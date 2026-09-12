@@ -1,0 +1,650 @@
+<title>JobGuard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --paper:#f1ede2; --surface:#fffdf8; --surface-2:#f6f1e6;
+    --ink:#141a20; --ink-soft:#3d4854; --ink-faint:#6b7580;
+    --navy:#0e1c2c; --navy-2:#14304c; --navy-line:#26405e;
+    --gold:#8a6412; --gold-2:#b8862f; --gold-dk:#e4c98a;
+    --steel:#5c7186; --line:#ded6c4; --line-soft:#e8e1d2;
+    --good:#3d6f4f; --good-bg:#e6efe6; --warn:#9a6a15; --warn-bg:#f5ecd6;
+    --crit:#9c3f28; --crit-bg:#f3e2da;
+    --shadow:0 1px 0 rgba(17,22,29,.03), 0 10px 30px -20px rgba(17,22,29,.4);
+    --r:14px;
+  }
+  :root:not([data-theme="light"]){ @media (prefers-color-scheme:dark){
+    --paper:#0a141f; --surface:#0f1e2e; --surface-2:#132638;
+    --ink:#eae4d6; --ink-soft:#b9c4cf; --ink-faint:#8497a6;
+    --navy:#06101a; --navy-2:#102134; --navy-line:#24405e;
+    --gold:#e4c98a; --gold-2:#d9b877; --gold-dk:#e4c98a;
+    --steel:#8ea2b6; --line:#22384f; --line-soft:#1a2c3f;
+    --good:#6db187; --good-bg:#122a20; --warn:#d4a751; --warn-bg:#2c2413;
+    --crit:#d98a6e; --crit-bg:#2c1a13;
+    --shadow:0 1px 0 rgba(0,0,0,.2), 0 16px 40px -24px rgba(0,0,0,.7);
+  }}
+  :root[data-theme="dark"]{
+    --paper:#0a141f; --surface:#0f1e2e; --surface-2:#132638;
+    --ink:#eae4d6; --ink-soft:#b9c4cf; --ink-faint:#8497a6;
+    --navy:#06101a; --navy-2:#102134; --navy-line:#24405e;
+    --gold:#e4c98a; --gold-2:#d9b877; --gold-dk:#e4c98a;
+    --steel:#8ea2b6; --line:#22384f; --line-soft:#1a2c3f;
+    --good:#6db187; --good-bg:#122a20; --warn:#d4a751; --warn-bg:#2c2413;
+    --crit:#d98a6e; --crit-bg:#2c1a13;
+    --shadow:0 1px 0 rgba(0,0,0,.2), 0 16px 40px -24px rgba(0,0,0,.7);
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:'Public Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:16px; line-height:1.5;}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+  h1,h2,h3,h4{font-family:'Archivo',system-ui,sans-serif; margin:0; letter-spacing:-.01em; text-wrap:balance;}
+  p{margin:0;} button{font-family:inherit;} input,textarea,select{font-family:inherit; font-size:16px;}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums;}
+  a{color:var(--gold);}
+
+  .app{max-width:680px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; background:var(--paper);}
+  .topbar{position:sticky; top:0; z-index:30; background:var(--navy); color:#eef1f4; display:flex; align-items:center; gap:12px; padding:13px 18px; border-bottom:2px solid var(--gold-2);}
+  .topbar .brand{display:flex; align-items:center; gap:10px; font-family:'Archivo'; font-weight:800; letter-spacing:.02em; font-size:16px;}
+  .shield{width:30px;height:30px;border-radius:8px;background:var(--gold-2);color:var(--navy);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono';font-weight:700;font-size:12px;flex:none;}
+  .topbar .spacer{flex:1;}
+  .conn{font-family:'IBM Plex Mono'; font-size:10.5px; letter-spacing:.04em; display:flex; align-items:center; gap:6px; color:#c6d1db; border:1px solid var(--navy-line); padding:5px 9px; border-radius:100px; white-space:nowrap;}
+  .conn .d{width:7px;height:7px;border-radius:50%;background:var(--gold-dk);}
+  .conn.live .d{background:#5fbf7c;}
+  .backbtn{background:none;border:none;color:#c6d1db;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:8px;font-weight:600;}
+  .backbtn:hover{background:rgba(255,255,255,.06);}
+
+  main{flex:1; padding:20px 18px 120px;}
+  .eyebrow{font-family:'IBM Plex Mono'; font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); display:inline-flex; align-items:center; gap:8px; margin-bottom:10px;}
+  .eyebrow::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--gold-2);}
+  h1.page{font-size:26px; font-weight:900; line-height:1.05; margin-bottom:8px;}
+  .muted{color:var(--ink-soft); font-size:14.5px;}
+  .faint{color:var(--ink-faint); font-size:12.5px;}
+  .sharehint{font-size:12px; color:var(--ink-faint); margin-top:6px; line-height:1.4;}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:11px;border:1.5px solid transparent;font-weight:700;font-size:15px;padding:13px 18px;cursor:pointer;min-height:48px;line-height:1;}
+  .btn.block{width:100%;}
+  .btn.gold{background:var(--gold-2);color:#25190a;border-color:var(--gold-2);}
+  .btn.gold:hover{filter:brightness(1.05);}
+  .btn.ghost{background:transparent;border-color:var(--line);color:var(--ink);}
+  .btn.ghost:hover{background:var(--surface-2);}
+  .btn.dark{background:var(--navy);color:#f2efe6;}
+  .btn.sm{min-height:38px;padding:9px 13px;font-size:13.5px;border-radius:9px;}
+  .btn.good{background:var(--good);color:#fff;border-color:var(--good);}
+  .btn.warnb{background:var(--warn-bg);color:var(--warn);border-color:transparent;}
+  .btn:disabled{opacity:.55;cursor:default;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px;}
+  .stack{display:flex;flex-direction:column;gap:12px;}
+  .row{display:flex;align-items:center;gap:12px;}
+  .between{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+
+  /* job list */
+  .grouplabel{font-family:'IBM Plex Mono';font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin:22px 2px 10px;font-weight:600;}
+  .jobrow{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 16px;cursor:pointer;display:flex;gap:13px;align-items:flex-start;box-shadow:var(--shadow);}
+  .jobrow:hover{border-color:var(--gold-2);}
+  .jobrow+.jobrow{margin-top:10px;}
+  .dot{width:11px;height:11px;border-radius:50%;flex:none;margin-top:5px;}
+  .dot.ok{background:#5fbf7c;} .dot.warn{background:var(--gold-2);} .dot.idle{background:var(--steel);} .dot.paid{background:var(--good);}
+  .jobrow .t{font-family:'Archivo';font-weight:700;font-size:16px;line-height:1.2;}
+  .jobrow .s{font-size:13px;color:var(--ink-soft);margin-top:3px;}
+  .jobrow .val{margin-left:auto;text-align:right;font-family:'IBM Plex Mono';font-weight:600;font-size:14px;white-space:nowrap;}
+  .statuschip{font-family:'IBM Plex Mono';font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:3px 7px;border-radius:100px;border:1px solid var(--line);color:var(--ink-faint);}
+
+  .empty{text-align:center;padding:34px 16px;}
+  .empty h3{font-size:19px;margin-bottom:8px;}
+
+  /* capture */
+  textarea.walk{width:100%;min-height:190px;resize:vertical;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface);color:var(--ink);line-height:1.55;}
+  textarea.walk:focus,input:focus,select:focus{outline:2px solid var(--gold-2);outline-offset:1px;}
+  .miczone{display:flex;gap:10px;align-items:center;margin:12px 0;}
+  .micbtn{width:56px;height:56px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);cursor:pointer;font-size:22px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .micbtn.on{background:var(--crit-bg);border-color:var(--crit);color:var(--crit);animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:100px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-soft);cursor:pointer;}
+
+  /* banners */
+  .banner{border-radius:12px;padding:14px 16px;font-size:13.5px;line-height:1.5;}
+  .banner.amber{background:var(--warn-bg);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);color:var(--ink);}
+  .banner.amber h4{color:var(--warn);font-size:13px;margin-bottom:8px;font-family:'IBM Plex Mono';letter-spacing:.04em;text-transform:uppercase;}
+  .qline{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed color-mix(in srgb,var(--warn) 25%,transparent);}
+  .qline:last-child{border-bottom:none;}
+  .qline .qx{flex:1;}
+
+  /* scope lines */
+  .lines{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
+  .line{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px;}
+  .line .desc{width:100%;border:none;background:transparent;color:var(--ink);font-weight:600;padding:2px 0;border-bottom:1px solid var(--line-soft);margin-bottom:9px;}
+  .line .desc:focus{outline:none;border-bottom-color:var(--gold-2);}
+  .line .grid{display:grid;grid-template-columns:1fr 1fr 1.2fr auto;gap:8px;align-items:center;}
+  .line label{font-family:'IBM Plex Mono';font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:3px;}
+  .line input,.line select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--paper);color:var(--ink);}
+  .line .cat{grid-column:1 / -1;margin-top:8px;}
+  .line .del{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:18px;align-self:end;padding:6px;}
+  .line .lt{font-family:'IBM Plex Mono';font-weight:600;font-size:13px;text-align:right;margin-top:8px;color:var(--ink-soft);}
+
+  .totals{margin-top:16px;border-top:1px solid var(--line);padding-top:14px;}
+  .totline{display:flex;justify-content:space-between;font-size:14px;padding:5px 0;color:var(--ink-soft);}
+  .totline.grand{font-family:'Archivo';font-weight:800;font-size:22px;color:var(--ink);padding-top:8px;}
+  .totline .mono{color:inherit;}
+
+  /* decisions */
+  .dec{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold-2);border-radius:0 12px 12px 0;padding:14px 15px;}
+  .dec+.dec{margin-top:11px;}
+  .dec.done{border-left-color:var(--good);opacity:.72;}
+  .dec .kind{font-family:'IBM Plex Mono';font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);font-weight:700;}
+  .dec.done .kind{color:var(--good);}
+  .dec h4{font-size:15px;margin:5px 0 4px;}
+  .dec p{font-size:13px;color:var(--ink-soft);line-height:1.45;}
+  .dec .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px;}
+  .sectlabel{font-family:'Archivo';font-weight:800;font-size:17px;margin:24px 0 12px;display:flex;align-items:center;gap:9px;}
+  .countpill{font-family:'IBM Plex Mono';font-size:11px;background:var(--navy);color:var(--gold-dk);padding:3px 8px;border-radius:100px;font-weight:600;}
+
+  .rec{background:var(--good-bg);border:1px solid color-mix(in srgb,var(--good) 30%,transparent);border-radius:11px;padding:13px 15px;}
+  .rec+.rec{margin-top:10px;}
+  .vitem{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:13px 15px;}
+  .vitem+.vitem{margin-top:10px;}
+
+  /* invoice bill panel */
+  .billpanel{background:var(--navy);color:#eef1f4;border-radius:var(--r);padding:20px;margin-top:16px;}
+  .billpanel h4{color:#f6f3ea;font-size:16px;margin-bottom:6px;}
+  .billpanel .bl{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--navy-line);font-size:14px;color:#c6d1db;}
+  .billpanel .bl .mono{color:#eef1f4;}
+  .billpanel .bl.neg .mono{color:#e2a37e;}
+  .billpanel .bl.keep .mono{color:#8fd0a3;font-size:17px;}
+  .billpanel .bl.grand{border-bottom:none;font-family:'Archivo';font-weight:800;color:#f6f3ea;padding-top:12px;}
+  .billpanel .note{font-size:11.5px;color:#9fb0bf;margin-top:12px;line-height:1.5;}
+
+  /* sticky action bar */
+  .actionbar{position:fixed;left:0;right:0;bottom:0;z-index:25;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:12px 18px calc(12px + env(safe-area-inset-bottom));}
+  .actionbar .inner{max-width:680px;margin:0 auto;display:flex;gap:10px;}
+
+  .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--navy);color:#f2efe6;padding:11px 18px;border-radius:100px;font-size:13.5px;font-weight:600;box-shadow:0 10px 30px -10px rgba(0,0,0,.5);z-index:60;max-width:88%;text-align:center;}
+
+  .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  .loadwrap{text-align:center;padding:40px 16px;color:var(--ink-soft);}
+  .loadwrap .big{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--gold-2);border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 16px;}
+
+  details.how{margin-top:14px;} details.how summary{cursor:pointer;font-family:'IBM Plex Mono';font-size:12px;color:var(--gold);font-weight:600;}
+  details.how p{font-size:12.5px;color:var(--ink-soft);margin-top:10px;line-height:1.55;}
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <span class="backbtn" id="back" data-act="back" hidden>‹ Back</span>
+    <div class="brand"><span class="shield">JG</span><span>JOBGUARD</span></div>
+    <span class="spacer"></span>
+    <span class="conn" id="conn"><span class="d"></span><span id="conntext">connecting…</span></span>
+  </div>
+  <main id="app"><div class="loadwrap"><div class="big"></div>Starting JobGuard…</div></main>
+</div>
+<div class="actionbar" id="actionbar" hidden><div class="inner" id="actioninner"></div></div>
+<input type="file" id="prooffile" accept="image/*" capture="environment" hidden>
+
+<script>
+(function(){
+  "use strict";
+  var DB=null, SAMPLE=null, usingLocal=false, capsReady=false;
+  var LKEY='jobguard.jobs.v1';
+  var app=document.getElementById('app');
+  var bar=document.getElementById('actionbar');
+  var barInner=document.getElementById('actioninner');
+  var backBtn=document.getElementById('back');
+  var connEl=document.getElementById('conn'), connText=document.getElementById('conntext');
+  var fileInput=document.getElementById('prooffile');
+
+  var ST={ view:'list', jobId:null, jobs:[], busy:false, walkText:'', extraText:'', pendingProof:null, wantLive:false };
+
+  // ---------- helpers ----------
+  function h(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function num(x){var n=parseFloat(x);return isFinite(n)?n:0;}
+  function gbp(n){return '£'+Math.round(num(n)).toLocaleString('en-GB');}
+  function uid(){try{return crypto.randomUUID();}catch(e){return 'id'+Date.now().toString(36)+Math.random().toString(16).slice(2);}}
+  function firstLine(t){t=(t||'').trim();var i=t.search(/[.\n]/);return (i>0?t.slice(0,i):t).slice(0,60);}
+  function curJob(){for(var i=0;i<ST.jobs.length;i++)if(ST.jobs[i].id===ST.jobId)return ST.jobs[i];return null;}
+  function sortedJobs(){return ST.jobs.slice().sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0);});}
+  var VAT=0.20;
+  function subtotal(j){return (j.scopeItems||[]).reduce(function(s,i){return s+num(i.qty)*num(i.unitRate);},0);}
+  function approvedVar(j){return (j.variations||[]).filter(function(v){return v.approved;});}
+  function varTotal(j){return approvedVar(j).reduce(function(s,v){return s+num(v.amount);},0);}
+  function invoiceNet(j){return subtotal(j)+varTotal(j);}
+  function openDecisions(j){return (j.decisions||[]).filter(function(d){return d.status==='open';});}
+  function landedRecoveries(j){return (j.recoveries||[]).filter(function(r){return r.landed;});}
+  function recoveredTotal(j){return landedRecoveries(j).reduce(function(s,r){return s+num(r.amount);},0);}
+
+  function blankJob(){return {id:uid(),title:'New job',client:'',jobType:'',status:'quoting',createdAt:Date.now(),scopeItems:[],materials:[],flaggedQuestions:[],variations:[],decisions:[],recoveries:[],proofs:[],acceptedValue:null,planFeePaid:0,recoveryCap:null,sentAt:null,wonAt:null,paidAt:null};}
+
+  // ---------- persistence ----------
+  function loadLocal(){try{return JSON.parse(localStorage.getItem(LKEY)||'[]');}catch(e){return[];}}
+  function saveLocalAll(){try{localStorage.setItem(LKEY,JSON.stringify(ST.jobs));}catch(e){}}
+  function persist(job){
+    job.updatedAt=Date.now();
+    if(DB){ DB.doc('jobs/'+job.id).set(job).catch(function(e){console.warn('save',e&&e.code);}); }
+    else{ var i=ST.jobs.findIndex(function(j){return j.id===job.id;}); if(i>=0)ST.jobs[i]=job; else ST.jobs.push(job); saveLocalAll(); }
+    render();
+  }
+  function removeJob(id){
+    if(DB){ DB.doc('jobs/'+id).delete().catch(function(){}); }
+    else{ ST.jobs=ST.jobs.filter(function(j){return j.id!==id;}); saveLocalAll(); }
+    ST.view='list'; ST.jobId=null; render();
+  }
+
+  // ---------- AI ----------
+  function normalizeExtract(o,walk){
+    o=o||{}; var j=blankJob();
+    j.title=(o.title&&String(o.title).trim())||firstLine(walk)||'New job';
+    j.client=o.client?String(o.client):''; j.jobType=o.jobType?String(o.jobType):'';
+    var items=Array.isArray(o.scopeItems)?o.scopeItems:[];
+    j.scopeItems=items.map(function(s){return {id:uid(),description:String(s.description||'').slice(0,140),qty:num(s.qty)||1,unit:String(s.unit||'item').slice(0,8),unitRate:Math.round(num(s.unitRate)),category:String(s.category||'other').toLowerCase()};}).filter(function(s){return s.description;});
+    if(!j.scopeItems.length){ j.scopeItems=fallbackLines(walk); }
+    var mats=Array.isArray(o.materials)?o.materials:[];
+    j.materials=mats.map(function(m){return {description:String(m.description||''),qty:num(m.qty)||1,unit:String(m.unit||''),estCost:Math.round(num(m.estCost))};}).filter(function(m){return m.description;});
+    var qs=Array.isArray(o.flaggedQuestions)?o.flaggedQuestions:[];
+    j.flaggedQuestions=qs.map(function(q){return {id:uid(),q:String(q).slice(0,180),resolved:false};}).filter(function(x){return x.q;});
+    return j;
+  }
+  function fallbackLines(walk){
+    var chunks=(walk||'').split(/[.\n;]+/).map(function(s){return s.trim();}).filter(function(s){return s.length>3;});
+    if(!chunks.length)chunks=['Work as described'];
+    return chunks.slice(0,12).map(function(c){return {id:uid(),description:c.slice(0,140),qty:1,unit:'item',unitRate:0,category:'other'};});
+  }
+  function aiExtract(walk){
+    var prompt='You are JobGuard, an estimating assistant for UK builders. A builder has just walked a site and described the job out loud (voice note). Convert it into structured data for a quote.\n'
+      +'Return ONLY a JSON object, no prose, shaped exactly:\n'
+      +'{"title": "short job title, include location if mentioned", "client": "name or empty", "jobType": "e.g. Kitchen refit",'
+      +'"scopeItems":[{"description":"clear line of work","qty":number,"unit":"item|m2|m|day|nr","unitRate":number (GBP, a realistic UK 2026 trade price for that line),"category":"labour|joinery|electrical|plumbing|plastering|materials|groundwork|decoration|other"}],'
+      +'"materials":[{"description":"","qty":number,"unit":"","estCost":number}],'
+      +'"flaggedQuestions":["genuine things a careful estimator would check BEFORE quoting — uncertainties, missing info, possible extras; empty array if none"]}\n'
+      +'Infer sensible, itemised lines even from a rough description, and price each realistically. Keep it to the work actually described.\n'
+      +'Walkaround:\n"""'+walk+'"""';
+    if(SAMPLE&&SAMPLE.json){
+      return SAMPLE.json(prompt,{modelTier:'default'}).then(function(o){return normalizeExtract(o,walk);});
+    }
+    // fallback: no AI in this view
+    return Promise.resolve(normalizeExtract({title:firstLine(walk)},walk));
+  }
+  function aiPriceExtra(text){
+    if(SAMPLE&&SAMPLE.json){
+      var p='You are JobGuard. A UK builder logged an EXTRA (variation) a customer asked for mid-job. Price it. Return ONLY JSON {"description":"tidy one-line description","amount":number (GBP, realistic UK 2026 price incl. labour+materials for the extra, net of VAT)}. Extra: """'+text+'"""';
+      return SAMPLE.json(p,{modelTier:'default'}).then(function(o){return {description:String((o&&o.description)||text).slice(0,140),amount:Math.round(num(o&&o.amount))};});
+    }
+    return Promise.resolve({description:String(text).slice(0,140),amount:0});
+  }
+
+  // ---------- switch live: derive watchdog decisions from the real job ----------
+  function goLive(job){
+    job.status='live'; job.wonAt=Date.now();
+    job.acceptedValue=Math.round(subtotal(job));
+    job.planFeePaid=79;
+    job.recoveryCap=Math.round(0.015*job.acceptedValue);
+    var decs=[];
+    (job.flaggedQuestions||[]).filter(function(q){return !q.resolved;}).forEach(function(q){
+      decs.push({id:uid(),kind:'check',title:'Check before you build',detail:q.q,status:'open'});
+    });
+    var cats={}; (job.scopeItems||[]).forEach(function(i){cats[i.category]=true;});
+    var proofFor= cats.plastering?'plastering':cats.electrical?'first-fix wiring':cats.groundwork?'groundwork / foundations':null;
+    if(proofFor){ decs.push({id:uid(),kind:'proof',title:'Proof before it’s covered',detail:'Capture a photo of the '+proofFor+' before the next trade covers it up — so it’s provable later.',status:'open'}); }
+    decs.push({id:uid(),kind:'materials',title:'Check the materials bill',detail:'When your merchant invoice lands, check it against your agreed account rate before you pay it.',status:'open'});
+    job.decisions=(job.decisions||[]).concat(decs);
+    persist(job);
+    ST.view='live'; render();
+    toast('Live. £79 plan fee applied — recovery cap for this job £'+job.recoveryCap.toLocaleString('en-GB')+'.');
+  }
+
+  // ---------- toast ----------
+  var toastT=null;
+  function toast(msg){
+    var t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t);
+    clearTimeout(toastT); toastT=setTimeout(function(){t.remove();},2600);
+  }
+
+  // ---------- render ----------
+  function setBack(show){ backBtn.hidden=!show; backBtn.style.display=show?'flex':'none'; }
+  function setBar(html){ if(!html){bar.hidden=true;barInner.innerHTML='';} else {bar.hidden=false;barInner.innerHTML=html;} }
+
+  function render(){
+    setBack(ST.view!=='list');
+    if(ST.view==='list') renderList();
+    else if(ST.view==='capture') renderCapture();
+    else if(ST.view==='quote') renderQuote();
+    else if(ST.view==='live') renderLive();
+    else if(ST.view==='invoice') renderInvoice();
+    else renderList();
+  }
+
+  function renderList(){
+    setBar('<button class="btn gold block" data-act="new">＋ Walk a new job</button>');
+    var jobs=sortedJobs();
+    var live=jobs.filter(function(j){return j.status==='live';});
+    var quotes=jobs.filter(function(j){return j.status==='quoting';});
+    var done=jobs.filter(function(j){return j.status==='invoiced'||j.status==='paid';});
+    var html='<div class="eyebrow">Your jobs</div><h1 class="page">Say it once. Watch it to paid.</h1>';
+    html+='<p class="muted">Walk a job by talking it through. JobGuard turns it into a quote, watches it once it’s live, and builds the invoice — nothing re-typed.</p>';
+    html+='<p class="sharehint">'+(usingLocal?'Saved on this device only.':'Shared live — anyone you give edit access to sees these jobs update in real time.')+'</p>';
+    if(!jobs.length){
+      html+='<div class="empty card" style="margin-top:22px;"><h3>No jobs yet</h3><p class="muted">Tap “Walk a new job”, then just talk: rooms, sizes, materials, anything that looks off. You can try the worked example to see it in action.</p></div>';
+    }
+    if(live.length){ html+='<div class="grouplabel">Live · protected</div>'; live.forEach(function(j){html+=jobRow(j);}); }
+    if(quotes.length){ html+='<div class="grouplabel">Quotes · free</div>'; quotes.forEach(function(j){html+=jobRow(j);}); }
+    if(done.length){ html+='<div class="grouplabel">Invoiced &amp; paid</div>'; done.forEach(function(j){html+=jobRow(j);}); }
+    app.innerHTML=html;
+  }
+  function jobRow(j){
+    var open=openDecisions(j).length;
+    var dot='idle',sub='',chip='';
+    if(j.status==='quoting'){dot='idle'; sub=(j.sentAt?'Quote sent':'Draft quote')+' · '+gbp(subtotal(j)*(1+VAT))+' inc VAT'; chip='Quote';}
+    else if(j.status==='live'){dot=open?'warn':'ok'; sub=open?(open+' need'+(open>1?'':'s')+' you'):'Running fine — nothing needs you'; chip='Live';}
+    else if(j.status==='invoiced'){dot='warn'; sub='Invoice ready · '+gbp(invoiceNet(j)*(1+VAT))+' inc VAT'; chip='Invoiced';}
+    else if(j.status==='paid'){dot='paid'; sub='Paid'+(recoveredTotal(j)?' · recovered '+gbp(recoveredTotal(j)):''); chip='Paid';}
+    var val=j.status==='quoting'?gbp(subtotal(j)):gbp(invoiceNet(j));
+    return '<button class="jobrow" data-act="open" data-id="'+j.id+'"><span class="dot '+dot+'"></span>'
+      +'<span style="flex:1;min-width:0;"><span class="t">'+h(j.title)+'</span>'
+      +(j.client?'<span class="s">'+h(j.client)+'</span>':'')
+      +'<span class="s">'+h(sub)+'</span></span>'
+      +'<span class="val"><span class="statuschip">'+chip+'</span><br>'+val+'</span></button>';
+  }
+
+  var EXAMPLE="Right, we're at 14 Oakfield Road, front reception room. Ceiling's about 2.4 metres, water stain in the top-left corner — looks old but worth a photo. Client wants three double sockets on this wall at worktop height, not skirting. Floor's screed, feels sound. Strip the old plaster off two walls, re-skim the whole room. Back room's a similar spec but there's a stud wall — doesn't look load-bearing but I'm not certain. Supply and fit a new consumer unit while we're at it. Skip needed for the muck-away.";
+
+  function renderCapture(){
+    setBar('<button class="btn ghost sm" data-act="back-list">Cancel</button><button class="btn gold" style="flex:1" data-act="extract" '+(ST.busy?'disabled':'')+'>'+(ST.busy?'<span class="spin"></span> JobGuard is listening…':'Turn this into a quote →')+'</button>');
+    var micSupported=!!(window.SpeechRecognition||window.webkitSpeechRecognition);
+    var html='<div class="eyebrow">Walk it</div><h1 class="page">Talk through the job.</h1>';
+    html+='<p class="muted">Rooms, sizes, materials, anything that looks off — the way you’d tell your foreman. JobGuard writes it up and flags what to check.</p>';
+    html+='<div class="miczone">';
+    if(micSupported){ html+='<button class="micbtn'+(ST.recOn?' on':'')+'" data-act="mic" title="Dictate">'+(ST.recOn?'■':'🎙')+'</button><span class="faint">'+(ST.recOn?'Listening… tap to stop':'Tap to dictate, or type below')+'</span>'; }
+    else { html+='<span class="chip" data-act="example">Try the worked example</span>'; }
+    html+='</div>';
+    html+='<textarea class="walk" id="walk" data-field="walk" placeholder="e.g. Kitchen refit at number 12 — rip out the old units, 5 metres of new base and wall units, re-tile the splashback, move the sink to the window wall, needs a new radiator…">'+h(ST.walkText)+'</textarea>';
+    if(micSupported){ html+='<div style="margin-top:10px;"><span class="chip" data-act="example">Try the worked example</span></div>'; }
+    html+='<p class="faint" style="margin-top:12px;">'+(SAMPLE?'Claude reads your walkaround and drafts the priced lines. You check every one before it’s a quote.':'AI isn’t available in this view — your words become draft lines you can price by hand.')+'</p>';
+    app.innerHTML=html;
+    var ta=document.getElementById('walk'); if(ta&&ST.focusWalk){ta.focus();ST.focusWalk=false;}
+  }
+
+  function renderQuote(){
+    var j=curJob(); if(!j){ST.view='list';return render();}
+    var unresolved=(j.flaggedQuestions||[]).filter(function(q){return !q.resolved;});
+    var net=subtotal(j), vat=net*VAT, tot=net+vat;
+    setBar('<button class="btn ghost sm" data-act="sendquote">'+(j.sentAt?'Sent ✓ Resend':'Send quote (free)')+'</button><button class="btn gold" style="flex:1" data-act="ask-live">Won it — switch live (£79) →</button>');
+    var html='<div class="eyebrow">Quote · free</div><h1 class="page">'+h(j.title)+'</h1>';
+    html+='<p class="muted">'+(j.client?h(j.client)+' · ':'')+'Quoting is free, win or lose. Edit any line — it’s your price.</p>';
+    if(unresolved.length){
+      html+='<div class="banner amber" style="margin-top:16px;"><h4>'+unresolved.length+' to check before you send</h4>';
+      unresolved.forEach(function(q){ html+='<div class="qline"><span class="qx">'+h(q.q)+'</span><button class="btn ghost sm" data-act="resolveq" data-id="'+q.id+'">Checked</button></div>'; });
+      html+='</div>';
+    }
+    html+='<div class="lines">';
+    (j.scopeItems||[]).forEach(function(l){
+      var lt=num(l.qty)*num(l.unitRate);
+      html+='<div class="line" data-line-wrap="'+l.id+'">'
+        +'<input class="desc" data-line="'+l.id+'" data-k="description" value="'+h(l.description)+'" aria-label="Description">'
+        +'<div class="grid">'
+        +'<div><label>Qty</label><input type="number" inputmode="decimal" data-line="'+l.id+'" data-k="qty" value="'+h(l.qty)+'"></div>'
+        +'<div><label>Unit</label><input data-line="'+l.id+'" data-k="unit" value="'+h(l.unit)+'"></div>'
+        +'<div><label>Rate £</label><input type="number" inputmode="decimal" data-line="'+l.id+'" data-k="unitRate" value="'+h(l.unitRate)+'"></div>'
+        +'<button class="del" data-act="delline" data-id="'+l.id+'" title="Remove">✕</button>'
+        +'</div>'
+        +'<div class="lt" data-lt="'+l.id+'">'+gbp(lt)+'</div>'
+        +'</div>';
+    });
+    html+='</div>';
+    html+='<button class="btn ghost sm" style="margin-top:12px" data-act="addline">＋ Add a line</button>';
+    html+='<div class="totals"><div class="totline"><span>Subtotal</span><span class="mono" id="q-net">'+gbp(net)+'</span></div>'
+      +'<div class="totline"><span>VAT (20%)</span><span class="mono" id="q-vat">'+gbp(vat)+'</span></div>'
+      +'<div class="totline grand"><span>Total</span><span class="mono" id="q-tot">'+gbp(tot)+'</span></div></div>';
+    html+='<button class="btn ghost sm" style="margin-top:18px;color:var(--crit)" data-act="delete-job">Delete this job</button>';
+    app.innerHTML=html;
+  }
+
+  function renderLive(){
+    var j=curJob(); if(!j){ST.view='list';return render();}
+    var open=openDecisions(j), doneDec=(j.decisions||[]).filter(function(d){return d.status==='resolved';});
+    setBar('<button class="btn ghost sm" data-act="log-extra">＋ Log an extra</button><button class="btn gold" style="flex:1" data-act="build-invoice">Build final account →</button>');
+    var html='<div class="eyebrow">Live · protected</div><h1 class="page">'+h(j.title)+'</h1>';
+    html+='<p class="muted">'+(j.client?h(j.client)+' · ':'')+'Accepted value '+gbp(j.acceptedValue||subtotal(j))+' · recovery cap '+gbp(j.recoveryCap||0)+'</p>';
+
+    html+='<div class="sectlabel">Needs you '+(open.length?'<span class="countpill">'+open.length+'</span>':'')+'</div>';
+    if(!open.length){ html+='<div class="card"><p class="muted">Nothing needs you right now. JobGuard is watching the job and the money in the background.</p></div>'; }
+    open.forEach(function(d){
+      html+='<div class="dec"><span class="kind">'+decKind(d.kind)+'</span><h4>'+h(d.title)+'</h4><p>'+h(d.detail)+'</p><div class="acts">'+decActions(d)+'</div></div>';
+    });
+
+    // extras / variations
+    if((j.variations||[]).length){
+      html+='<div class="sectlabel">Extras</div>';
+      (j.variations||[]).forEach(function(v){
+        html+='<div class="vitem"><div class="between"><b>'+h(v.description)+'</b><span class="mono">'+gbp(v.amount)+'</span></div>';
+        if(v.approved){ html+='<p class="faint" style="margin-top:6px;color:var(--good)">✓ Customer approved — on the final account</p>'; }
+        else { html+='<div class="acts" style="margin-top:10px"><button class="btn good sm" data-act="approve-var" data-id="'+v.id+'">Got customer’s OK</button><button class="btn ghost sm" data-act="del-var" data-id="'+v.id+'">Remove</button></div>'; }
+        html+='</div>';
+      });
+    }
+
+    // recoveries
+    if((j.recoveries||[]).length){
+      html+='<div class="sectlabel">Money to recover</div>';
+      (j.recoveries||[]).forEach(function(r){
+        html+='<div class="rec"><div class="between"><span><b>'+h(r.description)+'</b><br><span class="faint">'+h(r.type)+'</span></span><span class="mono">'+gbp(r.amount)+'</span></div>';
+        if(r.landed){ html+='<p class="faint" style="margin-top:6px;color:var(--good)">✓ Landed — the money’s back. Counts toward your recovery.</p>'; }
+        else { html+='<div class="acts" style="margin-top:10px"><button class="btn good sm" data-act="land-rec" data-id="'+r.id+'">Mark credit landed</button></div>'; }
+        html+='</div>';
+      });
+    }
+
+    // proofs captured
+    if((j.proofs||[]).length){
+      html+='<div class="sectlabel">Proof on file</div><div class="card"><div class="stack">';
+      (j.proofs||[]).forEach(function(p){ html+='<div class="between"><span>'+h(p.label)+'</span><span class="faint">'+h(p.filename||'photo')+'</span></div>'; });
+      html+='</div></div>';
+    }
+
+    if(doneDec.length){
+      html+='<div class="sectlabel">Done</div>';
+      doneDec.forEach(function(d){ html+='<div class="dec done"><span class="kind">'+decKind(d.kind)+' · resolved</span><h4>'+h(d.title)+'</h4>'+(d.outcome?'<p>'+h(d.outcome)+'</p>':'')+'</div>'; });
+    }
+    app.innerHTML=html;
+  }
+  function decKind(k){return k==='proof'?'Proof':k==='materials'?'Materials':k==='check'?'Check':'Decision';}
+  function decActions(d){
+    if(d.kind==='proof') return '<button class="btn gold sm" data-act="capture-proof" data-id="'+d.id+'">Capture proof</button><button class="btn ghost sm" data-act="resolve" data-id="'+d.id+'" data-outcome="Skipped (recorded)">Not needed</button>';
+    if(d.kind==='materials') return '<button class="btn ghost sm" data-act="resolve" data-id="'+d.id+'" data-outcome="Bill matched the agreed rate.">Bill’s right</button><button class="btn warnb sm" data-act="materials-over" data-id="'+d.id+'">Overbilled — recover it</button>';
+    return '<button class="btn gold sm" data-act="resolve" data-id="'+d.id+'" data-outcome="Checked and answered.">Checked / answered</button>';
+  }
+
+  function renderInvoice(){
+    var j=curJob(); if(!j){ST.view='list';return render();}
+    var net=invoiceNet(j), vat=net*VAT, tot=net+vat;
+    var paid=j.status==='paid';
+    setBar(paid?'<button class="btn ghost block" data-act="back-list">Back to jobs</button>':'<button class="btn gold block" data-act="mark-paid">Mark invoice paid</button>');
+    var html='<div class="eyebrow">Get paid</div><h1 class="page">Final account — '+h(j.title)+'</h1>';
+    html+='<p class="muted">Built straight from the agreed job and the proof on file. Every line is backed.</p>';
+    html+='<div class="card" style="margin-top:16px"><div class="stack">';
+    (j.scopeItems||[]).forEach(function(l){ html+='<div class="between"><span>'+h(l.description)+'</span><span class="mono">'+gbp(num(l.qty)*num(l.unitRate))+'</span></div>'; });
+    approvedVar(j).forEach(function(v){ html+='<div class="between"><span>'+h(v.description)+' <span class="faint">(agreed extra)</span></span><span class="mono">'+gbp(v.amount)+'</span></div>'; });
+    html+='</div><div class="totals"><div class="totline"><span>Subtotal</span><span class="mono">'+gbp(net)+'</span></div>'
+      +'<div class="totline"><span>VAT (20%)</span><span class="mono">'+gbp(vat)+'</span></div>'
+      +'<div class="totline grand"><span>Invoice total</span><span class="mono">'+gbp(tot)+'</span></div></div>';
+    html+='<p class="faint" style="margin-top:10px">'+((j.proofs||[]).length? (j.proofs.length+' proof photo'+(j.proofs.length>1?'s':'')+' attached.') :'No proof photos attached.')+'</p>';
+    html+='</div>';
+
+    // JobGuard's own bill
+    var recovered=recoveredTotal(j);
+    var feeGross=Math.round(0.10*recovered);
+    var feeCapped=Math.min(feeGross, j.recoveryCap||0);
+    var credit=Math.min(j.planFeePaid||0, feeCapped);
+    var owed=Math.max(0, feeCapped-credit);
+    var kept=recovered-feeCapped;
+    html+='<div class="billpanel"><h4>What you owe JobGuard</h4>';
+    html+='<div class="bl"><span>Plan fee (paid when you switched live)</span><span class="mono">'+gbp(j.planFeePaid||0)+'</span></div>';
+    if(recovered>0){
+      html+='<div class="bl"><span>Recovered for you (landed)</span><span class="mono">'+gbp(recovered)+'</span></div>';
+      html+='<div class="bl"><span>Recovery fee (10%'+(feeGross>feeCapped?', capped at 1.5%':'')+')</span><span class="mono">'+gbp(feeCapped)+'</span></div>';
+      html+='<div class="bl neg"><span>Plan fee credited once</span><span class="mono">−'+gbp(credit)+'</span></div>';
+      html+='<div class="bl grand"><span>Recovery fee owed (+VAT)</span><span class="mono">'+gbp(owed)+'</span></div>';
+      html+='<div class="bl keep"><span>You keep</span><span class="mono">'+gbp(kept)+'</span></div>';
+      html+='<p class="note">Cap for this job is '+gbp(j.recoveryCap||0)+' (1.5% of '+gbp(j.acceptedValue||0)+'). You only ever pay a recovery fee on money that actually landed — proof first, fee after.</p>';
+    } else {
+      html+='<p class="note">No recovery on this job — so there’s no recovery fee. You’ve paid the '+gbp(j.planFeePaid||0)+' plan fee for running it live, and nothing else.</p>';
+    }
+    html+='<details class="how"><summary>How charging works</summary><p>Quoting is always free. You pay the plan fee only when you win a job and switch it live. On top of that, a recovery fee is 10p of every £1 JobGuard proves it got back for you — capped at 1.5% of the job’s accepted value, with the plan fee credited once so the same pound is never billed twice. Catching a problem before it costs you (a missed line, a proof photo, a not-ready morning) is never charged.</p></details>';
+    html+='</div>';
+    app.innerHTML=html;
+  }
+
+  // ---------- events ----------
+  app.addEventListener('click', onClick);
+  bar.addEventListener('click', onClick);
+  document.querySelector('.topbar').addEventListener('click', onClick);
+  function onClick(e){
+    var t=e.target.closest('[data-act]'); if(!t)return;
+    var act=t.getAttribute('data-act'), id=t.getAttribute('data-id');
+    if(act==='back'||act==='back-list'){ ST.view= (ST.view==='capture')?'list':'list'; if(ST.view==='list'){ST.jobId=ST.jobId;} ST.view='list'; render(); return; }
+    if(act==='new'){ ST.view='capture'; ST.walkText=''; ST.focusWalk=true; render(); return; }
+    if(act==='example'){ ST.walkText=EXAMPLE; render(); return; }
+    if(act==='mic'){ toggleMic(); return; }
+    if(act==='extract'){ doExtract(); return; }
+    if(act==='open'){ var j=ST.jobs.find(function(x){return x.id===id;}); if(j){ST.jobId=id; ST.view= j.status==='quoting'?'quote': (j.status==='live'?'live':'invoice'); render();} return; }
+    if(act==='addline'){ var jb=curJob(); jb.scopeItems.push({id:uid(),description:'',qty:1,unit:'item',unitRate:0,category:'other'}); persist(jb); return; }
+    if(act==='delline'){ var j2=curJob(); j2.scopeItems=j2.scopeItems.filter(function(l){return l.id!==id;}); persist(j2); return; }
+    if(act==='resolveq'){ var j3=curJob(); var q=j3.flaggedQuestions.find(function(x){return x.id===id;}); if(q)q.resolved=true; persist(j3); return; }
+    if(act==='sendquote'){ var j4=curJob(); j4.sentAt=Date.now(); persist(j4); toast('Quote sent — still free.'); return; }
+    if(act==='ask-live'){ var jl=curJob(); var cap=Math.round(0.015*subtotal(jl)); if(confirm('Switch this job live?\n\nYou’ll be charged £79 to run it live. The recovery-fee cap for this job is fixed now at '+gbp(cap)+' (1.5% of '+gbp(subtotal(jl))+').\n\nContinue?')){ goLive(jl); } return; }
+    if(act==='resolve'){ var jd=curJob(); var d=jd.decisions.find(function(x){return x.id===id;}); if(d){d.status='resolved'; d.outcome=t.getAttribute('data-outcome')||'';} persist(jd); return; }
+    if(act==='capture-proof'){ ST.pendingProof=id; fileInput.value=''; fileInput.click(); return; }
+    if(act==='materials-over'){ materialsOver(id); return; }
+    if(act==='log-extra'){ logExtra(); return; }
+    if(act==='approve-var'){ var jv=curJob(); var v=jv.variations.find(function(x){return x.id===id;}); if(v)v.approved=true; persist(jv); toast('Extra approved — it’s on the final account.'); return; }
+    if(act==='del-var'){ var jv2=curJob(); jv2.variations=jv2.variations.filter(function(x){return x.id!==id;}); persist(jv2); return; }
+    if(act==='land-rec'){ var jr=curJob(); var r=jr.recoveries.find(function(x){return x.id===id;}); if(r){r.landed=true;r.landedAt=Date.now();} persist(jr); toast('Recovery landed — the money’s back in the account.'); return; }
+    if(act==='build-invoice'){ var ji=curJob(); ji.status='invoiced'; persist(ji); ST.view='invoice'; render(); return; }
+    if(act==='mark-paid'){ var jp=curJob(); jp.status='paid'; jp.paidAt=Date.now(); persist(jp); toast('Marked paid.'); return; }
+    if(act==='delete-job'){ if(confirm('Delete this job for good?')) removeJob(curJob().id); return; }
+  }
+
+  // live totals while typing in quote
+  app.addEventListener('input', function(e){
+    var t=e.target;
+    if(t.getAttribute&&t.getAttribute('data-field')==='walk'){ ST.walkText=t.value; return; }
+    if(t.getAttribute&&t.getAttribute('data-line')){
+      var wrap=t.closest('[data-line-wrap]'); var lid=wrap&&wrap.getAttribute('data-line-wrap');
+      var q=0,r=0;
+      if(wrap){ var qi=wrap.querySelector('[data-k="qty"]'), ri=wrap.querySelector('[data-k="unitRate"]'); q=num(qi&&qi.value); r=num(ri&&ri.value); var lt=wrap.querySelector('[data-lt="'+lid+'"]'); if(lt)lt.textContent=gbp(q*r); }
+      recomputeQuoteTotals();
+    }
+  });
+  app.addEventListener('change', function(e){
+    var t=e.target; if(!t.getAttribute)return;
+    var lid=t.getAttribute('data-line'); if(!lid)return;
+    var j=curJob(); if(!j)return; var line=(j.scopeItems||[]).find(function(l){return l.id===lid;}); if(!line)return;
+    var k=t.getAttribute('data-k');
+    line[k]= (k==='qty'||k==='unitRate')? num(t.value): t.value;
+    persist(j);
+  });
+  function recomputeQuoteTotals(){
+    var j=curJob(); if(!j)return; var net=0;
+    document.querySelectorAll('[data-line-wrap]').forEach(function(w){
+      var q=num(w.querySelector('[data-k="qty"]').value), r=num(w.querySelector('[data-k="unitRate"]').value); net+=q*r;
+    });
+    var vat=net*VAT; var e1=document.getElementById('q-net'),e2=document.getElementById('q-vat'),e3=document.getElementById('q-tot');
+    if(e1)e1.textContent=gbp(net); if(e2)e2.textContent=gbp(vat); if(e3)e3.textContent=gbp(net+vat);
+  }
+
+  // proof file chosen
+  fileInput.addEventListener('change', function(){
+    var f=fileInput.files&&fileInput.files[0]; var j=curJob(); if(!j||!ST.pendingProof)return;
+    var d=j.decisions.find(function(x){return x.id===ST.pendingProof;});
+    var label=d?d.detail:'Proof photo';
+    j.proofs=j.proofs||[]; j.proofs.push({id:uid(),label:label,filename:f?f.name:'photo.jpg',at:Date.now()});
+    if(d){d.status='resolved'; d.outcome='Proof captured: '+(f?f.name:'photo');}
+    ST.pendingProof=null; persist(j); toast('Proof filed against the job.');
+  });
+
+  function materialsOver(decId){
+    var j=curJob(); if(!j)return;
+    var v=prompt('How much has the merchant overbilled you (£)?','320');
+    if(v===null)return; var amt=Math.round(num(v)); if(!amt){toast('No amount — nothing recorded.');return;}
+    j.recoveries=j.recoveries||[]; j.recoveries.push({id:uid(),type:'Merchant overcharge',description:'Invoice '+gbp(amt)+' over your agreed rate',amount:amt,landed:false});
+    var d=j.decisions.find(function(x){return x.id===decId;}); if(d){d.status='resolved'; d.outcome='Querying '+gbp(amt)+' overcharge with the merchant.';}
+    persist(j); toast('Logged. Mark it landed once the credit arrives.');
+  }
+
+  function logExtra(){
+    var text=prompt('What’s the extra the customer asked for? (say it plainly)','Move a socket and add a radiator in the back room');
+    if(text===null||!text.trim())return;
+    ST.busy=true; toast('Pricing the extra…');
+    aiPriceExtra(text.trim()).then(function(res){
+      var j=curJob(); if(!j)return;
+      j.variations=j.variations||[]; j.variations.push({id:uid(),description:res.description,amount:res.amount,approved:false});
+      ST.busy=false; persist(j);
+      toast('Extra added at '+gbp(res.amount)+' — get the customer’s OK before you build it.');
+    }).catch(function(){ ST.busy=false; var j=curJob(); if(j){j.variations=j.variations||[];j.variations.push({id:uid(),description:text.trim(),amount:0,approved:false});persist(j);} });
+  }
+
+  function doExtract(){
+    var walk=(ST.walkText||'').trim();
+    if(walk.length<8){ toast('Tell me a bit more about the job first.'); return; }
+    ST.busy=true; render();
+    aiExtract(walk).then(function(job){
+      job.status='quoting';
+      ST.busy=false; ST.jobId=job.id;
+      if(DB){ DB.doc('jobs/'+job.id).set(job).catch(function(e){console.warn(e&&e.code);}); }
+      else { ST.jobs.push(job); saveLocalAll(); }
+      ST.view='quote'; render();
+      var flags=(job.flaggedQuestions||[]).length;
+      toast(job.scopeItems.length+' line'+(job.scopeItems.length>1?'s':'')+' priced'+(flags?' · '+flags+' to check':'')+'.');
+    }).catch(function(err){
+      ST.busy=false; render();
+      toast('Couldn’t read that — try again, or add lines by hand.'); console.warn('extract',err);
+    });
+  }
+
+  // ---------- speech ----------
+  var rec=null;
+  function toggleMic(){
+    var SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR){return;}
+    if(ST.recOn&&rec){ rec.stop(); return; }
+    rec=new SR(); rec.lang='en-GB'; rec.continuous=true; rec.interimResults=true;
+    var base=ST.walkText?ST.walkText+' ':'';
+    rec.onresult=function(ev){
+      var s=''; for(var i=ev.resultIndex;i<ev.results.length;i++){ s+=ev.results[i][0].transcript; }
+      ST.walkText=(base+s).replace(/\s+/g,' ');
+      var ta=document.getElementById('walk'); if(ta)ta.value=ST.walkText;
+    };
+    rec.onend=function(){ ST.recOn=false; render(); };
+    rec.onerror=function(){ ST.recOn=false; render(); };
+    ST.recOn=true; try{rec.start();}catch(e){ST.recOn=false;} render();
+  }
+
+  // ---------- boot ----------
+  function updateConn(){
+    if(usingLocal){ connEl.className='conn'; connText.textContent='on this device'; }
+    else if(DB){ connEl.className='conn live'; connText.textContent='shared live'; }
+    else { connEl.className='conn'; connText.textContent='connecting…'; }
+  }
+  function boot(){
+    render(); updateConn();
+    if(window.claude&&claude.use){
+      claude.use('db').then(function(d){
+        DB=d;
+        if(DB){
+          DB.collection('jobs').onSnapshot(function(snap){
+            ST.jobs=snap.docs.map(function(x){return x.data();}).filter(Boolean);
+            render();
+          }, function(err){ console.warn('db sub',err&&err.code); });
+        } else { fallbackLocal(); }
+        updateConn();
+      }).catch(function(){ fallbackLocal(); updateConn(); });
+      claude.use('sample').then(function(s){ SAMPLE=s; }).catch(function(){ SAMPLE=null; });
+    } else {
+      fallbackLocal(); updateConn();
+    }
+    // if caps never answer, ensure we still have local data after 10s
+    setTimeout(function(){ if(!DB && !usingLocal){ fallbackLocal(); updateConn(); } }, 10500);
+  }
+  function fallbackLocal(){ if(usingLocal)return; usingLocal=true; ST.jobs=loadLocal(); render(); }
+
+  boot();
+})();
+</script>

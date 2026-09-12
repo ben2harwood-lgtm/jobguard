@@ -1,0 +1,1029 @@
+<title>JobGuard Gen-2 Build Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    /* warm cream family, chosen to bias toward the gold accent */
+    --paper:#f1ede2;
+    --surface:#fbf8f1;
+    --surface-2:#f6f1e6;
+    --ink:#161a1f;
+    --ink-soft:#3f4a55;
+    --ink-faint:#6b7580;
+    --navy:#0e1c2c;
+    --navy-2:#132a43;
+    --navy-line:#26405e;
+    --steel:#5c7186;
+    --accent:#8a6412;        /* deep ochre-gold, readable on cream */
+    --accent-2:#b8862f;       /* brighter gold for marks/rails */
+    --accent-on-dark:#e4c98a;
+    --line:#ded6c4;
+    --line-soft:#e8e1d2;
+    --good:#3d6f4f;
+    --good-bg:#e6efe6;
+    --warn:#9a6a15;
+    --warn-bg:#f3ead7;
+    --crit:#9c3f28;
+    --crit-bg:#f2e2da;
+    --shadow:0 1px 0 rgba(17,22,29,.03), 0 10px 30px -20px rgba(17,22,29,.4);
+    --radius:14px;
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --paper:#0b1521;
+      --surface:#0f1e2e;
+      --surface-2:#132638;
+      --ink:#eae4d6;
+      --ink-soft:#b9c4cf;
+      --ink-faint:#8497a6;
+      --navy:#081019;
+      --navy-2:#0f2033;
+      --navy-line:#24405e;
+      --steel:#8ea2b6;
+      --accent:#e4c98a;
+      --accent-2:#d9b877;
+      --accent-on-dark:#e4c98a;
+      --line:#22384f;
+      --line-soft:#1a2c3f;
+      --good:#6db187;
+      --good-bg:#122a20;
+      --warn:#d4a751;
+      --warn-bg:#2c2413;
+      --crit:#d98a6e;
+      --crit-bg:#2c1a13;
+      --shadow:0 1px 0 rgba(0,0,0,.2), 0 16px 40px -24px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0b1521;
+    --surface:#0f1e2e;
+    --surface-2:#132638;
+    --ink:#eae4d6;
+    --ink-soft:#b9c4cf;
+    --ink-faint:#8497a6;
+    --navy:#081019;
+    --navy-2:#0f2033;
+    --navy-line:#24405e;
+    --steel:#8ea2b6;
+    --accent:#e4c98a;
+    --accent-2:#d9b877;
+    --accent-on-dark:#e4c98a;
+    --line:#22384f;
+    --line-soft:#1a2c3f;
+    --good:#6db187;
+    --good-bg:#122a20;
+    --warn:#d4a751;
+    --warn-bg:#2c2413;
+    --crit:#d98a6e;
+    --crit-bg:#2c1a13;
+    --shadow:0 1px 0 rgba(0,0,0,.2), 0 16px 40px -24px rgba(0,0,0,.7);
+  }
+
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%; scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Public Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:16px; line-height:1.6;
+  }
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} }
+  img{max-width:100%;}
+  a{color:var(--accent); text-underline-offset:3px;}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums;}
+  h1,h2,h3,h4{font-family:'Archivo',system-ui,sans-serif; margin:0; text-wrap:balance; letter-spacing:-.01em;}
+  p{margin:0;}
+  ul{margin:0; padding:0; list-style:none;}
+
+  .wrap{max-width:1120px; margin:0 auto; padding-inline:26px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--accent);
+    display:inline-flex; align-items:center; gap:9px;
+  }
+  .eyebrow::before{content:""; width:7px; height:7px; border-radius:2px; background:var(--accent-2);}
+
+  /* ===== Masthead ===== */
+  .mast{position:relative; overflow:hidden; background:var(--navy); color:#eef1f4; border-bottom:3px solid var(--accent-2);}
+  .mast .blueprint{
+    position:absolute; inset:0; pointer-events:none; opacity:.4;
+    background-image:linear-gradient(var(--navy-line) 1px, transparent 1px), linear-gradient(90deg,var(--navy-line) 1px, transparent 1px);
+    background-size:56px 56px;
+    -webkit-mask-image:radial-gradient(ellipse 75% 70% at 78% 10%, #000, transparent 72%);
+            mask-image:radial-gradient(ellipse 75% 70% at 78% 10%, #000, transparent 72%);
+  }
+  .mast .wrap{position:relative; z-index:1; padding-block:48px 52px;}
+  .mast .eyebrow{color:var(--accent-on-dark);}
+  .badge-row{display:flex; align-items:center; gap:12px; margin-bottom:22px;}
+  .shield{width:38px; height:38px; border-radius:9px; background:var(--accent-2); color:var(--navy); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15px;}
+  .brandword{font-family:'Archivo'; font-weight:800; font-size:19px; letter-spacing:.02em;}
+  .mast h1{font-size:clamp(32px,5vw,54px); line-height:1.02; font-weight:900; color:#f6f3ea; max-width:20ch;}
+  .mast .sub{margin-top:18px; font-size:19px; line-height:1.5; color:#c6d1db; max-width:66ch;}
+  .mast-meta{display:flex; flex-wrap:wrap; gap:10px; margin-top:26px;}
+  .mchip{font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.02em; color:#dbe3ea; border:1px solid var(--navy-line); background:rgba(255,255,255,.03); padding:7px 12px; border-radius:100px;}
+  .mchip b{color:var(--accent-on-dark); font-weight:600;}
+
+  /* ===== Section nav ===== */
+  .secnav{position:sticky; top:0; z-index:20; background:color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--line);}
+  .secnav .wrap{display:flex; gap:4px; overflow-x:auto; padding-block:9px; scrollbar-width:none;}
+  .secnav .wrap::-webkit-scrollbar{display:none;}
+  .secnav a{white-space:nowrap; text-decoration:none; color:var(--ink-soft); font-size:13px; font-weight:600; padding:7px 12px; border-radius:8px;}
+  .secnav a:hover{background:var(--surface-2); color:var(--ink);}
+
+  section.band{padding-block:60px; border-bottom:1px solid var(--line-soft);}
+  section.band:target{scroll-margin-top:52px;}
+  .band > .wrap > .eyebrow{margin-bottom:14px;}
+  h2.sec{font-size:clamp(26px,3.4vw,38px); line-height:1.08; font-weight:800; margin-bottom:14px;}
+  .lede{font-size:18px; line-height:1.6; color:var(--ink-soft); max-width:70ch;}
+  .note{font-size:13.5px; color:var(--ink-faint); max-width:76ch;}
+
+  /* dependency chain */
+  .chain{display:flex; flex-direction:column; gap:0; margin-top:34px; border-left:2px solid var(--accent-2); }
+  .chain li{position:relative; padding:14px 0 14px 26px;}
+  .chain li::before{content:""; position:absolute; left:-7px; top:20px; width:12px; height:12px; border-radius:50%; background:var(--paper); border:2px solid var(--accent-2);}
+  .chain li b{font-family:'Archivo'; font-weight:700; font-size:15.5px;}
+  .chain li span{color:var(--ink-soft); font-size:14.5px;}
+  .chain .arrow{font-family:'IBM Plex Mono',monospace; color:var(--accent); font-weight:700;}
+
+  /* phase table */
+  .ptable{width:100%; border-collapse:collapse; margin-top:30px; font-size:14.5px;}
+  .ptable th,.ptable td{text-align:left; padding:14px 16px; border-bottom:1px solid var(--line);}
+  .ptable thead th{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; border-bottom:1.5px solid var(--line);}
+  .ptable .pcode{font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--accent); white-space:nowrap;}
+  .ptable .ptheme{font-family:'Archivo'; font-weight:700; color:var(--ink);}
+  .ptable .pmonths{font-family:'IBM Plex Mono',monospace; color:var(--ink-soft); white-space:nowrap; font-size:13px;}
+  .ptable tr:hover td{background:var(--surface-2);}
+
+  /* phase detail blocks */
+  .phase{margin-top:26px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;}
+  .phase__head{display:flex; align-items:flex-start; gap:18px; padding:22px 24px; background:var(--surface-2); border-bottom:1px solid var(--line);}
+  .phase__code{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15px; color:var(--navy); background:var(--accent-2); padding:6px 11px; border-radius:8px; flex:none;}
+  :root[data-theme="dark"] .phase__code, :root:not([data-theme="light"]) .phase__code{color:var(--navy);}
+  .phase__title{font-family:'Archivo'; font-weight:800; font-size:20px; line-height:1.15;}
+  .phase__months{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--ink-faint); margin-top:4px;}
+  .phase__body{padding:22px 24px; display:grid; gap:20px;}
+  .kicker{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; margin-bottom:9px;}
+  .goal{font-size:15.5px; color:var(--ink); line-height:1.55;}
+  .ws-list{display:flex; flex-wrap:wrap; gap:8px;}
+  .ws{font-size:13px; color:var(--ink-soft); background:var(--surface-2); border:1px solid var(--line); padding:7px 11px; border-radius:8px; line-height:1.35;}
+  .ws b{color:var(--ink); font-weight:600;}
+  .exit{border-left:3px solid var(--good); background:var(--good-bg); padding:14px 16px; border-radius:0 10px 10px 0; font-size:14px; color:var(--ink); line-height:1.55;}
+  .exit.milestone{border-left-color:var(--accent-2); background:var(--surface-2);}
+  .exit .kicker{color:var(--good);}
+  .exit.milestone .kicker{color:var(--accent);}
+
+  /* subsystem grid */
+  .subgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:18px; margin-top:32px;}
+  .sub{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:22px 22px 18px; display:flex; flex-direction:column;}
+  .sub__top{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:6px;}
+  .sub h3{font-family:'Archivo'; font-weight:800; font-size:17.5px; line-height:1.15;}
+  .sub__meta{display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none;}
+  .pill{font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:600; letter-spacing:.04em; padding:4px 8px; border-radius:100px; white-space:nowrap;}
+  .pill.phase-b{background:var(--surface-2); color:var(--accent); border:1px solid var(--line);}
+  .pill.count-b{background:var(--navy); color:var(--accent-on-dark);}
+  .sub__purpose{font-size:13.5px; color:var(--ink-soft); line-height:1.5; margin:8px 0 12px;}
+  .sub__row{font-size:12.5px; color:var(--ink-soft); line-height:1.45; margin-top:7px;}
+  .sub__row .lab{font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); display:block; margin-bottom:2px;}
+  details.comps{margin-top:12px; border-top:1px solid var(--line-soft); padding-top:10px;}
+  details.comps summary{cursor:pointer; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--accent); list-style:none; display:flex; align-items:center; gap:7px;}
+  details.comps summary::-webkit-details-marker{display:none;}
+  details.comps summary::before{content:"+"; font-weight:700; color:var(--accent-2);}
+  details.comps[open] summary::before{content:"–";}
+  .comp-ul{margin-top:11px; display:grid; gap:5px;}
+  .comp-ul li{display:flex; justify-content:space-between; gap:12px; font-size:12.5px; color:var(--ink); padding:4px 0; border-bottom:1px dashed var(--line-soft); align-items:baseline;}
+  .comp-ul li span.t{font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink-faint); white-space:nowrap; flex:none;}
+  .kind-ui{color:var(--accent);}
+
+  /* standards / callouts */
+  .std-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-top:30px;}
+  .std{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px; border-top:3px solid var(--navy-2);}
+  .std h4{font-family:'Archivo'; font-weight:700; font-size:15.5px; margin-bottom:8px;}
+  .std p{font-size:13.5px; color:var(--ink-soft); line-height:1.5;}
+  .std .tagline{font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin-top:10px;}
+
+  /* gap cards with severity */
+  .gap-list{display:flex; flex-direction:column; gap:14px; margin-top:30px;}
+  .gap{display:grid; grid-template-columns:auto 1fr; gap:16px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px;}
+  .sev{align-self:start; font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:5px 9px; border-radius:6px; white-space:nowrap; margin-top:2px;}
+  .sev.high{background:var(--crit-bg); color:var(--crit);}
+  .sev.med{background:var(--warn-bg); color:var(--warn);}
+  .gap h4{font-family:'Archivo'; font-weight:700; font-size:15.5px; margin-bottom:6px;}
+  .gap p{font-size:13.5px; color:var(--ink-soft); line-height:1.5;}
+  .gap .fix{font-size:13px; color:var(--ink); margin-top:8px; line-height:1.5;}
+  .gap .fix b{font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--good); font-weight:700;}
+
+  /* stack columns */
+  .stack-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:30px;}
+  .stack-col{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px;}
+  .stack-col h4{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:12px;}
+  .stack-col ul{display:flex; flex-direction:column; gap:8px;}
+  .stack-col li{font-size:13px; color:var(--ink-soft); display:flex; gap:9px; line-height:1.4;}
+  .stack-col li b{color:var(--ink); font-weight:600; font-family:'IBM Plex Mono',monospace; font-size:11.5px; flex:none; min-width:78px;}
+
+  /* risk table */
+  .risk{display:flex; flex-direction:column; gap:0; margin-top:30px; border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .risk__row{display:grid; grid-template-columns:110px 1fr; gap:18px; padding:16px 20px; border-bottom:1px solid var(--line); background:var(--surface);}
+  .risk__row:last-child{border-bottom:none;}
+  .risk__row:nth-child(even){background:var(--surface-2);}
+  .risk__sev{display:flex; align-items:flex-start;}
+  .risk__body h4{font-family:'Archivo'; font-weight:700; font-size:14.5px; margin-bottom:5px; line-height:1.3;}
+  .risk__body p{font-size:13px; color:var(--ink-soft); line-height:1.5;}
+  .risk__body p b{font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--good); font-weight:700;}
+
+  /* team */
+  .team-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-top:28px;}
+  .team-col{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px;}
+  .team-col h4{font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin-bottom:12px;}
+  .team-col ul{display:flex; flex-direction:column; gap:9px;}
+  .team-col li{font-size:13.5px; color:var(--ink-soft); line-height:1.4; padding-left:16px; position:relative;}
+  .team-col li::before{content:"–"; position:absolute; left:0; color:var(--steel);}
+
+  /* milestones + crit path */
+  .ms-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:28px;}
+  .ms{background:var(--navy); color:#eef1f4; border-radius:var(--radius); padding:24px; border-top:3px solid var(--accent-2);}
+  .ms .tag{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-on-dark); margin-bottom:10px;}
+  .ms h4{font-family:'Archivo'; font-weight:800; font-size:18px; color:#f6f3ea; margin-bottom:10px;}
+  .ms p{font-size:14px; color:#c6d1db; line-height:1.55;}
+  .critpath{margin-top:26px; background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:20px 22px; font-size:14px; color:var(--ink-soft); line-height:1.7;}
+  .critpath .mono{color:var(--ink); font-size:12.5px;}
+
+  /* decisions list */
+  .dec-list{counter-reset:d; display:flex; flex-direction:column; gap:12px; margin-top:28px;}
+  .dec{display:grid; grid-template-columns:auto 1fr; gap:16px; background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent-2); border-radius:0 12px 12px 0; padding:16px 20px;}
+  .dec::before{counter-increment:d; content:counter(d,decimal-leading-zero); font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--accent); font-size:14px;}
+  .dec h4{font-family:'Archivo'; font-weight:700; font-size:14.5px; margin-bottom:4px;}
+  .dec p{font-size:13px; color:var(--ink-soft); line-height:1.5;}
+
+  .totals{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:30px;}
+  .tot{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px; border-top:2px solid var(--accent-2);}
+  .tot .k{font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-faint);}
+  .tot .v{font-family:'Archivo'; font-weight:800; font-size:26px; color:var(--ink); margin-top:8px; line-height:1;}
+  .tot .s{font-size:12px; color:var(--ink-soft); margin-top:7px; line-height:1.4;}
+
+  footer{background:var(--navy); color:#9fb0bf; padding-block:34px;}
+  footer .wrap{display:flex; flex-direction:column; gap:14px;}
+  footer .prov{font-size:13px; color:#b7c3cd; line-height:1.6; max-width:78ch;}
+  footer .strap{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.04em; color:var(--steel); border-top:1px solid var(--navy-line); padding-top:16px;}
+
+  @media (max-width:840px){
+    .subgrid,.std-grid,.team-grid,.ms-grid{grid-template-columns:1fr;}
+    .stack-grid{grid-template-columns:1fr;}
+    .totals{grid-template-columns:1fr 1fr;}
+    .risk__row{grid-template-columns:1fr; gap:8px;}
+    .ptable{font-size:13px;}
+    .ptable th,.ptable td{padding:11px 10px;}
+  }
+</style>
+
+<header class="mast">
+  <div class="blueprint"></div>
+  <div class="wrap">
+    <div class="badge-row"><span class="shield">JG</span><span class="brandword">JOBGUARD</span></div>
+    <span class="eyebrow">Second-generation build plan · v1 draft</span>
+    <h1>Everything we need to build, in the order the money demands it.</h1>
+    <p class="sub">A dependency-ordered plan to turn the JobGuard concept — the profit watchdog for UK builders — into a real, production, multi-tenant SaaS plus an offline-first field app. Six phases, twelve subsystems, 259 things to code, and the handful of decisions to make before a line is written.</p>
+    <div class="mast-meta">
+      <span class="mchip">Scope: <b>greenfield</b> — the concept site is the spec, no gen-1 code to carry</span>
+      <span class="mchip">Region: <b>UK-only</b> (eu-west-2)</span>
+      <span class="mchip">Timeline: <b>~30–33 months</b> across P0–P5</span>
+      <span class="mchip">Core loop first: <b>one live £79 job, end to end</b></span>
+    </div>
+  </div>
+</header>
+
+<nav class="secnav">
+  <div class="wrap">
+    <a href="#why">Why this order</a>
+    <a href="#phases">Phases</a>
+    <a href="#detail">Phase detail</a>
+    <a href="#subsystems">What we build</a>
+    <a href="#standards">Non-negotiables</a>
+    <a href="#gaps">Gaps to fold in</a>
+    <a href="#stack">Stack</a>
+    <a href="#team">Team</a>
+    <a href="#risks">Risks</a>
+    <a href="#milestones">Milestones</a>
+    <a href="#decisions">Start now</a>
+  </div>
+</nav>
+
+<section class="band" id="why">
+  <div class="wrap">
+    <span class="eyebrow">The shape of the problem</span>
+    <h2 class="sec">The build order isn't a preference — it's the value chain.</h2>
+    <p class="lede">JobGuard's promise is a strict dependency chain: you can't watch a job that doesn't exist yet, and you can't bill a recovery before the machinery that proves the money actually landed. The plan simply follows that chain. Everything that is <em>irreversible</em> once field phones hold data or once money and evidence records exist gets built first.</p>
+    <ul class="chain">
+      <li><b>Hold the job first.</b> <span>No capture without the <span class="mono">Job</span> + immutable <span class="mono">scope_item_id</span> spine and the offline substrate to hold it on a no-signal site.</span></li>
+      <li><b>Then structure it.</b> <span>No structured capture without the intake pipeline — speech-to-text → AI extraction → human confirm — sitting on the Integration Gateway.</span></li>
+      <li><b>Then price and switch it live.</b> <span>No quote without estimating over that spine; no £79 charge without the switch-live hook and the double-entry money ledger.</span></li>
+      <li><b>Then watch it.</b> <span>The watchdog can only check a job that already exists — so it follows capture and quoting, never precedes them.</span></li>
+      <li><b>Then, and only then, bill a recovery.</b> <span>A recovery fee needs 3-way match (the claim), evidence (the proof) and bank reconciliation (the cash landed) — so the fee meter is deliberately late.</span></li>
+      <li><b>Freeze the irreversibles on day one.</b> <span>The sync contract, the tamper-evident hash chains and the <span class="mono">scope_item_id</span> spine cannot be repainted later. They are Phase 0 whatever else slips.</span></li>
+    </ul>
+    <p class="note" style="margin-top:26px;">Guiding cut for the whole plan: spend the risk budget forward on the two hardest, most differentiating paths — the <b>voice-capture intake spine</b> and the <b>recovery-billing engine</b> — and buy or abstract everything that isn't a moat (speech-to-text, the language model, invoice reading, payments, open banking, e-signature) behind one gateway from the first line of code.</p>
+  </div>
+</section>
+
+<section class="band" id="phases">
+  <div class="wrap">
+    <span class="eyebrow">Six phases at a glance</span>
+    <h2 class="sec">Each phase proves exactly one thing.</h2>
+    <p class="lede">Timelines assume the founding team below and run several workstreams in parallel; the critical path is shorter than the sum of the phases because the Phase 0 foundations are built underneath Phase 1, not before it.</p>
+    <div style="overflow-x:auto;">
+    <table class="ptable">
+      <thead><tr><th>Phase</th><th>Theme</th><th>Months</th><th>The one thing it proves</th></tr></thead>
+      <tbody>
+        <tr><td class="pcode">P0</td><td class="ptheme">Irreversible foundations</td><td class="pmonths">0–4 (overlaps P1)</td><td>The substrate is right and cannot need repainting.</td></tr>
+        <tr><td class="pcode">P1</td><td class="ptheme">MVP — the “one live job” loop</td><td class="pmonths">2–9</td><td>The whole loop runs, unscripted and offline-tolerant, on one live £79 job.</td></tr>
+        <tr><td class="pcode">P2</td><td class="ptheme">Watchdog depth</td><td class="pmonths">9–14</td><td>It catches a real loss the builder didn't see, from outside data — as a real decision, not noise.</td></tr>
+        <tr><td class="pcode">P3</td><td class="ptheme">Recovery + billing engine</td><td class="pmonths">14–21</td><td>A real recovery is metered, proven, capped, credited, billed — and would survive a challenge.</td></tr>
+        <tr><td class="pcode">P4</td><td class="ptheme">Scale + integrations</td><td class="pmonths">21–27</td><td>It sits cleanly beside the builder's accounting + supplier stack; the rate-book compounds.</td></tr>
+        <tr><td class="pcode">P5</td><td class="ptheme">Enterprise</td><td class="pmonths">27–33+</td><td>A 40+-live-job contractor adopts it under their own security, identity and audit rules.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="totals">
+      <div class="tot"><div class="k">Subsystems</div><div class="v">12</div><div class="s">Owned end-to-end, each with a lead engineer.</div></div>
+      <div class="tot"><div class="k">Things to code</div><div class="v">259</div><div class="s">Components across all subsystems, S→XL.</div></div>
+      <div class="tot"><div class="k">Indicative effort</div><div class="v">~13–16</div><div class="s">Engineer-years across the full roadmap (≈650–830 engineer-weeks).</div></div>
+      <div class="tot"><div class="k">Team</div><div class="v">9–11</div><div class="s">Core at P0/P1, peaking in P3 for the money systems.</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="detail">
+  <div class="wrap">
+    <span class="eyebrow">Phase detail</span>
+    <h2 class="sec">Goal, workstreams and the exit that ends each phase.</h2>
+    <p class="lede">A phase isn't done when the code is written — it's done when the exit criterion is demonstrably true. Two of those exits are the milestones the whole company is judged on.</p>
+
+    <div class="phase">
+      <div class="phase__head"><span class="phase__code">P0</span><div><div class="phase__title">Irreversible foundations</div><div class="phase__months">Months 0–4 · built under and before P1</div></div></div>
+      <div class="phase__body">
+        <div><div class="kicker">Goal</div><p class="goal">Stand up every decision that is expensive or impossible to reverse once phones are in the field, money records exist, or evidence has been captured — so everything after builds on bedrock, never sand.</p></div>
+        <div><div class="kicker">Workstreams</div><div class="ws-list">
+          <span class="ws"><b>Infra + region pinning</b> — Terraform, ECS Fargate, Aurora Postgres, S3 Object-Lock, Temporal, Cognito, KMS, all in eu-west-2</span>
+          <span class="ws"><b>Multi-tenant isolation</b> — <span class="mono">tenant_id</span> on every row, Postgres RLS, and the adversarial cross-tenant test harness as a hard CI merge gate</span>
+          <span class="ws"><b>The spine</b> — <span class="mono">Job</span> aggregate + immutable <span class="mono">scope_item_id</span>, append-only event log + transactional outbox</span>
+          <span class="ws"><b>Offline substrate + frozen sync contract</b> — encrypted SQLite, PowerSync, the conflict/event-fold engine, the separate command outbox</span>
+          <span class="ws"><b>Evidence integrity</b> — hash-on-capture, WORM storage, per-tenant evidence hash chain</span>
+          <span class="ws"><b>Audit chain + anchoring skeleton</b> — per-tenant hash-chained <span class="mono">AuditEvent</span>, Merkle anchoring to a timestamping authority</span>
+          <span class="ws"><b>Money primitives</b> — integer-pence GBP, one rounding rule, the append-only double-entry ledger, the concurrency ledger</span>
+          <span class="ws"><b>Integration Gateway</b> — the anti-corruption layer so no business module ever calls a vendor SDK directly</span>
+        </div></div>
+        <div class="exit"><div class="kicker">Exit criteria</div>Two-tenant isolation suite gates every merge; an offline row syncs and folds deterministically through a simulated multi-crew conflict; a photo is hashed on device, re-hashed and WORM-locked server-side; an <span class="mono">AuditEvent</span> verifies against a recomputed chain and anchors to a test TSA; the ledger holds debits==credits under fuzz; the frozen sync contract is written down, test-enforced and signed off.</div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase__head"><span class="phase__code">P1</span><div><div class="phase__title">MVP — the “one live job” loop</div><div class="phase__months">Months 2–9 · the centre of gravity</div></div></div>
+      <div class="phase__body">
+        <div><div class="kicker">Goal</div><p class="goal">Prove the entire promise on a single live job, end to end, unscripted and offline-tolerant: walk it → quote it free → switch it live for £79 → protect it with the internal-signal watchdog → get paid. Nothing canonical until a human confirms; nothing sent, ordered or billed without an explicit yes.</p></div>
+        <div><div class="kicker">Workstreams</div><div class="ws-list">
+          <span class="ws"><b>Identity + auth</b> — Cognito SMS-OTP, crew invites, offline capture-only sessions</span>
+          <span class="ws"><b>“Walk it” capture</b> — one-thumb voice + inline photo, fully offline, hashed and queued</span>
+          <span class="ws"><b>Intake pipeline</b> — STT adapter, numeric-safe post-correction, AI structured extraction, the flagged-question engine, a golden-set eval gate</span>
+          <span class="ws"><b>Review + confirm</b> — the “nothing dropped” reconciliation screen; accept is the human-in-the-loop boundary</span>
+          <span class="ws"><b>Estimating + quoting</b> — quote builder over the spine, seeded rate-book, UK VAT/DRC/CIS presentation, coverage-diff, PDF, Decision-gated send</span>
+          <span class="ws"><b>Win + switch-live</b> — baseline freeze, won→live hand-off, the flat £79 charge, and the recovery-fee cap fixed for the job</span>
+          <span class="ws"><b>Variations + proof-of-cover</b> — the hard gate that a stage can't complete without a proof photo; on-site written approval</span>
+          <span class="ws"><b>Watchdog + Decision Inbox</b> — the four internal signals, suppression v1, the single Resolution API → Command Dispatcher path</span>
+          <span class="ws"><b>Final account</b> — assembled from the frozen baseline + evidence pack, mark-paid</span>
+        </div></div>
+        <div class="exit milestone"><div class="kicker">Exit — Milestone A</div>A real builder walks a job by voice + photos offline; it becomes a structured proposal with flagged questions; they confirm it with “nothing dropped” visible; build, price and send a free quote; mark it won (baseline freezes); switch live and are charged exactly £79 with no surprise; resolve a genuine watchdog decision; capture proof-of-cover and log an extra as a variation; the same one record becomes a final account with evidence attached and is marked paid. <b>No re-typing anywhere. Every outbound a deliberate yes. It runs unscripted.</b></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase__head"><span class="phase__code">P2</span><div><div class="phase__title">Watchdog depth</div><div class="phase__months">Months 9–14</div></div></div>
+      <div class="phase__body">
+        <div><div class="kicker">Goal</div><p class="goal">Make the watchdog earn its name: catch a real loss the builder didn't see, from outside data — a merchant invoice, a site-readiness signal — and surface it as a genuine, ranked, de-noised decision rather than noise.</p></div>
+        <div><div class="kicker">Workstreams</div><div class="ws-list">
+          <span class="ws"><b>Materials 3-way match (leak 3)</b> — PO builder, pre-commit rate checks, invoice OCR, goods-received capture, the line-matching + 3-way match engines</span>
+          <span class="ws"><b>Site readiness (leak 4)</b> — the dependency model, daily evaluation, sequencing + lead-time knowledge base, labour-gap roll-up, resequencing</span>
+          <span class="ws"><b>Inbox depth</b> — suppression v2, AI decision-copy, urgency classifier, SMS + WhatsApp, escalation and routing, the signal-to-noise dashboard as a standing gate</span>
+          <span class="ws"><b>Crew multi-user</b> — concurrent editing and conflict UX exercised for real</span>
+          <span class="ws"><b>Rate-book assist + observation capture</b> — static pricing help now, with actuals-capture wired on so the moat can compound</span>
+        </div></div>
+        <div class="exit"><div class="kicker">Exit criteria</div>The materials engine surfaces a real overcharge / short delivery from a photographed invoice as an actioned Decision, below the tuned false-positive threshold; the readiness engine flags a genuinely not-ready tomorrow early enough to resequence, with labour-£-at-stake shown, without crying wolf; Finding→Decision conversion sits in the healthy band on real usage.</div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase__head"><span class="phase__code">P3</span><div><div class="phase__title">Recovery + billing engine</div><div class="phase__months">Months 14–21 · highest complexity, do not compress</div></div></div>
+      <div class="phase__body">
+        <div><div class="kicker">Goal</div><p class="goal">Turn a detected leak into money that provably lands back in the builder's account — and only then emit a billable event. “No proof, no fee,” the 1.5% cap fixed at switch-live, and the once-only plan-fee credit become structural impossibilities to violate, not checks someone can forget.</p></div>
+        <div><div class="kicker">Workstreams</div><div class="ws-list">
+          <span class="ws"><b>Recovery case engine</b> — the case state machine, the billability classifier, the evidence-bundle assembler, the tamper-evident pack</span>
+          <span class="ws"><b>Regulator-safe pursuit</b> — the AI message drafter with tone guardrails, the human-approval send flow, the Temporal recovery saga; the builder is always the sender</span>
+          <span class="ws"><b>Landed-money detection</b> — open-banking feed + reconciliation matcher + the structural guard that a fee is impossible without landed evidence</span>
+          <span class="ws"><b>Outcome billing</b> — the deterministic recovery-fee derivation (no AI in the money path), concurrent-live tiering + upgrade decisions, Stripe + GoCardless, VAT invoicing, dunning, the “see the proof” statement</span>
+          <span class="ws"><b>Full customer billing</b> — interim applications + Construction Act notices, retention release on durable timers, full CIS/DRC, withheld-payment handoff</span>
+          <span class="ws"><b>Audit hardening</b> — live TSA anchoring, DSAR + legal-hold, first money-surface pen test, the regulatory-controls module</span>
+        </div></div>
+        <div class="exit milestone"><div class="kicker">Exit — Milestone B</div>A real supplier overcharge (or withheld customer payment) is detected, classified billable, assembled into a defensible pack, pursued via a builder-approved message, and the credit/refund actually lands and is machine-reconciled to hash-chained landed evidence. Exactly one recovery-fee row is written — 10p/£1, capped at the 1.5% fixed at switch-live, plan fee credited once — reproducible, disputable, VAT-correct, and <b>impossible to have fired without proof</b>. A prevented miss produces no fee. Legal has signed off the perimeter posture.</div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase__head"><span class="phase__code">P4</span><div><div class="phase__title">Scale + integrations</div><div class="phase__months">Months 21–27</div></div></div>
+      <div class="phase__body">
+        <div><div class="kicker">Goal</div><p class="goal">Make JobGuard sit cleanly beside the builder's existing accounting and supplier stack, and switch the rate-book learning loop on so the moat compounds from the first completed job.</p></div>
+        <div><div class="kicker">Workstreams</div><div class="ws-list">
+          <span class="ws"><b>Accounting</b> — Codat aggregator + direct Xero then QuickBooks, with a VAT/DRC/CIS/retention tax-code mapping UI and human-confirmed deduped pushes</span>
+          <span class="ws"><b>Merchants</b> — hardened document ingestion, punchout + PEPPOL + top-merchant portals where they exist, a second open-banking provider</span>
+          <span class="ws"><b>Rate-book learning on</b> — the shrinkage drift estimator, recurring-extra detection, merchant-reliability scoring — suggestions only, human-accepted</span>
+          <span class="ws"><b>Sync + scale hardening</b> — conflict resolution at scale, low-end-Android performance floor, backups/DR, Contractor-scale load</span>
+        </div></div>
+        <div class="exit"><div class="kicker">Exit criteria</div>A builder's final account posts correctly (VAT/CIS/DRC/retention) into Xero without re-keying and deduped; the rate-book produces an accepted suggestion that measurably tightens the next similar quote; the system holds performance and sync integrity at Contractor scale on the phones builders actually carry.</div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase__head"><span class="phase__code">P5</span><div><div class="phase__title">Enterprise</div><div class="phase__months">Months 27–33+</div></div></div>
+      <div class="phase__body">
+        <div><div class="kicker">Goal</div><p class="goal">Let a 40+-live-job contractor adopt JobGuard under their own security, identity and audit requirements.</p></div>
+        <div><div class="kicker">Workstreams</div><div class="ws-list">
+          <span class="ws"><b>Enterprise identity</b> — SSO (SAML/OIDC), fine-grained roles + org hierarchies via a Cedar policy engine, on-call routing</span>
+          <span class="ws"><b>Isolation graduation</b> — per-tenant KMS keys, schema-/DB-per-tenant, transparent behind the repository layer</span>
+          <span class="ws"><b>Trust exports</b> — independently-verifiable signed audit trails, custom recovery caps/contracts, PO/net-30 invoicing, a public API</span>
+          <span class="ws"><b>Certifications</b> — Cyber Essentials Plus → ISO 27001 / SOC 2, second pen test, white-glove onboarding</span>
+        </div></div>
+        <div class="exit"><div class="kicker">Exit criteria</div>An enterprise contractor runs 40+ concurrent live jobs under SSO and their own KMS, and exports a signed audit trail that verifies independently.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="subsystems">
+  <div class="wrap">
+    <span class="eyebrow">What we build — the full inventory</span>
+    <h2 class="sec">Twelve subsystems, 259 components to code.</h2>
+    <p class="lede">Each subsystem is owned end-to-end by a lead engineer and spans several phases. The badge shows its home phase and how many components it holds; open “all components” for the complete build list — the literal answer to “everything we need to code.” Tags: <span class="mono">S/M/L/XL</span> = rough effort.</p>
+
+    <div class="subgrid">
+
+      <!-- 1 Capture -->
+      <div class="sub">
+        <div class="sub__top"><h3>Capture &amp; Intake</h3><div class="sub__meta"><span class="pill phase-b">HOME · P1</span><span class="pill count-b mono">22 parts</span></div></div>
+        <p class="sub__purpose">On-site voice notes + photos become a structured Job with scope items, measurements, materials, tasks, hazards and flagged questions — nothing canonical until a human confirms. Kills leaks 1 &amp; 2 at source; the most important data path in the product.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Deepgram/AssemblyAI STT (construction vocab, per-word confidence) → Claude structured extraction with per-field citation + confidence → vision photo↔scope matching → flagged-question detection → golden-set evals.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Buy the models, build the extraction schema, prompts, citation/confidence harness, the construction lexicon and the eval gate — the moat is ours, the model is rented.</div>
+        <details class="comps"><summary>All 22 components</summary><ul class="comp-ul">
+          <li><span>Field capture recorder (voice + inline photo)</span><span class="t">ui · L</span></li>
+          <li><span>On-device capture store, hashing &amp; resumable upload</span><span class="t">module · L</span></li>
+          <li><span>Photo–voice temporal correlation capture</span><span class="t">module · S</span></li>
+          <li><span>On-device instant transcript preview (native STT)</span><span class="t">module · M</span></li>
+          <li><span>Capture/review inbox with processing state</span><span class="t">ui · M</span></li>
+          <li><span>Proposal review, edit &amp; confirm screen</span><span class="t">ui · XL</span></li>
+          <li><span>Attach-to-running-job capture + routing UI</span><span class="t">ui · L</span></li>
+          <li><span>Capture ingestion API + media finalize/verify</span><span class="t">api · M</span></li>
+          <li><span>Intake pipeline orchestrator</span><span class="t">service · L</span></li>
+          <li><span>STT adapter (Integration Gateway)</span><span class="t">integ · L</span></li>
+          <li><span>Construction lexicon / keyword-boost dataset + admin</span><span class="t">data · M</span></li>
+          <li><span>STT domain post-correction pass</span><span class="t">ml · M</span></li>
+          <li><span>LLM structured extraction service</span><span class="t">ml · XL</span></li>
+          <li><span>Extraction schema, prompt suite &amp; versioning</span><span class="t">data · L</span></li>
+          <li><span>Flagged-question engine</span><span class="t">module · L</span></li>
+          <li><span>Photo↔scope association (vision + temporal)</span><span class="t">ml · M</span></li>
+          <li><span>Capture intent classifier / router</span><span class="t">ml · L</span></li>
+          <li><span>Delta / variation extraction mode</span><span class="t">module · L</span></li>
+          <li><span>Proposal → canonical commit handler</span><span class="t">module · M</span></li>
+          <li><span>Proposal &amp; flagged-question store + lifecycle</span><span class="t">data · M</span></li>
+          <li><span>Golden-set eval harness + human-edit flywheel</span><span class="t">module · L</span></li>
+          <li><span>Prompt/version management + Langfuse instrumentation</span><span class="t">module · M</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 2 Quoting -->
+      <div class="sub">
+        <div class="sub__top"><h3>Quoting &amp; Rate-book</h3><div class="sub__meta"><span class="pill phase-b">HOME · P1</span><span class="pill count-b mono">23 parts</span></div></div>
+        <p class="sub__purpose">The free-forever quoting path and the pricing brain behind it. Turns an accepted capture into canonical scope items, prices them from the builder's own rates, freezes a baseline at won, and hands a won quote into a live job with nothing re-typed. Then learns from actuals so the next quote starts closer to right.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Rate matching (FTS + pgvector + LLM), similar-past-jobs retrieval, a Bayesian drift estimator (not deep learning) with an N-observation threshold, recurring-extra detection. Every output is a suggestion a human accepts — never a silent price change.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Build the pricing engine, the learning loop and the UK VAT/CIS/DRC engine; buy the LLM + a headless PDF renderer; open question on licensing a seed price book (BCIS/SPON's).</div>
+        <details class="comps"><summary>All 23 components</summary><ul class="comp-ul">
+          <li><span>Estimating scaffold + Job aggregate &amp; state machine</span><span class="t">module · L</span></li>
+          <li><span>ScopeItem living-scope model &amp; service</span><span class="t">data · L</span></li>
+          <li><span>JobStage model &amp; staging service</span><span class="t">data · M</span></li>
+          <li><span>Capture→Estimating proposal ingestion &amp; accept</span><span class="t">integ · M</span></li>
+          <li><span>Quote builder service (mutable working draft)</span><span class="t">service · L</span></li>
+          <li><span>Pricing engine (rate resolution + calculation)</span><span class="t">service · L</span></li>
+          <li><span>UK construction VAT / CIS / DRC engine</span><span class="t">module · M</span></li>
+          <li><span>QuoteVersion / QuoteLine snapshotting + versioning</span><span class="t">data · M</span></li>
+          <li><span>‘Nothing dropped’ coverage-diff engine</span><span class="t">module · M</span></li>
+          <li><span>Quote document generation &amp; templates</span><span class="t">service · M</span></li>
+          <li><span>Quote send + acceptance tracking</span><span class="t">service · M</span></li>
+          <li><span>Win / lose / expire recording</span><span class="t">module · M</span></li>
+          <li><span>Baseline freeze service</span><span class="t">module · M</span></li>
+          <li><span>Won→live scope hand-off orchestrator</span><span class="t">service · L</span></li>
+          <li><span>Rate-book core + starter seeding + import</span><span class="t">module · L</span></li>
+          <li><span>Rate matching / normalization (AI-assisted)</span><span class="t">ml · L</span></li>
+          <li><span>Similar-past-jobs retrieval (pgvector)</span><span class="t">ml · M</span></li>
+          <li><span>RateBookObservation capture</span><span class="t">data · M</span></li>
+          <li><span>Rate-book learning aggregator (drift estimator)</span><span class="t">bg · L</span></li>
+          <li><span>Recurring-extra + merchant-reliability signal</span><span class="t">ml · M</span></li>
+          <li><span>Win-rate / margin / pricing-calibration analytics</span><span class="t">module · M</span></li>
+          <li><span>Estimating REST/OpenAPI + PowerSync sync rules</span><span class="t">api · M</span></li>
+          <li><span>Quote builder UI (mobile field-first + web)</span><span class="t">ui · XL</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 3 Materials -->
+      <div class="sub">
+        <div class="sub__top"><h3>Materials &amp; 3-way Match</h3><div class="sub__meta"><span class="pill phase-b">HOME · P2</span><span class="pill count-b mono">19 parts</span></div></div>
+        <p class="sub__purpose">Leak 3, end to end. Before commit: check order price against the builder's agreed account rate, plus stock and delivery fit. After the fact: ingest merchant invoices and delivery notes and reconcile order vs delivered vs invoiced to catch overcharges, shortfalls, duplicates and VAT errors — every discrepancy a Decision, never an auto-order.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Textract + LLM-vision invoice OCR with citations; hybrid exact-code + fuzzy + pgvector line matching with LLM tie-break; spoken “two bags short” → structured shortfall; duplicate/anomaly detection.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Buy OCR + inbound email + (later) a PEPPOL access point; build the 3-way match engine and the material entity-resolution — no off-the-shelf matcher fits UK trade materials.</div>
+        <details class="comps"><summary>All 19 components</summary><ul class="comp-ul">
+          <li><span>Materials domain model &amp; migrations</span><span class="t">data · M</span></li>
+          <li><span>Purchase-order builder</span><span class="t">service · M</span></li>
+          <li><span>Pre-commit ordering checks</span><span class="t">module · M</span></li>
+          <li><span>Order approval command + send path</span><span class="t">module · M</span></li>
+          <li><span>Merchant-invoice ingestion pipeline</span><span class="t">service · L</span></li>
+          <li><span>Delivery / goods-received (GRN) capture</span><span class="t">ui · M</span></li>
+          <li><span>Material entity-resolution / line-matching engine</span><span class="t">ml · L</span></li>
+          <li><span>3-way match engine</span><span class="t">module · L</span></li>
+          <li><span>Monthly-statement reconciliation</span><span class="t">module · L</span></li>
+          <li><span>Duplicate-invoice &amp; anomaly detection</span><span class="t">module · S</span></li>
+          <li><span>Agreed account-rate management</span><span class="t">module · M</span></li>
+          <li><span>Merchant catalog / SKU master</span><span class="t">data · M</span></li>
+          <li><span>Discrepancy → Finding → Decision integration</span><span class="t">integ · M</span></li>
+          <li><span>Discrepancy → Recovery handoff + credit saga</span><span class="t">integ · M</span></li>
+          <li><span>VAT / DRC / CIS correctness checks</span><span class="t">module · S</span></li>
+          <li><span>Match review UI (web + mobile)</span><span class="t">ui · M</span></li>
+          <li><span>Scheduled materials timers</span><span class="t">bg · S</span></li>
+          <li><span>Merchant integration adapters</span><span class="t">integ · L</span></li>
+          <li><span>Merchant reliability &amp; rate-learning feedback</span><span class="t">ml · M</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 4 Readiness -->
+      <div class="sub">
+        <div class="sub__top"><h3>Site Readiness &amp; Scheduling</h3><div class="sub__meta"><span class="pill phase-b">HOME · P2</span><span class="pill count-b mono">17 parts</span></div></div>
+        <p class="sub__purpose">Leak 4 — “tomorrow, checked today.” Models lightweight dependencies (access, materials landed, preceding trade, cure/weather) over the scope spine, evaluates each afternoon whether tomorrow can actually start, and surfaces the labour gap in time to resequence. A readiness checker, never a maintained Gantt. Its catches are prevention, so never billable.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Dependency + day-plan extraction from the same voice notes; LLM-vision “is the preceding trade actually done?”; statistical duration/lead-time learning; rules/greedy resequencing with an LLM-drafted rationale.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Build the readiness engine and the sequencing knowledge base; reuse the shared scheduler; buy weather (Met Office) + the gov.uk bank-holiday feed. A full PM planner is an explicit non-goal.</div>
+        <details class="comps"><summary>All 17 components</summary><ul class="comp-ul">
+          <li><span>Scheduling &amp; dependency data model</span><span class="t">data · M</span></li>
+          <li><span>Dependency derivation service</span><span class="t">module · M</span></li>
+          <li><span>Readiness evaluation engine</span><span class="t">module · L</span></li>
+          <li><span>Daily evaluation job + reactive re-evaluation</span><span class="t">bg · M</span></li>
+          <li><span>Construction sequencing &amp; lead-time knowledge base</span><span class="t">data · M</span></li>
+          <li><span>Labour-gap / resource roll-up</span><span class="t">module · M</span></li>
+          <li><span>Resequencing suggestion engine</span><span class="t">module · M</span></li>
+          <li><span>Readiness Checks registered with the Watchdog</span><span class="t">module · S</span></li>
+          <li><span>Chase-owner action + short await saga</span><span class="t">integ · M</span></li>
+          <li><span>Weather adapter + weather-dependency check</span><span class="t">integ · S</span></li>
+          <li><span>Working-calendar / bank-holiday service</span><span class="t">module · S</span></li>
+          <li><span>Readiness UI surfaces (mobile + web)</span><span class="t">ui · L</span></li>
+          <li><span>Offline sync contract for planned-work/dependency</span><span class="t">module · S</span></li>
+          <li><span>Rate-book learning of durations &amp; lead times</span><span class="t">ml · M</span></li>
+          <li><span>Crew-availability / calendar integrations (optional)</span><span class="t">integ · M</span></li>
+          <li><span>Enterprise resource view + subcontractor portal</span><span class="t">service · L</span></li>
+          <li><span>Readiness observability (signal-to-noise + value)</span><span class="t">module · S</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 5 Evidence -->
+      <div class="sub">
+        <div class="sub__top"><h3>Evidence &amp; Variations</h3><div class="sub__meta"><span class="pill phase-b">HOME · P0/P1</span><span class="pill count-b mono">21 parts</span></div></div>
+        <p class="sub__purpose">The two audit-critical leaks. Leak 5: prompt for tamper-evident proof before a stage is covered, and hard-gate the stage so it can't appear complete on the invoice without it. Leak 6: capture an extra on site, price it, get the customer's dated written approval before work, and store the bundle that later powers defensible recovery.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>On-device blur/exposure rejection + perceptual-hash reuse detection; LLM-vision proof-relevance; extra-vs-baseline classification for leak-6; optional handwritten-agreement OCR.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Buy S3 Object-Lock (WORM), an RFC-3161 timestamping authority, KMS per-evidence keys, and Dropbox Sign for formal envelopes; build the hash chain, the light in-app on-site signature, and byte-stable pack rendering.</div>
+        <details class="comps"><summary>All 21 components</summary><ul class="comp-ul">
+          <li><span>Evidence + EvidenceLink core model &amp; repository</span><span class="t">data · M</span></li>
+          <li><span>On-device capture + content-hashing + manifest chain</span><span class="t">module · L</span></li>
+          <li><span>Resumable media upload to S3 + WORM</span><span class="t">service · M</span></li>
+          <li><span>Server hash verify + evidence hash-chain writer</span><span class="t">service · M</span></li>
+          <li><span>Merkle anchoring to RFC-3161 TSA</span><span class="t">bg · M</span></li>
+          <li><span>Stage proof-of-cover gate + guided capture UI</span><span class="t">ui · L</span></li>
+          <li><span>Proof prompt engine</span><span class="t">module · M</span></li>
+          <li><span>Proof quality checks (blur/exposure/dup/reuse)</span><span class="t">ml · M</span></li>
+          <li><span>Proof relevance vision check</span><span class="t">ml · M</span></li>
+          <li><span>Variation + VariationLine model &amp; state machine</span><span class="t">data · M</span></li>
+          <li><span>Variation capture &amp; pricing UI</span><span class="t">ui · L</span></li>
+          <li><span>Variation → baseline/billing integration</span><span class="t">module · M</span></li>
+          <li><span>In-app on-site written approval + VariationApproval</span><span class="t">module · L</span></li>
+          <li><span>Remote approval-link service</span><span class="t">service · M</span></li>
+          <li><span>Formal e-sign integration (Dropbox Sign)</span><span class="t">integ · M</span></li>
+          <li><span>Leak-6 watchdog check (approval-before-work)</span><span class="t">module · S</span></li>
+          <li><span>Evidence bundle / dispute-pack assembler</span><span class="t">service · L</span></li>
+          <li><span>Signature / pack PDF rendering</span><span class="t">service · M</span></li>
+          <li><span>Evidence &amp; approval offline sync contract</span><span class="t">module · M</span></li>
+          <li><span>GDPR crypto-shred + tombstoning</span><span class="t">module · M</span></li>
+          <li><span>Verifiable export + enterprise countersign</span><span class="t">module · M</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 6 Invoicing -->
+      <div class="sub">
+        <div class="sub__top"><h3>Final Account &amp; Invoicing</h3><div class="sub__meta"><span class="pill phase-b">HOME · P1/P3</span><span class="pill count-b mono">21 parts</span></div></div>
+        <p class="sub__purpose">Leak 7 — “get paid.” Turns the agreed scope + captured evidence into a customer invoice where every line is backed by its lineage via one <span class="mono">scope_item_id</span> join. Handles UK construction reality — interim applications, retention, VAT, CIS, DRC, disputed lines — and feeds any withheld amount into recovery. Tracks payment; never holds client funds.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Final-account &amp; pay-less-notice drafting (human-reviewed), nothing-unbilled reconciliation, VAT/CIS/DRC classification assist, open-banking transaction→invoice matching.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Build the invoicing engine + the construction tax logic (Stripe Tax doesn't cover CIS/DRC/retention) + in-region PDF; buy TrueLayer for landed-money; integrate Xero/QuickBooks/Sage in P4.</div>
+        <details class="comps"><summary>All 21 components</summary><ul class="comp-ul">
+          <li><span>Final Account domain model &amp; schema</span><span class="t">data · L</span></li>
+          <li><span>Final-account assembly service</span><span class="t">service · L</span></li>
+          <li><span>UK construction tax &amp; totals engine</span><span class="t">module · L</span></li>
+          <li><span>Evidence-backed line gating</span><span class="t">module · M</span></li>
+          <li><span>Invoice / application PDF &amp; branded document</span><span class="t">module · M</span></li>
+          <li><span>Human-in-the-loop send &amp; consent flow</span><span class="t">module · M</span></li>
+          <li><span>Payment tracking &amp; reconciliation</span><span class="t">integ · L</span></li>
+          <li><span>Interim / stage payment application engine</span><span class="t">module · L</span></li>
+          <li><span>Retention engine &amp; release scheduler</span><span class="t">module · M</span></li>
+          <li><span>CIS &amp; DRC handling</span><span class="t">module · L</span></li>
+          <li><span>Dispute / withheld detection &amp; Recovery handoff</span><span class="t">module · M</span></li>
+          <li><span>Evidence pack / dispute bundle assembler</span><span class="t">module · M</span></li>
+          <li><span>Leak-7 watchdog checks</span><span class="t">module · M</span></li>
+          <li><span>Credit notes, adjustments &amp; contra-charges</span><span class="t">module · S</span></li>
+          <li><span>Customer view / acceptance &amp; query portal</span><span class="t">ui · M</span></li>
+          <li><span>Mobile ‘turn job into invoice’ flow + offline</span><span class="t">ui · M</span></li>
+          <li><span>AI: final-account &amp; pay-less response drafting</span><span class="t">ml · M</span></li>
+          <li><span>AI: nothing-unbilled reconciliation</span><span class="t">ml · M</span></li>
+          <li><span>AI: VAT/CIS/DRC classification assist</span><span class="t">ml · M</span></li>
+          <li><span>Final Account REST/OpenAPI + frozen sync contract</span><span class="t">api · M</span></li>
+          <li><span>Accounting export / integration</span><span class="t">integ · M</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 7 Recovery -->
+      <div class="sub">
+        <div class="sub__top"><h3>Recovery Engine</h3><div class="sub__meta"><span class="pill phase-b">HOME · P3</span><span class="pill count-b mono">19 parts</span></div></div>
+        <p class="sub__purpose">The commercial heart. Turns a detected leak into money that provably lands, then — and only then — emits a billable event. Two invariants are structural: a fee can only originate from a case in state <span class="mono">landed</span> with hash-chained landed evidence; and <span class="mono">prevented</span> is a terminal state physically incapable of producing a fee. The builder always sends; JobGuard never auto-collects.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Billability classifier (biased non-billable, human-confirmed), evidence-completeness assessor, message drafter with a banned-phrase/tone filter, reconciliation matcher, inbound-reply classifier — the risk-critical ones get CI golden-set regression.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Build the case engine, no-proof-no-fee guard and reconciliation logic (proprietary, regulator-sensitive); buy bank data (TrueLayer) + Temporal; explicitly do NOT build debt-collection-as-a-service.</div>
+        <details class="comps"><summary>All 19 components</summary><ul class="comp-ul">
+          <li><span>RecoveryCase aggregate + state machine</span><span class="t">data · L</span></li>
+          <li><span>RecoveryEvent append-only case log</span><span class="t">data · M</span></li>
+          <li><span>Candidate-Finding ingestion + billability classifier</span><span class="t">module · L</span></li>
+          <li><span>Evidence bundle assembler</span><span class="t">module · L</span></li>
+          <li><span>Tamper-evident evidence pack renderer</span><span class="t">module · M</span></li>
+          <li><span>Evidence completeness assessor (AI)</span><span class="t">ml · M</span></li>
+          <li><span>Recovery message drafter (AI) + tone guardrails</span><span class="t">ml · M</span></li>
+          <li><span>Human-approval send flow + cadence/cooling-off</span><span class="t">module · L</span></li>
+          <li><span>Recovery saga (Temporal workflow)</span><span class="t">bg · XL</span></li>
+          <li><span>TrueLayer AIS integration + bank-consent flow</span><span class="t">integ · L</span></li>
+          <li><span>Reconciliation matcher (landed-money detection)</span><span class="t">module · XL</span></li>
+          <li><span>LandedConfirmation + no-proof-no-fee guard</span><span class="t">module · M</span></li>
+          <li><span>Billable-event emitter to Platform Billing</span><span class="t">api · M</span></li>
+          <li><span>Inbound counterparty reply capture + classifier</span><span class="t">integ · M</span></li>
+          <li><span>Recovery API + read models</span><span class="t">api · M</span></li>
+          <li><span>Back-office recovery/dispute review console</span><span class="t">ui · L</span></li>
+          <li><span>Field / desk decision surfaces</span><span class="t">ui · M</span></li>
+          <li><span>Consumer-facing regulatory workflow variant</span><span class="t">module · M</span></li>
+          <li><span>Recovery → rate-book feedback</span><span class="t">module · S</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 8 Billing -->
+      <div class="sub">
+        <div class="sub__top"><h3>Platform Billing &amp; Metering</h3><div class="sub__meta"><span class="pill phase-b">HOME · P3</span><span class="pill count-b mono">22 parts</span></div></div>
+        <p class="sub__purpose">How JobGuard bills the builder (never their customer): the tiered concurrent-live-jobs plan fee, the outcome-based recovery fee (10%, capped at 1.5% of accepted value, plan fee credited once), VAT, invoices, dunning. Two invariants: free quoting can NEVER produce a charge, and “no proof, no fee” is enforced by the schema, not a check.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Deliberate non-goal: NO AI in any money computation. Light rules/ML anomaly detection for fee-gaming flags to back-office only; optional read-only “explain your bill.”</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Buy Stripe (hosted card capture keeps us out of PCI) + GoCardless; build the internal double-entry ledger, the concurrency metering, and the capped/credited recovery-fee derivation no billing SaaS can express.</div>
+        <details class="comps"><summary>All 22 components</summary><ul class="comp-ul">
+          <li><span>Double-entry Ledger core</span><span class="t">module · XL</span></li>
+          <li><span>Money primitives &amp; rounding library</span><span class="t">module · S</span></li>
+          <li><span>ConcurrencyLedger + metering service</span><span class="t">module · L</span></li>
+          <li><span>PlanTier catalog &amp; Subscription model</span><span class="t">data · M</span></li>
+          <li><span>Switch-live billing hook + upgrade-Decision producer</span><span class="t">module · L</span></li>
+          <li><span>BillingAllocation (per-job billing state)</span><span class="t">data · M</span></li>
+          <li><span>Recovery-fee derivation engine</span><span class="t">module · XL</span></li>
+          <li><span>No-proof-no-fee structural guard</span><span class="t">module · M</span></li>
+          <li><span>VAT engine &amp; tax-point handling</span><span class="t">module · M</span></li>
+          <li><span>PlatformInvoice, receipt &amp; credit-note generation</span><span class="t">module · L</span></li>
+          <li><span>Payment-provider adapters (Stripe + GoCardless)</span><span class="t">integ · XL</span></li>
+          <li><span>Webhook ingestion &amp; reconciliation worker</span><span class="t">bg · L</span></li>
+          <li><span>Metering → provider push pipeline</span><span class="t">bg · M</span></li>
+          <li><span>Dunning engine &amp; saga</span><span class="t">bg · L</span></li>
+          <li><span>Proration engine</span><span class="t">module · M</span></li>
+          <li><span>Per-job statement API + ‘see the proof’ UI</span><span class="t">ui · L</span></li>
+          <li><span>Billing back-office / admin console</span><span class="t">ui · M</span></li>
+          <li><span>Money-event idempotency &amp; outbox intake</span><span class="t">module · M</span></li>
+          <li><span>AuditEvent chain integration for fee facts</span><span class="t">module · M</span></li>
+          <li><span>Enterprise custom-billing module</span><span class="t">module · M</span></li>
+          <li><span>Billing observability &amp; revenue/dunning dashboards</span><span class="t">module · S</span></li>
+          <li><span>Billing anomaly &amp; fee-gaming detector</span><span class="t">ml · S</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 9 Watchdog -->
+      <div class="sub">
+        <div class="sub__top"><h3>Watchdog Inbox &amp; Notifications</h3><div class="sub__meta"><span class="pill phase-b">HOME · P1/P2</span><span class="pill count-b mono">18 parts</span></div></div>
+        <p class="sub__purpose">The “only what needs you” layer. Turns the checks engine's Findings into a ranked, de-noised Decision Inbox, is the single authenticated path from watchdog to real-world action, and delivers to field crews across push/SMS/WhatsApp/email with digests, quiet hours and a hard no-noise budget. It exists to never cry wolf.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Template-first, LLM-filled decision copy (citation-grounded); urgency/interruption classifier; ranking personalization + fatigue model — all constrained by hard money/safety floors it can never suppress below.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Build the suppression engine, ranking, dispatcher and inbox — this IS the promise; buy transport only (Expo Push, Twilio, SES). Hosted orchestration (Knock/Courier) rejected on residency.</div>
+        <details class="comps"><summary>All 18 components</summary><ul class="comp-ul">
+          <li><span>Decision + DecisionOption + DecisionEvent model</span><span class="t">data · L</span></li>
+          <li><span>Finding → Decision suppression engine</span><span class="t">module · L</span></li>
+          <li><span>Decision ranking service</span><span class="t">module · M</span></li>
+          <li><span>Decision Resolution API + Command Dispatcher</span><span class="t">service · L</span></li>
+          <li><span>Inbox read APIs + PowerSync replication</span><span class="t">api · M</span></li>
+          <li><span>Offline resolution path</span><span class="t">module · M</span></li>
+          <li><span>Notification orchestration engine</span><span class="t">service · XL</span></li>
+          <li><span>Notification preference &amp; routing model + APIs</span><span class="t">data · M</span></li>
+          <li><span>Digest builder</span><span class="t">bg · M</span></li>
+          <li><span>Channel adapters (push/SMS/WhatsApp/email)</span><span class="t">integ · L</span></li>
+          <li><span>Delivery + inbound webhook handlers</span><span class="t">integ · M</span></li>
+          <li><span>Escalation &amp; reminder timers</span><span class="t">bg · M</span></li>
+          <li><span>Decision-copy drafting (LLM)</span><span class="t">ml · M</span></li>
+          <li><span>Urgency / interruption classifier</span><span class="t">ml · M</span></li>
+          <li><span>Ranking personalization + notification-fatigue model</span><span class="t">ml · L</span></li>
+          <li><span>Inbox UI (mobile + web)</span><span class="t">ui · L</span></li>
+          <li><span>Signal-to-noise &amp; delivery observability + feedback</span><span class="t">module · M</span></li>
+          <li><span>WhatsApp/SMS template registration &amp; management</span><span class="t">integ · S</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 10 Integrations -->
+      <div class="sub">
+        <div class="sub__top"><h3>Integrations Layer</h3><div class="sub__meta"><span class="pill phase-b">SPANS · P0–P5</span><span class="pill count-b mono">20 parts</span></div></div>
+        <p class="sub__purpose">One reusable connector framework — connection lifecycle, token vault, OAuth, webhook ingress, sync engine, canonical-model normalization — plus the concrete connectors to accounting, merchants, banks and comms. Design principle: most UK merchants have NO usable API, so document-ingestion is the always-on default and any real feed is a bonus layer.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Invoice/delivery OCR + vision reconcile; merchant identity resolution; cross-merchant SKU dedup (pgvector); account-rate learning; heterogeneous price-file parsing; bank-transaction matching.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Buy an accounting aggregator (Codat) + direct Xero, TrueLayer as AISP, Twilio + SES, Dropbox Sign; build the connector framework, token vault and the merchant OCR/matching moat.</div>
+        <details class="comps"><summary>All 20 components</summary><ul class="comp-ul">
+          <li><span>Connection lifecycle service</span><span class="t">service · M</span></li>
+          <li><span>Token &amp; Secret Vault + OAuth2 service</span><span class="t">service · L</span></li>
+          <li><span>Webhook ingress gateway</span><span class="t">service · M</span></li>
+          <li><span>Capability registry &amp; connector SDK</span><span class="t">module · M</span></li>
+          <li><span>Sync engine</span><span class="t">bg · L</span></li>
+          <li><span>Canonical models + ACL normalization + outbox</span><span class="t">module · M</span></li>
+          <li><span>Outbound command handlers</span><span class="t">module · M</span></li>
+          <li><span>Merchant document-ingestion pipeline</span><span class="t">integ · L</span></li>
+          <li><span>Merchant identity + SKU/catalogue matching (ML)</span><span class="t">ml · L</span></li>
+          <li><span>Account-rate learning + overcharge anomaly detection</span><span class="t">ml · M</span></li>
+          <li><span>Price-file / statement parser</span><span class="t">module · M</span></li>
+          <li><span>Bank-feed connector (open banking / TrueLayer)</span><span class="t">integ · M</span></li>
+          <li><span>Bank-transaction matching engine</span><span class="t">module · L</span></li>
+          <li><span>Accounting connectors + tax mapping</span><span class="t">integ · XL</span></li>
+          <li><span>Comms provider adapters (email + SMS)</span><span class="t">integ · M</span></li>
+          <li><span>Business-messaging engine</span><span class="t">module · M</span></li>
+          <li><span>WhatsApp Business connector</span><span class="t">integ · M</span></li>
+          <li><span>e-sign connector (Dropbox Sign)</span><span class="t">integ · S</span></li>
+          <li><span>Punchout (OCI/cXML) + PEPPOL e-invoicing</span><span class="t">integ · L</span></li>
+          <li><span>Connection UI + integrations health dashboard</span><span class="t">ui · M</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 11 Platform -->
+      <div class="sub">
+        <div class="sub__top"><h3>Identity, Security &amp; Compliance</h3><div class="sub__meta"><span class="pill phase-b">SPANS · P0–P5</span><span class="pill count-b mono">23 parts</span></div></div>
+        <p class="sub__purpose">The trust substrate everything else stands on: who a user is, which tenant/crew they act for, that no tenant can see another's data, that every money/approval/recovery fact is tamper-evident, and that UK GDPR + consumer-recovery obligations are enforced in code. Two hard invariants: isolation is a DB invariant; a side effect needs an elevated role AND a resolved Decision, written to the anchored audit chain.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>Defensive only: PII detection/redaction before anything reaches a vendor; the recovery-message content-compliance classifier; risk-based auth signals. Owns no generative pipeline.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Buy Cognito (wrapped), KMS/Secrets Manager, an external timestamping authority, off-the-shelf scanners; build the RLS isolation, the audit hash-chain and the authz-invariant test suites.</div>
+        <details class="comps"><summary>All 23 components</summary><ul class="comp-ul">
+          <li><span>Identity &amp; Tenancy core + tenant-scoped repository</span><span class="t">data · L</span></li>
+          <li><span>Auth service (Cognito wrapper)</span><span class="t">service · L</span></li>
+          <li><span>Offline field sign-in</span><span class="t">module · L</span></li>
+          <li><span>Authorization / RBAC policy engine</span><span class="t">module · L</span></li>
+          <li><span>Multi-tenant isolation layer (RLS)</span><span class="t">module · M</span></li>
+          <li><span>Cross-tenant isolation test harness</span><span class="t">module · M</span></li>
+          <li><span>Tenant-scoped PowerSync sync-rules spec</span><span class="t">module · M</span></li>
+          <li><span>AuditEvent hash-chain service</span><span class="t">service · L</span></li>
+          <li><span>Anchoring service (Merkle → RFC-3161 TSA)</span><span class="t">service · L</span></li>
+          <li><span>Audit integrity monitor</span><span class="t">bg · M</span></li>
+          <li><span>Reusable tamper-evident ledger mechanism</span><span class="t">module · M</span></li>
+          <li><span>Consent &amp; DPA management</span><span class="t">module · M</span></li>
+          <li><span>DSAR / data-subject-rights tooling</span><span class="t">module · L</span></li>
+          <li><span>Retention &amp; legal-hold engine</span><span class="t">bg · L</span></li>
+          <li><span>PII minimization / redaction service</span><span class="t">service · M</span></li>
+          <li><span>Recovery regulatory-controls module</span><span class="t">module · L</span></li>
+          <li><span>Recovery message content-compliance classifier</span><span class="t">ml · M</span></li>
+          <li><span>Secrets &amp; key management</span><span class="t">module · M</span></li>
+          <li><span>Security SDLC gates</span><span class="t">integ · M</span></li>
+          <li><span>Back-office admin &amp; audit console</span><span class="t">ui · L</span></li>
+          <li><span>Security monitoring &amp; incident response</span><span class="t">module · M</span></li>
+          <li><span>Compliance documentation package</span><span class="t">integ · M</span></li>
+          <li><span>Enterprise identity (SSO, Cedar, per-tenant KMS)</span><span class="t">module · XL</span></li>
+        </ul></details>
+      </div>
+
+      <!-- 12 Field -->
+      <div class="sub">
+        <div class="sub__top"><h3>Field &amp; Mobile UX + Offline</h3><div class="sub__meta"><span class="pill phase-b">SPANS · P0–P5</span><span class="pill count-b mono">34 parts</span></div></div>
+        <p class="sub__purpose">Make JobGuard usable by a builder on a muddy plot with no signal and one hand free: capture by talking and photographing, keep everything writable offline for days, sync cleanly on reconnect, and surface only genuine decisions on a gloveable, low-typing interface — with a keyboard-first web companion for the office. Owns the one offline sync contract every subsystem shares.</p>
+        <div class="sub__row"><span class="lab">AI/ML</span>On-device image-quality check + voice-activity trimming; optional on-device draft STT (whisper.cpp); renders the server's structured proposal with tap-to-source citations.</div>
+        <div class="sub__row"><span class="lab">Build vs buy</span>Buy PowerSync (behind our interface), Expo/EAS, S3 resumable upload, Sentry/OTel; build the command outbox + conflict/event-fold engine and the gloveable design system — a from-scratch sync engine is a classic sink.</div>
+        <details class="comps"><summary>All 34 components</summary><ul class="comp-ul">
+          <li><span>Offline data layer (encrypted local store)</span><span class="t">module · L</span></li>
+          <li><span>PowerSync integration + sync rules</span><span class="t">integ · L</span></li>
+          <li><span>Client id + hybrid-logical-clock module</span><span class="t">module · S</span></li>
+          <li><span>Conflict-resolution policy + server event-fold contract</span><span class="t">module · XL</span></li>
+          <li><span>Command outbox (side-effectful, idempotent, offline)</span><span class="t">module · L</span></li>
+          <li><span>Media upload pipeline (resumable, hash-on-capture)</span><span class="t">module · L</span></li>
+          <li><span>Frozen sync contract &amp; schema-evolution spec</span><span class="t">data · M</span></li>
+          <li><span>Local storage &amp; cache manager</span><span class="t">module · M</span></li>
+          <li><span>Voice capture (crash-safe)</span><span class="t">module · L</span></li>
+          <li><span>Photo / media capture</span><span class="t">module · M</span></li>
+          <li><span>On-device image quality checker</span><span class="t">ml · M</span></li>
+          <li><span>‘Walk it’ site-visit capture flow</span><span class="t">ui · L</span></li>
+          <li><span>Extraction-proposal review &amp; confirm screen</span><span class="t">ui · L</span></li>
+          <li><span>Flagged-questions answer queue</span><span class="t">ui · M</span></li>
+          <li><span>Quote review + ‘nothing dropped’ diff + send</span><span class="t">ui · M</span></li>
+          <li><span>Switch-live / £79 plan-fee confirmation flow</span><span class="t">ui · M</span></li>
+          <li><span>Decision Inbox (mobile)</span><span class="t">ui · L</span></li>
+          <li><span>Decision resolution command handlers</span><span class="t">module · M</span></li>
+          <li><span>Site-readiness self-report + finding view</span><span class="t">ui · M</span></li>
+          <li><span>Guided proof-of-cover evidence capture</span><span class="t">ui · M</span></li>
+          <li><span>Log-an-extra / variation quick capture</span><span class="t">ui · M</span></li>
+          <li><span>Final account view + evidence pack + mark-paid</span><span class="t">ui · M</span></li>
+          <li><span>Gloveable design system</span><span class="t">module · L</span></li>
+          <li><span>Accessibility &amp; literacy layer</span><span class="t">module · M</span></li>
+          <li><span>Voice-navigation / hands-free affordances</span><span class="t">module · M</span></li>
+          <li><span>Mobile auth (offline-tolerant)</span><span class="t">module · M</span></li>
+          <li><span>Push notification client + SMS fallback hooks</span><span class="t">integ · M</span></li>
+          <li><span>App lifecycle &amp; background task manager</span><span class="t">module · M</span></li>
+          <li><span>Web companion app shell</span><span class="t">module · L</span></li>
+          <li><span>Web office surfaces</span><span class="t">ui · XL</span></li>
+          <li><span>Web data client (online + optional offline)</span><span class="t">module · M</span></li>
+          <li><span>Field telemetry &amp; sync-health observability</span><span class="t">module · M</span></li>
+          <li><span>Recovery-case field UX</span><span class="t">ui · M</span></li>
+          <li><span>On-device draft STT (optional)</span><span class="t">ml · L</span></li>
+        </ul></details>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="band" id="standards">
+  <div class="wrap">
+    <span class="eyebrow">The non-negotiables</span>
+    <h2 class="sec">Ten invariants that are set in Phase 0 and never bent.</h2>
+    <p class="lede">These are the decisions that are catastrophic or impossible to reverse once phones hold data and money records exist. They are enforced structurally — in the database, the type system and the physical separation of code — not by policy or discipline.</p>
+    <div class="std-grid">
+      <div class="std"><h4>Tenant isolation is a DB invariant</h4><p>Every row carries <span class="mono">tenant_id</span>; Postgres row-level security makes a cross-tenant read impossible even with a buggy handler. An adversarial two-tenant test suite is a hard CI merge gate before any business table ships.</p><div class="tagline">RLS · default-deny · CI-gated</div></div>
+      <div class="std"><h4>Human-in-the-loop is architectural</h4><p>Watchdog checks are pure, side-effect-free functions that only emit Findings. The code that places an order, sends a message or bills is physically separate and reachable only by an authenticated user command resolving a Decision.</p><div class="tagline">Nothing sent without a yes</div></div>
+      <div class="std"><h4>The one job record spine</h4><p>A single immutable <span class="mono">scope_item_id</span> carries from voice capture through quote, live job and invoice — so nothing is ever copied or re-typed, and evidence attaches once and appears everywhere.</p><div class="tagline">Say it once</div></div>
+      <div class="std"><h4>Two audit logs, one hash-chained</h4><p>An append-only event log drives read models and the watchdog; a separate per-tenant hash-chained <span class="mono">AuditEvent</span> trail, Merkle-anchored to an external timestamping authority, gives dispute-grade tamper evidence for approvals, recoveries and every fee.</p><div class="tagline">Legally defensible</div></div>
+      <div class="std"><h4>The frozen sync contract</h4><p>The offline ids, conflict rules and schema evolution are frozen day one, because changing them once devices hold data is a fleet migration. Three data classes: field last-writer-wins, append-only, and deterministic state-machine fold.</p><div class="tagline">Freeze before the fleet</div></div>
+      <div class="std"><h4>Money is integer pence, double-entry</h4><p>Never floats. An internal append-only double-entry ledger is the source of truth for every fee; Stripe and GoCardless are collectors reconciled against it. UK reality — DRC, CIS, retention, interim applications — is modelled fully.</p><div class="tagline">Pennies conserved under fuzz</div></div>
+      <div class="std"><h4>Evidence is WORM + hashed at capture</h4><p>Every photo is SHA-256 hashed on the device, stored write-once (S3 Object Lock), and its hash chained. Editing is a new object; GDPR erasure is a crypto-shred tombstone that preserves the chain and the fact-of-existence.</p><div class="tagline">Write-once, provable</div></div>
+      <div class="std"><h4>“No proof, no fee” is structural</h4><p>A recovery-fee row can physically only be written from a case in state <span class="mono">landed</span> carrying hash-chained landed evidence. Prevention is a terminal state incapable of billing. The 1.5% cap is fixed at switch-live before any result can count.</p><div class="tagline">Proof first, fee after</div></div>
+      <div class="std"><h4>AI outputs are validated, cited, confident</h4><p>Every model output is strict-JSON-schema validated with reject/repair, carries a citation to its source span or photo and a confidence score, and never becomes canonical without a human confirm. Golden-set evals gate CI so quality can't silently rot.</p><div class="tagline">Cite or discard</div></div>
+      <div class="std"><h4>UK residency + one gateway</h4><p>Everything runs in eu-west-2, and every third-party capability (STT, LLM, OCR, payments, open banking, e-sign) sits behind an Integration Gateway with per-vendor residency tags — keeping every build-vs-buy choice reversible and auditable.</p><div class="tagline">In-region · swappable</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="gaps">
+  <div class="wrap">
+    <span class="eyebrow">Gaps the review caught</span>
+    <h2 class="sec">The perimeter and the commercial reality — fold these in before committing.</h2>
+    <p class="lede">The internal engineering spine is strong. The gaps are almost all where the product touches the outside world and its own business model: the builder's existing jobs, their customer, the legal basis of the fee, and the ways a free-tier-plus-outcome-fee model can be gamed. Several are Phase 0/1 blockers for the very Milestone A demo, not P4 polish.</p>
+    <div class="gap-list">
+      <div class="gap"><span class="sev high">High</span><div><h4>No way to onboard a builder's in-flight jobs</h4><p>A job can only be born via capture → quote → won → live. A real builder adopting the product already has 5–15 live jobs mid-flight — and the first thing every pilot user wants is to protect the work they're running now.</p><p class="fix"><b>Fix</b> Add an “adopt an in-flight job” intake in P1/P2: create a Job at any phase with a stated accepted value, an attested baseline and an <span class="mono">imported</span> provenance flag (weaker evidence lineage, modelled explicitly). Fix the cap at import.</p></div></div>
+      <div class="gap"><span class="sev high">High</span><div><h4>The customer is invisible — no counterparty or approval portal</h4><p>Quote acceptance, variation sign-off and the withheld-payment recovery all legally require the customer to act, yet there's no counterparty entity, portal auth, or consumer-vs-commercial classification — and that classification is what gates the whole regulator-safe recovery workflow.</p><p class="fix"><b>Fix</b> Define a Customer/Counterparty context + a magic-link approval portal in P1. Capture every customer “yes” as a hash-chained, portal-authenticated event. Drive <span class="mono">is_consumer_facing</span> from the modelled counterparty type.</p></div></div>
+      <div class="gap"><span class="sev high">High</span><div><h4>The free-tier + outcome-fee model is trivially gameable</h4><p>A builder can run capture, quoting and management free forever by never switching live; the 1.5% cap is set from a builder-controlled accepted value they're incentivised to under-report; and a builder who sees a recovery coming can settle it outside the app.</p><p class="fix"><b>Fix</b> Treat business-model integrity as a first-class subsystem: instrument won-but-never-live, run-elsewhere, and accepted-value divergence; consider tying the cap to quoted value or adding a fee floor. Decide deliberately, don't discover it in production.</p></div></div>
+      <div class="gap"><span class="sev high">High</span><div><h4>The fee has a regulatory opinion but no contract</h4><p>The plan covers the FCA/claims-management perimeter, but not the ToS, the definition of “landed,” the charge mandate, or UK unfair-terms exposure — and many sole-trader builders are treated as consumers. Enforceability rests on versioned ToS acceptance no subsystem currently captures.</p><p class="fix"><b>Fix</b> Add hash-chained, versioned ToS/mandate acceptance as a P0/P1 primitive (reuse the audit chain). Draft the fee terms in parallel with the perimeter opinion — you fix the cap on jobs in P1, before any legal basis for the fee exists.</p></div></div>
+      <div class="gap"><span class="sev high">High</span><div><h4>Disaster recovery is three words in P4</h4><p>For a product whose whole value is a tamper-evident vault + a money ledger, a data-loss event before P4 destroys the proposition. Restoring hash chains + WORM + saga state without breaking the chains is non-trivial, and single-region residency is in tension with a credible DR posture.</p><p class="fix"><b>Fix</b> Move RPO/RTO targets, point-in-time recovery, cross-AZ replication, saga-state recovery and tested restore drills into P0/P1. Explicitly resolve residency-vs-DR (multi-AZ in eu-west-2; a documented decision on any cross-region backup).</p></div></div>
+      <div class="gap"><span class="sev high">High</span><div><h4>No test strategy for the money paths</h4><p>Property tests are named for the ledger, but not for the combinatorially nasty parts: recovery-fee derivation across cap × plan-credit × partial-landing × multiple recoveries; VAT/DRC/CIS/retention correctness; reconciliation-matcher accuracy; end-to-end offline→sync→money.</p><p class="fix"><b>Fix</b> Elevate a “money-correctness golden suite” and an accountant-validated tax suite to named P0/P3 deliverables with coverage gates. Add contract tests for every gateway adapter against vendor sandboxes, and reconciliation-drift alerting as a P3 acceptance criterion.</p></div></div>
+      <div class="gap"><span class="sev med">Med</span><div><h4>No analytics pipeline behind the two must-have dashboards</h4><p>The plan names the decision-inbox signal-to-noise and recovery-funnel dashboards but nothing feeds them, and there's no activation/retention analytics to judge the Milestone A pilot. Reusing the domain event log for this couples them badly.</p><p class="fix"><b>Fix</b> Stand up a lightweight, residency-safe product-analytics pipeline in P1, separate from the domain event log — the pilot literally can't be judged without it.</p></div></div>
+      <div class="gap"><span class="sev med">Med</span><div><h4>The plan is purely engineering — no pilot or support</h4><p>Milestone A hinges on “a real builder on a real site,” but there's no design-partner recruitment, feedback loop or success metric beyond “it runs,” and human support first appears in P3. P1 pilot users on a high-UX-risk field product need support immediately.</p><p class="fix"><b>Fix</b> Add a design-partner/pilot workstream running P1→P3 with instrumented cohorts and explicit activation metrics. Staff human support at P1, not P3.</p></div></div>
+      <div class="gap"><span class="sev med">Med</span><div><h4>Where the seed rate-book comes from is hand-waved</h4><p>P1 assumes a “seeded starter rate-book,” but a credible UK materials + labour price book is a real data-acquisition and licensing problem (SPON's / NRM data is copyrighted). Without a decent seed, the very first quote is poor and the “closer to right” promise fails on day one.</p><p class="fix"><b>Fix</b> Name rate-book seed acquisition as a P0/P1 dependency with a copyright/licensing review — license a price book, build from merchant price feeds, or partner. It has lead time and legal exposure.</p></div></div>
+      <div class="gap"><span class="sev med">Med</span><div><h4>No data export / portability / offboarding</h4><p>GDPR portability, anti-lock-in, and what a cancelling builder gets back are missing; DSAR is P3 and accounting export P4, but there's no general “export my jobs, evidence and invoices,” which a cancelling P1 pilot user will demand.</p><p class="fix"><b>Fix</b> Add a self-service export workstream earlier than P4, and explicitly reconcile WORM compliance-mode retention against statutory retention and GDPR erasure-via-crypto-shred.</p></div></div>
+      <div class="gap"><span class="sev med">Med</span><div><h4>Integrity isn't authenticity — and there's a liability question</h4><p>Tamper-evidence proves a photo wasn't altered after capture; it doesn't prove it's a genuine record of this job/stage. A builder could stage evidence to fabricate a supplier claim or defend against a customer, and JobGuard assembles the pack.</p><p class="fix"><b>Fix</b> Add cheap capture-authenticity signals (geo + device attestation + capture-time correlation) and, more importantly, a documented liability posture reviewed with legal: JobGuard organizes builder-supplied evidence; it does not attest truth.</p></div></div>
+      <div class="gap"><span class="sev med">Med</span><div><h4>SMS/WhatsApp provisioning lead times could break signup</h4><p>Crew auth is SMS-OTP-first in P1 and WhatsApp arrives in P2. UK registered sender IDs and WhatsApp Business template approval have long lead times — if provisioning slips, signup itself breaks.</p><p class="fix"><b>Fix</b> Make the SMS provider + sender registration an early P0/P1 procurement item; start WhatsApp BSP onboarding at the beginning of P2, not when the feature is coded.</p></div></div>
+    </div>
+    <p class="note" style="margin-top:24px;"><b>Five sequencing fixes to bank now:</b> (1) PowerSync's replication typically reads the WAL via a role that <em>bypasses</em> RLS — spike whether tenant isolation actually holds on the sync path in P0, before declaring the isolation harness covers it. (2) Rate-book observation capture must be <em>writing</em> from the first completed job in P1/P2, even though learning suggestions land in P4 — otherwise P4 has nothing to learn from. (3) Shape the P1 authorization seam for the eventual fine-grained/Cedar model, or you rebuild permission checks everywhere and pay for it twice. (4) Start TrueLayer (open-banking) procurement in P2 — app review + 90-day reconsent have real lead time. (5) Serialize the once-only plan-fee credit per job (advisory lock / single writer / one workflow per job) so two concurrent recoveries can't each apply it.</p>
+  </div>
+</section>
+
+<section class="band" id="stack">
+  <div class="wrap">
+    <span class="eyebrow">Stack at a glance</span>
+    <h2 class="sec">One TypeScript modular monolith, UK-hosted, vendors kept swappable.</h2>
+    <p class="lede">Keep it a modular monolith in one repo throughout — modules lift out to their own service unchanged when they need independent scaling (intake/STT and the watchdog first). Don't pay the microservice tax early.</p>
+    <div class="stack-grid">
+      <div class="stack-col"><h4>Core platform</h4><ul>
+        <li><b>Lang</b> TypeScript, end to end</li>
+        <li><b>API</b> NestJS + a queue worker + a Temporal worker</li>
+        <li><b>DB</b> PostgreSQL (Aurora Serverless v2) + RLS</li>
+        <li><b>Search</b> Postgres FTS + pgvector</li>
+        <li><b>Async</b> transactional outbox; graphile-worker; Temporal for human-wait sagas</li>
+        <li><b>Infra</b> Terraform, ECS Fargate, all eu-west-2</li>
+      </ul></div>
+      <div class="stack-col"><h4>Clients</h4><ul>
+        <li><b>Field</b> React Native (Expo/EAS)</li>
+        <li><b>Offline</b> encrypted SQLite + PowerSync</li>
+        <li><b>Sync</b> UUIDv7 + hybrid-logical-clock, command outbox</li>
+        <li><b>Web</b> Next.js office companion</li>
+        <li><b>Design</b> gloveable tokens on RN primitives</li>
+      </ul></div>
+      <div class="stack-col"><h4>AI &amp; data</h4><ul>
+        <li><b>STT</b> Deepgram/AssemblyAI; Whisper fallback</li>
+        <li><b>LLM</b> Claude via the gateway</li>
+        <li><b>OCR</b> Textract + LLM-vision</li>
+        <li><b>Evals</b> Langfuse (self-hosted, EU) + golden sets</li>
+      </ul></div>
+      <div class="stack-col"><h4>Money &amp; banking</h4><ul>
+        <li><b>Ledger</b> in-house double-entry, integer pence</li>
+        <li><b>Collect</b> Stripe (hosted) + GoCardless</li>
+        <li><b>Bank</b> TrueLayer (open banking / AIS)</li>
+        <li><b>VAT</b> Stripe Tax for platform billing; in-house CIS/DRC/retention for customer billing</li>
+      </ul></div>
+      <div class="stack-col"><h4>Trust &amp; identity</h4><ul>
+        <li><b>Auth</b> Cognito (wrapped, SMS-OTP)</li>
+        <li><b>Keys</b> KMS + Secrets Manager</li>
+        <li><b>Evidence</b> S3 Object Lock (WORM)</li>
+        <li><b>Anchor</b> external RFC-3161 TSA</li>
+        <li><b>PII</b> Comprehend / Presidio redaction</li>
+      </ul></div>
+      <div class="stack-col"><h4>Integrations</h4><ul>
+        <li><b>Accounts</b> Codat + direct Xero/QuickBooks</li>
+        <li><b>Merchants</b> OCR-first; punchout/PEPPOL as bonus</li>
+        <li><b>Comms</b> Twilio (SMS/WhatsApp) + SES</li>
+        <li><b>e-sign</b> in-app light; Dropbox Sign formal</li>
+        <li><b>Observe</b> OpenTelemetry, Grafana/Sentry (EU)</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="team">
+  <div class="wrap">
+    <span class="eyebrow">Team &amp; how it scales</span>
+    <h2 class="sec">A lean core that peaks for the money systems.</h2>
+    <p class="lede">Roughly 9–11 people at P0/P1, growing to a P3 peak where the recovery-fee and reconciliation work concentrates the schedule risk.</p>
+    <div class="team-grid">
+      <div class="team-col"><h4>Core · P0–P1 (~9–11)</h4><ul>
+        <li>1 Engineering lead / architect — owns the reconciled foundation, the frozen sync contract, cross-module seams</li>
+        <li>2 Mobile / React-Native — offline substrate, conflict engine, gloveable field UX</li>
+        <li>2 Backend / platform — spine, event log + outbox, Integration Gateway, ledger primitives, RLS</li>
+        <li>1 Applied-AI / ML — STT + extraction pipeline, golden-set evals, Langfuse</li>
+        <li>1 Full-stack / web — Next.js companion and desk surfaces</li>
+        <li>1 Security / compliance-leaning — RLS isolation harness, auth, audit chain, DPIA support</li>
+        <li>1 Product designer (field-first, gloveable) + 0.5 QA / test-automation</li>
+        <li>Fractional: UK construction-accounting/VAT advisor + external legal counsel (perimeter + DPIA)</li>
+      </ul></div>
+      <div class="team-col"><h4>Scale by phase</h4><ul>
+        <li><b>P2 (+2–3):</b> a materials/OCR-leaning engineer (line-matching is the overrun risk), a second ML engineer, an integrations engineer</li>
+        <li><b>P3 (+3–4, the peak):</b> 1–2 money-systems engineers (recovery-fee + reconciliation), a Temporal/saga specialist, a back-office/console engineer</li>
+        <li><b>P4–P5:</b> an integrations pod (accounting + merchant connectors) and an enterprise/identity engineer</li>
+        <li>Add from the review: <b>human support from P1</b>, and a <b>design-partner/pilot</b> owner running P1→P3</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="risks">
+  <div class="wrap">
+    <span class="eyebrow">Top build risks</span>
+    <h2 class="sec">What could sink it, and how each is de-risked.</h2>
+    <div class="risk">
+      <div class="risk__row"><div class="risk__sev"><span class="sev high">High</span></div><div class="risk__body"><h4>Speech-to-text accuracy on accents, site noise and trade jargon</h4><p>Measurement mishears are financially dangerous. <b>De-risk</b> a real-audio vendor bake-off before committing; construction keyword boosting; numeric isolation + aggressive flagging; the human confirm step as backstop; a golden-set gate in CI.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev high">High</span></div><div class="risk__body"><h4>The offline conflict engine silently diverging money/state</h4><p>Under real multi-crew editing. <b>De-risk</b> start it first; enforce the three-class policy end to end; property-based / multi-crew simulation testing before crews ever share a job offline; money, approvals and evidence are append-only and structurally can't conflict.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev high">High</span></div><div class="risk__body"><h4>Over-billing on a false “landed” detection</h4><p>Breaks “no proof, no fee” — existential and regulatory. <b>De-risk</b> landing requires a hash-chained evidence artifact + a confidence threshold + mandatory back-office review above a value threshold; an immutable, disputable derivation snapshot; prevention is a structural terminal state.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev high">High</span></div><div class="risk__body"><h4>Recovery construed as regulated claims-management / debt collection</h4><p><b>De-risk</b> a legal perimeter opinion before P3 GA; the builder is always the sender; human approval on every contact; no dunning language (content-compliance classifier); an evidence-only posture; cadence caps and cooling-off for consumers.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev high">High</span></div><div class="risk__body"><h4>Extraction hallucination or a silently dropped scope item</h4><p>The exact leak we sell against. <b>De-risk</b> mandatory citations + confidence; the “nothing dropped” reconciliation; never auto-canonical; human confirm.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev med">Med</span></div><div class="risk__body"><h4>A crying-wolf inbox — no-noise is existential</h4><p>A noisy inbox kills the whole premise. <b>De-risk</b> suppression-first design; the signal-to-noise dashboard as a launch gate; per-user fatigue caps; hard money/safety floors personalization can never cross.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev med">Med</span></div><div class="risk__body"><h4>RLS misconfiguration → cross-tenant leak</h4><p><b>De-risk</b> default-deny policies; an RLS-subject runtime role that is never owner/superuser; a migration lint; the adversarial isolation suite as a hard CI gate — and the separate PowerSync-path spike above.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev med">Med</span></div><div class="risk__body"><h4>UK tax correctness (VAT/DRC/CIS/retention)</h4><p>HMRC-adjacent and trust-destroying if wrong, on the builder's own invoices and in accounting pushes. <b>De-risk</b> in-house engines with accountant-validated golden suites; assist-not-assert UX; human-confirmed deduped pushes.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev med">Med</span></div><div class="risk__body"><h4>Merchant API scarcity</h4><p>The materials value prop rests on OCR + email ingestion. <b>De-risk</b> make the always-on document-ingestion tier excellent; treat any real API / punchout / PEPPOL as a bonus layer, won by BD not engineering.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev med">Med</span></div><div class="risk__body"><h4>Line-matching &amp; statement reconciliation accuracy</h4><p>The two items most likely to overrun. <b>De-risk</b> confidence thresholds + tolerance bands + human-correctable matches; per-delivery matching first, consolidated statements as a hardened fast-follow.</p></div></div>
+      <div class="risk__row"><div class="risk__sev"><span class="sev med">Med</span></div><div class="risk__body"><h4>Long-lived sagas outliving their code</h4><p>Recovery and retention timers run for months. <b>De-risk</b> Temporal versioning discipline with replay tests; durable scheduling that fires even on archived jobs.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="milestones">
+  <div class="wrap">
+    <span class="eyebrow">Critical path &amp; the two milestones</span>
+    <h2 class="sec">The company is judged on two demonstrations.</h2>
+    <div class="ms-grid">
+      <div class="ms"><div class="tag">Milestone A — end of P1</div><h4>One live job, unscripted</h4><p>The full loop runs offline-tolerant on a single £79 live job: walk it, quote free, switch live, resolve a real watchdog decision, capture proof and a variation, invoice with evidence, mark paid — nothing re-typed. Proves desirability, the live-billing hook and the human-in-the-loop spine.</p></div>
+      <div class="ms"><div class="tag">Milestone B — end of P3</div><h4>A proven, capped, credited recovery</h4><p>A real recovery is metered from a hash-chained landed event, capped at the fixed 1.5%, plan fee credited once, VAT-correct, reproducible and legally defensible. Proves the commercial engine and “no proof, no fee” as a structural guarantee.</p></div>
+    </div>
+    <div class="critpath">
+      <b>The critical path to Milestone A:</b><br>
+      <span class="mono">offline substrate + conflict engine → the spine → Integration Gateway + STT/LLM adapters → capture → extraction + confirm → estimating + quote → win/freeze + switch-live + £79 hook → watchdog + Decision Inbox → final account + mark-paid.</span><br><br>
+      <b>Then extending to Milestone B:</b><br>
+      <span class="mono">3-way match + evidence bundle → recovery case + saga → landed detection + reconciliation → recovery-fee derivation + no-proof guard</span> — gated by the legal perimeter opinion.<br><br>
+      Two external tracks run in parallel off the engineering path and gate their phases: the <b>real-UK-audio STT/extraction bake-off</b> (before the intake pod commits) and the <b>legal/regulatory perimeter opinion</b> on recovery (must start no later than P2, gates P3 GA). Everything else — readiness, inbox depth, rate-book learning, integrations, enterprise — parallelizes off this spine.
+    </div>
+  </div>
+</section>
+
+<section class="band" id="decisions" style="border-bottom:none;">
+  <div class="wrap">
+    <span class="eyebrow">Start these in week one</span>
+    <h2 class="sec">The decisions that gate everything else.</h2>
+    <p class="lede">These are the load-bearing unknowns. Resolving them early is cheap; discovering them late is not. Most are not code — they're a spike, a procurement, or a lawyer.</p>
+    <div class="dec-list">
+      <div class="dec"><div><h4>Book the speech-to-text bake-off on real UK site audio</h4><p>Accuracy is the single gating product risk. Record real accents, site noise and trade jargon and compare vendors before the intake pod commits.</p></div></div>
+      <div class="dec"><div><h4>Brief legal on the recovery perimeter and the fee contract together</h4><p>Claims-management / debt-collection edge, plus the ToS, the definition of “landed,” the charge mandate, and sole-trader-as-consumer unfair-terms exposure. This gates P3 GA — start it now.</p></div></div>
+      <div class="dec"><div><h4>Spike PowerSync + RLS tenant isolation on the sync path</h4><p>Replication commonly bypasses row-level security. Prove isolation holds on the mobile sync stream, or choose sync-rules/per-tenant buckets — before the substrate is frozen.</p></div></div>
+      <div class="dec"><div><h4>Settle how the seed rate-book is sourced</h4><p>License a price book, build from merchant feeds, or partner — with a copyright review. First-quote quality depends on it, and it has lead time.</p></div></div>
+      <div class="dec"><div><h4>Decide the commercial-integrity stance on the cap and the fee</h4><p>Is the cap set from a builder-editable accepted value, or from quoted value, or with a floor? Design the anti-leakage instrumentation before the model ships, not after.</p></div></div>
+      <div class="dec"><div><h4>Resolve residency vs disaster recovery, and the evidence key store</h4><p>Single-region UK residency vs a credible RPO/RTO; and the per-evidence crypto-shred key store — now the single most sensitive asset — needs its own HSM, rotation and DR story.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="prov"><b>How this plan was produced.</b> Twelve domain designs (capture, quoting, materials, readiness, evidence, invoicing, recovery, billing, watchdog, integrations, platform, field) were drafted against a shared foundation reconciled from an independent scope, architecture and data-model pass, then stress-tested by a completeness review whose findings became the “gaps to fold in” section. Effort figures and timelines are indicative planning ranges, not commitments — treat them as a starting shape to refine with the team, not estimates to hold anyone to.</p>
+    <p class="strap">JOBGUARD · SECOND-GENERATION BUILD PLAN · UK / EU-WEST-2 · SAY IT ONCE, WATCH IT TO PAID</p>
+  </div>
+</footer>
