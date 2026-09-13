@@ -6,12 +6,20 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0000_tenancy.sql", import.meta.url),
   new URL("../migrations/0001_audit.sql", import.meta.url),
   new URL("../migrations/0002_evidence.sql", import.meta.url),
+  new URL("../migrations/0003_job_spine.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 
 export async function migrate(pool: Pool): Promise<void> {
+  await pool.query(`CREATE TABLE IF NOT EXISTS public.jobguard_schema_migration (
+    migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
+  )`);
   for (const migrationUrl of MIGRATION_URLS) {
+    const migrationName = fileURLToPath(migrationUrl).split("/").at(-1)!;
+    const applied = await pool.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name=$1", [migrationName]);
+    if (applied.rowCount) continue;
     const sql = await readFile(fileURLToPath(migrationUrl), "utf8");
     await pool.query(sql);
+    await pool.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1) ON CONFLICT DO NOTHING", [migrationName]);
   }
 }

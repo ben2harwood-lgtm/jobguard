@@ -135,6 +135,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@jobguard/core':
+        specifier: workspace:*
+        version: link:../core
       '@jobguard/storage':
         specifier: workspace:*
         version: link:../storage

@@ -11,3 +11,5 @@ export {
   type VerifiedTenantContext,
 } from "./tenant-context.js";
 export * from "./evidence.js";
+
+export * from "./job-repository.js";

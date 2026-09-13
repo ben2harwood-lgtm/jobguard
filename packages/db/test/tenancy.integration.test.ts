@@ -191,7 +191,14 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_object", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_upload", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "membership", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "proposal_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "quote_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "scope_identity", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "scope_lineage", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "scope_progress", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "scope_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
     ]);
   });
 
@@ -231,7 +238,14 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_link", owner: "jobguard_migration" },
       { relname: "evidence_object", owner: "jobguard_migration" },
       { relname: "evidence_upload", owner: "jobguard_migration" },
+      { relname: "job", owner: "jobguard_migration" },
       { relname: "membership", owner: "jobguard_migration" },
+      { relname: "proposal_line", owner: "jobguard_migration" },
+      { relname: "quote_version", owner: "jobguard_migration" },
+      { relname: "scope_identity", owner: "jobguard_migration" },
+      { relname: "scope_lineage", owner: "jobguard_migration" },
+      { relname: "scope_progress", owner: "jobguard_migration" },
+      { relname: "scope_revision", owner: "jobguard_migration" },
     ]);
   });
 });
