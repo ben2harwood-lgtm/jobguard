@@ -93,6 +93,10 @@ importers:
         version: 3.2.4(@types/node@24.0.3)(terser@5.51.2)(tsx@4.20.3)
 
   packages/ai:
+    dependencies:
+      zod:
+        specifier: 3.25.67
+        version: 3.25.67
     devDependencies:
       typescript:
         specifier: 5.8.3
