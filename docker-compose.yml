@@ -21,6 +21,13 @@ services:
       MINIO_ROOT_PASSWORD: devsecret123
     ports: ["9000:9000", "9001:9001"]
     volumes: ["miniodata:/data"]
+  minio-init:
+    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
+    depends_on: [minio]
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    # Private and versioned, deliberately without Object Lock/WORM until retention approval.
+    command: ["mc alias set local http://minio:9000 jobguard devsecret123 && mc mb --ignore-existing local/jobguard-evidence-private && mc anonymous set none local/jobguard-evidence-private && mc version enable local/jobguard-evidence-private"]
   mailhog:
     image: mailhog/mailhog:v1.0.1
     ports: ["1025:1025", "8025:8025"]

@@ -10,3 +10,4 @@ export {
   type TenantTransaction,
   type VerifiedTenantContext,
 } from "./tenant-context.js";
+export * from "./evidence.js";

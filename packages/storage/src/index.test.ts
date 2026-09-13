@@ -1,0 +1,3 @@
+import { describe, expect, it } from "vitest";
+import { MissingObjectVersionError, sha256, storageEnvironmentSchema } from "./index.js";
+describe("storage boundary",()=>{it("validates private adapter configuration and hashes bytes",()=>{expect(storageEnvironmentSchema.parse({S3_ENDPOINT:"http://localhost:9000",S3_BUCKET:"evidence-private",S3_ACCESS_KEY_ID:"test",S3_SECRET_ACCESS_KEY:"test"}).S3_REGION).toBe("eu-west-2");expect(sha256(new Uint8Array([1]))).toHaveLength(64);});it("has a typed missing-version failure",()=>expect(new MissingObjectVersionError().code).toBe("MISSING_OBJECT_VERSION"));});
