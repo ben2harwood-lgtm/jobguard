@@ -20,6 +20,9 @@ importers:
       '@jobguard/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@jobguard/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@nestjs/common':
         specifier: 11.1.3
         version: 11.1.3(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -38,6 +41,9 @@ importers:
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
+      zod:
+        specifier: 3.25.67
+        version: 3.25.67
     devDependencies:
       '@nestjs/cli':
         specifier: 11.0.7
