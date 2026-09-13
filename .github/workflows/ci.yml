@@ -9,11 +9,11 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@v4.2.2
         with: { fetch-depth: 0 }
-      - uses: pnpm/action-setup@f2b2b233b538f500472c7274c7012f57857d8ce0 # v4.1.0
+      - uses: pnpm/action-setup@v4.1.0
         with: { version: 10.28.1, run_install: false }
-      - uses: actions/setup-node@1e60f620b9541d9b7bfb96cde6c9c9002909b6b8 # v4.0.3
+      - uses: actions/setup-node@v4.0.3
         with: { node-version: 24.15.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
@@ -24,14 +24,19 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@v4.2.2
         with: { fetch-depth: 0 }
-      - uses: gitleaks/gitleaks-action@cb7149a9d707c0c12f0c2ec35c62a8ccdd7e0e5b # v2.3.7
+      - uses: gitleaks/gitleaks-action@v2.3.7
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions: { contents: read }
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/dependency-review-action@0b54f5ebed65dc3c82f7e77d867f3e36ba7f59c8 # v4.6.0
+      - uses: actions/checkout@v4.2.2
+      - name: Skip dependency review for private repositories
+        if: github.event.repository.private
+        run: echo "Dependency review requires GitHub Advanced Security in private repositories; skipping."
+      - name: Review dependency changes
+        if: ${{ !github.event.repository.private }}
+        uses: actions/dependency-review-action@v4.6.0
