@@ -187,6 +187,7 @@ describe("migration and privilege catalog", () => {
     `);
     expect(result.rows).toEqual([
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "audit_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "membership", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
     ]);
   });
@@ -223,6 +224,7 @@ describe("migration and privilege catalog", () => {
     `);
     expect(ownership.rows).toEqual([
       { relname: "account", owner: "jobguard_migration" },
+      { relname: "audit_event", owner: "jobguard_migration" },
       { relname: "membership", owner: "jobguard_migration" },
     ]);
   });
