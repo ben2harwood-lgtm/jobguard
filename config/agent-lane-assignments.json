@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "defaultLane": "m0-1",
+  "lanes": {
+    "m0-1": { "branchPrefixes": ["work", "codex/m0-1"], "allow": ["**"] },
+    "m0-2": { "branchPrefixes": ["codex/m0-2"], "allow": ["docs/contracts/**", "docs/decisions/**", "packages/core/src/contracts/**", "packages/core/src/gates/**"] },
+    "m0-3": { "branchPrefixes": ["codex/m0-3"], "allow": ["packages/core/src/money/**", "packages/core/src/quantity/**", "packages/core/src/tax/**"] },
+    "m0-4": { "branchPrefixes": ["codex/m0-4"], "allow": ["packages/db/**"] },
+    "m0-12": { "branchPrefixes": ["codex/m0-12"], "allow": ["packages/ai/**", "docs/fixtures/ai/**"] }
+  }
+}

@@ -1,0 +1,43 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+        env: { LANE_BASE_REF: "origin/${{ github.base_ref }}" }
+      - run: pnpm test
+      - run: pnpm build
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2.3.7
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Skip dependency review for private repositories
+        if: github.event.repository.private
+        run: echo "Dependency review requires GitHub Advanced Security in private repositories; skipping."
+      - name: Review dependency changes
+        if: ${{ !github.event.repository.private }}
+        uses: actions/dependency-review-action@v4.6.0
