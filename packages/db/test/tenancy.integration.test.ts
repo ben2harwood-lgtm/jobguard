@@ -187,7 +187,11 @@ describe("migration and privilege catalog", () => {
     `);
     expect(result.rows).toEqual([
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "action_authorization", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "audit_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "command_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "decision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "decision_resolution", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_object", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_upload", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -239,7 +243,11 @@ describe("migration and privilege catalog", () => {
     `);
     expect(ownership.rows).toEqual([
       { relname: "account", owner: "jobguard_migration" },
+      { relname: "action_authorization", owner: "jobguard_migration" },
       { relname: "audit_event", owner: "jobguard_migration" },
+      { relname: "command_receipt", owner: "jobguard_migration" },
+      { relname: "decision", owner: "jobguard_migration" },
+      { relname: "decision_resolution", owner: "jobguard_migration" },
       { relname: "evidence_link", owner: "jobguard_migration" },
       { relname: "evidence_object", owner: "jobguard_migration" },
       { relname: "evidence_upload", owner: "jobguard_migration" },
