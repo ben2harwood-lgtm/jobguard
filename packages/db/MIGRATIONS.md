@@ -38,3 +38,7 @@ expiry/revocation timestamps. An interrupted application rolls back as one
 transaction; corrections are forward fixes because removing receipts or grants
 would destroy authorization evidence. Standing and unattended authorization is
 deliberately excluded from the database until its later policy gate is approved.
+
+## 0006_outbox.sql
+
+Adds tenant-protected outbox, immutable attempt history, and provider-event inbox tables. A trigger writes only tenant/action routing identifiers to an infrastructure projection in the same transaction; the Graphile connection can read that projection but has no `app` schema access. Forward-fix rollback: stop dispatchers, preserve action/attempt/event records for audit, and deploy a corrective migration; do not drop delivery history after use.

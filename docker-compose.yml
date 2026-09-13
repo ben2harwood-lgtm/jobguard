@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: dev
       POSTGRES_DB: jobguard
     ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    volumes: ["pgdata:/var/lib/postgresql/data", "./tools/docker/001-worker-roles.sql:/docker-entrypoint-initdb.d/001-worker-roles.sql:ro"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U jobguard"]
       interval: 5s
@@ -37,7 +37,8 @@ services:
     command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jobguard/api start:worker"
     volumes: [".:/workspace"]
     environment:
-      DATABASE_URL: postgresql://jobguard:dev@postgres:5432/jobguard
+      GRAPHILE_DATABASE_URL: postgresql://jobguard_infrastructure_login:dev-infrastructure-only@postgres:5432/jobguard
+      RUNTIME_DATABASE_URL: postgresql://jobguard_runtime_login:dev-runtime-only@postgres:5432/jobguard
     depends_on:
       postgres:
         condition: service_healthy
