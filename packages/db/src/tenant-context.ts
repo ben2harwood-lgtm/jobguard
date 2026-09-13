@@ -4,6 +4,15 @@ import * as schema from "./schema.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 declare const verifiedTenantContextBrand: unique symbol;
+declare const authenticatedMembershipBrand: unique symbol;
+
+/** Proof created only after authentication and an active membership lookup. */
+export interface AuthenticatedMembership {
+  readonly identityUserId: string;
+  readonly tenantId: string;
+  readonly membershipId: string;
+  readonly [authenticatedMembershipBrand]: true;
+}
 
 /**
  * An authentication/membership bridge must create this value. The constructor is
@@ -12,6 +21,21 @@ declare const verifiedTenantContextBrand: unique symbol;
 export interface VerifiedTenantContext {
   readonly tenantId: string;
   readonly [verifiedTenantContextBrand]: true;
+}
+
+/** M0-6 trust-boundary constructor; never accepts a tenant id on its own. */
+export function verifiedTenantContextFromMembership(
+  membership: AuthenticatedMembership,
+): VerifiedTenantContext {
+  if (
+    !membership ||
+    !UUID.test(membership.identityUserId) ||
+    !UUID.test(membership.membershipId) ||
+    !UUID.test(membership.tenantId)
+  ) {
+    throw new InvalidTenantContextError();
+  }
+  return Object.freeze({ tenantId: membership.tenantId }) as VerifiedTenantContext;
 }
 
 export class InvalidTenantContextError extends Error {
