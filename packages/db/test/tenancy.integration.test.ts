@@ -185,10 +185,10 @@ describe("migration and privilege catalog", () => {
       GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
       ORDER BY c.relname
     `);
-    expect(result.rows).toEqual([
-      { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
-      { relname: "membership", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+    expect(result.rows.map((row) => row.relname)).toEqual([
+      "account", "evidence_deletion_request", "evidence_export_request", "evidence_item", "evidence_upload", "membership",
     ]);
+    expect(result.rows.every((row) => row.relrowsecurity && row.relforcerowsecurity && row.guarded)).toBe(true);
   });
 
   it("keeps runtime and infrastructure roles unprivileged", async () => {
@@ -221,9 +221,42 @@ describe("migration and privilege catalog", () => {
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'app' AND c.relkind = 'r' ORDER BY c.relname
     `);
-    expect(ownership.rows).toEqual([
-      { relname: "account", owner: "jobguard_migration" },
-      { relname: "membership", owner: "jobguard_migration" },
-    ]);
+    expect(ownership.rows).toHaveLength(6);
+    expect(ownership.rows.every((row) => row.owner === "jobguard_migration")).toBe(true);
+  });
+});
+
+describe("evidence metadata isolation", () => {
+  const uploadId = "60000000-0000-4000-8000-000000000006";
+
+  it("allows only the current tenant to register and see an upload", async () => {
+    await withTenant(runtime, context(TENANT_A), async (database) => {
+      await database.$client.query(`INSERT INTO app.evidence_upload
+        (tenant_id,id,job_id,idempotency_key,request_hash,evidence_type,content_type,retention_class,state,object_key,expected_sha256,expected_bytes,expires_at)
+        VALUES ($1,$2,$3,'db-upload','${"a".repeat(64)}','site_photo','image/jpeg','pilot_evidence','pending','tenants/a/object','${"b".repeat(64)}',10,now()+interval '5 min')`,
+      [TENANT_A, uploadId, "70000000-0000-4000-8000-000000000007"]);
+    });
+    await withTenant(runtime, context(TENANT_B), async (database) => {
+      expect((await database.$client.query("SELECT id FROM app.evidence_upload WHERE id=$1", [uploadId])).rows).toEqual([]);
+      await expect(database.$client.query(`INSERT INTO app.evidence_upload
+        (tenant_id,id,job_id,idempotency_key,request_hash,evidence_type,content_type,retention_class,state,object_key,expected_sha256,expected_bytes,expires_at)
+        VALUES ($1,$2,$3,'cross','${"a".repeat(64)}','site_photo','image/jpeg','pilot_evidence','pending','x','${"b".repeat(64)}',10,now())`,
+      [TENANT_A, "80000000-0000-4000-8000-000000000008", "70000000-0000-4000-8000-000000000007"])).rejects.toMatchObject({ code: "42501" });
+    });
+  });
+
+  it("prevents runtime mutation and deletion of registered immutable evidence", async () => {
+    const evidenceId = "90000000-0000-4000-8000-000000000009";
+    await admin.query(`UPDATE app.evidence_upload SET state='verified', object_version_id='v1', received_at=now(), verified_at=now() WHERE tenant_id=$1 AND id=$2`, [TENANT_A, uploadId]);
+    await admin.query(`INSERT INTO app.evidence_item
+      (tenant_id,id,upload_id,job_id,evidence_type,artifact_role,retention_class,state,object_key,object_version_id,sha256,byte_length,content_type,received_at,verified_at)
+      VALUES ($1,$2,$3,$4,'site_photo','original','pilot_evidence','verified','tenants/a/object','v1','${"b".repeat(64)}',10,'image/jpeg',now(),now())`,
+    [TENANT_A, evidenceId, uploadId, "70000000-0000-4000-8000-000000000007"]);
+    await withTenant(runtime, context(TENANT_A), async (database) => {
+      await expect(database.$client.query("UPDATE app.evidence_item SET sha256=$1 WHERE id=$2", ["c".repeat(64), evidenceId])).rejects.toMatchObject({ code: "42501" });
+    }).catch(() => undefined);
+    await withTenant(runtime, context(TENANT_A), async (database) => {
+      await expect(database.$client.query("DELETE FROM app.evidence_item WHERE id=$1", [evidenceId])).rejects.toMatchObject({ code: "42501" });
+    }).catch(() => undefined);
   });
 });
