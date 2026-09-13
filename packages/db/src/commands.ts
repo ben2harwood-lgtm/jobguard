@@ -62,8 +62,13 @@ export class UserCommandDispatcher {
         if(prior.status==="succeeded") return prior.result;
         throw new CommandError("COMMAND_CONFLICT");
       }
+      // Do not upgrade the membership KEY SHARE lock already taken by the receipt's
+      // foreign key. Concurrent commands can each hold that lock, and attempting to
+      // upgrade both to FOR UPDATE before taking their aggregate lock deadlocks.
+      // Membership is checked again at action execution; command authorization does
+      // not need to mutate or serialize on this row.
       const member=(await database.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2
-        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()) FOR UPDATE`,[context.tenantId,command.actorMembershipId])).rows[0];
+        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,command.actorMembershipId])).rows[0];
       if(!member || member.role!=="owner") throw new CommandError("FORBIDDEN");
       if (command.action.expiresAt.getTime() <= Date.now()) throw new CommandError("AUTHORIZATION_INVALID");
       const decisionId=command.decisionId??randomUUID(), resolutionId=command.resolutionId??randomUUID(), authorizationId=command.authorizationId??randomUUID();
