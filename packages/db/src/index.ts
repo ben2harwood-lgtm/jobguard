@@ -16,3 +16,4 @@ export * from "./job-repository.js";
 
 export * from "./ledger.js";
 export * from "./commands.js";
+export * from "./outbox.js";

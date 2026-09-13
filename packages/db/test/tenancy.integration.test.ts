@@ -187,7 +187,9 @@ describe("migration and privilege catalog", () => {
     `);
     expect(result.rows).toEqual([
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "action_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_authorization", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "action_outbox", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "audit_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "command_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "decision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -202,6 +204,7 @@ describe("migration and privilege catalog", () => {
       { relname: "ledger_account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "ledger_book", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "membership", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "provider_event_inbox", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proposal_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "quote_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "scope_identity", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -243,7 +246,9 @@ describe("migration and privilege catalog", () => {
     `);
     expect(ownership.rows).toEqual([
       { relname: "account", owner: "jobguard_migration" },
+      { relname: "action_attempt", owner: "jobguard_migration" },
       { relname: "action_authorization", owner: "jobguard_migration" },
+      { relname: "action_outbox", owner: "jobguard_migration" },
       { relname: "audit_event", owner: "jobguard_migration" },
       { relname: "command_receipt", owner: "jobguard_migration" },
       { relname: "decision", owner: "jobguard_migration" },
@@ -258,6 +263,7 @@ describe("migration and privilege catalog", () => {
       { relname: "ledger_account", owner: "jobguard_migration" },
       { relname: "ledger_book", owner: "jobguard_migration" },
       { relname: "membership", owner: "jobguard_migration" },
+      { relname: "provider_event_inbox", owner: "jobguard_migration" },
       { relname: "proposal_line", owner: "jobguard_migration" },
       { relname: "quote_version", owner: "jobguard_migration" },
       { relname: "scope_identity", owner: "jobguard_migration" },
