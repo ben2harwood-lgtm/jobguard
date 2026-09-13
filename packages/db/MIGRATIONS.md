@@ -23,3 +23,10 @@ An interrupted migration rolls back transactionally; corrections are forward fix
 because removing evidence identity or object-version references would weaken proof.
 Object bytes remain private and versioned outside PostgreSQL. Object Lock/WORM is
 intentionally not enabled pending the retention/deletion decision.
+
+`0004_ledger.sql` is the forward-only M0-10 ledger migration. Posted journals
+and lines are immutable; corrections are linked reversing journals. Deferred
+triggers validate whole-journal balance and matching audit provenance at commit.
+Production chart mappings and recovery-fee posting remain disabled pending D02,
+the fee decisions, and the qualifying-landing implementation. Corrections are
+forward fixes, never destructive rollback.
