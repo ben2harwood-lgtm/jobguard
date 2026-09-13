@@ -41,5 +41,6 @@ DO $$ DECLARE n text; BEGIN FOREACH n IN ARRAY ARRAY['action_outbox','action_att
  EXECUTE format('GRANT SELECT,INSERT ON app.%I TO jobguard_runtime',n); EXECUTE format('REVOKE DELETE,TRUNCATE,REFERENCES,TRIGGER ON app.%I FROM jobguard_runtime',n);
  END LOOP; END $$;
 GRANT UPDATE(status,next_attempt_at,claimed_at,completed_at,updated_at) ON app.action_outbox TO jobguard_runtime;
+GRANT UPDATE(outcome,provider_reference,error_code,finished_at) ON app.action_attempt TO jobguard_runtime;
 GRANT UPDATE(processing_status,processed_at) ON app.provider_event_inbox TO jobguard_runtime;
 COMMIT;
