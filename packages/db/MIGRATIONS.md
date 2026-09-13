@@ -30,3 +30,11 @@ triggers validate whole-journal balance and matching audit provenance at commit.
 Production chart mappings and recovery-fee posting remain disabled pending D02,
 the fee decisions, and the qualifying-landing implementation. Corrections are
 forward fixes, never destructive rollback.
+
+`0005_commands.sql` is the forward-only M0-8 command/authorization migration.
+It adds tenant-protected immutable decisions and resolutions, exact revocable
+authorizations, and durable semantic command receipts. It also adds membership
+expiry/revocation timestamps. An interrupted application rolls back as one
+transaction; corrections are forward fixes because removing receipts or grants
+would destroy authorization evidence. Standing and unattended authorization is
+deliberately excluded from the database until its later policy gate is approved.
