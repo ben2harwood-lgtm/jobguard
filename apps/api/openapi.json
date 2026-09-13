@@ -12,20 +12,38 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["status"],
-                  "properties": { "status": { "type": "string", "enum": ["ok"] } }
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  }
                 }
               }
             }
           }
         },
         "summary": "Process liveness; deliberately does not access dependencies",
-        "tags": ["system"]
+        "tags": [
+          "system"
+        ]
       }
     }
   },
-  "info": { "title": "JobGuard API", "description": "", "version": "0.0.0", "contact": {} },
+  "info": {
+    "title": "JobGuard API",
+    "description": "",
+    "version": "0.0.0",
+    "contact": {}
+  },
   "tags": [],
   "servers": [],
-  "components": { "schemas": {} }
+  "components": {
+    "schemas": {}
+  }
 }
