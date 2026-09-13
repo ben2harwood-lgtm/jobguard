@@ -1,0 +1,39 @@
+# Synthetic local development infrastructure only.
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_USER: jobguard
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: jobguard
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: jobguard
+      MINIO_ROOT_PASSWORD: devsecret123
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["miniodata:/data"]
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports: ["1025:1025", "8025:8025"]
+  worker:
+    image: node:24.15.0-alpine
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jobguard/api start:worker"
+    volumes: [".:/workspace"]
+    environment:
+      DATABASE_URL: postgresql://jobguard:dev@postgres:5432/jobguard
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  pgdata: {}
+  miniodata: {}

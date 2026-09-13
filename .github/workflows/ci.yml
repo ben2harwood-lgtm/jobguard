@@ -1,0 +1,37 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@f2b2b233b538f500472c7274c7012f57857d8ce0 # v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@1e60f620b9541d9b7bfb96cde6c9c9002909b6b8 # v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+        env: { LANE_BASE_REF: "origin/${{ github.base_ref }}" }
+      - run: pnpm test
+      - run: pnpm build
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@cb7149a9d707c0c12f0c2ec35c62a8ccdd7e0e5b # v2.3.7
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/dependency-review-action@0b54f5ebed65dc3c82f7e77d867f3e36ba7f59c8 # v4.6.0
