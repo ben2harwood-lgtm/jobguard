@@ -5,6 +5,7 @@ import type { Pool } from "pg";
 export const MIGRATION_URLS = [
   new URL("../migrations/0000_tenancy.sql", import.meta.url),
   new URL("../migrations/0001_audit.sql", import.meta.url),
+  new URL("../migrations/0002_evidence.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 

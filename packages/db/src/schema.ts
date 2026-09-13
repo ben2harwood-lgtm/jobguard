@@ -67,3 +67,26 @@ export const memberships = app.table(
 
 export type Account = typeof accounts.$inferSelect;
 export type Membership = typeof memberships.$inferSelect;
+
+export const evidenceUploads = app.table("evidence_upload", {
+  id: uuid("id").notNull(), tenantId: uuid("tenant_id").notNull(), jobId: uuid("job_id").notNull(),
+  scopeItemId: uuid("scope_item_id"), objectKey: varchar("object_key", { length: 1024 }).notNull(),
+  expectedSha256: varchar("expected_sha256", { length: 64 }).notNull(),
+  expectedContentType: varchar("expected_content_type", { length: 100 }).notNull(),
+  maximumBytes: varchar("maximum_bytes").notNull(), retentionClass: varchar("retention_class", { length: 40 }).notNull(),
+  state: varchar("state", { length: 20 }).notNull(), rejectionCode: varchar("rejection_code", { length: 50 }),
+  objectVersionId: varchar("object_version_id", { length: 1024 }), deviceCapturedAt: timestamp("device_captured_at", { withTimezone: true }),
+  serverReceivedAt: timestamp("server_received_at", { withTimezone: true }).notNull(), serverVerifiedAt: timestamp("server_verified_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => [primaryKey({ columns: [table.tenantId, table.id] })]);
+
+export const evidenceObjects = app.table("evidence_object", {
+  id: uuid("id").notNull(), tenantId: uuid("tenant_id").notNull(), uploadId: uuid("upload_id"),
+  jobId: uuid("job_id").notNull(), scopeItemId: uuid("scope_item_id"), kind: varchar("kind", { length: 20 }).notNull(),
+  originalEvidenceId: uuid("original_evidence_id"), evidenceType: varchar("evidence_type", { length: 40 }).notNull(),
+  objectKey: varchar("object_key", { length: 1024 }).notNull(), objectVersionId: varchar("object_version_id", { length: 1024 }).notNull(),
+  sha256: varchar("sha256", { length: 64 }).notNull(), byteLength: varchar("byte_length").notNull(),
+  contentType: varchar("content_type", { length: 100 }).notNull(), retentionClass: varchar("retention_class", { length: 40 }).notNull(),
+  deviceCapturedAt: timestamp("device_captured_at", { withTimezone: true }), serverReceivedAt: timestamp("server_received_at", { withTimezone: true }).notNull(),
+  serverVerifiedAt: timestamp("server_verified_at", { withTimezone: true }).notNull(),
+}, (table) => [primaryKey({ columns: [table.tenantId, table.id] })]);

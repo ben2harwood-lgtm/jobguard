@@ -16,3 +16,10 @@ reviewed migration.
 RLS is a defence within a correctly verified tenant context. It does not protect
 against a compromised owner/migration connection or an application bridge that
 is allowed to manufacture a false verified context.
+
+`0002_evidence.sql` is the forward-only M0-11 evidence-storage migration. It adds
+RLS-protected upload, immutable object-registration, and authorized-link tables.
+An interrupted migration rolls back transactionally; corrections are forward fixes
+because removing evidence identity or object-version references would weaken proof.
+Object bytes remain private and versioned outside PostgreSQL. Object Lock/WORM is
+intentionally not enabled pending the retention/deletion decision.
