@@ -33,6 +33,38 @@
           "system"
         ]
       }
+    },
+    "/jobs/capture": {
+      "post": {
+        "operationId": "CaptureController_capture",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "contractVersion",
+                  "requested_tenant_id",
+                  "captureId",
+                  "source",
+                  "fixtureId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Proposal only; no canonical revision or send is created"
+          }
+        },
+        "summary": "Create an idempotent draft job and cited proposal from synthetic text",
+        "tags": [
+          "jobs"
+        ]
+      }
     }
   },
   "info": {

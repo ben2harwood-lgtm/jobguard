@@ -17,9 +17,15 @@ importers:
 
   apps/api:
     dependencies:
+      '@jobguard/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@jobguard/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@jobguard/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@jobguard/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -81,6 +87,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@jobguard/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@jobguard/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       next:
         specifier: 15.3.3
         version: 15.3.3(@playwright/test@1.55.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -115,6 +127,9 @@ importers:
 
   packages/ai:
     dependencies:
+      '@jobguard/core':
+        specifier: workspace:*
+        version: link:../core
       zod:
         specifier: 3.25.67
         version: 3.25.67
@@ -140,6 +155,10 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.0.3)(terser@5.51.2)(tsx@4.20.3)
 
   packages/core:
+    dependencies:
+      zod:
+        specifier: 3.25.67
+        version: 3.25.67
     devDependencies:
       typescript:
         specifier: 5.8.3

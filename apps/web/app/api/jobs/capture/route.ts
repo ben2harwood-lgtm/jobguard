@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { extractCaptureFixture } from "@jobguard/ai";
+import { captureRequestV1 } from "@jobguard/core";
+export async function POST(request:Request){const parsed=captureRequestV1.safeParse(await request.json().catch(()=>null));if(!parsed.success)return NextResponse.json({code:"INVALID_CAPTURE"},{status:400});const{source,captureId,fixtureId}=parsed.data;if(fixtureId==="provider-unavailable")return NextResponse.json({code:"PROVIDER_UNAVAILABLE",originalInputRetained:true},{status:503});if(fixtureId==="invalid-output")return NextResponse.json({code:"INVALID_MODEL_OUTPUT",originalInputRetained:true},{status:422});const proposal=await extractCaptureFixture(captureId,source.text,fixtureId);return NextResponse.json({captureId,jobId:`draft-${captureId}`,source:{text:source.text,version:1},proposal,status:"draft",commercialRevision:null,quoteSend:null});}
