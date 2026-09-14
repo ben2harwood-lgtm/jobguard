@@ -1,0 +1,3 @@
+import{NextResponse}from"next/server";import{quoteDocumentV1,renderQuotePdf}from"@jobguard/core";
+export const runtime="nodejs";
+export async function POST(request:Request){const parsed=quoteDocumentV1.safeParse(await request.json().catch(()=>null));if(!parsed.success)return NextResponse.json({code:"INVALID_QUOTE_DOCUMENT"},{status:400});const pdf=renderQuotePdf(parsed.data);return new Response(pdf,{headers:{"content-type":"application/pdf","content-disposition":`attachment; filename="${parsed.data.reference}-v${parsed.data.documentVersion}.pdf"`,"cache-control":"no-store","x-jobguard-processing-region":"supported-runtime"}});}

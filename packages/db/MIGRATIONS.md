@@ -51,3 +51,6 @@ Adds the tenant-owned optimistic review aggregate, editable review lines, explic
 
 ## 0009_quote_pricing.sql
 Adds immutable quote-edit revisions and lines, a mutable draft pointer, and idempotent tenant-scoped rate observations. Corrections use a later forward-fix migration; commercial revision and observation facts are never edited or deleted.
+
+## 0010_quote_documents.sql
+Adds immutable, tenant-isolated quote document versions, exact authorized send records, and separate append-only delivery/customer-acceptance facts. Corrections are forward fixes: published commercial artifacts are never rewritten or destructively rolled back.

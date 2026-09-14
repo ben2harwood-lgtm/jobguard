@@ -463,6 +463,31 @@
         "packages/db/test/quote.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
+    },
+    "m1-5": {
+      "branchPrefixes": [
+        "codex/m1-5"
+      ],
+      "branches": [
+        "codex/implement-m1-5-for-jobguard-with-synthetic-data"
+      ],
+      "allow": [
+        "apps/web/app/api/quotes/preview/route.ts",
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/e2e/quote-send.spec.ts",
+        "config/agent-lane-assignments.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/quote-document.ts",
+        "packages/core/src/quote-document.test.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0010_quote_documents.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/quote-document-repository.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
     }
   }
 }
