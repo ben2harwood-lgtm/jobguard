@@ -9,7 +9,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   refresh:
-    if: github.repository == 'ben2harwood-lgtm/jobguard' && startsWith(github.event.head_commit.message, 'fix(deps): prepare audited security refresh')
+    if: >-
+      github.repository == 'ben2harwood-lgtm/jobguard' && startsWith(github.event.head_commit.message, 'fix(deps): prepare audited security refresh')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
