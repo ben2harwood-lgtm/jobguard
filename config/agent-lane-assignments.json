@@ -582,7 +582,7 @@
     },
     "m1-10": {
       "branches": [
-        "codex/implement-m1-10-proof-capture-and-stage-gates"
+        "codex/implement-m1-10-proof-capture-and-operational-stages"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
