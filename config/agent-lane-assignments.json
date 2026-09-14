@@ -321,7 +321,21 @@
         "tools/agent-lane-boundary.test.mjs",
         "tools/dependency-audit.mjs",
         "tools/dependency-audit.test.mjs",
-        "docs/operations/ci-checks.md"
+        "docs/operations/ci-checks.md",
+        "package.json",
+        "apps/api/package.json",
+        "apps/web/package.json",
+        "packages/ai/package.json",
+        "packages/config/package.json",
+        "packages/core/package.json",
+        "packages/db/package.json",
+        "packages/storage/package.json",
+        "pnpm-lock.yaml",
+        ".github/workflows/dependency-repair-once.yml",
+        "docs/operations/dependency-remediation-2026-09-14.json",
+        "docs/decisions/CI-SECURITY-REFRESH-2026-09-14.md",
+        "apps/web/playwright.config.ts",
+        "apps/web/tsconfig.json"
       ]
     },
     "main-integration": {
