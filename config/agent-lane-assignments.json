@@ -560,7 +560,7 @@
     },
     "m1-9": {
       "branches": [
-        "codex/implement-m1-9-variations"
+        "codex/implement-m1-9-for-jobguard-with-migrations"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
