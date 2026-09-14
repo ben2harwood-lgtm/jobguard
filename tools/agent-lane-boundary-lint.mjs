@@ -4,8 +4,14 @@ import { readFileSync } from "node:fs";
 const config = JSON.parse(readFileSync(new URL("../config/agent-lane-assignments.json", import.meta.url), "utf8"));
 const argument = process.argv.find((value) => value.startsWith("--lane="));
 const branch = process.env.GITHUB_HEAD_REF || execFileSync("git", ["branch", "--show-current"], { encoding: "utf8" }).trim();
-const inferred = Object.entries(config.lanes).find(([, lane]) => lane.branchPrefixes.some((prefix) => branch === prefix || branch.startsWith(`${prefix}-`)))?.[0];
-const laneName = argument?.slice("--lane=".length) || process.env.AGENT_LANE || inferred || config.defaultLane;
+const matchingLanes = Object.entries(config.lanes).filter(([, lane]) =>
+  lane.branches.includes(branch) || branch === lane.branchPrefix || branch.startsWith(`${lane.branchPrefix}-`)
+);
+const inferred = matchingLanes.length === 1 ? matchingLanes[0][0] : undefined;
+const laneName = argument?.slice("--lane=".length) || process.env.AGENT_LANE || inferred;
+if (!laneName) {
+  throw new Error(`Branch ${branch} must match exactly one registered lane; found ${matchingLanes.length}. Register the task before building.`);
+}
 const lane = config.lanes[laneName];
 if (!lane) throw new Error(`Unknown agent lane: ${laneName}`);
 

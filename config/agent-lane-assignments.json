@@ -1,11 +1,64 @@
 {
-  "version": 1,
-  "defaultLane": "m0-1",
+  "version": 2,
   "lanes": {
-    "m0-1": { "branchPrefixes": ["work", "codex/m0-1"], "allow": ["**"] },
-    "m0-2": { "branchPrefixes": ["codex/m0-2"], "allow": ["docs/contracts/**", "docs/decisions/**", "packages/core/src/contracts/**", "packages/core/src/gates/**"] },
-    "m0-3": { "branchPrefixes": ["codex/m0-3"], "allow": ["packages/core/src/money/**", "packages/core/src/quantity/**", "packages/core/src/tax/**"] },
-    "m0-4": { "branchPrefixes": ["codex/m0-4"], "allow": ["packages/db/**"] },
-    "m0-12": { "branchPrefixes": ["codex/m0-12"], "allow": ["packages/ai/**", "docs/fixtures/ai/**"] }
+    "m0-2": {
+      "allow": [
+        "docs/contracts/**",
+        "docs/decisions/**",
+        "packages/core/src/contracts/**",
+        "packages/core/src/gates/**"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-2"
+    },
+    "m0-3": {
+      "allow": [
+        "packages/core/src/money/**",
+        "packages/core/src/quantity/**",
+        "packages/core/src/tax/**"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-3"
+    },
+    "m0-4": {
+      "allow": [
+        "packages/db/**"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-4"
+    },
+    "m0-12": {
+      "allow": [
+        "packages/ai/**",
+        "docs/fixtures/ai/**"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-12"
+    },
+    "m1-3": {
+      "branches": [
+        "codex/implement-review-and-confirmation-for-jobguard"
+      ],
+      "branchPrefix": "codex/implement-review-and-confirmation-for-jobguard",
+      "allow": [
+        "apps/web/app/api/jobs/capture/route.ts",
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/e2e/review-confirm.spec.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/review.ts",
+        "packages/core/src/review.test.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0008_review.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/review-repository.ts",
+        "packages/db/test/review.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/pool-test-utils.ts",
+        "config/agent-lane-assignments.json"
+      ]
+    }
   }
 }
