@@ -1,0 +1,32 @@
+BEGIN;
+CREATE TABLE app.final_account_draft (
+ id uuid NOT NULL,tenant_id uuid NOT NULL,job_id uuid NOT NULL,current_revision_id uuid,revision integer NOT NULL DEFAULT 0 CHECK(revision>=0),
+ created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),updated_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+ PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,job_id),UNIQUE(tenant_id,job_id,id),FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id));
+CREATE TABLE app.final_account_revision (
+ id uuid NOT NULL,tenant_id uuid NOT NULL,job_id uuid NOT NULL,final_account_draft_id uuid NOT NULL,revision integer NOT NULL CHECK(revision>0),previous_revision_id uuid,
+ source_hash char(64) NOT NULL CHECK(source_hash~'^[0-9a-f]{64}$'),baseline_quote_version_id uuid NOT NULL,currency char(3) NOT NULL CHECK(currency='GBP'),tax_policy_version varchar(80) NOT NULL CHECK(tax_policy_version='candidate_m1_standard_v1'),
+ net_pence bigint NOT NULL,tax_pence bigint NOT NULL,total_pence bigint NOT NULL,issue_blocked boolean NOT NULL,findings jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+ PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,final_account_draft_id,revision),UNIQUE(tenant_id,final_account_draft_id,source_hash),UNIQUE(tenant_id,job_id,id),
+ FOREIGN KEY(tenant_id,job_id,final_account_draft_id) REFERENCES app.final_account_draft(tenant_id,job_id,id),FOREIGN KEY(tenant_id,job_id,previous_revision_id) REFERENCES app.final_account_revision(tenant_id,job_id,id),
+ FOREIGN KEY(tenant_id,job_id,baseline_quote_version_id) REFERENCES app.quote_version(tenant_id,job_id,id),CHECK(net_pence+tax_pence=total_pence));
+ALTER TABLE app.final_account_draft ADD CONSTRAINT final_account_current_revision_fk FOREIGN KEY(tenant_id,job_id,current_revision_id) REFERENCES app.final_account_revision(tenant_id,job_id,id);
+CREATE TABLE app.final_account_line (
+ id uuid NOT NULL,tenant_id uuid NOT NULL,job_id uuid NOT NULL,final_account_revision_id uuid NOT NULL,line_kind varchar(12) NOT NULL CHECK(line_kind IN('baseline','variation')),
+ source_id uuid NOT NULL,scope_item_id uuid NOT NULL,commercial_revision_id uuid NOT NULL,approval_id uuid,description varchar(500) NOT NULL,net_pence bigint NOT NULL,ordinal integer NOT NULL CHECK(ordinal>0),
+ PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,final_account_revision_id,line_kind,source_id),FOREIGN KEY(tenant_id,job_id,final_account_revision_id) REFERENCES app.final_account_revision(tenant_id,job_id,id),
+ FOREIGN KEY(tenant_id,job_id,scope_item_id) REFERENCES app.scope_identity(tenant_id,job_id,id),CHECK((line_kind='baseline' AND approval_id IS NULL) OR (line_kind='variation' AND approval_id IS NOT NULL)));
+CREATE TABLE app.final_account_proof (
+ id uuid NOT NULL,tenant_id uuid NOT NULL,job_id uuid NOT NULL,final_account_revision_id uuid NOT NULL,evidence_id uuid NOT NULL,object_version_id varchar(1024) NOT NULL,scope_item_id uuid NOT NULL,evidence_type varchar(80) NOT NULL,sha256 char(64) NOT NULL CHECK(sha256~'^[0-9a-f]{64}$'),mandatory boolean NOT NULL,
+ PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,final_account_revision_id,evidence_id),FOREIGN KEY(tenant_id,job_id,final_account_revision_id) REFERENCES app.final_account_revision(tenant_id,job_id,id),
+ FOREIGN KEY(tenant_id,evidence_id) REFERENCES app.evidence_object(tenant_id,id),FOREIGN KEY(tenant_id,job_id,scope_item_id) REFERENCES app.scope_identity(tenant_id,job_id,id));
+CREATE TRIGGER final_account_revision_immutable BEFORE UPDATE OR DELETE ON app.final_account_revision FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_commercial_mutation();
+CREATE TRIGGER final_account_line_immutable BEFORE UPDATE OR DELETE ON app.final_account_line FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_commercial_mutation();
+CREATE TRIGGER final_account_proof_immutable BEFORE UPDATE OR DELETE ON app.final_account_proof FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_commercial_mutation();
+DO $$ DECLARE t text;BEGIN FOREACH t IN ARRAY ARRAY['final_account_draft','final_account_revision','final_account_line','final_account_proof'] LOOP EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',t);EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',t);EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',t);EXECUTE format('CREATE POLICY tenant_isolation ON app.%I FOR ALL TO jobguard_runtime USING (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',t);EXECUTE format('GRANT SELECT,INSERT ON app.%I TO jobguard_runtime',t);EXECUTE format('REVOKE UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON app.%I FROM jobguard_runtime',t);END LOOP;END $$;
+CREATE FUNCTION app.advance_final_account_draft(p_tenant uuid,p_draft uuid,p_revision uuid,p_number integer) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$BEGIN IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'tenant context mismatch' USING ERRCODE='42501';END IF;UPDATE app.final_account_draft SET current_revision_id=p_revision,revision=p_number,updated_at=transaction_timestamp() WHERE tenant_id=p_tenant AND id=p_draft;END$$;
+ALTER FUNCTION app.advance_final_account_draft(uuid,uuid,uuid,integer) OWNER TO jobguard_migration;GRANT EXECUTE ON FUNCTION app.advance_final_account_draft(uuid,uuid,uuid,integer) TO jobguard_runtime;
+CREATE FUNCTION app.invalidate_stale_final_account_authorizations(p_tenant uuid,p_job uuid,p_current_hash char(64)) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$DECLARE n integer;BEGIN IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'tenant context mismatch' USING ERRCODE='42501';END IF;UPDATE app.action_authorization a SET revoked_at=transaction_timestamp() FROM app.decision d WHERE (d.tenant_id,d.id)=(a.tenant_id,a.decision_id) AND a.tenant_id=p_tenant AND d.subject_type='job' AND d.subject_ref=p_job::text AND a.action_type IN('final_account.issue','final_account.send') AND a.content_hash<>p_current_hash AND a.revoked_at IS NULL;GET DIAGNOSTICS n=ROW_COUNT;RETURN n;END$$;
+ALTER FUNCTION app.invalidate_stale_final_account_authorizations(uuid,uuid,char(64)) OWNER TO jobguard_migration;
+GRANT EXECUTE ON FUNCTION app.invalidate_stale_final_account_authorizations(uuid,uuid,char(64)) TO jobguard_runtime;
+COMMIT;
