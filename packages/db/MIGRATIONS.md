@@ -54,3 +54,7 @@ Adds immutable quote-edit revisions and lines, a mutable draft pointer, and idem
 
 ## 0010_quote_documents.sql
 Adds immutable, tenant-isolated quote document versions, exact authorized send records, and separate append-only delivery/customer-acceptance facts. Corrections are forward fixes: published commercial artifacts are never rewritten or destructively rolled back.
+
+### 0011_quote_acceptance.sql
+
+Adds immutable, tenant-protected builder-attested quote acceptances and append-only disposition events. It creates the accepted quote-version projection from the exact immutable document in the controlled acceptance routine. Forward-fix only: acceptance/audit history must not be rolled back or deleted; disable command entry and ship a corrective migration if remediation is needed.
