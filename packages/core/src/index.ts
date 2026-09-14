@@ -10,3 +10,4 @@ export * from "./review.js";
 export * from "./rational.js";
 export * from "./tax.js";
 export * from "./quote.js";
+export * from "./quote-document.js";
