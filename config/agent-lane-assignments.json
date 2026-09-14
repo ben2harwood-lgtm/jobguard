@@ -272,7 +272,14 @@
         "packages/db/test/review.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts",
         "packages/db/test/pool-test-utils.ts",
-        "config/agent-lane-assignments.json"
+        "config/agent-lane-assignments.json",
+        "packages/db/test/audit.integration.test.ts",
+        "packages/db/test/capture.integration.test.ts",
+        "packages/db/test/commands.integration.test.ts",
+        "packages/db/test/evidence.integration.test.ts",
+        "packages/db/test/job.integration.test.ts",
+        "packages/db/test/ledger.integration.test.ts",
+        "packages/db/test/outbox.integration.test.ts"
       ]
     }
   }
