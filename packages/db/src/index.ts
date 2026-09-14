@@ -25,3 +25,4 @@ export * from "./acceptance-repository.js";
 export * from "./activation-repository.js";
 
 export * from "./decision-repository.js";
+export * from "./variation-repository.js";

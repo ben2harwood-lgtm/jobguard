@@ -557,6 +557,28 @@
         "apps/web/app/styles.css",
         "apps/web/e2e/decision-inbox.spec.ts"
       ]
+    },
+    "m1-9": {
+      "branches": [
+        "codex/implement-m1-9-for-jobguard-with-migrations"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/variation.ts",
+        "packages/core/src/variation.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migrations/0014_variations.sql",
+        "packages/db/src/variation-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/variation.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/variation-flow.tsx",
+        "apps/web/app/styles.css",
+        "apps/web/e2e/variations.spec.ts"
+      ]
     }
   }
 }
