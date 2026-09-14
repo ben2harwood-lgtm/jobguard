@@ -601,6 +601,28 @@
         "apps/web/app/styles.css",
         "apps/web/e2e/proof-capture.spec.ts"
       ]
+    },
+    "m1-11": {
+      "branches": [
+        "codex/implement-m1-11-final-account-assembly"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/final-account.ts",
+        "packages/core/src/final-account.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migrations/0016_final_accounts.sql",
+        "packages/db/src/final-account-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/final-account.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "apps/web/app/ui/final-account.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/styles.css",
+        "apps/web/e2e/final-account.spec.ts"
+      ]
     }
   }
 }

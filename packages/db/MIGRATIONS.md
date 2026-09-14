@@ -70,3 +70,6 @@ Adds tenant-protected variation proposals, immutable priced revisions, exact-rev
 
 ## 0015_proof_stage_gates.sql
 Adds immutable stage completions plus append-only evidence invalidation and rework events. Completion references the exact finalized evidence link; revocation never rewrites that history. Rollback is forward-fix only. Object bytes remain in the synthetic versioned store and audit payloads contain identifiers and hashes only.
+## 0016_final_accounts.sql
+
+Adds tenant-protected draft heads and immutable final-account revisions, traced lines, and exact-version proof manifests. Forward-fix only: revisions are commercial history and must not be rolled back destructively.
