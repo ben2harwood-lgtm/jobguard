@@ -15,3 +15,4 @@ export * from "./acceptance.js";
 export * from "./activation.js";
 export * from "./decision-checks.js";
 export * from "./variation.js";
+export * from "./proof.js";

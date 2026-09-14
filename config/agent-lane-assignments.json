@@ -579,6 +579,28 @@
         "apps/web/app/styles.css",
         "apps/web/e2e/variations.spec.ts"
       ]
+    },
+    "m1-10": {
+      "branches": [
+        "codex/implement-m1-10-proof-capture-and-stage-gates"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/proof.ts",
+        "packages/core/src/proof.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migrations/0015_proof_stage_gates.sql",
+        "packages/db/src/proof-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/evidence.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "apps/web/app/ui/proof-capture.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/styles.css",
+        "apps/web/e2e/proof-capture.spec.ts"
+      ]
     }
   }
 }
