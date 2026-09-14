@@ -491,7 +491,7 @@
     },
     "m1-6": {
       "branches": [
-        "codex/implement-m1-6-record-acceptance"
+        "codex/implement-m1-6-for-jobguard-acceptance-flow"
       ],
       "allow": [
         "apps/web/app/styles.css",
