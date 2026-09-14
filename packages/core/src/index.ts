@@ -13,3 +13,4 @@ export * from "./quote.js";
 export * from "./quote-document.js";
 export * from "./acceptance.js";
 export * from "./activation.js";
+export * from "./decision-checks.js";
