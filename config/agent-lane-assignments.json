@@ -488,6 +488,28 @@
         "packages/db/test/quote.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
+    },
+    "m1-6": {
+      "branches": [
+        "codex/implement-m1-6-record-acceptance"
+      ],
+      "allow": [
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/e2e/quote-acceptance.spec.ts",
+        "config/agent-lane-assignments.json",
+        "packages/core/src/acceptance.test.ts",
+        "packages/core/src/acceptance.ts",
+        "packages/core/src/index.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0011_quote_acceptance.sql",
+        "packages/db/src/acceptance-repository.ts",
+        "packages/db/src/commands.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
     }
   }
 }

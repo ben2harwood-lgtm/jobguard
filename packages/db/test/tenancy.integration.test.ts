@@ -186,6 +186,7 @@ describe("migration and privilege catalog", () => {
       ORDER BY c.relname
     `);
     expect(result.rows).toEqual([
+      { relname: "acceptance_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_attempt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_authorization", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -212,6 +213,7 @@ describe("migration and privilege catalog", () => {
       { relname: "proposal_review_line_parent", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proposal_review_question", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "provider_event_inbox", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "quote_acceptance", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "quote_delivery_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "quote_document_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "quote_draft", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -258,6 +260,7 @@ describe("migration and privilege catalog", () => {
       WHERE n.nspname = 'app' AND c.relkind = 'r' ORDER BY c.relname
     `);
     expect(ownership.rows).toEqual([
+      { relname: "acceptance_event", owner: "jobguard_migration" },
       { relname: "account", owner: "jobguard_migration" },
       { relname: "action_attempt", owner: "jobguard_migration" },
       { relname: "action_authorization", owner: "jobguard_migration" },
@@ -284,6 +287,7 @@ describe("migration and privilege catalog", () => {
       { relname: "proposal_review_line_parent", owner: "jobguard_migration" },
       { relname: "proposal_review_question", owner: "jobguard_migration" },
       { relname: "provider_event_inbox", owner: "jobguard_migration" },
+      { relname: "quote_acceptance", owner: "jobguard_migration" },
       { relname: "quote_delivery_event", owner: "jobguard_migration" },
       { relname: "quote_document_version", owner: "jobguard_migration" },
       { relname: "quote_draft", owner: "jobguard_migration" },

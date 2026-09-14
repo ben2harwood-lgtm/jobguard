@@ -11,3 +11,4 @@ export * from "./rational.js";
 export * from "./tax.js";
 export * from "./quote.js";
 export * from "./quote-document.js";
+export * from "./acceptance.js";
