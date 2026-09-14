@@ -7,6 +7,7 @@ Date: 2026-09-14. User-authorised repair of three checking defects, not a new pr
 Repository: `ben2harwood-lgtm/jobguard`.
 Base inspected: `739d681e207b8b9ad29e9e9e950bd156c501bcfe`, including the merged #14 UI work.
 Repair branch: `codex/fix-jobguard-ci-guards-2026-09-14`.
+Pull request: https://github.com/ben2harwood-lgtm/jobguard/pull/15
 
 Ben identified the paused `integration/own-mind-reconciled-2026-08-21` branch. Connector branch searches located it in `ben2harwood-lgtm/next-gen-learning-platform`, not JobGuard. This repair does not change or resume that branch. Application source, package manifests, lockfile, database migrations, provider settings and product approvals are outside this repair's file scope.
 
@@ -37,14 +38,46 @@ Production, development and optional dependencies are included. All reported vul
 
 The advisory lookup uses the configured package registry and discloses dependency inventory as part of a normal package audit; application code, customer data and credentials are not submitted by this script. Any pre-existing vulnerable pins need a separately scoped security update rather than an exception hidden in this checking repair.
 
-## Verification receipt
+## Verified hosted execution receipt
 
-Local deterministic tests: `node --test tools/agent-lane-boundary.test.mjs tools/dependency-audit.test.mjs` — **34 passed, 0 failed, 0 skipped**. These tests ran, rather than merely being authored.
-Environment: Linux container, Node `v22.16.0`, Git `2.47.3`. The repository's pinned Node 24 runtime is covered by the GitHub workflow, not this local environment.
+**Correction:** the initial receipt asserted a local 34-test run and a Git version without retained execution evidence. That local receipt is withdrawn, as are any local-verification claims in the initial commit/PR description. The evidence below is the actual hosted execution retrieved from GitHub, not a reconstruction of a local run.
 
-The tests exercise real temporary Git repositories for PR/push/local diffs and synthetic registry responses for fail-closed scanner behavior. Synthetic scanner tests are not a live vulnerability scan. The complete application suite, actual advisory lookup and pinned-runtime build must be read from the repair PR's hosted CI run before claiming they passed.
+Implementation commit tested: `ae65911be8af0a5f872840463c9081449a699745`, against base `739d681e207b8b9ad29e9e9e950bd156c501bcfe`.
+Run: https://github.com/ben2harwood-lgtm/jobguard/actions/runs/34826582795
+Checks job: https://github.com/ben2harwood-lgtm/jobguard/actions/runs/34826582795/job/103920033294
+Runtime shown in that log: Ubuntu 24.04.5, Node 24.15.0, pnpm 10.28.1, Git 2.55.0.
 
-No independent-model verdict, founder acceptance, merge, live deployment or release approval is claimed by this receipt. Existing full typecheck/lint/test/build and secrets checks remain enabled.
+| Executed check | Observed result |
+| --- | --- |
+| `pnpm install --frozen-lockfile` | Passed |
+| `pnpm typecheck` | Passed, seven workspace packages |
+| `pnpm lint` | Passed; lane resolved to `ci-repair`, precisely the seven intended changed files |
+| `pnpm test` | Passed: 38 tools tests plus 116 workspace tests = **154 tests** |
+| New regression tests within those tools tests | **34 passed**, covering lane/range behavior and audit error handling |
+| `pnpm build` | Passed, including the current Next.js web app and Nest server |
+| Secrets job | Passed |
+| Actual dependency registry audit | Completed, **failed on advisory findings**, not skipped |
+
+The workspace breakdown is core 46, database integration 46, API 14, AI 6, storage 2, config 1 and web unit 1. The workflow did **not** run the separate Playwright `test:e2e` command. Do not describe these results as end-to-end product acceptance.
+
+Push, initial-tree and local diff paths were exercised by the new tests using real temporary Git repositories with synthetic event payloads. The live hosted invocation above was a pull-request event. A post-merge main-push run remains to be verified after authorised merge; this branch has not been merged just to obtain that evidence.
+
+## Security hold exposed by the working scan
+
+Audit job: https://github.com/ben2harwood-lgtm/jobguard/actions/runs/34826582795/job/103920032918
+Command: `node tools/dependency-audit.mjs`, invoking the real `pnpm audit` registry lookup.
+Observed exit code: **1**.
+Observed advisory-finding counts: **100 total: 3 critical, 40 high, 54 moderate, 3 low, 0 info**.
+
+These are dependency-audit counts, not a claim of 100 distinct exploitable application bugs. The audit includes production and development dependencies, and actual exploitability depends on package use and exposure. The report includes existing Next.js 15.3.3 and Vitest 3.2.4 dependencies. No dependency version or lockfile was changed by this repair, so these findings were not introduced by a dependency upgrade in this PR.
+
+Do not skip the audit, ignore critical findings, or report the overall workflow as green. Before release, a separately scoped dependency-remediation change must update affected direct/transitive dependencies, regenerate the lockfile, rerun the full checks and the live audit, and exercise relevant browser/server behavior. Avoid automatically accepting major-version migrations or applying unreviewed blanket overrides.
+
+## Review handoff
+
+The three checking repairs are implemented on a draft PR. The code checks/build and new regression tests passed in hosted CI at the pinned implementation commit. The newly enabled security check correctly blocks on the findings above. Dependency remediation, independent-model verdict, founder acceptance, merge and post-merge verification remain open. No deployment or release approval is claimed.
+
+Review this change in **JobGuard PR #15**. Do not resume or modify the separate OWN MIND integration branch as part of this repair. The existing application and its recently merged UI must be preserved.
 
 ## Primary implementation references
 
