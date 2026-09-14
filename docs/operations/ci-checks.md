@@ -1,86 +1,36 @@
-# CI repair: scope and verification
+# JobGuard CI and dependency repair
 
-Date: 2026-09-14. User-authorised repair of three checking defects, not a new product build.
+## Scope and coordination
 
-## Ownership and base
+Ben authorised the original three checking repairs and then asked Astra to finish the remaining fixes, testing and a plain-English handover. This is JobGuard PR #15, branch `codex/fix-jobguard-ci-guards-2026-09-14`, based on `739d681e207b8b9ad29e9e9e950bd156c501bcfe` (including the merged #14 UI). The security-remediation work is a named subtask of the same repair, not a competing implementation.
 
-Repository: `ben2harwood-lgtm/jobguard`.
-Base inspected: `739d681e207b8b9ad29e9e9e950bd156c501bcfe`, including the merged #14 UI work.
-Repair branch: `codex/fix-jobguard-ci-guards-2026-09-14`.
-Pull request: https://github.com/ben2harwood-lgtm/jobguard/pull/15
+The paused `integration/own-mind-reconciled-2026-08-21` belongs to `ben2harwood-lgtm/next-gen-learning-platform`. It has not been modified or resumed. JobGuard application business logic, database migrations and product/provider approvals remain untouched. Package pins, the lockfile, explicit test configuration, checking tools and their evidence are in scope.
 
-Ben identified the paused `integration/own-mind-reconciled-2026-08-21` branch. Connector branch searches located it in `ben2harwood-lgtm/next-gen-learning-platform`, not JobGuard. This repair does not change or resume that branch. Application source, package manifests, lockfile, database migrations, provider settings and product approvals are outside this repair's file scope.
+## Implemented checks
 
-## 1. Event-specific comparison
+1. The lane checker reads validated immutable GitHub event SHAs. PRs compare the merge base to the PR head; pushes compare the complete before/after range; first pushes inspect the tracked tree. Missing history, self-comparisons, checkout mismatches and unknown events fail rather than passing an empty substitute check. Renames check both old/new paths. Local runs additionally include staged, unstaged and untracked files.
+2. Lane policy has no default or blanket all-files grant. Actual task names and file locations are registered. Unknown/ambiguous branches and conflicting overrides fail. Main has an explicitly identified integration scope, not a PR fallback. The repair lane permits package manifests and named test/type configuration files, not arbitrary application-source or migration changes. Its regression assertion was updated to reflect the user-authorised dependency subtask while continuing to deny broad source access.
+3. The `dependency-review` job now runs a real pnpm vulnerability audit on PRs and main pushes, including private repositories and production/development/optional dependencies. Findings, registry failures and malformed/incomplete responses fail. No exclusions or severity waivers were added. This is not a licence, provenance or production-security certification.
+4. CI now runs the existing browser suite against `next start` after the production build, at mobile and desktop viewport sizes, with two workers and no retries. Earlier mandatory suites remain enabled. Superseded CI runs are cancelled to avoid redundant execution.
 
-The old workflow supplied `origin/${{ github.base_ref }}` on main pushes, producing `origin/`. The guard now reads the GitHub event JSON and validates actual commit objects:
+## Dependency remediation
 
-- Pull requests: merge-base comparison between the event's immutable base and head SHAs. The checkout must contain the PR head. Base-branch-only changes do not become the task's changes.
-- Main pushes: the complete `before` to `after` range, including multi-commit pushes. HEAD must equal `after`. Non-fast-forward pushes require review and fail rather than silently reducing coverage.
-- Initial branch push: inspect the entire tracked tree. Missing history, unsupported events and self-comparison never become a clean pass.
-- Local use: compare against the task base (`LANE_BASE_REF`, otherwise available `origin/main` or `main`) and additionally inspect staged, unstaged and untracked files. Local main uses its previous commit. A missing comparison base fails explicitly.
+Exact direct-pin changes, bounded transitive overrides, original lockfile hash and the measured baseline are in `dependency-remediation-2026-09-14.json`. The test-runner security migration and pre-1.0 dependency considerations are recorded in `docs/decisions/CI-SECURITY-REFRESH-2026-09-14.md`; no commercial, privacy, provider or release approval is implied.
 
-Renames are checked as deletion plus addition. NUL-delimited Git output preserves whitespace/newlines in paths.
+The temporary, branch-only metadata/lockfile generator was removed after its output was published. It never changed main, enabled production providers or ran dependency lifecycle scripts with a write credential. Its final push was non-forced and limited to enumerated repair files. All final versions are pinned and the normal CI uses a frozen lockfile.
 
-## 2. Explicit task lanes
+## Evidence and corrections
 
-Policy version 2 has no default lane and no `**` blanket grant. Every task branch must match exactly one registered lane. The observed descriptive Codex branch names are registered alongside the M0 task prefixes; the money task uses the actual leaf-file paths rather than nonexistent money/quantity/tax directories. Unregistered branches, ambiguous assignments and conflicting lane overrides fail.
+Original implementation `ae65911be8af0a5f872840463c9081449a699745`: hosted run `34826582795` passed installation, typecheck, lint, 154 tests (38 tools + 116 workspace) and build, plus the secrets job. The dependency scan failed on the original lockfile.
 
-`main` has an explicitly named integration scope because it combines multiple tasks. It is not a task-lane fallback and a PR cannot borrow it. Scope checks prevent accidental file overlap; they are not a security sandbox against an author who can edit the workflow, checker or policy. Policy changes and merges still need independent review and founder acceptance. No branch-protection settings were changed.
+**Correction:** an earlier receipt and chat said the original audit had 100 findings. The actual log and the fresh baseline both report **81 findings: 5 critical, 35 high, 34 moderate, 7 low**. Use the measured JSON, not the earlier hand-transcribed count. These are audit advisory counts, not proven exploitable application vulnerabilities.
 
-Before issuing a new task with an unregistered branch, add its intended files and branch mapping through a separately reviewed policy change. Do not restore the old `work`/all-files fallback to silence a failure.
+Dependency update commit `182872527813c85f59611967cd4821114d253396` was generated by hosted run `34828625240`; its real advisory check passed before publication. This proves the updated lockfile passed that registry scan, not that the application tests or independent review had already passed. Those must be read from the latest final-commit CI run on PR #15.
 
-## 3. Real dependency vulnerability scan
+The original unretained local-test claim remains withdrawn. Only actual hosted logs are evidence of full-suite execution. The CI YAML was additionally parsed locally; that is syntax checking, not hosted execution.
 
-The existing `dependency-review` check identity is retained. It now runs a pinned-pnpm registry audit on PRs AND main pushes for private repositories, without GitHub Advanced Security dependency-review eligibility requirements. It installs from the frozen lockfile with dependency lifecycle scripts disabled in the scan job, then runs `node tools/dependency-audit.mjs`.
+## Acceptance and final handover
 
-Production, development and optional dependencies are included. All reported vulnerability severities fail; no exclusions or baselines were added. A timeout, failed command, registry error, invalid JSON or incomplete result also fails. Findings are printed and a summary is written to the GitHub job summary. A registry's clean response means no known vulnerabilities were reported for that lockfile at that time, not proof that dependencies are safe. This does not replace licence, maintainer/provenance or malicious-package review.
+Read PR #15's latest pinned head SHA and its complete CI result. Do not infer success from an older commit or a plan. Record any independent review against the exact final diff. Keep main unchanged until the repository's independent-verdict and separate acceptance requirements are met; do not self-approve or fabricate a Claude verdict. After merge, verify the actual main-push run separately. This repair does not release the product or enable live users/providers.
 
-The advisory lookup uses the configured package registry and discloses dependency inventory as part of a normal package audit; application code, customer data and credentials are not submitted by this script. Any pre-existing vulnerable pins need a separately scoped security update rather than an exception hidden in this checking repair.
-
-## Verified hosted execution receipt
-
-**Correction:** the initial receipt asserted a local 34-test run and a Git version without retained execution evidence. That local receipt is withdrawn, as are any local-verification claims in the initial commit/PR description. The evidence below is the actual hosted execution retrieved from GitHub, not a reconstruction of a local run.
-
-Implementation commit tested: `ae65911be8af0a5f872840463c9081449a699745`, against base `739d681e207b8b9ad29e9e9e950bd156c501bcfe`.
-Run: https://github.com/ben2harwood-lgtm/jobguard/actions/runs/34826582795
-Checks job: https://github.com/ben2harwood-lgtm/jobguard/actions/runs/34826582795/job/103920033294
-Runtime shown in that log: Ubuntu 24.04.5, Node 24.15.0, pnpm 10.28.1, Git 2.55.0.
-
-| Executed check | Observed result |
-| --- | --- |
-| `pnpm install --frozen-lockfile` | Passed |
-| `pnpm typecheck` | Passed, seven workspace packages |
-| `pnpm lint` | Passed; lane resolved to `ci-repair`, precisely the seven intended changed files |
-| `pnpm test` | Passed: 38 tools tests plus 116 workspace tests = **154 tests** |
-| New regression tests within those tools tests | **34 passed**, covering lane/range behavior and audit error handling |
-| `pnpm build` | Passed, including the current Next.js web app and Nest server |
-| Secrets job | Passed |
-| Actual dependency registry audit | Completed, **failed on advisory findings**, not skipped |
-
-The workspace breakdown is core 46, database integration 46, API 14, AI 6, storage 2, config 1 and web unit 1. The workflow did **not** run the separate Playwright `test:e2e` command. Do not describe these results as end-to-end product acceptance.
-
-Push, initial-tree and local diff paths were exercised by the new tests using real temporary Git repositories with synthetic event payloads. The live hosted invocation above was a pull-request event. A post-merge main-push run remains to be verified after authorised merge; this branch has not been merged just to obtain that evidence.
-
-## Security hold exposed by the working scan
-
-Audit job: https://github.com/ben2harwood-lgtm/jobguard/actions/runs/34826582795/job/103920032918
-Command: `node tools/dependency-audit.mjs`, invoking the real `pnpm audit` registry lookup.
-Observed exit code: **1**.
-Observed advisory-finding counts: **100 total: 3 critical, 40 high, 54 moderate, 3 low, 0 info**.
-
-These are dependency-audit counts, not a claim of 100 distinct exploitable application bugs. The audit includes production and development dependencies, and actual exploitability depends on package use and exposure. The report includes existing Next.js 15.3.3 and Vitest 3.2.4 dependencies. No dependency version or lockfile was changed by this repair, so these findings were not introduced by a dependency upgrade in this PR.
-
-Do not skip the audit, ignore critical findings, or report the overall workflow as green. Before release, a separately scoped dependency-remediation change must update affected direct/transitive dependencies, regenerate the lockfile, rerun the full checks and the live audit, and exercise relevant browser/server behavior. Avoid automatically accepting major-version migrations or applying unreviewed blanket overrides.
-
-## Review handoff
-
-The three checking repairs are implemented on a draft PR. The code checks/build and new regression tests passed in hosted CI at the pinned implementation commit. The newly enabled security check correctly blocks on the findings above. Dependency remediation, independent-model verdict, founder acceptance, merge and post-merge verification remain open. No deployment or release approval is claimed.
-
-Review this change in **JobGuard PR #15**. Do not resume or modify the separate OWN MIND integration branch as part of this repair. The existing application and its recently merged UI must be preserved.
-
-## Primary implementation references
-
-- GitHub Actions contexts: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
-- pnpm 10 audit options: https://pnpm.io/10.x/cli/audit
-- GitHub dependency-review availability: https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-review
+Primary references: https://pnpm.io/10.x/cli/audit ; https://docs.github.com/en/actions/reference/workflows-and-actions/contexts ; https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9 .

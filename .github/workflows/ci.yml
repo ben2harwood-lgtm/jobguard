@@ -6,6 +6,9 @@ on:
 permissions:
   contents: read
   pull-requests: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -19,10 +22,13 @@ jobs:
         with: { node-version: 24.15.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      # The lane checker reads immutable before/after or PR SHAs from the event.
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      - name: Install the browser used by the existing end-to-end suite
+        run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium
+      - name: Exercise the production web build at mobile and desktop sizes
+        run: pnpm test:e2e
   secrets:
     runs-on: ubuntu-latest
     steps:
@@ -31,7 +37,7 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2.3.7
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
   dependency-review:
-    # Preserve the check identity, but run a real registry audit for private repos too.
+    # The existing check name now represents a real scan, including private repositories.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: { contents: read }
