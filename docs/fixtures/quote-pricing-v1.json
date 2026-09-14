@@ -1,0 +1,6 @@
+{
+  "fixture": "synthetic-standard-rated-quote-v1",
+  "currency": "GBP",
+  "taxPolicyVersion": "candidate_m1_standard_v1",
+  "expected": { "subtotalPence": 30832, "discountPence": 1542, "netPence": 29290, "taxPence": 5858, "totalPence": 35148 }
+}

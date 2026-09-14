@@ -12,6 +12,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0006_outbox.sql", import.meta.url),
   new URL("../migrations/0007_capture.sql", import.meta.url),
   new URL("../migrations/0008_review.sql", import.meta.url),
+  new URL("../migrations/0009_quote_pricing.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 

@@ -437,6 +437,32 @@
         "packages/db/test/ledger.integration.test.ts",
         "packages/db/test/outbox.integration.test.ts"
       ]
+    },
+    "m1-4": {
+      "branchPrefixes": [
+        "codex/m1-4"
+      ],
+      "branches": [
+        "codex/m1-4-quote-pricing"
+      ],
+      "allow": [
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/e2e/quote-editor.spec.ts",
+        "config/agent-lane-assignments.json",
+        "docs/fixtures/quote-pricing-v1.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/quote.test.ts",
+        "packages/core/src/quote.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0009_quote_pricing.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/quote-repository.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
     }
   }
 }
