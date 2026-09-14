@@ -469,7 +469,7 @@
         "codex/m1-5"
       ],
       "branches": [
-        "codex/implement-m1-5-immutable-quote-send"
+        "codex/implement-m1-5-for-jobguard-with-synthetic-data"
       ],
       "allow": [
         "apps/web/app/api/quotes/preview/route.ts",
