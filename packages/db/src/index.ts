@@ -22,3 +22,4 @@ export * from "./review-repository.js";
 export * from "./quote-repository.js";
 export * from "./quote-document-repository.js";
 export * from "./acceptance-repository.js";
+export * from "./activation-repository.js";

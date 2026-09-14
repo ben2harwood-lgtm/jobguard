@@ -192,6 +192,7 @@ describe("migration and privilege catalog", () => {
       { relname: "action_authorization", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "action_outbox", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "audit_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "cap_snapshot", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "capture_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "command_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "decision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -201,6 +202,7 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_upload", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "financial_authorization", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "job", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_activation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "job_record_proposal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "journal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "journal_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -226,6 +228,8 @@ describe("migration and privilege catalog", () => {
       { relname: "scope_lineage", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "scope_progress", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "scope_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "simulated_settlement_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "synthetic_obligation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
     ]);
   });
 
@@ -266,6 +270,7 @@ describe("migration and privilege catalog", () => {
       { relname: "action_authorization", owner: "jobguard_migration" },
       { relname: "action_outbox", owner: "jobguard_migration" },
       { relname: "audit_event", owner: "jobguard_migration" },
+      { relname: "cap_snapshot", owner: "jobguard_migration" },
       { relname: "capture_source", owner: "jobguard_migration" },
       { relname: "command_receipt", owner: "jobguard_migration" },
       { relname: "decision", owner: "jobguard_migration" },
@@ -275,6 +280,7 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_upload", owner: "jobguard_migration" },
       { relname: "financial_authorization", owner: "jobguard_migration" },
       { relname: "job", owner: "jobguard_migration" },
+      { relname: "job_activation", owner: "jobguard_migration" },
       { relname: "job_record_proposal", owner: "jobguard_migration" },
       { relname: "journal", owner: "jobguard_migration" },
       { relname: "journal_line", owner: "jobguard_migration" },
@@ -300,6 +306,8 @@ describe("migration and privilege catalog", () => {
       { relname: "scope_lineage", owner: "jobguard_migration" },
       { relname: "scope_progress", owner: "jobguard_migration" },
       { relname: "scope_revision", owner: "jobguard_migration" },
+      { relname: "simulated_settlement_event", owner: "jobguard_migration" },
+      { relname: "synthetic_obligation", owner: "jobguard_migration" },
     ]);
   });
 });
