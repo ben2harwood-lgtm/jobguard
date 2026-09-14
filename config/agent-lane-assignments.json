@@ -513,7 +513,7 @@
     },
     "m1-7": {
       "branches": [
-        "codex/implement-m1-7-switch-live"
+        "codex/implement-m1-7-features-for-jobguard"
       ],
       "allow": [
         "apps/web/app/styles.css",
