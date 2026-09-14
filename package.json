@@ -9,6 +9,7 @@
     "lint": "node tools/lint.mjs && turbo run lint",
     "lint:lanes": "node tools/agent-lane-boundary-lint.mjs",
     "test": "node --test tools/*.test.mjs && turbo run test",
+    "test:e2e": "pnpm --filter @jobguard/web test:e2e",
     "typecheck": "turbo run typecheck",
     "openapi:check": "pnpm --filter @jobguard/api openapi:check"
   },
