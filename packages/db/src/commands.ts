@@ -22,6 +22,11 @@ export const consequentialCommandV1Schema = z.object({
 }).strict();
 export type ConsequentialCommand = z.infer<typeof consequentialCommandV1Schema>;
 export type ExactAction = z.infer<typeof actionSchema>;
+export const decisionDismissCommandV1Schema = z.object({
+  version:z.literal("decision-resolution-command.v1"),commandId:uuid,semanticKey:z.string().min(1).max(300),actorMembershipId:uuid,
+  decisionId:uuid,findingFingerprint:sha256,resolution:z.enum(["dismissed","rejected"]),expectedSnapshotRevision:z.number().int().nonnegative(),
+}).strict();
+export type DecisionDismissCommand=z.infer<typeof decisionDismissCommandV1Schema>;
 
 /** Contract reserved for M4. No dispatcher accepts this type while the gate is disabled. */
 export interface StandingAuthorizationV1 {
@@ -74,7 +79,7 @@ export class UserCommandDispatcher {
       if(!member || member.role!=="owner") throw new CommandError("FORBIDDEN");
       if (command.action.expiresAt.getTime() <= Date.now()) throw new CommandError("AUTHORIZATION_INVALID");
       const decisionId=command.decisionId??randomUUID(), resolutionId=command.resolutionId??randomUUID(), authorizationId=command.authorizationId??randomUUID();
-      await database.$client.query(`INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,$3,$4,$5)`,[decisionId,context.tenantId,command.subjectType,command.subjectRef,command.action.actionType]);
+      if(command.decisionId){const existing=(await database.$client.query(`SELECT 1 FROM app.decision WHERE tenant_id=$1 AND id=$2 AND subject_type=$3 AND subject_ref=$4 AND action_type=$5`,[context.tenantId,decisionId,command.subjectType,command.subjectRef,command.action.actionType])).rows[0];if(!existing)throw new CommandError("AUTHORIZATION_INVALID");}else await database.$client.query(`INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,$3,$4,$5)`,[decisionId,context.tenantId,command.subjectType,command.subjectRef,command.action.actionType]);
       await database.$client.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolutionId,context.tenantId,decisionId,command.actorMembershipId]);
       await database.$client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[authorizationId,context.tenantId,decisionId,resolutionId,command.actorMembershipId,command.action.actionType,command.action.recipient,command.action.contentHash,command.action.aggregateRevision,command.action.amountPence,command.action.currency,command.action.policyVersion,command.action.expiresAt]);
@@ -84,6 +89,9 @@ export class UserCommandDispatcher {
       return result;
     });
   }
+  /** Non-consequential inbox resolution. Dismiss/reject is audited and intentionally creates no action authorization. */
+  async dismissDecision(context:VerifiedTenantContext,raw:unknown):Promise<{decisionId:string;resolution:"dismissed"|"rejected";authorizedAction:false}>{const command=decisionDismissCommandV1Schema.parse(raw);const requestHash=createHash("sha256").update(canonical(command)).digest("hex");return withTenant(this.pool,context,async database=>{const claimed=await database.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'finding.resolve',$3,$4,'processing',$5) ON CONFLICT DO NOTHING RETURNING command_id`,[command.commandId,context.tenantId,command.semanticKey,requestHash,command.actorMembershipId]);if(!claimed.rowCount){const prior=(await database.$client.query<{request_hash:string;result:{decisionId:string;resolution:"dismissed"|"rejected";authorizedAction:false}}>(`SELECT request_hash,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type='finding.resolve' AND semantic_key=$3))`,[context.tenantId,command.commandId,command.semanticKey])).rows[0];if(!prior||prior.request_hash!==requestHash)throw new CommandError("COMMAND_CONFLICT");return prior.result;}const member=(await database.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner' AND revoked_at IS NULL`,[context.tenantId,command.actorMembershipId])).rows[0];if(!member)throw new CommandError("FORBIDDEN");const finding=(await database.$client.query<{id:string}>(`SELECT id FROM app.job_finding WHERE tenant_id=$1 AND decision_id=$2 AND fingerprint=$3 AND snapshot_revision=$4`,[context.tenantId,command.decisionId,command.findingFingerprint,command.expectedSnapshotRevision])).rows[0];if(!finding)throw new CommandError("AUTHORIZATION_INVALID");await database.$client.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,$4,$5)`,[randomUUID(),context.tenantId,command.decisionId,command.resolution,command.actorMembershipId]);const result={decisionId:command.decisionId,resolution:command.resolution,authorizedAction:false as const};await appendAuditBatch(database,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${command.actorMembershipId}`,eventType:"finding.resolved",subjectType:"finding",subjectRef:finding.id,payload:{references:{decisionId:command.decisionId,findingFingerprint:command.findingFingerprint,resolution:command.resolution,authorizationCreated:"false"},classifications:{action:"operational"}}}]);await database.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,command.commandId,JSON.stringify(result)]);return result;});}
+
 }
 
 /** The only boundary allowed to invoke a commercial adapter. It always rechecks the exact immutable grant. */

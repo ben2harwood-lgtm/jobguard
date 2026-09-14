@@ -23,3 +23,5 @@ export * from "./quote-repository.js";
 export * from "./quote-document-repository.js";
 export * from "./acceptance-repository.js";
 export * from "./activation-repository.js";
+
+export * from "./decision-repository.js";

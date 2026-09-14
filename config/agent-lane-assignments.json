@@ -531,6 +531,32 @@
         "packages/db/test/activation.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
+    },
+    "m1-8": {
+      "branches": [
+        "codex/implement-m1-8-for-jobguard-with-checks-and-inbox"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/decision-checks.ts",
+        "packages/core/src/decision-checks.test.ts",
+        "packages/core/src/index.ts",
+        "tools/decision-check-purity.test.mjs",
+        "packages/db/migrations/0013_decision_inbox.sql",
+        "packages/db/src/decision-repository.ts",
+        "packages/db/src/commands.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/decision-inbox.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "apps/web/app/api/decisions/route.ts",
+        "apps/web/app/lib/decision-fixture.ts",
+        "apps/web/app/ui/decision-inbox.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/styles.css",
+        "apps/web/e2e/decision-inbox.spec.ts"
+      ]
     }
   }
 }
