@@ -335,7 +335,8 @@
         "docs/operations/dependency-remediation-2026-09-14.json",
         "docs/decisions/CI-SECURITY-REFRESH-2026-09-14.md",
         "apps/web/playwright.config.ts",
-        "apps/web/tsconfig.json"
+        "apps/web/tsconfig.json",
+        ".github/workflows/integrate-main-once.yml"
       ]
     },
     "main-integration": {
@@ -366,6 +367,41 @@
         "turbo.json",
         "docker-compose.yml",
         "docker/**"
+      ]
+    },
+    "m1-2": {
+      "branches": [
+        "codex/implement-m1-2-capture-source"
+      ],
+      "branchPrefixes": [
+        "codex/m1-2"
+      ],
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/package.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/capture/**",
+        "apps/web/app/api/jobs/capture/**",
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/e2e/capture.spec.ts",
+        "apps/web/package.json",
+        "packages/ai/package.json",
+        "packages/ai/src/capture.ts",
+        "packages/ai/src/capture.test.ts",
+        "packages/ai/src/index.ts",
+        "packages/core/package.json",
+        "packages/core/src/capture.ts",
+        "packages/core/src/capture.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0007_capture.sql",
+        "packages/db/src/capture-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/test/capture.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "pnpm-lock.yaml"
       ]
     }
   }

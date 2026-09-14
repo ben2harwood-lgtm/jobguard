@@ -17,7 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "zod": "3.25.67"
+    "zod": "3.25.67",
+    "@jobguard/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "5.8.3",
