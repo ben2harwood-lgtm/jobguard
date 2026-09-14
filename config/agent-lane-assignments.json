@@ -1,6 +1,59 @@
 {
   "version": 2,
   "lanes": {
+    "m0-1": {
+      "allow": [
+        ".env.example",
+        ".github/workflows/ci.yml",
+        ".gitignore",
+        ".nvmrc",
+        "apps/api/nest-cli.json",
+        "apps/api/openapi.json",
+        "apps/api/package.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/bootstrap.ts",
+        "apps/api/src/generate-openapi.ts",
+        "apps/api/src/health.controller.ts",
+        "apps/api/src/health.test.ts",
+        "apps/api/src/main.ts",
+        "apps/api/src/worker.ts",
+        "apps/api/tsconfig.json",
+        "apps/web/app/layout.tsx",
+        "apps/web/app/page.test.tsx",
+        "apps/web/app/page.tsx",
+        "apps/web/next-env.d.ts",
+        "apps/web/package.json",
+        "apps/web/tsconfig.json",
+        "config/agent-lane-assignments.json",
+        "docker-compose.yml",
+        "docs/repo-baseline.md",
+        "package.json",
+        "packages/ai/package.json",
+        "packages/ai/src/index.ts",
+        "packages/ai/tsconfig.json",
+        "packages/config/package.json",
+        "packages/config/src/index.test.ts",
+        "packages/config/src/index.ts",
+        "packages/config/tsconfig.json",
+        "packages/core/package.json",
+        "packages/core/src/index.test.ts",
+        "packages/core/src/index.ts",
+        "packages/core/tsconfig.json",
+        "packages/db/package.json",
+        "packages/db/src/index.ts",
+        "packages/db/tsconfig.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "tools/agent-lane-boundary-lint.mjs",
+        "tools/core-purity-lint.mjs",
+        "tools/core-purity.test.mjs",
+        "tools/lint.mjs",
+        "tsconfig.json",
+        "turbo.json"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-1"
+    },
     "m0-2": {
       "allow": [
         "docs/contracts/**",
@@ -27,6 +80,126 @@
       "branches": [],
       "branchPrefix": "codex/m0-4"
     },
+    "m0-5": {
+      "allow": [
+        "docs/contracts/audit-v1.md",
+        "packages/db/migrations/0001_audit.sql",
+        "packages/db/package.json",
+        "packages/db/src/audit.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/test/audit.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "pnpm-lock.yaml"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-5"
+    },
+    "m0-6": {
+      "allow": [
+        "apps/api/package.json",
+        "apps/api/src/auth/auth-provider.ts",
+        "apps/api/src/auth/auth-schemas.ts",
+        "apps/api/src/auth/auth.test.ts",
+        "apps/api/src/auth/principal-bridge.ts",
+        "apps/api/src/auth/tenant-auth.guard.ts",
+        "docs/contracts/authentication-v1.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/tenant-context.ts",
+        "pnpm-lock.yaml"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-6"
+    },
+    "m0-7": {
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/job.test.ts",
+        "packages/core/src/job.ts",
+        "packages/db/migrations/0003_job_spine.sql",
+        "packages/db/package.json",
+        "packages/db/src/index.ts",
+        "packages/db/src/job-repository.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/test/job.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "pnpm-lock.yaml"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-7"
+    },
+    "m0-8": {
+      "allow": [
+        "apps/api/src/commercial/approved-boundary.ts",
+        "apps/api/src/commercial/commercial-adapter.port.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0005_commands.sql",
+        "packages/db/src/commands.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/test/commands.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "tools/commercial-boundary-lint.mjs",
+        "tools/commercial-boundary.test.mjs",
+        "tools/lint.mjs"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-8"
+    },
+    "m0-9": {
+      "allow": [
+        "apps/api/package.json",
+        "apps/api/src/worker.ts",
+        "docker-compose.yml",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0006_outbox.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/test/outbox.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "pnpm-lock.yaml",
+        "tools/docker/001-worker-roles.sql"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-9"
+    },
+    "m0-10": {
+      "allow": [
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0004_ledger.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/ledger.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/test/ledger.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-10"
+    },
+    "m0-11": {
+      "allow": [
+        ".env.example",
+        "docker-compose.yml",
+        "docs/operations/evidence-storage.md",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0002_evidence.sql",
+        "packages/db/package.json",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/schema.ts",
+        "packages/db/test/evidence.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/storage/package.json",
+        "packages/storage/src/index.test.ts",
+        "packages/storage/src/index.ts",
+        "packages/storage/tsconfig.json",
+        "pnpm-lock.yaml"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m0-11"
+    },
     "m0-12": {
       "allow": [
         "packages/ai/**",
@@ -34,6 +207,48 @@
       ],
       "branches": [],
       "branchPrefix": "codex/m0-12"
+    },
+    "m1-1": {
+      "allow": [
+        "apps/web/**",
+        "packages/core/src/index.ts",
+        "packages/core/src/job.test.ts",
+        "packages/core/src/job.ts"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m1-1"
+    },
+    "m1-2": {
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/package.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/capture/capture.controller.ts",
+        "apps/api/src/capture/capture.service.ts",
+        "apps/web/app/api/jobs/capture/route.ts",
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/e2e/capture.spec.ts",
+        "apps/web/package.json",
+        "packages/ai/package.json",
+        "packages/ai/src/capture.test.ts",
+        "packages/ai/src/capture.ts",
+        "packages/ai/src/index.ts",
+        "packages/core/package.json",
+        "packages/core/src/capture.test.ts",
+        "packages/core/src/capture.ts",
+        "packages/core/src/index.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0007_capture.sql",
+        "packages/db/src/capture-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/test/capture.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "pnpm-lock.yaml"
+      ],
+      "branches": [],
+      "branchPrefix": "codex/m1-2"
     },
     "m1-3": {
       "branches": [
