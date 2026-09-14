@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e", fullyParallel: true, retries: 0,
-  workers: process.env.CI ? 2 : undefined,
+  ...(process.env.CI ? { workers: 2 } : {}),
   use: { baseURL: "http://127.0.0.1:3000", trace: "retain-on-failure" },
   webServer: {
     // CI verifies the actual production build, not a separately compiled development server.
