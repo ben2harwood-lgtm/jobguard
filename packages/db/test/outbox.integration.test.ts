@@ -1,3 +1,4 @@
+import { closeTestPools } from "./pool-test-utils.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -69,9 +70,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await infrastructure?.end();
-  await runtime?.end();
-  await admin?.end();
+  await closeTestPools(infrastructure, runtime, admin);
   await postgres?.stop();
   await rm(databaseDir, { recursive: true, force: true });
 });

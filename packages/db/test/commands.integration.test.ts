@@ -1,3 +1,4 @@
+import { closeTestPools } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,7 +22,7 @@ beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-commands-"));const
  CREATE ROLE command_test LOGIN PASSWORD 'runtime-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS; GRANT jobguard_runtime TO command_test;`);
  runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"command_test",password:"runtime-only",max:5});runtime.on("error",()=>undefined);
 },60_000);
-afterAll(async()=>{await runtime?.end();await admin?.end();await postgres?.stop();await rm(dir,{recursive:true,force:true})});
+afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();await rm(dir,{recursive:true,force:true})});
 const command=(commandId:string,overrides:Record<string,unknown>={})=>({version:"command.v1",commandId,commandType:"job.switch_live",semanticKey:`job:${JOB}:switch_live`,actorMembershipId:MEMBER,subjectType:"job",subjectRef:JOB,action:{actionType:"switch_live",recipient:null,contentHash:HASH,aggregateRevision:1,amountPence:10000,currency:"GBP",policyVersion:"pilot-no-charge-v1",expiresAt:new Date("2099-01-01T00:00:00Z")},...overrides});
 const transition={mutate:async(d:any)=>{const row=(await d.$client.query(`SELECT * FROM app.transition_job($1,$2,1,'live','switch_live',$3,10000,'pilot-no-charge-v1',0)`,[TENANT,JOB,QUOTE])).rows[0];return{jobId:JOB,revision:row.revision,status:row.status}}};
 

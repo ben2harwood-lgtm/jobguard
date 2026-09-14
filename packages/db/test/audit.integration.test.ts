@@ -1,3 +1,4 @@
+import { closeTestPools } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,7 +55,7 @@ beforeAll(async () => {
   runtime.on("error", () => undefined);
 }, 60_000);
 
-afterAll(async () => { await runtime?.end(); await admin?.end(); await postgres?.stop();
+afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop();
   await rm(databaseDir, { recursive: true, force: true }); });
 
 describe("serialized append-only audit", () => {

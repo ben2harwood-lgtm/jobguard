@@ -1,3 +1,4 @@
+import { closeTestPools } from "./pool-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -23,7 +24,7 @@ class MemoryVersionedStorage implements PrivateVersionedStorage {
 }
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const storage=new MemoryVersionedStorage();let service:EvidenceService;
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-evidence-pg16-"));const port=56500+Math.floor(Math.random()*300);postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic-test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic-test-only"});await migrate(admin);await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)",[TENANT,OTHER]);await admin.query(`CREATE ROLE jobguard_evidence_login LOGIN PASSWORD 'synthetic-runtime-only' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);await admin.query("GRANT jobguard_runtime TO jobguard_evidence_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"jobguard_evidence_login",password:"synthetic-runtime-only"});service=new EvidenceService(runtime,storage);},60_000);
-afterAll(async()=>{await runtime?.end();await admin?.end();await postgres?.stop();await rm(dir,{recursive:true,force:true});});
+afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();await rm(dir,{recursive:true,force:true});});
 
 async function begin(bytes:Uint8Array,overrides:Record<string,unknown>={}){return service.beginUpload(context,{jobId:JOB,scopeItemId:SCOPE,expectedSha256:hash(bytes),contentType:"image/png",maximumBytes:100,expiresAt:new Date(Date.now()+60_000),...overrides});}
 
