@@ -18,3 +18,4 @@ export * from "./ledger.js";
 export * from "./commands.js";
 export * from "./outbox.js";
 export * from "./capture-repository.js";
+export * from "./review-repository.js";

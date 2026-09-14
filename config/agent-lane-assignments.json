@@ -403,6 +403,40 @@
         "packages/db/test/tenancy.integration.test.ts",
         "pnpm-lock.yaml"
       ]
+    },
+    "m1-3": {
+      "branches": [
+        "codex/implement-review-and-confirmation-for-jobguard"
+      ],
+      "branchPrefixes": [
+        "codex/m1-3"
+      ],
+      "allow": [
+        "apps/web/app/api/jobs/capture/route.ts",
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/e2e/review-confirm.spec.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/review.ts",
+        "packages/core/src/review.test.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/migrations/0008_review.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/review-repository.ts",
+        "packages/db/test/review.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "packages/db/test/pool-test-utils.ts",
+        "config/agent-lane-assignments.json",
+        "packages/db/test/audit.integration.test.ts",
+        "packages/db/test/capture.integration.test.ts",
+        "packages/db/test/commands.integration.test.ts",
+        "packages/db/test/evidence.integration.test.ts",
+        "packages/db/test/job.integration.test.ts",
+        "packages/db/test/ledger.integration.test.ts",
+        "packages/db/test/outbox.integration.test.ts"
+      ]
     }
   }
 }
