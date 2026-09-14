@@ -443,7 +443,7 @@
         "codex/m1-4"
       ],
       "branches": [
-        "codex/m1-4-quote-pricing"
+        "codex/implement-m1-4-quote-pricing-for-jobguard"
       ],
       "allow": [
         "apps/web/app/styles.css",
