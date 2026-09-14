@@ -5,6 +5,7 @@ import type { JobSummary, SessionView } from "../lib/contracts";
 import { jobsResponseV1, sessionResponseV1, UiRequestError } from "../lib/contracts";
 import { ReviewProposal, type ReviewCaptureResult } from "./review-proposal";
 import { DecisionInbox } from "./decision-inbox";
+import { VariationFlow } from "./variation-flow";
 
 const statusLabels: Record<JobSummary["status"], string> = { draft: "Draft", quoting: "Quoting", accepted: "Accepted", live: "Live", invoiced: "Invoiced", paid: "Paid", lost: "Lost" };
 
@@ -27,6 +28,7 @@ export function JobGuardApp() {
   const [search, setSearch] = useState("");
   const [walking, setWalking] = useState(false);
   const [showDecisions, setShowDecisions] = useState(false);
+  const [showVariation, setShowVariation] = useState(false);
   const requestId = useRef(0);
 
   const checkSession = useCallback(async () => {
@@ -69,7 +71,7 @@ export function JobGuardApp() {
   return <div className="app-shell">
     <aside><a className="brand" href="#main"><Logo /><span>JobGuard</span></a><nav aria-label="Primary navigation"><a className="active" href="#jobs"><Icon name="jobs" />Jobs</a><button type="button" onClick={()=>setShowDecisions(true)}><Icon name="bell" />Decisions <span className="nav-count">2</span></button><a href="#account"><Icon name="user" />Account</a></nav><div className="pilot-note"><strong>Pilot workspace</strong><span>No JobGuard fees are charged.</span></div></aside>
     <div className="workspace"><header><button className="mobile-brand" aria-label="JobGuard home"><Logo /></button><label className="tenant-picker">Workspace<select aria-label="Select workspace" value={tenantId} onChange={(event) => { setSearch(""); setJobs([]); setTenantId(event.target.value); }}>{session.tenants.map((tenant) => <option value={tenant.id} key={tenant.id}>{tenant.name}</option>)}</select></label><div className="person"><span className="avatar">AB</span><span>{session.principal.displayName}</span></div></header>
-      <main id="main" tabIndex={-1}>{showDecisions ? <DecisionInbox close={()=>setShowDecisions(false)} /> : walking ? <WalkIt tenantId={tenantId} close={()=>setWalking(false)} /> : <><div className="page-heading"><div><p className="eyebrow">Your work</p><h1>Jobs</h1><p>Current status, documents and customer payments — without guesswork.</p></div><button className="primary" type="button" onClick={()=>setWalking(true)}><span aria-hidden="true">＋</span> Walk a new job</button></div>
+      <main id="main" tabIndex={-1}>{showVariation ? <VariationFlow close={()=>setShowVariation(false)} /> : showDecisions ? <DecisionInbox close={()=>setShowDecisions(false)} /> : walking ? <WalkIt tenantId={tenantId} close={()=>setWalking(false)} /> : <><div className="page-heading"><div><p className="eyebrow">Your work</p><h1>Jobs</h1><p>Current status, documents and customer payments — without guesswork.</p></div><div className="heading-actions"><button type="button" onClick={()=>setShowVariation(true)}>Log an extra</button><button className="primary" type="button" onClick={()=>setWalking(true)}><span aria-hidden="true">＋</span> Walk a new job</button></div></div>
         <div className="toolbar"><label className="search"><span className="sr-only">Search jobs</span><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search jobs" /></label><span className="result-count" aria-live="polite">{visible.length} {visible.length === 1 ? "job" : "jobs"}</span></div>
         {error ? <ErrorPanel error={error} retry={() => void loadJobs(tenantId)} /> : loading ? <div className="state" aria-live="polite"><span className="spinner" />Loading this workspace…</div> : visible.length === 0 ? <div className="empty"><span className="empty-icon">⌂</span><h2>{search ? "No matching jobs" : "No jobs yet"}</h2><p>{search ? "Try a different job or customer name." : "Walk through your first job when capture becomes available."}</p></div> : <section id="jobs" className="job-grid" aria-label="Jobs">{visible.map((job) => <JobCard job={job} key={job.id} />)}</section>}</>}
       </main><nav className="bottom-nav" aria-label="Mobile navigation"><a className="active" href="#jobs"><Icon name="jobs" />Jobs</a><button type="button" onClick={()=>setShowDecisions(true)}><Icon name="bell" />Decisions</button><a href="#account"><Icon name="user" />Account</a></nav>

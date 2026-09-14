@@ -232,6 +232,11 @@ describe("migration and privilege catalog", () => {
       { relname: "scope_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "simulated_settlement_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "synthetic_obligation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "variation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "variation_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "variation_rate_observation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "variation_rejection", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "variation_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
     ]);
   });
 
@@ -312,6 +317,11 @@ describe("migration and privilege catalog", () => {
       { relname: "scope_revision", owner: "jobguard_migration" },
       { relname: "simulated_settlement_event", owner: "jobguard_migration" },
       { relname: "synthetic_obligation", owner: "jobguard_migration" },
+      { relname: "variation", owner: "jobguard_migration" },
+      { relname: "variation_approval", owner: "jobguard_migration" },
+      { relname: "variation_rate_observation", owner: "jobguard_migration" },
+      { relname: "variation_rejection", owner: "jobguard_migration" },
+      { relname: "variation_revision", owner: "jobguard_migration" },
     ]);
   });
 });
