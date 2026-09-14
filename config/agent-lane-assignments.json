@@ -534,7 +534,7 @@
     },
     "m1-8": {
       "branches": [
-        "codex/implement-m1-8-pure-checks-decision-inbox"
+        "codex/implement-m1-8-for-jobguard-with-checks-and-inbox"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
