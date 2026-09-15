@@ -2,11 +2,17 @@ import type { Pool } from "pg";
 import { DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "./demo-seed.js";
 import { verifiedTenantContextFromMembership, withTenant } from "./tenant-context.js";
 
-export type SyntheticDemoJob = Readonly<{ id: string; title: string; status: string }>;
+export type SyntheticDemoJob = Readonly<{ id: string; title: string; status: string; revision: number; updatedAt: Date }>;
+
+export class SyntheticDemoReadError extends Error {
+  constructor(readonly code: "DATABASE_UNAVAILABLE" | "MEMBERSHIP_FORBIDDEN" | "JOB_NOT_FOUND", options?: ErrorOptions) {
+    super(code, options);
+  }
+}
 
 /** A fixed synthetic principal bridge. It cannot select a caller-provided tenant. */
 export async function readSyntheticDemo(pool: Pool) {
-  if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("Synthetic demo database access is disabled");
+  if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
   const context = verifiedTenantContextFromMembership({
     identityUserId: "d1500000-0000-4000-8000-000000000001",
     membershipId: DEMO_MEMBERSHIP_ID,
@@ -20,11 +26,25 @@ export async function readSyntheticDemo(pool: Pool) {
          AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp())`,
       [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID],
     );
-    if (membership.rowCount !== 1) throw new Error("Synthetic demo tenant has not been bootstrapped");
+    if (membership.rowCount !== 1) throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
     const jobs = await database.$client.query<SyntheticDemoJob>(
-      "SELECT id::text,title,status FROM app.job WHERE tenant_id=$1 ORDER BY created_at,id",
+      `SELECT id::text,title,status,revision,updated_at AS "updatedAt"
+         FROM app.job WHERE tenant_id=$1 ORDER BY created_at,id`,
       [DEMO_TENANT_ID],
     );
     return { tenant: { id: DEMO_TENANT_ID, name: membership.rows[0].name as string }, jobs: jobs.rows };
   });
+}
+
+/** Authoritative job projection. RLS deliberately makes a foreign job indistinguishable from a missing one. */
+export async function readSyntheticDemoJob(pool: Pool, jobId: string) {
+  try {
+    const workspace = await readSyntheticDemo(pool);
+    const job = workspace.jobs.find((candidate) => candidate.id === jobId);
+    if (!job) throw new SyntheticDemoReadError("JOB_NOT_FOUND");
+    return { tenant: workspace.tenant, job };
+  } catch (error) {
+    if (error instanceof SyntheticDemoReadError) throw error;
+    throw new SyntheticDemoReadError("DATABASE_UNAVAILABLE", { cause: error });
+  }
 }

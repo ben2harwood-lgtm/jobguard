@@ -811,6 +811,20 @@
         "BUILD_PLAN.md",
         "config/agent-lane-assignments.json"
       ]
+    },
+    "sbox-1": {
+      "branches": [
+        "codex/sandbox/sbox-1"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "config/agent-lane-assignments.json",
+        "package.json",
+        "pnpm-lock.yaml",
+        "docs/verdicts/**"
+      ]
     }
   }
 }

@@ -3,11 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": { "./workspace": { "types": "./src/workspace/index.ts", "import": "./dist/workspace/index.js" }, "./workspace-contracts": { "types": "./src/workspace/contracts.ts", "import": "./dist/workspace/contracts.js" } },
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run && pnpm openapi:check",
+    "test": "vitest run src && pnpm openapi:check",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "openapi:generate": "tsx src/generate-openapi.ts",
     "openapi:check": "tsx src/generate-openapi.ts --check",

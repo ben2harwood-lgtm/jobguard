@@ -42,8 +42,11 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     runtime = new Pool({ connectionString: runtimeUrl, max: 1 });
     const client = await runtime.connect();
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
-    expect((await client.query("SELECT title FROM app.job")).rows).toEqual([{ title: "Synthetic kitchen extension" }]);
-    await client.query("COMMIT"); client.release();
+    expect((await client.query("SELECT title,status,revision FROM app.job")).rows).toEqual([{ title: "Practice kitchen", status: "quoting", revision: 0 }]);
+    await expect(client.query("UPDATE app.job SET title='forbidden'")).rejects.toMatchObject({ code: "42501" }); await client.query("ROLLBACK");
+    await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await expect(client.query("INSERT INTO app.job(id,tenant_id,title) VALUES(gen_random_uuid(),'22222222-2222-4222-8222-222222222222','foreign')")).rejects.toMatchObject({ code: "42501" });
+    await client.query("ROLLBACK"); client.release();
     expect((await runtime.query("SELECT current_setting('app.tenant_id',true) tenant,count(*)::int count FROM app.job GROUP BY 1")).rows).toEqual([]);
   }, 60_000);
 
