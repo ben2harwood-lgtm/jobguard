@@ -626,7 +626,7 @@
     },
     "m1-12": {
       "branches": [
-        "codex/implement-m1-12-customer-invoice-issue-send-and-explicit-payment-records"
+        "codex/implement-m1-12-for-customer-invoices"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
