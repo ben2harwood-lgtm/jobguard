@@ -30,3 +30,4 @@ export * from "./proof-repository.js";
 export * from "./final-account-repository.js";
 export * from "./customer-billing-repository.js";
 export * from "./recovery-repository.js";
+export * from "./demo-seed.js";

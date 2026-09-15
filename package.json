@@ -14,7 +14,9 @@
     "test": "node --test tools/*.test.mjs && turbo run test",
     "test:e2e": "pnpm --filter @jobguard/web test:e2e",
     "typecheck": "turbo run typecheck",
-    "openapi:check": "pnpm --filter @jobguard/api openapi:check"
+    "openapi:check": "pnpm --filter @jobguard/api openapi:check",
+    "seed:demo": "turbo run build --filter=@jobguard/db... && node packages/db/dist/demo-seed-cli.js",
+    "test:regression": "pnpm --filter @jobguard/db test:regression && pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop m1-15-complete-journey.spec.ts"
   },
   "devDependencies": {
     "turbo": "2.10.12",
