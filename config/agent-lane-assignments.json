@@ -645,6 +645,24 @@
         "apps/web/e2e/customer-invoice.spec.ts",
         "apps/web/e2e/final-account.spec.ts"
       ]
+    },
+    "m1-13": {
+      "branches": [
+        "work"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/recovery.ts",
+        "packages/core/src/recovery.test.ts",
+        "packages/db/migrations/0018_recovery_outcomes.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/recovery-repository.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/recovery.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
     }
   }
 }
