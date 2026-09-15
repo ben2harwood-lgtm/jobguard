@@ -681,7 +681,7 @@
     },
     "m1-15": {
       "branches": [
-        "codex/implement-m1-15-demo-seed-and-regressions"
+        "codex/implement-m1-15-demo-seed-and-regression-suite"
       ],
       "allow": [
         ".gitignore",
