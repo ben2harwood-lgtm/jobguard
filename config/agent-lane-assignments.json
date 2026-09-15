@@ -802,6 +802,15 @@
       "allow": [
         "config/agent-lane-assignments.json"
       ]
+    },
+    "checker-adopt-demo-plan": {
+      "branches": [
+        "checker/adopt-demo-sandbox-plan"
+      ],
+      "allow": [
+        "BUILD_PLAN.md",
+        "config/agent-lane-assignments.json"
+      ]
     }
   }
 }
