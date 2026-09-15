@@ -666,7 +666,7 @@
     },
     "m1-14": {
       "branches": [
-        "codex/implement-m1-14-fee-illustration-and-transparent-per-job-statement"
+        "codex/implement-m1-14-fee-illustration-for-jobguard"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
