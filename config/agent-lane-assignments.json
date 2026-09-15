@@ -663,6 +663,21 @@
         "packages/db/test/recovery.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
+    },
+    "m1-14": {
+      "branches": [
+        "codex/implement-m1-14-fee-illustration-for-jobguard"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/fee-statement.ts",
+        "packages/core/src/fee-statement.test.ts",
+        "apps/web/app/ui/fee-statement.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/styles.css",
+        "apps/web/e2e/fee-statement.spec.ts"
+      ]
     }
   }
 }
