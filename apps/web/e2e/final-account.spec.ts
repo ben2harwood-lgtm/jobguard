@@ -2,8 +2,9 @@ import { expect, test } from "@playwright/test";
 
 test("shows an unissued draft final account with exact totals and a synthetic issue action", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Continue with demo code" }).click();
-  await page.getByRole("button", { name: "Draft final account" }).click();
+  await page.getByRole("button", { name: "Start the demo" }).click();
+  await page.getByRole("button", { name: "Skip tour" }).click();
+  await page.getByRole("button", { name: "Prepare the final bill" }).click();
 
   await expect(page.getByRole("heading", { name: "Final account" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Exact totals" })).toBeVisible();

@@ -1,6 +1,15 @@
 {
   "version": 2,
   "lanes": {
+    "demo-onboarding": {
+      "branches": [
+        "codex/redesign-synthetic-demo-onboarding"
+      ],
+      "allow": [
+        "apps/web/**",
+        "config/agent-lane-assignments.json"
+      ]
+    },
     "m0-1": {
       "branchPrefixes": [
         "codex/m0-1"

@@ -2,10 +2,29 @@ import { expect, test } from "@playwright/test";
 
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Keep every job on track." })).toBeVisible();
-  await page.getByRole("button", { name: "Continue with demo code" }).click();
+  await expect(page.getByRole("heading", { name: "Keep every job and every pound on track." })).toBeVisible();
+  await page.getByRole("button", { name: "Start the demo" }).click();
+  await page.getByRole("button", { name: "Skip tour" }).click();
   await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
 }
+
+test("first visit explains the journey and the help button reopens it", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Start the demo" })).toBeVisible();
+  await expect(page.getByText("A safe demo, nothing is really sent, charged, or saved to a real customer.")).toBeVisible();
+  await page.getByRole("button", { name: "Start the demo" }).click();
+  await expect(page.getByRole("heading", { name: "Welcome to JobGuard" })).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("heading", { name: "1. These are your jobs" })).toBeVisible();
+  await expect(page.locator('[data-tour="jobs-list"]')).toHaveClass(/tour-target/);
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page.getByRole("heading", { name: "Welcome to JobGuard" })).toBeVisible();
+  await page.getByRole("button", { name: "Skip tour" }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Welcome to JobGuard" })).toHaveCount(0);
+  await page.getByRole("button", { name: "How it works" }).click();
+  await expect(page.getByRole("heading", { name: "Welcome to JobGuard" })).toBeVisible();
+});
 
 test("sign-in opens the accessible shell without horizontal overflow", async ({ page }) => {
   await signIn(page);
@@ -19,9 +38,9 @@ test("live job has exact document, payment and pilot provenance", async ({ page 
   await signIn(page);
   const live = page.getByRole("article").filter({ hasText: "Kitchen extension" });
   await expect(live).toContainText("Live");
-  await expect(live).toContainText("Q-1007 · Delivered");
-  await expect(live).toContainText("Customer payment not due");
-  await expect(live).toContainText("Pilot no-charge · no JobGuard fee paid");
+  await expect(live).toContainText("Q-1007 · Sent");
+  await expect(live).toContainText("No payment due yet");
+  await expect(live).toContainText("No-charge pilot · no JobGuard fee paid");
   await expect(page.getByRole("article").filter({ hasText: "Loft conversion" })).toContainText("Queued — not delivered");
 });
 
@@ -29,7 +48,7 @@ test("tenant switching re-keys data and shows the empty state", async ({ page })
   await signIn(page);
   await expect(page.getByText("Kitchen extension")).toBeVisible();
   await page.getByLabel("Select workspace").selectOption({ label: "Empty Workshop" });
-  await expect(page.getByRole("heading", { name: "No jobs yet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
   await expect(page.getByText("Kitchen extension")).toHaveCount(0);
 });
 
