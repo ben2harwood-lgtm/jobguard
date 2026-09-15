@@ -3,7 +3,7 @@
   "lanes": {
     "demo-onboarding": {
       "branches": [
-        "codex/redesign-synthetic-demo-onboarding"
+        "codex/redesign-jobguard-demo-web-app-ui"
       ],
       "allow": [
         "apps/web/**",
