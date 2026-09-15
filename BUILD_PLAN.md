@@ -1496,3 +1496,491 @@ A proposal to import an already-running job is specified as task M1-17, which mu
 Agents append adjacent findings here rather than implementing them inline. Each entry must include discovery date, related task, evidence, risk, proposed scope, dependency/release gate, and whether it changes an invariant or needs a decision record.
 
 _No repository-specific findings have been added: the repository has not been inspected for this revision._
+
+
+
+---
+
+> **Current extension:** The original rev 2.2 text above is preserved. The following 15 September 2026 addendum supplies the ordered synthetic sandbox work orders and explicitly scoped dependency amendments. Original live gates and milestone acceptance remain in force.
+
+# §13 — Synthetic sandbox completion addendum to BUILD_PLAN.md rev 2.2
+
+**Date:** 15 September 2026. **Status:** ordered work orders, all unbuilt/unverified by this planning exercise. Retain §§1–12, existing milestone IDs, contracts, candidate fee formula, Appendix A and AGENTS rev 2.2. This addendum extends them; it does not replace completed M0/M1 work or certify it again.
+
+**Inspected source:** `ben2harwood-lgtm/jobguard`, main observed at `7ca6541405d8dd748382c714d4a1296ba70d1bc5`; the rev 2.2 text is preserved above. Source inspection covered the plan, AGENTS, web shell, synthetic server, API module, root scripts, Playwright config, current journey test, and D11. No application, database or deployed-browser tests were executed for this plan. M0/M1 merged status is the user's supplied baseline; each new leaf must verify the relevant implementation it reuses.
+
+The current web API surface has `/api/session`, `/api/jobs`, `/api/jobs/capture`, `/api/quotes/preview`, `/api/decisions`. Existing review/quote/acceptance/activation/proof/variation/final-account/customer-billing/recovery repositories are reuse targets. Existing UI panels and DOM-only tests are not evidence that those repositories are reached. The shell's job card currently renders “Open this job” as text. This addendum closes that integration gap first.
+
+## 13.1 Scope and explicit sequencing amendments
+
+Ben authorizes the complete requested feature set using generated data and simulations now. Every listed leaf is technically buildable without a live provider, paid AI, real bank feed, real send, real payment, or production release decision. “Ready” still means its listed prerequisite leaves have merged. The numbered list is a safe topological merge order; disjoint ready leaves may build concurrently under registered lanes.
+
+- `UIWIRE-*` completes the web/application-service seam of the corresponding existing M1 task. It does not replace its domain acceptance.
+- `M2-*-S` and `M4-*-S` are synthetic web child leaves of the existing parent IDs. Original native/provider/legal/live acceptance remains open where applicable. **M3 means Expo/offline in rev 2.2; do not rename recovery work M3.**
+- For these synthetic web children only, `UIWIRE-15` supplies the M1 integration prerequisite for M2. The original two-builder usability observation remains a separate release/trial evidence item; agents cannot manufacture it or record G1 as passed.
+- For these synthetic web children only, M4 depends on the tested web spine and UIWIRE-13, **not M3-7/native delivery**. M4-5-S uses a mapped evidence bundle without claiming WORM or an external timestamp, so it does not wait for live M4-4. M4-7-S is a deterministic internal settlement adapter, so it does not wait for Temporal or TrueLayer onboarding. These are explicit synthetic dependency substitutions, not completion of those parent tasks.
+- The demo may change a **job** to the existing `live` lifecycle state using “Start this practice job”. It never changes deployment mode. Only `synthetic_demo` is valid for these interactions. No user control may enable `pilot_no_charge`, provider access or `production_billing`.
+- D01–D12, G1, G4 and the M0-13 operational/live-release work remain unchanged. Real data requires G1 even if no payment is charged. All applicable decisions and release evidence must be signed off before any paying customer. Keep production-seed refusal and synthetic-event rejection at server/worker/financial boundaries.
+- This delivery covers the requested web sandbox, including materials and recovery. Original native/offline M3, conditional M2-8 enhancements, real integrations, WORM anchoring, subscriptions, extra rails, statutory notices/CIS/DRC/retention, and M5 retain their existing work orders and gates. Do not claim those milestones complete from this sandbox.
+
+## 13.2 Mandatory Done when — inherited by EVERY leaf
+
+**C1 — Complete vertical slice.** Each leaf ships its versioned Zod commands/queries, application service, real PostgreSQL persistence or authoritative query, Next UI, accessible loading/error/empty/success states, and tests together. Read-only leaves ship real server projections plus UI. Reuse existing domain/repository logic. No localStorage, component state, fixed JSON response or intercepted success response may substitute for authoritative business state. Refresh, deep link and a second browser context must read the persisted result. Local UI state may hold an unsaved draft, visibly labelled.
+
+**C2 — Server composition and deployment.** Extend `apps/api` application services/controllers and export a narrow server-only application entrypoint. Next route handlers are thin authenticated adapters to those same services, composed in-process in the existing Vercel deployment; the Nest standalone API exposes the same schemas/services. Establish this seam in SBOX-1, with generated OpenAPI/contract checks and a Vercel-compatible build test. No second write implementation or undeployed Nest-only endpoint counts. A leaf's Next `/api/...` paths below define its web contract; additive routes may reuse the existing command route where semantically identical, with an explicit mapping in its receipt and tests. Route implementation is server-only, never a browser import of DB/credentials.
+
+**C3 — Simulation boundary.** Server-selected mode; session-scoped generated tenant/scenario; `.invalid` recipients; fixed generated source documents and optional synthetic-only text editing. UI tells users to use the supplied fictional job, not real names, addresses, bank details or invoices. Use selectable generated documents instead of inviting arbitrary real uploads. Every screen and exported artifact says `Practice sandbox — synthetic data; nothing is sent or charged`. Audio stays on device; only reviewed fictional text is submitted. Live adapter factories reject initialization in this mode; no real bank/provider credentials or outbound integrations are configured. Mutation responses, queue records and synthetic receipts retain environment identity. Tests reject a production/pilot request carrying a synthetic command, object or settlement. Production workers reject synthetic references even if a client forges a mode flag. Internal application/DB/storage traffic is allowed; commercial/provider outbound attempts must be zero.
+
+**C4 — Database and money.** GBP Money uses validated safe integer pence, the existing `1_000_000_000_000` magnitude limit and checked bigint/rational arithmetic; exact quantities/units and versioned rounding. Every new tenant table has non-null tenant ID, tenant/job-qualified FKs, enabled and FORCE RLS, `jobguard_migration` ownership. `jobguard_runtime` stays non-owner, non-superuser, no BYPASSRLS/role escalation/DDL/UPDATE/DELETE/TRUNCATE; ordinary table grants stay SELECT/INSERT. Use existing narrowly authorized command/posting routines for protected effects; any necessary routine EXECUTE grant is specific and catalog-tested, never an elevation of the runtime role. No new unrestricted SECURITY DEFINER helper. Test actual runtime SQL denial of forbidden inserts as well as mutation/tenant attacks. Append events/revisions; preserve audit actor/subject/hash/sequence and transactional rollback. No superuser-only runtime feature; fresh/upgrade migrations and the existing Neon bootstrap remain compatible. Use expand-compatible schema changes so the preceding demo still runs during rollout.
+
+**C5 — Authorization and races.** Authenticate membership server-side; client tenant IDs are requests, not authority. Test missing tenant context, a non-member tenant, and a same-tenant wrong-job link. Commercial commands bind action, amount/currency, document/evidence/recipient hash, policy version and expected revision to an approved Decision. Dismissal is not approval. Replay the same command ID; reuse with different payload must conflict. Two browser clients must produce one effect or a typed stale-revision conflict. Approvals expire/revoke/supersede; workers recheck authority. Atomic command/domain/audit/outbox; no business lock after audit append. Unknown send/payment outcome means reconcile, never blind retry or success.
+
+**C6 — Executable tests.** Vitest covers pure domain, schema and service logic. Any DB-touching leaf runs real PostgreSQL 16 integration tests using the embedded-postgres harness and actual runtime/migration roles; no SQLite/ORM-mock substitution. Browser tests run the production Next build against that real database and the same application services as deployment. Only external effects, clock and browser speech hardware may be faked. Do not `route.fulfill()` JobGuard success APIs. Fault tests may abort transport to exercise recovery, and must say so. Each leaf executes its new Playwright spec in BOTH existing projects: `mobile-360` (360×800) and `desktop` (1280×800). These are viewport tests, not proof of real phone/browser speech support.
+
+**C7 — UI assertions for every leaf.** After its positive and negative paths, reload, open the job from Jobs, and verify the same authoritative state and source identity. Assert the sandbox banner; no horizontal page overflow (`scrollWidth <= clientWidth`); keyboard-accessible primary actions with visible focus; labels, error focus and touch targets at least 44×44 CSS px. Unknown/stale/pending data must remain distinct from successful completion. Money labels show pounds to two decimals, never ask builders to type pence. No binary assets committed: inline SVG/CSS and generated textual fixtures; valid synthetic image/PDF bytes may be generated at test/runtime and stored as evidence/export artifacts.
+
+**C8 — CI and independent verdict.** Preserve fail-closed dependency audit, secrets scan, lane-boundary, purity, gate, typecheck, lint, build, applicable evaluation, migration, DB and previous regression checks. Security scanner failure/unavailability is a failure, not `continue-on-error`. Register one leaf per branch/lane in `config/agent-lane-assignments.json`; shared route registry, package exports, migration sequence and global CSS edits serialize. Codex supplies the diff, exact commit, changed contracts, commands actually run, environment/fixtures, results and Playwright traces. Independent Claude inspects that exact diff, runs the specified tests plus listed negative assertions, and records PASS/HOLD/FAIL with evidence in `docs/verdicts/`. No claim of Claude review without an actual Claude response. A separate actor records technical acceptance; founder-owned push/merge/release remains founder-owned. Any changed commit needs a fresh or explicitly rebound review. Missing/inconclusive evidence is HOLD; green UI alone is not acceptance.
+
+**Per-leaf executable command pattern:** preserve existing root `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm openapi:check`. Run `pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop <ID>.spec.ts` and existing regressions. The root currently lacks `test:db`, `test:migrations`, `eval` wrappers named by AGENTS; SBOX-1 must map/add real wrappers to existing package suites, report applicable commands precisely, and never introduce placeholder pass scripts. New deterministic extraction/matching policies run the synthetic `pnpm eval` suite; paid/live model evaluation is not part of these leaves.
+
+## 13.3 Fixed acceptance fixtures and assertion notation
+
+Each browser test gets a fresh generated tenant and scenario run. Seeds are immutable, versioned source recipes; mutations go through domain commands. Per-leaf seeded states are permitted for isolation; UIWIRE-15 and DEMO-1 also traverse without skipping business steps. Reset creates a new run and archives the previous run; it never deletes audits or reuses document/receipt identities. Tests must not depend on test order.
+
+| Fixture | Exact source facts and expected arithmetic |
+|---|---|
+| `core-1000` | Exact confirmed scope: Protect room, Prepare walls, Paint walls, Finish trim, Clean site; each quantity 1, rates £200/£200/£200/£200/£100. Five stable IDs; quote v1 net £900. Change Clean site rate from £100 to £200 to create v2 net £1,000, illustrative standard VAT £200, gross £1,200. At activation A=100000 pence, cap=1500. Approve +£125 extra and −£25 omission; leave a £50 extra unapproved. Final net £1,100, VAT £220, gross £1,320. Baseline and cap stay £1,000/£15. Payment £500 leaves £820; then £820 settles; reversing that £820 restores £820 due. |
+| `materials-A` | Order A belongs to `recovery-18800` in the two-job aggregate scenario. 10 units at proposed £25 vs applicable agreed £20: proposed commitment £250, reference £200, difference £50. Builder changes order before simulated placement: £200 commitment, £50 lower than recorded proposal; zero recovered cash. |
+| `materials-B` | Separate order B also belongs to `recovery-18800`: 10×£20=£200; accepted delivery 8 units; supplier bill 10×£25=£250. Price variance = 10×(£25−£20)=£50; quantity variance = (10−8)×£20=£40; combined net questioned amount £90, with no overlapping £10. Human-confirmed revised supplier bill £160 is £90 lower; it is neither landed cash nor fee-eligible. Supplier costs never alter the accepted customer-sale baseline by themselves. |
+| `materials-320` | Separate selectable original M2 acceptance scenario, excluded from the two-job VALUE-2 aggregate: 40 units received/ordered, agreed £20, billed £28; £1,120−£800=£320 net questioned. Retain this original required fixture. |
+| `recovery-18800` | Accepted net A=£18,800, cap £282. A generated issued customer invoice has net £18,800 + reference VAT £3,760 = £22,560. Two attributed claims have eligible principal £320 and £2,500. Fake settled customer receipts are £384 (£320 net+£64 VAT) and £3,000 (£2,500 net+£500 VAT). Aggregate eligible net L=£2,820; not gross £3,384. Separate fake base settlement P=£79 principal gives F=£282, K=£79, R=£203. These movements remain entirely synthetic. |
+| `small-fee` / `zero-fee` | A=£1,000,L=£500,P=£79 → C=£15,F=£15,K=£15,R=£0,total principal £79,benefit £421. A=£10,000,L=£0,P=£79 → recovery fee £0,total principal £79,benefit −£79. No suppression of negative benefits. |
+| `rounding-tie` | A=300 pence → cap=roundHalfEven(4.5)=4 pence; with L=100 and P=0, F=4,R=4. A=100000,L=5,P=0 → F=0; L=15 → F=2. These distinguish half-even from half-up. |
+
+The following helpers are exact Playwright assertions, not visual-review shorthand. Bind them per test to `page`; use the named test IDs as UI acceptance contracts. Every leaf also inherits C1–C8. Actions below use exact accessible names; job links use job IDs returned by the test's real seed/capture API. `J` means `/jobs/<that job_id>`, never a global fixture job. `D(id)` reads the job's Details/source panel and checks the persisted identity. Tests assert source IDs/revisions from server responses and database receipts, not just copied DOM attributes.
+
+```ts
+const B = (name: string) => page.getByRole('button', { name, exact: true });
+const V = async (id: string, value: string) =>
+  expect(page.getByTestId(id)).toHaveText(value);
+const H = async (name: string) =>
+  expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+const X = async (text: string) =>
+  expect(page.getByText(text, { exact: true })).toBeVisible();
+const disabled = async (name: string) => expect(B(name)).toBeDisabled();
+// All examples below are inside async Playwright tests.
+// The assertion strings are deliberately plain English and normative.
+```
+
+## 13.4 Ordered leaves — core and voice
+
+### 01. SBOX-1 — Give every job a real, persistent server-backed workspace
+
+**Parent/dependencies:** M0 foundations + existing M1 repositories; first leaf. **Backend + UI:** establish C2 application composition, opaque synthetic session with server-verified membership, runtime-role DB access, job read model and `/api/jobs/:id`; clickable `/jobs/:id` shell with stage navigation and genuine server status. Remove silent no-DB/static-job success from this deployed path; unavailable DB is a typed recoverable error. Register real DB/e2e script wiring and leaf evidence format. **Ben decision:** none; engineering seam only.
+
+**Done when:**
+- Open a seeded job through Jobs: `await H('Practice kitchen'); await V('job-status','Quote being prepared');` Copy URL to a second authorized context; same `job_id`, values and server revision load. Another tenant/session cannot open it; UI shows `await X('You cannot open this job');`, API returns 403/404 without its title.
+- Browser closes/reopens a workspace without invented fee/payment/delivery statuses. An unauthorized `requested_tenant_id` cannot select a membership. Missing database produces `await X('Your job could not load'); await expect(B('Try again')).toBeVisible();`; restoring it and retrying loads the DB row, not fixture fallback.
+- Real DB integration and Next/Nest contract parity pass; server build boots with migration credentials absent. Catalog test proves runtime grants/RLS. All prior UI routes remain usable while later panels are labelled `Illustration — not yet connected to this job` until their leaf replaces them.
+
+### 02. SBOX-2 — Make a private, resettable practice run with deterministic simulations
+
+**Dependencies:** SBOX-1. **Backend + UI:** session-scoped scenario provisioning, generated tenants/jobs, `/api/sandbox/runs`, append-only reset/archive command, per-run fake clock and adapter receipts; “Start a fresh practice run” and scenario chooser. Add `/api/sandbox/runs/:id/advance`, behind “Continue simulation”: a bounded authenticated request reads approved persisted outbox work after its creating transaction commits, runs only named deterministic fake adapters, records durable attempts/events/receipts and returns. Both deployed demo and Playwright use this exact executor. No persistent Vercel daemon, unawaited background promise or frontend-injected success event is assumed. Repeated advance/restart reconciles unknown results under existing outbox contracts. Future scheduled checks use the same scoped clock/execution owner. Register future fixtures incrementally as their schemas land. **Ben decision:** none.
+
+**Done when:**
+- Two independent sessions mutate different generated workspaces. Click reset: `await H('Your fresh practice run'); await V('run-status','Synthetic practice');` New run ID differs; previous run deep link shows `await X('This practice run is archived');`. Old audits remain queryable by its authorized session, and cannot be changed by reset.
+- Repeating the reset command ID returns one run; a different payload conflicts. Archive/seed commands never accept arbitrary tenant IDs, database URLs or environment modes. `production_billing` and `pilot_no_charge` seed attempts hard-fail with no writes; keep the original production-seed refusal.
+- Every screen says the C3 banner. Forged live/send/bank options are rejected server-side. `await V('real-external-actions','0');` matches inspected adapter counters; do not infer it from UI text alone. Normal users cannot alter a global clock or another run's events.
+
+### 03. UIWIRE-1 — Persist capture, review and scope confirmation on the same job
+
+**Parent/dependencies:** M1-2/M1-3; SBOX-2. **Backend + UI:** wire `/api/jobs/capture`, proposal queries, review revisions and confirm commands to existing capture/review repositories; Walk → review → confirmed scope. Deterministic local text parser uses supplied text/spans, never returns the reference fixture for unrelated input; unsupported phrasing stays raw for human review. **Ben decision:** none.
+
+**Done when:**
+- Main fixture submits Protect room/Prepare walls/Paint walls/Finish trim at quantity 1 × £200, Clean site at 1 × £100, and an unpriced optional Replace shelves line. `await V('proposal-line-count','6'); await X('Price needed'); await disabled('Preview quote');` Accept the first five, explicitly dismiss Replace shelves with reason `Not in this practice quote`, and answer the blocking question. Confirm yields the exact five-line core-1000 baseline: `await V('confirmed-line-count','5'); await V('job-status','Quote being prepared');`. Separate isolated tests edit a description, add an omitted line, and exercise split/merge; they do not silently change the money fixture. Reload retains all edits/dispositions/source excerpts.
+- Unknown text produces `await X('Please turn these words into work items');` while retaining the source; no fabricated scope or rates. Source instructions cannot execute tools or authorize any action.
+- Acceptance retains reserved scope IDs; split/merge has explicit parent/child lineage and retired IDs. Concurrent confirm creates one canonical revision set. A stale second tab sees `await X('This draft changed. Review the latest version.');` No quote/send/platform journal exists merely from capture/confirmation.
+
+### 04. VOICE-1 — Add browser on-device dictation to Walk, with honest fallback
+
+**Parent/dependencies:** extends M1-2 only; UIWIRE-1. **Backend + UI:** microphone start/stop/cancel, interim/final text review, `source.kind=browser_local_transcript` with acquisition metadata and human edits through the same capture service; no audio upload/storage or paid transcription endpoint. Read capability before start: actual `processLocally` support, `available({langs:['en-GB'],processLocally:true})`, and installed local model. Set `recognition.processLocally=true` before `start()`. Do not treat a writable expando property or merely `webkitSpeechRecognition` existence as support. **Ben decision:** none; production transcription remains M0-12/D04/G1-gated.
+
+**Done when:**
+- With deterministic speech adapter events, click `Talk through the example`; `await X('Listening on this device');` Interim text is visibly provisional; final text is editable. Click `Use these words`, then confirm through UIWIRE-1; reload shows `await V('capture-method','On-device dictation · checked by you');` Exact submitted text/spans persist once, with no audio bytes or network speech requests.
+- Permission denial/no-speech/cancel/navigation stop recognition, clear interim text as appropriate and preserve saved typed work. `await X('Microphone unavailable. You can type instead.');` remains usable. Unsupported/local-model-unavailable browser: `await X('On-device voice is unavailable in this browser. Type or use the example.'); await disabled('Talk through the example');`. Never switch to remote recognition. Optional model installation requires its own click, shows honest indeterminate installing/status feedback where the API offers no measurable progress, and never starts listening automatically.
+- Playwright runs supported, unsupported, denied, duplicate-final-event and unmount paths in both viewport projects. Tests assert local-only adapter configuration; page request interception alone cannot prove browser-internal speech traffic. Technical delivery comprises this full-stack implementation plus fail-closed fallback. Separately record one real supported browser/OS/device local-only rehearsal after model installation, with network unavailable during dictation, and explicit mobile fallback evidence before calling the voice capability device-validated. Mock events do not count as hardware validation. Missing hardware leaves that claim on HOLD; it does not block unrelated typed-journey/materials/recovery construction or permit a claim of universal phone speech support.
+- Basis: the [Web Speech API specification](https://webaudio.github.io/web-speech-api/#speechreco-attributes) distinguishes local and server recognition and defaults local processing to false. Recheck capability at build time; guarantee the complete typed journey on phone, not universal on-device speech availability.
+
+### 05. UIWIRE-2 — Price and revise a quote without losing scope or old prices
+
+**Parent/dependencies:** M1-4; UIWIRE-1. **Backend + UI:** `/api/jobs/:id/quotes` draft commands/projections via quote repository; exact quantity/rate/discount/tax fields, coverage and priced revision comparison; rate observations. **Ben decision:** none for existing reference standard-20% synthetic policy; no actual tax invoice claim.
+
+**Done when:**
+- `core-1000` v1: `await V('quote-net','£900.00');` Change last unit rate from `100.00` to `200.00`, save v2: `await V('quote-net','£1,000.00'); await V('quote-vat','£200.00'); await V('quote-gross','£1,200.00'); await V('quote-revision','2');`. Revision comparison shows `await X('Price change: +£100.00');`, and v1 still totals £900 after refresh.
+- Missing rate and unresolved required input block preview/issue; tax selection says `Illustrative standard VAT at 20%`. An unsupported treatment retains draft data and displays a specific unavailable explanation. Decimal quantities and half-penny tests use Money, not parseFloat arithmetic.
+- DB confirms one rate observation per human confirmation, correct scope lineage, no platform obligation/journal/action. Stale edit conflicts instead of overwriting v2.
+
+### 06. UIWIRE-3 — Preview an immutable quote and simulate sending exactly that version
+
+**Parent/dependencies:** M1-5; UIWIRE-2. **Backend + UI:** quote artifact issue/preview/download, exact-recipient Decision, durable fake outbox send and attempt/reconciliation view. Versioned PDFs generated at runtime, visibly synthetic. **Ben decision:** none; quote terms stay fictional and existing reference-only.
+
+**Done when:**
+- Preview v2 and `practice-customer@example.invalid`; click `Simulate sending this quote`. `await V('quote-delivery','Queued — not sent');` After fake worker receipt: `await V('quote-delivery','Simulated delivery — nothing sent');`. Downloaded artifact has v2, £1,000/£200/£1,200, all five lines, exclusions, synthetic watermark and same recorded hash/version. Long multi-page fixture has no clipped/missing lines.
+- Alter recipient/content after preview: `await X('The quote changed. Preview and approve it again.');`. Old approval cannot send new bytes. Two clicks/worker retries yield one authorized semantic send and one invoice-free quote artifact, zero platform debt or charge attempts.
+- Fake timeout-after-acceptance shows `await V('quote-delivery','Outcome unknown — check needed');`; reconciliation recovers one receipt and never blindly sends twice. Approval expiry/revocation is checked again by executor.
+
+### 07. UIWIRE-4 — Record acceptance with its exact revision and actual provenance
+
+**Parent/dependencies:** M1-6; UIWIRE-3. **Backend + UI:** acceptance/decline/cancel/supersede commands and acceptance timeline, bound to quote hash/revision; explicitly simulated builder attestation. **Ben decision:** none; no invented e-signature/contract-law wording.
+
+**Done when:**
+- Select v2; click `Record practice acceptance`; `await V('job-status','Customer said yes'); await V('accepted-revision','Quote 2 · £1,000.00 net'); await X('Builder-recorded practice acceptance — not an authenticated customer signature');`. Reload retains actor/date/method/source evidence.
+- Create v3 after cancelling pre-live acceptance; v2 acceptance cannot authorize v3 or activation. `await X('This quote version needs its own acceptance');`. Cancellation/decline remains in history; accepted snapshot never mutates.
+- Concurrent/replayed acceptance has one effect; platform obligation, settlement and recovery fee counts remain zero.
+
+### 08. UIWIRE-5 — Start the practice job and freeze its accepted baseline
+
+**Parent/dependencies:** M1-7; UIWIRE-4. **Backend + UI:** exact activation Decision/command, accepted/cap/policy snapshots, no-charge entitlement display and optional isolated reference base-obligation scenario; next-action navigation. **Ben decision:** none; reference policy already authorized for synthetic use.
+
+**Done when:**
+- Click `Start this practice job`: `await V('job-status','Work under way'); await V('accepted-net','£1,000.00'); await V('recovery-cap','£15.00'); await X('Practice only — no real job or payment activated');`. Same job and scope IDs persist; required unpriced/unaccepted state cannot start.
+- Default run shows `await V('base-status','No real charge');`. A separately labelled simulated-fee scenario shows `await V('base-status','Simulated obligation £79.00 — unpaid'); await V('base-credit','£0.00');`. Activation never invents a settlement or £79 paid credit.
+- Concurrent start creates one activation/snapshot and at most one permitted simulated obligation. Later working-scope/variation changes cannot alter accepted value/cap. Forged deployment-mode input has no effect; gates remain proposed/closed as before.
+
+### 09. UIWIRE-6 — Make the Decisions inbox act on this job's facts
+
+**Parent/dependencies:** M1-8; UIWIRE-5. **Backend + UI:** persist pure finding evaluations, dedupe/suppression, job/overall Decision projections, resolve/dismiss and deep links to required actions. **Ben decision:** none.
+
+**Done when:**
+- Seed missing electrical proof and one generic materials review suggestion: `await V('mandatory-decision-count','1'); await V('advisory-decision-count','1');`. Open each and inspect actual source/rule/version; replay evaluation yields the same two Decision identities.
+- Dismiss materials review: `await X('Dismissed — no action authorized'); await V('mandatory-decision-count','1');`. Missing proof remains blocking even if advisory budget is zero; completing/dismissing a generic inbox row cannot fabricate proof or authorize an outbound action.
+- Jobs navigation count equals API pending count after reload/tenant change; another tenant never sees the finding. Pure checks have no I/O or commercial write imports; persistence is separate application code.
+
+### 10. UIWIRE-7 — Attach valid synthetic proof and enforce operational completion
+
+**Parent/dependencies:** M1-10; UIWIRE-6. **Backend + UI:** existing evidence/proof services, generated valid practice photo/file selection, upload/finalization/link commands, scoped versioned preview, stage command and proof Decision reconciliation. **Ben decision:** none.
+
+**Done when:**
+- On the selected scope, before finalization: `await V('proof-state','Uploading'); await disabled('Complete this stage');`. After server byte/type/hash/version checks: `await V('proof-state','File integrity checked · synthetic example');`. Complete: `await V('stage-status','Complete'); await V('mandatory-decision-count','0');` after relevant rule rerun, same scope ID on reload.
+- Truncated PNG headers (including the old test's header-only buffer), corrupt bytes, missing original, unfinished upload, wrong type and cross-job/cross-tenant evidence cannot pass. `await X('This file cannot satisfy the required proof');`. Generate valid images at runtime; no committed binaries.
+- Invalidate the supporting version: `await V('stage-review','Proof needs review');` and reopen the proof Decision. Preserve historic completion and append rework; no bare “verified” or proof-of-work-quality claim. Replayed finalize/complete creates one effect, and races cannot bypass finalization.
+
+### 11. UIWIRE-8 — Price and approve extra work and omissions as immutable variations
+
+**Parent/dependencies:** M1-9; UIWIRE-5. **Backend + UI:** variation proposal/review/price/revise/attestation commands and job-linked variation list; existing/new scope lineage; signed deltas. **Ben decision:** none; same fictional acceptance wording as UIWIRE-4.
+
+**Done when:**
+- Enter +£125 extra, −£25 omission, and £50 pending extra. Approve exact first two revisions: `await V('approved-additions','£125.00'); await V('approved-omissions','−£25.00'); await V('pending-extras','£50.00');`. All show source/actor/price revision after reload.
+- Edit the approved +£125 extra to +£150 as a new proposed revision: `await X('Changed price needs new approval');`; prior approved revision remains immutable and the unapproved successor does not become billable. To replace it, explicitly approve/supersede; never silently remove the prior valid commercial fact.
+- Missing prices cannot approve; rejected revisions remain visible; new work gets new linked IDs, changes to old scope retain IDs. Double approval creates one fact, and baseline/cap stay £1,000/£15.
+
+### 12. UIWIRE-9 — Assemble the final account from accepted history and approved changes
+
+**Parent/dependencies:** M1-11; UIWIRE-7, UIWIRE-8. **Backend + UI:** final-account build/rebuild/read through repository, baseline/variation/proof breakdown and coverage findings; exact source manifest. **Ben decision:** none.
+
+**Done when:**
+- Use `core-1000`: `await V('final-baseline','£1,000.00'); await V('final-variation-net','£100.00'); await V('final-net','£1,100.00'); await V('final-vat','£220.00'); await V('final-gross','£1,320.00');`. +£125 and −£25 appear once; pending £50 is under `Not included — approval needed`, never invoiced.
+- Edit today's working scope to £9,999 without commercial approval; rebuilding preserves £1,320. Every line/source drawer traces to exact scope, accepted/approved revision and proof version; no retyping accepted lines.
+- Missing mandatory proof blocks applicable issue with `await X('Finish the required proof before issuing this bill');`. Same inputs produce same manifest/hash; new approved sources produce new revision and invalidate stale issue authority. API service and real DB tests enforce these rules independent of UI.
+
+### 13. UIWIRE-10 — Issue an immutable numbered customer invoice and simulate its send
+
+**Parent/dependencies:** M1-12 issue/send; UIWIRE-9. **Backend + UI:** invoice issuance command, tenant/issuer-specific numbering, snapshot/tax/evidence PDF, exact simulated send, job invoice list and delivery states. **Ben decision:** none for synthetic standard-20% reference invoice, labelled not a real tax invoice.
+
+**Done when:**
+- Fresh scenario issues `DEMO-CUST-000001`: `await V('customer-invoice-number','DEMO-CUST-000001'); await V('invoice-gross','£1,320.00'); await V('invoice-balance','£1,320.00'); await V('invoice-delivery','Simulated delivery — nothing sent');`. Server snapshot/download contains number/date/issuer/reference tax version, frozen inputs and banner. Artifact hash survives refresh.
+- Concurrent issue/retry returns that one invoice/debt/number. Next distinct invoice in the same issuer namespace uses another number; cancellation/archive never reuse it. Reset creates a new generated tenant/issuer namespace, which may start at 000001; issuer identity plus number is unique, and global document UUID never repeats. Printed issuer/run identity distinguishes the identical display numbers in different fictional issuers. Changes after issue cannot mutate bytes or number; UI directs to correction.
+- Stale final-account hash or changed recipient fails exact authorization. Pending/unknown simulated send is never “sent”. UI status separates issued from delivered; a production tax-invoice path with D02/D06/G1 unapproved refuses even if the demo payload is replayed.
+
+### 14. UIWIRE-11 — Correct an issued invoice with a linked credit note
+
+**Parent/dependencies:** M1-12 correction; UIWIRE-10. **Backend + UI:** approved credit-note command, separate immutable numbering, amount availability, negative tax calculation and customer balance projection; correction preview. **Ben decision:** none for existing synthetic tax-rounding candidate.
+
+**Done when:**
+- On a fresh issued £1,320 fixture, approve net £100 + VAT £20 credit: `await V('credit-note-gross','£120.00'); await V('invoice-balance','£1,200.00'); await X('Corrects DEMO-CUST-000001');`. Original invoice remains £1,320 and same hash; credit note has its own immutable number/hash and approval.
+- Duplicate credit command does not repeat £120; concurrent credits cannot exceed the allowed remaining creditable amount. Wrong invoice/job/tenant and stale preview fail. Refund due/customer credit are displayed separately if credit exceeds unpaid balance, never silently paid out.
+- Sign-symmetric VAT correction/rounding and append-only accounting tests pass; no platform fee/landing is created from customer credit.
+
+### 15. UIWIRE-12 — Record customer receipts, partial payment, overpayment and reversals
+
+**Parent/dependencies:** M1-12 payment; UIWIRE-10, UIWIRE-11. **Backend + UI:** dated/method/reference receipt commands, allocation/reversal projections and balance history; amount form in pounds. **Ben decision:** none; manual practice records are not bank evidence.
+
+**Done when:**
+- Fresh uncredited `core-1000`: record £500 → `await V('invoice-balance','£820.00'); await V('customer-payment-status','Part paid');`. Record £820 → `await V('invoice-balance','£0.00'); await V('job-status','Customer paid');`. Reload and reverse second receipt → `await V('invoice-balance','£820.00'); await V('customer-payment-status','Part paid');` with both original/reversal shown.
+- Separate overpayment case £1,400 against £1,320 → `await V('invoice-balance','£0.00'); await V('customer-credit','£80.00');`, not −£80 invoice balance. Allocations cannot consume the same receipt twice across invoices; repeated command returns one receipt.
+- `await X('Recorded by you in the practice sandbox — not bank-confirmed'); await V('eligible-recovery-principal','£0.00'); await V('base-credit','£0.00');`. Manual customer receipts cannot become bank landing or platform settlement through UI, API or direct runtime writes.
+
+### 16. UIWIRE-13 — Expose the structural recovery-fee guard and synthetic outcome records
+
+**Parent/dependencies:** M1-13; UIWIRE-5. **Backend + UI:** minimal existing recovery case/settlement/evidence/eligibility commands, guarded landing/posting routines and per-job outcome/guard explanations; selectable generated positive/negative scenarios. This leaf wires the existing minimum; M4 later extends lifecycle and matching. **Ben decision:** none; reference_fee_policy_v1 only.
+
+**Done when:**
+- Missing evidence, pending money, manual receipt, unapproved eligibility and prevented scenarios each show a specific reason and `await V('additional-fee','£0.00'); await disabled('Approve simulated fee');`. Injecting only an evidence ID or `landed=true` does not qualify anything.
+- Generated finalized evidence + approved eligible case + separate fake settled event + authorized allocation in the same synthetic tenant/job produce an inspectable landing; only then can an exact simulated statement be approved. SQL tests try missing/wrong evidence, wrong case/job/tenant, stale approval, duplicate underlying movement, oversubscription and direct fee insert; all are denied structurally.
+- Two cases racing share one cap/credit; a repeated source has one allocation/effect. Reversal/invalidation requires recomputation/compensation/review, never edits journals. Production and no-charge pilot reject synthetic proof and positive reference-policy fee posting.
+
+### 17. UIWIRE-14 — Show the exact existing fee illustration with all its caveats
+
+**Parent/dependencies:** M1-14; UIWIRE-13. **Backend + UI:** persisted-source statement query and separate explicit what-if endpoint using the existing pure policy; base obligation/settlement, landed principal, cap/credit/postings and principal benefit UI. What-if calculations create no authoritative postings. **Ben decision:** none; existing candidate, not agreed pricing.
+
+**Done when:**
+- `recovery-18800` synthetic settled example: `await V('eligible-net','£2,820.00'); await V('recovery-cap','£282.00'); await V('capped-fee','£282.00'); await V('base-credit','£79.00'); await V('additional-fee','£203.00'); await V('incremental-retained','£2,617.00'); await V('benefit-after-platform-principal','£2,538.00');` with `Illustration — proposed policy; principal only, VAT excluded`.
+- Switch what-if scenarios: `small-fee` → additional £0, total platform principal £79, benefit £421; `zero-fee` → additional £0, total £79, benefit −£79. UI explains recovery cap does not cap the separate base fee. Unpaid base gives credit £0, additional £282 on the large fixture.
+- Browser table also covers original A=£188,000 and £10,000 examples; pure tests retain every §3.5 case and half-even ties. Editing what-if values never changes job baseline, landing, statement issuance or ledger. No “cash in your bank”, actual collection or tax-invoice claim.
+
+### 18. UIWIRE-15 — Prove the newly connected core loop as one continuous practice journey
+
+**Parent/dependencies:** M1-15 web synthetic convergence; UIWIRE-1 through UIWIRE-14 and VOICE-1 technical delivery/fallback (not its separate hardware observation). **Backend + UI:** resumable next-step query on persisted state, plain-English step links, scenario progress and a finish/restart view; replace the old assembled-panel test with a DB-backed end-to-end journey while preserving its intended assertions. **Ben decision:** none for build; two real builder observations remain externally recorded evidence, not an agent fabrication.
+
+**Done when:**
+- BOTH projects run from new capture through review, quote v2, simulated send, attested acceptance, start, Decision/proof, variations, £1,320 final invoice, partial/full payment and fee illustration. After each mutation reload/deep link; job/scope/document/approval IDs come from real server reads and remain linked. `await H('You finished this practice job'); await V('journey-customer-balance','£0.00'); await V('real-external-actions','0');`.
+- At each stop `Continue this job` opens the next valid persisted step. A completed earlier step remains inspectable; no hidden fixture-ID hop, global panel state, hardcoded £750+£750 payment shortcut, or retyping of accepted facts is used.
+- Run the listed stale approval, incomplete proof, denied tenant, duplicate activation, partial payment and fee-proof denial cases in the same production build. Publish a human trial checklist and mark unperformed trials `Not observed`; this technical leaf does not declare G1 or the original unscripted trial complete.
+
+### 19. VALUE-1 — Explain the core job's money position using inspectable facts
+
+**Dependencies:** UIWIRE-15. **Backend + UI:** `/api/jobs/:id/value` read model and `How JobGuard helps protect your money` page; source links into quote coverage, approved extras, invoices, receipts and blocked actions. No guessed ROI or “saved” total. **Ben decision:** none with the wording below.
+
+**Done when:**
+- On completed uncredited `core-1000`: `await V('value-approved-extras','£125.00'); await V('value-approved-reductions','£25.00'); await V('value-invoiced-gross','£1,320.00'); await V('value-recorded-gross','£1,320.00'); await V('value-outstanding-gross','£0.00');`. Each card links to exact source revisions, names net/gross basis and says synthetic.
+- £125 extra included in the invoice is not added to £1,320 as separate “savings”. The £50 pending extra is shown as `Awaiting approval`, not earned/saved. Proof blockers explain what they stopped, without inventing a pound value. No-source cards say `No recorded outcome yet`, not a fabricated zero claim of effectiveness.
+- Reversing £820 changes recorded total to £500 and outstanding to £820 after refresh; value derives from the same receipted facts, never a separately writable savings field.
+
+## 13.5 Ordered leaves — materials and advisory integrity
+
+### 20. M2-1A-S — Record materials, units and versioned agreed prices
+
+**Parent/dependencies:** M2-1 model; UIWIRE-15. **Backend + UI:** tenant merchant/SKU/alias, material requirement, agreed-rate revisions, exact unit/pack conversion and validity interval repositories; `/api/jobs/:id/materials` and `/api/material-rates` views/commands; Materials and Agreed prices screens. **Ben decision:** none; synthetic supplier terms are entered fixture facts, not a commercial offer by JobGuard.
+
+**Done when:**
+- Save rate £20 per each for a fictional supplier/SKU and 10 needed units: `await V('required-material-net','£200.00'); await X('Agreed price: £20.00 per each');`. A box explicitly defined as 5 each at £100 normalizes to exactly £20/each; missing conversion says `await X('Pack size needed before comparison');`, never assumes 1.
+- Rate v2 effective next week leaves today's applicable rate/source at v1. Overlap/unknown supplier/unit/tax basis is a review state, not arbitrary rate selection. Positive/negative/overflow/decimal quantity cases are exact; stale corrections conflict.
+- Refresh and source drawer retain agreement version/date/basis/scope ID. Cross-tenant merchant/rate and same-tenant wrong-job requirement links fail via actual FKs/RLS. No orders, supplier debt, landing or fee are created by defining a rate.
+
+### 21. M2-1B-S — Check a purchase order before authorizing simulated placement
+
+**Parent/dependencies:** M2-1 pre-commit; M2-1A-S, UIWIRE-6. **Backend + UI:** PO draft/revisions, required date, price/stock/lead-time pre-commit findings, exact approved simulated placement through outbox, distinct manual-placement attestation. **Ben decision:** none; price comparisons use the recorded synthetic agreement.
+
+**Done when:**
+- `materials-A`: `await V('order-proposed-net','£250.00'); await V('order-agreed-net','£200.00'); await V('order-price-difference','£50.00'); await X('This order is £50.00 above the recorded agreed price');`. The difference is a review Decision before placement; unknown stock/date shows `Availability unknown`, not guaranteed delivery.
+- Correct unit price to £20, preview and `Approve simulated order`: `await V('order-status','Simulated placement — nothing ordered'); await V('order-net','£200.00');`. Record the original £250 proposal and resulting £200 commitment; `await V('prevented-fee','£0.00');`. A review flag itself never changes/places the order.
+- Changed quantity/price/recipient/rate after preview invalidates authority; explicit “proceed with this difference” requires a new exact approval and reason, not dismissal. Double placement/retry creates one outbox business effect. Manual placement is separately labelled and does not produce a fake supplier confirmation.
+
+### 22. M2-2-S — Ingest generated merchant documents and record actual received quantities
+
+**Parent/dependencies:** M2-2; M2-1B-S, UIWIRE-7. **Backend + UI:** generated PDF/text/image merchant invoice/credit/delivery fixtures, scoped intake commands, immutable original versions/hashes, quarantine/duplicate handling; delivery/GRN commands for accepted/rejected/missing quantities; simulated inbound-mail sink using fixture aliases only. **Ben decision:** none; no mailbox connection or real upload invitation.
+
+**Done when:**
+- Select `materials-B` synthetic delivery and invoice; `await V('delivery-ordered','10 each'); await V('delivery-accepted','8 each'); await V('delivery-missing','2 each'); await V('supplier-document-status','Ready for review');`. Ordered/delivered/accepted/rejected are distinct; later deliveries append instead of overwriting the first GRN.
+- Re-import same supplier invoice bytes or same business document via fake mail: `await X('Possible duplicate — review the original');` and one underlying document identity with zero newly recognized debt at intake. Invoice numbers are unique only under the scoped supplier/type/context contract, never globally guessed. Different suppliers with same invoice number remain distinct.
+- Pending/corrupt/oversized/unreadable/password-protected fixture is held with an explicit reason. Unknown alias, wrong tenant/job, remote URL/attachment injection and partial upload cannot route into another workspace or be marked complete. Multi-page/split-document children retain original version/page lineage. No matching, auto-debt recognition, live mail or fee occurs at intake.
+
+### 23. M2-3-S — Extract and human-confirm supplier facts, freezing the evaluation set
+
+**Parent/dependencies:** M2-3; M2-2-S. **Backend + UI:** deterministic text-first parser; document-line proposals, cited page/span/region provenance, totals reconciliation, human correction/confirmation; side-by-side source and editable facts. Image-only sources allow manual transcription with `Entered by you`; optional deterministic fixture OCR is explicitly labelled simulation. Freeze development and held-out corpus/labels/thresholds before M2-4-S tuning. **Ben decision:** none; no paid/live OCR or AI and no claim of production OCR readiness.
+
+**Done when:**
+- Confirm `materials-B` bill: `await V('supplier-line-quantity','10'); await V('supplier-line-unit-price','£25.00'); await V('supplier-invoice-net','£250.00');`. Every extracted fact opens its real source version/page/span. Human edit shows `Entered by you`; changing source text changes parser output, never silently returns the fixture answer.
+- Missing page, arithmetic mismatch, pack ambiguity or unreadable image: `await X('Check the source before confirming these figures'); await disabled('Confirm supplier document');` until explicit corrections/dispositions reconcile it. Fictional photographed £320 fixture is entered/confirmed from its displayed original; no OCR “success” is fabricated.
+- Persist original proposal and corrected revision separately; repeated confirmation is idempotent. Invoice/credit type and sign are validated; confirmed document data is distinct from agreed debt/settled cash.
+- At least 100 varied held-out document sets plus separate development set exist with immutable source recipes/hashes, labels, class counts and frozen M2-5 targets. Variation includes real matching cases, discrepancies, ambiguity, partial deliveries, discounts, credits, packs, rotated/blurred and multi-page generated sources. Generated sets vary facts/layouts, not only duplicate templates. A read-only fixture review page lists source/label lineage; DB-backed e2e asserts `await V('held-out-set-count','100');` for the initial corpus and detects hash/label changes. Later additions version the corpus rather than altering the frozen 100.
+
+### 24. M2-4-S — Match order, delivery and invoice with explicit correction history
+
+**Parent/dependencies:** M2-4; M2-3-S. **Backend + UI:** deterministic match service and immutable proposals/confirmed links; three-column order/delivery/bill view, manual ambiguity resolution and correction commands. **Ben decision:** none.
+
+**Done when:**
+- `materials-B`: `await V('match-ordered','10 each'); await V('match-received','8 each'); await V('match-billed','10 each'); await V('match-state','Matched to recorded sources');`. Each cell opens its exact source/line/version. Matched means a relationship, not agreement that the invoice is correct.
+- Ambiguous duplicate SKU/alias, substitution or missing unit conversion shows `await X('Choose which source this line belongs to');`, never auto-picks using a model. Human correction creates a new match revision, invalidates derived unresolved findings and preserves old history. Stale second-tab correction shows a revision conflict.
+- Frozen critical fixtures cover partial/split invoices, one-to-many matches, quantity allocation limits, returns/credits, rate dates and discounts. Rerun identical inputs reproduces match IDs/digests; allocations cannot reuse the same received quantity twice. Matching creates no order, payment, recovery allocation or fee.
+
+### 25. M2-5-S — Turn synthetic overcharges into cited, reviewable “Things to check”
+
+**Parent/dependencies:** M2-5; M2-4-S, UIWIRE-6. **Backend + UI:** pure discrepancy/rule-version engine, evidence-linked Decision persistence, net exposure breakdown and review/correction outcomes; `/api/jobs/:id/things-to-check` builder view and held-out report. **Ben decision:** none for frozen reference targets; changes to those targets need a recorded decision.
+
+**Done when:**
+- `materials-B`: `await V('price-to-check','£50.00'); await V('quantity-to-check','£40.00'); await V('total-to-check','£90.00'); await X('Possible bill discrepancy — check these sources');`. Show `10 × (£25 − £20)` and `(10 − 8) × £20`; no double counting. `materials-320` shows `await V('total-to-check','£320.00');` from 40×(£28−£20), not a canned suggestion.
+- Select/intake the generated revised supplier bill for £160, human-confirm its facts through M2-3-S, then approve its explicit supersession link to the original £250 bill. A builder typing a lower number alone is only a proposed correction. Source-backed corrected bill yields `await V('confirmed-bill-reduction','£90.00'); await V('eligible-recovery-principal','£0.00');`; originals stay unchanged. Dispute/dismiss separately with reason. Applied/unapplied supplier credit remains non-billable under reference D03; finding dismissal cannot send a claim or charge/suspend anyone.
+- “No discrepancy found” means evaluated confirmed facts; unknown/unmatched facts say `Not enough information to compare`. Replay dedupes by source/rule revision; a later delivery or corrected match triggers re-evaluation and supersedes stale exposure.
+- Frozen ≥100-set held-out evaluation has FDR ≤5% among actionable monetary Decisions, recall ≥90% for labelled discrepancies ≥£25 net, and all critical fixtures pass. Publish class counts/confusion matrix/errors, denominator and zero-prediction failure. Report confirmed-fact matching separately from end-to-end text/manual/fixture extraction; simulation performance is not live OCR accuracy or G2 pilot approval. Browser report links to the actual versioned output, not hardcoded success percentages.
+
+### 26. M2-6-S — Show practical readiness risks from explicit synthetic facts
+
+**Parent/dependencies:** M2-6; M2-5-S. **Backend + UI:** work dependencies, material/access/crew readiness, generated weather/calendar adapter facts, per-run clock and existing scheduler; next-workday readiness page and Decisions. **Ben decision:** none; no invented statutory deadline, curing requirement or real forecast.
+
+**Done when:**
+- A selected task has missing predecessor, two units short, and unknown crew: `await X('This work is not ready'); await X('2 units still needed'); await X('Crew availability unknown');`. Resolve factual dependencies and confirm the revised plan: `await V('readiness','Ready on the recorded facts');`. All dates/weather say synthetic; stale weather is unknown.
+- Advancing the scenario clock creates one due review Decision, no order/send/schedule rewrite. DST/weekend and jurisdiction calendar cases, cycles, stale facts and adapter outage pass deterministic tests. Builder chooses schedule changes explicitly.
+- Cost exposure, if displayed, uses a recorded exact labour rate and explicit uncertain duration; absent inputs mean no invented £ savings. `await V('readiness-recovery-fee','£0.00');` even for high exposure. This is not a live Met Office or construction-specification integration.
+
+### 27. M2-7-S — Keep mandatory work visible and explain advisory relevance
+
+**Parent/dependencies:** M2-7; M2-6-S. **Backend + UI:** deterministic mandatory/advisory grouping, coalescing constraints, user preference/budget commands and source-based rule/outcome metrics; inbox filters and “Why am I seeing this?” detail. **Ben decision:** none; no paid AI copy or guessed commercial consequence.
+
+**Done when:**
+- Seed two mandatory and three advisory findings; set advisory budget to zero: `await V('mandatory-decision-count','2'); await V('visible-advisory-count','0'); await X('3 advisory checks available');`. Mandatory proof/approval items remain visible and block their real predicates.
+- Two truly duplicate advisory findings coalesce with both source references; different jobs, actions, recipients, amounts or source revisions never coalesce into one authority. Resolving one job does not clear another's Decision.
+- Counts and resolution time derive from persisted events and versioned clock: one dismissal increments dismissed exactly once after retry, never “money saved”. Fresh/empty view has explained empty state; no generated sentence can alter amount, source or permitted action.
+
+### 28. M1-16-S — Make D11 advisory integrity signals inspectable by the builder
+
+**Parent/dependencies:** extends M1-16/D11; UIWIRE-15, M2-5-S. **Backend + UI:** source-linked quoted/accepted/final/activity/outside-settlement projections and pure checks on `commercial_integrity_demo_v1`, linked explicitly from the proposed D11 record; Things to check filter and dismiss/explain workflow. **Ben decision:** none for conspicuously synthetic test settings; D11 thresholds/cap basis/consequences remain undecided for live use.
+
+**Done when:**
+- Store a **demo-only** rule profile, not a silent production default: accepted/not-started when elapsed time is strictly greater than 7 days; accepted lower than quoted with `(quoted − accepted) / quoted > 10%`, or accepted lower than final with `(final − accepted) / final > 10%`; started job with no recorded activity for strictly more than 7 days; an explicit synthetic outside-settlement attestation with no mapped in-app landing. Use integer comparison, not float ratios. Zero quoted/final comparison value means `Cannot compare`, not divide-by-zero. Opposite-direction changes do not trigger this under-recording rule. UI labels `Example thresholds — not a judgement or billing rule`.
+- With fake clock at day 8, unstarted accepted job shows `await X('You recorded acceptance, but have not started this practice job');`. £1,000 quoted vs £800 accepted → `await V('integrity-value-difference','£200.00'); await X('Check the recorded accepted value');`. Activity case says `No activity recorded here`, never “you worked elsewhere”. Explicit outside receipt says `await X('A payment was reported outside this record — check the evidence');`.
+- Boundary tests at exactly 7 days/10% follow documented strict-greater rules; 10% exact does not flag. Show each rule/version/source/time window, with plain reasons and review/dismiss. No telemetry inference of cheating or proof of fraud. False positive feedback is append-only.
+- Preserve frozen accepted cap: e.g. accepted £800 → cap £12 despite quoted £1,000 or final £1,100. Signals cannot reprice, charge, penalise, suspend or alter eligibility/authority. Runtime/API/purity tests prove no money/account-action writes; pending D11 production path refuses. The production D11 record remains `proposed`, with no fabricated approver evidence.
+
+## 13.6 Ordered leaves — recovery, fees and complete sandbox acceptance
+
+### 29. M4-1-S — Open and manage an evidence-linked recovery case
+
+**Parent/dependencies:** M4-1 synthetic web slice; UIWIRE-12, UIWIRE-13, M2-5-S. **Backend + UI:** extend existing recovery primitives with the full §3.6 state machine, claim revisions, case types, dispute/write-off/reopen events; `/api/jobs/:id/recovery-cases` and `Chase unpaid money` workbench. **Ben decision:** none; no entitlement/legal promise.
+
+**Done when:**
+- From `materials-320`, open a merchant-overcharge case: `await V('case-claimed-net','£320.00'); await V('case-landed-net','£0.00'); await V('case-state','Needs evidence');`. Source links identify supplier agreement/delivery/invoice, not customer debt. Creating a claim is not evidence the supplier owes or paid it.
+- Separately, `recovery-18800` has two **withheld-customer-payment** claims £320 and £2,500 against its generated customer invoice. These are the sources for its £384/£3,000 customer receipt examples; do not recast a supplier refund as a customer-invoice payment. Source type/counterparty/book remain explicit.
+- Mark a separate prevention case: `await V('case-state','Prevented before payment'); await V('case-fee','£0.00'); await disabled('Record a landed recovery');`. Prevention is terminal. Full allowed/forbidden transitions, direct receipt after evidence assembly, partial landing + remainder write-off, disputes and reopening on reversal pass Vitest/DB tests. No arbitrary editable state dropdown may bypass transition commands.
+- A £2,500 claim with £1,000 approved synthetic landing shows received £1,000/outstanding £1,500; write-off remainder says `£1,500.00 written off`, never £2,500 recovered. Record actual reviewer and immutable claim versions; concurrency/replay creates one transition.
+
+### 30. M4-2-S — Review eligibility and attribution before treating a recovery as qualifying
+
+**Parent/dependencies:** M4-2; M4-1-S. **Backend + UI:** deterministic reference D03 classifications/exclusions, cited attribution review and exact case/evidence/policy approval; “Why this may qualify” panel. **Ben decision:** none within existing cash-only reference; adding eligible categories requires D03 decision.
+
+**Done when:**
+- Evidence-backed £320 withheld-payment claim: `await V('claim-eligible-net','£320.00'); await V('eligibility-status','Approved for this simulation'); await V('case-landed-net','£0.00');` after `Approve this eligibility review`. Approval alone creates no landing or fee. Drawer shows case/evidence/policy revisions and actual authorized reviewer.
+- Table-driven browser scenarios show exact reasons `Pending money cannot qualify`, `A manual payment record is not settlement evidence`, `Prevented spending is not recovered cash`, `Supplier credits are excluded by this reference policy`, `This payment is not attributed to this recovery case`, or `This movement is already allocated`; positive posting stays unavailable. Claim eligibility may be approved before cash exists, but the **landing/fee** stays blocked; do not confuse those states.
+- Unknown net/tax basis or causation remains non-billable pending review. Superseded evidence/case/policy invalidates outstanding approval; stale click shows `Review the changed evidence before approving`. A high confidence value or forged `eligible=true` cannot authorize a posting. Production D03 status remains untouched.
+
+### 31. M4-3-S — Assemble and check an inspectable evidence pack
+
+**Parent/dependencies:** M4-3; M4-2-S, UIWIRE-7, M2-4-S. **Backend + UI:** deterministic ordered source manifest, immutable versioned pack/PDF/ZIP generation, least-disclosure/redaction selection, authorized download, source explorer and standalone manifest verifier; `/api/recovery-cases/:id/evidence-packs`. **Ben decision:** none with “mapped, inspectable” wording; no legal-validity or WORM claim.
+
+**Done when:**
+- Build pack: `await V('pack-state','Sources mapped — inspect the evidence');`. Accepted quote/approval, relevant proof/variations, invoice and case records open exact immutable versions. Merchant cases include only their relevant supplier records. Unrelated jobs/transactions are absent. Rebuild same inputs produces the same ordered manifest and content digests; generation IDs/time do not make the canonical manifest nondeterministic.
+- Generated malformed scenarios show `Missing original source`, `Content hash mismatch`, `Wrong source version` or `Checkpoint not independently trusted` separately. No missing/tampered source gets “complete”; an intact file may say `Content matches manifest` while claims still need human review. Original and redacted derivative have distinct hashes with explicit lineage.
+- Downloaded runtime-created pack contains the banner, source hashes, statement provenance and trust limitations. Independent verifier reports the same findings as UI. A new evidence version creates a new pack/hash and invalidates previously approved attachments. Do not label it court-ready, externally timestamped, tamper-proof, or a verified recovery.
+
+### 32. M4-5-S — Draft, approve and simulate a factual recovery message
+
+**Parent/dependencies:** M4-5 synthetic template slice; M4-3-S, UIWIRE-3. **Backend + UI:** deterministic source-bound templates, sender/recipient/body/pack preview, exact Decision and outbox adapter; message history with fake delivery/reconciliation. **Ben decision:** none for the explicitly fictional factual copy below. Legal threats, statutory deadlines, collection representation or claims of professional template approval are blocked pending D06/D10 review.
+
+**Done when:**
+- Preview `Practice message — not sent. Our practice records show £320.00 net remains in this case. Please review the attached example records.` to `practice-customer@example.invalid`. `await V('pursuit-claim-net','£320.00'); await V('pursuit-recipient','practice-customer@example.invalid');` opens sources for amount/record references. A supplier correction message uses supplier-source wording and recipient, not this customer claim text.
+- Click `Approve and simulate this message`, then run the ordinary practice advance action: `await V('pursuit-delivery','Simulated delivery — nothing sent');`. The sink has exactly one action with the approved body/hash/recipient/attachment; reload shows it. No live mail/SMS/AI request occurs.
+- Change recipient/body/amount/pack after preview: `await X('Review the changed message before approving');`. Unknown fake outcome stays `Outcome unknown — check needed`; definite failure retries the same authorized effect; cancellation/permission revocation blocks execution. Free text or embedded source instructions cannot override amount validation, source requirements or authorization. No fictional statutory deadline is added.
+
+### 33. M4-6-S — Advance a persisted recovery timeline without automatic authority
+
+**Parent/dependencies:** M4-6 synthetic scheduling slice; M4-5-S. **Backend + UI:** durable per-run follow-up intent/timeline with fake clock, explicit single scheduling owner and existing application/outbox executor; `Advance practice time`, reminder review/cancel controls. This is a local deterministic scheduling slice, not hosted Temporal acceptance. **Ben decision:** none; example dates are not legal deadlines.
+
+**Done when:**
+- Schedule a practice follow-up, advance across due time: `await V('follow-up-state','Review reminder'); await V('new-simulated-messages','0');`. Only approving the exact reminder creates a new simulated message. Time passing never creates standing consent.
+- Advance twice, restart the application/executor and replay duplicate signals: exactly one due Decision remains; no duplicate transition/journal/send. Persisted owner identity prevents Graphile and this runner independently scheduling the same follow-up.
+- Cancel/dispute/settle the case before due time: `await V('follow-up-state','Stopped');`. Revoke permission before dispatch: `Approval needed again`. Reopening a reversed case requires a new reviewed follow-up intent, never resurrects stale send authority.
+
+### 34. M4-7-S — Produce synthetic pending/settled movement facts without a bank connection
+
+**Parent/dependencies:** M4-7 adapter slice; M4-2-S, SBOX-2. **Backend + UI:** provider-neutral fake account/consent lifecycle, deterministic movement/event ingestion, durable underlying movement identity, pagination/replay/revocation scenarios; `Practice receipts` screen. No TrueLayer SDK, OAuth, token entry, provider-sandbox network or real bank feed. **Ben decision:** none; no claim of regulated bank consent.
+
+**Done when:**
+- `recovery-18800`: select pending gross £384 scenario, advance executor: `await V('movement-gross','£384.00'); await V('movement-state','Pending — cannot qualify');`. Select fake settlement event and advance: `await V('movement-state','Simulated settled movement'); await V('allocated-eligible-net','£0.00');`. Settlement alone is not case allocation/eligibility authority.
+- Replay same provider event/page overlap and a known alternate statement representation: one underlying movement; unknown duplicate identity shows `Possible duplicate movement — review needed` and is ineligible until reconciled. Browser amount alone never creates a settled fact; the server's generated signed/validated adapter event does.
+- `Disconnect practice feed`: `await V('practice-feed-state','Disconnected');` stops new ingestion but preserves past facts. Forged tenant/account/event and all production/pilot consumption of synthetic receipts are refused. No real bank branding or “bank-verified” badge appears.
+
+### 35. M4-8-S — Allocate settled synthetic money to exact cases and handle reversals
+
+**Parent/dependencies:** M4-8; M4-2-S, M4-3-S, M4-7-S. **Backend + UI:** exact gross/net/tax allocation proposals, review/approve commands, available-value locks, source/claim/evidence linkage, partial allocation/dispute/reversal workbench. **Ben decision:** none under reference D03; uncertain allocation/tax basis is held.
+
+**Done when:**
+- Allocate gross £384 as net £320 + reference VAT £64 to claim 1, then gross £3,000 as net £2,500 + VAT £500 to claim 2: `await V('recovery-gross-movements','£3,384.00'); await V('eligible-net','£2,820.00'); await V('allocated-tax','£564.00');`. Each approved allocation links its immutable settled movement, finalized evidence, policy and reviewer. The displayed landing remains `Simulated`.
+- £100 + £220 net partial allocations reach £320, with available gross/tax conserved. Over-allocation, cross-job claim/evidence, reused underlying cash and concurrent alternative-representation allocations fail visibly and in PostgreSQL. Ordinary manual receipt and pending movement never qualify. Customer receipts reconcile to customer invoices; supplier refunds use their separate supplier/recovery mapping, never reduce unrelated customer balances.
+- Main reversal scenario is an **actual simulated £3,000 customer movement reversal**, with linked net £2,500/VAT £500 allocation reversal: `await V('eligible-net','£320.00'); await V('recovery-gross-movements','£384.00'); await V('allocated-tax','£64.00'); await V('customer-invoice-balance','£22,176.00'); await V('case-2-state','Reopened — £2,500.00 outstanding'); await V('fee-execution-state','Paused — recovery changed');`. Original movement/allocation remain visible with compensating facts.
+- Separately invalidate only claim-2 attribution/evidence while its cash remains settled: gross customer receipts stay £3,384 and customer invoice balance stays £19,176; only fee eligibility is held/recomputed and collection paused. Never reopen customer invoice debt merely because recovery evidence lost eligibility. Partial cash reversal, evidence invalidation and disputed cash have distinct events and tests.
+
+### 36. M4-11-S — Simulate base-plan settlement as a separate fact from activation
+
+**Parent/dependencies:** M4-11 synthetic activation-payment slice; UIWIRE-5, UIWIRE-13, M4-7-S. **Backend + UI:** provider-neutral fake base-payment attempt/approval/result using a **separate platform principal book**, base obligation/settlement/refund projection and “Simulate base payment” scenario. No hosted checkout, card/account fields, Stripe/GoCardless or real payment instruction. **Ben decision:** none for existing £79 principal reference; tax/gross customer offer remains D01/D02/D05.
+
+**Done when:**
+- With £79 synthetic obligation: `await V('base-obligation','£79.00'); await V('base-settled-principal','£0.00'); await V('base-credit','£0.00');`. Approve/start fake payment: status pending; return/redirect alone still gives £0 settled credit. Only generated settled provider fact changes `await V('base-settled-principal','£79.00');`.
+- Partial principal settlement £30 gives at most £30 available credit. Replayed settlement is not £158; customer receipt of £79 never settles platform base. Tax says `Not calculated in this principal-only simulation`, never “VAT-free” or “£79 including VAT”.
+- Refund/dispute appends history, reduces qualifying P under reference rules, and pauses automatic new collection pending review. Fake timeout is unresolved until reconciliation; no blind retry. Existing no-charge entitlement cannot be converted to a paid live job.
+
+### 37. M4-9-S — Derive and approve cumulative simulated recovery fees
+
+**Parent/dependencies:** M4-9; M4-8-S, M4-11-S, UIWIRE-13. **Backend + UI:** existing exact cumulative fee routine extended through live-simulation queries/commands, source drilldown, statement-hash approval, guarded positive postings and linked negative compensation. **Ben decision:** none with unchanged reference_fee_policy_v1 and explicit proposed-policy labels.
+
+**Done when:**
+- With A £18,800 and P £79: first eligible L £320 → `await V('capped-fee','£32.00'); await V('base-credit-used','£32.00'); await V('additional-fee','£0.00');`. After cumulative L £2,820 → fee £282, credit £79, `await V('additional-fee','£203.00'); await V('posting-delta','£203.00');`. Approve exact derivation once; rerun yields delta £0 and no second journal.
+- With unpaid base P=0, R=£282. If posted and base later settles £79, recompute R=£203 and linked compensation −£79; do not collect stale uncredited debt. Reverse L £2,820→£320 after £203 posting: `await V('additional-fee','£0.00'); await V('compensation-principal','−£203.00');`. Historical journals remain unchanged; already collected excess is visible refund/credit work.
+- Execute every §3.5 table row, ties A=300p→C=4p, L=5p→F=0p, L=15p→F=2p; splitting 5p+5p uses cumulative L=10p→F=1p. Browser verifies named headline scenarios; Vitest exact pence/property tests cover the whole matrix, overflow and invalid quantities.
+- Real DB races across cases near shared cap/credit yield the same serial result and unique derivation. Direct runtime positive inserts, stale statement approval, invalidated proof and unauthorized/wrong-mode commands fail; a zero delta retains derivation/audit but creates no fee journal. No AI participates in arithmetic or entitlement.
+
+### 38. M4-10-S — Issue a traceable simulation fee statement and linked corrections
+
+**Parent/dependencies:** M4-10 statement slice; M4-9-S, UIWIRE-14. **Backend + UI:** immutable numbered **simulation statements**, principal breakdown, source/allocation/approval links, prior liabilities/settlements/compensations, versioned runtime download. Customer invoice namespace/book remains separate. **Ben decision:** none for principal-only illustration. A platform tax invoice, VAT amount or payable gross offer needs D02 decision before that wording/calculation is built.
+
+**Done when:**
+- Fresh platform statement namespace: `await V('fee-statement-number','DEMO-FEE-000001'); await V('statement-additional-principal','£203.00'); await V('statement-total-platform-principal','£282.00'); await X('Simulation statement — proposed policy, principal only; not a tax invoice or real amount due');`. Show £79 settled base, L £2,820, cap £282, credit £79 and links to each source.
+- Downloaded statement has same immutable number/hash/inputs as screen, synthetic watermark and `VAT not calculated`. Rendering/downloading does not post a new fee or attempt collection. Neither £2,617 nor £2,538 is called bank cash.
+- After reversal, original statement remains inspectable at same hash; linked compensation/correction record shows −£203 and relevant new balance. Replay creates one semantic statement/correction. Tenant-scoped numbering uniqueness and source authorization hold; unsupported tax is not silently zero-rated.
+
+### 39. M4-12-S — Simulate recovery-fee collection and refund with exact approval
+
+**Parent/dependencies:** M4-12; M4-10-S. **Backend + UI:** fake collection/refund attempts, exact statement approval, atomic outstanding-balance reservation, fake pending/unknown/settled states, reconciliation and refund work UI. No payment rails, real mandates or raw financial data. **Ben decision:** none for existing principal-only simulated £203; any real payable gross amount remains gated.
+
+**Done when:**
+- Click `Approve simulated collection of £203.00 principal`: `await V('fee-collection-state','Pending simulation'); await V('fee-settled-principal','£0.00');`. Run fake settled event → `await V('fee-settled-principal','£203.00'); await V('fee-outstanding-principal','£0.00');`. A redirect or UI success state alone never settles it.
+- Double-click, worker retry, concurrent attempts and replayed events cannot reserve/collect >£203. Unknown outcome shows `Needs reconciliation`; another attempt is blocked until definitive result. Stale balance, expired/revoked approval or changed eligibility stops dispatch with a specific review reason.
+- After previously settled £203 and qualifying recovery reversal: `await V('fee-refund-due','£203.00');`. Approve exact fake refund and settle → `await V('fee-refunded-principal','£203.00'); await V('fee-refund-due','£0.00');`. Repeat/unknown refund cannot exceed refundable settled principal. Preserve original fee, settlement, compensation and refund facts separately; no direct ledger editing.
+
+### 40. M4-17-S — Reconcile the synthetic money trail and expose unresolved differences
+
+**Parent/dependencies:** M4-17 synthetic control slice; M4-12-S, UIWIRE-12. **Backend + UI:** deterministic reconciliation query/run receipt across customer records, recovery allocations, platform obligations/postings/reservations/settlements/refunds and fake adapter events; builder-friendly “Check the practice money records” result and authorized review actions. **Ben decision:** none; this does not certify real accounting or live reconciliation.
+
+**Done when:**
+- Consistent post-cash-reversal/refund scenario: `await V('money-check-state','Records match within this simulation'); await V('unresolved-money-differences','0'); await V('recovery-gross-movements','£384.00'); await V('eligible-net','£320.00'); await V('allocated-tax','£64.00'); await V('customer-invoice-balance','£22,176.00');`. Platform base principal remains £79, net additional fee liability/settled balance £0 after the £203 compensation/refund. Gross, principal, tax and platform books are separately labelled.
+- Seed orphan/duplicate/late/unknown event scenarios: show specific unresolved rows and `await V('money-check-state','Review needed');`. Reconciliation consumes definitive fake facts idempotently; cannot “fix” a discrepancy by deleting history, inventing a settlement or clamping a negative amount.
+- Rebuild projections from immutable facts and restore a test DB checkpoint: same cap/credit/liability/source hashes. Restored execution starts paused and shows `await X('Practice execution paused until records are checked');`; replaying queued work does not duplicate money/messages. This is a synthetic recovery test, not M0-13 live DR sign-off.
+
+### 41. VALUE-2 — Show honest job and overall value from the completed synthetic journey
+
+**Dependencies:** VALUE-1, M2-5-S, M2-6-S, M1-16-S, M4-17-S. **Backend + UI:** extend per-job value query and add `/api/value` tenant aggregate with source/period/policy/outcome classification, net/gross basis and no-overlap attribution. Main navigation `How JobGuard helps protect your money` links every number back to its job/evidence. **Ben decision:** none for the factual wording and existing benefit formula below; new marketing claims need Ben review first.
+
+**Done when:**
+- Before supplier correction, `materials-A` approved order outcome shows `await V('value-lower-planned-spend','£50.00');` with `Lower than the recorded proposal — not recovered cash`. `materials-B` shows £90 `Amount to check`; after corrected bill, that exposure becomes £0 resolved and `await V('value-confirmed-bill-reduction','£90.00');`, with correction provenance. Never count both £90 unresolved and £90 resolved, nor create a fee from either.
+- Recovery source job shows `await V('value-simulated-eligible-recovery','£2,820.00'); await V('value-additional-fee-principal','£203.00'); await V('value-total-platform-principal','£282.00'); await V('value-benefit-after-platform-principal','£2,538.00');`. Each is labelled synthetic/principal-only and cites sources. £2,617 incremental retained is a different explanatory view, not an additional benefit.
+- Overall view with only `core-1000` and `recovery-18800` includes £125 approved extras, £50 lower planned spend, £90 confirmed bill reduction, £2,820 simulated eligible recovery **as separate categories**; no combined “JobGuard saved you £3,085” headline. Full customer payments are not added to attributed recoveries of the same movements. A scoped time filter counts immutable events once and deals explicitly with reversals/corrections; cross-tenant results never leak.
+- After recovery reversal to L £320, update eligible recovery £320, total reference platform principal £79, benefit £241; additional liability £0, and show refund status separately if relevant. Small/zero cases retain £421/−£79. No unexplained blank/fake positive returns.
+- Copy audit checks every value card/export: permitted `mapped`, `inspectable`, `recorded`, `simulated`, `file integrity checked`; absent bare `verified`, `guaranteed`, `cash in your bank`, fraud judgements or claims the system caused all observed savings. No-source/incomplete/stale inputs are explicitly unknown. API derivation version and source list must reproduce every displayed amount.
+
+### 42. DEMO-1 — Finish, replay and independently check the whole practice product
+
+**Parent/dependencies:** synthetic convergence of M1-15/M4-23; all 41 preceding leaves' technical deliverables. **Backend + UI:** complete guided scenario chooser/resume/reset, source-aware progress/readiness query and end-of-run report; links from core, materials, case, statement and value screens with no disconnected illustrative panel left for the requested features. **Ben decision:** none to build; founder acceptance/release and live gates remain separate.
+
+**Done when:**
+- Run `core-1000` from fresh capture with the exact five-line result through all UIWIRE steps, £1,320 invoice/payment/reversal/correction tests, and value screen in BOTH projects. Then run `recovery-18800` from capture/confirmed £18,800 baseline through its own simulated send/accept/start/proof/£22,560 invoice, materials sources/checks, two withheld-payment cases, eligibility/pack/approved pursuit, fake receipts, landing allocations, separately settled base, £203 fee statement/collection, reversal/refund/reconciliation and final value. Each job keeps its own identity throughout; never merge their cap pools or invoice books.
+- The recovery end state after actual simulated £3,000 cash reversal has `await V('recovery-gross-movements','£384.00'); await V('eligible-net','£320.00'); await V('allocated-tax','£64.00'); await V('customer-invoice-balance','£22,176.00'); await V('additional-fee','£0.00'); await V('fee-refunded-principal','£203.00'); await V('value-benefit-after-platform-principal','£241.00'); await V('unresolved-money-differences','0'); await V('real-external-actions','0');`. Original statement and all compensations remain inspectable. Preview server/API/DB results agree, not just DOM counters.
+- Dedicated scenarios cover no proof, prevention, unapplied credit, ordinary/manual payment, unreviewed eligibility, unpaid/refunded base, partial/duplicate/out-of-order receipts, cap exhaustion/races, stale/revoked authority, unknown send/collection outcome, tenant isolation and corrupted evidence. Every prior mandatory test remains enforced; production-seed refusal and fail-closed security/lane checks are green at the reviewed commit.
+- The deployed-equivalent production build boots and runs using the same DB/application/synthetic executor paths, without local daemons, paid/live providers or frontend fixture fallback. Preview URL and commit are recorded when the founder deploys; absence of a deploy is labelled not tested, never a claimed published result. All menus/buttons for the requested feature set reach their persisted job/context and have useful success/failure/empty states at 360px and desktop.
+- Codex receipt and an **actual independent Claude verdict** cover the exact candidate commit; a separate acceptance actor records the decision. Obtain two non-technical builder observations on phone/desktop using fictional content, record blockers/friction and fix reproducible defects as scoped leaves. Unavailable humans/hardware remain explicit observation/voice evidence gaps and must not be faked. Technical completion does not mark those human evidence items, M3 native, G1, G4, D01–D12 or M0-13 live work complete.
+
+## 13.7 Ben decisions, readiness and merge order
+
+**No listed technical leaf waits for a new fee, tax or legal decision:** the full-synthetic authorization, existing reference_fee_policy_v1, candidate standard-20% customer tax fixtures, and explicitly fictional factual message copy cover them. Every `Ben decision: none` is limited to that declared demo content. Keep decision statuses proposed; documenting a demo fixture is not approval evidence. Do not quietly turn reference choices into actual terms.
+
+| If the requested demo content changes to… | Must decide before building/showing that changed content | Leaves affected |
+|---|---|---|
+| A new fee rate/base price; cap covering all fees; greater-of-quoted/accepted cap; refunds/cancellation presented as actual terms | Ben commercial decision D01/D11; applicable legal/accounting review. Use unchanged labelled candidate until then. | UIWIRE-5/14, M1-16-S, M4-9-S/11-S/12-S, VALUE-2 |
+| Actual platform VAT, tax invoice wording, VAT-inclusive £79, CIS/DRC/retention or a new tax regime | D02/D06 with qualified tax/legal review; Ben alone cannot substitute for required professional review. Keep principal-only platform statement and reference customer invoice. | UIWIRE-10/11, M4-10-S/11-S/12-S; original M4-18–22 |
+| Applied credits/prevented losses/manual receipts become fee-eligible, or recovery causation is asserted as proven | D03 and supporting legal/accounting decision; existing exclusions remain. | M4-2-S/8-S/9-S, VALUE-2 |
+| Legal threats, statutory demands/deadlines, autonomous representation, standing pursuit authority or “legally approved” templates | D05/D06/D10 and relevant professional review before that demo wording is authored as usable content. Keep factual practice message. | M4-5-S/6-S; original M4-19 |
+| Named paid tiers, included job counts, renewals, cancellation or an actual mandate | D09/D05; no invented prices or recurring authority. | Original M4-13–16, outside this requested sandbox track |
+| “Guaranteed savings”, “verified recovery”, fraud/evasion findings, changed D11 commercial thresholds/consequences | Ben product/commercial decision plus supporting evidence; no automatic penalties under any version of this addendum. | M1-16-S, VALUE-1/2 |
+| Real customer data, real sending, bank/provider access, paying users, charging, collection or payout | Applicable D01–D12 and G1/G4/M0-13 release evidence, including D04/D07/D12; the demo supplies none of those approvals. | Every leaf's live equivalent |
+
+**Order summary:** SBOX-1 → SBOX-2 → capture/review → quote/revisions/send/accept/start → parallel proof/Decisions, variations, fee-guard/illustration and voice → final account/invoice/corrections/payment → UIWIRE-15. Then VALUE-1 and materials model → PO → intake → confirmed extraction/corpus → matching → discrepancies → readiness/relevance. Recovery case/eligibility/pack/pursuit/timeline and fake movement ingestion proceed on disjoint branches once their prerequisites merge; allocation + separate base settlement converge at the fee engine → statement → fake collection/refund → reconciliation → VALUE-2 → DEMO-1. M1-16-S can run once its source facts exist. Match/fee/shared-schema edits serialize where ownership overlaps.
+
+Use branch `codex/sandbox/<lowercase-leaf-id>` and lane `<LEAF-ID>`, with test `apps/web/e2e/<LEAF-ID>.spec.ts` and receipt `docs/verdicts/<LEAF-ID>/<commit>.md`. Before dispatch, the integration owner registers the branch's exact paths using the existing lane schema; do not weaken the lane checker or grant a global wildcard. Coordinate migration numbers and shared application registration in one integration lane; merge the prerequisite before a consumer. A frontend and backend for one leaf stay on that same branch. A branch is accepted only against its exact reviewed commit with all inherited and leaf-specific Done when criteria met. Human observation, supported-device voice and live-release evidence are separately recorded; do not block unrelated synthetic construction or represent missing evidence as a pass.
