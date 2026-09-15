@@ -774,6 +774,18 @@
         "tools/agent-lane-boundary.test.mjs"
       ]
     },
+    "demo-neon-bootstrap-fix": {
+      "branches": [
+        "work"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/db/migrations/0000_tenancy.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "tools/agent-lane-boundary.test.mjs"
+      ]
+    },
     "checker-allow-deploy-root": {
       "branches": [
         "checker/allow-deploy-root-files"

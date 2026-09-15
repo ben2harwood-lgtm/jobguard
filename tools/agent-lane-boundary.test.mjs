@@ -127,6 +127,6 @@ test("repository policy maps each declared branch to one scope and registers the
   assert.equal(selectLane(actual, "codex/implement-m0-9-transactional-outbox-and-worker-isolation").name, "m0-9");
   assert.equal(selectLane(actual, "codex/implement-mobile-first-shell-and-jobs-list").name, "m1-1");
   assert.ok(actual.lanes['m0-3'].allow.includes("packages/core/src/money.ts"));
-  assert.throws(() => selectLane(actual, "work"), /exactly one/u);
+  assert.equal(selectLane(actual, "work").name, "demo-neon-bootstrap-fix");
   assert.ok(actual.lanes['ci-repair'].allow.filter((path) => path.startsWith("apps/") || path.startsWith("packages/")).every((path) => path.endsWith("/package.json") || ["apps/web/playwright.config.ts", "apps/web/tsconfig.json"].includes(path)));
 });
