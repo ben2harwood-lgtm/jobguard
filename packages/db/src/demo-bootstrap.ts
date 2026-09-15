@@ -23,19 +23,45 @@ const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
 const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
 async function ensureRoles(admin: PoolClient, runtimePassword: string) {
-  await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_migration NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
-  await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
-  await admin.query(`ALTER ROLE jobguard_runtime LOGIN PASSWORD ${quoteLiteral(runtimePassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`);
+  await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_migration NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+  await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_runtime LOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+  await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_infrastructure NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+  await admin.query(`ALTER ROLE jobguard_migration NOLOGIN NOCREATEROLE NOINHERIT`);
+  await admin.query(`ALTER ROLE jobguard_runtime LOGIN PASSWORD ${quoteLiteral(runtimePassword)} NOCREATEROLE NOINHERIT`);
+  await admin.query(`ALTER ROLE jobguard_infrastructure NOLOGIN NOCREATEROLE NOINHERIT`);
+  const runtimePosture = await admin.query<{ rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolinherit: boolean; rolcanlogin: boolean }>(
+    "SELECT rolsuper,rolbypassrls,rolcreatedb,rolcreaterole,rolinherit,rolcanlogin FROM pg_roles WHERE rolname='jobguard_runtime'",
+  );
+  const runtimeRole = runtimePosture.rows[0];
+  if (runtimePosture.rowCount !== 1 || !runtimeRole || runtimeRole.rolsuper || runtimeRole.rolbypassrls ||
+      runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
+    throw new Error("jobguard_runtime does not have the required least-privilege posture");
+  }
   const owner = (await admin.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
   await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_runtime TO ${quoteIdentifier(owner)}`);
+  await admin.query(`GRANT jobguard_infrastructure TO ${quoteIdentifier(owner)}`);
+  await admin.query(`GRANT CREATE ON DATABASE ${quoteIdentifier(SYNTHETIC_DATABASE_NAME)} TO jobguard_migration`);
   await admin.query("GRANT USAGE,CREATE ON SCHEMA public TO jobguard_migration");
+}
+
+async function migrateAsMigrationOwner(client: PoolClient) {
+  await client.query("SET ROLE jobguard_migration");
+  try {
+    await migrate(client);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    await client.query("RESET ROLE");
+  }
 }
 
 async function seedDatabase(client: PoolClient) {
   await client.query("BEGIN");
   try {
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await client.query("SET LOCAL ROLE jobguard_migration");
     await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
     await client.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
     await client.query("SET LOCAL ROLE jobguard_runtime");
@@ -69,7 +95,7 @@ export async function bootstrapSyntheticDemo(options: { ownerUrl: string; runtim
   try {
     await client.query("SELECT pg_advisory_lock(hashtext('jobguard_demo_bootstrap_v1'))");
     await ensureRoles(client, decodeURIComponent(runtime.password));
-    await migrate(client);
+    await migrateAsMigrationOwner(client);
     await seedDatabase(client);
     return { database: SYNTHETIC_DATABASE_NAME, tenantId: DEMO_TENANT_ID, migrations: 21 };
   } finally {

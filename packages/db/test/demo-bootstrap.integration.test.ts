@@ -11,7 +11,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
   let postgres: EmbeddedPostgres; let directory: string; let admin: Pool; let runtime: Pool;
   const port = 57800 + Math.floor(Math.random() * 100);
   const password = "synthetic-bootstrap-only";
-  const ownerUrl = `postgresql://postgres:${password}@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
+  const ownerUrl = `postgresql://neondb_owner:${password}@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
   const runtimeUrl = `postgresql://jobguard_runtime:runtime-synthetic-only@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
 
   beforeAll(async () => {
@@ -19,7 +19,8 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
     await postgres.initialise(); await postgres.start();
     const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "postgres" });
-    await control.query(`CREATE DATABASE ${SYNTHETIC_DATABASE_NAME}`); await control.end();
+    await control.query(`CREATE ROLE neondb_owner LOGIN PASSWORD '${password}' CREATEROLE NOSUPERUSER NOCREATEDB NOINHERIT NOBYPASSRLS`);
+    await control.query(`CREATE DATABASE ${SYNTHETIC_DATABASE_NAME} OWNER neondb_owner`); await control.end();
     admin = new Pool({ connectionString: ownerUrl });
   }, 60_000);
   afterAll(async () => { await runtime?.end(); await admin?.end(); await postgres?.stop(); await rm(directory, { recursive: true, force: true }); });
@@ -28,8 +29,15 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     process.env.JOBGUARD_ENV = "synthetic_demo";
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 21, tenantId: DEMO_TENANT_ID });
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 21 });
-    expect((await admin.query("SELECT migration_name FROM jobguard_schema_migration ORDER BY migration_name")).rows.map(({ migration_name }) => migration_name)).toHaveLength(21);
-    expect((await admin.query("SELECT semantic_key FROM app.command_receipt WHERE tenant_id=$1", [DEMO_TENANT_ID])).rowCount).toBe(demoCheckpoints.length);
+    const verifier = await admin.connect();
+    await verifier.query("SET ROLE jobguard_migration");
+    await verifier.query("SELECT set_config('app.tenant_id',$1,false)", [DEMO_TENANT_ID]);
+    expect((await verifier.query("SELECT migration_name FROM jobguard_schema_migration ORDER BY migration_name")).rows.map(({ migration_name }) => migration_name)).toHaveLength(21);
+    expect((await verifier.query("SELECT semantic_key FROM app.command_receipt WHERE tenant_id=$1", [DEMO_TENANT_ID])).rowCount).toBe(demoCheckpoints.length);
+    await verifier.query("RESET ROLE"); verifier.release();
+    expect((await admin.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_runtime'")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+    expect((await admin.query(`SELECT count(*)::int AS count FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control','infrastructure') AND tableowner <> 'jobguard_migration'`)).rows).toEqual([{ count: 0 }]);
+    expect((await admin.query(`SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relkind IN ('r','p') AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity)`)).rows).toEqual([{ count: 0 }]);
 
     runtime = new Pool({ connectionString: runtimeUrl, max: 1 });
     const client = await runtime.connect();
