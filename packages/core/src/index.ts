@@ -2,6 +2,7 @@
 export const CORE_PACKAGE = "@jobguard/core" as const;
 export * from "./allocation.js";
 export * from "./fee.js";
+export * from "./fee-statement.js";
 export * from "./job.js";
 export * from "./capture.js";
 export * from "./money.js";
