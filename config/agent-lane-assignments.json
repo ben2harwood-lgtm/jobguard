@@ -678,6 +678,26 @@
         "apps/web/app/styles.css",
         "apps/web/e2e/fee-statement.spec.ts"
       ]
+    },
+    "m1-15": {
+      "branches": [
+        "codex/implement-m1-15-demo-seed-and-regressions"
+      ],
+      "allow": [
+        ".gitignore",
+        "config/agent-lane-assignments.json",
+        "package.json",
+        "packages/db/package.json",
+        "packages/db/src/index.ts",
+        "packages/db/src/demo-seed.ts",
+        "packages/db/src/demo-seed-cli.ts",
+        "packages/db/src/demo-seed.test.ts",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/final-account.tsx",
+        "apps/web/e2e/m1-15-complete-journey.spec.ts",
+        "docs/operations/m1-15-regression.md"
+      ]
     }
   }
 }
