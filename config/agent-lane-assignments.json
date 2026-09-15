@@ -814,7 +814,7 @@
     },
     "sbox-1": {
       "branches": [
-        "codex/build-sbox-1-according-to-build_plan.md"
+        "codex/fix-playwright-suite-failures-on-sbox-1"
       ],
       "allow": [
         "apps/api/**",
