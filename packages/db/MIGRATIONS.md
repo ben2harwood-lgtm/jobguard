@@ -1,5 +1,6 @@
 # Database migration strategy
 
+`0017_customer_billing.sql` adds tenant-numbered immutable synthetic customer invoices, embedded runtime PDF bytes/evidence manifests, append-only credit notes, manual builder-attested receipts and reversals. Customer receipts are structurally marked as neither recovery proof nor platform-fee settlement. Forward-fix only: issued commercial history must never be rolled back destructively.
 `0000_tenancy.sql` is the M0-4 fresh-install baseline. It is intentionally
 idempotent so an existing M0-1 database (which had no application tables) can be
 upgraded safely. Tests execute it both fresh and a second time.

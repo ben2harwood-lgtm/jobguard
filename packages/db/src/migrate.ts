@@ -20,6 +20,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0014_variations.sql", import.meta.url),
   new URL("../migrations/0015_proof_stage_gates.sql", import.meta.url),
   new URL("../migrations/0016_final_accounts.sql", import.meta.url),
+  new URL("../migrations/0017_customer_billing.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 
