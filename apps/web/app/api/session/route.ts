@@ -7,9 +7,9 @@ export async function GET() {
   try { const workspace = await syntheticWorkspace(); return NextResponse.json({ version: 1, principal: { displayName: "Alex Builder" }, tenants: workspace.tenants }); }
   catch { return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
 }
-export async function POST() {
+export async function POST(request: Request) {
   try { await syntheticWorkspace(); } catch { return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
   const response = NextResponse.json({ ok: true });
-  response.cookies.set("jg_session", SYNTHETIC_SESSION, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/" });
+  response.cookies.set("jg_session", SYNTHETIC_SESSION, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/" });
   return response;
 }

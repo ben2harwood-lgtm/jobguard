@@ -6,6 +6,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
 import { DEMO_TENANT_ID, demoCheckpoints } from "../src/demo-seed.js";
+import { closeTestPools } from "./pool-test-utils.js";
 
 describe("synthetic Vercel/Neon bootstrap", () => {
   let postgres: EmbeddedPostgres; let directory: string; let admin: Pool; let runtime: Pool;
@@ -23,7 +24,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     await control.query(`CREATE DATABASE ${SYNTHETIC_DATABASE_NAME} OWNER neondb_owner`); await control.end();
     admin = new Pool({ connectionString: ownerUrl });
   }, 60_000);
-  afterAll(async () => { await runtime?.end(); await admin?.end(); await postgres?.stop(); await rm(directory, { recursive: true, force: true }); });
+  afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); await rm(directory, { recursive: true, force: true }); });
 
   it("creates roles, applies 0000..0020, seeds once, replays safely, and keeps pooled RLS local", async () => {
     process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -42,7 +43,11 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     runtime = new Pool({ connectionString: runtimeUrl, max: 1 });
     const client = await runtime.connect();
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
-    expect((await client.query("SELECT title,status,revision FROM app.job")).rows).toEqual([{ title: "Practice kitchen", status: "quoting", revision: 0 }]);
+    expect((await client.query("SELECT title,status,revision FROM app.job ORDER BY title")).rows).toEqual([
+      { title: "Kitchen extension", status: "live", revision: 0 },
+      { title: "Loft conversion", status: "quoting", revision: 0 },
+      { title: "Practice kitchen", status: "quoting", revision: 0 },
+    ]);
     await expect(client.query("UPDATE app.job SET title='forbidden'")).rejects.toMatchObject({ code: "42501" }); await client.query("ROLLBACK");
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await expect(client.query("INSERT INTO app.job(id,tenant_id,title) VALUES(gen_random_uuid(),'22222222-2222-4222-8222-222222222222','foreign')")).rejects.toMatchObject({ code: "42501" });
