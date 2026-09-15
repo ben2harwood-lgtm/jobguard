@@ -765,7 +765,7 @@
     },
     "demo-deploy-config-fix": {
       "branches": [
-        "work"
+        "codex/fix-vercel-deploy-config-for-next.js"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
