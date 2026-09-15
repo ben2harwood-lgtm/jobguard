@@ -16,7 +16,9 @@
     "typecheck": "turbo run typecheck",
     "openapi:check": "pnpm --filter @jobguard/api openapi:check",
     "seed:demo": "turbo run build --filter=@jobguard/db... && node packages/db/dist/demo-seed-cli.js",
+    "bootstrap:demo": "turbo run build --filter=@jobguard/db... && node packages/db/dist/demo-bootstrap-cli.js",
     "test:regression": "pnpm --filter @jobguard/db test:regression && pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop m1-15-complete-journey.spec.ts"
+    ,"test:deploy": "pnpm turbo run build --filter=@jobguard/db... && pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/demo-bootstrap.integration.test.ts && pnpm --filter @jobguard/web test:e2e --project=desktop deploy-smoke.spec.ts"
   },
   "devDependencies": {
     "turbo": "2.10.12",

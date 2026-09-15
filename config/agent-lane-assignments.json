@@ -734,6 +734,32 @@
         "packages/db/test/job-import.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
+    },
+    "demo-deploy": {
+      "branches": [
+        "codex/deploy-synthetic-demo-on-vercel-neon"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "vercel.json",
+        "DEPLOY.md",
+        ".env.example",
+        "package.json",
+        "pnpm-lock.yaml",
+        "apps/web/package.json",
+        "apps/web/app/lib/synthetic-server.ts",
+        "apps/web/app/api/session/route.ts",
+        "apps/web/app/api/jobs/route.ts",
+        "apps/web/e2e/deploy-smoke.spec.ts",
+        "packages/db/package.json",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/demo-bootstrap-cli.ts",
+        "packages/db/src/demo-runtime.ts",
+        "packages/db/src/demo-seed.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts"
+      ]
     }
   }
 }

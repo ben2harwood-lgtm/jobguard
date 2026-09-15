@@ -31,5 +31,7 @@ export * from "./final-account-repository.js";
 export * from "./customer-billing-repository.js";
 export * from "./recovery-repository.js";
 export * from "./demo-seed.js";
+export * from "./demo-bootstrap.js";
+export * from "./demo-runtime.js";
 export * from "./commercial-integrity-repository.js";
 export * from "./job-import-repository.js";

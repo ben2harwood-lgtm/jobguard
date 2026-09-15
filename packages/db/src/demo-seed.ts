@@ -4,6 +4,9 @@ import { money, type Money } from "@jobguard/core";
 export const DEMO_TENANT_ID = "d1500000-0000-4000-8000-000000000015";
 export const DEMO_JOB_ID = "d1500000-0000-4000-8000-000000000150";
 export const DEMO_SCOPE_ITEM_ID = "d1500000-0000-4000-8000-000000001500";
+export const DEMO_IDENTITY_USER_ID = "d1500000-0000-4000-8000-000000000001";
+export const DEMO_ACCOUNT_ID = "d1500000-0000-4000-8000-000000000002";
+export const DEMO_MEMBERSHIP_ID = "d1500000-0000-4000-8000-000000000003";
 export const DEMO_SEED_VERSION = "m1-15.demo-seed.v1";
 
 export type DemoEnvironment = "synthetic_demo" | "pilot_no_charge" | "production";

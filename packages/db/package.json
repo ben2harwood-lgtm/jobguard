@@ -15,6 +15,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests --maxWorkers=1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "bootstrap:demo": "pnpm build && node dist/demo-bootstrap-cli.js",
     "test:regression": "vitest run --maxWorkers=1 test/activation.integration.test.ts test/quote.integration.test.ts test/tenancy.integration.test.ts test/evidence.integration.test.ts test/final-account.integration.test.ts test/recovery.integration.test.ts test/outbox.integration.test.ts"
   },
   "devDependencies": {
