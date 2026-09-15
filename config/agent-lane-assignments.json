@@ -737,7 +737,7 @@
     },
     "demo-deploy": {
       "branches": [
-        "codex/deploy-synthetic-demo-on-vercel-neon"
+        "codex/enable-demo-deployment-on-vercel-and-neon"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
