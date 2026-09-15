@@ -828,7 +828,7 @@
     },
     "sbox-2": {
       "branches": [
-        "work"
+        "codex/build-leaf-sbox-2-with-full-backend-and-ui"
       ],
       "allow": [
         "apps/api/**",
