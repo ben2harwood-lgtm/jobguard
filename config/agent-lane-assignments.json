@@ -698,6 +698,24 @@
         "apps/web/e2e/m1-15-complete-journey.spec.ts",
         "docs/operations/m1-15-regression.md"
       ]
+    },
+    "m1-16": {
+      "branches": [
+        "codex/implement-m1-16-commercial-integrity-instrumentation"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/commercial-integrity.ts",
+        "packages/core/src/commercial-integrity.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migrations/0019_commercial_integrity.sql",
+        "packages/db/src/commercial-integrity-repository.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/index.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/commercial-integrity.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
     }
   }
 }
