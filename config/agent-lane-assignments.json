@@ -623,6 +623,28 @@
         "apps/web/app/styles.css",
         "apps/web/e2e/final-account.spec.ts"
       ]
+    },
+    "m1-12": {
+      "branches": [
+        "codex/implement-m1-12-customer-invoice-issue-send-and-explicit-payment-records"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/customer-billing.ts",
+        "packages/core/src/customer-billing.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migrations/0017_customer_billing.sql",
+        "packages/db/src/customer-billing-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/final-account.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "apps/web/app/ui/final-account.tsx",
+        "apps/web/app/styles.css",
+        "apps/web/e2e/customer-invoice.spec.ts",
+        "apps/web/e2e/final-account.spec.ts"
+      ]
     }
   }
 }

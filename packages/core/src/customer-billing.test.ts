@@ -1,0 +1,7 @@
+import{describe,expect,it}from"vitest";import{createSyntheticInvoicePdf,formatCustomerInvoiceNumber,projectInvoiceBalance,SYNTHETIC_INVOICE_WATERMARK}from"./customer-billing.js";import{money}from"./money.js";
+describe("customer billing",()=>{
+ it("numbers synthetic invoices deterministically",()=>expect(formatCustomerInvoiceNumber(12,"2026-09-14")).toBe("SYN-2026-000012"));
+ it.each([{receiptPence:0,status:"unpaid",balance:12000},{receiptPence:3000,status:"partial",balance:9000},{receiptPence:12000,status:"paid",balance:0}])("projects $status",x=>expect(projectInvoiceBalance({totalPence:12000,receiptPence:x.receiptPence})).toMatchObject({status:x.status,balance:{pence:x.balance,currency:"GBP"}}));
+ it("keeps overpayment unapplied and reversal history restores debt",()=>{expect(projectInvoiceBalance({totalPence:12000,receiptPence:15000})).toMatchObject({status:"paid",balance:{pence:0},unappliedCredit:{pence:3000}});expect(projectInvoiceBalance({totalPence:12000,receiptPence:15000,reversedReceiptPence:5000})).toMatchObject({status:"partial",balance:{pence:2000},unappliedCredit:{pence:0}})});
+ it("credits without mutating the original debt and emits a runtime watermarked PDF",()=>{expect(projectInvoiceBalance({totalPence:12000,creditPence:12000})).toMatchObject({status:"credited",balance:{pence:0}});expect(new TextDecoder().decode(createSyntheticInvoicePdf({invoiceNumber:"SYN-2026-000001",issuerName:"Fixture Builder",total:money(12000),sourceRevisionId:"revision",evidenceVersionIds:["v1"]}))).toContain(SYNTHETIC_INVOICE_WATERMARK)});
+});
