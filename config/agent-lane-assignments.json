@@ -366,7 +366,9 @@
         "tsconfig.json",
         "turbo.json",
         "docker-compose.yml",
-        "docker/**"
+        "docker/**",
+        "DEPLOY.md",
+        "vercel.json"
       ]
     },
     "m1-2": {
@@ -759,6 +761,14 @@
         "packages/db/src/migrate.ts",
         "packages/db/src/index.ts",
         "packages/db/test/demo-bootstrap.integration.test.ts"
+      ]
+    },
+    "checker-allow-deploy-root": {
+      "branches": [
+        "checker/allow-deploy-root-files"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json"
       ]
     }
   }
