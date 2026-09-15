@@ -719,7 +719,7 @@
     },
     "m1-17": {
       "branches": [
-        "codex/implement-m1-17-adopt-in-flight-job"
+        "codex/implement-m1-17-for-jobguard"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
