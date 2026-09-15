@@ -648,7 +648,7 @@
     },
     "m1-13": {
       "branches": [
-        "work"
+        "codex/implement-m1-13-for-jobguard"
       ],
       "allow": [
         "config/agent-lane-assignments.json",
