@@ -40,7 +40,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await expect(page.getByText("Proof complete · verified evidence linked")).toBeVisible();
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Log an extra" }).click();
+  await page.getByRole("button", { name: "Add extra work" }).click();
   await page.getByLabel("Use approved fixture audio transcript").check();
   await page.getByRole("button", { name: "Create variation proposal" }).click();
   await page.getByLabel("Confirmed rate pence").fill("12500");

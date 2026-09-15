@@ -14,7 +14,7 @@ test("first visit explains the journey and the help button reopens it", async ({
   await expect(page.getByText("A safe demo, nothing is really sent, charged, or saved to a real customer.")).toBeVisible();
   await page.getByRole("button", { name: "Start the demo" }).click();
   await expect(page.getByRole("heading", { name: "Welcome to JobGuard" })).toBeVisible();
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByRole("heading", { name: "1. These are your jobs" })).toBeVisible();
   await expect(page.locator('[data-tour="jobs-list"]')).toHaveClass(/tour-target/);
   await page.getByRole("button", { name: "Back" }).click();
@@ -28,7 +28,14 @@ test("first visit explains the journey and the help button reopens it", async ({
 
 test("sign-in opens the accessible shell without horizontal overflow", async ({ page }) => {
   await signIn(page);
-  await expect(page.getByRole("navigation", { name: /navigation/i }).first()).toBeVisible();
+  await expect(page.getByRole("navigation", { name: /Main menu|Mobile navigation/ }).filter({ visible: true })).toBeVisible();
+  const navigation = page.getByRole("navigation", { name: /Main menu|Mobile navigation/ }).filter({ visible: true });
+  await expect(navigation.getByRole("button", { name: /Decisions/ })).toBeVisible();
+  await expect(navigation.getByRole("button", { name: "Account" })).toBeVisible();
+  await navigation.getByRole("button", { name: "Account" }).click();
+  await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
+  await navigation.getByRole("button", { name: "Jobs", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.getByLabel("Search jobs").focus();
   await expect(page.getByLabel("Search jobs")).toBeFocused();
@@ -37,11 +44,11 @@ test("sign-in opens the accessible shell without horizontal overflow", async ({ 
 test("live job has exact document, payment and pilot provenance", async ({ page }) => {
   await signIn(page);
   const live = page.getByRole("article").filter({ hasText: "Kitchen extension" });
-  await expect(live).toContainText("Live");
+  await expect(live).toContainText("Work under way");
   await expect(live).toContainText("Q-1007 · Sent");
   await expect(live).toContainText("No payment due yet");
   await expect(live).toContainText("No-charge pilot · no JobGuard fee paid");
-  await expect(page.getByRole("article").filter({ hasText: "Loft conversion" })).toContainText("Queued — not delivered");
+  await expect(page.getByRole("article").filter({ hasText: "Loft conversion" })).toContainText("Waiting to send — not sent yet");
 });
 
 test("tenant switching re-keys data and shows the empty state", async ({ page }) => {
