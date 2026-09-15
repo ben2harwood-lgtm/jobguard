@@ -32,3 +32,4 @@ export * from "./customer-billing-repository.js";
 export * from "./recovery-repository.js";
 export * from "./demo-seed.js";
 export * from "./commercial-integrity-repository.js";
+export * from "./job-import-repository.js";

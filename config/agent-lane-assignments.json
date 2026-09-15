@@ -716,6 +716,24 @@
         "packages/db/test/commercial-integrity.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
+    },
+    "m1-17": {
+      "branches": [
+        "codex/implement-m1-17-for-jobguard"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "packages/core/src/job-import.ts",
+        "packages/core/src/job-import.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migrations/0020_job_import.sql",
+        "packages/db/src/job-import-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/migrate.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/test/job-import.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
     }
   }
 }
