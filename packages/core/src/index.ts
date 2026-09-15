@@ -18,3 +18,4 @@ export * from "./variation.js";
 export * from "./proof.js";
 export * from "./final-account.js";
 export * from "./customer-billing.js";
+export * from "./recovery.js";

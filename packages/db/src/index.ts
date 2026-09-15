@@ -29,3 +29,4 @@ export * from "./variation-repository.js";
 export * from "./proof-repository.js";
 export * from "./final-account-repository.js";
 export * from "./customer-billing-repository.js";
+export * from "./recovery-repository.js";
