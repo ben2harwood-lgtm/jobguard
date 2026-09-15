@@ -24,6 +24,9 @@ importers:
 
   .:
     devDependencies:
+      next:
+        specifier: 15.5.25
+        version: 15.5.25(@playwright/test@1.55.1)(@types/node@24.0.3)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       turbo:
         specifier: 2.10.12
         version: 2.10.12
