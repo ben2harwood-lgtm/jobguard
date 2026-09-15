@@ -1,4 +1,6 @@
 import "server-only";
+import { readSyntheticDemo } from "@jobguard/db";
+import { Pool } from "pg";
 import type { JobSummary } from "./contracts";
 
 export const TENANTS = [
@@ -17,4 +19,28 @@ export function isMember(tenantId: string) { return TENANTS.some((tenant) => ten
 export function tenantJobs(tenantId: string) {
   // Keep tenant filtering at the server boundary. Tenant IDs from URLs are never authority.
   return tenantId === TENANTS[1].id ? [] : jobs.filter((job) => job.tenantId === tenantId);
+}
+
+let runtimePool: Pool | undefined;
+function pool() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) return undefined;
+  runtimePool ??= new Pool({ connectionString, max: 4, application_name: "jobguard-vercel-synthetic-demo" });
+  return runtimePool;
+}
+
+/** Production deployments prove the fixed demo membership and read jobs through RLS. */
+export async function syntheticWorkspace() {
+  const database = pool();
+  if (!database) return { tenants: TENANTS, jobs: jobs.filter((job) => job.tenantId !== TENANTS[1].id) };
+  const seeded = await readSyntheticDemo(database);
+  return {
+    tenants: [seeded.tenant],
+    jobs: seeded.jobs.map((job): JobSummary => ({
+      id: job.id, tenantId: seeded.tenant.id, title: job.title,
+      customerLabel: "Synthetic customer · demo only", status: job.status as JobSummary["status"],
+      document: { kind: "none", reference: null, delivery: "not_sent" }, customerPayment: "not_due",
+      pilotNoCharge: true, updatedLabel: "Synthetic demo",
+    })),
+  };
 }

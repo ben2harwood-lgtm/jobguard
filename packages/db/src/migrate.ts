@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 export const MIGRATION_URLS = [
   new URL("../migrations/0000_tenancy.sql", import.meta.url),
@@ -27,7 +27,7 @@ export const MIGRATION_URLS = [
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 
-export async function migrate(pool: Pool): Promise<void> {
+export async function migrate(pool: Pick<Pool | PoolClient, "query">): Promise<void> {
   await pool.query(`CREATE TABLE IF NOT EXISTS public.jobguard_schema_migration (
     migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
   )`);
