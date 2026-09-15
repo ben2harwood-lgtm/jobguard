@@ -98,6 +98,77 @@
           "jobs"
         ]
       }
+    },
+    "/sandbox/runs": {
+      "post": {
+        "operationId": "SandboxController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a private synthetic practice run",
+        "tags": [
+          "sandbox"
+        ]
+      }
+    },
+    "/sandbox/runs/{id}": {
+      "get": {
+        "operationId": "SandboxController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "sandbox"
+        ]
+      }
+    },
+    "/sandbox/runs/{id}/reset": {
+      "post": {
+        "operationId": "SandboxController_reset",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "sandbox"
+        ]
+      }
+    },
+    "/sandbox/runs/{id}/archive": {
+      "post": {
+        "operationId": "SandboxController_archive",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "sandbox"
+        ]
+      }
+    },
+    "/sandbox/runs/{id}/advance": {
+      "post": {
+        "operationId": "SandboxController_advance",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "sandbox"
+        ]
+      }
     }
   },
   "info": {
