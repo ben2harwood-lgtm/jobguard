@@ -21,6 +21,7 @@
     ,"test:deploy": "pnpm turbo run build --filter=@jobguard/db... && pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/demo-bootstrap.integration.test.ts && pnpm --filter @jobguard/web test:e2e --project=desktop deploy-smoke.spec.ts"
   },
   "devDependencies": {
+    "next": "15.5.25",
     "turbo": "2.10.12",
     "typescript": "5.8.3"
   },

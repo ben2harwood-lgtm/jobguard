@@ -763,6 +763,17 @@
         "packages/db/test/demo-bootstrap.integration.test.ts"
       ]
     },
+    "demo-deploy-config-fix": {
+      "branches": [
+        "codex/fix-vercel-deploy-config-for-next.js"
+      ],
+      "allow": [
+        "config/agent-lane-assignments.json",
+        "package.json",
+        "pnpm-lock.yaml",
+        "tools/agent-lane-boundary.test.mjs"
+      ]
+    },
     "checker-allow-deploy-root": {
       "branches": [
         "checker/allow-deploy-root-files"
