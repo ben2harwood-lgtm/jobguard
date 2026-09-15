@@ -65,6 +65,39 @@
           "jobs"
         ]
       }
+    },
+    "/jobs/{id}": {
+      "get": {
+        "operationId": "WorkspaceController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Versioned synthetic job workspace projection"
+          },
+          "403": {
+            "description": "Membership does not authorize this workspace"
+          },
+          "404": {
+            "description": "Job is absent or hidden by tenant isolation"
+          },
+          "503": {
+            "description": "Typed recoverable database failure"
+          }
+        },
+        "summary": "Read a tenant-authorized persistent job workspace",
+        "tags": [
+          "jobs"
+        ]
+      }
     }
   },
   "info": {

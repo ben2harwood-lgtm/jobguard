@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
 import { money, type Money } from "@jobguard/core";
 
-export const DEMO_TENANT_ID = "d1500000-0000-4000-8000-000000000015";
+export const DEMO_TENANT_ID = "11111111-1111-4111-8111-111111111111";
 export const DEMO_JOB_ID = "d1500000-0000-4000-8000-000000000150";
 export const DEMO_SCOPE_ITEM_ID = "d1500000-0000-4000-8000-000000001500";
 export const DEMO_IDENTITY_USER_ID = "d1500000-0000-4000-8000-000000000001";
 export const DEMO_ACCOUNT_ID = "d1500000-0000-4000-8000-000000000002";
 export const DEMO_MEMBERSHIP_ID = "d1500000-0000-4000-8000-000000000003";
+export const DEMO_EMPTY_TENANT_ID = "33333333-3333-4333-8333-333333333333";
+export const DEMO_EMPTY_ACCOUNT_ID = "33333333-3333-4333-8333-333333333334";
+export const DEMO_EMPTY_MEMBERSHIP_ID = "33333333-3333-4333-8333-333333333335";
 export const DEMO_SEED_VERSION = "m1-15.demo-seed.v1";
 
 export type DemoEnvironment = "synthetic_demo" | "pilot_no_charge" | "production";
