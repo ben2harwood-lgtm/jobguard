@@ -3,10 +3,11 @@ import { expect, test } from "@playwright/test";
 test("M1-15 complete synthetic journey retains the job spine and accepted scope", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/");
-  await page.getByRole("button", { name: "Continue with demo code" }).click();
-  await page.getByRole("button", { name: "Walk a new job" }).click();
-  await page.getByRole("button", { name: "Create draft proposal" }).click();
-  await page.getByRole("button", { name: "Review proposal" }).click();
+  await page.getByRole("button", { name: "Start the demo" }).click();
+  await page.getByRole("button", { name: "Skip tour" }).click();
+  await page.getByRole("button", { name: "Start a new job" }).click();
+  await page.getByRole("button", { name: "Make my draft" }).click();
+  await page.getByRole("button", { name: "Check and edit my draft" }).click();
   for (const button of await page.getByRole("button", { name: "Accept", exact: true }).all()) await button.click();
   await page.getByLabel(/Disposition Confirm disposal/).selectOption("answered");
   await page.getByRole("button", { name: "Confirm scope and start quoting" }).click();
@@ -31,7 +32,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await expect(page.getByText("Dismissed — no action authorized")).toBeVisible();
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Capture proof" }).click();
+  await page.getByRole("button", { name: "Add a photo" }).click();
   const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
   await page.getByLabel("Choose site photo").setInputFiles({ name: "runtime-proof.png", mimeType: "image/png", buffer: png });
   await page.getByRole("button", { name: "Run synthetic server verification" }).click();
@@ -39,7 +40,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await expect(page.getByText("Proof complete · verified evidence linked")).toBeVisible();
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Log an extra" }).click();
+  await page.getByRole("button", { name: "Add extra work" }).click();
   await page.getByLabel("Use approved fixture audio transcript").check();
   await page.getByRole("button", { name: "Create variation proposal" }).click();
   await page.getByLabel("Confirmed rate pence").fill("12500");
@@ -47,7 +48,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await page.getByRole("button", { name: "Record approval for this exact revision" }).click();
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Draft final account" }).click();
+  await page.getByRole("button", { name: "Prepare the final bill" }).click();
   const account = page.locator(".final-account");
   await expect(account).toHaveAttribute("data-job-id", jobId!);
   await expect(account).toHaveAttribute("data-scope-lineage", scopeLineage!);
@@ -59,7 +60,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await expect(page.getByRole("heading", { name: "Payment: paid" })).toBeVisible();
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Fee illustration" }).click();
+  await page.getByRole("button", { name: "See the fee example" }).click();
   await expect(page.getByText("ILLUSTRATIVE ONLY — NOT A PLATFORM TAX INVOICE")).toBeVisible();
   await expect(page.getByText(/No collectible platform balance/)).toBeVisible();
   await page.screenshot({ path: `/tmp/jobguard-m1-15-${test.info().project.name}.png`, fullPage: true });
