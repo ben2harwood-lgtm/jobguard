@@ -854,7 +854,7 @@
     },
     "voice-1": {
       "branches": [
-        "work"
+        "codex/build-leaf-voice-1-per-build_plan.md"
       ],
       "allow": [
         "apps/api/**",
