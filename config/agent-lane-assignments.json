@@ -903,7 +903,7 @@
     },
     "uiwire-4": {
       "branches": [
-        "work"
+        "codex/build-leaf-uiwire-4-per-specifications"
       ],
       "allow": [
         "apps/api/**",
