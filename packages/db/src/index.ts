@@ -36,3 +36,5 @@ export * from "./demo-runtime.js";
 export * from "./commercial-integrity-repository.js";
 export * from "./job-import-repository.js";
 export * from "./sandbox-repository.js";
+
+export * from "./quote-delivery-repository.js";
