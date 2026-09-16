@@ -851,6 +851,19 @@
         "config/agent-lane-assignments.json",
         "docs/verdicts/**"
       ]
+    },
+    "uiwire-2": {
+      "branches": [
+        "work"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
     }
   }
 }
