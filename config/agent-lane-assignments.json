@@ -825,6 +825,19 @@
         "pnpm-lock.yaml",
         "docs/verdicts/**"
       ]
+    },
+    "sbox-2": {
+      "branches": [
+        "codex/fix-sandbox-job-isolation-for-sbox-1-tests"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**",
+        "tools/agent-lane-boundary.test.mjs"
+      ]
     }
   }
 }

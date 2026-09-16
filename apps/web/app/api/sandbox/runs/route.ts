@@ -1,0 +1,3 @@
+import {cookies} from "next/headers";import {NextResponse} from "next/server";import {SandboxServiceError} from "@jobguard/api/workspace";import {workspaceApplication} from "../../../lib/workspace-server";
+const reply=async(fn:()=>Promise<unknown>)=>{try{return NextResponse.json(await fn())}catch(e){const code=e instanceof SandboxServiceError?e.code:"DATABASE_UNAVAILABLE";return NextResponse.json({code},{status:code==="UNAUTHENTICATED"?401:code==="INVALID_COMMAND"?400:code==="COMMAND_CONFLICT"?409:503})}};
+export async function POST(request:Request){const session=(await cookies()).get("jg_session")?.value;const body=await request.json();return reply(()=>workspaceApplication().sandbox.create(session,body));}

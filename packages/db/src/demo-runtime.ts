@@ -29,7 +29,13 @@ export async function readSyntheticDemo(pool: Pool) {
     if (membership.rowCount !== 1) throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
     const jobs = await database.$client.query<SyntheticDemoJob>(
       `SELECT id::text,title,status,revision,updated_at AS "updatedAt"
-         FROM app.job WHERE tenant_id=$1 ORDER BY created_at,id`,
+         FROM app.job j
+         WHERE j.tenant_id=$1
+           AND NOT EXISTS (
+             SELECT 1 FROM app.sandbox_run sr
+              WHERE sr.tenant_id=j.tenant_id AND sr.job_id=j.id
+           )
+         ORDER BY created_at,id`,
       [DEMO_TENANT_ID],
     );
     return { tenant: { id: DEMO_TENANT_ID, name: membership.rows[0].name as string }, jobs: jobs.rows };
