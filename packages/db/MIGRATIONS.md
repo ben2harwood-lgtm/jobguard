@@ -80,3 +80,7 @@ Adds immutable stage completions plus append-only evidence invalidation and rewo
 ## 0016_final_accounts.sql
 
 Adds tenant-protected draft heads and immutable final-account revisions, traced lines, and exact-version proof manifests. Forward-fix only: revisions are commercial history and must not be rolled back destructively.
+
+## 0022_browser_local_dictation.sql
+
+Adds immutable acquisition metadata for reviewed browser-local transcripts and a database-enforced zero audio-byte count. Existing forced RLS and SELECT/INSERT-only runtime grants remain unchanged. Roll back only with a forward fix that preserves transcript provenance; browser speech never has a remote fallback.

@@ -851,6 +851,20 @@
         "config/agent-lane-assignments.json",
         "docs/verdicts/**"
       ]
+    },
+    "voice-1": {
+      "branches": [
+        "work"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/ai/**",
+        "packages/core/**",
+        "packages/db/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
     }
   }
 }
