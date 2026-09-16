@@ -852,10 +852,22 @@
         "docs/verdicts/**"
       ]
     },
+    "uiwire-2": {
+      "branches": [
+        "codex/build-leaf-uiwire-2-according-to-build_plan.md"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
+    },
     "voice-1": {
       "branches": [
-        "codex/build-leaf-voice-1-per-build_plan.md",
-        "work"
+        "codex/fix-renderer-crash-defect-in-localdictation"
       ],
       "allow": [
         "apps/api/**",
