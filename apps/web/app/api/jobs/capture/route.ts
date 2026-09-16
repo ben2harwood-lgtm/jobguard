@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { extractCaptureFixture } from "@jobguard/ai";
-import { captureRequestV1 } from "@jobguard/core";
-import { randomUUID } from "node:crypto";
-export async function POST(request:Request){const parsed=captureRequestV1.safeParse(await request.json().catch(()=>null));if(!parsed.success)return NextResponse.json({code:"INVALID_CAPTURE"},{status:400});const{source,captureId,fixtureId}=parsed.data;if(fixtureId==="provider-unavailable")return NextResponse.json({code:"PROVIDER_UNAVAILABLE",originalInputRetained:true},{status:503});if(fixtureId==="invalid-output")return NextResponse.json({code:"INVALID_MODEL_OUTPUT",originalInputRetained:true},{status:422});const proposal=await extractCaptureFixture(captureId,source.text,fixtureId);return NextResponse.json({captureId,jobId:randomUUID(),proposalId:randomUUID(),reviewId:randomUUID(),source:{text:source.text,version:1},proposal:{...proposal,lines:proposal.lines.map(line=>({...line,id:randomUUID(),scopeItemId:randomUUID(),room:"Kitchen",category:"Work",sourceExcerpt:line.description.provenance.kind==="extracted"?source.text.slice(line.description.provenance.span.start,line.description.provenance.span.end):line.description.value}))},status:"draft",commercialRevision:null,quoteSend:null,fixtureOnly:true});}
+import { cookies } from "next/headers";
+import { CaptureApplicationError } from "@jobguard/api/workspace";
+import { hasSyntheticSession } from "../../../lib/synthetic-server";
+import { workspaceApplication } from "../../../lib/workspace-server";
+export async function POST(request:Request){const body=await request.json().catch(()=>null);if(!hasSyntheticSession((await cookies()).get("jg_session")?.value))return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{return NextResponse.json(await workspaceApplication().capture.create(body),{status:201})}catch(e){const code=e instanceof CaptureApplicationError?e.code:"DATABASE_UNAVAILABLE";return NextResponse.json({code,originalInputRetained:true},{status:code==="TENANT_FORBIDDEN"?403:code==="DATABASE_UNAVAILABLE"?503:400})}}

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { "./workspace": { "types": "./src/workspace/index.ts", "import": "./dist/workspace/index.js" }, "./workspace-contracts": { "types": "./src/workspace/contracts.ts", "import": "./dist/workspace/contracts.js" }, "./sandbox-contracts": { "types": "./src/sandbox/contracts.ts", "import": "./dist/sandbox/contracts.js" } },
+  "exports": { "./workspace": { "types": "./src/workspace/index.ts", "import": "./dist/workspace/index.js" }, "./workspace-contracts": { "types": "./src/workspace/contracts.ts", "import": "./dist/workspace/contracts.js" }, "./sandbox-contracts": { "types": "./src/sandbox/contracts.ts", "import": "./dist/sandbox/contracts.js" }, "./capture-contracts": { "types": "./src/capture/contracts.ts", "import": "./dist/capture/contracts.js" } },
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",

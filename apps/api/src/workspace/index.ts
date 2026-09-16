@@ -4,3 +4,5 @@ export * from "./workspace.service.js";
 export * from "./workspace-session.js";
 export * from "../sandbox/contracts.js";
 export * from "../sandbox/sandbox.service.js";
+export * from "../capture/contracts.js";
+export * from "../capture/capture.application.js";
