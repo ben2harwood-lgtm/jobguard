@@ -841,7 +841,7 @@
     },
     "uiwire-1": {
       "branches": [
-        "work"
+        "codex/build-leaf-uiwire-1-per-specifications"
       ],
       "allow": [
         "apps/api/**",
