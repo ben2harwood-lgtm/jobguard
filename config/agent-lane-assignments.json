@@ -828,7 +828,7 @@
     },
     "sbox-2": {
       "branches": [
-        "codex/build-leaf-sbox-2-with-full-backend-and-ui"
+        "codex/fix-sandbox-job-isolation-for-sbox-1-tests"
       ],
       "allow": [
         "apps/api/**",
