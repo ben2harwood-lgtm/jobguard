@@ -11,8 +11,9 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   expect(jobId).toMatch(/^[0-9a-f-]{36}$/);
   expect(scopeLineage?.split(",")).toHaveLength(6);
   await page.getByLabel("Unit rate Replace shelves").fill("125.00");
+  await page.getByRole("button", { name: "Save draft revision" }).click();
   await page.getByRole("button", { name: "Preview immutable quote" }).click();
-  await page.getByRole("button", { name: "Approve exact version and fake-send" }).click();
+  await page.getByRole("button", { name: "Simulate sending this quote" }).click();
   await page.getByRole("button", { name: "Record builder attestation" }).click();
   await page.getByRole("button", { name: "Switch live · no-charge pilot" }).click();
   await expect(page.getByRole("heading", { name: "Live · baseline frozen" })).toBeVisible();
