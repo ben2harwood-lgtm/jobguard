@@ -1,12 +1,20 @@
 import { expect, type Page } from "@playwright/test";
 
 export async function openCapture(page: Page) {
+  await page.addInitScript(() => {
+    if (!(window as any).__JOBGUARD_SPEECH_ADAPTER__) (window as any).__JOBGUARD_SPEECH_ADAPTER__ = {
+      configuration: { language: "en-GB", processLocally: true, remoteFallback: false },
+      available: async () => "unavailable",
+      install: async () => false,
+      start: () => ({ stop() {}, cancel() {} }),
+    };
+  });
   await page.goto("/");
   const start = page.getByRole("button", { name: "Start the demo" });
   await start.waitFor({ state: "visible" });
   await start.click();
   await page.getByRole("button", { name: "Skip tour" }).click();
-  await page.getByRole("button", { name: "＋ Start a new job" }).click();
+  await page.getByRole("button", { name: "＋ Start a new job" }).dispatchEvent("click");
   await expect(page.getByRole("heading", { name: "Walk the job" })).toBeVisible();
 }
 

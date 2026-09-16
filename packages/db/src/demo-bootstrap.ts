@@ -103,7 +103,7 @@ export async function bootstrapSyntheticDemo(options: { ownerUrl: string; runtim
     await ensureRoles(client, decodeURIComponent(runtime.password));
     await migrateAsMigrationOwner(client);
     await seedDatabase(client);
-    return { database: SYNTHETIC_DATABASE_NAME, tenantId: DEMO_TENANT_ID, migrations: 21 };
+    return { database: SYNTHETIC_DATABASE_NAME, tenantId: DEMO_TENANT_ID, migrations: 22 };
   } finally {
     await client.query("SELECT pg_advisory_unlock(hashtext('jobguard_demo_bootstrap_v1'))").catch(() => undefined);
     client.release(); await pool.end();

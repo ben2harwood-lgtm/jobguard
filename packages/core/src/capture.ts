@@ -26,7 +26,13 @@ export const jobRecordProposalV1 = z.object({
 });
 export const captureRequestV1 = z.object({
   contractVersion: z.literal(CAPTURE_CONTRACT_VERSION), requested_tenant_id: z.string().uuid(),
-  captureId: z.string().uuid(), source: z.object({ kind: z.literal("text"), text: z.string().min(1).max(50_000) }),
+  captureId: z.string().uuid(), source: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("text"), text: z.string().min(1).max(50_000) }),
+    z.object({ kind: z.literal("browser_local_transcript"), text: z.string().min(1).max(50_000), acquisition: z.object({
+      contractVersion: z.literal("browser_local_dictation_v1"), language: z.literal("en-GB"), processLocally: z.literal(true),
+      audioUploaded: z.literal(false), audioStored: z.literal(false), rawFinalText: z.string().min(1).max(50_000), humanEdited: z.boolean(),
+    }) }),
+  ]),
   fixtureId: z.string().min(1).max(100),
 });
 export type JobRecordProposal = z.infer<typeof jobRecordProposalV1>;

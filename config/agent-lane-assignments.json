@@ -865,6 +865,20 @@
         "docs/verdicts/**"
       ]
     },
+    "voice-1": {
+      "branches": [
+        "codex/fix-renderer-crash-defect-in-localdictation"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/ai/**",
+        "packages/core/**",
+        "packages/db/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
+    },
     "harden-signin": {
       "branches": [
         "chore/harden-uiwire1-signin"

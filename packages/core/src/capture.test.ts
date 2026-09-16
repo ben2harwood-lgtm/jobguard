@@ -1,3 +1,4 @@
 import { describe,expect,it } from "vitest";
-import { jobRecordProposalV1 } from "./capture.js";
+import { captureRequestV1,jobRecordProposalV1 } from "./capture.js";
 describe("proposal boundary",()=>{it("rejects extracted values without a versioned span",()=>{expect(jobRecordProposalV1.safeParse({title:{value:"x",provenance:{kind:"extracted"}},lines:[],materials:[],questions:[]}).success).toBe(false);});});
+describe("browser-local capture boundary",()=>{it("requires explicit local-only acquisition facts",()=>{const input={contractVersion:"job_capture_v1",requested_tenant_id:"10000000-0000-4000-8000-000000000001",captureId:"20000000-0000-4000-8000-000000000001",fixtureId:"fixture",source:{kind:"browser_local_transcript",text:"Test",acquisition:{contractVersion:"browser_local_dictation_v1",language:"en-GB",processLocally:true,audioUploaded:false,audioStored:false,rawFinalText:"Test",humanEdited:false}}};expect(captureRequestV1.safeParse(input).success).toBe(true);expect(captureRequestV1.safeParse({...input,source:{...input.source,acquisition:{...input.source.acquisition,processLocally:false}}}).success).toBe(false)})});
