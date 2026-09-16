@@ -197,6 +197,49 @@
           "quotes"
         ]
       }
+    },
+    "/jobs/{id}/quotes/acceptance": {
+      "get": {
+        "operationId": "QuoteController_acceptance",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read exact synthetic quote acceptance timeline",
+        "tags": [
+          "quotes"
+        ]
+      },
+      "post": {
+        "operationId": "QuoteController_accept",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record simulated builder-attested acceptance",
+        "tags": [
+          "quotes"
+        ]
+      }
+    },
+    "/jobs/{id}/quotes/acceptance/disposition": {
+      "post": {
+        "operationId": "QuoteController_disposition",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record synthetic quote disposition",
+        "tags": [
+          "quotes"
+        ]
+      }
     }
   },
   "info": {

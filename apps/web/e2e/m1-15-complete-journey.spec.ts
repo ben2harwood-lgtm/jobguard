@@ -17,7 +17,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await expect(page.getByTestId("quote-delivery")).toHaveText("Queued — not sent");
   await page.getByRole("button", { name: "Continue fake worker" }).click();
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
-  await page.getByRole("button", { name: "Record builder attestation" }).click();
+  await page.getByRole("button", { name: "Record practice acceptance" }).click();
   await page.getByRole("button", { name: "Switch live · no-charge pilot" }).click();
   await expect(page.getByRole("heading", { name: "Live · baseline frozen" })).toBeVisible();
 
