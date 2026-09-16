@@ -852,6 +852,19 @@
         "docs/verdicts/**"
       ]
     },
+    "uiwire-2": {
+      "branches": [
+        "codex/build-leaf-uiwire-2-according-to-build_plan.md"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
+    },
     "harden-signin": {
       "branches": [
         "chore/harden-uiwire1-signin"

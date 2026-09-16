@@ -169,6 +169,34 @@
           "sandbox"
         ]
       }
+    },
+    "/jobs/{id}/quotes": {
+      "get": {
+        "operationId": "QuoteController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read authoritative quote draft revisions",
+        "tags": [
+          "quotes"
+        ]
+      },
+      "post": {
+        "operationId": "QuoteController_save",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append an exact synthetic quote draft revision",
+        "tags": [
+          "quotes"
+        ]
+      }
     }
   },
   "info": {
