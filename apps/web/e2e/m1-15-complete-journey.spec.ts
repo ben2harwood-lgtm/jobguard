@@ -1,24 +1,16 @@
 import { expect, test } from "@playwright/test";
+import { openQuote } from "./helpers/capture-journey";
 
 test("M1-15 complete synthetic journey retains the job spine and accepted scope", async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto("/");
-  await page.getByRole("button", { name: "Start the demo" }).click();
-  await page.getByRole("button", { name: "Skip tour" }).click();
-  await page.getByRole("button", { name: "Start a new job" }).click();
-  await page.getByRole("button", { name: "Make my draft" }).click();
-  await page.getByRole("button", { name: "Check and edit my draft" }).click();
-  for (const button of await page.getByRole("button", { name: "Accept", exact: true }).all()) await button.click();
-  await page.getByLabel(/Disposition Confirm disposal/).selectOption("answered");
-  await page.getByRole("button", { name: "Confirm scope and start quoting" }).click();
-  await page.getByRole("button", { name: "Price the work" }).click();
+  await openQuote(page);
 
   const quote = page.locator(".quote-editor");
   const jobId = await quote.getAttribute("data-job-id");
   const scopeLineage = await quote.getAttribute("data-scope-lineage");
   expect(jobId).toMatch(/^[0-9a-f-]{36}$/);
   expect(scopeLineage?.split(",")).toHaveLength(6);
-  await page.getByLabel("Unit rate Replace damaged skirting").fill("125.00");
+  await page.getByLabel("Unit rate Replace shelves").fill("125.00");
   await page.getByRole("button", { name: "Preview immutable quote" }).click();
   await page.getByRole("button", { name: "Approve exact version and fake-send" }).click();
   await page.getByRole("button", { name: "Record builder attestation" }).click();
