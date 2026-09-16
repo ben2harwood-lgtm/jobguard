@@ -31,6 +31,15 @@ export class CaptureRepository {
       return { id:proposalId, capture_id:input.captureId, job_id:jobId, source_id:input.captureId, source_version:1, source_sha256:hash, proposal, content_text:input.text };
     });
   }
+
+  async readByJob(context: VerifiedTenantContext, jobId: string) {
+    return withTenant(this.pool, context, async (db) => {
+      const proposal=(await db.$client.query(`SELECT p.id,p.job_id,p.capture_id,p.proposal,s.content_text,p.source_version,j.status FROM app.job_record_proposal p JOIN app.capture_source s ON (s.tenant_id,s.id)=(p.tenant_id,p.source_id) JOIN app.job j ON (j.tenant_id,j.id)=(p.tenant_id,p.job_id) WHERE p.tenant_id=$1 AND p.job_id=$2`,[context.tenantId,jobId])).rows[0];
+      if(!proposal) return null;
+      const lines=(await db.$client.query(`SELECT id,scope_item_id,proposed_data,source_reference FROM app.proposal_line WHERE tenant_id=$1 AND job_id=$2 AND proposal_id=$3 ORDER BY ordinal`,[context.tenantId,jobId,proposal.id])).rows;
+      return {...proposal,lines};
+    });
+  }
 }
 
 function validateProposalReferences(value: unknown, sourceId: string, source: string): void {

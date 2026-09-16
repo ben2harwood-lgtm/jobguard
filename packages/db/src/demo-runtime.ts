@@ -32,6 +32,10 @@ export async function readSyntheticDemo(pool: Pool) {
          FROM app.job j
          WHERE j.tenant_id=$1
            AND NOT EXISTS (
+             SELECT 1 FROM app.job_record_proposal cp
+              WHERE cp.tenant_id=j.tenant_id AND cp.job_id=j.id
+           )
+           AND NOT EXISTS (
              SELECT 1 FROM app.sandbox_run sr
               WHERE sr.tenant_id=j.tenant_id AND sr.job_id=j.id
            )

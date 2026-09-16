@@ -838,6 +838,19 @@
         "docs/verdicts/**",
         "tools/agent-lane-boundary.test.mjs"
       ]
+    },
+    "uiwire-1": {
+      "branches": [
+        "work"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/ai/**",
+        "packages/db/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
     }
   }
 }

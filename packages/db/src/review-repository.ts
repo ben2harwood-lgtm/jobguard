@@ -11,7 +11,7 @@ export class ProposalReviewRepository {
     const review=proposalReviewV1.parse(raw);
     if(review.revision!==expectedRevision) throw new ReviewConflictError("The submitted review revision is stale");
     return withTenant(this.pool,context,async db=>{
-      const current=(await db.$client.query<{revision:number;state:string}>(`SELECT revision,state FROM app.proposal_review WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[context.tenantId,review.reviewId])).rows[0];
+      const current=(await db.$client.query<{revision:number;state:string}>(`SELECT revision,state FROM app.proposal_review WHERE tenant_id=$1 AND (id=$2 OR proposal_id=$3) FOR UPDATE`,[context.tenantId,review.reviewId,review.proposalId])).rows[0];
       if(current && (current.revision!==expectedRevision || current.state!=="reviewing")) throw new ReviewConflictError("The review changed; reconcile before saving");
       const proposal=(await db.$client.query<{proposal:{questions:Array<{question:{value:string}}>}}>(`SELECT proposal FROM app.job_record_proposal WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,review.jobId,review.proposalId])).rows[0];
       if(!proposal) throw new ReviewConflictError("Proposal is unavailable");
@@ -37,6 +37,8 @@ export class ProposalReviewRepository {
       return {...review,revision:next};
     });
   }
+
+  async read(context:VerifiedTenantContext,jobId:string):Promise<ProposalReview|null>{return withTenant(this.pool,context,async db=>{const head=(await db.$client.query<{id:string;proposal_id:string;revision:number}>(`SELECT id,proposal_id,revision FROM app.proposal_review WHERE tenant_id=$1 AND job_id=$2`,[context.tenantId,jobId])).rows[0];if(!head)return null;const lines=(await db.$client.query<any>(`SELECT l.*,coalesce(array_agg(p.parent_scope_item_id) FILTER(WHERE p.parent_scope_item_id IS NOT NULL),'{}') parents FROM app.proposal_review_line l LEFT JOIN app.proposal_review_line_parent p ON (p.tenant_id,p.review_id,p.line_id)=(l.tenant_id,l.review_id,l.id) WHERE l.tenant_id=$1 AND l.review_id=$2 GROUP BY l.tenant_id,l.id ORDER BY l.ordinal`,[context.tenantId,head.id])).rows;const questions=(await db.$client.query<any>(`SELECT * FROM app.proposal_review_question WHERE tenant_id=$1 AND review_id=$2 ORDER BY id`,[context.tenantId,head.id])).rows;return proposalReviewV1.parse({version:"proposal_review_v1",reviewId:head.id,proposalId:head.proposal_id,jobId,revision:head.revision,lines:lines.map(x=>({id:x.id,scopeItemId:x.scope_item_id,origin:x.origin,description:x.description,room:x.room,category:x.category,quantity:x.quantity_decimal,unit:x.unit,unitPricePence:x.unit_price_pence===null?null:Number(x.unit_price_pence),disposition:x.disposition,dismissalReason:x.dismissal_reason,parentScopeItemIds:x.parents,sourceExcerpt:x.source_excerpt})),questions:questions.map(x=>({id:x.id,question:x.question,blocking:x.blocking,disposition:x.disposition,answer:x.answer}))});});}
 }
 
 async function ensureScopeIdentity(db:TenantTransaction,tenantId:string,jobId:string,scopeId:string){
