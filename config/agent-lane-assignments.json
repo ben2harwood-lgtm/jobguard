@@ -841,7 +841,7 @@
     },
     "uiwire-1": {
       "branches": [
-        "codex/build-leaf-uiwire-1-per-specifications"
+        "codex/fix-playwright-tests-for-uiwire-1-changes"
       ],
       "allow": [
         "apps/api/**",
