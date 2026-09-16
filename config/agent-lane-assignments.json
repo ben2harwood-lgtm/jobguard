@@ -851,6 +851,15 @@
         "config/agent-lane-assignments.json",
         "docs/verdicts/**"
       ]
+    },
+    "harden-signin": {
+      "branches": [
+        "chore/harden-uiwire1-signin"
+      ],
+      "allow": [
+        "apps/web/e2e/**",
+        "config/agent-lane-assignments.json"
+      ]
     }
   }
 }
