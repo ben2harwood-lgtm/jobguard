@@ -23,6 +23,10 @@
     "./quote-contracts": {
       "types": "./src/quote/contracts.ts",
       "import": "./dist/quote/contracts.js"
+    },
+    "./variation-contracts": {
+      "types": "./src/variation/contracts.ts",
+      "import": "./dist/variation/contracts.js"
     }
   },
   "scripts": {

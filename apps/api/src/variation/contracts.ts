@@ -1,0 +1,10 @@
+import{z}from"zod";const uuid=z.string().uuid();
+const price=z.object({quantity:z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u),unit:z.string().min(1).max(40),unitRatePence:z.number().int().min(0).max(1_000_000_000_000),direction:z.enum(["addition","omission"])}).strict();
+export const variationCommandV1=z.discriminatedUnion("action",[
+ z.object({version:z.literal("variation-command.v1"),action:z.literal("propose"),proposalId:uuid,scopeItemId:uuid,existingScopeItemId:uuid.nullable(),lineageParentScopeItemId:uuid.nullable(),description:z.string().trim().min(1).max(500),captureText:z.string().trim().min(1).max(5000),price:price.nullable()}).strict(),
+ z.object({version:z.literal("variation-command.v1"),action:z.literal("revise"),variationId:uuid,revisionId:uuid,description:z.string().trim().min(1).max(500),price}).strict(),
+ z.object({version:z.literal("variation-command.v1"),action:z.literal("approve"),variationId:uuid,revisionId:uuid,approvalId:uuid,attestation:z.literal("Builder-recorded practice acceptance — not an authenticated customer signature")}).strict(),
+ z.object({version:z.literal("variation-command.v1"),action:z.literal("reject"),variationId:uuid,revisionId:uuid,rejectionId:uuid}).strict()
+]);
+export const variationWorkspaceResponseV1=z.object({version:z.literal(1),environment:z.literal("synthetic_demo"),jobId:uuid,baselinePence:z.number().int(),capPence:z.number().int(),parentScopeItemId:uuid,approvedAdditionsPence:z.number().int(),approvedOmissionsPence:z.number().int(),pendingExtrasPence:z.number().int(),variations:z.array(z.object({id:uuid,scopeItemId:uuid,existingScopeItemId:uuid.nullable(),lineageParentScopeItemId:uuid.nullable(),description:z.string(),captureText:z.string(),state:z.string(),currentRevisionId:uuid.nullable(),revisions:z.array(z.object({id:uuid,revision:z.number().int(),description:z.string(),quantity:z.string(),unit:z.string(),unitRatePence:z.number().int(),signedDeltaPence:z.number().int(),contentHash:z.string(),approved:z.boolean(),rejected:z.boolean(),actor:z.string(),source:z.string()}))}))});
+export type VariationWorkspaceResponse=z.infer<typeof variationWorkspaceResponseV1>;
