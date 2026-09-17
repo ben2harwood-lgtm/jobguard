@@ -407,6 +407,34 @@
           "fee-illustration"
         ]
       }
+    },
+    "/jobs/{id}/final-account": {
+      "get": {
+        "operationId": "FinalAccountController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the authoritative final-account draft",
+        "tags": [
+          "final accounts"
+        ]
+      },
+      "post": {
+        "operationId": "FinalAccountController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Assemble from frozen accepted and approved sources",
+        "tags": [
+          "final accounts"
+        ]
+      }
     }
   },
   "info": {
