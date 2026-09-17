@@ -9,3 +9,5 @@ export * from "../capture/capture.application.js";
 
 export * from "../quote/contracts.js";
 export * from "../quote/quote.application.js";
+export * from "../decisions/contracts.js";
+export * from "../decisions/decisions.application.js";
