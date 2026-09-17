@@ -13,28 +13,32 @@ export async function openCapture(page: Page) {
   const start = page.getByRole("button", { name: "Start the demo" });
   await start.waitFor({ state: "visible" });
   await start.click();
-  await page.getByRole("button", { name: "Skip tour" }).click();
-  await page.getByRole("button", { name: "＋ Start a new job" }).dispatchEvent("click");
+  const skip = page.getByRole("button", { name: "Skip tour" });
+  await expect(skip).toBeVisible(); await expect(skip).toBeEnabled(); await skip.click();
+  const newJob = page.getByRole("button", { name: "＋ Start a new job" });
+  await expect(newJob).toBeVisible(); await expect(newJob).toBeEnabled(); await newJob.click();
   await expect(page.getByRole("heading", { name: "Walk the job" })).toBeVisible();
 }
 
 export async function openReview(page: Page) {
   await openCapture(page);
-  await page.getByRole("button", { name: "Make my draft" }).click();
-  await page.getByRole("button", { name: "Check and edit my draft" }).click();
+  const makeDraft = page.getByRole("button", { name: "Make my draft" });
+  await expect(makeDraft).toBeVisible(); await expect(makeDraft).toBeEnabled(); await makeDraft.click();
+  const checkDraft = page.getByRole("button", { name: "Check and edit my draft" });
+  await expect(checkDraft).toBeVisible(); await expect(checkDraft).toBeEnabled(); await checkDraft.click();
   await expect(page.getByRole("heading", { name: "Check the work items" })).toBeVisible();
 }
 
 export async function confirmCapturedScope(page: Page) {
   await openReview(page);
-  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site", "Replace shelves"])
-    await page.getByRole("button", { name: `Accept ${name}` }).click();
+  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site", "Replace shelves"]) { const action=page.getByRole("button", { name: `Accept ${name}` }); await expect(action).toBeVisible(); await expect(action).toBeEnabled(); await action.click(); }
   await page.getByLabel(/Answer Confirm disposal/u).fill("Builder will remove waste");
-  await page.getByRole("button", { name: "Confirm scope" }).click();
+  const confirm = page.getByRole("button", { name: "Confirm scope" }); await expect(confirm).toBeVisible(); await expect(confirm).toBeEnabled(); await confirm.click();
   await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
 }
 
 export async function openQuote(page: Page) {
   await confirmCapturedScope(page);
-  await page.getByRole("button", { name: "Price the work" }).click();
+  const price = page.getByRole("button", { name: "Price the work" }); await expect(price).toBeVisible(); await expect(price).toBeEnabled(); await price.click();
+  await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
 }
