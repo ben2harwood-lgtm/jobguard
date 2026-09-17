@@ -10,6 +10,7 @@ import { SandboxRepository } from "@jobguard/db";
 import { SandboxService } from "./sandbox/sandbox.service.js";
 import { SandboxController } from "./sandbox/sandbox.controller.js";
 import { QuoteController } from "./quote/quote.controller.js";
+import { DecisionsController } from "./decisions/decisions.controller.js";
 
-@Module({ controllers: [HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController], providers:[{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService] })
+@Module({ controllers: [HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,DecisionsController], providers:[{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService] })
 export class AppModule {}

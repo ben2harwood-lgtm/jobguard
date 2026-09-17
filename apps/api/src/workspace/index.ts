@@ -12,3 +12,5 @@ export * from "../quote/quote.application.js";
 
 export * from "./recovery.contracts.js";
 export * from "./recovery.application.js";
+export * from "../decisions/contracts.js";
+export * from "../decisions/decisions.application.js";
