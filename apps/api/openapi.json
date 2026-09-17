@@ -240,6 +240,34 @@
           "quotes"
         ]
       }
+    },
+    "/jobs/{id}/quotes/activation": {
+      "get": {
+        "operationId": "QuoteController_activation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the immutable practice activation snapshot",
+        "tags": [
+          "quotes"
+        ]
+      },
+      "post": {
+        "operationId": "QuoteController_activate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Start an accepted synthetic practice job",
+        "tags": [
+          "quotes"
+        ]
+      }
     }
   },
   "info": {
