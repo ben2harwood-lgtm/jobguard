@@ -269,6 +269,48 @@
         ]
       }
     },
+    "/decisions": {
+      "get": {
+        "operationId": "DecisionsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "decisions"
+        ]
+      }
+    },
+    "/decisions/evaluate": {
+      "post": {
+        "operationId": "DecisionsController_evaluate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "decisions"
+        ]
+      }
+    },
+    "/decisions/resolve": {
+      "post": {
+        "operationId": "DecisionsController_resolve",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "decisions"
+        ]
+      }
+    },
     "/jobs/{id}/variations": {
       "get": {
         "operationId": "VariationController_get",

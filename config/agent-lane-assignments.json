@@ -927,9 +927,36 @@
         "docs/verdicts/**"
       ]
     },
+    "uiwire-6": {
+      "branches": [
+        "codex/build-uiwire-6-per-build_plan.md-specifications"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**",
+        "tools/**"
+      ]
+    },
+    "uiwire-13": {
+      "branches": [
+        "codex/build-leaf-uiwire-13-per-specifications"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
+    },
     "uiwire-8": {
       "branches": [
-        "codex/sandbox/uiwire-8"
+        "codex/implement-uiwire-8-for-price-approval-flow"
       ],
       "allow": [
         "apps/api/**",
