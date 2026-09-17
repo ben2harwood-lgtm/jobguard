@@ -17,3 +17,5 @@ export * from "../decisions/decisions.application.js";
 
 export * from "../proof/contracts.js";
 export * from "../proof/proof.application.js";
+export * from "./fee-illustration.contracts.js";
+export * from "./fee-illustration.application.js";

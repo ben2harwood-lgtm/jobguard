@@ -31,6 +31,10 @@
     "./recovery-contracts": {
       "types": "./src/workspace/recovery.contracts.ts",
       "import": "./dist/workspace/recovery.contracts.js"
+    },
+    "./fee-illustration-contracts": {
+      "types": "./src/workspace/fee-illustration.contracts.ts",
+      "import": "./dist/workspace/fee-illustration.contracts.js"
     }
   },
   "scripts": {
