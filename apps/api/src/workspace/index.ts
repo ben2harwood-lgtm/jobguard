@@ -14,3 +14,6 @@ export * from "./recovery.contracts.js";
 export * from "./recovery.application.js";
 export * from "../decisions/contracts.js";
 export * from "../decisions/decisions.application.js";
+
+export * from "./fee-illustration.contracts.js";
+export * from "./fee-illustration.application.js";

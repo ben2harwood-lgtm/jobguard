@@ -17,6 +17,21 @@ export const feeStatementInputV1 = z.object({
 }).strict();
 
 export type FeeStatementInputV1 = z.infer<typeof feeStatementInputV1>;
+export const feeWhatIfInputV1 = z.object({
+  version: z.literal("fee-what-if.v1"),
+  acceptedNetPence: z.number().int().min(0).max(1_000_000_000_000),
+  eligibleNetPence: z.number().int().min(0).max(1_000_000_000_000),
+  settledBasePlanPence: z.number().int().min(0).max(7_900),
+}).strict();
+export type FeeWhatIfInputV1 = z.infer<typeof feeWhatIfInputV1>;
+
+/** A side-effect-free candidate-policy calculation. It deliberately has no posting identifier. */
+export function calculateFeeWhatIf(raw: unknown) {
+  const input = feeWhatIfInputV1.parse(raw);
+  const calculation = calculateReferenceFee({acceptedNet:money(input.acceptedNetPence),cumulativeEligibleLanded:money(input.eligibleNetPence),settledPlanPrincipal:money(input.settledBasePlanPence),priorPostedRecoveryPrincipal:money(0)});
+  const totalPlatformPrincipal=addMoney(money(Number(BASE_PLAN_PRINCIPAL)),calculation.additionalLiability);
+  return Object.freeze({version:"fee-what-if-result.v1" as const,policyVersion:calculation.policyVersion,acceptedNet:money(input.acceptedNetPence),eligibleNet:money(input.eligibleNetPence),recoveryCap:calculation.cap,cappedFee:calculation.cappedFee,baseCredit:calculation.creditUsed,additionalFee:calculation.additionalLiability,incrementalRetained:subtractMoney(money(input.eligibleNetPence),calculation.additionalLiability),totalPlatformPrincipal,benefitAfterPlatformPrincipal:subtractMoney(money(input.eligibleNetPence),totalPlatformPrincipal)});
+}
 export type FeeStatement = Readonly<{
   version: "fee-statement.v1"; mode: "synthetic_demo" | "pilot_no_charge"; policyVersion: "reference_fee_policy_v1";
   labels: readonly string[]; basePlan: Readonly<{ obligation: Money; settled: Money; creditEarned: Money }>;

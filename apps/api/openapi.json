@@ -338,6 +338,49 @@
           "decisions"
         ]
       }
+    },
+    "/jobs/{id}/fee-illustration": {
+      "get": {
+        "operationId": "FeeIllustrationController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read persisted-source proposed fee illustration",
+        "tags": [
+          "fee-illustration"
+        ]
+      },
+      "post": {
+        "operationId": "FeeIllustrationController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Prepare fixed synthetic illustration sources",
+        "tags": [
+          "fee-illustration"
+        ]
+      }
+    },
+    "/jobs/{id}/fee-illustration/what-if": {
+      "post": {
+        "operationId": "FeeIllustrationController_whatIf",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Calculate an unpersisted proposed-policy what-if",
+        "tags": [
+          "fee-illustration"
+        ]
+      }
     }
   },
   "info": {
