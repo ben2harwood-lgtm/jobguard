@@ -953,6 +953,19 @@
         "config/agent-lane-assignments.json",
         "docs/verdicts/**"
       ]
+    },
+    "uiwire-8": {
+      "branches": [
+        "codex/implement-uiwire-8-for-price-approval-flow"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
     }
   }
 }

@@ -24,6 +24,10 @@
       "types": "./src/quote/contracts.ts",
       "import": "./dist/quote/contracts.js"
     },
+    "./variation-contracts": {
+      "types": "./src/variation/contracts.ts",
+      "import": "./dist/variation/contracts.js"
+    },
     "./recovery-contracts": {
       "types": "./src/workspace/recovery.contracts.ts",
       "import": "./dist/workspace/recovery.contracts.js"

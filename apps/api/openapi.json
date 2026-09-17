@@ -269,6 +269,34 @@
         ]
       }
     },
+    "/jobs/{id}/variations": {
+      "get": {
+        "operationId": "VariationController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read immutable variation history",
+        "tags": [
+          "variations"
+        ]
+      },
+      "post": {
+        "operationId": "VariationController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Propose, revise, approve or reject a synthetic variation",
+        "tags": [
+          "variations"
+        ]
+      }
+    },
     "/decisions": {
       "get": {
         "operationId": "DecisionsController_list",
