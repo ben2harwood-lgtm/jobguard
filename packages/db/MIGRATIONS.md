@@ -84,3 +84,6 @@ Adds tenant-protected draft heads and immutable final-account revisions, traced 
 ## 0022_browser_local_dictation.sql
 
 Adds immutable acquisition metadata for reviewed browser-local transcripts and a database-enforced zero audio-byte count. Existing forced RLS and SELECT/INSERT-only runtime grants remain unchanged. Roll back only with a forward fix that preserves transcript provenance; browser speech never has a remote fallback.
+
+## 0023_recovery_demo_ui.sql
+Adds the synthetic-only UIWIRE-13 scenario selection and its narrow configuration routine. The table is forced-RLS and append-only; runtime receives SELECT plus specific routine execution only. Roll forward to correct it because recovery/audit history is immutable.
