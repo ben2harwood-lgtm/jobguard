@@ -39,3 +39,4 @@ export * from "./sandbox-repository.js";
 
 export * from "./quote-delivery-repository.js";
 export * from "./recovery-demo-repository.js";
+export * from "./fee-illustration-repository.js";
