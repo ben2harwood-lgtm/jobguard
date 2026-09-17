@@ -339,6 +339,32 @@
         ]
       }
     },
+    "/jobs/{id}/proof": {
+      "get": {
+        "operationId": "ProofController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Proof"
+        ]
+      },
+      "post": {
+        "operationId": "ProofController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Proof"
+        ]
+      }
+    },
     "/jobs/{id}/fee-illustration": {
       "get": {
         "operationId": "FeeIllustrationController_get",

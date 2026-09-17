@@ -981,6 +981,21 @@
         "config/agent-lane-assignments.json",
         "docs/verdicts/**"
       ]
+    },
+    "uiwire-7": {
+      "branches": [
+        "codex/build-leaf-uiwire-7-per-specifications"
+      ],
+      "test": "apps/web/e2e/UIWIRE-7.spec.ts",
+      "receipt": "docs/verdicts/UIWIRE-7/COMMIT.md",
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
     }
   }
 }
