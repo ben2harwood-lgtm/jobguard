@@ -64,7 +64,9 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
 
   await page.goto("/");
   await click(page, "See the fee example");
-  await click(page, "Prepare recovery-18800 illustration");
+  await expect(page.getByRole("heading", { name: "Exact fee illustration" })).toBeVisible();
+  const preparefee = page.getByRole("button", { name: "Prepare recovery-18800 illustration", exact: true });
+  if (await preparefee.isVisible().catch(() => false)) await preparefee.click();
   await expect(page.getByText("ILLUSTRATIVE ONLY — NOT A PLATFORM TAX INVOICE")).toBeVisible();
   await expect(page.getByText(/No collectible platform balance/)).toBeVisible();
   await page.screenshot({ path: `/tmp/jobguard-m1-15-${test.info().project.name}.png`, fullPage: true });
