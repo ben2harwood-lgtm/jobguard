@@ -35,6 +35,10 @@
     "./fee-illustration-contracts": {
       "types": "./src/workspace/fee-illustration.contracts.ts",
       "import": "./dist/workspace/fee-illustration.contracts.js"
+    },
+    "./final-account-contracts": {
+      "types": "./src/final-account.contracts.ts",
+      "import": "./dist/final-account.contracts.js"
     }
   },
   "scripts": {
