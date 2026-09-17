@@ -26,14 +26,14 @@ describe("synthetic Vercel/Neon bootstrap", () => {
   }, 60_000);
   afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); await rm(directory, { recursive: true, force: true }); });
 
-  it("creates roles, applies 0000..0022, seeds once, replays safely, and keeps pooled RLS local", async () => {
+  it("creates roles, applies 0000..0023, seeds once, replays safely, and keeps pooled RLS local", async () => {
     process.env.JOBGUARD_ENV = "synthetic_demo";
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 22, tenantId: DEMO_TENANT_ID });
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 22 });
     const verifier = await admin.connect();
     await verifier.query("SET ROLE jobguard_migration");
     await verifier.query("SELECT set_config('app.tenant_id',$1,false)", [DEMO_TENANT_ID]);
-    expect((await verifier.query("SELECT migration_name FROM jobguard_schema_migration ORDER BY migration_name")).rows.map(({ migration_name }) => migration_name)).toHaveLength(23);
+    expect((await verifier.query("SELECT migration_name FROM jobguard_schema_migration ORDER BY migration_name")).rows.map(({ migration_name }) => migration_name)).toHaveLength(24);
     expect((await verifier.query("SELECT semantic_key FROM app.command_receipt WHERE tenant_id=$1", [DEMO_TENANT_ID])).rowCount).toBe(demoCheckpoints.length);
     await verifier.query("RESET ROLE"); verifier.release();
     expect((await admin.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_runtime'")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);

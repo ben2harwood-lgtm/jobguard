@@ -23,6 +23,10 @@
     "./quote-contracts": {
       "types": "./src/quote/contracts.ts",
       "import": "./dist/quote/contracts.js"
+    },
+    "./recovery-contracts": {
+      "types": "./src/workspace/recovery.contracts.ts",
+      "import": "./dist/workspace/recovery.contracts.js"
     }
   },
   "scripts": {

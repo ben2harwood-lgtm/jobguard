@@ -940,6 +940,19 @@
         "docs/verdicts/**",
         "tools/**"
       ]
+    },
+    "uiwire-13": {
+      "branches": [
+        "codex/build-leaf-uiwire-13-per-specifications"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
     }
   }
 }
