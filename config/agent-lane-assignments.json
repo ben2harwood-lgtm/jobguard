@@ -916,7 +916,7 @@
     },
     "uiwire-5": {
       "branches": [
-        "work"
+        "codex/implement-uiwire-5-per-build_plan.md"
       ],
       "allow": [
         "apps/api/**",
