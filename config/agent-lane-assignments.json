@@ -969,7 +969,7 @@
     },
     "uiwire-7": {
       "branches": [
-        "codex/sandbox/uiwire-7"
+        "codex/build-leaf-uiwire-7-per-specifications"
       ],
       "allow": [
         "apps/api/**",
