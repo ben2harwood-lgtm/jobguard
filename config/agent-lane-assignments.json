@@ -999,7 +999,7 @@
     },
     "uiwire-9": {
       "branches": [
-        "codex/sandbox/uiwire-9"
+        "codex/build-leaf-uiwire-9-according-to-build_plan.md"
       ],
       "test": "apps/web/e2e/UIWIRE-9.spec.ts",
       "receipt": "docs/verdicts/UIWIRE-9/COMMIT.md",
