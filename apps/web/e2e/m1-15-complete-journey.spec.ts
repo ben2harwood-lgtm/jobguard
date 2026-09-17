@@ -22,6 +22,12 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await click(page, "Start this practice job");
   await expect(page.getByRole("heading", { name: "Live · baseline frozen" })).toBeVisible();
 
+  // Seed this job's deterministic findings so the (job-scoped) Decisions inbox
+  // shows exactly this job's items, matching the UIWIRE-6 persisted-findings
+  // architecture; the evaluate command also sets the jg_decision_job scope cookie.
+  const seedFindings = await page.request.post("/api/decisions", { data: { version: "finding-evaluation-command.v1", commandId: crypto.randomUUID(), tenantId: "11111111-1111-4111-8111-111111111111", jobId: jobId! } });
+  expect(seedFindings.status()).toBe(200);
+
   await page.goto("/");
   const decisions=page.getByRole("button", { name: /Decisions/ }).first(); await expect(decisions).toBeVisible(); await expect(decisions).toBeEnabled(); await decisions.click();
   await page.getByRole("button", { name: /Check the materials bill/ }).click();

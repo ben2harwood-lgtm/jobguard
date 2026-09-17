@@ -926,6 +926,20 @@
         "config/agent-lane-assignments.json",
         "docs/verdicts/**"
       ]
+    },
+    "uiwire-6": {
+      "branches": [
+        "codex/build-uiwire-6-per-build_plan.md-specifications"
+      ],
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**",
+        "tools/**"
+      ]
     }
   }
 }
