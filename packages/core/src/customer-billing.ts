@@ -4,6 +4,12 @@ import { addMoney, money, subtractMoney, type Money } from "./money.js";
 export const CUSTOMER_INVOICE_POLICY_VERSION="candidate_m1_standard_v1" as const;
 export const REAL_CUSTOMER_INVOICE_ISSUE_ENABLED=false as const;
 export const SYNTHETIC_INVOICE_WATERMARK="SYNTHETIC - NOT A REAL INVOICE" as const;
+export const PRACTICE_INVOICE_NUMBER_PREFIX="DEMO-CUST" as const;
+
+export function formatPracticeCustomerInvoiceNumber(sequence:number):string{
+ if(!Number.isSafeInteger(sequence)||sequence<1)throw new Error("INVALID_INVOICE_SEQUENCE");
+ return `${PRACTICE_INVOICE_NUMBER_PREFIX}-${sequence.toString().padStart(6,"0")}`;
+}
 
 const uuid=z.string().uuid();
 export const customerPaymentV1=z.object({version:z.literal("customer-payment.record.v1"),commandId:uuid,actorMembershipId:uuid,jobId:uuid,invoiceId:uuid,paidOn:z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),amountPence:z.number().int().positive(),currency:z.literal("GBP"),method:z.enum(["bank_transfer","cash","card_elsewhere","cheque","other"]),reference:z.string().trim().min(1).max(120),builderAttestsReceived:z.literal(true)}).strict();

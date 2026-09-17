@@ -39,6 +39,10 @@
     "./final-account-contracts": {
       "types": "./src/final-account.contracts.ts",
       "import": "./dist/final-account.contracts.js"
+    },
+    "./customer-invoice-contracts": {
+      "types": "./src/customer-invoice.contracts.ts",
+      "import": "./dist/customer-invoice.contracts.js"
     }
   },
   "scripts": {
