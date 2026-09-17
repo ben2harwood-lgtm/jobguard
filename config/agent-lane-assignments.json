@@ -1014,7 +1014,7 @@
     },
     "uiwire-10": {
       "branches": [
-        "codex/sandbox/uiwire-10"
+        "codex/build-uiwire-10-per-build_plan.md"
       ],
       "test": "apps/web/e2e/UIWIRE-10.spec.ts",
       "receipt": "docs/verdicts/UIWIRE-10/COMMIT.md",
