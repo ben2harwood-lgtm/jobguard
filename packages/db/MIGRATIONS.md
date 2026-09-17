@@ -87,3 +87,6 @@ Adds immutable acquisition metadata for reviewed browser-local transcripts and a
 
 ## 0023_recovery_demo_ui.sql
 Adds the synthetic-only UIWIRE-13 scenario selection and its narrow configuration routine. The table is forced-RLS and append-only; runtime receives SELECT plus specific routine execution only. Roll forward to correct it because recovery/audit history is immutable.
+
+## 0024_uiwire7_synthetic_evidence_bytes.sql
+Adds an append-only, forced-RLS store for the generated sandbox image originals. It is not a general upload surface; corrections are forward fixes and registered object versions remain immutable.
