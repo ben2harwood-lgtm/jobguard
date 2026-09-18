@@ -22,3 +22,6 @@ export * from "./fee-illustration.application.js";
 
 export * from "../final-account.contracts.js";
 export * from "../final-account.application.js";
+
+export * from "../customer-invoice.contracts.js";
+export * from "../customer-invoice.application.js";

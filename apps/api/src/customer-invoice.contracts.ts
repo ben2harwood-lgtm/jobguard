@@ -1,0 +1,4 @@
+import{z}from"zod";const uuid=z.string().uuid();
+export const practiceInvoiceIssueV1=z.object({version:z.literal("practice-customer-invoice.issue.v1"),commandId:uuid,finalAccountRevisionId:uuid,expectedSourceHash:z.string().regex(/^[a-f0-9]{64}$/u),recipient:z.string().email().regex(/@example\.invalid$/u),issuedOn:z.string().regex(/^\d{4}-\d{2}-\d{2}$/u)}).strict();
+export const practiceInvoiceV1=z.object({id:uuid,number:z.string(),issuedOn:z.string(),recipient:z.string(),pdfSha256:z.string().length(64),finalAccountRevisionId:uuid,sourceHash:z.string().length(64),netPence:z.number(),taxPence:z.number(),totalPence:z.number(),balancePence:z.number(),delivery:z.literal("simulated_delivery")});
+export const practiceInvoiceResponseV1=z.object({version:z.literal(1),environment:z.literal("synthetic_demo"),jobId:uuid,invoices:z.array(practiceInvoiceV1)});export type PracticeInvoiceResponse=z.infer<typeof practiceInvoiceResponseV1>;

@@ -435,6 +435,48 @@
           "final accounts"
         ]
       }
+    },
+    "/jobs/{id}/customer-invoices": {
+      "get": {
+        "operationId": "CustomerInvoiceController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List immutable synthetic customer invoices",
+        "tags": [
+          "customer invoices"
+        ]
+      },
+      "post": {
+        "operationId": "CustomerInvoiceController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Issue and simulate delivery of a synthetic customer invoice",
+        "tags": [
+          "customer invoices"
+        ]
+      }
+    },
+    "/jobs/{id}/customer-invoices/{invoiceId}/pdf": {
+      "get": {
+        "operationId": "CustomerInvoiceController_pdf",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer invoices"
+        ]
+      }
     }
   },
   "info": {
