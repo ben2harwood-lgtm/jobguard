@@ -1026,6 +1026,21 @@
         "config/agent-lane-assignments.json",
         "docs/verdicts/**"
       ]
+    },
+    "uiwire-11": {
+      "branches": [
+        "codex/implement-credit-note-correction-feature"
+      ],
+      "test": "apps/web/e2e/UIWIRE-11.spec.ts",
+      "receipt": "docs/verdicts/UIWIRE-11/COMMIT.md",
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
     }
   }
 }
