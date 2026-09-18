@@ -1041,6 +1041,21 @@
         "config/agent-lane-assignments.json",
         "docs/verdicts/**"
       ]
+    },
+    "uiwire-12": {
+      "branches": [
+        "codex/sandbox/uiwire-12"
+      ],
+      "test": "apps/web/e2e/UIWIRE-12.spec.ts",
+      "receipt": "docs/verdicts/UIWIRE-12/COMMIT.md",
+      "allow": [
+        "apps/api/**",
+        "apps/web/**",
+        "packages/db/**",
+        "packages/core/**",
+        "config/agent-lane-assignments.json",
+        "docs/verdicts/**"
+      ]
     }
   }
 }

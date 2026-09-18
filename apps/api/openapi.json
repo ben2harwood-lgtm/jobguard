@@ -517,6 +517,46 @@
           "customer invoices"
         ]
       }
+    },
+    "/jobs/{id}/customer-invoices/{invoiceId}/receipts": {
+      "get": {
+        "operationId": "CustomerInvoiceController_receipts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer invoices"
+        ]
+      },
+      "post": {
+        "operationId": "CustomerInvoiceController_receipt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer invoices"
+        ]
+      }
+    },
+    "/jobs/{id}/customer-invoices/{invoiceId}/receipts/reversals": {
+      "post": {
+        "operationId": "CustomerInvoiceController_reverse",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer invoices"
+        ]
+      }
     }
   },
   "info": {
