@@ -477,6 +477,46 @@
           "customer invoices"
         ]
       }
+    },
+    "/jobs/{id}/customer-invoices/{invoiceId}/credit-notes": {
+      "get": {
+        "operationId": "CustomerInvoiceController_creditView",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer invoices"
+        ]
+      },
+      "post": {
+        "operationId": "CustomerInvoiceController_credit",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer invoices"
+        ]
+      }
+    },
+    "/jobs/{id}/customer-invoices/{invoiceId}/credit-notes/preview": {
+      "post": {
+        "operationId": "CustomerInvoiceController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer invoices"
+        ]
+      }
     }
   },
   "info": {

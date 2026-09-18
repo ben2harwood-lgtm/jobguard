@@ -31,6 +31,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0025_uiwire7_synthetic_evidence_bytes.sql", import.meta.url),
   new URL("../migrations/0026_final_account_migration_policy.sql", import.meta.url),
   new URL("../migrations/0027_uiwire10_customer_invoice.sql", import.meta.url),
+  new URL("../migrations/0028_uiwire11_credit_notes.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 
