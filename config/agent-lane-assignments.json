@@ -1029,7 +1029,7 @@
     },
     "uiwire-11": {
       "branches": [
-        "codex/sandbox/uiwire-11"
+        "codex/implement-credit-note-correction-feature"
       ],
       "test": "apps/web/e2e/UIWIRE-11.spec.ts",
       "receipt": "docs/verdicts/UIWIRE-11/COMMIT.md",
