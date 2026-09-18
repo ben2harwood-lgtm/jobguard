@@ -1044,7 +1044,7 @@
     },
     "uiwire-12": {
       "branches": [
-        "codex/sandbox/uiwire-12"
+        "codex/implement-customer-receipts-management"
       ],
       "test": "apps/web/e2e/UIWIRE-12.spec.ts",
       "receipt": "docs/verdicts/UIWIRE-12/COMMIT.md",
