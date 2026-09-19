@@ -77,7 +77,7 @@ jobs:
           git bundle create "$out/artifact/source.bundle" HEAD
           tar -czf "$out/artifact/dependencies.tar.gz" node_modules apps/*/node_modules packages/*/node_modules
           cp "$(command -v node)" "$out/tooling/bin/node"
-          cp -a "$PNPM_HOME/../pnpm" "$out/tooling/pnpm"
+          cp -aL "$PNPM_HOME/../pnpm" "$out/tooling/pnpm"
           tar -czf "$out/artifact/tooling.tar.gz" -C "$out" tooling
           tar -czf "$out/artifact/browsers.tar.gz" -C "$HOME/.cache" ms-playwright
           {
@@ -89,7 +89,7 @@ jobs:
           } > "$out/artifact/manifest.txt"
           (cd "$out/artifact" && sha256sum source.bundle dependencies.tar.gz tooling.tar.gz browsers.tar.gz > SHA256SUMS)
       - name: Retain immutable disposable workbench for one day
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7 inspected 2026-09-19
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: jobguard-offline-workbench-${{ github.sha }}
           path: |
@@ -102,10 +102,18 @@ jobs:
           compression-level: 0
           retention-days: 1
       - name: Retain separate disposable test browser
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7 inspected 2026-09-19
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: jobguard-offline-browser-${{ github.sha }}
           path: ${{ runner.temp }}/jobguard-offline-workbench/artifact/browsers.tar.gz
           if-no-files-found: error
           compression-level: 0
+          retention-days: 1
+      - name: Retain standalone pinned pnpm package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: jobguard-offline-pnpm-${{ github.sha }}
+          path: ${{ runner.temp }}/jobguard-offline-workbench/tooling/pnpm/
+          if-no-files-found: error
+          compression-level: 1
           retention-days: 1
