@@ -4,8 +4,10 @@ export interface InvoicePaymentFact {
   totalPence: number;
   balancePence: number;
   customerCreditPence: number;
-  paidPence?: number;
-  creditedPence?: number;
+  // Zod optional fields may be absent OR explicitly undefined. Both mean
+  // unknown provenance, never an inferred zero payment or credit.
+  paidPence?: number | undefined;
+  creditedPence?: number | undefined;
 }
 export interface JobPaymentState {
   state: "not_invoiced" | "unpaid" | "part_paid" | "paid" | "credited" | "settled" | "outstanding" | "zero_balance";
