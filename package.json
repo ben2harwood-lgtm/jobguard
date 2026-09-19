@@ -21,7 +21,7 @@
     "test:deploy": "pnpm turbo run build --filter=@jobguard/db... && pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/demo-bootstrap.integration.test.ts && pnpm --filter @jobguard/web test:e2e --project=desktop deploy-smoke.spec.ts",
     "test:db": "pnpm --filter @jobguard/db test",
     "test:migrations": "pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/tenancy.integration.test.ts test/demo-bootstrap.integration.test.ts",
-    "eval": "pnpm --filter @jobguard/ai test"
+    "eval": "turbo run build --filter=@jobguard/ai... >&2 && node packages/ai/dist/evaluation-cli.js"
   },
   "devDependencies": {
     "next": "15.5.25",
