@@ -29,6 +29,14 @@ jobs:
         run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium
       - name: Exercise the production web build at mobile and desktop sizes
         run: pnpm test:e2e
+      - name: Retain synthetic browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/web/test-results/
+          retention-days: 3
+          if-no-files-found: ignore
   secrets:
     runs-on: ubuntu-latest
     steps:
@@ -51,3 +59,50 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Audit all dependency scopes; findings and lookup errors fail
         run: node tools/dependency-audit.mjs
+  review-workspace:
+    # Explicit same-repository temporary repair branch only; no arbitrary PR export.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'codex/m0-1/review-workspace'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: { contents: read }
+    env: { NEXT_TELEMETRY_DISABLED: '1', TURBO_TELEMETRY_DISABLED: '1' }
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0 }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @jobguard/web exec playwright install chromium
+      - name: Export only tracked public source and installed test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=tar HEAD > .review-source.tar
+          mkdir -p .review-runtime/bin
+          cp "$(command -v node)" .review-runtime/bin/node
+          cp -a "$(dirname "$(dirname "$(readlink -f "$(command -v pnpm)")")")" .review-runtime/pnpm
+          cp -a "$HOME/.cache/ms-playwright" .review-runtime/browsers
+          git rev-parse HEAD > .review-runtime/source-commit.txt
+          node --version > .review-runtime/node-version.txt
+          pnpm --version > .review-runtime/pnpm-version.txt
+          sha256sum pnpm-lock.yaml > .review-runtime/lockfile.sha256
+          python3 - <<'PY'
+          import glob, os, subprocess
+          paths=['.review-source.tar','.review-runtime','node_modules']
+          paths += sorted(glob.glob('apps/*/node_modules') + glob.glob('packages/*/node_modules'))
+          # No Git credentials, runner home, environment dump, npm cache or .git.
+          assert all(os.path.lexists(p) for p in paths)
+          subprocess.run(['tar','-czf','/tmp/jobguard-review-workspace.tgz',*paths],check=True)
+          PY
+          sha256sum /tmp/jobguard-review-workspace.tgz > /tmp/jobguard-review-workspace.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: jobguard-review-workspace-${{ github.run_id }}
+          path: |
+            /tmp/jobguard-review-workspace.tgz
+            /tmp/jobguard-review-workspace.sha256
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
