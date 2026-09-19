@@ -43,7 +43,7 @@ test("shows an overpayment as customer credit rather than a negative balance",as
 test("validates amounts, refuses unauthenticated reads and pauses an unknown transport result",async({page,browser})=>{
  const{receiptPath}=await issueInvoice(page);
  const stranger=await browser.newContext();try{expect((await stranger.request.get(receiptPath)).status()).toBe(401);}finally{await stranger.close();}
- await recordThroughUi(page,"1.001");await expect(page.getByRole("alert")).toContainText("Enter a positive amount");
+ await recordThroughUi(page,"1.001");await expect(page.getByRole("region",{name:"Customer receipts and balance history",exact:true}).getByRole("alert")).toContainText("Enter a positive amount");
  expect((await jsonResult(page.request.get(receiptPath),"Check invalid amount")).receipts).toHaveLength(0);
  await recordThroughUi(page,"16.29");await expect(page.getByTestId("invoice-balance")).toHaveText("GBP 1,303.71");
  expect((await jsonResult(page.request.get(receiptPath),"Check exact pence")).receipts[0].amountPence).toBe(1629);
