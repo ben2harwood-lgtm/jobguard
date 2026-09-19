@@ -13,7 +13,7 @@ import { closeTestPools } from "./pool-test-utils.js";
 
 const tenant="a1000000-0000-4000-8000-000000000001", otherTenant="a1000000-0000-4000-8000-000000000002";
 const job="a2000000-0000-4000-8000-000000000001",otherJob="a2000000-0000-4000-8000-000000000002",emptyJob="a2000000-0000-4000-8000-000000000003",foreignJob="a2000000-0000-4000-8000-000000000004";
-const member="a3000000-0000-4000-8000-000000000001",retired="00000000-0000-4000-8000-000000000001",proposed="00000000-0000-4000-8000-000000000002",first="b0000000-0000-4000-8000-000000000001",second="b0000000-0000-4000-8000-000000000002";
+const member="a3000000-0000-4000-8000-000000000001",retired="00000000-0000-4000-8000-000000000001",reserved="00000000-0000-4000-8000-000000000002",first="b0000000-0000-4000-8000-000000000001",second="b0000000-0000-4000-8000-000000000002";
 const context={tenantId:tenant} as VerifiedTenantContext,foreignContext={tenantId:otherTenant} as VerifiedTenantContext;
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 beforeAll(async()=>{
@@ -26,7 +26,7 @@ beforeAll(async()=>{
  INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES('${member}','${tenant}','a5000000-0000-4000-8000-000000000001','a4000000-0000-4000-8000-000000000001','owner');
  INSERT INTO app.job(id,tenant_id,title,status) VALUES('${job}','${tenant}','Synthetic dismissed-first regression','live'),('${otherJob}','${tenant}','Other synthetic job','live'),('${emptyJob}','${tenant}','No confirmed scope','live'),('${foreignJob}','${otherTenant}','Foreign synthetic job','live');
  INSERT INTO app.scope_identity(id,tenant_id,job_id,state,created_at) VALUES
- ('${retired}','${tenant}','${job}','retired','2026-01-01T00:00:00Z'),('${proposed}','${tenant}','${job}','proposed','2026-01-01T00:00:00Z'),
+ ('${retired}','${tenant}','${job}','retired','2026-01-01T00:00:00Z'),('${reserved}','${tenant}','${job}','reserved','2026-01-01T00:00:00Z'),
  ('${first}','${tenant}','${job}','confirmed','2026-01-02T00:00:00Z'),('${second}','${tenant}','${job}','confirmed','2026-01-02T00:00:00Z'),
  ('c0000000-0000-4000-8000-000000000001','${tenant}','${otherJob}','confirmed','2025-01-01T00:00:00Z'),('c0000000-0000-4000-8000-000000000002','${tenant}','${emptyJob}','retired','2025-01-01T00:00:00Z'),('c0000000-0000-4000-8000-000000000003','${otherTenant}','${foreignJob}','confirmed','2025-01-01T00:00:00Z');
  INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES('${tenant}','${job}','${first}'),('${tenant}','${job}','${second}');
