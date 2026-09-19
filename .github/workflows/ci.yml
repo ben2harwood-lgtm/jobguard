@@ -60,7 +60,6 @@ jobs:
       - name: Audit all dependency scopes; findings and lookup errors fail
         run: node tools/dependency-audit.mjs
   review-workspace:
-    # Explicit same-repository temporary repair branch only; no arbitrary PR export.
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'codex/m0-1/review-workspace'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -68,33 +67,36 @@ jobs:
     env: { NEXT_TELEMETRY_DISABLED: '1', TURBO_TELEMETRY_DISABLED: '1' }
     steps:
       - uses: actions/checkout@v4.2.2
-        with: { persist-credentials: false }
+        with: { fetch-depth: 0, persist-credentials: false }
       - uses: pnpm/action-setup@v4.1.0
         with: { version: 10.28.1, run_install: false }
       - uses: actions/setup-node@v4.0.3
         with: { node-version: 24.15.0 }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @jobguard/web exec playwright install chromium
-      - name: Export only tracked public source and installed test dependencies
+      - name: Export tracked source and essential test dependencies only
         shell: bash
         run: |
           set -euo pipefail
-          git archive --format=tar HEAD > .review-source.tar
+          git bundle create .review-source.bundle --all
+          git bundle verify .review-source.bundle
           mkdir -p .review-runtime/bin
           cp "$(command -v node)" .review-runtime/bin/node
-          cp -a "$(dirname "$(dirname "$(readlink -f "$(command -v pnpm)")")")" .review-runtime/pnpm
-          cp -a "$HOME/.cache/ms-playwright" .review-runtime/browsers
+          # The .bin entry is a wrapper, not a symlink: copy pnpm itself, not its store.
+          cp -a "$(dirname "$(command -v pnpm)")/../pnpm" .review-runtime/pnpm
           git rev-parse HEAD > .review-runtime/source-commit.txt
           node --version > .review-runtime/node-version.txt
           pnpm --version > .review-runtime/pnpm-version.txt
-          sha256sum pnpm-lock.yaml > .review-runtime/lockfile.sha256
+          sha256sum pnpm-lock.yaml .review-source.bundle > .review-runtime/inputs.sha256
           python3 - <<'PY'
           import glob, os, subprocess
-          paths=['.review-source.tar','.review-runtime','node_modules']
+          paths=['.review-source.bundle','.review-runtime','node_modules']
           paths += sorted(glob.glob('apps/*/node_modules') + glob.glob('packages/*/node_modules'))
-          # No Git credentials, runner home, environment dump, npm cache or .git.
           assert all(os.path.lexists(p) for p in paths)
           subprocess.run(['tar','-czf','/tmp/jobguard-review-workspace.tgz',*paths],check=True)
+          size=os.stat('/tmp/jobguard-review-workspace.tgz').st_size
+          print('Export bytes:',size)
+          if size > 384*1024*1024:
+              raise SystemExit('Export exceeds the bounded transfer size; no artifact uploaded')
           PY
           sha256sum /tmp/jobguard-review-workspace.tgz > /tmp/jobguard-review-workspace.sha256
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
