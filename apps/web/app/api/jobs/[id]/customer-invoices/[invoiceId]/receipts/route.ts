@@ -1,1 +1,15 @@
-import{cookies}from"next/headers";import{NextResponse}from"next/server";import{hasSyntheticSession}from"../../../../../../lib/synthetic-server";import{workspaceApplication}from"../../../../../../lib/workspace-server";const auth=async()=>hasSyntheticSession((await cookies()).get("jg_session")?.value);export async function GET(_r:Request,{params}:{params:Promise<{id:string;invoiceId:string}>}){if(!await auth())return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{const{id,invoiceId}=await params;return NextResponse.json(await workspaceApplication().customerInvoice.receiptView(id,invoiceId))}catch(e){return NextResponse.json({code:e instanceof Error?e.message:"DATABASE_UNAVAILABLE"},{status:404})}}export async function POST(r:Request,{params}:{params:Promise<{id:string;invoiceId:string}>}){if(!await auth())return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{const{id,invoiceId}=await params;return NextResponse.json(await workspaceApplication().customerInvoice.recordReceipt(id,{...await r.json(),invoiceId}))}catch(e){return NextResponse.json({code:e instanceof Error?e.message:"DATABASE_UNAVAILABLE"},{status:400})}}
+import{cookies}from"next/headers";import{NextResponse}from"next/server";
+import{hasSyntheticSession}from"../../../../../../lib/synthetic-server";
+import{workspaceApplication}from"../../../../../../lib/workspace-server";
+import{receiptHttpError}from"../../../../../../lib/receipt-http-error";
+type Context={params:Promise<{id:string;invoiceId:string}>};
+export async function GET(_request:Request,{params}:Context){
+ if(!hasSyntheticSession((await cookies()).get("jg_session")?.value))return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});
+ try{const{id,invoiceId}=await params;return NextResponse.json(await workspaceApplication().customerInvoice.receiptView(id,invoiceId),{headers:{"Cache-Control":"no-store"}});}
+ catch(error){const result=receiptHttpError(error,false);return NextResponse.json({code:result.code},{status:result.status});}
+}
+export async function POST(request:Request,{params}:Context){
+ if(!hasSyntheticSession((await cookies()).get("jg_session")?.value))return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});
+ try{const{id,invoiceId}=await params;return NextResponse.json(await workspaceApplication().customerInvoice.recordReceipt(id,{...await request.json(),invoiceId}),{headers:{"Cache-Control":"no-store"}});}
+ catch(error){const result=receiptHttpError(error,true);return NextResponse.json({code:result.code},{status:result.status});}
+}
