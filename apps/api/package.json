@@ -43,6 +43,10 @@
     "./customer-invoice-contracts": {
       "types": "./src/customer-invoice.contracts.ts",
       "import": "./dist/customer-invoice.contracts.js"
+    },
+    "./value-contracts": {
+      "types": "./src/value/contracts.ts",
+      "import": "./dist/value/contracts.js"
     }
   },
   "scripts": {

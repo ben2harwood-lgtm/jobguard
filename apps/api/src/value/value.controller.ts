@@ -1,0 +1,2 @@
+import{Controller,Get,Param}from"@nestjs/common";import{ApiOperation,ApiTags}from"@nestjs/swagger";import{Pool}from"pg";import{ValueApplication}from"./value.application.js";
+@ApiTags("jobs")@Controller("jobs/:id/value")export class ValueController{private readonly value;constructor(pool:Pool){this.value=new ValueApplication(pool)}@Get()@ApiOperation({summary:"Read a synthetic job's persisted money position"})get(@Param("id")id:string){return this.value.read(id)}}

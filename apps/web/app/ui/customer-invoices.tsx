@@ -37,7 +37,7 @@ export function CustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccount
  if(error&&!view)return <section role="alert"><h3>Customer invoice unavailable</h3><p>{error}</p><button onClick={()=>void load()}>Try invoice history again</button></section>;
  const invoice=view?.invoices.at(-1);
  return <section className="customer-invoice"><h3>Customer invoice</h3><p>Reference VAT is illustrative. This is not a real tax invoice.</p>
-  {!invoice?<button className="primary" disabled={busy||finalAccount.issueBlocked} onClick={()=>void issue()}>Issue and simulate this invoice</button>:<article>
+  {!invoice?<button className="primary" disabled={busy||finalAccount.issueBlocked} onClick={()=>void issue()}>Issue and simulate this invoice</button>:<article id={`invoice-${invoice.id}`}>
    <p>Issued separately from delivery.</p><dl>
     <div><dt>Invoice number</dt><dd data-testid="customer-invoice-number">{invoice.number}</dd></div>
     <div><dt>Invoice gross</dt><dd data-testid="invoice-gross">{pounds(invoice.totalPence)}</dd></div>
