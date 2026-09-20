@@ -34,6 +34,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0028_uiwire11_credit_notes.sql", import.meta.url),
   new URL("../migrations/0029_uiwire12_customer_receipts.sql", import.meta.url),
   new URL("../migrations/0030_receipt_replay_and_invoice_binding.sql", import.meta.url),
+  new URL("../migrations/0031_material_rates.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 

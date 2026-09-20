@@ -90,3 +90,6 @@ Adds the synthetic-only UIWIRE-13 scenario selection and its narrow configuratio
 
 ## 0024_uiwire7_synthetic_evidence_bytes.sql
 Adds an append-only, forced-RLS store for the generated sandbox image originals. It is not a general upload surface; corrections are forward fixes and registered object versions remain immutable.
+
+## 0031_material_rates.sql
+Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/scope-qualified material requirements and validity-dated agreed-rate revisions. All tables are forced-RLS and runtime SELECT/INSERT only. Corrections append a new revision; forward-fix rather than destructive rollback.

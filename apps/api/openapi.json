@@ -557,6 +557,49 @@
           "customer invoices"
         ]
       }
+    },
+    "/jobs/{id}/materials": {
+      "get": {
+        "operationId": "MaterialController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read persisted material requirements and applicable agreed rates",
+        "tags": [
+          "materials"
+        ]
+      },
+      "post": {
+        "operationId": "MaterialController_requirement",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append a material requirement revision",
+        "tags": [
+          "materials"
+        ]
+      }
+    },
+    "/material-rates": {
+      "post": {
+        "operationId": "MaterialController_rate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append a synthetic entered agreed-rate revision",
+        "tags": [
+          "materials"
+        ]
+      }
     }
   },
   "info": {
