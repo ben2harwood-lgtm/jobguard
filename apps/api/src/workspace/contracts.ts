@@ -12,6 +12,8 @@ export const jobWorkspaceResponseV1 = z.object({
     status: workspaceJobStatusV1,
     revision: z.number().int().nonnegative(),
     updatedAt: z.string().datetime(),
+    // Confirmed work only; retired proposal identities never prove completion.
+    scopeIdentityIds: z.array(workspaceJobIdV1),
   }),
 });
 export type JobWorkspaceResponse = z.infer<typeof jobWorkspaceResponseV1>;

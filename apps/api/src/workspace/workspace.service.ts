@@ -1,6 +1,6 @@
 import { DEMO_TENANT_ID, readSyntheticDemoJob, SyntheticDemoReadError } from "@jobguard/db";
 import { Pool } from "pg";
-import { workspaceJobIdV1, type JobWorkspaceResponse } from "./contracts.js";
+import { jobWorkspaceResponseV1, workspaceJobIdV1, type JobWorkspaceResponse } from "./contracts.js";
 
 export type WorkspacePrincipal = Readonly<{ sessionId: string; requestedTenantId?: string }>;
 export class WorkspaceServiceError extends Error {
@@ -16,7 +16,7 @@ export class WorkspaceService {
     if (principal.requestedTenantId && principal.requestedTenantId !== DEMO_TENANT_ID) throw new WorkspaceServiceError("TENANT_FORBIDDEN");
     try {
       const { job } = await readSyntheticDemoJob(this.pool, parsed.data);
-      return { version: 1, environment: "synthetic_demo", job: { id: job.id, tenantId: DEMO_TENANT_ID, title: job.title, status: job.status as JobWorkspaceResponse["job"]["status"], revision: job.revision, updatedAt: job.updatedAt.toISOString() } };
+      return jobWorkspaceResponseV1.parse({ version: 1, environment: "synthetic_demo", job: { id: job.id, tenantId: DEMO_TENANT_ID, title: job.title, status: job.status, revision: job.revision, updatedAt: job.updatedAt.toISOString(), scopeIdentityIds: job.scopeIdentityIds } });
     } catch (error) {
       if (error instanceof SyntheticDemoReadError && error.code === "JOB_NOT_FOUND") throw new WorkspaceServiceError("NOT_FOUND");
       if (error instanceof SyntheticDemoReadError && error.code === "MEMBERSHIP_FORBIDDEN") throw new WorkspaceServiceError("TENANT_FORBIDDEN");
