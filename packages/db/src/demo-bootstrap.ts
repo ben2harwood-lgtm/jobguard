@@ -7,9 +7,7 @@ import {
 } from "./demo-seed.js";
 
 export const SYNTHETIC_DATABASE_NAME = "jobguard_synthetic_demo";
-
 export class DemoBootstrapSafetyError extends Error { readonly code = "DEMO_BOOTSTRAP_TARGET_FORBIDDEN"; }
-
 function connection(value: string, label: string) {
   let parsed: URL;
   try { parsed = new URL(value); } catch { throw new DemoBootstrapSafetyError(`${label} must be a PostgreSQL URL`); }
@@ -18,10 +16,8 @@ function connection(value: string, label: string) {
   }
   return parsed;
 }
-
 const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
 const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
-
 async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_migration NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_runtime LOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
@@ -44,11 +40,12 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   await admin.query(`GRANT CREATE ON DATABASE ${quoteIdentifier(SYNTHETIC_DATABASE_NAME)} TO jobguard_migration`);
   await admin.query("GRANT USAGE,CREATE ON SCHEMA public TO jobguard_migration");
 }
-
-async function migrateAsMigrationOwner(client: PoolClient) {
+async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
   await client.query("SET ROLE jobguard_migration");
   try {
     await migrate(client);
+    const result = await client.query<{count:number}>("SELECT count(*)::int count FROM public.jobguard_schema_migration");
+    return result.rows[0]!.count;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -56,7 +53,6 @@ async function migrateAsMigrationOwner(client: PoolClient) {
     await client.query("RESET ROLE");
   }
 }
-
 async function seedDatabase(client: PoolClient) {
   await client.query("BEGIN");
   try {
@@ -87,7 +83,6 @@ async function seedDatabase(client: PoolClient) {
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
 }
-
 export async function bootstrapSyntheticDemo(options: { ownerUrl: string; runtimeUrl: string }) {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new DemoBootstrapSafetyError("JOBGUARD_ENV=synthetic_demo is required");
   const owner = connection(options.ownerUrl, "MIGRATION_DATABASE_URL");
@@ -101,9 +96,9 @@ export async function bootstrapSyntheticDemo(options: { ownerUrl: string; runtim
   try {
     await client.query("SELECT pg_advisory_lock(hashtext('jobguard_demo_bootstrap_v1'))");
     await ensureRoles(client, decodeURIComponent(runtime.password));
-    await migrateAsMigrationOwner(client);
+    const migrations = await migrateAsMigrationOwner(client);
     await seedDatabase(client);
-    return { database: SYNTHETIC_DATABASE_NAME, tenantId: DEMO_TENANT_ID, migrations: 23 };
+    return { database: SYNTHETIC_DATABASE_NAME, tenantId: DEMO_TENANT_ID, migrations };
   } finally {
     await client.query("SELECT pg_advisory_unlock(hashtext('jobguard_demo_bootstrap_v1'))").catch(() => undefined);
     client.release(); await pool.end();

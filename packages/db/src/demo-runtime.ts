@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "./demo-seed.js";
+import { DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "./demo-seed.js";
 import { verifiedTenantContextFromMembership, withTenant } from "./tenant-context.js";
 
 export type SyntheticDemoJob = Readonly<{ id: string; title: string; status: string; revision: number; updatedAt: Date }>;
@@ -59,13 +59,43 @@ export async function readSyntheticDemo(pool: Pool) {
   return { ...primary, tenants: [primary.tenant, empty] };
 }
 
-/** Authoritative job projection. RLS deliberately makes a foreign job indistinguishable from a missing one. */
+/**
+ * Read one saved job, not the deliberately filtered home-page fixture list.
+ * This fixed synthetic bridge cannot choose a caller-supplied tenant. Membership
+ * is rechecked on every read; RLS makes foreign and missing jobs indistinguishable.
+ * Scope identities describe confirmed work only, excluding reserved/retired history.
+ */
 export async function readSyntheticDemoJob(pool: Pool, jobId: string) {
+  if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
+  const context = verifiedTenantContextFromMembership({
+    identityUserId: DEMO_IDENTITY_USER_ID,
+    membershipId: DEMO_MEMBERSHIP_ID,
+    tenantId: DEMO_TENANT_ID,
+  } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
   try {
-    const workspace = await readSyntheticDemo(pool);
-    const job = workspace.jobs.find((candidate) => candidate.id === jobId);
-    if (!job) throw new SyntheticDemoReadError("JOB_NOT_FOUND");
-    return { tenant: workspace.tenant, job };
+    return await withTenant(pool, context, async (database) => {
+      const membership = await database.$client.query<{ name: string }>(
+        `SELECT a.name FROM app.membership m JOIN app.account a
+           ON (a.tenant_id,a.id)=(m.tenant_id,m.account_id)
+         WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3
+           AND m.revoked_at IS NULL
+           AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp())`,
+        [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID],
+      );
+      if (membership.rowCount !== 1) throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
+      // One SQL snapshot binds the returned scope set to the job projection.
+      const result = await database.$client.query<SyntheticDemoJob & { scopeIdentityIds: string[] }>(
+        `SELECT j.id::text,j.title,j.status,j.revision,j.updated_at AS "updatedAt",
+           ARRAY(SELECT s.id::text FROM app.scope_identity s
+             WHERE (s.tenant_id,s.job_id)=(j.tenant_id,j.id) AND s.state='confirmed'
+             ORDER BY s.created_at,s.id) AS "scopeIdentityIds"
+         FROM app.job j WHERE j.tenant_id=$1 AND j.id=$2`,
+        [DEMO_TENANT_ID, jobId],
+      );
+      const job = result.rows[0];
+      if (!job) throw new SyntheticDemoReadError("JOB_NOT_FOUND");
+      return { tenant: { id: DEMO_TENANT_ID, name: membership.rows[0]!.name }, job };
+    });
   } catch (error) {
     if (error instanceof SyntheticDemoReadError) throw error;
     throw new SyntheticDemoReadError("DATABASE_UNAVAILABLE", { cause: error });

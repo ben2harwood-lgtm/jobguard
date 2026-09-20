@@ -1,0 +1,11 @@
+# Payment UI and prerequisite sequencing repair
+
+Builder: ChatGPT, continuing Ben's JobGuard instruction. Not a Claude verdict or technical acceptance.
+
+Payment labels now derive from authenticated invoice/receipt reads, on mount and change/focus, rather than direct DOM text changes. Missing provenance and credit-only settlement are not labelled customer cash. Existing invoice projection supplies paid/credited amounts. Receipt dates are editable Gregorian dates; pounds use the exact parser; reasons are editable and validated. Reads and failed mutations leave useful error states. Unknown transport/server results pause further receipt writes for this mounted editor, without any automatic retry. Durable command resumption across closing/reloading the page remains an explicit gap: a proposed pending-request helper was not published because its connector write was blocked. This change does not claim that gap solved.
+
+The full backend candidate da8586e passed all 368 tool/unit/integration tests, typecheck, lint, security scans and build in run 35468372611. Counts: 39 tooling + 1 config + 2 storage + 120 core + 9 AI + 70 API + 16 web + 111 database. Its browser result was 124 passed / 4 failed. Receipt browser cases passed. Remaining failures exposed existing quote save-to-preview and variation form-reset races. Inputs/actions now stay disabled while their saved operation is pending, and variation form reset happens before reopening the editor. Errors do not strand buttons busy. Earlier tests are not removed or assertions weakened.
+
+Additional tests cover real receipt-date persistence, paid status after reload, UI reversal and reason persistence, exact pence, no-session read denial, and transport-abort pause. The common receipt setup now checks every real API response and no longer retries writes with new command IDs inside polls. Pure payment-state tests include 1000 generated cases inside one test. HTTP error tests ensure private error messages are never reflected.
+
+The new commit's CI result is not known at the time this record is authored. Main merge, independent review and deployment are still outstanding. Nothing has enabled live providers, customer data, bank proof or platform charging.
