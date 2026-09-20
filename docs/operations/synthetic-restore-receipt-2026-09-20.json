@@ -1,0 +1,173 @@
+{
+  "schema": "jobguard-synthetic-restore-receipt.v1",
+  "recordedAt": "2026-09-20T01:07:33.424Z",
+  "environment": "synthetic_demo",
+  "result": "PASS",
+  "implementation": "whole-cluster-cold-filesystem-copy",
+  "nodeVersion": "v24.15.0",
+  "postgresVersion": "16.10",
+  "migrationNames": [
+    "0000_tenancy.sql",
+    "0001_audit.sql",
+    "0002_evidence.sql",
+    "0003_job_spine.sql",
+    "0004_ledger.sql",
+    "0005_commands.sql",
+    "0006_outbox.sql",
+    "0007_capture.sql",
+    "0008_review.sql",
+    "0009_quote_pricing.sql",
+    "0010_quote_documents.sql",
+    "0011_quote_acceptance.sql",
+    "0012_job_activation.sql",
+    "0013_decision_inbox.sql",
+    "0014_variations.sql",
+    "0015_proof_stage_gates.sql",
+    "0016_final_accounts.sql",
+    "0017_customer_billing.sql",
+    "0018_recovery_outcomes.sql",
+    "0019_commercial_integrity.sql",
+    "0020_job_import.sql",
+    "0021_sandbox_runs.sql",
+    "0022_browser_local_dictation.sql",
+    "0023_recovery_demo_ui.sql",
+    "0024_fee_illustration.sql",
+    "0025_uiwire7_synthetic_evidence_bytes.sql",
+    "0026_final_account_migration_policy.sql",
+    "0027_uiwire10_customer_invoice.sql",
+    "0028_uiwire11_credit_notes.sql",
+    "0029_uiwire12_customer_receipts.sql",
+    "0030_receipt_replay_and_invoice_binding.sql"
+  ],
+  "tableCount": 89,
+  "totalRows": 86,
+  "backup": {
+    "manifestSha256": "08faf3823bbbb30108e1eaa83a30247c3fab4bc63a3c028ea8c11620c763a9eb",
+    "fileCount": 1311,
+    "byteCount": 45334229,
+    "verifiedBeforeStart": true
+  },
+  "checkpoint": {
+    "sequence": 5,
+    "eventHash": "76add73a385ddddbd3702f865f0c006f4a40c947180fe8be7558409ea62a2fee"
+  },
+  "exportReceipt": {
+    "format": "synthetic-job-export.v1",
+    "sha256": "c2bd81892dc0d8ffeea46512393a1ea39368af75b5d1162f5c2dd6314ad9a88a",
+    "jobCount": 1,
+    "evidenceCount": 1
+  },
+  "financialFixture": {
+    "invoiceGrossPence": 12000,
+    "manualReceiptPence": 5000,
+    "outstandingPence": 7000,
+    "invoicePdfSha256": "80030029a19c3967d7833756cf3e9c7e3e59908b7f3a3c9d0b2e44746d160466",
+    "qualifyingRecoveryProof": false,
+    "platformFeeSettlement": false
+  },
+  "fakeDeliveryCallsAfterRestore": 1,
+  "liveProviderCalls": 0,
+  "timings": {
+    "backupMilliseconds": 1198,
+    "restoreStartMilliseconds": 1084,
+    "totalMilliseconds": 3778
+  },
+  "checks": [
+    {
+      "id": "running-cluster-refused",
+      "status": "PASS",
+      "detail": "A live data-directory copy is rejected; no partial hot backup is treated as usable."
+    },
+    {
+      "id": "cold-cluster-backup",
+      "status": "PASS",
+      "detail": "Cleanly stopped whole-cluster copy includes WAL, roles, schema and all table files."
+    },
+    {
+      "id": "corrupt-backup-refused",
+      "status": "PASS",
+      "detail": "A modified backup fails SHA-256 verification before any restore starts."
+    },
+    {
+      "id": "all-rows-restored",
+      "status": "PASS",
+      "detail": "89 application/control tables match their pre-backup row counts and hashes."
+    },
+    {
+      "id": "invoice-and-manual-receipt-restored",
+      "status": "PASS",
+      "detail": "The immutable \u00a3120 invoice bytes/hash and \u00a350 manual receipt survive restore; replay leaves \u00a370 outstanding and never creates recovery eligibility or platform settlement."
+    },
+    {
+      "id": "evidence-versions-restored",
+      "status": "PASS",
+      "detail": "The retained DB-backed synthetic original has the same key, version, bytes and SHA-256; another tenant cannot download it."
+    },
+    {
+      "id": "retained-evidence-preserved",
+      "status": "PASS",
+      "detail": "Expired-orphan cleanup does not select or remove the finalized retained original, even with a future test clock."
+    },
+    {
+      "id": "audit-checkpoint-restored",
+      "status": "PASS",
+      "detail": "The restored audit chain matches the checkpoint recorded outside the copied cluster; altered payloads fail verification. The checkpoint is a local fixture, not an external signed attestation."
+    },
+    {
+      "id": "restored-role-and-tenant-isolation",
+      "status": "PASS",
+      "detail": "Runtime remains non-superuser/non-BYPASSRLS, sees no unscoped rows, cannot update jobs, and retains forced evidence RLS."
+    },
+    {
+      "id": "tenant-scoped-export-slice",
+      "status": "PASS",
+      "detail": "The fixture export contains only the selected tenant's job and evidence references; no credentials or other-tenant job are exported."
+    },
+    {
+      "id": "restore-harness-starts-paused",
+      "status": "PASS",
+      "detail": "The rehearsal wrapper refuses dispatch and leaves restored pending work unchanged until its verification finishes. This is not a global application kill switch."
+    },
+    {
+      "id": "pending-replay-and-unknown-outcome",
+      "status": "PASS",
+      "detail": "Concurrent/repeated dispatch produces one fake effect for the pending action; completed work is not resent and unknown work stays held without a blind retry."
+    }
+  ],
+  "notRun": [
+    "Hosted deployment backup/restore, replication and point-in-time recovery",
+    "MinIO/S3/object-version restore; this run restores the current DB-backed synthetic storage path",
+    "Application-wide outbound kill switch and independently authorized unpause",
+    "Full privacy export/deletion/retention/legal-hold workflow",
+    "Physical-device/offline, independent Claude verdict and founder release acceptance"
+  ],
+  "releaseDecision": "NOT_AUTHORIZED",
+  "productionRpoRto": "NOT_ESTABLISHED",
+  "realDataUsed": false,
+  "sourceEvidence": {
+    "baseCommit": "a1be6fcccdf4cddf809b8fc7cfbfd0ee083a1457",
+    "baseTree": "619a0f4e292504afce73f75f10010187f2257cc0",
+    "localCodeCommit": "b069f8002d5ce2fc8f68be74360315858ff3bf29",
+    "runnerSha256": "e688f604f1714c2fe94b761ac9da11af5f36c8794015aede3242056e14f824cf",
+    "execution": "ChatGPT local pinned Linux workbench; own worktree dependency resolution checked",
+    "independentReview": "PENDING",
+    "commands": [
+      {
+        "command": "cd /mnt/data/jobguard-ops && pnpm typecheck && LANE_BASE_REF=astra/fix-authoritative-job-workspaces pnpm lint && pnpm test && pnpm test:migrations && pnpm build && node packages/db/tools/synthetic-restore.mjs > /mnt/data/jobguard-evidence/restore-integrated-final.json && CI=1 pnpm test:e2e",
+        "exitCode": 0,
+        "elapsedSeconds": 268.48
+      }
+    ],
+    "browserResult": {
+      "passed": 130,
+      "failed": 0,
+      "skipped": 0
+    },
+    "priorMainBaselineRun": {
+      "recordedAt": "2026-09-20T01:00:27.141Z",
+      "baseCommit": "ab8e7f2d9d43ac5ec6ff62bff2533b0fa508d404",
+      "result": "PASS",
+      "manifestSha256": "86bf3bafe21efec2452ce3e63084fd4d8695c8a2b5f5b374d6cb51aebe0f41b2"
+    }
+  }
+}
