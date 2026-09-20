@@ -557,6 +557,21 @@
           "customer invoices"
         ]
       }
+    },
+    "/jobs/{id}/value": {
+      "get": {
+        "operationId": "ValueController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read a synthetic job's persisted money position",
+        "tags": [
+          "jobs"
+        ]
+      }
     }
   },
   "info": {
