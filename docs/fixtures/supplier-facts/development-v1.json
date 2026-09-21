@@ -1,0 +1,56 @@
+{
+  "version": "supplier-facts-development.v1",
+  "count": 10,
+  "items": [
+    {
+      "id": "dev-01",
+      "class": "match",
+      "source": "INVOICE\\n1 each @ GBP 2.00\\nNET GBP 2.00"
+    },
+    {
+      "id": "dev-02",
+      "class": "discrepancy",
+      "source": "INVOICE\\n2 each @ GBP 3.00\\nNET GBP 6.00"
+    },
+    {
+      "id": "dev-03",
+      "class": "ambiguity",
+      "source": "INVOICE\\n3 each @ GBP 4.00\\nNET GBP 12.00"
+    },
+    {
+      "id": "dev-04",
+      "class": "partial_delivery",
+      "source": "INVOICE\\n4 each @ GBP 5.00\\nNET GBP 20.00"
+    },
+    {
+      "id": "dev-05",
+      "class": "discount",
+      "source": "INVOICE\\n5 each @ GBP 6.00\\nNET GBP 30.00"
+    },
+    {
+      "id": "dev-06",
+      "class": "credit",
+      "source": "INVOICE\\n6 each @ GBP 7.00\\nNET GBP 42.00"
+    },
+    {
+      "id": "dev-07",
+      "class": "pack",
+      "source": "INVOICE\\n7 each @ GBP 8.00\\nNET GBP 56.00"
+    },
+    {
+      "id": "dev-08",
+      "class": "rotated",
+      "source": "INVOICE\\n8 each @ GBP 9.00\\nNET GBP 72.00"
+    },
+    {
+      "id": "dev-09",
+      "class": "blurred",
+      "source": "INVOICE\\n9 each @ GBP 10.00\\nNET GBP 90.00"
+    },
+    {
+      "id": "dev-10",
+      "class": "multi_page",
+      "source": "INVOICE\\n10 each @ GBP 11.00\\nNET GBP 110.00"
+    }
+  ]
+}
