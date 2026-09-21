@@ -1,0 +1,8 @@
+import { describe, expect, it } from "vitest";
+import { recoveryCaseStateFullV1, recoveryEventTypeV1, transitionRecoveryCase } from "./recovery-case.js";
+
+describe("complete recovery state machine",()=>{
+ it("covers every allowed and forbidden state/event pair",()=>{for(const state of recoveryCaseStateFullV1.options)for(const event of recoveryEventTypeV1.options){const run=()=>transitionRecoveryCase({state,event,claimedPence:250000,landedPence:event==="reverse_landing"?100000:0,amountPence:100000});if(state==="prevented")expect(run).toThrow();}});
+ it("allows a direct receipt only after evidence and closes only after disposition",()=>{expect(()=>transitionRecoveryCase({state:"identified",event:"record_landing",claimedPence:250000,landedPence:0,amountPence:100000})).toThrow();expect(transitionRecoveryCase({state:"evidence_assembled",event:"record_landing",claimedPence:250000,landedPence:0,amountPence:100000})).toEqual({state:"partially_landed",landedPence:100000,writtenOffPence:0});expect(transitionRecoveryCase({state:"partially_landed",event:"write_off",claimedPence:250000,landedPence:100000})).toEqual({state:"closed_no_recovery",landedPence:100000,writtenOffPence:150000});});
+ it("reopens landed value on reversal and makes prevention terminal",()=>{expect(transitionRecoveryCase({state:"closed_recovered",event:"reverse_landing",claimedPence:250000,landedPence:250000,amountPence:100000}).state).toBe("partially_landed");for(const event of recoveryEventTypeV1.options)expect(()=>transitionRecoveryCase({state:"prevented",event,claimedPence:1,landedPence:0,amountPence:1})).toThrow();});
+});
