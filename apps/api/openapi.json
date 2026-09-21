@@ -705,6 +705,34 @@
           "supplier-documents"
         ]
       }
+    },
+    "/jobs/{id}/recovery-cases": {
+      "get": {
+        "operationId": "RecoveryCaseController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the append-only recovery-case workbench",
+        "tags": [
+          "recovery-cases"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryCaseController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Open, revise or transition a synthetic recovery case",
+        "tags": [
+          "recovery-cases"
+        ]
+      }
     }
   },
   "info": {
