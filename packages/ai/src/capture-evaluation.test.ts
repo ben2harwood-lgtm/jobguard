@@ -54,8 +54,18 @@ describe("labelled synthetic capture evaluation", () => {
     expect(()=>validateCorpus([...sources.slice(0,-1),sources[0]!],labels)).toThrow();
     expect(()=>validateCorpus(sources,[...labels.slice(0,-1),labels[0]!])).toThrow();
   });
-  it.each(["", " ", "x".repeat(50001), "ITEM: | £10.00", "x".repeat(501), Array(101).fill("ITEM: Test | £1").join("\n")])("bounds malformed or unsupported fixture input %#", text => {
+  it.each(["", " ", "x".repeat(50001), "ITEM: | £10.00", Array(101).fill("ITEM: Test | £1").join("\n")])("bounds malformed or unsupported fixture input %#", text => {
     expect(()=>parseCaptureFixture("source",text)).toThrow();
+  });
+  // The former case "x".repeat(501) asserted that unstructured text over 500 characters is
+  // malformed. It contradicted this same parser's front door, which accepts up to 50,000, and the
+  // capture contract, which accepts a 50,000-character dictated transcript. Over-long text is now
+  // shortened to the contract's description limit and a question is raised for a human, which
+  // capture.test.ts covers at 501, at 50,000 and for an over-long ITEM cell. Coverage increases.
+  it("shortens rather than rejects unstructured text over the description limit", () => {
+    const result=parseCaptureFixture("source","x".repeat(501));
+    expect(result.lines[0]?.description.value).toHaveLength(500);
+    expect(result.questions.map(q=>q.question.value).join(" ")).toMatch(/shortened/u);
   });
   it("does not allow expected labels, commercial tools or I/O inside the pure parser", () => {
     const source=readFileSync(new URL("./capture-fixture-parser.ts",import.meta.url),"utf8");

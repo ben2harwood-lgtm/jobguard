@@ -66,9 +66,10 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   let lines: JobRecordProposal["lines"];
   if (!items.length) {
     const description = text.trim();
-    if (description.length > 500) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
+    const kept = description.slice(0, 500);
+    if (kept.length < description.length) questions.push(question("Confirm the work items; the source note is longer than one description and was shortened"));
     lines = [{
-      description: { value: description, provenance: extracted(text.indexOf(description), description.length) },
+      description: { value: kept, provenance: extracted(text.indexOf(description), kept.length) },
       quantity: { value: null, provenance: defaulted("Quantity not stated in structured fixture grammar") },
       unit: { value: null, provenance: defaulted("Unit not stated in structured fixture grammar") },
       unitPricePence: { value: null, provenance: defaulted("Rate not stated; never invented") },
@@ -77,8 +78,10 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
     lines = items.map(line => {
       const parts = cells(line.raw, line.start);
       const description = parts[0]!;
-      if (!description.value || description.value.length > 500) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
-      const label = description.value.slice(0, 160);
+      if (!description.value) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
+      const keptDescription = description.value.slice(0, 500);
+      if (keptDescription.length < description.value.length) questions.push(question(`Confirm the description for ${keptDescription.slice(0, 160)}; it is longer than one description and was shortened`));
+      const label = keptDescription.slice(0, 160);
       const attributes = parts.slice(1);
       const rateCells = attributes.filter(cell => /^(?:£|RATE:)/u.test(cell.value));
       const rate = rateCells.length === 1
@@ -95,7 +98,7 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
       const validUnit = unit && /^[\p{L}\p{N}][\p{L}\p{N} _²³/-]{0,39}$/u.test(unit.value);
       if (unitCells.length && !validUnit) questions.push(question(`Confirm unit for ${label}`));
       return {
-        description: { value: description.value, provenance: extracted(description.start, description.value.length) },
+        description: { value: keptDescription, provenance: extracted(description.start, keptDescription.length) },
         quantity: quantityCells.length ? {
           value: validQuantity ? quantity!.value : null,
           provenance: validQuantity ? extracted(quantity!.start, quantity!.value.length) : defaulted("Quantity needs confirmation"),
