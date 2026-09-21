@@ -721,6 +721,49 @@
         ]
       }
     },
+    "/jobs/{id}/supplier-matches": {
+      "get": {
+        "operationId": "SupplierMatchController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read exact order, receipt and bill match revisions",
+        "tags": [
+          "supplier-matches"
+        ]
+      },
+      "post": {
+        "operationId": "SupplierMatchController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a deterministic source match proposal",
+        "tags": [
+          "supplier-matches"
+        ]
+      }
+    },
+    "/jobs/{id}/supplier-matches/corrections": {
+      "post": {
+        "operationId": "SupplierMatchController_correct",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append a human source-match correction",
+        "tags": [
+          "supplier-matches"
+        ]
+      }
+    },
     "/jobs/{id}/recovery-cases": {
       "get": {
         "operationId": "RecoveryCaseController_get",

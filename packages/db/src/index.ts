@@ -47,3 +47,4 @@ export * from "./practice-scope.js";
 export * from "./material-repository.js";
 export * from "./purchase-order-repository.js";
 export * from "./supplier-document-repository.js";
+export * from "./supplier-match-repository.js";

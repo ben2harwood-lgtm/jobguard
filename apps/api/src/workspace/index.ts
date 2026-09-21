@@ -33,5 +33,7 @@ export * from "../value/value.application.js";
 
 export * from "../supplier-document.contracts.js";
 export * from "../supplier-document.application.js";
+export * from "../supplier-match.contracts.js";
+export * from "../supplier-match.application.js";
 export * from "../recovery-case.contracts.js";
 export * from "../recovery-case.application.js";
