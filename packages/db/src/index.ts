@@ -44,3 +44,4 @@ export * from "./fee-illustration-repository.js";
 export * from "./practice-scope.js";
 
 export * from "./material-repository.js";
+export * from "./purchase-order-repository.js";
