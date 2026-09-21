@@ -706,6 +706,21 @@
         ]
       }
     },
+    "/jobs/{id}/supplier-documents/facts/confirm": {
+      "post": {
+        "operationId": "SupplierDocumentController_confirm",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm or correct cited supplier facts",
+        "tags": [
+          "supplier-documents"
+        ]
+      }
+    },
     "/jobs/{id}/recovery-cases": {
       "get": {
         "operationId": "RecoveryCaseController_get",
