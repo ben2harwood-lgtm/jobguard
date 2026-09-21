@@ -53,14 +53,6 @@ export function PurchaseOrder({ jobId }: { jobId: string }) {
     const timer = setInterval(() => void load(), 1_500);
     return () => clearInterval(timer);
   }, [requirementId, load]);
-  useEffect(() => {
-    if (!order) return;
-    setQuantity(order.quantity);
-    setUnitPrice((order.unitPricePence / 100).toFixed(2));
-    setRecipient(order.recipient);
-    setRequiredDate(order.requiredDate);
-  }, [order]);
-
   async function revise() {
     setBusy(true);
     setError("");
