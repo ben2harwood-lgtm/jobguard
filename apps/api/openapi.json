@@ -733,6 +733,21 @@
           "recovery-cases"
         ]
       }
+    },
+    "/jobs/{id}/recovery-cases/eligibility": {
+      "post": {
+        "operationId": "RecoveryCaseController_eligibility",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Review or approve synthetic reference D03 eligibility",
+        "tags": [
+          "recovery-cases"
+        ]
+      }
     }
   },
   "info": {
