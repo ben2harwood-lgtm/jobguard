@@ -36,6 +36,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0030_receipt_replay_and_invoice_binding.sql", import.meta.url),
   new URL("../migrations/0031_material_rates.sql", import.meta.url),
   new URL("../migrations/0032_purchase_order_precommit.sql", import.meta.url),
+  new URL("../migrations/0033_supplier_document_intake.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 

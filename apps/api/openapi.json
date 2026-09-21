@@ -660,6 +660,51 @@
           "purchase-orders"
         ]
       }
+    },
+    "/jobs/{id}/supplier-documents": {
+      "get": {
+        "operationId": "SupplierDocumentController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read synthetic supplier documents and goods receipts",
+        "tags": [
+          "supplier-documents"
+        ]
+      }
+    },
+    "/jobs/{id}/supplier-documents/intake": {
+      "post": {
+        "operationId": "SupplierDocumentController_intake",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Ingest one generated merchant fixture",
+        "tags": [
+          "supplier-documents"
+        ]
+      }
+    },
+    "/jobs/{id}/supplier-documents/receipts": {
+      "post": {
+        "operationId": "SupplierDocumentController_receipt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append an actual synthetic goods receipt",
+        "tags": [
+          "supplier-documents"
+        ]
+      }
     }
   },
   "info": {
