@@ -615,6 +615,96 @@
           "jobs"
         ]
       }
+    },
+    "/jobs/{id}/purchase-orders": {
+      "get": {
+        "operationId": "PurchaseOrderController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the authoritative synthetic purchase-order pre-commit state",
+        "tags": [
+          "purchase-orders"
+        ]
+      }
+    },
+    "/jobs/{id}/purchase-orders/revisions": {
+      "post": {
+        "operationId": "PurchaseOrderController_revise",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append a synthetic purchase-order draft revision",
+        "tags": [
+          "purchase-orders"
+        ]
+      }
+    },
+    "/jobs/{id}/purchase-orders/placement": {
+      "post": {
+        "operationId": "PurchaseOrderController_place",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Authorize one exact simulated purchase-order placement",
+        "tags": [
+          "purchase-orders"
+        ]
+      }
+    },
+    "/jobs/{id}/supplier-documents": {
+      "get": {
+        "operationId": "SupplierDocumentController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read synthetic supplier documents and goods receipts",
+        "tags": [
+          "supplier-documents"
+        ]
+      }
+    },
+    "/jobs/{id}/supplier-documents/intake": {
+      "post": {
+        "operationId": "SupplierDocumentController_intake",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Ingest one generated merchant fixture",
+        "tags": [
+          "supplier-documents"
+        ]
+      }
+    },
+    "/jobs/{id}/supplier-documents/receipts": {
+      "post": {
+        "operationId": "SupplierDocumentController_receipt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append an actual synthetic goods receipt",
+        "tags": [
+          "supplier-documents"
+        ]
+      }
     }
   },
   "info": {
