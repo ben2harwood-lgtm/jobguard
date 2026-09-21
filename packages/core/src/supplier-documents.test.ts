@@ -1,0 +1,2 @@
+import{describe,expect,it}from"vitest";import{supplierDocumentIntakeV1,supplierFixtures}from"./supplier-documents.js";
+describe("synthetic supplier fixtures",()=>{it("are deterministic and reject injection fields",()=>{expect(supplierFixtures["materials-B-invoice"].bytes).toContain("INV-MB-001");expect(supplierFixtures["multi-page-invoice"].pages).toBe(2);expect(()=>supplierDocumentIntakeV1.parse({version:"supplier-document-intake.v1",fixtureId:"materials-B-invoice",channel:"picker",expectedRevision:0,remoteUrl:"https://evil.invalid/a"})).toThrow()})});
