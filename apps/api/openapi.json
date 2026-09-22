@@ -1001,6 +1001,48 @@
           "commercial integrity"
         ]
       }
+    },
+    "/recovery-cases/{id}/evidence-packs": {
+      "get": {
+        "operationId": "EvidencePackController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List immutable mapped, inspectable evidence packs",
+        "tags": [
+          "evidence-packs"
+        ]
+      },
+      "post": {
+        "operationId": "EvidencePackController_post",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Generate an immutable evidence-pack revision",
+        "tags": [
+          "evidence-packs"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/evidence-packs/{packId}/download": {
+      "get": {
+        "operationId": "EvidencePackController_download",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "evidence-packs"
+        ]
+      }
     }
   },
   "info": {

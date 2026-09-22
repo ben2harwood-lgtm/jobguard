@@ -1,0 +1,1 @@
+import{z}from"zod";export const evidencePackCommandV1=z.object({version:z.literal("evidence-pack-command.v1"),commandId:z.string().uuid(),format:z.enum(["ZIP","PDF"]).default("ZIP"),actorRef:z.string().min(1).default("practice-owner"),evidenceVersion:z.number().int().positive().optional()});
