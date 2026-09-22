@@ -11,7 +11,7 @@ const poolRegistry = globalThis as typeof globalThis & { __jobguardSyntheticPool
 export function syntheticPool() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw Object.assign(new Error("Database configuration is unavailable"), { code: "DATABASE_UNAVAILABLE" });
-  poolRegistry.__jobguardSyntheticPool ??= new Pool({ connectionString, max: 4, application_name: "jobguard-vercel-synthetic-demo" });
+  poolRegistry.__jobguardSyntheticPool ??= new Pool({ connectionString, max: 12, application_name: "jobguard-vercel-synthetic-demo" });
   return poolRegistry.__jobguardSyntheticPool;
 }
 

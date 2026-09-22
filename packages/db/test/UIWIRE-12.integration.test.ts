@@ -51,14 +51,14 @@ beforeAll(async()=>{
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
  await migrate(admin);
- expect(MIGRATION_URLS).toHaveLength(40);
- expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0039_readiness.sql'`)).rowCount).toBe(40);
+ expect(MIGRATION_URLS).toHaveLength(41);
+ expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0040_inbox_relevance.sql'`)).rowCount).toBe(41);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 
 describe("UIWIRE-12 customer receipts",()=>{
  it("upgrades without changing old command hashes and replays old receipts and reversals",async()=>{
-  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(40);
+  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(41);
   expect((await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows).toEqual(legacyHashes);
   expect(await repo.recordReceipt(context,legacyInput)).toEqual(legacyPayment);
   expect(await repo.reverseReceipt(context,{...reversal(legacy,legacyPayment.paymentId),commandId:legacyReverseCommand})).toEqual({reversalId:legacyReversal});
