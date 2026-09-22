@@ -1,0 +1,860 @@
+{
+  "version": "things-to-check-held-out.v1",
+  "frozenOn": "2026-09-22",
+  "ruleRevision": "supplier-overcharge.v1",
+  "corpusSize": 100,
+  "classCounts": {
+    "labelledDiscrepancyAtLeastGbp25": 40,
+    "noDiscrepancy": 60
+  },
+  "confusionMatrix": {
+    "truePositive": 36,
+    "falsePositive": 0,
+    "trueNegative": 60,
+    "falseNegative": 4
+  },
+  "denominators": {
+    "actionablePredictions": 36,
+    "labelledDiscrepanciesAtLeastGbp25": 40
+  },
+  "metrics": {
+    "falseDiscoveryRate": 0,
+    "recall": 0.9
+  },
+  "zeroPredictionFailure": false,
+  "criticalFixtures": {
+    "passed": 2,
+    "total": 2
+  },
+  "confirmedFactMatching": {
+    "status": "pass",
+    "cases": 100,
+    "fdr": 0,
+    "recall": 0.9
+  },
+  "endToEndExtraction": {
+    "status": "not_evaluated",
+    "reason": "This rule report does not claim live OCR or extraction accuracy."
+  },
+  "errors": [
+    {
+      "caseId": "held-037",
+      "type": "false_negative"
+    },
+    {
+      "caseId": "held-038",
+      "type": "false_negative"
+    },
+    {
+      "caseId": "held-039",
+      "type": "false_negative"
+    },
+    {
+      "caseId": "held-040",
+      "type": "false_negative"
+    }
+  ],
+  "cases": [
+    {
+      "id": "held-001",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2500,
+      "prediction": "actionable",
+      "critical": true,
+      "passed": true
+    },
+    {
+      "id": "held-002",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2501,
+      "prediction": "actionable",
+      "critical": true,
+      "passed": true
+    },
+    {
+      "id": "held-003",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2502,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-004",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2503,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-005",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2504,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-006",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2505,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-007",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2506,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-008",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2507,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-009",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2508,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-010",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2509,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-011",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2510,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-012",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2511,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-013",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2512,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-014",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2513,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-015",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2514,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-016",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2515,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-017",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2516,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-018",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2517,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-019",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2518,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-020",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2519,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-021",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2520,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-022",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2521,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-023",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2522,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-024",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2523,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-025",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2524,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-026",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2525,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-027",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2526,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-028",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2527,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-029",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2528,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-030",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2529,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-031",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2530,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-032",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2531,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-033",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2532,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-034",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2533,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-035",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2534,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-036",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2535,
+      "prediction": "actionable",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-037",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2536,
+      "prediction": "none",
+      "critical": false,
+      "passed": false
+    },
+    {
+      "id": "held-038",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2537,
+      "prediction": "none",
+      "critical": false,
+      "passed": false
+    },
+    {
+      "id": "held-039",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2538,
+      "prediction": "none",
+      "critical": false,
+      "passed": false
+    },
+    {
+      "id": "held-040",
+      "class": "discrepancy",
+      "netDiscrepancyPence": 2539,
+      "prediction": "none",
+      "critical": false,
+      "passed": false
+    },
+    {
+      "id": "held-041",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-042",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-043",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-044",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-045",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-046",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-047",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-048",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-049",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-050",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-051",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-052",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-053",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-054",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-055",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-056",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-057",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-058",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-059",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-060",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-061",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-062",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-063",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-064",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-065",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-066",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-067",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-068",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-069",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-070",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-071",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-072",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-073",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-074",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-075",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-076",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-077",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-078",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-079",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-080",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-081",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-082",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-083",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-084",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-085",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-086",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-087",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-088",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-089",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-090",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-091",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-092",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-093",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-094",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-095",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-096",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-097",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-098",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-099",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    },
+    {
+      "id": "held-100",
+      "class": "no_discrepancy",
+      "netDiscrepancyPence": 0,
+      "prediction": "none",
+      "critical": false,
+      "passed": true
+    }
+  ],
+  "outputSha256": "4bc5c22c9e072c462d571fea56a6d479757695a69b2e6b7829fe479a90d64b3f"
+}
