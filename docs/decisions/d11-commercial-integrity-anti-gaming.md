@@ -7,6 +7,7 @@
 - **Applicable environment / jurisdiction:** synthetic advisory evaluation until approval; United Kingdom
 - **Source / supporting review:** BUILD_PLAN.md §2 and M1-16; owner anti-gaming design and commercial review required
 - **Executable feature gate:** `G4; production_integrity_signals/thresholds require D11; no signal may authorize an automatic charge or account action`
+- **Synthetic inspection profile:** [`commercial_integrity_demo_v1`](../../packages/core/src/commercial-integrity.ts) is explicitly linked for M1-16-S demonstrations only. Its example thresholds are not this proposed production policy and are never a production default.
 
 ## Exact proposed policy
 
