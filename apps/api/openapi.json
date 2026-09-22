@@ -911,6 +911,66 @@
           "readiness"
         ]
       }
+    },
+    "/jobs/{id}/relevance-inbox": {
+      "get": {
+        "operationId": "InboxRelevanceController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List source-linked mandatory and advisory Decisions",
+        "tags": [
+          "inbox relevance"
+        ]
+      }
+    },
+    "/jobs/{id}/relevance-inbox/seed": {
+      "post": {
+        "operationId": "InboxRelevanceController_seed",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record deterministic synthetic findings",
+        "tags": [
+          "inbox relevance"
+        ]
+      }
+    },
+    "/jobs/{id}/relevance-inbox/budget": {
+      "post": {
+        "operationId": "InboxRelevanceController_budget",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record an advisory budget revision",
+        "tags": [
+          "inbox relevance"
+        ]
+      }
+    },
+    "/jobs/{id}/relevance-inbox/{decisionId}/dismiss": {
+      "post": {
+        "operationId": "InboxRelevanceController_dismiss",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Dismiss one job-bound advisory Decision idempotently",
+        "tags": [
+          "inbox relevance"
+        ]
+      }
     }
   },
   "info": {

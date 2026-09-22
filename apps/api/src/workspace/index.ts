@@ -39,3 +39,6 @@ export * from "../recovery-case.contracts.js";
 export * from "../recovery-case.application.js";
 export * from "../things-to-check.contracts.js";
 export * from "../things-to-check.application.js";
+
+export * from "../inbox-relevance.contracts.js";
+export * from "../inbox-relevance.application.js";
