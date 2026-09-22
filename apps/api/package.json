@@ -47,6 +47,10 @@
     "./value-contracts": {
       "types": "./src/value/contracts.ts",
       "import": "./dist/value/contracts.js"
+    },
+    "./commercial-integrity": {
+      "types": "./src/commercial-integrity.application.ts",
+      "import": "./dist/commercial-integrity.application.js"
     }
   },
   "scripts": {

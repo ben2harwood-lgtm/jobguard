@@ -971,6 +971,36 @@
           "inbox relevance"
         ]
       }
+    },
+    "/jobs/{id}/commercial-integrity": {
+      "get": {
+        "operationId": "CommercialIntegrityController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Inspect synthetic-only D11 advisory projections",
+        "tags": [
+          "commercial integrity"
+        ]
+      }
+    },
+    "/jobs/{id}/commercial-integrity/reviews": {
+      "post": {
+        "operationId": "CommercialIntegrityController_review",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append false-positive feedback without taking account or money action",
+        "tags": [
+          "commercial integrity"
+        ]
+      }
     }
   },
   "info": {
