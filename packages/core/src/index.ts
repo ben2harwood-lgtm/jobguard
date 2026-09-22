@@ -30,3 +30,4 @@ export * from "./purchase-order.js";
 export * from "./supplier-documents.js";
 export * from "./supplier-facts.js";
 export * from "./supplier-fact-corpus.js";
+export * from "./supplier-matching.js";
