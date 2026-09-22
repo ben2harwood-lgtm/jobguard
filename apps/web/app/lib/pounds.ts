@@ -1,0 +1,1 @@
+export function pounds(pence:number):string{const absolute=Math.abs(pence),whole=Math.floor(absolute/100).toLocaleString("en-GB"),minor=String(absolute%100).padStart(2,"0");return`${pence<0?"−":""}£${whole}.${minor}`}
