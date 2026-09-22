@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice"] as const;
+export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice"] as const;
 export const supplierDocumentIntakeV1 = z.object({
   version: z.literal("supplier-document-intake.v1"),
   fixtureId: z.enum(supplierFixtureIds),
@@ -15,6 +15,8 @@ export type SupplierDocumentIntake=z.infer<typeof supplierDocumentIntakeV1>;
 export const supplierFixtures = {
   "materials-B-delivery": {type:"delivery",number:"DEL-MB-001",media:"application/pdf",bytes:"%PDF-1.4\nSynthetic delivery: 10 each\n%%EOF",pages:1},
   "materials-B-invoice": {type:"invoice",number:"INV-MB-001",media:"text/plain",bytes:"FICTIONAL SUPPLIER INVOICE INV-MB-001\n10 each @ GBP 25.00\nNET GBP 250.00",pages:1},
+  "materials-B-revised-invoice": {type:"invoice",number:"INV-MB-001-R",media:"text/plain",bytes:"FICTIONAL REVISED SUPPLIER INVOICE INV-MB-001-R\n8 each @ GBP 20.00\nNET GBP 160.00",pages:1},
+  "materials-320-invoice": {type:"invoice",number:"INV-M320-001",media:"text/plain",bytes:"FICTIONAL SUPPLIER INVOICE INV-M320-001\n40 each @ GBP 28.00\nNET GBP 1120.00",pages:1},
   "materials-B-credit": {type:"credit",number:"CR-MB-001",media:"application/pdf",bytes:"%PDF-1.4\nSynthetic supplier credit CR-MB-001 GBP 90.00\n%%EOF",pages:1},
   "pending": {type:"invoice",number:null,media:"application/pdf",bytes:"generated incomplete fixture",pages:1,hold:"Upload is incomplete"},
   "corrupt": {type:"invoice",number:null,media:"application/pdf",bytes:"not-a-pdf",pages:1,hold:"Corrupt document"},

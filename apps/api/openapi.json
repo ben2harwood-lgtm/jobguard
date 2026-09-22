@@ -806,6 +806,66 @@
           "recovery-cases"
         ]
       }
+    },
+    "/jobs/{id}/things-to-check": {
+      "get": {
+        "operationId": "ThingsToCheckController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read cited supplier discrepancy decisions",
+        "tags": [
+          "things-to-check"
+        ]
+      }
+    },
+    "/jobs/{id}/things-to-check/evaluate": {
+      "post": {
+        "operationId": "ThingsToCheckController_evaluate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Evaluate confirmed matched facts with a versioned pure rule",
+        "tags": [
+          "things-to-check"
+        ]
+      }
+    },
+    "/jobs/{id}/things-to-check/review": {
+      "post": {
+        "operationId": "ThingsToCheckController_review",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Dismiss or dispute a finding with a reason",
+        "tags": [
+          "things-to-check"
+        ]
+      }
+    },
+    "/jobs/{id}/things-to-check/supersede-bill": {
+      "post": {
+        "operationId": "ThingsToCheckController_supersede",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve a confirmed source-backed replacement bill",
+        "tags": [
+          "things-to-check"
+        ]
+      }
     }
   },
   "info": {
