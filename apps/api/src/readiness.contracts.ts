@@ -1,0 +1,1 @@
+import{z}from"zod";export const readinessPlanV1=z.object({version:z.literal("readiness-plan.v1"),commandId:z.string().uuid(),scenarioNow:z.string().datetime(),resolved:z.boolean().optional()}).strict();export const readinessAdvanceV1=z.object({version:z.literal("readiness-clock.v1"),commandId:z.string().uuid(),scenarioNow:z.string().datetime()}).strict();

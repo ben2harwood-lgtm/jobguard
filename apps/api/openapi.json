@@ -866,6 +866,51 @@
           "things-to-check"
         ]
       }
+    },
+    "/jobs/{id}/readiness": {
+      "get": {
+        "operationId": "ReadinessController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read next-workday readiness from recorded synthetic facts",
+        "tags": [
+          "readiness"
+        ]
+      }
+    },
+    "/jobs/{id}/readiness/plan": {
+      "post": {
+        "operationId": "ReadinessController_plan",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm an immutable synthetic work-plan revision",
+        "tags": [
+          "readiness"
+        ]
+      }
+    },
+    "/jobs/{id}/readiness/advance": {
+      "post": {
+        "operationId": "ReadinessController_advance",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Advance the per-run scenario clock and deduplicate the due review",
+        "tags": [
+          "readiness"
+        ]
+      }
     }
   },
   "info": {
