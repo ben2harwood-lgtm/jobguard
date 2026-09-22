@@ -51,3 +51,69 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Audit all dependency scopes; findings and lookup errors fail
         run: node tools/dependency-audit.mjs
+  offline-workbench:
+    # Disposable developer fixture only. Never runs on main or arbitrary PRs.
+    if: github.event_name == 'pull_request' && github.head_ref == 'codex/m0-1/offline-test-workbench' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0 }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @jobguard/web exec playwright install chromium
+      - name: Package only code, pinned dependencies and disposable tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/jobguard-offline-workbench"
+          mkdir -p "$out/tooling/bin" "$out/artifact"
+          # No runner HOME, credentials, environment dump, .env, databases or
+          # generated customer documents are included. Git credentials are not persisted.
+          git bundle create "$out/artifact/source.bundle" HEAD
+          tar -czf "$out/artifact/dependencies.tar.gz" node_modules apps/*/node_modules packages/*/node_modules
+          cp "$(command -v node)" "$out/tooling/bin/node"
+          cp -aL "$PNPM_HOME/../pnpm" "$out/tooling/pnpm"
+          tar -czf "$out/artifact/tooling.tar.gz" -C "$out" tooling
+          tar -czf "$out/artifact/browsers.tar.gz" -C "$HOME/.cache" ms-playwright
+          {
+            printf 'commit='; git rev-parse HEAD
+            printf 'node='; node --version
+            printf 'pnpm='; pnpm --version
+            printf 'lockfile_sha256='; sha256sum pnpm-lock.yaml | cut -d' ' -f1
+            printf 'purpose=synthetic local development only; not a release or review verdict\n'
+          } > "$out/artifact/manifest.txt"
+          (cd "$out/artifact" && sha256sum source.bundle dependencies.tar.gz tooling.tar.gz browsers.tar.gz > SHA256SUMS)
+      - name: Retain immutable disposable workbench for one day
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: jobguard-offline-workbench-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/jobguard-offline-workbench/artifact/source.bundle
+            ${{ runner.temp }}/jobguard-offline-workbench/artifact/dependencies.tar.gz
+            ${{ runner.temp }}/jobguard-offline-workbench/artifact/tooling.tar.gz
+            ${{ runner.temp }}/jobguard-offline-workbench/artifact/manifest.txt
+            ${{ runner.temp }}/jobguard-offline-workbench/artifact/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+      - name: Retain separate disposable test browser
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: jobguard-offline-browser-${{ github.sha }}
+          path: ${{ runner.temp }}/jobguard-offline-workbench/artifact/browsers.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+      - name: Retain standalone pinned pnpm package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: jobguard-offline-pnpm-${{ github.sha }}
+          path: ${{ runner.temp }}/jobguard-offline-workbench/tooling/pnpm/
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 1
