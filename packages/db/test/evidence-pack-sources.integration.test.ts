@@ -71,9 +71,15 @@ describe("evidence pack immutable sources", () => {
       await admin!.query("UPDATE app.job SET accepted_quote_version_id=$1 WHERE tenant_id=$2 AND id=$3", [fixture.quoteId, fixture.tenantId, fixture.jobId]);
     }
   });
-  it("reports missing accepted/proof/variation records as omissions", async () => {
+  it("does not invent a variation requirement for an unchanged job", async () => {
+    const unchanged = await seedEvidencePackFixture(admin!, { withVariation: false });
+    const result = await load(unchanged.caseId, unchanged.tenantId);
+    expect(result.sources.some(source => source.kind === "variation")).toBe(false);
+    expect(result.omissions).toEqual([]);
+  });
+  it("reports missing accepted/proof records as omissions", async () => {
     const result = await load(fixture.emptyCaseId);
     expect(result.sources.every(source => source.kind === "recovery_case")).toBe(true);
-    expect(result.omissions).toEqual(expect.arrayContaining(["Accepted quote and approval unavailable", "Verified proof unavailable", "Approved variations unavailable"]));
+    expect(result.omissions).toEqual(expect.arrayContaining(["Accepted quote and approval unavailable", "Verified proof unavailable"]));
   });
 });

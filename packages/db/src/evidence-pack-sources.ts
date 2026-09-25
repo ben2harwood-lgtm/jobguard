@@ -74,7 +74,7 @@ export async function loadEvidencePackSources(db: TenantTransaction, tenantId: s
     add("variation_revision", variation, "variation", "Approved variation immutable revision");
     add("variation_approval", { id: variation.approval_id, version: 1, record: variation.approval }, "approval", "Variation approval record");
   }
-  if (!variations.rowCount) omissions.push("Approved variations unavailable");
+  // An unchanged job legitimately has no approved variations. Never fabricate one.
 
   const claims = await db.$client.query<SourceRow>("SELECT id,revision version,to_jsonb(r) record FROM app.recovery_claim_revision r WHERE tenant_id=$1 AND job_id=$2 AND case_id=$3 ORDER BY revision", [tenantId, jobId, caseId]);
   if (!claims.rowCount) throw new EvidencePackSourceError("EVIDENCE_PACK_SOURCE_NOT_FOUND", caseId);
