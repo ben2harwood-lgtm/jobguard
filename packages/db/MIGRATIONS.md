@@ -102,3 +102,11 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 ## 0039 readiness
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
+
+## 0043_practice_feed.sql (M4-7-S)
+
+Adds append-only synthetic account/session ownership, command and validated adapter-event tables. Number 0042 is reserved to the sibling M4-5-S lane and is deliberately not used here. Existing jobs need no backfill. The preceding application ignores these additive tables and remains compatible. Fresh and repeated/upgrade migration paths use the registry; corrections are forward migrations, never deletion of retained facts.
+
+All three tables use FORCE RLS, migration ownership, tenant/job-qualified FKs and runtime SELECT/INSERT only. Invoker triggers validate the current live membership, session-owned account, environment, command revision, exact generated scenario/event fields and integrity hash. A deferred trigger requires the transactional audit. No SECURITY DEFINER writer, provider SDK or external action is added. The SHA-256 is an integrity hash, not a signature: event authority comes from the server-selected deterministic adapter and database command/event validation. Runtime SQL cannot insert arbitrary settled facts merely by supplying an amount.
+
+Revocation appends a disconnect command, stops further ingestion and retains all history. Pending events cannot downgrade settled events; known aliases project to one durable account-qualified movement identity. An uncertain identity is held until explicit reconciliation; reconciliation preserves original event history. These tables have no FK/write route into production/pilot settlement, allocation or ledger tables. The fixed demo principal still requires live membership; session ownership protects newly connected feeds but does not retroactively make older shared demo job data private.
