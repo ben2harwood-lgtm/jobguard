@@ -1,6 +1,241 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/practice-feed": {
+      "get": {
+        "operationId": "PracticeFeedController_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "practice-feed-query.v1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted practice-feed-view.v1; synthetic movement facts only"
+          },
+          "403": {
+            "description": "Session, membership or synthetic environment forbidden"
+          }
+        },
+        "summary": "Read session-owned synthetic movement facts without connecting a provider",
+        "tags": [
+          "practice-feed"
+        ]
+      },
+      "post": {
+        "operationId": "PracticeFeedController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "connect"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "disconnect"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reconcile_duplicate"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "scenario"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "advance"
+                        ]
+                      },
+                      "scenario": {
+                        "type": "string",
+                        "enum": [
+                          "pending_384",
+                          "settled_384",
+                          "replay_event",
+                          "page_overlap",
+                          "alternate_representation",
+                          "unknown_duplicate"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Persisted practice-feed-view.v1; settlement never allocates money"
+          },
+          "409": {
+            "description": "Stale revision, conflicting command replay, or disconnected feed"
+          }
+        },
+        "summary": "Execute a versioned practice feed lifecycle or deterministic adapter scenario",
+        "tags": [
+          "practice-feed"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_health",
