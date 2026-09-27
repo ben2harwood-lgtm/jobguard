@@ -5,7 +5,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { migrate, type VerifiedTenantContext, withTenant } from "../src/index.js";
+import { migrate, RecoveryCaseRepository, type VerifiedTenantContext, withTenant } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
 const T="10000000-0000-4000-8000-000000000001",J="20000000-0000-4000-8000-000000000002",C1="30000000-0000-4000-8000-000000000003",C2="30000000-0000-4000-8000-000000000004",R="40000000-0000-4000-8000-000000000004",E="50000000-0000-4000-8000-000000000005",EA1="60000000-0000-4000-8000-000000000006",LA1="70000000-0000-4000-8000-000000000007",EA2="60000000-0000-4000-8000-000000000008",LA2="70000000-0000-4000-8000-000000000009";
@@ -17,5 +17,24 @@ const payload=(caseId:string,eligibility:string,landing:string)=>({version:"reco
 describe("structural recovery fee guard",()=>{
  it("configures only the generated synthetic scenario through the narrow routine",async()=>{const command=randomUUID();await withTenant(runtime,context,db=>db.$client.query(`SELECT app.configure_recovery_demo($1,$2,$3)`,[J,command,"eligible"]));const row=(await withTenant(runtime,context,db=>db.$client.query(`SELECT scenario,evidence_id,receipt_id FROM app.recovery_demo_selection WHERE tenant_id=$1 AND job_id=$2`,[T,J]))).rows[0];expect(row.scenario).toBe("eligible");expect(row.evidence_id).toBeTruthy();expect(row.receipt_id).toBeTruthy();await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.recovery_demo_selection(tenant_id,job_id,command_id,scenario,case_id)VALUES($1,$2,$3,'eligible',$4)`,[T,J,randomUUID(),C1]))).rejects.toMatchObject({code:"42501"});});
  it("denies actual direct runtime writes and serializes competing receipt allocations",async()=>{await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.recovery_fee_journal(id,tenant_id,job_id,derivation_id,kind,amount_pence,currency,debit_code,credit_code)VALUES(gen_random_uuid(),$1,$2,gen_random_uuid(),'fee_obligation',1,'GBP','a','b')`,[T,J]))).rejects.toMatchObject({code:"42501"});const outcomes=await Promise.allSettled([withTenant(runtime,context,db=>db.$client.query(`SELECT app.approve_synthetic_landing($1::jsonb)`,[payload(C1,EA1,LA1)])),withTenant(runtime,context,db=>db.$client.query(`SELECT app.approve_synthetic_landing($1::jsonb)`,[payload(C2,EA2,LA2)]))]);expect(outcomes.filter(x=>x.status==="fulfilled")).toHaveLength(1);expect(outcomes.filter(x=>x.status==="rejected")).toHaveLength(1);expect((await admin.query(`SELECT sum(gross_pence) total FROM app.landing_allocation WHERE tenant_id=$1 AND receipt_id=$2`,[T,R])).rows[0].total).toBe("70");});
+ it("the existing landing routine reads amended workbench claims and revisions", async()=>{
+  const repo=new RecoveryCaseRepository(runtime),reviewer="verified-test-reviewer";
+  let c=await repo.command(context,J,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",claimedNetPence:100,counterparty:"Synthetic",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Invoice"],expectedRevision:0},reviewer);
+  c=await repo.command(context,J,{version:"recovery-case-command.v1",action:"amend_claim",commandId:randomUUID(),caseId:c.id,claimedNetPence:50,expectedRevision:c.revision},reviewer);
+  c=await repo.command(context,J,{version:"recovery-case-command.v1",action:"transition",commandId:randomUUID(),caseId:c.id,eventType:"assemble_evidence",expectedRevision:c.revision},reviewer);
+  const receipt=randomUUID(),eligibility=randomUUID(),landing=randomUUID();
+  await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1,$2,$3,$1,$1,'settled',100,'GBP',true,now())",[receipt,T,J]);
+  for(const [id,kind] of [[eligibility,"eligibility"],[landing,"landing"]])await admin.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id)VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',now()+interval '1 hour',$7)",[id,T,J,c.id,kind,c.revision,randomUUID()]);
+  const p={...payload(c.id,eligibility,landing),receiptId:receipt,expectedCaseRevision:c.revision,grossPence:60,eligibleNetPence:60};
+  await expect(withTenant(runtime,context,db=>db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[p]))).rejects.toThrow("allocation exceeds available receipt or claim");
+  await expect(withTenant(runtime,context,db=>db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[{...p,expectedCaseRevision:0}]))).rejects.toThrow("eligible current synthetic case required");
+  // Execute the positive path and roll back only this test's financial effect.
+  await withTenant(runtime,context,async db=>{
+   await db.$client.query("SAVEPOINT valid_landing");
+   const result=await db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb) id",[{...p,grossPence:40,eligibleNetPence:40}]);
+   expect(result.rows[0].id).toBe(p.derivationId);
+   await db.$client.query("ROLLBACK TO SAVEPOINT valid_landing");
+  });
+ });
  it("rejects incomplete proof, pending cash, prevented cases, and stale approval in PostgreSQL",async()=>{for(const statement of [`UPDATE app.synthetic_recovery_receipt SET status='pending',settled_at=NULL WHERE id='${R}'`,`UPDATE app.recovery_case SET state='prevented' WHERE id='${C2}'`,`UPDATE app.recovery_approval SET expires_at=now()-interval '1 second' WHERE id='${EA2}'`]){await admin.query(`SET session_replication_role=replica;${statement};SET session_replication_role=origin`);await expect(withTenant(runtime,context,db=>db.$client.query(`SELECT app.approve_synthetic_landing($1::jsonb)`,[payload(C2,EA2,LA2)]))).rejects.toBeTruthy();}await admin.query(`SELECT set_config('app.tenant_id','${T}',false);SET session_replication_role=replica;INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code)VALUES(gen_random_uuid(),'${T}','${E}',gen_random_uuid(),'verification_invalid');SET session_replication_role=origin`);expect((await admin.query(`SELECT reason FROM app.recovery_review WHERE tenant_id=$1`,[T])).rows).toEqual([{reason:"evidence_invalidated"}]);});
 });
