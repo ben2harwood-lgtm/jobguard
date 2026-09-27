@@ -1,12 +1,16 @@
 # AGENTS.md — JobGuard build conventions
 
-**Revision:** 2.2 · 11 September 2026 (independent-check fixes; see `BUILD_PLAN.md` rev 2.2 change log)  
-**Companion:** `BUILD_PLAN.md`, revision 2.2  
+**Revision:** 2.4 · 25 September 2026, adopted with twelve plan corrections 26 September 2026 (monetisation consolidation; see `BUILD_PLAN.md` rev 2.4 change log, item 5, and §15)  
+**Companion:** `BUILD_PLAN.md`, revision 2.4  
 **Status:** implementation instructions, not a statement that the repository or any feature has been verified.
 
+> **Rev 2.4 note:** the subscription is priced by jobs on the go (D09 v3, proposed). §5.10 clarifies the extra-job charge, §5.14 severs the meter from the shadow bill, and a new §5.15 lists money JobGuard never takes. Rev 2.3 is preserved at `docs/archive/AGENTS.rev2.3.md`.
+>
+> **Rev 2.3 note:** the commercial model is now a recurring subscription plus a separate 10% success fee (`reference_fee_policy_v3`, proposed). §5.6 and §5.10 are amended and a new §5.14 makes the shadow-bill rules invariants. Rev 2.2 is preserved at `docs/archive/AGENTS.rev2.2.md`.
+>
 > **Rev 2.2 note:** an independent seven-lens check (2026-09-11) confirmed the fee model, dependency graph, gate coherence, security architecture and regulatory deferrals. The surviving fixes are logged in `BUILD_PLAN.md` rev 2.2. The two AGENTS changes are: Node 24 recorded as an approved deviation (§3), and a new §5.13 making the independent-checker loop a durable invariant. Rev 2.1 is preserved at `docs/archive/AGENTS.rev2.1.md`.
 
-You are an autonomous coding agent building **JobGuard**, a UK “profit watchdog for builders”: a builder talks through a job on site; it becomes a reviewed quote; the same job goes live; JobGuard watches the job and the money, asks the builder only for decisions that are genuinely theirs, and assembles the final account without re-typing.
+You are an autonomous coding agent building **JobGuard**, a UK “profit watchdog for builders”: a builder talks through a job on site; it becomes a reviewed quote; the same job goes live; JobGuard watches the job and the money, asks the builder only for decisions that are genuinely theirs, and assembles the final account without re-typing. After the builder completes the final account, JobGuard runs an independent final check and reveals work it found in the job's evidence that is missing from the bill (§5.14).
 
 Read this file before every task. Read the applicable contracts and task in `BUILD_PLAN.md` before changing code. The original documents have been replaced in full; old task numbers are not authoritative.
 
@@ -136,7 +140,7 @@ A journal has immutable headers and balanced debit/credit lines. Posted entries 
 
 A positive recovery-fee posting must be derived from approved, immutable, qualifying landing allocations for the same tenant/job, with finalized evidence and available unallocated settled value. A non-null evidence ID, pending transaction, claim letter, builder’s “mark paid”, or classifier score is not enough.
 
-The cap is fixed from the accepted net job value at switch-live. Aggregate eligible landing, cap consumption, plan-fee credit, prior postings, and reversals are evaluated under locking. A unique derivation/source identity prevents duplicates. Multiple cases on one job share one cap and one plan-fee credit pool.
+Under `reference_fee_policy_v3` (proposed) the success fee is 10% of cumulative qualifying recovered net principal, with no cap, no base-plan credit and no subscription offset. Aggregate qualifying principal, prior postings and reversals are evaluated under locking, rounding once on the cumulative exact value. A unique derivation/source identity prevents duplicates. A `missed_variation_final_account` recovery additionally requires an immutable attribution revision satisfying `BUILD_PLAN.md` §14.6. The v1 cap and plan-credit rules apply only to existing v1 synthetic data.
 
 Use same-row checks and composite foreign keys where they apply, plus controlled posting routines and triggers for cross-row invariants. An ordinary PostgreSQL `CHECK` is not a cross-table integrity mechanism. The runtime cannot bypass the controlled financial write path.
 
@@ -170,11 +174,11 @@ Golden sets measure omission, unsupported additions, citation validity, ambiguit
 
 ### 5.10 Free quoting never bills; simulations never become production facts
 
-Creating, editing, reviewing, generating, or sending a quote cannot create platform fee obligations, payment requests, or platform ledger postings. Quote acceptance alone also does not activate a paid plan; **switch-live** is an explicit, separately authorized boundary.
+Creating, editing, reviewing, generating, or sending a quote cannot create platform fee obligations, payment requests, or platform ledger postings. Quote acceptance alone also does not create a charge; **switch-live** is an explicit, separately authorized boundary that freezes the baseline. Under v3 the platform charge is a tenant-level subscription (D09), never a per-job base fee, and subscription payments never offset success fees. The D09 extra-job charge is a capacity charge on the tenant, measured only by how many jobs are live at once; it is never attached to a job's value, a quote, an acceptance or a finding.
 
 The M1 real-user pilot is `pilot_no_charge`. It may send real builder documents only after its release gate, but it does not accrue or collect JobGuard fees. Hypothetical fee statements are clearly labelled. Synthetic paid examples run in an isolated demo/sandbox environment using the same command contracts, not production settlement overrides.
 
-M4 production accounting distinguishes obligations, issued invoices, settled principal/tax, provider clearing, refunds, and disputes. A checkout redirect, a demo flag, or `job.switched_live` never means £79 was paid. M1 pilot jobs cannot be retroactively billed without a new, explicit migration/activation agreement.
+M4 production accounting distinguishes obligations, issued invoices, settled principal/tax, provider clearing, refunds, and disputes. A checkout redirect, a demo flag, or `job.switched_live` never means a subscription or fee was paid. M1 pilot jobs cannot be retroactively billed without a new, explicit migration/activation agreement.
 
 ### 5.11 Operational safety and residency precede real data
 
@@ -193,6 +197,25 @@ Offline intent may be queued, but stale approval, changed price, revoked members
 ### 5.13 Every task carries an independent recorded verdict (rev 2.2)
 
 This build runs a cross-model loop: a builder agent (Codex) builds one task as one reviewable PR with a truthful run receipt; a **different** model records an independent verdict bound to the exact commit before technical acceptance; a separate actor records acceptance; the founder issues work and owns merge/push/release. A builder never accepts its own work. A deterministic check result is labelled as such and is not presented as a model review. Recorded verdicts live in `docs/verdicts/`. "Reviewed" requires a real recorded response for the relevant diff, not an assertion. Treat "source-inspected", "test-executed" and "independently-verified" as three different claims; missing evidence is a hold, not a pass. This mirrors the OWN MIND cross-model working agreement and makes it a durable JobGuard invariant rather than a one-off packet instruction.
+
+### 5.14 The shadow bill is hidden, fair and fee-bounded (rev 2.3)
+
+- **Builder capture is always fee-free.** Capture means a **Log an extra** record in any state (draft, priced, approved, rejected, withdrawn), a line the builder adds at final review before lock, or baseline scope. Everything else JobGuard holds — diary and voice notes not submitted as Log an extra, photos, supplier documents, purchase orders, customer messages — is evidence. Matching between a signal and a capture resolves ambiguity in the builder's favour.
+- **Hidden until lock, structurally.** Shadow signals live in tables the builder runtime role cannot read. Before the final-account lock, no builder-facing response, notification, count, export, error, cache key or timing path may vary with their existence. Support access is break-glass and audited.
+- **Any disclosure before lock is permanent ineligibility.** Early surfacing under a D13 must-surface rule (safety, significant work needing prior written agreement, a worsening dispute, a legal duty), a support conversation, an export or a data-subject access response all set `disclosed_before_lock`, and that signal can never earn a fee. When a must-surface rule fires, surface it; never suppress it to protect a fee.
+- **One immutable lock per job.** The lock binds the exact final-account revision, baseline, capture-register snapshot, declaration text, actor and server time. Only evidence received before lock can qualify (v1). Final customer invoice issue requires the lock, so the final check always precedes the invoice.
+- **Signals are proposals, never liability.** No detector, model or confidence score creates a variation, invoice line, debt or fee. A catch becomes billable only by explicit builder confirmation through the normal variation path, and a fee arises only from settled, allocated, unreversed cash (`BUILD_PLAN.md` §14.6–14.9).
+- **The meter is severed from the shadow bill.** The jobs-on-the-go count is computed only from the builder's own commands and server timestamps. No hidden signal, finding or document count may change a count, a plan, a bill or anything a builder sees before lock.
+- **Never degrade the builder's own billing to create fees.** JobGuard keeps tracking and billing every builder capture fully; the shadow bill only withholds JobGuard's own findings until the final check.
+
+### 5.15 Money JobGuard never takes (rev 2.4)
+
+- No money from merchants or suppliers (connector fees, rebates, commissions), lenders, lead platforms or the builder's customers. Insurer and professional-body commissions only under an approved D15, never in the pilot.
+- No fee, credit, signal or feature depends on which merchant a builder uses.
+- No fee is measured on a tax outcome (VAT, CIS, bad-debt relief).
+- No change to the 10% rate by automatic minimums or bands; optional services are separate, builder-chosen charges.
+- No paid disclosure of findings held for the Final Check.
+- The builder's customers' payments always go to the builder's own provider account; JobGuard never holds them.
 
 ## 6. M1 core loop and success claim
 

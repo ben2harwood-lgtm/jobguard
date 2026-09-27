@@ -1,9 +1,23 @@
 # BUILD_PLAN.md — JobGuard, for Codex
 
-**Revision:** 2.2 · 11 September 2026 (independent-check fixes; see change log below)  
-**Companion:** `AGENTS.md`, revision 2.2  
+**Revision:** 2.4 · 25 September 2026, adopted with twelve corrections 26 September 2026 (monetisation consolidation; see change log below)  
+**Companion:** `AGENTS.md`, revision 2.4  
 **Status:** full replacement implementation plan; repository and provider accounts have not been inspected. Requirements below describe work to perform, not completed or verified implementation.
 
+> **Rev 2.4 change log** — monetisation consolidation (2026-09-25). Rev 2.3 is preserved at `docs/archive/BUILD_PLAN.rev2.3.md`. New **§15** governs where it conflicts with earlier text.
+> 1. **Pricing:** jobs-on-the-go subscription — Solo £29 (4), Builder £69 (7), Firm £179 (13), Contractor £349 (20) — with extra-job charges instead of forced upgrades, a monthly maximum, small jobs under £2,000 free, and a free first job (D09 v3, D05 v2).
+> 2. **Built-work changes (CH-1…CH-9):** v3 switch-live without the £79 obligation or cap; the watchdog restricted to live jobs; structured customer and site; work-state events and post-lock rules; import, integrity, eligibility, evidence-pack and value-page updates.
+> 3. **New work (MON-1…MON-10):** meter, plans and billing (replacing M4-11), free first job, fee on the payment screen, customer portal, pay-now links, prevention checks, entitlements, managed recovery, several companies under Contractor.
+> 4. **One order of remaining work** (§15.6) merging §13.6, §14 and §15; a sales promises register (§15.5); decision records D03 v3, D05 v2, D06 v2, D09 v3, D10 v2, D11 v3, D12 v3, D13 v2, new D14 and D15, all `proposed`.
+> 5. **Adoption corrections (2026-09-26; founder decision "Adopt with the fixes").** The twelve replacement pairs R01–R12 of the 26 September corrected-text packet are applied: §14.19 becomes a dependency table (SV-2 → SV-3; SV-0 is an adoption precondition, not a passed prerequisite); M4-8-S owns the §14.8 receipt-to-line allocator, depends on SV-2 and gains its acceptance tests; M4-9-S depends on SV-6, not the retired M4-11-S; M4-17-S depends on MON-2; the §14.13 M4-11-S row is superseded by MON-2 and the £30 placeholder is withdrawn; MON-7's synthetic work depends on M2-6-S; the §15 verdict count is corrected; §15.6 states readiness, synthetic-versus-live, dispatch-consistency, branch-convention and merge-authority rules, rows A–C are aligned, waves D/E become D1–D2 and E1–E5, and row F names the replacement leaves. No commercial decision text changed; D01, D03, D09, D11 and D13–D15 remain `proposed`.
+>
+> **Rev 2.3 change log** — commercial model amendment by founder direction (2026-09-24). Rev 2.2 is preserved at `docs/archive/BUILD_PLAN.rev2.2.md`. New **§14** governs where it conflicts with earlier text.
+> 1. **Model:** a recurring subscription (D09 v2) plus a separate 10% success fee on qualifying recovered net principal (D01 → `reference_fee_policy_v3`). No £79 per-job base, no cap and no plan credit. The subscription never offsets fees.
+> 2. **Shadow bill:** possible extras found in evidence (supplier documents, photos, diary/voice notes, customer messages) are held hidden until the builder locks the final account, then revealed. Only **Log an extra** entries (any state) and lines added at final review count as builder capture and are always fee-free. Any pre-lock disclosure makes a signal permanently fee-ineligible; D13 must-surface rules override hiding.
+> 3. **Decisions:** D01 v3, D03 v2 (adds `missed_variation_final_account`, tightens withheld-payment entry), D09 v2 (subscription pricing), D11 v2 (lock/reveal anti-gaming), D12 v2 (shadow data transparency) and new **D13** (shadow attribution and delayed disclosure), all `proposed`.
+> 4. **Payment allocation:** explicit allocation → separate invoice → pro-rata across lines outstanding at receipt; single rounding on the cumulative exact value.
+> 5. **Tasks:** new SV-0…SV-8; M4-11 replaced by subscription sign-up; M4-13 rewritten as subscription and success-fee agreement; the §13.6 fee leaves are rewritten to v3 (§14.13). The v1 formula and fixtures are kept only for existing synthetic data and tests.
+>
 > **Rev 2.2 change log** — applied after an independent seven-lens check (2026-09-11). The fee model, the M0 dependency graph, the gate coherence, the security architecture and the regulatory deferrals all passed adversarial refutation; these are the surviving fixes. Rev 2.1 is preserved at `docs/archive/BUILD_PLAN.rev2.1.md`.
 > 1. **New decision D12** (data protection of the builder's customers / third parties) added to §2 as `proposed`; G1 now requires it. The bank feed (M4-7) and pursuit (M4-5) ingest third-party personal data with no named lawful basis / UK GDPR Article 14 notice.
 > 2. **M0-2 DoD** now enumerates **D01–D12** (D11 was dropped in 2.1) and adds a **fitness test**: in `production` mode any fee-posting, tax-invoice or provider-dispatch site fails unless the matching D01/D02/D04 record is `approved` — a static check that these sites import the gate, plus a `proposed`-record denial test — mirroring M0-8's boundary test.
@@ -83,7 +97,7 @@ The deployment selects the mode; it is not a user-editable flag. A production wo
 | **G1 — real-data/no-charge pilot** | Any real personal data or real commercial document send | Approved processor/data-flow register; supported invoice/tax scope; permissions; privacy/retention procedure; secret management; alerts; backup and successful restore evidence; outbound kill switch; approved pilot terms stating no platform charge. |
 | **G2 — watchdog pilot expansion** | Operational reliance on M2 findings | Fixed labelled evaluation sets, published error metrics, confirmed input provenance, human review and false-positive feedback. |
 | **G3 — native release** | Real-data native distribution | Encrypted storage/device tests, download and upload authorization tests, revocation/cleanup behavior, supported build/OS matrix, tested sync migration. |
-| **G4 — production outcome billing** | Real recovery-fee invoicing or collection, paid activation/subscriptions | Relevant D01–D12 approvals; tested bank/fee/payment reconciliation, reversals, cap/credit cases, external-action authorization, penetration review of the money surface, operational runbooks, and controlled live smoke checks. Each rail can remain disabled independently. |
+| **G4 — production outcome billing** | Real success-fee invoicing or collection, paid subscriptions | Relevant D01–D15 approvals and the §14.18 additions; tested bank/fee/payment reconciliation, reversals, cap/credit cases, external-action authorization, penetration review of the money surface, operational runbooks, and controlled live smoke checks. Each rail can remain disabled independently. |
 | **G5 — enterprise/connector release** | Each connector or enterprise capability | Its task acceptance, updated data-flow approval, migration/restore evidence, and explicit customer-specific requirements. |
 
 Pending gates must block the affected production feature in configuration and server-side execution. They do not block unrelated synthetic development.
@@ -94,20 +108,23 @@ M0-2 creates the actual records in `docs/decisions/`. Every record has owner, st
 
 | Record | Proposed implementation basis | Required approval / deadline |
 |---|---|---|
-| **D01 — commercial fees and cap** | Section 3.5’s candidate: £79 base plan principal; 10% of eligible landed principal; 1.5% accepted-net-value cap on the recovery-fee calculation; settled plan principal credited once within the same job. Base plan fee is not reduced merely because the cap is below £79. | Product/commercial owner before production fee disclosure, obligation, or collection. Must approve small-job wording, cancellation/refund terms, and whether this proposed cap interpretation is acceptable. |
+| **D01 — commercial fees** (rev 2.3: `reference_fee_policy_v3`) | §14.9: 10% of qualifying recovered net principal, uncapped; no per-job base plan, no plan credit, no subscription offset. Superseded candidate v1 (§3.5: £79 base, 1.5% cap, plan credit) is retained only to interpret existing synthetic data. | Product/commercial owner before production fee disclosure, obligation, or collection. Must approve small-job wording, cancellation/refund terms, and whether this proposed cap interpretation is acceptable. |
 | **D02 — VAT, rounding, invoicing** | Candidate fee figures are VAT-exclusive; accepted job value and eligible recovery principal exclude VAT. M1 customer invoicing supports only explicitly confirmed standard-rated 20% GBP cases in the approved pilot scope. Tax rounding is separate from commercial half-even. | Qualified tax/accounting review and product approval before real tax invoices/fee collection. Decide platform VAT registration/treatment, invoice presentation, and jurisdiction. Do not label £79 as VAT-inclusive by inference. |
-| **D03 — eligible recovery and reversals** | Initial eligible outcome is evidenced settled cash principal attributable to an approved recovery case. Pending cash, prevented spending, unapplied credit notes, invoice reductions, and unverified manual receipts are non-billable. Applied credits remain excluded until an approved extension. | Product owner plus appropriate legal/accounting review before M4 billability or production fees. Define attribution, partial outcomes, duplicates, refunds, disputes, and evidentiary sufficiency. |
+| **D03 — eligible recovery and reversals** (rev 2.3: v2 adds §14.7 categories — `missed_variation_final_account`, cash-only supplier overcharge, and a strict withheld-payment entry test) | Initial eligible outcome is evidenced settled cash principal attributable to an approved recovery case. Pending cash, prevented spending, unapplied credit notes, invoice reductions, and unverified manual receipts are non-billable. Applied credits remain excluded until an approved extension. | Product owner plus appropriate legal/accounting review before M4 billability or production fees. Define attribution, partial outcomes, duplicates, refunds, disputes, and evidentiary sufficiency. |
 | **D04 — providers and residency** | EU/UK-only personal-data service boundary; UK primary hosting; no unapproved global fallback. Verify each actual deployment, not just vendor brand. | Data/security owner before any real data reaches a provider. Include AI, speech, auth email, commercial email, telemetry, OCR, sync, storage/backups, banking, payments, and accounting. |
 | **D05 — authority and standing consent** | Exact action approval by an authorized tenant member; each recovery-fee statement requires approval by default. A separately accepted, bounded subscription mandate may authorize defined renewals. | Product/legal/security owners before standing-authority execution. Define frequency, amounts, notices, expiry, cancellation, revocation, revalidation, and provider-managed retries/messages. |
 | **D06 — builder invoices, customer approval, jurisdiction** | M1 supports a reviewed simple-invoice pilot only, with no automated construction notices, CIS, DRC, retention, or unsupported VAT categories. Builder attestations remain visibly distinct from authenticated customer approvals. | Product/legal/tax review before G1 real invoice issue; expanded contract/jurisdiction templates before their M4 tasks. UK-wide product intent is not one universal construction-notice regime. |
 | **D07 — retention, recovery, and operations** | Private versioned evidence, explicit retention classes, deletion/export workflow, independent audit checkpoints, backup/restore. Proposed pilot recovery objectives: no more than 24 hours’ data loss and recovery within one working day. | Data/operations owner before G1; approve actual objectives and retention periods. Review WORM/legal holds before M4 retention is enabled. Proposed recovery objectives are targets, not measured service promises. |
 | **D08 — offline security and conflicts** | Encrypted per-user/tenant local storage, sensitive-field minimization, append-only commands for commercial actions, bounded offline access lease, last-writer-wins only for allowlisted non-commercial fields. | Security/product owner before G3. State lost-device and offline-revocation limitations honestly. |
-| **D09 — plan tiers and metering** | No assumed tier prices or included job counts. Define billable concurrency intervals, billing periods, inclusions, credits, and upgrade approval before implementation of paid tiers. | Commercial/accounting owners before M4 subscription/metering release. Subscription credit must not silently duplicate the per-job £79 credit. |
+| **D09 — subscription pricing and metering** (rev 2.3: v2) | Recurring subscription amount, monthly/annual frequency, any trial, optional active-job tiers, cancellation, price changes, grandfathering and payment failure. Subscription payments never reduce or offset success fees. No assumed tier prices or included job counts. Define billable concurrency intervals, billing periods, inclusions, credits, and upgrade approval before implementation of paid tiers. | Commercial/accounting owners before M4 subscription/metering release. Subscription credit must not silently duplicate the per-job £79 credit. |
 | **D10 — pursuit and banking route** | Builder sends approved factual communications; no autonomous debt collection or representation. Use an approved TrueLayer consent/licensing route and do not hold customer funds. | Appropriate legal/regulatory review and provider onboarding before real recovery pursuit/banking. Tone filters are not the review. |
-| **D11 — commercial integrity / anti-gaming** | Candidate: freeze `accepted_net_value` at switch-live and store the quoted and eventual final values beside it; detect and **flag, never auto-penalize** — a job won but never switched live, an accepted value materially below its quoted or final value, a live job whose activity is inconsistent with being run in JobGuard, and a recovery marked settled outside the app. All outputs are review signals, not proof. Option: bind the recovery-fee cap to the greater of accepted and quoted value. | Product/commercial owner. Reconcile with the owner’s own anti-gaming design; approve the cap basis, the thresholds, and what — if anything — a confirmed evasion changes. Detection is a signal, never a basis for an automatic charge, suspension, or account action. |
-| **D12 — data protection role and third-party transparency** | Candidate: JobGuard is a data **controller** for the builder-facing account and processing, and processes the builder's customers' and counterparties' personal data (esp. the TrueLayer bank feed at M4-7 and recovery pursuit at M4-5, plus merchant intake at M2-2) — none of whom is party to the builder–JobGuard contract. Name the lawful basis for that third-party processing and the UK GDPR **Article 14** ("personal data not obtained from the data subject") transparency mechanism: who serves the notice (builder-as-controller vs JobGuard) and how. This is distinct from D04 (residency/where-data-goes) and D07 (retention). | Data/legal owner before G1 (first real personal data) and hard before M4-7. Determine controller/processor status per data category; state the lawful basis; define the Article 14 notice route. A subprocessor register is not a controllership analysis. |
+| **D11 — commercial integrity / anti-gaming** (rev 2.3: v2 adds §14.10 lock/reveal controls and signals; cap signals become v1-only) | Candidate: freeze `accepted_net_value` at switch-live and store the quoted and eventual final values beside it; detect and **flag, never auto-penalize** — a job won but never switched live, an accepted value materially below its quoted or final value, a live job whose activity is inconsistent with being run in JobGuard, and a recovery marked settled outside the app. All outputs are review signals, not proof. Option: bind the recovery-fee cap to the greater of accepted and quoted value. | Product/commercial owner. Reconcile with the owner’s own anti-gaming design; approve the cap basis, the thresholds, and what — if anything — a confirmed evasion changes. Detection is a signal, never a basis for an automatic charge, suspension, or account action. |
+| **D12 — data protection role and third-party transparency** (rev 2.3: v2 adds §14.11 shadow-bill transparency and data-subject-access handling) | Candidate: JobGuard is a data **controller** for the builder-facing account and processing, and processes the builder's customers' and counterparties' personal data (esp. the TrueLayer bank feed at M4-7 and recovery pursuit at M4-5, plus merchant intake at M2-2) — none of whom is party to the builder–JobGuard contract. Name the lawful basis for that third-party processing and the UK GDPR **Article 14** ("personal data not obtained from the data subject") transparency mechanism: who serves the notice (builder-as-controller vs JobGuard) and how. This is distinct from D04 (residency/where-data-goes) and D07 (retention). | Data/legal owner before G1 (first real personal data) and hard before M4-7. Determine controller/processor status per data category; state the lawful basis; define the Article 14 notice route. A subprocessor register is not a controllership analysis. |
+| **D13 — shadow attribution and delayed disclosure** (rev 2.3) | §14.2–14.6: what may be held hidden; builder capture = Log an extra (any state) or a final-review line; evidence = everything else incl. diary notes; valid lock; evidence must be received before lock; deterministic must-surface rules and thresholds; any pre-lock disclosure → permanently ineligible; builder-favourable matching; disputes; onboarding disclosure; shadow access control and break-glass audit. | Founder plus legal review before any real-data shadow processing (pilot included) and before any success-fee posting. |
+| **D14 — paid data services** (rev 2.4) | §15.1/MON-7: free public-register layer in the plans; flat-priced company reports and title checks later; companies only. | Founder plus legal review before any paid check. |
+| **D15 — partner commissions and regulated introductions** (rev 2.4) | §15.1: only insurers and professional bodies, disclosed; never merchants, lenders, lead platforms or customers; never in the pilot. | Founder plus legal review before any partner money. |
 
-Until D01/D02/D03 are approved, implement their candidate as `reference_fee_policy_v1` for pure calculations and synthetic tests only. The UI must describe it as an illustration, not agreed pricing. A changed policy gets a new version; it does not rewrite accepted terms or historic postings.
+Until D01/D02/D03 are approved, implement their candidate (rev 2.3: `reference_fee_policy_v3`, §14.9; v1 remains for existing synthetic data) for pure calculations and synthetic tests only. The UI must describe it as an illustration, not agreed pricing. A changed policy gets a new version; it does not rewrite accepted terms or historic postings.
 
 ## 3. Canonical domain contracts
 
@@ -191,6 +208,8 @@ The Graphile dispatcher can enumerate outbox references through a narrow control
 The ECMAScript safe-integer boundary and HMRC guidance motivating explicit numerical/tax policies are recorded in Appendix C [R03, R12–R14]. The choices above are implementation requirements, not an assertion that every UK construction transaction uses the same treatment.
 
 ### 3.5 Candidate fee contract and required fixtures
+
+> **Rev 2.3:** superseded for new work by §14.9 (`reference_fee_policy_v3`). This v1 contract and its fixtures remain only to interpret existing synthetic v1 data and to keep merged v1 tests passing. Do not build new features on the £79 base, cap or plan credit.
 
 **This is a proposed reference policy, not an approved customer agreement.** It deliberately makes the previously ambiguous cap/credit interpretation visible for D01–D03 approval. All following amounts are **principal/ex-VAT**; a tax-correct gross cash statement is additional work, not a relabelling of these examples.
 
@@ -544,6 +563,8 @@ Do not create the entire roadmap schema in M0. Add each family with the task tha
 
 ### M1-6 Record acceptance of exact terms
 
+> **Rev 2.4:** authenticated customer acceptance added by MON-5 (§15.4).
+
 **Depends on:** M1-5.
 
 **Build:** “Record customer acceptance” with actual actor, method, date, exact quote revision/hash, and supporting evidence. M1 supports builder attestation with an explicitly labelled claim of customer approval; authenticated customer-link approval is a separately verified method, not a relabelled builder click.
@@ -555,6 +576,8 @@ Do not create the entire roadmap schema in M0. Add each family with the task tha
 - Acceptance alone never activates a plan, fixes a new paid obligation, or collects money. A stale or unauthorized acceptance attempt fails.
 
 ### M1-7 Switch live, freeze cap/baseline, and separate fee states
+
+> **Rev 2.3:** under v3 switch-live freezes the baseline and accepted value but creates no per-job base obligation or cap (§14.13).
 
 **Depends on:** M1-6, M0-10.
 
@@ -633,6 +656,8 @@ Do not create the entire roadmap schema in M0. Add each family with the task tha
 
 ### M1-13 Recovery outcome primitives and structural fee guard
 
+> **Rev 2.3:** extended to v3 by SV-6; v1 routine retained for existing synthetic data (§14.13).
+
 **Depends on:** M1-7, M0-10. (Track B — parallel with Track A; not blocked by customer billing.)
 
 **Build:** the minimal recovery event/landing-allocation schema and controlled fee-derivation/posting routine needed to test section 3.5/3.6. Use isolated synthetic provider facts, verified synthetic evidence, explicit eligibility/landing approval commands, and the same typed interfaces M4 extends. There is no production “toggle landed” control.
@@ -645,6 +670,8 @@ Do not create the entire roadmap schema in M0. Add each family with the task tha
 - The SQL test attempts actual forbidden writes and races in PostgreSQL; a Zod-only test is not accepted as structural enforcement.
 
 ### M1-14 Fee illustration and transparent per-job statement
+
+> **Rev 2.3:** v3 illustration and builder value receipt added by SV-6; v1 panel relabelled or retired (§14.13).
 
 **Depends on:** M1-13.
 
@@ -681,6 +708,8 @@ Do not create the entire roadmap schema in M0. Add each family with the task tha
 - Signals are strictly per-tenant and cannot read another tenant’s data. While D11 is pending, the cap stays on the D01 candidate and these signals run advisory in synthetic mode only.
 
 ### M1-17 Adopt an in-flight job (import path)
+
+> **Rev 2.4:** changed by CH-5 (§15.3).
 
 **Depends on:** M1-7; a decision record for import terms (D06/D11 as applicable). Independent track; not required for the M1-15 trial.
 
@@ -760,6 +789,8 @@ Do not create the entire roadmap schema in M0. Add each family with the task tha
 - A Decision does not send a claim, classify cash as landed, or charge a fee. Gate G2 requires reviewed pilot feedback as well as the benchmark.
 
 ### M2-6 Site-readiness model, factual adapters, and scheduled checks
+
+> **Rev 2.4:** property constraints added by MON-7 (§15.4).
 
 **Depends on:** M2-5.
 
@@ -893,6 +924,8 @@ The risk validation is now explicitly first. Do not interpret a later task numbe
 
 ## 9. M4 — Recovery + billing: the outcome engine
 
+> **Rev 2.3:** §14 amends M4. See §14.13 for per-task changes and §14.14 for new SV tasks. Affected tasks carry a pointer.
+
 Implement and test against provider sandboxes first. Real pursuit, bank access, invoices, and payment collection each require their applicable approvals. Core recovery/payment readiness and expanded customer-billing readiness are independently gated capabilities; completing an unrelated tax template is not proof that a payment rail is safe, or vice versa. Core G4 can be reviewed after M4-17 without enabling expanded customer billing. All planned tasks still require their own acceptance before milestone exit; a disabled or unapproved feature is not silently counted as completed.
 
 ### M4-1 Full RecoveryCase state machine and case workbench
@@ -909,6 +942,8 @@ Implement and test against provider sandboxes first. Real pursuit, bank access, 
 
 ### M4-2 Billability/attribution policy and review workflow
 
+> **Rev 2.3:** adds `missed_variation_final_account`, §14.7 entry tests and D13 (§14.13).
+
 **Depends on:** M4-1.
 
 **Build:** versioned D03 eligibility policy with default non-billable classifications; a cited classifier may propose but not decide; human review records category, attribution, claimed eligible principal, exclusions, and reasons. Resolve D01–D03 for any intended production fee path before enabling it.
@@ -920,6 +955,8 @@ Implement and test against provider sandboxes first. Real pursuit, bank access, 
 - Owner/adviser approval evidence is stored for D01–D03 or production fee functionality remains disabled; a green classifier test is not commercial approval.
 
 ### M4-3 Deterministic evidence-bundle assembly and verifier
+
+> **Rev 2.3:** packs add lock, capture snapshot, signals, reconciliation, reveal, disposition and settlement (§14.13).
 
 **Depends on:** M4-2.
 
@@ -981,6 +1018,8 @@ Implement and test against provider sandboxes first. Real pursuit, bank access, 
 
 ### M4-8 Landing reconciliation, partial allocations, and reversal controls
 
+> **Rev 2.3:** adds §14.8 customer-receipt-to-line allocation (§14.13).
+
 **Depends on:** M4-7.
 
 **Build:** deterministic cash-to-case matching suggestions using approved evidence, amount/reference/counterparty/date constraints, human confirmation, gross/net/tax allocations, shared-receipt allocation, duplicate underlying movement reconciliation, and reversal/dispute handling.
@@ -993,6 +1032,8 @@ Implement and test against provider sandboxes first. Real pursuit, bank access, 
 - Sandbox events/evidence cannot qualify for production, and ordinary “mark customer paid” records from M1 are not automatically imported as recovery proof.
 
 ### M4-9 Production fee derivation and authorized accrual
+
+> **Rev 2.3:** derive the v3 success fee only (§14.9); no base plan, cap or credit. Subscription obligations are separate (D09).
 
 **Depends on:** M4-8, M1-13.
 
@@ -1007,6 +1048,8 @@ Implement and test against provider sandboxes first. Real pursuit, bank access, 
 
 ### M4-10 Platform tax invoices, credit notes, and statement of account
 
+> **Rev 2.3:** success-fee and subscription lines only; no base-plan credit lines (§14.13).
+
 **Depends on:** M4-9.
 
 **Build:** JobGuard’s own invoice issuer/profile/numbering, approved VAT/tax policy, line-level provenance, separate base/recovery charges and credit application, credit-note/refund obligations, and principal/tax/gross statements. Keep platform documents distinct from builders’ customer invoices.
@@ -1019,6 +1062,8 @@ Implement and test against provider sandboxes first. Real pursuit, bank access, 
 - No collection is started merely by rendering a statement or issuing an unsupported/gated document.
 
 ### M4-11 Stripe one-off base activation payment
+
+> **Rev 2.3/2.4: replaced** by MON-2 (§15.4): subscription plans and billing, live on Stripe hosted subscriptions at G4; the acceptance below applies to the subscription payment, not a £79 per-job charge.
 
 **Depends on:** M4-10.
 
@@ -1046,6 +1091,8 @@ Implement and test against provider sandboxes first. Real pursuit, bank access, 
 
 ### M4-13 Subscription terms and bounded standing authorization
 
+> **Rev 2.3: rewritten** as “Subscription and success-fee agreement with bounded payment authorisation” (§14.13).
+
 **Depends on:** M4-12.
 
 **Build:** D05/D09-approved subscription terms, exact plan/price/version, billing-cycle basis, cancellation, and bounded standing authorization permitting only specified renewals/retries/notices. Disable provider-default automations that exceed that authorization.
@@ -1057,6 +1104,8 @@ Implement and test against provider sandboxes first. Real pursuit, bank access, 
 - Subscription discounts/credits have explicit allocation and cannot accidentally become the same per-job £79 credit a second time.
 
 ### M4-14 Concurrency metering and explicit tier-upgrade Decisions
+
+> **Rev 2.4: required** — delivered as MON-1, the jobs-on-the-go meter (§15.4).
 
 **Depends on:** M4-13.
 
@@ -1891,15 +1940,19 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 
 ### 35. M4-8-S — Allocate settled synthetic money to exact cases and handle reversals
 
-**Parent/dependencies:** M4-8; M4-2-S, M4-3-S, M4-7-S. **Backend + UI:** exact gross/net/tax allocation proposals, review/approve commands, available-value locks, source/claim/evidence linkage, partial allocation/dispute/reversal workbench. **Ben decision:** none under reference D03; uncertain allocation/tax basis is held.
+**Parent/dependencies:** M4-8; M4-2-S, M4-3-S, M4-7-S, SV-2. **Backend + UI:** exact gross/net/tax allocation proposals, review/approve commands, available-value locks, source/claim/evidence linkage, partial allocation/dispute/reversal workbench. Also implement §14.8 customer-receipt-to-line allocation using SV-1’s pure rules and SV-2’s §14.12 persistence: reliable explicit allocation first, separately settled invoice second, otherwise pro-rata across lines outstanding when the receipt arrived. Persist the source, rule and exact rational allocation; payments received before a caught line existed are not allocated to it. Refunds and credits follow the same hierarchy in reverse. This leaf owns the allocator; SV-6 consumes it for attribution, fee illustration and end-to-end acceptance. M4-8-S does not depend on SV-6. **Ben decision:** none for implementing the labelled synthetic candidate already specified in §14.8; uncertain allocation/tax basis is held, and all commercial decisions remain proposed.
 
 **Done when:**
 - Allocate gross £384 as net £320 + reference VAT £64 to claim 1, then gross £3,000 as net £2,500 + VAT £500 to claim 2: `await V('recovery-gross-movements','£3,384.00'); await V('eligible-net','£2,820.00'); await V('allocated-tax','£564.00');`. Each approved allocation links its immutable settled movement, finalized evidence, policy and reviewer. The displayed landing remains `Simulated`.
 - £100 + £220 net partial allocations reach £320, with available gross/tax conserved. Over-allocation, cross-job claim/evidence, reused underlying cash and concurrent alternative-representation allocations fail visibly and in PostgreSQL. Ordinary manual receipt and pending movement never qualify. Customer receipts reconcile to customer invoices; supplier refunds use their separate supplier/recovery mapping, never reduce unrelated customer balances.
 - Main reversal scenario is an **actual simulated £3,000 customer movement reversal**, with linked net £2,500/VAT £500 allocation reversal: `await V('eligible-net','£320.00'); await V('recovery-gross-movements','£384.00'); await V('allocated-tax','£64.00'); await V('customer-invoice-balance','£22,176.00'); await V('case-2-state','Reopened — £2,500.00 outstanding'); await V('fee-execution-state','Paused — recovery changed');`. Original movement/allocation remain visible with compensating facts.
 - Separately invalidate only claim-2 attribution/evidence while its cash remains settled: gross customer receipts stay £3,384 and customer invoice balance stays £19,176; only fee eligibility is held/recomputed and collection paused. Never reopen customer invoice debt merely because recovery evidence lost eligibility. Partial cash reversal, evidence invalidation and disputed cash have distinct events and tests.
+- The §14.8 allocation tests prove the priority order: reliable explicit remittance allocation, then separate settlement, then pro-rata across invoice lines outstanding at receipt time. A deposit or stage payment received before a caught line existed is never allocated to that line. Retain the allocation’s source and rule; uncertainty never becomes fee entitlement.
+- Real-PostgreSQL tests persist exact rational receipt-line allocations, conserve available money under concurrent/replayed allocation, and apply item-specific refunds/credits first, otherwise the reverse pro-rata allocation. Do not round each receipt’s deemed net principal; round only the cumulative fee at §14.9’s boundary. Test split receipts against a combined receipt using the same underlying facts. SV-6 owns the complete attribution-to-fee journeys, including Tests C, F, G, H, M and N; M4-8-S must not wait for that consumer.
 
 ### 36. M4-11-S — Simulate base-plan settlement as a separate fact from activation
+
+> **Rev 2.4: replaced** by MON-2 (synthetic) (§15.4). Do not build the text below.
 
 **Parent/dependencies:** M4-11 synthetic activation-payment slice; UIWIRE-5, UIWIRE-13, M4-7-S. **Backend + UI:** provider-neutral fake base-payment attempt/approval/result using a **separate platform principal book**, base obligation/settlement/refund projection and “Simulate base payment” scenario. No hosted checkout, card/account fields, Stripe/GoCardless or real payment instruction. **Ben decision:** none for existing £79 principal reference; tax/gross customer offer remains D01/D02/D05.
 
@@ -1910,7 +1963,9 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 
 ### 37. M4-9-S — Derive and approve cumulative simulated recovery fees
 
-**Parent/dependencies:** M4-9; M4-8-S, M4-11-S, UIWIRE-13. **Backend + UI:** existing exact cumulative fee routine extended through live-simulation queries/commands, source drilldown, statement-hash approval, guarded positive postings and linked negative compensation. **Ben decision:** none with unchanged reference_fee_policy_v1 and explicit proposed-policy labels.
+> **Rev 2.3: rewritten to v3** — figures and fields in §14.13 replace those below.
+
+**Parent/dependencies:** M4-9; M4-8-S, SV-6, UIWIRE-13. **Backend + UI:** the exact cumulative v3 fee routine exposed through synthetic queries/commands, source drilldown, statement-hash approval, guarded simulated positive postings and linked negative compensation. Use `reference_fee_policy_v3` and the figures and fields in §§14.9 and 14.13 for new work; no base-plan, cap, credit-used or subscription-offset term. Retain v1 arithmetic tests for existing v1 synthetic data, not as the new v3 acceptance figures. All unchanged security, authorization, replay and concurrency assertions still apply. **Ben decision:** none for these labelled candidate calculations in `synthetic_demo`; no commercial decision or live billing approval is supplied by this leaf.
 
 **Done when:**
 - With A £18,800 and P £79: first eligible L £320 → `await V('capped-fee','£32.00'); await V('base-credit-used','£32.00'); await V('additional-fee','£0.00');`. After cumulative L £2,820 → fee £282, credit £79, `await V('additional-fee','£203.00'); await V('posting-delta','£203.00');`. Approve exact derivation once; rerun yields delta £0 and no second journal.
@@ -1919,6 +1974,8 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 - Real DB races across cases near shared cap/credit yield the same serial result and unique derivation. Direct runtime positive inserts, stale statement approval, invalidated proof and unauthorized/wrong-mode commands fail; a zero delta retains derivation/audit but creates no fee journal. No AI participates in arithmetic or entitlement.
 
 ### 38. M4-10-S — Issue a traceable simulation fee statement and linked corrections
+
+> **Rev 2.3: rewritten to v3** — §14.13 replaces the base/cap/credit figures below.
 
 **Parent/dependencies:** M4-10 statement slice; M4-9-S, UIWIRE-14. **Backend + UI:** immutable numbered **simulation statements**, principal breakdown, source/allocation/approval links, prior liabilities/settlements/compensations, versioned runtime download. Customer invoice namespace/book remains separate. **Ben decision:** none for principal-only illustration. A platform tax invoice, VAT amount or payable gross offer needs D02 decision before that wording/calculation is built.
 
@@ -1929,6 +1986,8 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 
 ### 39. M4-12-S — Simulate recovery-fee collection and refund with exact approval
 
+> **Rev 2.3: rewritten to v3** — collect £282, refund due £250 after reversal (§14.13).
+
 **Parent/dependencies:** M4-12; M4-10-S. **Backend + UI:** fake collection/refund attempts, exact statement approval, atomic outstanding-balance reservation, fake pending/unknown/settled states, reconciliation and refund work UI. No payment rails, real mandates or raw financial data. **Ben decision:** none for existing principal-only simulated £203; any real payable gross amount remains gated.
 
 **Done when:**
@@ -1938,7 +1997,9 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 
 ### 40. M4-17-S — Reconcile the synthetic money trail and expose unresolved differences
 
-**Parent/dependencies:** M4-17 synthetic control slice; M4-12-S, UIWIRE-12. **Backend + UI:** deterministic reconciliation query/run receipt across customer records, recovery allocations, platform obligations/postings/reservations/settlements/refunds and fake adapter events; builder-friendly “Check the practice money records” result and authorized review actions. **Ben decision:** none; this does not certify real accounting or live reconciliation.
+> **Rev 2.3:** reconcile subscription and success-fee books and receipt-line allocations; no base principal (§14.13).
+
+**Parent/dependencies:** M4-17 synthetic control slice; M4-12-S, UIWIRE-12, MON-2. **Backend + UI:** deterministic reconciliation query/run receipt across customer records, recovery allocations, platform obligations/postings/reservations/settlements/refunds and fake adapter events; builder-friendly “Check the practice money records” result and authorized review actions. **Ben decision:** none; this does not certify real accounting or live reconciliation.
 
 **Done when:**
 - Consistent post-cash-reversal/refund scenario: `await V('money-check-state','Records match within this simulation'); await V('unresolved-money-differences','0'); await V('recovery-gross-movements','£384.00'); await V('eligible-net','£320.00'); await V('allocated-tax','£64.00'); await V('customer-invoice-balance','£22,176.00');`. Platform base principal remains £79, net additional fee liability/settled balance £0 after the £203 compensation/refund. Gross, principal, tax and platform books are separately labelled.
@@ -1946,6 +2007,8 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 - Rebuild projections from immutable facts and restore a test DB checkpoint: same cap/credit/liability/source hashes. Restored execution starts paused and shows `await X('Practice execution paused until records are checked');`; replaying queued work does not duplicate money/messages. This is a synthetic recovery test, not M0-13 live DR sign-off.
 
 ### 41. VALUE-2 — Show honest job and overall value from the completed synthetic journey
+
+> **Rev 2.4: replaced** by CH-9 (§15.3). Do not build the text below.
 
 **Dependencies:** VALUE-1, M2-5-S, M2-6-S, M1-16-S, M4-17-S. **Backend + UI:** extend per-job value query and add `/api/value` tenant aggregate with source/period/policy/outcome classification, net/gross basis and no-overlap attribution. Main navigation `How JobGuard helps protect your money` links every number back to its job/evidence. **Ben decision:** none for the factual wording and existing benefit formula below; new marketing claims need Ben review first.
 
@@ -1958,6 +2021,8 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 
 ### 42. DEMO-1 — Finish, replay and independently check the whole practice product
 
+> **Rev 2.3:** adds `shadow-30000` (§14.16) and v3 end states (§14.13).
+
 **Parent/dependencies:** synthetic convergence of M1-15/M4-23; all 41 preceding leaves' technical deliverables. **Backend + UI:** complete guided scenario chooser/resume/reset, source-aware progress/readiness query and end-of-run report; links from core, materials, case, statement and value screens with no disconnected illustrative panel left for the requested features. **Ben decision:** none to build; founder acceptance/release and live gates remain separate.
 
 **Done when:**
@@ -1968,6 +2033,8 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 - Codex receipt and an **actual independent Claude verdict** cover the exact candidate commit; a separate acceptance actor records the decision. Obtain two non-technical builder observations on phone/desktop using fictional content, record blockers/friction and fix reproducible defects as scoped leaves. Unavailable humans/hardware remain explicit observation/voice evidence gaps and must not be faked. Technical completion does not mark those human evidence items, M3 native, G1, G4, D01–D12 or M0-13 live work complete.
 
 ## 13.7 Ben decisions, readiness and merge order
+
+> **Rev 2.3:** the founder has directed the §14 commercial model (still `proposed` pending records/review). Fee leaves use `reference_fee_policy_v3`; the “unchanged reference_fee_policy_v1” statements below apply only to already-merged leaves.
 
 **No listed technical leaf waits for a new fee, tax or legal decision:** the full-synthetic authorization, existing reference_fee_policy_v1, candidate standard-20% customer tax fixtures, and explicitly fictional factual message copy cover them. Every `Ben decision: none` is limited to that declared demo content. Keep decision statuses proposed; documenting a demo fixture is not approval evidence. Do not quietly turn reference choices into actual terms.
 
@@ -1984,3 +2051,488 @@ const disabled = async (name: string) => expect(B(name)).toBeDisabled();
 **Order summary:** SBOX-1 → SBOX-2 → capture/review → quote/revisions/send/accept/start → parallel proof/Decisions, variations, fee-guard/illustration and voice → final account/invoice/corrections/payment → UIWIRE-15. Then VALUE-1 and materials model → PO → intake → confirmed extraction/corpus → matching → discrepancies → readiness/relevance. Recovery case/eligibility/pack/pursuit/timeline and fake movement ingestion proceed on disjoint branches once their prerequisites merge; allocation + separate base settlement converge at the fee engine → statement → fake collection/refund → reconciliation → VALUE-2 → DEMO-1. M1-16-S can run once its source facts exist. Match/fee/shared-schema edits serialize where ownership overlaps.
 
 Use branch `codex/sandbox/<lowercase-leaf-id>` and lane `<LEAF-ID>`, with test `apps/web/e2e/<LEAF-ID>.spec.ts` and receipt `docs/verdicts/<LEAF-ID>/<commit>.md`. Before dispatch, the integration owner registers the branch's exact paths using the existing lane schema; do not weaken the lane checker or grant a global wildcard. Coordinate migration numbers and shared application registration in one integration lane; merge the prerequisite before a consumer. A frontend and backend for one leaf stay on that same branch. A branch is accepted only against its exact reviewed commit with all inherited and leaf-specific Done when criteria met. Human observation, supported-device voice and live-release evidence are separately recorded; do not block unrelated synthetic construction or represent missing evidence as a pass.
+
+---
+
+> **Rev 2.3 extension (24 September 2026):** the following section amends the commercial model. Where §§2, 3.5, 3.6, M1-7, M1-13, M1-14, M4-2/3/9/10/11/13, §13.6 or §13.7 conflict with §14, **§14 governs all new work**. The `reference_fee_policy_v1` text and its fixtures stay in place only to interpret existing synthetic data and to keep already-merged tests green (AGENTS §1 “preserve earlier guarantees”).
+
+# §14 — Shadow bill, subscription and success-fee amendment
+
+**Status:** proposed architecture amendment by founder direction given on 2026-09-24. It is **not** approval of D01, D03, D09, D11, D12 or D13: each remains `proposed` until dated approval evidence (and the legal/accounting review each names) exists. Production subscription charging, success-fee posting and shadow processing of real data stay disabled until then.
+
+**Repository baseline inspected for this amendment:** main at `694e9e1` (after M4-3-S, #92). Built and reused: immutable `final_account_revision/line/proof` (migration 0016), variations (0014), recovery cases with types `merchant_overcharge|withheld_customer_payment|prevention` (0034), D03 eligibility review (0035), supplier intake/facts/matching (0033/0036/0037), proof uploads (0015/0025), evidence packs (0041), and the v1 synthetic fee routine (0018/0024). Existing supplier checks flag overcharges only; no shipped feature surfaces out-of-scope work, so nothing already built leaks the shadow bill. No fee-side leaf after M4-3-S (§13.6 items 32–42) has been built.
+
+## 14.1 Commercial model
+
+JobGuard charges two separate things. They never offset each other.
+
+1. **Subscription** — a small recurring platform charge per builder business (monthly or annual; tiers later), governed by D09. It pays for the always-on service: tracking the quote, the builder's own extras, approvals, proof, the final account and billing. It is not an advance against success fees, is never credited against them and is not refunded because a success fee is earned.
+2. **Success fee** — 10% of **qualifying recovered net principal** in an approved category (§14.7), uncapped in the reference policy, governed by D01/D03. The builder keeps 90%.
+
+Anything the builder captures themselves (§14.2) attracts no success fee, ever. The `pilot_no_charge` mode is unchanged: no subscription, no success fee, only labelled hypothetical figures.
+
+**Permitted claim:** “This item was missing from the final account you completed at 16:42 on 3 July. JobGuard found it afterwards from [sources], and £X was then paid.”
+**Forbidden claims:** “you would have forgotten this”, “you would never have billed this”, “JobGuard saved you £X” before settled cash, “you kept £X” without stating the VAT/tax basis, and any suggestion that a subscription is free or hidden.
+
+## 14.2 Capture versus evidence
+
+**Builder capture (fee-free):**
+- any variation record the builder creates through **Log an extra**, typed or voice, in **any** state: draft, priced, approved, rejected or withdrawn;
+- any line the builder adds during final-account review before lock (§14.4);
+- anything already in the accepted baseline scope.
+
+**Evidence (may support a success fee):** everything else JobGuard holds for the job, including **job diary notes and voice notes that were not submitted through Log an extra**, proof and progress photos, supplier invoices/delivery notes/credits, purchase orders, customer messages and approvals received through JobGuard, imported documents and, later, approved connectors.
+
+Rules:
+- AI structuring of a builder's own Log an extra entry is still builder capture.
+- The diary and other evidence surfaces show a standing, non-item-specific notice: *“Notes are for your records. To bill for extra work, use Log an extra. JobGuard checks your records against your final bill after you complete it.”* No per-note prompt, badge or suggestion may reveal that a specific note looks billable.
+- **Builder-favourable tie-break:** where a pre-lock capture plausibly describes the same work as a signal (same scope area, overlapping description, compatible date/value), the signal reconciles to `builder_captured`. Ambiguity never resolves in JobGuard's favour.
+
+## 14.3 Shadow bill
+
+JobGuard runs a hidden, append-only list of possible unbilled work for every live job: `shadow_commercial_signal`. A signal is only a `possible_unrecorded_commercial_change`. It is not an invoice line, variation, customer debt, journal entry, fee or proof that money is owed.
+
+**Minimum fields:** `id`, `tenant_id`, `job_id`, `signal_type`, `detector_kind (deterministic|ai_proposal)`, `detector_version`, `created_at` (server), `evidence_cutoff_at`, `description`, `estimated_value_pence` (nullable, labelled estimate), `confidence_band`, `must_surface_now`, `disclosed_before_lock` (monotonic false→true), `first_builder_visible_at`, match references (`scope_item_id`, `variation_id`, `final_account_line_id`), `coalesced_into_signal_id`. Evidence links are immutable rows binding `(tenant_id, job_id, signal_id, evidence_id, object_version_id, sha256, source_received_at)`.
+
+**States:** `candidate → held_for_final_check → (reconciled | revealed)`; `revealed → (dismissed | confirmed_extra)`; `confirmed_extra → recovery_case_created`. Reconciled outcomes: `already_in_original_scope | builder_captured | already_on_final_account | duplicate_signal | not_enough_evidence`. `surfaced_early` is a terminal attribution state reachable from any pre-lock state. No transition leads to fee liability.
+
+**Visibility — structural, not cosmetic:**
+- Shadow tables are owned by the migration role and granted only to a dedicated `jobguard_shadow` worker role. The builder-facing runtime role has **no** grant on them; a reveal is served only by a controlled routine that returns `revealed` rows for a job with an attribution lock.
+- Before lock, no builder-facing route, notification, export, count, badge, error code, cache key, analytics event or response shape may vary with signal existence. The lock/final-check flow runs the same steps and shows the same “Running JobGuard's final check” screen whether zero or many signals exist.
+- Support/admin access needs a separate, audited break-glass permission and is never used to tell a builder about a candidate before lock.
+- **Any disclosure before lock, by any route** (early surface, support, export, a data-subject access request, a bug), sets `disclosed_before_lock=true` permanently and makes the signal ineligible for a success fee. JobGuard absorbs that cost.
+
+**Must-surface-now override (D13):** a signal is shown to the builder immediately, and is then permanently fee-ineligible, when a deterministic D13 rule fires: a safety implication; a clear customer request for significant work where written agreement is needed before the work proceeds (value threshold in D13); an active dispute that silence would materially worsen; or any legal/contractual duty to tell. When a rule fires, surface; do not let a model or cost estimate suppress it. Each override is audited with the rule version.
+
+## 14.4 Final-account lock
+
+1. **Build the account.** Show the accepted contract, every builder-captured variation, credits and receipts already recorded. No shadow content.
+2. **Review.** Prompt: *“Anything else to add before you finish this job?”* The builder can add extras (builder capture), amend legitimate data, inspect their own evidence, or leave and return.
+3. **Declare.** Button **Complete final account**, confirmation text *“I've reviewed the work and extras on this job and this is my complete final account.”* The onboarding terms have already explained the independent check that follows; the wording is not a trick.
+
+On confirmation, one transaction creates an immutable `final_account_lock`: tenant/job, the exact `final_account_revision_id`, the accepted `baseline_quote_version_id`, a variation-register snapshot hash covering every builder capture in every state, the line set hash, the declaration text version, the locking membership, the server timestamp, the command ID and the audit event. There is **one attribution lock per job**. Later final-account revisions (after catches are confirmed, or for corrections) never alter it. Issuing the final customer invoice through JobGuard requires the lock, so the final check always runs **before** the invoice is issued and confirmed catches go on the same invoice.
+
+A builder who never locks gets no final check and no catches; nothing is charged. “Invoice or payment activity without a lock” is a D11 signal, not a penalty.
+
+## 14.5 Final check: reconcile, reveal, dispose
+
+Immediately after lock, a worker (not the builder session) compares every eligible signal with the locked baseline, the locked variation register, the locked account lines, prior dispositions and other signals. Only evidence whose server receive time precedes the lock counts (v1). Each signal gets one classification from §14.3. Only `possible_missed_extra` is revealed.
+
+The reveal shows, per candidate: the description, each evidence item with its date and source, and the proof that it is missing: “Accepted quote: no outside tap. Your extras: none. Your completed final account: no outside tap.” Builder actions:
+- **Yes — this was extra work** → creates a variation with `origin=jobguard_catch` and the signal ID, then follows the ordinary priced/approved/customer-approval path, then a new final-account revision.
+- **Already included** → must pick the exact locked account line or baseline item; a genuine match closes it; an unmatched assertion cannot rewrite the lock and stays open for review.
+- **Included in original scope** → must pick the baseline scope item.
+- **Not completed**, **Not chargeable**, **Wrong job / wrong evidence** → dismissed with the reason recorded.
+
+Nothing is auto-charged. Zero candidates is a normal, clearly worded outcome.
+
+## 14.6 Attribution predicate
+
+A missed-variation recovery qualifies only if **all** of these are true, and each is recorded in an immutable attribution revision:
+
+```text
+evidence_received_before_lock
+AND NOT disclosed_before_lock
+AND absent_from_accepted_scope
+AND absent_from_builder_captures_at_lock   (any state, builder-favourable matching)
+AND absent_from_locked_final_account
+AND revealed_after_lock
+AND builder_confirmed_genuine_extra_and_completed
+AND billed_through_a_final_account_revision_and_invoice
+AND customer_payment_settled_and_allocated_to_that_line (§14.8)
+AND not_reversed_refunded_or_credited
+```
+
+Evidence first imported after lock may inform the builder but can never qualify in v1. North-star test for every design decision: **can JobGuard prove from immutable records that the builder completed their own final bill without this item before JobGuard showed it to them?** If not, no fee.
+
+## 14.7 Qualifying categories (D03 v2)
+
+| Category | Qualifies when | Never qualifies |
+|---|---|---|
+| `missed_variation_final_account` | §14.6 is fully satisfied | builder captures, surfaced-early signals, post-lock evidence, unpaid or pending amounts |
+| `supplier_overcharge` (existing `merchant_overcharge`) | settled **cash** refund from the supplier, allocated to an approved case | supplier credit notes against future purchases (excluded until D03 extends), prevented spend, invoice reductions before payment |
+| `withheld_customer_payment` | the builder's own invoice is overdue beyond the D03 threshold **and** the customer has refused, disputed or ignored the builder's own reminder, **and** the builder explicitly opens the case and approves the success-fee terms for that case before any JobGuard pursuit; only cash settled after case opening counts | ordinary late payment, reminders JobGuard sends as part of normal billing, any amount paid before the case opened |
+
+`prevention` stays terminal and fee-free. New categories need a new D03 version.
+
+## 14.8 Allocating customer payments to a caught item
+
+Apply the first rule that fits; never choose the rule that pays JobGuard most.
+
+1. **Explicit allocation.** Reliable evidence (the customer's remittance or payment reference, recorded with its source) states what was paid for. Use it.
+2. **Separate invoice.** The caught item is on its own invoice or is otherwise separately settled. Use that settlement; the status of other invoices is irrelevant.
+3. **Pro-rata.** An unallocated receipt against a blended invoice is spread across the lines **outstanding at the moment of the receipt**, in proportion to each line's outstanding gross. Payments received before the caught line existed (deposits, stage payments) are never spread onto it.
+
+Exact method: keep each line's deemed paid gross as an exact rational. For receipt `r` with invoice outstanding gross `O` and caught-line outstanding gross `o`, deemed gross paid to the line is `r × o / O`. Convert to net principal with the line's own `net/gross` ratio. **Round only once**, when deriving the fee from the cumulative exact value (§14.9), so splitting receipts cannot change the result. Refunds and credit notes use the same hierarchy in reverse: item-specific first, otherwise pro-rata across the lines they settled.
+
+## 14.9 Success-fee contract — `reference_fee_policy_v3`
+
+```text
+Q = cumulative qualifying recovered net principal for the job and rate, as an exact rational,
+    after allocation (§14.8), reversals, refunds and credits; never negative
+F = roundHalfEven(Q × 10 / 100)      // cumulative success-fee principal
+J = prior net posted success-fee principal for the job/rate, including compensations
+posting_delta = F − J
+```
+
+No cap, no base-plan term, no plan credit, no subscription offset. A v3 derivation has no “credit used” field. A positive delta needs qualifying proof (§14.6/14.7) and exact statement authorization. A negative delta creates a linked compensating journal plus refund/credit work if already collected, and never edits history. VAT follows D02. Rounding follows the existing half-even rule; tax rounding stays separate.
+
+**Mandatory v3 fixtures (principal, ex-VAT unless stated):**
+
+| Scenario | Q | F | Posting |
+|---|---:|---:|---|
+| Catch £800 paid in full (Test C) | £800.00 | £80.00 | +£80.00 |
+| £400 of £800 paid (Test G) | £400.00 | £40.00 | +£40.00; then +£40.00 when the rest settles |
+| £800 paid, £200 item-specific refund (Test H) | £600.00 | £60.00 | −£20.00 compensation |
+| Blended invoice gross £41,280 (net £34,400 incl. £800 catch at 20% VAT); unallocated £24,000 received (Test M) | £465.12 (exact 465.1162…) | £46.51 | +£46.51; after the remaining £17,280, Q £800, F £80, +£33.49 |
+| As Test M but £12,000 deposit received before lock; then £14,640 unallocated against £29,280 outstanding | £400.00 | £40.00 | deposit never spread onto the catch |
+| Separate £960 gross catch invoice paid; £40,320 main invoice unpaid (Test N) | £800.00 | £80.00 | +£80.00 |
+| Half-even ties | 5p / 15p / 25p | 0p / 2p / 2p | splitting 5p+5p uses Q=10p → 1p |
+| `recovery-18800` withheld-payment cases £320 then £2,820 cumulative | £320 → £2,820 | £32 → £282 | +£32, +£250; reversal to £320 → −£250 |
+| Builder-captured £3,600 (Tests A/B) | £0 | £0 | none |
+
+## 14.10 Anti-gaming and residual risk (D11 v2)
+
+Structural controls: immutable lock and evidence receive times (no backdating); variation records cannot be deleted (only withdrawn, which still counts as capture); one economic recovery per underlying work item via signal coalescing and unique `(job, coalesced signal)` recovery identity; a line already present anywhere in the locked account cannot be caught; ordinary contracted work cannot be relabelled as a catch because it reconciles to baseline; AI confidence is never entitlement.
+
+Advisory signals (flag, never auto-penalise): a catch dismissed as “not completed” while completion evidence exists; customer receipts exceeding the locked account plus confirmed catches; credit notes or write-offs against catch lines; explicit allocations that consistently avoid catch lines; invoice or payment activity with no lock.
+
+**Residual risk, stated plainly:** after the reveal, a builder can dismiss a genuine catch or bill it outside JobGuard and pay nothing. The fee depends partly on builder honesty. D11 signals and terms mitigate this; they do not prevent it, and no automatic charge may be inferred from a signal.
+
+## 14.11 Privacy and trust (D12 extension, D13)
+
+“Hidden” means **not shown in the ordinary workflow until the final check**, never undisclosed surveillance. Onboarding and terms must say, before the first job, that JobGuard analyses job records, may identify possible unrecorded extras, compares them independently with the completed final account, and may earn the success fee on qualifying paid recoveries. Process only job-linked data needed for the service. Customer messages and third-party data in evidence need the D12 lawful basis and Article 14 route. A data-subject access request is answered lawfully; if the answer discloses a candidate before lock, that candidate becomes permanently ineligible (§14.3). Shadow processing on real pilot data requires G1 plus D12 and D13 approval of the pilot disclosure.
+
+## 14.12 Data model additions
+
+Extend first: `variation` gains `origin (builder_logged|final_review|jobguard_catch)` and `source_signal_id`; `recovery_case.case_type` gains `missed_variation_final_account`; evidence packs gain lock, capture snapshot, signal/evidence, reconciliation, reveal, disposition and settlement sections. Add only what is genuinely new: `shadow_commercial_signal`, `shadow_signal_evidence`, `shadow_reconciliation_run` + immutable per-signal classification rows, `shadow_disclosure_event`, `final_account_lock`, `recovery_attribution_revision`, `receipt_line_allocation` (exact rational deemed allocations with rule used), `subscription_terms/period_obligation` (D09). All are tenant-keyed with RLS/`FORCE`, append-only where evidentiary, with no runtime update/delete. Shadow tables add the role isolation in §14.3.
+
+## 14.13 Changes to existing tasks
+
+| Task | Change |
+|---|---|
+| §2, §3.5 | D01 → `reference_fee_policy_v3`; §3.5 v1 formula and fixtures retained as historic only. |
+| M1-7 | Switch-live still freezes the baseline and accepted net value (needed for §14.6). Under v3 it creates **no** per-job base obligation or cap snapshot; the v1 cap/obligation path stays only for v1 synthetic data. |
+| M1-13/M1-14 | Structural fee guard and illustration extend to v3 (SV-6). v1 illustration is relabelled “earlier proposed pricing (v1)” or retired from default display; its arithmetic tests stay. |
+| M1-16 / M1-16-S | Cap-related signals become v1-only; D11 v2 signals added in SV-5/SV-6. |
+| M4-2 | Adds `missed_variation_final_account`, the §14.7 entry tests and D13 dependency. |
+| M4-3 | Packs include lock, capture snapshot, source observations, reconciliation, reveal, disposition, confirmed recovery and qualifying settlement. |
+| M4-8 | Adds §14.8 customer-receipt-to-line allocation (explicit / separate invoice / pro-rata) alongside case allocation. |
+| M4-9 | Derives only the v3 success fee (§14.9). No base plan, cap or credit. Subscription obligations are derived separately from D09 terms. |
+| M4-10 | Platform documents carry success-fee lines and, separately, subscription period lines. No base-plan credit lines. |
+| M4-11 | **Replaced:** “Stripe hosted subscription sign-up and first-period payment” (was the £79 one-off activation payment). Same webhook/idempotency/unknown-outcome acceptance. |
+| M4-13 | **Rewritten:** “Subscription and success-fee agreement with bounded payment authorisation”: fee rate, qualifying recovery, capture versus evidence, lock, refunds, disputes, collection authority, cancellation. |
+| M4-14 | Kept, optional: only if D09 adopts active-job tiers. |
+| §13.6 M4-11-S | **Superseded by MON-2 (synthetic), §15.4.** Do not build M4-11-S or `placeholder_subscription_v0`. MON-2 uses the proposed §15.1 / D09 v3 catalogue with a synthetic provider; this does not approve actual prices, terms or charging. Subscription facts remain separate from success fees and never offset them. |
+| §13.6 M4-9-S | Rewritten to v3: `recovery-18800` £320 → fee £32; £2,820 → £282 (delta £250); reversal to £320 → −£250. No `base-credit` or `additional-fee` fields; use `success-fee-principal` and `posting-delta`. Plus the §14.9 table. |
+| §13.6 M4-10-S | Statement shows success-fee principal £282, sources and policy v3; no base/cap/credit lines. |
+| §13.6 M4-12-S | Collect £282 principal; after the reversal, refund due £250; retained settled fee £32. |
+| §13.6 M4-17-S | Money check covers the subscription book, success-fee book and receipt-line allocations; no base principal. |
+| §13.6 VALUE-2 | Separate cards: “Tracked through to your bill” (builder captures, no fee); “Found by JobGuard after your bill was complete” (recovered, fee, retained before VAT/tax); subscription shown per period, not per job. `recovery-18800`: £2,820 / £282 / £2,538; after the reversal £320 / £32 / £288. Small cases: £500 → £50 fee; £0 → £0. |
+| §13.6 DEMO-1 | Adds `shadow-30000` (§14.16) and v3 end states: `success-fee-principal` £32, `fee-refunded-principal` £250, retained £288. |
+
+## 14.14 New tasks
+
+All run in `synthetic_demo` first; live equivalents stay behind G4 + D13. Inherit §13.2 C1–C8 and AGENTS §2.
+
+### SV-0 Plan and policy amendment
+**Depends on:** none. **Build:** this §14, AGENTS rev 2.3, D01 v3, D03 v2, D09 v2, D11 v2, D12 v2, new D13 (all `proposed`), decision-record test for D01–D13. **Done when:** no task text directs building production billing on the £79/cap/credit model; every affected task names §14; records remain proposed. *(Delivered as plan text by this revision; independent verdict still required under AGENTS §5.13.)*
+
+### SV-1 Shadow commercial domain (packages/core)
+**Depends on:** SV-0. **Build:** signal/state/classification types and transitions; capture-vs-evidence predicate with builder-favourable matching; the §14.6 predicate; must-surface and `disclosed_before_lock` rules; §14.8 exact allocation; §14.9 v3 fee and reversals. **Done when:** property and table tests cover every predicate combination and every §14.9 fixture; no transition leads from a signal to liability; AI output types cannot construct attribution or entitlement; the v1 module and tests are untouched.
+
+### SV-2 Persistence, isolation and provenance
+**Depends on:** SV-1. **Build:** §14.12 tables and extensions; `jobguard_shadow` role; controlled reveal routine; disclosure events; RLS/privilege catalog tests; audit events. **Done when:** real-PostgreSQL tests prove the builder runtime role gets permission-denied on shadow tables, the reveal routine returns nothing without a lock, evidence receive times and lock rows cannot be updated or deleted, and cross-tenant/cross-job links fail.
+
+### SV-3 Shadow detection engine and evaluation
+**Depends on:** SV-2. **Build:** deterministic detectors first: supplier items/POs with no matching baseline or captured scope; completion photos tagged to work with no scope item; diary/voice-note mentions of new work; customer requests received through JobGuard. Then AI proposals through `packages/ai` with citations; coalescing; scope/capture matching. **Done when:** a held-out set (genuine extras, contracted work, ambiguity, chat, alternative materials, duplicates, cancelled/uncompleted requests, supplier spares, builder mistakes, pre-captured work, one extra with several sources) reports recall and false-positive precision separately; builder-visible state and every builder API response are byte-identical with and without signals.
+
+### SV-4 Final-account lock
+**Depends on:** SV-2, UIWIRE-9. **Build:** §14.4 review/add/declare UX and the atomic lock command; invoice issue requires lock. **Done when:** anything added before lock is recorded as builder capture; the exact locked account is reconstructable from hashes; double submit creates one lock; later revisions leave the lock unchanged.
+
+### SV-5 Final check, reveal and disposition
+**Depends on:** SV-3, SV-4. **Build:** §14.5 reconciliation run, reveal screen, dispositions, already-included/baseline linking, conversion to a `jobguard_catch` variation and a `missed_variation_final_account` case; D11 v2 signals. **Done when:** a detector output cannot become a recovery without builder confirmation; the zero-candidate path runs the same steps; Tests B, D, E, I, J, K, L pass.
+
+### SV-6 Attribution, allocation and success-fee illustration
+**Depends on:** SV-5, M4-8-S. **Build:** attribution revisions, D03 v2 review, receipt-line allocation, v3 derivation/illustration, builder value receipt (“JobGuard found / recovered / fee / retained before VAT and tax”). **Done when:** Tests C, F, G, H, M, N pass end-to-end in synthetic mode with exact figures and an evidence chain; no real posting.
+
+### SV-7 Source expansion
+**Depends on:** SV-3. **Build:** job diary (if absent), customer message page, then approved connectors (email forwarding, business messaging, accounting), each through one canonical evidence-observation contract. **Done when:** every source produces the same contract and passes its own D04/D12 review; none bypasses tenant or shadow isolation.
+
+### SV-8 Production settlement
+**Depends on:** SV-6, live M4-7/M4-8, G4, D13. **Build:** real settlement evidence, allocation, v3 accrual, platform invoices, collection, refunds. **Done when:** only verified qualifying settled cash can produce a positive success-fee liability.
+
+## 14.15 Required end-to-end tests
+
+| Test | Scenario | Expected |
+|---|---|---|
+| A | Builder logs £800 extra before lock; customer pays | builder keeps 100%; fee £0 |
+| B | Signal exists; builder adds £800 at final review | reconciles `builder_captured`; never revealed; £0 |
+| C | Evidence before lock; omitted; locked; revealed; confirmed; billed; paid | Q £800; fee £80 |
+| D | Signal is baseline scope | reconciled/dismissed; £0 |
+| E | Customer asked; work not done | dismissed “not completed”; £0 |
+| F | Valid catch invoiced, never paid | £0 |
+| G | £400 of £800 paid | £40 until more settles |
+| H | £800 paid; £200 refunded | Q £600; fee £60; −£20 linked compensation |
+| I | £8,000 change surfaced early under a D13 rule | builder told; may capture; permanently fee-ineligible |
+| J | Email + message + photo describe one extra | one recovery; one fee |
+| K | “Already included” | must pick a locked line; unmatched claim cannot rewrite the lock |
+| L | Old message imported after lock | usable evidence; not fee-eligible |
+| M | Blended invoice partial payment | per §14.9 table |
+| N | Separate catch invoice paid, main invoice unpaid | £80 |
+| O | Diary note “fitted outside tap”, no Log an extra, omitted at lock | eligible catch |
+| P | Log an extra draft “outside tap”, never priced, omitted at lock | `builder_captured`; £0 |
+| Q | Shadow isolation | builder role denied; responses identical with or without signals |
+| R | Candidate disclosed via support or DSAR before lock | permanently ineligible |
+
+## 14.16 Canonical acceptance journey — `shadow-30000`
+
+£30,000 net quote accepted → builder logs £3,200 of extras → JobGuard holds several signals from supplier documents, photos and a diary note → work completes → account built from baseline plus captures only → builder adds a remembered £400 item → builder completes the final account (locked, hashed) → final check reconciles → two completed extras, £500 and £300, are absent and revealed with evidence → builder confirms both → customer approves → new final-account revision and a single invoice, net £34,400 / gross £41,280 → customer pays in full → settlement verified → Q £800, success fee £80, builder retains £720 before VAT/tax → evidence pack proves the chain → the £3,600 the builder captured attracts £0.
+
+## 14.17 Pilot measurement
+
+In `pilot_no_charge`, run the shadow bill and final check with **hypothetical** fees only (after G1, D12 and D13 pilot approval). Measure: extras builders capture themselves; signals left at lock; false-positive rate; confirmed and recovered amounts; disputed attributions; perceived fairness; whether hiding hurt the workflow; whether anything should have surfaced earlier; which sources produce real catches; subscription and success revenue per builder against demonstrated value. Tune for credible recovered builder money with defensible attribution, not for fee volume.
+
+## 14.18 Release gate additions (G4)
+
+Production success-fee charging additionally requires: approved D01 v3, D02, D03 v2, D11 v2, D12 v2 and D13; lock proven; shadow isolation proven; attribution evidence proven; production settlement evidence proven; reversal/refund controls proven; v3 fee arithmetic independently checked; customer terms reviewed; pilot evidence reviewed. Subscription charging requires D09 v2, D05 and D02 and is enabled independently.
+
+## 14.19 Build order
+
+**Adoption first:** SV-0 is the plan/policy amendment, not an already-passed prerequisite. Successor implementation starts only after Ben adopts the corrected revision, the required independent verdict for SV-0 is recorded, and the amendment is merged. Preparing and reviewing SV-0 itself may precede adoption. This does not approve any proposed commercial decision or open a live gate.
+
+The following table states the affected synthetic dependencies. Other task dependencies remain in force. A task may start only after all its prerequisites have merged; shared-file edits still serialize under §13.2 C8.
+
+| Task | Required prerequisites | Scope / handoff |
+|---|---|---|
+| SV-1 | SV-0 | Pure shadow, allocation and v3 fee contracts. |
+| SV-2 | SV-1 | Persistence, roles, provenance and the §14.12 tables. |
+| SV-3 | SV-2 | Detection consumes the persisted, isolated shadow model. It is not a separate lane starting directly from SV-1. |
+| SV-4 | SV-2, UIWIRE-9 | Final-account lock; may run alongside SV-3. |
+| SV-5 | SV-3, SV-4 | Reconcile, reveal and record dispositions. |
+| M4-5-S | M4-3-S, UIWIRE-3 | Existing synthetic pursuit scope is unchanged. |
+| M4-6-S | M4-5-S | Existing synthetic timeline scope is unchanged; it cannot run ahead of M4-5-S. |
+| M4-7-S | M4-2-S, SBOX-2 | Existing synthetic movement scope is unchanged; independent of the pursuit timeline. |
+| M4-8-S | M4-2-S, M4-3-S, M4-7-S, SV-2 | Existing case allocation plus the §14.8 receipt-to-line allocator specified in the amended leaf. |
+| SV-6 | SV-5, M4-8-S | Integrates attribution and the existing receipt-to-line allocator with the v3 illustration and end-to-end tests; do not build a second allocator. |
+| M4-9-S | M4-8-S, SV-6, UIWIRE-13 | v3 synthetic fee derivation; no dependency on deleted M4-11-S and no subscription credit or offset. |
+| M4-10-S | M4-9-S, UIWIRE-14 | Synthetic success-fee statement and corrections. |
+| M4-12-S | M4-10-S | Synthetic success-fee collection and refunds. |
+| M4-17-S | M4-12-S, UIWIRE-12, MON-2 | Reconciles customer records, receipt-line allocations, and separate success-fee and subscription books. |
+| MON-2 | MON-1 | Replaces M4-11 and M4-11-S. It follows the meter, not SV-6. |
+| CH-9 | SV-6, MON-1 | Replaces VALUE-2. |
+| DEMO-1 | The complete synthetic convergence specified in §15.6, row F | Uses MON-2 and CH-9 instead of the retired leaves. |
+
+The shadow spine is SV-0 → SV-1 → SV-2, then SV-3 and SV-4, then SV-5. SV-6 also waits for M4-8-S. The fee chain is SV-6 → M4-9-S → M4-10-S → M4-12-S → M4-17-S; reconciliation additionally waits for MON-2. §15.6 supplies the CH/MON ordering and the dependency-preserving subwaves.
+
+Live and later work remains in §15.6 G–J and the original live task definitions, with their own dependencies and release gates. MON-2 replaces M4-11; it is not an additional £79 activation task. Do not build a new £79 activation, per-job credit or £30 placeholder-subscription path. Retain existing v1 data and regression tests only as already specified.
+
+---
+
+> **Rev 2.4 extension (25 September 2026):** §15 consolidates the monetisation decisions made after rev 2.3 with what is already built. Where earlier text (including §13.6, §14.13 and §14.14) conflicts with §15, **§15 governs**. §14 (shadow bill, Final Check, 10% success fee) stands and is referenced, not repeated.
+
+# §15 — Monetisation consolidation: what's built, what changes, what's left
+
+**Status:** proposed, by founder direction on 2026-09-24/25. Sources: `reports/JobGuard monetisation and jobs pricing.md` (sections 1–3 and 6 adopted as the direction; section 4 as the avoid/park list), `reports/JobGuard competitor and pricing research.md`, and the sales bible in `sales/JobGuard Sales Bible/` (the promises sales will make). The decision records named below are all `proposed`; none is approval.
+
+**Repository baseline inspected:** main at `694e9e1`. Built (from code, migrations `0000`–`0041`, routes and commit history): §13 leaves 1–31 — SBOX-1/2, UIWIRE-1…15, VOICE-1, VALUE-1, M2-1A/1B/2/3/4/5/6/7-S, M1-16-S, M4-1-S, M4-2-S, M4-3-S. At this main baseline, the 25 September 2026 read-only decision packet records **zero independent verdicts**. The six entries previously counted for SBOX-1, UIWIRE-7, UIWIRE-9, UIWIRE-12, UIWIRE-14 and M2-2-S are builder receipts, not independent verdicts. The only independent verdicts recorded so far are retrospective and none is a PASS: M4-1-S **HOLD** (head `54adf02`), M4-2-S **HOLD** (head `be81bd5`) and M4-3-S **FAIL** (head `fd56bdd`; repair candidate `8116aa6` also FAIL), all dated 25 September 2026 and held on the `codex/sandbox/m4-1-s-repair`, `m4-2-s-repair` and `m4-3-s-repair` branches under `docs/verdicts/`, not on `main`; their repairs are in flight. The listed built leaves are source-inspected; none is established as independently accepted by those receipts. Independent acceptance still requires an actual verdict bound to the reviewed commit (§13.2 C8; AGENTS §5.13). Nothing from §14 (SV tasks) or later §13.6 leaves (items 32–42) is built.
+
+## 15.1 The money model (one table)
+
+| Charge | Rule | Decision |
+|---|---|---|
+| Quoting | Free forever; never creates a platform charge (AGENTS §5.10) | D09 v3 |
+| Subscription | Per business, unlimited users, priced by **jobs on the go**: Solo £29 (4 jobs), Builder £69 (7), Firm £179 (13), Contractor £349 (20); above 36 on request. Annual = two months free on the plan price | D09 v3 |
+| Extra jobs | £20 (Solo, Builder) / £25 (Firm) / £30 (Contractor) a month per job over the plan, billed by the day; caps of 1 / 5 / 6 / 16 extras, so a plan plus extras is never dearer than the next plan; never blocks a job | D09 v3 |
+| Monthly maximum | £49 / £169 / £329 / £829 — the most the plan can take in a month without a new builder decision | D05 v2 |
+| Free first job | No subscription while the first live job is the only live job, until its final account is completed or 90 days; card asked at switch-live with "skip for now", required before a second job goes live; one per business | D09 v3, D05 v2 |
+| Small jobs | Accepted value (greater of quoted and accepted) under £2,000 takes no place, up to the plan's included count at once; takes a place if the pre-lock final account passes £4,000 | D09 v3 |
+| Success fee | 10% of qualifying recovered net principal (§14): Final Check catches, supplier cash refunds, recovery cases the builder opened and agreed terms for. Never offset by or against the subscription | D01 v3, D03 v3, D13 v2 |
+| Fee collection | Shown on the same screen as the customer's payment ("received / fee / yours"); per-statement approval by default; optional standing Direct Debit capped at the verified fee and paused during disputes | D05 v2, D02 |
+| Pay-now links | Card and pay-by-bank links on customer invoices via the builder's own provider account (JobGuard never holds funds); small capped JobGuard fee (about 0.3% on cards, 20–30p on pay-by-bank, capped £6–£15 a payment); bank transfer always free and equally shown | D10 v2, D05 v2, D02 — **needs a payment-regulation opinion and a VAT ruling first** |
+| Optional services (later) | Managed recovery (a per-case service charge of 5 or 10 points **on top of** the unchanged 10%), Firm Care account management, annual profit-leak review, QS quote review — offered only after pilot data | D01 service table, D09 add-ons |
+| Paid data (later) | Credit-agency company reports and title checks, at a flat price; companies only; free public-register layer first | D14 (new) |
+| Partner commissions (later) | Only insurers (insurance-backed guarantees) and professional bodies; never merchants, lenders, lead platforms or homeowners; never in the pilot | D15 (new) |
+
+**Never build** (report §4, recorded in D11 v3): any money from merchants, lenders, lead platforms or the builder's customers; any change to the 10% rate or automatic minimum fees; a paid "show me what you found" button; fees measured on tax outcomes (VAT, CIS); fees or features that depend on which merchant a builder uses; value-indexed price rises; a file fee to open a recovery case; a verified-builder marketplace; homeowner-paid audits of the builder; pooled cross-tenant payer ratings. **Parked for pilot data:** "Tell me now" (§14 disclosure toggle), weighted big-job places (I03), £0 months with no live jobs.
+
+## 15.2 What's built, judged against the new model
+
+| Built area (where) | Verdict | Why |
+|---|---|---|
+| Capture, review, scope lineage, voice dictation (UIWIRE-1, VOICE-1; 0007/0008/0022) | Keep | Unaffected |
+| Quotes, revisions, preview, simulated send (UIWIRE-2/3; 0009/0010) | Keep; small change | Quote must carry structured customer and site (CH-3) |
+| Acceptance (UIWIRE-4; 0011) | Keep; extend | Only `builder_attestation` exists; authenticated customer acceptance arrives with the portal (MON-5) |
+| Switch-live (UIWIRE-5; 0012) | **Change** (CH-1) | Creates a v1 cap snapshot and a £79 synthetic obligation on every demo job; v3 has neither |
+| Decisions inbox (UIWIRE-6, M2-7-S; 0013/0040) | Keep; add test | Must be provably unchanged by hidden signals (SV-3) |
+| Proof and stage gates (UIWIRE-7; 0015/0025) | **Change** (CH-2) | Not restricted to live jobs |
+| Variations (UIWIRE-8; 0014) | Keep; extend | Needs `origin` and `source_signal_id` (SV-2) |
+| Final account (UIWIRE-9; 0016/0026) | Keep; extend | Needs the lock and post-lock rules (SV-4, CH-4) |
+| Customer invoices, credit notes, receipts (UIWIRE-10/11/12; 0017/0027–0030) | Keep; extend | Final invoice must derive from the locked account (SV-4); receipt-to-line allocation (§14.8, M4-8-S); pay-now links (MON-6) |
+| Structural fee guard and synthetic outcomes (UIWIRE-13; 0018/0023) | **Change** (CH-1, SV-6) | v1 cap/credit derivation; v3 derivation replaces it for new data |
+| Fee illustration (UIWIRE-14; 0024) | **Change** (CH-1, SV-6) | Shows £79, cap and credit; becomes "earlier proposed pricing (v1)" and a v3 illustration is added |
+| Value page (VALUE-1, #79) | **Change** (CH-9) | Must separate "tracked to your bill (fee £0)", "found by JobGuard" and "what we checked"; no prevention £ claims |
+| Materials: rates, PO pre-check, supplier intake, facts, matching, Things to check (M2-1A…M2-5-S; 0031–0038) | Keep; **change** (CH-2) | Not restricted to live jobs; supplier documents are also Final Check evidence (SV-3) |
+| Readiness (M2-6-S; 0039) | Keep; extend | Not restricted to live jobs (CH-2); property constraints added (MON-7) |
+| Commercial integrity (M1-16-S; 0019) | **Change** (CH-6) | Cap-basis signals become v1-only; add lock/reveal and meter residual signals |
+| Job import (M1-17; 0020) | **Change** (CH-5) | Requires v1 cap/policy; must link to existing customer and site; pre-adoption evidence fee-free |
+| Recovery cases (M4-1-S; 0034) | Keep; extend | Add `missed_variation_final_account` (SV-5) and the builder-opened withheld-payment entry test (CH-7) |
+| Eligibility review (M4-2-S; 0035) | **Change** (CH-7) | Reason set follows D03 v1; D03 v3 adds applied credit notes, duplicate payments and statutory interest |
+| Evidence packs (M4-3-S; 0041) | **Change** (CH-8) | Add lock/capture/reveal sections; ordering a pack before lock runs the must-surface check |
+| Sandbox runs, demo seed (SBOX-1/2; 0021) | Keep; extend | New scenarios for the meter and `shadow-30000` (DEMO-1) |
+
+The v1 tables, routines and tests stay (they hold existing synthetic data and keep merged tests green — AGENTS §1); new jobs stop writing to them.
+
+## 15.3 Changes to built work (CH tasks)
+
+Each CH task inherits §13.2 C1–C8 and AGENTS §2. All are buildable now in `synthetic_demo`.
+
+### CH-1 Switch-live under v3; retire v1 from the default path
+**Depends on:** SV-1 (v3 types). **Build:** new activations record the baseline and accepted net value (and `reference_fee_policy_v3`) but no cap snapshot and no per-job obligation; the demo stops simulating a £79 base payment; the v1 fee statement and illustration move behind "Earlier proposed pricing (v1)" for jobs that already have v1 data; remove £79 wording from the quote editor. Update UIWIRE-5/14, `fee-statement` and `switch-live` e2e fixtures by adding v3 expectations, keeping v1 assertions for v1 jobs. **Done when:** a new demo job switches live with no obligation or cap rows; existing v1 jobs still render and their tests pass; no default screen mentions £79, a cap or a plan credit.
+
+### CH-2 The watchdog runs only on live jobs
+**Depends on:** none. **Build:** purchase orders, supplier document intake, proof uploads, readiness facts, diary entries and customer messages require `job.status = 'live'` (variations and final account already check). Quotes and capture stay available before live. A clear message: "Switch this job live to use the watchdog — it's free until work starts on site." **Done when:** each command is refused for a non-live job in PostgreSQL and the UI, with tests; existing demo scenarios switch jobs live first.
+
+### CH-3 Structured customer and site on every job
+**Depends on:** none. **Build:** customer (name; type `person|business|landlord_or_agent|insurer|main_contractor`; contact) and site (normalised address) as structured, tenant-scoped fields captured on the quote and required at switch-live; a separate paying-party field (who actually pays, if different). Backfill existing demo jobs. **Done when:** switch-live refuses a job without customer and site; two customers can never share a job; the same customer and site with overlapping jobs can be recognised (needed by MON-1 and CH-5).
+
+### CH-4 Work-state events for the meter and the lock
+**Depends on:** CH-2, CH-3, SV-4. **Build:** immutable events: first site evidence (site photo, delivery note, diary entry — not POs or supplier invoices), "Finished on site", close with a recorded reason, last site activity; post-lock rule: new site work (order, supplier invoice, progress photo, new extra) on a locked job is redirected to a new linked job; completing the final account requires each scope item marked done, removed or deferred. **Done when:** replay tests prove the events and the redirect; confirming catches, invoicing, payments, retention and snagging photos after lock never create site activity.
+
+### CH-5 Job import under the new rules
+**Depends on:** CH-3, SV-2. **Build:** imports no longer require the v1 cap/policy; an import matching an existing customer and site links instead of creating a new place; imports at the invoiced stage never count; evidence dated before adoption is marked fee-free forever (D13 v2). **Done when:** tests cover linking, the invoiced-stage rule and fee-free pre-adoption evidence.
+
+### CH-6 Commercial-integrity signals for v3
+**Depends on:** SV-5, MON-1. **Build:** cap-basis signals labelled v1-only; add D11 v2/v3 advisory signals (catch dismissed as "not done" despite completion evidence; receipts exceeding the locked account plus confirmed catches; credit notes against catch lines; invoice or payment activity with no lock; won but never switched live). **Done when:** no signal can change a price, a count or a fee (architecture test).
+
+### CH-7 Eligibility review under D03 v3
+**Depends on:** SV-1. **Build:** reason set and categories per D03 v3: applied supplier credit notes qualify once consumed against a later invoice paid in full (minimum £250 a case); duplicate supplier payment refunded in cash; statutory late-payment interest as a separate line, business debtors only, inside a builder-opened case, with the fixed statutory compensation excluded; withheld-payment cases require the builder to open the case and approve the fee terms before any pursuit; insurer proceeds never qualify. **Done when:** browser and DB tests show each new reason and each exclusion; D03 v1 cases keep their v1 outcome.
+
+### CH-8 Evidence packs with lock and reveal
+**Depends on:** SV-5. **Build:** pack sections for the lock, capture snapshot, source observations, reconciliation, reveal, disposition and settlement (§14.13); ordering a pack before lock runs the D13 must-surface check. **Done when:** a `shadow-30000` catch produces a pack a reader can follow from source to payment.
+
+### CH-9 Value page and value receipt
+**Depends on:** SV-6, MON-1. **Build:** three separate sections — "What we checked" (documents checked, orders matched, proof captured, constraints flagged; counts, no £), "Tracked through to your bill" (builder captures; fee £0) and "Found by JobGuard after your bill" (recovered, fee, retained, before VAT and tax) — plus the subscription shown per month, not per job. Replaces VALUE-2's figures. **Done when:** the copy audit forbids prevention £ claims ("saved you", "would have forgotten") and every figure traces to a source.
+
+## 15.4 New work (MON tasks)
+
+### MON-1 Jobs-on-the-go meter (makes M4-14 required)
+**Depends on:** CH-2, CH-3, CH-4, SV-4. **Build:** a job-days ledger rebuilt from immutable events with server timestamps: counting starts at first site evidence or day 31 after switch-live; stops at lock, "Finished on site" + 7 days, a month of no site activity, or close; small-job allowance and £4,000 trip; overlapping jobs for the same customer and site count once; plan caps checked at **every** place-adding command (switch-live, resume, reopen, import); "5 of 7 jobs on the go; next job +£20 a month" on the jobs list; flat bill unless over. The meter reads only builder commands — no hidden signal, finding or document count can move it (§14.3). The no-charge pilot runs it with hypothetical prices. **Done when:** replay fixtures prove the pricing-page sentence and the code agree; the cap-bypass, pause-rotation, early-lock and import-grace exploits fail; a cached counter can never trigger a charge; late events post a correction, never an edit.
+
+### MON-2 Plans, subscription billing and the monthly maximum (replaces M4-11 and M4-11-S)
+**Depends on:** MON-1. **Build:** plan catalogue per D09 v3; upgrades immediate and pro-rated, downgrades at the next billing date if the count fits; annual plans; extra-job lines by the day; the D05 monthly maximum enforced; subscription lines on platform documents (M4-10) kept separate from success-fee lines; synthetic first (`placeholder` provider), then Stripe hosted subscription at G4. **Done when:** the §15.1 figures and the monetisation report's month-by-month profiles (Solo £348, small firm £828, firm about £2,600 a year) reproduce exactly; the subscription never offsets a fee.
+
+### MON-3 Free first job and card at switch-live
+**Depends on:** MON-2. **Build:** trial rules per §15.1; one trial per business (company number where one exists, otherwise phone and card); card ask with "skip for now"; card required before a second live job; the Final Check and 10% run normally on the trial job. **Done when:** tests cover the trial ending on lock, on day 90 and on a second live job, and a second trial attempt.
+
+### MON-4 Success-fee statement on the payment screen, collected by Direct Debit
+**Depends on:** SV-6, M4-8-S; live collection needs M4-12 and M4-15. **Build:** when a qualifying receipt is verified, one screen shows received / fee + VAT / yours; per-statement approval by default; optional standing Direct Debit authority capped at the fee on the verified receipt and silent during a dispute; the fee is never deducted from the customer's payment. **Done when:** the fee can't be collected before bank-verified settlement, can't exceed the verified amount and pauses on dispute.
+
+### MON-5 Customer portal: approvals, stage sign-off and messages
+**Depends on:** CH-3; real homeowners need G1 and D06 v2/D12 v3. **Build:** an authenticated link (no app) for the customer to accept the quote, approve extras (adding `customer_authenticated` acceptance alongside `builder_attestation`), sign off stages, and message the builder; customer messages become job evidence (SV-3 source); the domestic cancellation-notice kit in every domestic quote (free on every plan). **Done when:** approvals bind to the exact quote or extra revision; a forged or stale link fails; messages appear as evidence without any builder-visible signal before lock.
+
+### MON-6 Pay-now links and stage collection
+**Depends on:** MON-5, M4-18; live needs the payment-regulation opinion, the VAT ruling, D10 v2, M4-11 onward and G4. **Build:** card and pay-by-bank links on customer invoices through the builder's own provider account (direct charges; JobGuard never holds funds), with the capped JobGuard fee; bank transfer always shown equally; the link looks identical whether or not an invoice carries a catch; deposit and stage collection by Direct Debit via M4-15. **Done when:** the fee cap holds at every size; no customer surcharge; tests prove the invoice is identical with and without catches.
+
+### MON-7 Prevention checks inside the plans
+**Depends on:** CH-3, M2-6-S for the synthetic implementation. Use generated, dated source fixtures only, under §13.2 C3; no live register, monitoring feed or other external data-source access is enabled by this leaf’s synthetic acceptance. Live operation still depends on M2-6, D04 and D12 v3 approval for each data source, and the applicable real-data release gates. Paid reports remain gated by D14. **Build:** property constraints at quote time (listed building, conservation area, Article 4, planning history, flood) as readiness/quote facts; a "who actually pays?" check using the paying-party field; a free Companies House card on business customers; an exposure curve on the stage schedule ("£12,400 out of pocket at week 6 under these terms"); watch-this-customer monitoring on free feeds (Companies House, the Gazette). No meters; paid credit-agency reports wait for D14. **Done when:** each check cites its source and date and never runs on individuals except the builder's own customer record.
+
+### MON-8 Plan entitlements
+**Depends on:** MON-2. **Build:** one entitlement service keyed on plan: every plan gets the full watchdog, Final Check, invoices, pay-now links, recovery cases and accounting export; Firm and Contractor add the commercial layer (M4-18–22: applications, notices, retention, reverse charge, CIS) and staff permissions; Contractor adds several companies under one account (MON-10). **Done when:** entitlement checks are server-side and a downgrade never deletes data.
+
+### MON-9 Managed-recovery service charge (optional, later)
+**Depends on:** SV-6, M4-5; offered only after pilot data. **Build:** a per-case choice made before JobGuard does anything: +5 points (drafted for you) or +10 points (with a solicitor letter via an SRA-regulated partner), shown as a separate service charge beside the unchanged 10%. **Done when:** the 10% rate is unchanged in every case; a builder who does not opt in is never charged the service charge. Needs a solicitor's view on whether it is a damages-based agreement.
+
+### MON-10 Several companies under one Contractor account (M5)
+**Depends on:** M5-7. **Build:** one Contractor subscription covering several companies, each its own tenant with strict isolation; no cross-tenant read path except an explicit, audited group view. **Done when:** isolation tests pass across entities. (The sales bible promises this for Contractor; if it is dropped, remove it from Part 4 of the bible in the same change.)
+
+## 15.5 Sales promises register
+
+Every promise in `sales/JobGuard Sales Bible/` and the task that delivers it. Nothing may be promised to a customer that has no task here.
+
+| Promise | Delivered by | State |
+|---|---|---|
+| Talk through the job on site; it writes the list | M1-2/3, VOICE-1; live voice M0-12b; offline M3-5 | Built (synthetic, browser dictation) |
+| Gaps flagged before the quote goes out; no unpriced lines | M1-4 | Built |
+| Prices from your own rates; learns over time | M1-4; M5-6 | Partly built; learning M5 |
+| Customer accepts the quote and approves extras on their phone | MON-5 | To build (today builder-attested only) |
+| Baseline locked at switch-live | M1-7 + CH-1 | Built; change |
+| Decisions inbox, mandatory vs useful | M1-8, M2-7-S | Built |
+| Log an extra in seconds | M1-9, UIWIRE-8 | Built |
+| Proof reminders; stage can't complete without proof | M1-10, UIWIRE-7 | Built; CH-2 |
+| Supplier invoices snapped, forwarded or from connected merchants | M2-2/3; email forwarding SV-7; merchants M5-4/5 | Partly built |
+| Orders checked against agreed prices before placing | M2-1B-S | Built |
+| Order / delivery / invoice matched; problems before you pay | M2-4-S, M2-5-S | Built |
+| Readiness warnings incl. weather | M2-6-S; live adapters M2-6 | Partly built |
+| Listed building / conservation-area checks at quote time | MON-7 | To build |
+| Final account built automatically | M1-11, UIWIRE-9 | Built |
+| Complete final account, then the Final Check with proof | SV-1…SV-6, CH-4 | To build |
+| Diary and voice notes | SV-7 (job diary) | To build |
+| Invoices, credit notes, receipts | UIWIRE-10/11/12 | Built |
+| Deposits, stage payments, pay-now links (card / pay-by-bank) | M4-18, M4-15, MON-6 | To build (gated) |
+| Reminders the builder approves | M4-5, M4-16 | To build |
+| Recovery cases, evidence pack, drafted factual letters | M4-1-S, M4-3-S built; M4-5-S…M4-8-S next | Partly built |
+| Bank confirms money landed | M4-7 | To build (gated) |
+| Fee shown on the payment screen and collected by Direct Debit | MON-4, M4-15 | To build |
+| Value receipt ("tracked" vs "found") | CH-9 | To build |
+| Jobs-on-the-go pricing, small jobs free, first job free, monthly maximum | MON-1, MON-2, MON-3 | To build |
+| Mobile app that works with no signal | M3 | To build |
+| Export to Xero and QuickBooks on every plan | M5-1…3 | To build |
+| Applications, notices, retention, reverse charge, CIS (Firm+) | M4-18…22, MON-8 | To build |
+| Staff permissions | M0-6 roles built; M5-7 | Partly built |
+| Several companies under Contractor | MON-10 | To build (M5) |
+| Import jobs already under way | M1-17 + CH-5 | Built; change |
+| Data in UK/EU; export; email-code sign-in | D04/D07, M0-6, M5-11 | Built (sign-in); rest gated |
+| Never holds customers' money; never sends without approval | AGENTS §5.3, MON-6 design | Invariant |
+
+## 15.6 Consolidated order of remaining work
+
+Build synthetic work in dependency-preserving subwaves. Tasks in the same synthetic row may run in parallel only when every declared prerequisite is merged and their write paths do not overlap. These rows give a safe order, not permission to skip dependencies or a requirement to delay a ready task behind unrelated work. Declare and serialize shared-file changes. The synthetic rows retain §13.2 C1–C8, including real persistence, the simulation boundary and independent review.
+
+**Before new revision work starts:** Ben must adopt the corrected revision 2.4, the required independent verdict for SV-0 must be recorded, and the plan/policy amendment must be merged. SV-1 is not ready merely because it appears in row A. No SV-1–SV-8, CH- or MON- implementation, revised M4-8-S allocation scope, or v3 fee rewrite is authorized before adoption. Preparing and reviewing SV-0 itself may precede adoption. Adoption does not approve D01, D03, D09, D11, D13–D15, or any other proposed decision, and does not authorize spending, real data or production release.
+
+Before adoption, the committed scopes of M4-5-S and M4-7-S may proceed once their existing prerequisites are satisfied; M4-6-S follows M4-5-S, and the original, unextended M4-8-S follows its existing prerequisites including M4-7-S. That is not permission to include §14.8 early.
+
+**Synthetic versus live:** entries through F describe synthetic technical work, not completed features or permission to use live providers. MON-4’s live collection remains dependent on M4-12 and M4-15; MON-7’s live operation retains M2-6 and its data-source approvals. Rows G–J are gated workstreams, not claims that every item inside a row runs in parallel. Each live task’s own dependencies and G1/G4 or other applicable gates remain in force; the H/I parallel label permits only work whose actual dependencies are satisfied.
+
+**Dispatch consistency:** `docs/dispatch/2026-09-25-rev2.4-parallel-build.md` must match these dependencies, scope boundaries and authority rules before it is used. It is not authority to shorten a dependency, replace a task’s acceptance criteria, or declare a missing verdict passed. Align the existing migration reservations and registered paths with the chosen schedule; this text assigns no new migration numbers and grants no wildcard paths.
+
+**Branch convention:** retain §13.7’s `codex/sandbox/<lowercase-leaf-id>` and lane `<LEAF-ID>`. Align the dispatch prefixes and lane registrations to that convention. Changing to `codex/jg-<id>` requires an explicit convention amendment and matching updates to both documents; do not silently run two conflicting instructions.
+
+**Merge authority:** retain §13.2 C8. The checker records a verdict, a separate actor records technical acceptance, and Ben retains push, merge and release authority. A dispatch instruction or an uncommitted handoff does not delegate these powers. A different arrangement requires Ben’s dated written delegation and consistent recorded instructions; adopting this correction alone supplies no delegation.
+
+| Wave | Tasks (synthetic unless marked) | Notes |
+|---|---|---|
+| A | SV-1 · CH-2 · CH-3 · M4-5-S · M4-7-S | After the adoption precondition; SV-1 waits for SV-0. All existing leaf prerequisites still apply. |
+| B | SV-2 · CH-1 · CH-7 · M4-6-S | SV-2, CH-1 and CH-7 need SV-1; M4-6-S needs M4-5-S. |
+| C | SV-3 · SV-4 · CH-5 · MON-5 · MON-7 (synthetic) · M4-8-S (including §14.8) | SV-3 and SV-4 need SV-2; CH-5 needs CH-3 and SV-2; MON-5 needs CH-3; MON-7 needs CH-3 and M2-6-S. M4-8-S needs its original prerequisites plus SV-2, so it is not parallel with SV-2 in B. |
+| D1 | SV-5 · CH-4 | SV-5 needs SV-3 and SV-4. CH-4 needs CH-2, CH-3 and SV-4. They may run in parallel on disjoint files. |
+| D2 | MON-1 | Needs CH-2, CH-3, CH-4 and SV-4. It cannot run in parallel with the CH-4 work it consumes. |
+| E1 | SV-6 · CH-6 · CH-8 · MON-2 (synthetic) | SV-6 needs SV-5 and M4-8-S; CH-6 needs SV-5 and MON-1; CH-8 needs SV-5; MON-2 needs MON-1. No dependency between these tasks is implied by their shared row. |
+| E2 | MON-3 · MON-4 (synthetic) · M4-9-S (v3) · CH-9 (replaces VALUE-2) · MON-8 | MON-3 and MON-8 need MON-2; MON-4 needs SV-6 and M4-8-S; M4-9-S needs SV-6, M4-8-S and UIWIRE-13; CH-9 needs SV-6 and MON-1. |
+| E3 | M4-10-S | Needs M4-9-S and UIWIRE-14. |
+| E4 | M4-12-S | Needs M4-10-S. |
+| E5 | M4-17-S | Needs M4-12-S, UIWIRE-12 and MON-2. M4-11-S is not dispatched: MON-2 replaces it. |
+| F | DEMO-1 with `shadow-30000`, the meter scenarios and v3 end states | Technical convergence: all surviving §13 technical prerequisites plus the synthetic SV/CH/MON work listed before this row. MON-2 replaces M4-11-S and CH-9 replaces VALUE-2; do not require or dispatch the retired leaves. This is the revision 2.4 interpretation of DEMO-1’s “all 41 preceding leaves” dependency. Keep DEMO-1’s actual independent verdict and separate human/device observation requirements; technical completion does not open G1 or G4. |
+| G (live) | M0-13 deploy/DR/privacy · G1 · no-charge pilot running the shadow bill, the meter at hypothetical prices and the fairness measurement (report items 23/30) | Needs D04, D07, D12 v3, D13 v2 pilot approval |
+| H (live) | M3 native and offline | Parallel with I |
+| I (live) | M4-4 · M4-6 · M4-7 · M4-8 · M4-9 · M4-10 · MON-2 live (Stripe subscription) · M4-12 · M4-13 (subscription + success-fee agreement) · M4-15 + MON-4 live · MON-6 (after the legal opinion and VAT ruling) · M4-16 · M4-18…22 (Firm layer) · SV-8 · M4-23 → **G4** | Charging starts only at G4 |
+| J (later) | M5-1…3 accounting · M5-4/5 merchants + SV-7 connectors · M5-6 rate learning · M5-7 permissions + MON-10 · MON-9 managed recovery · D14 paid data · D15 partner schemes · M5-8…12 | After pilot data |
+
+## 15.7 Decision records touched
+
+| Record | Change (all `proposed`) |
+|---|---|
+| D01 v3 | Unchanged rate; adds the optional managed-recovery service-charge table as a separate option |
+| D03 v3 | §15.3 CH-7 additions |
+| D05 v2 | Monthly maximum per plan; trial renewal; per-statement fee approval by default; optional standing Direct Debit capped at the verified fee |
+| D06 v2 | Authenticated customer approval in the portal; domestic cancellation-notice kit; reviewed commercial notice templates (England and Wales first) |
+| D09 v3 | The §15.1 ladder, counting rules, small jobs, trial, annual, extras, entitlements |
+| D10 v2 | Pay-now links and stage collection route; JobGuard never holds funds |
+| D11 v3 | Never-build list; no fee or feature depends on which merchant is used; no fee on a tax outcome; metering residuals as advisory signals |
+| D12 v3 | Customer portal and homeowner notice; counterparty checks, monitoring and pursuit named as purposes |
+| D13 v2 | Any pre-lock disclosure route makes a signal fee-free at creation; pre-adoption evidence of imported jobs is fee-free; a supplier or order line outside the quote stays evidence (not must-surface) unless a must-surface rule fires |
+| D14 (new) | Paid data services: companies-only reports, title checks, flat prices, retention |
+| D15 (new) | Partner commissions and regulated introductions: insurers and professional bodies only; disclosed; never in the pilot |
+
+Professional input needed before the gated items: solicitor — subscription and trial terms, pay-now links outside payment regulation, the customer portal and cancellation kit, managed recovery and damages-based agreements, construction notice templates, credit-reference questions for D14; accountant — VAT on subscription, fees and the pay-now fee; revenue recognition.
