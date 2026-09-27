@@ -102,3 +102,26 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 ## 0039 readiness
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
+
+## 0046_recovery_case_current.sql — M4-1-S retrospective repair
+
+Expand-compatible: keeps immutable `recovery_case` creation columns for existing
+writers and foreign keys, and documents them as legacy snapshots. The
+`security_invoker` view `recovery_case_current` is the single current-state read
+contract: latest immutable claim + latest event + claim/event revision count.
+Only cases with no workbench history fall back to the 0018 legacy row; incomplete
+workbench history is excluded. No data backfill or historical rewrite is needed.
+Runtime gets SELECT on the view and retains forced RLS on its source tables.
+
+Replaces the existing narrowly granted `approve_synthetic_landing(jsonb)` body to
+read that projection after locking job, case advisory key and original row. The
+workbench command uses the same job-to-case order, before audit append. Existing
+function ownership, search path and EXECUTE grants are retained; no new SECURITY
+DEFINER function or runtime mutation grant. Repository, eligibility, demo and
+pack readers use the same projection. Deploy migration before the new readers;
+preceding code can still write/read its original tables during rollout.
+
+Tests cover upgrade from the preceding schema with existing event/claim history,
+repeat migration, legacy landing behavior, amended claim/revision in the landing
+routine, prevention, runtime read isolation and forbidden updates. Forward-fix
+only; do not delete immutable history or restore the stale landing routine.
