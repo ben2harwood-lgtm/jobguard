@@ -21,7 +21,7 @@ const exclusions: Readonly<Partial<Record<EligibilityScenario, string>>> = {
 export type EligibilityClassification = Readonly<{ classification: "eligible_for_review" | "excluded" | "pending_review"; eligibleNetPence: number | null; reason: string }>;
 export function classifyReferenceD03(scenario: EligibilityScenario, claimedNetPence: number): EligibilityClassification {
   const claimed = money(claimedNetPence).pence;
-  if (scenario === "evidence_backed_withheld_payment") return { classification: "eligible_for_review", eligibleNetPence: claimed, reason: "Verified evidence attributes settled customer money to this claim" };
+  if (scenario === "evidence_backed_withheld_payment") return { classification: "eligible_for_review", eligibleNetPence: claimed, reason: "Synthetic scenario cites evidence attributing customer money to this claim; settlement is not verified" };
   if (scenario === "unknown_basis" || scenario === "unknown_causation") return { classification: "pending_review", eligibleNetPence: null, reason: exclusions[scenario]! };
   return { classification: "excluded", eligibleNetPence: null, reason: exclusions[scenario]! };
 }
