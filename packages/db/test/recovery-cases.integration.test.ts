@@ -11,16 +11,16 @@ async function reviewedCase() {
  return repo.eligibilityCommand(ctx,job,eligibility({action:"review",caseId:opened.id,expectedCaseRevision:opened.revision,scenario:"evidence_backed_withheld_payment",evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1}),reviewer);
 }
 function approval(x: Awaited<ReturnType<typeof reviewedCase>>) {
- return eligibility({action:"approve",caseId:x.id,expectedCaseRevision:x.revision,expectedEvidenceRevision:x.eligibility!.evidenceRevision,expectedPolicyRevision:1,expectedReviewRevision:x.eligibility!.revision});
+ return eligibility({action:"approve",caseId:x.id,expectedCaseRevision:x.revision,expectedEvidenceRevision:x.eligibility!.evidenceRevision,expectedPolicyRevision:x.eligibility!.policyRevision,expectedReviewRevision:x.eligibility!.revision});
 }
-it.each(["evidence","case"])("rejects current revisions after %s supersession until re-review",async subject=>{
+it.each(["evidence","case","policy"])("rejects current revisions after %s supersession until re-review",async subject=>{
  const repo=new RecoveryCaseRepository(runtime);let x=await reviewedCase();
  x=await repo.eligibilityCommand(ctx,job,eligibility({action:"supersede",caseId:x.id,expectedCaseRevision:x.revision,subject}),reviewer);
  const before=await admin.query("SELECT count(*) FROM app.audit_event WHERE tenant_id=$1",[tenant]);
  await expect(repo.eligibilityCommand(ctx,job,approval(x),reviewer)).rejects.toThrow("ELIGIBILITY_REVIEW_REQUIRED");
  expect((await repo.list(ctx,job)).find(c=>c.id===x.id)!.eligibility).toEqual(x.eligibility);
  expect((await admin.query("SELECT count(*) FROM app.audit_event WHERE tenant_id=$1",[tenant])).rows).toEqual(before.rows);
- x=await repo.eligibilityCommand(ctx,job,eligibility({action:"review",caseId:x.id,expectedCaseRevision:x.revision,scenario:"evidence_backed_withheld_payment",evidenceRevision:x.eligibility!.evidenceRevision,policyVersion:"reference-d03.v1",policyRevision:1}),reviewer);
+ x=await repo.eligibilityCommand(ctx,job,eligibility({action:"review",caseId:x.id,expectedCaseRevision:x.revision,scenario:"evidence_backed_withheld_payment",evidenceRevision:x.eligibility!.evidenceRevision,policyVersion:"reference-d03.v1",policyRevision:x.eligibility!.policyRevision}),reviewer);
  const approve=approval(x);x=await repo.eligibilityCommand(ctx,job,approve,reviewer);
  expect(x).toMatchObject({landedNetPence:0,eligibility:{status:"approved",reviewerRef:`membership:${reviewer.membershipId}`}});
  expect((await repo.eligibilityCommand(ctx,job,approve,reviewer)).eligibility).toEqual(x.eligibility);
