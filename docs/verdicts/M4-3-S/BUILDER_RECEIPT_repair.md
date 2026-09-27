@@ -1,5 +1,75 @@
 # M4-3-S repair — BUILDER RECEIPT, not an independent review
 
+## 2026-09-27: repairs to the 8116aa6 FAIL verdict
+
+Builder: Codex (GPT-6 Astra). No delegated workers in this run. Branch: `codex/sandbox/m4-3-s-repair`.
+Implementation commit: **`906f35ba794879e4aafc24f2794fa942f5f9ae3c`**, based on receipt commit `27697954a9aed1047e0edbb18604debe74945d8e` (previous implementation `8116aa6aed2542a0644d0c9042c73c9198dc734e`). This receipt is a subsequent documentation-only commit. Full review base remains `694e9e1755f2a5680898eb0fa04af48afd66c86b`.
+
+**State: repairs committed locally; PostgreSQL migration/DB proof and both browser projects NOT RUN to acceptance because of startup failures. NOT independently verified, NOT technically accepted. No push or PR.** The supplied independent FAIL verdict at `8116aa6-repair.md` is preserved verbatim and committed; it is not superseded by this builder receipt. A fresh independent Claude verdict must bind the new implementation commit after executable verification in an environment that supports PostgreSQL and listeners.
+
+### The five requested repairs
+
+1. **0042 bootstrap policy repair implemented.** At the start of 0042, ALTER POLICY on the two existing 0041 tables uses `nullif(current_setting('app.tenant_id', true), '')::uuid` for both USING and WITH CHECK, before constraint validation. This repairs upgrades from 0041 without editing that historical migration. Missing/empty context admits no rows; malformed context still errors. FORCE RLS, role grants, ownership, validated FK additions and existing data are unchanged. No BYPASSRLS, SECURITY DEFINER helper, data rewrite or NOT VALID constraint introduced.
+2. **Real migration-role proof attempted, held.** `demo-bootstrap.integration` continues to call the real bootstrap with its non-superuser owner and `SET ROLE jobguard_migration`; fresh and idempotent expectations now require all 43 migrations. It and `sandbox.integration` fail PostgreSQL startup here, before migration execution. Playwright cannot start its web server; its global setup is NOT RUN. There is no claim that the role-specific fix has been executed successfully.
+3. **UIWIRE-12 stale count fixed** from 42 to 43. Its exact path is explicitly added to the repair lane roots with a note explaining the migration-count-only change (the lane already included the broader DB directory). Bootstrap's three stale count assertions and migration-range test title are also corrected. No receipt behavior or existing assertion is removed.
+4. **Required DB/browser runs attempted; counts below.** Both `mobile-360` and `desktop` were requested in the exact M4-3-S command. Zero browser tests executed; the two requested screenshots are **NOT PRODUCED**. Existing screenshots are not reused as evidence.
+5. **Three low findings repaired.** The repository view reports the stored ZIP/PDF/TEXT format; new artifacts remain TEXT and legacy downloads/approvals remain held. Actor references now use verified `membership:<id>` without session-cookie material. The API test confirms identical generate arguments across two session UUIDs and checks membership-only approval actor identity. The checkpoint option explicitly says it uses the same intact sources, and its explanation says no server scenario has an independent digest; it is no longer described as malformed.
+
+Added PostgreSQL adversarial coverage (authored, NOT RUN): two legacy ZIP/PDF projection/held-action cases and one raw runtime SQL case for absent/empty context reads, denied INSERT and malformed context. The evidence-pack integration file now has 11 tests (previously 8). Existing tenant/FK/immutability/approval/replay assertions remain intact.
+
+Compatibility: expanded view format type is honest about historical labels. Historical actor refs and command hashes are not rewritten. New commands replay consistently across sessions for the same verified member; pre-change command hashes incorporating a session actor can still conflict on replay after this change. No AI/policy/provider behavior or production gate changed. No new operational alert. Forward fix is documented in `packages/db/MIGRATIONS.md`; preserve history and hold attachment actions if remediation is needed. An environment that already applied the earlier candidate 0042 will not rerun it automatically; this repair targets the failed rollout/unapplied 0042, as requested.
+
+### Environment and actual commands
+
+Cwd: `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/m4-3-s-repair`. Node **24.17.0** installed versus `.nvmrc` **24.15.0**; cached exact pnpm **10.28.1**, embedded PostgreSQL **16.10.0-beta.15**, Vitest **4.1.11**. Reused hydrated dependencies. **Clean pinned install NOT established**: offline frozen install aborted before replacement with `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`. No manifest or lockfile changes.
+
+`P` means `PATH=/private/tmp/jobguard-pinned-bin:$PATH`, with `pnpm` symlinked to the existing cached `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`. The default wrapper's initial `pnpm --version` failed online signature verification (`fetch failed`); no signature-ignore option was used. Local bundled libraries already had ICU `.68` aliases; added only untracked node_modules sibling aliases for `libzstd.1`, `liblz4.1`, `libz.1`, and `libicui18n` to their installed versioned dylibs. Initial missing-library failures were resolved, but kernel shared-memory failure remained. No sandbox permission escalation or kernel changes attempted.
+
+Logs: `/private/tmp/m4-3-s-rerepair-logs/` (temporary local evidence). Results below are builder execution, not model review. Turbo used the existing shared worktree cache and emitted nonfatal cache IO permission warnings; cached work is identified explicitly.
+
+| Command | Exit | Result |
+|---|---|---|
+| `P pnpm install --offline --frozen-lockfile` | 1 | NOT completed; no-TTY abort described above. |
+| `P pnpm test:migrations` (before and after local library aliases) | 1 / 1 | Each: 2 failed setup files, 11 skipped tests, 0 assertions executed. Real-role migration proof NOT RUN. |
+| `P pnpm test:db` (initial attempt) | 1 | 34 failed files / 2 passed; 15 passed / 1 failed / 148 skipped tests. Before the 3 new DB regression cases. |
+| `P pnpm test:db` (final source) | 1 | 34 failed files / 2 passed; **15 passed / 1 failed / 151 skipped**, 167 total. PostgreSQL-backed assertions NOT RUN. Restore listener fails with EPERM. Evidence packs 0/11, source mapping 0/6, demo-bootstrap 0/2, sandbox 0/2, UIWIRE-12 0/22 executed. |
+| `P pnpm build` (initial and final) | 0 / 0 | 7/7 tasks, 4 cached each; affected DB/API/web compiled, Next production build passed. Final run completed after root test's cancelled API build. |
+| `P pnpm typecheck` | 0 | 7/7 tasks, 4 cached. |
+| `P LANE_BASE_REF=694e9e1 pnpm lint` | 0 | Purity, lane, money/commercial checks and 7/7 package tasks, 4 cached. |
+| `P pnpm test` | 1 | Tools 39/39 executed; config 2, storage 4, core 366, AI 72 replayed from cache. API 83 passed / 1 failed, plus listener error in health test; DB task cancelled by Turbo, web task not reached. Root suite is NOT GREEN. |
+| `P pnpm --filter @jobguard/api exec vitest run src/evidence-pack.application.test.ts` | 0 | **9/9 executed and passed** independently of the health listener failure. |
+| `P pnpm --filter @jobguard/web test` | 0 | **36/36 executed and passed**, 4 files. |
+| `P pnpm test:regression` | 1 | 7 DB setup files failed, 39 tests skipped, 0 assertions executed. Complete-journey browser stage NOT RUN. |
+| `P CI=1 pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M4-3-S.spec.ts` | 1 | Web-server listener denied. **mobile-360: 0/2 executed, 0 passed; desktop: 0/2 executed, 0 passed. NOT RUN; no screenshots.** |
+| `P pnpm openapi:check` | 1 | tsx IPC listener EPERM; wrapper NOT RUN to completion. |
+| `node apps/api/dist/generate-openapi.js --check` | 1 | No diagnostic output; not treated as a passing check. |
+| `P pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Same source generator and comparison via Node loader; committed spec matches. |
+| `P LANE_BASE_REF=694e9e1 pnpm lint:lanes` | 0 | Final implementation plus updated receipt remain within the registered repair lane. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Exact final blockers:
+
+```text
+FATAL:  could not create shared memory segment: No space left on device
+DETAIL: Failed system call was shmget(key=110614420, size=56, 03600).
+HINT: This error does *not* mean that you have run out of disk space.
+```
+
+Direct bundled `initdb -D <fresh temporary directory> --lc-messages=C` exited 1 after the library aliases were repaired (`initdb-final.log`). Suites suppress the underlying startup log and report `Postgres init script exited with code 1. Please check the logs for extra info. The data directory might already exist.` The directory was freshly created; no running database was reset.
+
+```text
+Playwright: Error: listen EPERM: operation not permitted 127.0.0.1:3000
+Root API health test: Error: listen EPERM: operation not permitted 0.0.0.0
+Restore test: Error: listen EPERM: operation not permitted 127.0.0.1
+OpenAPI tsx wrapper: Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/53716.pipe
+```
+
+No test weakening, mocks substituted for real database proof, changed Playwright setup, approvals, push, PR, merge or release. The next verification must run migrations/bootstrap, full DB and both browser projects on this candidate and capture fresh screenshots, then obtain the independent verdict. This builder does not accept its own work.
+
+---
+
+## Historical receipt — 2026-09-25 (superseded only by the dated update above)
+
 Date: 2026-09-25. Builder: Codex (GPT-6 Astra), with three scoped Codex workers. Their source inspections are builder work, not the required independent Claude verdict.
 
 Branch: `codex/sandbox/m4-3-s-repair`. Base: `694e9e1755f2a5680898eb0fa04af48afd66c86b`. Implementation head: `8116aa6aed2542a0644d0c9042c73c9198dc734e`. The subsequent receipt commit changes documentation only. Review the full branch diff from the base; the earlier FAIL at `fd56bdd` has not been superseded by a new independent verdict.
