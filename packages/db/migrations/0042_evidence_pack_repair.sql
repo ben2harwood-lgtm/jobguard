@@ -1,4 +1,12 @@
 BEGIN;
+-- Upgrade existing 0041 policies before FK validation under the real migration
+-- role. Missing/empty context sees no tenant rows; FORCE RLS and grants stay intact.
+ALTER POLICY tenant_isolation ON app.evidence_pack
+ USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+ WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+ALTER POLICY tenant_isolation ON app.evidence_pack_revision
+ USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+ WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 -- Expand-compatible with 0041. Old deployments can still insert ZIP/PDF labels;
 -- repaired readers always describe the actual text representation honestly.
 ALTER TABLE app.evidence_pack_revision DROP CONSTRAINT evidence_pack_revision_format_check;

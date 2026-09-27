@@ -25,7 +25,7 @@ export class EvidencePackApplication {
       [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID],
     )).rows[0]);
     if (!member) throw new Error("FORBIDDEN");
-    return { ctx, actorRef: `membership:${member.id}:session:${sessionId}` };
+    return { ctx, actorRef: `membership:${member.id}` };
   }
 
   async list(sessionId: string | undefined, caseId: string) {

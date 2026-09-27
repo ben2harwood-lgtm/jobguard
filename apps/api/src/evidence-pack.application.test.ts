@@ -47,17 +47,19 @@ describe("evidence pack API repair boundaries", () => {
     for (const session of [undefined, "forged"]) await expect(app.list(session, caseId)).rejects.toThrow("UNAUTHENTICATED");
     expect(repository.list).not.toHaveBeenCalled();
   });
-  it("derives the recorded actor from the server session and returns environment identity", async () => {
+  it("derives a stable recorded actor from verified membership and returns environment identity", async () => {
     const app = new EvidencePackApplication({} as Pool);
     const response = await app.generate(sessionId, caseId, { version: "evidence-pack-command.v1", commandId });
-    expect(repository.generate).toHaveBeenCalledWith(expect.anything(), caseId, { commandId, format: "TEXT" }, `membership:${membershipId}:session:${sessionId}`);
+    expect(repository.generate).toHaveBeenCalledWith(expect.anything(), caseId, { commandId, format: "TEXT" }, `membership:${membershipId}`);
+    await app.generate("18000000-0000-4000-8000-000000000099", caseId, { version: "evidence-pack-command.v1", commandId });
+    expect(repository.generate.mock.calls[1]).toEqual(repository.generate.mock.calls[0]);
     expect(response).toMatchObject({ version: "evidence-pack-response.v1", environment: "synthetic_demo", realExternalActions: 0, packs: [] });
   });
   it("uses the same persisted approval and inspection paths for API and web adapters", async () => {
     const app = new EvidencePackApplication({} as Pool);
     const command = { version: "evidence-pack-attachment-approval.v1", commandId, expectedManifestHash: hash, expectedContentHash: hash };
     await app.approveAttachment(sessionId, caseId, packId, command);
-    expect(repository.approveAttachment).toHaveBeenCalledWith(expect.anything(), caseId, packId, { commandId, expectedManifestHash: hash, expectedContentHash: hash }, `membership:${membershipId}:session:${sessionId}`);
+    expect(repository.approveAttachment).toHaveBeenCalledWith(expect.anything(), caseId, packId, { commandId, expectedManifestHash: hash, expectedContentHash: hash }, `membership:${membershipId}`);
     repository.inspect.mockResolvedValue({ findings: ["Content hash mismatch"], complete: false, contentMatches: false });
     expect(await app.inspect(sessionId, caseId, packId, { scenario: "tampered" })).toMatchObject({ environment: "synthetic_demo", scenario: "tampered", findings: ["Content hash mismatch"], complete: false });
     expect(repository.inspect).toHaveBeenCalledWith(expect.anything(), caseId, packId, "tampered");

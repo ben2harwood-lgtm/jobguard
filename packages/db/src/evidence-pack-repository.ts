@@ -16,14 +16,14 @@ export type EvidencePackScenario = z.infer<typeof scenarioInput>;
 export type EvidencePackView = {
   id: string; revision: number; caseId: string; jobId: string;
   manifest: ReturnType<typeof buildEvidenceManifest>; manifestHash: string; contentHash: string;
-  format: 'TEXT'; sources: EvidenceSource[]; omissions: string[]; findings: string[];
+  format: 'ZIP' | 'PDF' | 'TEXT'; sources: EvidenceSource[]; omissions: string[]; findings: string[];
   contentMatches: boolean; complete: boolean; attachmentApprovalValid: boolean;
   attachmentApprovalRecorded: boolean; createdAt: string;
 };
 type PackRow = {
   pack_id: string; revision: number; case_id: string; job_id: string; canonical_manifest: string;
   manifest_hash: string; content_hash: string; sources: EvidenceSource[]; source_omissions: string[];
-  artifact_text: string | null; request_hash: string | null; subject_hash: string; created_at: Date;
+  format: EvidencePackView['format']; artifact_text: string | null; request_hash: string | null; subject_hash: string; created_at: Date;
 };
 export class EvidencePackError extends Error {
   constructor(readonly code: string) { super(code); this.name = 'EvidencePackError'; }
@@ -83,7 +83,7 @@ export class EvidencePackRepository {
         const approval = approvals.find(value => value.pack_id === row.pack_id && value.manifest_hash === row.manifest_hash && value.content_hash === row.content_hash);
         return {
           id: row.pack_id, revision: Number(row.revision), caseId: row.case_id, jobId: row.job_id,
-          manifest, manifestHash: row.manifest_hash, contentHash: row.content_hash, format: 'TEXT' as const,
+          manifest, manifestHash: row.manifest_hash, contentHash: row.content_hash, format: row.format,
           sources, omissions: manifest.omissions ?? [], findings,
           contentMatches: digestsMatch && check.contentMatches, complete: digestsMatch && check.complete,
           attachmentApprovalRecorded: !!approval,

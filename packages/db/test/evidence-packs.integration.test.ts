@@ -43,6 +43,25 @@ describe('immutable evidence pack commands on PostgreSQL', () => {
     const count = await admin.query('SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type=$3', [fixture.tenantId, pack.id, 'evidence_pack.generated']);
     expect(Number(count.rows[0].n)).toBe(1);
   });
+  it.each(['ZIP', 'PDF'] as const)('reports stored legacy %s format while holding download and approval', async format => {
+    const pack = await repo.generate(context, fixture.caseId, { commandId: randomUUID() }, actor);
+    await admin.query('UPDATE app.evidence_pack_revision SET format=$3,artifact_text=NULL,request_hash=NULL WHERE tenant_id=$1 AND pack_id=$2', [fixture.tenantId, pack.id, format]);
+    expect((await repo.list(context, fixture.caseId)).find(row => row.id === pack.id)).toMatchObject({ format, complete: false, attachmentApprovalValid: false });
+    await expect(repo.download(context, fixture.caseId, pack.id)).rejects.toThrow('EVIDENCE_PACK_REBUILD_REQUIRED');
+    await expect(repo.approveAttachment(context, fixture.caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor)).rejects.toThrow('EVIDENCE_PACK_STALE_APPROVAL');
+  });
+  it('keeps raw runtime SQL fail-closed without tenant context', async () => {
+    const client = await runtime.connect();
+    try {
+      await client.query('RESET app.tenant_id');
+      for (const table of ['evidence_pack', 'evidence_pack_revision', 'evidence_pack_attachment_approval']) {
+        expect((await client.query(`SELECT * FROM app.${table}`)).rows).toEqual([]);
+      }
+      await expect(client.query('INSERT INTO app.evidence_pack(id,tenant_id,job_id,case_id) VALUES($1,$2,$3,$4)', [randomUUID(), fixture.tenantId, fixture.jobId, fixture.caseId])).rejects.toMatchObject({ code: '42501' });
+      await client.query("SELECT set_config('app.tenant_id','malformed',false)");
+      await expect(client.query('SELECT * FROM app.evidence_pack')).rejects.toMatchObject({ code: '22P02' });
+    } finally { await client.query('RESET app.tenant_id'); client.release(); }
+  });
   it('records exact attachment approval, rejects stale hashes, and invalidates previous approvals without updating history', async () => {
     const pack = await repo.generate(context, fixture.caseId, { commandId: randomUUID() }, actor);
     const input = { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash };

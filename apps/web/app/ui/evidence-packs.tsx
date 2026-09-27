@@ -80,9 +80,10 @@ export function EvidencePacks({ caseId, claimedNetPence }: { caseId: string; cla
       <label>Server inspection scenario <select style={{ minHeight: 44, maxWidth: "100%" }} aria-label="Check a pack scenario" value={scenario} disabled={busy} onChange={event => setScenario(event.target.value)}>
         <option value="intact">Intact sources</option><option value="missing">Missing source</option>
         <option value="tampered">Changed content</option><option value="wrong-version">Wrong version</option>
-        <option value="checkpoint">Untrusted checkpoint</option>
+        <option value="checkpoint">Untrusted checkpoint (same intact sources)</option>
       </select></label>
-      {scenario !== "intact" && <p>Generated malformed practice scenario. The recorded pack is unchanged.</p>}
+      {scenario === "checkpoint" && <p>Same intact sources. No independent checkpoint digest is available in any server scenario.</p>}
+      {scenario !== "intact" && scenario !== "checkpoint" && <p>Generated malformed practice scenario. The recorded pack is unchanged.</p>}
       {inspecting && <p role="status">Checking the stored bundle on the server…</p>}
       {inspection && <div data-testid="pack-server-inspection" aria-live="polite">
         {inspection.contentMatches && <p>Content matches manifest</p>}
