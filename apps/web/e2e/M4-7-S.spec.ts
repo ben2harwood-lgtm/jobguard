@@ -44,7 +44,7 @@ async function clickCommand(page: Page, jobId: string, name: string): Promise<Pr
 }
 
 async function advance(page: Page, jobId: string, scenario: string) {
-  await page.getByLabel("Generated receipt scenario", { exact: true }).selectOption(scenario);
+  await panel(page).getByRole("combobox", { name: "Generated receipt scenario", exact: true }).selectOption(scenario);
   return clickCommand(page, jobId, "Advance practice executor");
 }
 
@@ -195,7 +195,7 @@ test("rejects forged receipt authority, preserves command identity, and makes co
   expect(changedReplay.status()).toBe(409);
   expect(await read(page, jobId)).toEqual(view);
 
-  await copied.page.getByLabel("Generated receipt scenario", { exact: true }).selectOption("settled_384");
+  await panel(copied.page).getByRole("combobox", { name: "Generated receipt scenario", exact: true }).selectOption("settled_384");
   await panel(copied.page).getByRole("button", { name: "Advance practice executor", exact: true }).click();
   const alert = panel(copied.page).getByRole("alert");
   await expect(alert).toBeFocused();
@@ -254,7 +254,7 @@ test("shows transport errors and reloads authoritative facts without inventing s
   await panel(page).getByRole("button", { name: "Load saved practice receipts", exact: true }).click();
   await expect(page.getByTestId("movement-state")).toHaveText("Pending — cannot qualify");
   await page.route(`**${endpoint(jobId)}`, route => route.request().method() === "POST" ? route.abort("failed") : route.continue());
-  await page.getByLabel("Generated receipt scenario", { exact: true }).selectOption("settled_384");
+  await panel(page).getByRole("combobox", { name: "Generated receipt scenario", exact: true }).selectOption("settled_384");
   await panel(page).getByRole("button", { name: "Advance practice executor", exact: true }).click();
   await expect(alert).toBeFocused();
   await expect(page.getByTestId("movement-state")).toHaveText("Pending — cannot qualify");
