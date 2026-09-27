@@ -3,5 +3,10 @@
   "installCommand": "corepack enable && pnpm install --frozen-lockfile",
   "buildCommand": "pnpm bootstrap:demo && pnpm turbo run build --filter=@jobguard/web...",
   "outputDirectory": "apps/web/.next",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "aac/**": false
+    }
+  }
 }
