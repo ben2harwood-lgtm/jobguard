@@ -1,3 +1,50 @@
+# M4-7-S repair receipt — builder evidence, not a review
+
+Date: 27 September 2026. Builder: Codex. Branch: `codex/sandbox/m4-7-s`.
+
+**New candidate: `6e2c49991d4be7ae647615de944e7aa944612ac1`.** This update is committed separately after the candidate. The original receipt below is historical evidence for `659dddf`, not current test results.
+
+## Exact repair scope
+
+- R1: changed the UIWIRE-12 registry length assertion from 42 to 43, covering migration 0043. Preserved the historical `0000_tenancy.sql` through `0041_evidence_packs.sql` row-count assertion at 42. Added only that test's exact path to the lane write roots, with a founder-authorized R1 note.
+- R2: changed all three scenario selectors to the panel-scoped `getByRole("combobox", { name: "Generated receipt scenario", exact: true })`, including the second browser context.
+- Migration 0043 and all server implementation files are unchanged. Optional R3 and the low-priority observations were not included in this R1/R2 repair scope.
+
+## Current execution evidence
+
+Commands use `PATH=/tmp/m4-7-s-bin:$PATH` with Node `v24.17.0` and pinned pnpm `10.28.1`, using the existing install. No fresh install is claimed. Turbo reused existing matching cache entries where reported; those are not fresh executions. Local logs are `/tmp/m4-7-s-repair-*.log`.
+
+| Command | Exit | Actual result |
+|---|---:|---|
+| `pnpm build` | 0 | 7/7 tasks successful, 4 cached; production Next build completed. |
+| `pnpm test:db` | 1 | 35 files: 33 failed / 2 passed; 161 tests: 15 passed / 1 failed / 145 skipped by failed setup. UIWIRE-12: all 22 NOT RUN; practice-feed: all 11 NOT RUN. Native PostgreSQL setup failed; restore test failed at `listen EPERM ... 127.0.0.1`. No real-PostgreSQL assertion pass claimed. |
+| `pnpm --filter @jobguard/web test` | 0 | 4 files, 36 tests passed in a direct fresh execution. |
+| `pnpm typecheck` | 0 | 7/7 tasks successful, 4 cached. |
+| `GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH=/tmp/m4-7-s-repair-event.json pnpm lint` | 0 | 7/7 package tasks, 4 cached; purity, money boundary and lane passed. Local event fixture binds base `694e9e1755f2a5680898eb0fa04af48afd66c86b` to candidate `6e2c49991d4be7ae647615de944e7aa944612ac1`; 29 candidate paths inside lane. This is local validation, not a submitted PR. |
+| `pnpm test` | 1 | Tools 39 passed; config 2, storage 4, core 352, AI 72 passed (cached package results); API 103 passed / 1 failed, with `listen EPERM ... 0.0.0.0` in the health test. Turbo stopped at 9/12 successful tasks; not an overall pass or completed DB run. |
+| `pnpm --filter @jobguard/web exec playwright test --list --project=mobile-360 --project=desktop M4-7-S.spec.ts` | 0 | Six tests discovered: three mobile-360 and three desktop. Discovery only. |
+| `CI=true pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M4-7-S.spec.ts` | 1 | Three prerequisite build tasks passed (two cached). `Error: Timed out waiting 120000ms from config.webServer.` Both projects NOT RUN: 0 executed, 0 passed; 3 not run per project. No panel screenshots or completed browser traces generated. |
+| `CI=true pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M4-7-S.spec.ts` (retry after production build completed) | 1 | `Error: listen EPERM: operation not permitted 127.0.0.1:3000`; `Error: Process from config.webServer was not able to start. Exit code: 1`. Both projects NOT RUN: 0 executed / 0 passed, 3 not run per project. No screenshots. Log: `/tmp/m4-7-s-repair-e2e-final.log`. |
+| `pnpm exec next start --hostname 127.0.0.1 --port 3000` (in `apps/web`, diagnostic) | 1 | `Error: listen EPERM: operation not permitted 127.0.0.1:3000`. Confirms server binding is forbidden in this sandbox. |
+| Native package `initdb --version`; direct `initdb -D <fresh /tmp directory> -U postgres --auth=trust --lc-messages=C` diagnostic | 0; native bootstrap failed | PostgreSQL 16.10 executable loads normally; no missing dylib and no hydration needed in this run. Bootstrap reports the shared-memory failure below. The shell wrapper ended with `cat`, so its status is not an initdb success. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Exact native diagnostic (`/tmp/m4-7-s-repair-initdb.log`):
+
+```text
+FATAL:  could not create shared memory segment: Operation not permitted
+DETAIL:  Failed system call was shmget(key=110512102, size=56, 03600).
+child process exited with exit code 1
+```
+
+No test was skipped by editing its implementation or harness; setup failures prevent PostgreSQL assertions from executing. No fallback database, altered permission model, port-binding workaround, or mocked successful browser API was introduced.
+
+## Review status
+
+The supplied Claude verdict `docs/verdicts/M4-7-S/659dddf.md` was read in full and preserved unchanged as an existing untracked file. It is HOLD and binds only to the old candidate. R4 (fresh independent review of this new commit) remains outstanding; this receipt is not that review and does not record technical acceptance. M4-2-S's retrospective HOLD remains a dependency acceptance/merge blocker as recorded by Claude. No push, PR, merge, release, or external provider action occurred. Both commits use normal `git commit`, never `--no-verify`.
+
+---
+
 # M4-7-S builder receipt — not an independent review
 
 Date: 25 September 2026. Builder: Codex, GPT-6 Astra.
