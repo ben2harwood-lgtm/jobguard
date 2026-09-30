@@ -3489,6 +3489,7 @@ Agents append adjacent findings here rather than implementing them inline, with 
 | 2026-09-27 | Rev 2.4 adoption (R01–R12, Astra PASS) exists only on the unpushed branch `claude/plan-rev24-adopt`; rev 3.0 carries every correction | §2 | Rev 3.0 replaces that branch once reviewed and merged |
 | 2026-09-27 | PR-merge delegation (rev 2.4 packet item 9) is unanswered; merging stays with Ben | §2.1 | Ben to retain or delegate in writing |
 | 2026-09-30 | `app.job` constraint `job_baseline_shape` (0020) and the lifecycle routine (0003) require a quote or imported baseline plus cap when a job goes live; contractor work-order jobs and v3 small-builder activations have neither | CH-1, ENT-2 | ENT-2 adds a `work_order` provenance and a controlled route into `live`; CH-1 relaxes the cap requirement for v3 |
+| 2026-09-30 | Flaky browser test: `e2e/M2-5-S.spec.ts` (mobile-360) timed out on a 45-second poll in CI run 36748730218 on a docs-only commit, after passing on the two previous runs of identical code | M2-5-S; §2.4 C6 | A small test-stability task: find the race behind the poll (server projection timing or seed readiness), fix it without lengthening timeouts or skipping the test |
 | 2026-09-30 | M0-6 is an in-memory auth scaffold (no persisted sessions or identity email) and the AI gateway is fixture-only (no Claude route or Deepgram adapter) | §11 M0-6L, M0-12a/b | Carried as live prerequisites before any real user signs in |
 
 ---
