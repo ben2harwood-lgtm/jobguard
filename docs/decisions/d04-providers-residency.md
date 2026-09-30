@@ -5,8 +5,8 @@
 - **Policy version:** `provider_residency_policy_v1`
 - **Dated approver evidence:** None — proposed on 2026-09-13. Approval is founder-reserved; a future approval must identify approver, date, evidence URI/reference, and the exact policy version.
 - **Applicable environment / jurisdiction:** Real-data pilot and production; EU/UK personal-data boundary with UK-primary deployment
-- **Source / supporting review:** BUILD_PLAN.md §§2, 5.11 and Appendix C; current vendor deployment evidence and data/security review required
-- **Executable feature gate:** `G1, G3, G4 and G5 as applicable; provider_dispatch requires D04 through requireApprovedDecision`
+- **Source / supporting review:** `BUILD_PLAN.md` §4 and Appendix C; `AGENTS.md` §5.11 (rev 3.0); current vendor deployment evidence and data/security review required
+- **Executable feature gate:** `G1, G3, the applicable track gate (G4-C or G4-S) and G5 as applicable; provider_dispatch requires D04 through requireApprovedDecision`
 
 ## Exact proposed policy
 
