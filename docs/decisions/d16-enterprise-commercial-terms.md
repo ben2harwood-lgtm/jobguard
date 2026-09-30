@@ -14,6 +14,8 @@ JobGuard earns 10% of the net (ex-VAT) value of site-originated extras that are 
 
 Which firms are on this deal (founder decision 2026-09-30): the deal is per company, never per person. Firms that start above 7 jobs at once, or that want operatives logging extras, join this deal directly; a small-builder account that runs more than 7 jobs at once in any 2 of 3 consecutive monthly billing periods is moved to it with notice once this agreement and a data processing agreement are signed; jobs already live at the move finish on their original terms.
 
+Founder direction 2026-09-30 (Command Center card `jobguard-open-policy-details`, "Accept as proposed"): a fee binds to the agreement version in force when the extra was raised, and the fee base never exceeds the approved value when the contractor bills more. This is direction, not formal approval evidence.
+
 Open for approval: the formula for any volume bands or minimums (the fee engine refuses them until defined); whether a fee binds to the agreement version in force when the extra was raised (reference choice) or when it was paid; whether the fee base is capped at the approved value when the contractor bills more; whether any volume bands or caps apply; minimum commitments; implementation and contractual evidence for the fixed fee-on-payment rule; pilot-period terms; the baseline method used in pilots.
 
 ## Approval requirement

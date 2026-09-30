@@ -22,6 +22,8 @@ Qualifying categories (BUILD_PLAN §14.7): (1) `missed_variation_final_account`,
 
 Only evidenced settled cash principal attributable to an approved recovery case is eligible. Pending cash, prevented spending, unapplied credit notes, invoice reductions and unverified manual receipts are non-billable; applied credits remain excluded. Partial outcomes, duplication, refunds, disputes, attribution and evidentiary sufficiency require approval.
 
+Founder direction 2026-09-30 (Command Center card `jobguard-open-policy-details`, "Accept as proposed"): keep the consumed-supplier-credit candidate. Its production fee path stays disabled until the separate non-cash proof, allocation and reversal contract is approved and incorporated into AGENTS and BUILD_PLAN (BUILD_PLAN §5.5). This is direction, not formal approval evidence.
+
 ## Approval requirement
 
 This record is not approval and must fail closed wherever its executable gate applies. Changing this policy requires a new version and must not rewrite historic terms or facts.
