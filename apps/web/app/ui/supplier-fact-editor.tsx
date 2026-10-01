@@ -8,7 +8,7 @@ type Fact = {
   unit_price_pence: number | null; net_pence: number | null; source_page: number;
   span_start: number; span_end: number; source_region: string; source_hash: string;
   version_id: string; source_text: string; issues: string[];
-  confirmed: null | { revision: number; quantity_decimal: string; unit_price_pence: string; net_pence: string; origin: string };
+  confirmed: null | { revision: number; quantity_decimal: string | number; unit_price_pence: string | number; net_pence: string | number; origin: string };
 };
 const pounds = (p: number | null) => p === null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(p / 100);
 const inputPounds = (p: string | number | null) => {
@@ -17,8 +17,12 @@ const inputPounds = (p: string | number | null) => {
   return `${value / 100n}.${String(value % 100n).padStart(2, "0")}`;
 };
 
+/** Tolerates a JSON number or string: confirmed rows may arrive from the API either way. */
+export const initialQuantity = (fact: Pick<Fact, "quantity_decimal" | "confirmed">) =>
+  String(fact.confirmed?.quantity_decimal ?? fact.quantity_decimal ?? "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+
 export function SupplierFactEditor({ jobId, fact }: { jobId: string; fact: Fact }) {
-  const [q, setQ] = useState((fact.confirmed?.quantity_decimal ?? fact.quantity_decimal ?? "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""));
+  const [q, setQ] = useState(initialQuantity(fact));
   const [price, setPrice] = useState(inputPounds(fact.confirmed?.unit_price_pence ?? fact.unit_price_pence));
   const [net, setNet] = useState(inputPounds(fact.confirmed?.net_pence ?? fact.net_pence));
   const [changed, setChanged] = useState(false), [error, setError] = useState("");

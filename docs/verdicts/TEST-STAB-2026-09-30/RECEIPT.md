@@ -98,3 +98,52 @@ d552785fad2c6713d8ee64f35ae78b36537b3b7db99e1b898d0f4d5cf203e5e0  apps/web/e2e/M
 f36d6ddd781e2d72718049d9d58e04e8aed4d937b7294e10f64f1da3079fe26a  packages/core/src/money.test.ts
 b87e83d291fd5db09ef776737afa3f759629a44ef8af23bc14e6903ecadcc242  packages/core/src/money.ts
 ```
+
+## Repair 1 — F1 and F3 (builder: Claude cloud builder session)
+
+Builder identity: Claude cloud builder session, https://claude.ai/code/session_01CE5vY6XhfctX4KD1dBzm1V. Branch `claude/test-stab-2026-09-30-repair1`, created from `a92ed6b9084c44aa1d232863c2fb280106388f4f`. This is a builder receipt; it is not an independent verdict or acceptance. Nothing was pushed to any other branch; no PR was opened or edited; no live service, spend, real data, provider/AI call or new dependency was used.
+
+### What changed and why
+
+- **F1 (P1) — M2-5-S crash.** The API builds `confirmed` with `row_to_json`, so the `numeric(20,6)` quantity reached the browser as a JSON number and `SupplierFactEditor` called `.replace` on it (TypeError → "Application error" after the confirm remount).
+  - `packages/db/src/supplier-document-repository.ts`: `confirmed` is now `to_jsonb(r) || jsonb_build_object('quantity_decimal', r.quantity_decimal::text)`, so the API sends the exact decimal string (`"10.000000"`). The pence columns stay JSON numbers, as before.
+  - `apps/web/app/ui/supplier-fact-editor.tsx`: the `Fact.confirmed` type now says `string | number` (it previously claimed `string`), and a small exported `initialQuantity` wraps the value in `String(…)` before trimming, so the UI tolerates both. No float arithmetic was introduced; the exact parsers (`parseQuantity`, `parsePoundsToPence`) are unchanged.
+  - Tests: new `apps/web/app/ui/supplier-fact-editor.test.ts` (renders the editor with numeric and string confirmed quantities). Red before: `TypeError: (… ?? …).replace is not a function` on a92ed6b's component; green after. DB: `supplier-documents.integration.test.ts` now asserts the confirmed quantity is the string `"10.000000"`; red with the old query (confirmed quantity arrives as a number), green with the new.
+- **F3 (P2) — no real e2e result.** Both specs now have recorded runs on Linux (below). a92ed6b reproduces F1 (4 passed, 2 failed — M2-5-S on both projects); this head passes 6/6, three times in a row.
+
+### Environment
+
+Linux; Node v22.22.0 (repo engines want >=24 <25 — pnpm warned "Unsupported engine"; the reviewer used 24.15.0, so this is a difference to note); pnpm 10.28.1 via corepack; embedded-postgres 16.10 as root via the existing `createPostgresUser`. Chromium: a private `PLAYWRIGHT_BROWSERS_PATH` (outside the repo) holding `chromium-1193` / `chromium_headless_shell-1193` symlinks to the pre-installed 1194 builds; no download, no `playwright install`, no repo edit. Port 3000 was free before each run (`pkill next-server` between runs). The a92ed6b comparison ran in a separate git worktree under `/home/user` (a worktree under a 0700 `/tmp` directory made `initdb` fail with EACCES for the postgres user — environment only).
+
+### Gates (head vs a92ed6b)
+
+| Command | a92ed6b | this head |
+| --- | --- | --- |
+| `pnpm install --frozen-lockfile` | exit 0 | exit 0 |
+| `pnpm typecheck` | exit 0, 7/7 tasks | exit 0, 7/7 tasks |
+| `LANE_BASE_REF=10f1fae9… pnpm lint` | not re-run (see F2) | exit 1 at lane step, branch not registered (see F2); other three custom lints exit 0 |
+| `pnpm test` | exit 1 on first run (output not retained), then exit 0 on rerun: tools 39/39, core 380, ai 72, api 75, web 54, storage 2, config 1, db 150/150 (34 files) | exit 0: tools 39/39, core 380, ai 72, api 75, web 56 (7 files), storage 2, config 1, db 150/150 (34 files) |
+| `pnpm build` | exit 0, 7/7 | exit 0, 7/7 |
+| e2e (both specs, both projects) | exit 1: 4 passed, 2 failed (M2-5-S ×2 projects, `supplier-confirmed-revision` wait) | exit 0, 6/6 passed |
+
+The first a92ed6b `pnpm test` exit 1 happened while the worktree was still misconfigured (initdb EACCES, db setup timeouts); I did not capture the unfiltered output, so the cause of that first exit is attributed to the environment but not proven. The rerun passed cleanly. The earlier head `pnpm test` (before adding the DB assertion) reported db 147 tests in 33 files; the final full run above reports 150/34, matching a92ed6b.
+
+### E2E run table (`CI=1 pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M2-1B-S.spec.ts M2-5-S.spec.ts`)
+
+| Run | M2-1B-S mobile-360 | M2-1B-S desktop | M2-5-S mobile-360 | M2-5-S desktop |
+| --- | --- | --- | --- | --- |
+| 1 | pass | pass | pass | pass |
+| 2 | pass | pass | pass | pass |
+| 3 | pass | pass | pass | pass |
+
+M2-5-S also contains the "held-out report" test, which passed in every run on both projects (6 tests per run). Three further consecutive 6/6 runs were made earlier on the same application code (before the DB assertion was added); 6/6 consecutive in all. No timeout increase, retry, skip or weakened assertion.
+
+### F2 — lane lint (not fixed here, by instruction)
+
+`LANE_BASE_REF=10f1fae9bdcba62157ccd8b1cac5947ce7992e42 pnpm lint` exits 1 at: `Lane boundary FAILED: Branch "claude/test-stab-2026-09-30-repair1" must match exactly one registered lane; found 0. Register the task before building.` Lane config was not edited. The remaining custom lints (core purity, money arithmetic, commercial boundary) exit 0. **Ben decides:** (a) register this repair branch (and permit `apps/web/app/ui/supplier-fact-editor.test.ts`, `packages/db/src/supplier-document-repository.ts`, `packages/db/test/supplier-documents.integration.test.ts` for the lane) or fold these changes onto the PR branch; and (b) the merge-order fix for #95's CI failure (merge #94 first / retarget #95 onto #94's branch).
+
+### P3 follow-ups (not built)
+
+- F4: server purchase-order placement accepts a superseded revision — add a latest-revision check.
+- F5: a fetch that never settles holds the per-job command lock until reload — add AbortController timeouts.
+- F6: the parser rejects `"20.00 "` and `"1."` — consider trimming in the UI; keep the parser strict.
