@@ -19,3 +19,7 @@ Commands actually run (Linux, Node 24.15.0, pnpm 10.28.1, embedded PostgreSQL 16
 | new test against a92ed6b's editor | 1 | `.replace is not a function` reproduced |
 
 GitHub CI on the pushed head is still required (three consecutive green runs per the merge rule).
+
+**Correction (after the Codex verdict `cf59d09.md`):** the lane change adds three exact paths, not two: the inherited `package.json` and `pnpm-lock.yaml`, plus this repair's new test file `apps/web/app/ui/supplier-fact-editor.test.ts`. No other lane changed and no wildcard was added.
+
+**GitHub CI on `cf59d09`:** run 36830110781 attempt 1 and attempt 2 — `checks`, `secrets`, `dependency-review` all success.
