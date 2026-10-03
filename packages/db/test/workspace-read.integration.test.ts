@@ -10,7 +10,7 @@ import {
   DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_MEMBERSHIP_ID,
   migrate, readSyntheticDemo, readSyntheticDemoJob, withTenant, type VerifiedTenantContext,
 } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const capturedJob = randomUUID(), ordinaryJob = randomUUID(), foreignJob = randomUUID();
 const foreignTenant = randomUUID(), otherIdentity = randomUUID();
@@ -22,7 +22,7 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic" });
-  await migrate(admin);
+  await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2),($3)", [DEMO_TENANT_ID, DEMO_EMPTY_TENANT_ID, foreignTenant]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1),($2)", [DEMO_IDENTITY_USER_ID, otherIdentity]);
   for (const [tenant, account, member] of [[DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID], [DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_MEMBERSHIP_ID]]) {

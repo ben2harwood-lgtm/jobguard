@@ -1,0 +1,68 @@
+import { expect, test, type Page } from "@playwright/test";
+import { openCapture } from "./helpers/capture-journey";
+const B=(page:Page,name:string)=>page.getByRole("button",{name,exact:true});
+async function quotingJob(page:Page){
+  await openCapture(page);await B(page,"Make my draft").click();await B(page,"Check and edit my draft").click();
+  for(const name of ["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await B(page,`Accept ${name}`).click();
+  await B(page,"Dismiss Replace shelves").click();await page.getByLabel("Dismissal reason Replace shelves").fill("Not included in fictional work");
+  await page.getByLabel(/Answer Confirm disposal/u).fill("Fictional builder removes waste");await B(page,"Confirm scope").click();await B(page,"Price the work").click();
+  await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready","true");
+  await B(page,"Save draft revision").click();await expect(page.getByText("Rate confirmations are recorded once; nothing was sent or billed.",{exact:false})).toBeVisible();
+  await page.getByLabel("Unit rate Clean site").fill("200.00");await B(page,"Save draft revision").click();
+  return (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
+}
+test("CH-3a captures structured parties, gates live, and preserves authoritative identity across browsers",async({page,browser})=>{
+  test.setTimeout(180000);const jobId=await quotingJob(page);
+  await expect(page.getByText("Customer and site are required before this job can switch live.",{exact:true})).toBeVisible();
+  await expect(B(page,"Start this practice job")).toBeDisabled();await expect(B(page,"Preview immutable quote")).toBeDisabled();
+  const missing=await page.request.post(`/api/jobs/${jobId}/quotes/activation`,{data:{version:"practice-activation-command.v1",commandId:crypto.randomUUID(),scenario:"no_charge"}});
+  expect(missing.status()).toBe(409);expect((await missing.json()).code).toBe("JOB_PARTIES_REQUIRED");
+  await expect(B(page,"Import the fictional underway job")).toBeDisabled();
+  const missingImport=await page.request.post(`/api/jobs/${jobId}/parties/import`,{data:{version:"job-parties-import.v1",commandId:crypto.randomUUID(),expectedBindingId:crypto.randomUUID()}});expect(missingImport.status()).toBe(409);expect((await missingImport.json()).code).toBe("JOB_PARTIES_REQUIRED");
+  const invalid=await page.request.post(`/api/jobs/${jobId}/parties`,{data:{version:"job-parties-command.v1",commandId:crypto.randomUUID(),action:"create_site",site:{version:"site.v1",addressLines:["Fictional road"],town:"London",postcode:"not a postcode",uprn:"12x"}}});expect(invalid.status()).toBe(400);
+  await expect(page.getByLabel("Who pays?")).toHaveValue("");
+  await page.getByLabel("Customer type").selectOption("landlord_or_agent");await page.getByLabel("Customer name",{exact:true}).fill("Fictional Lettings");await page.getByLabel("UK postcode").fill("sw1a1aa");
+  await B(page,"Save customer and site").focus();await expect(B(page,"Save customer and site")).toBeFocused();
+  const size=await B(page,"Save customer and site").boundingBox();expect(size!.height).toBeGreaterThanOrEqual(44);expect(size!.width).toBeGreaterThanOrEqual(44);
+  const outline=await B(page,"Save customer and site").evaluate(el=>getComputedStyle(el).outlineStyle);expect(outline).not.toBe("none");
+  await B(page,"Save customer and site").click();await expect(page.getByTestId("party-customer")).toHaveText("Fictional Lettings");await expect(page.getByTestId("party-site")).toContainText("SW1A 1AA");
+  const view=(await (await page.request.get(`/api/jobs/${jobId}/parties`)).json());const binding=view.current.bindingId;
+  expect(view.current.customer.type).toBe("landlord_or_agent");expect(view.current.payingPartyRevisionId).toBe(view.current.customerRevisionId);expect(view.realExternalActions).toBe(0);
+  await B(page,"Preview immutable quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();await B(page,"Record practice acceptance").click();await B(page,"Start this practice job").click();
+  await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
+  await page.reload();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
+  await page.goto("/");await page.getByLabel("Search jobs").fill("Fictional Lettings");const card=page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)});await expect(card).toContainText("SW1A 1AA");await card.getByRole("link").click();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
+  const other=await browser.newContext();await other.addCookies(await page.context().cookies());const second=await other.newPage();await second.goto(`/jobs/${jobId}`);await expect(second.getByTestId("party-binding-id")).toHaveText(binding);await expect(second.getByTestId("party-customer")).toHaveText("Fictional Lettings");await other.close();
+  const importCommand={version:"job-parties-import.v1",commandId:crypto.randomUUID(),expectedBindingId:binding};
+  const imports=await Promise.all([page.request.post(`/api/jobs/${jobId}/parties/import`,{data:importCommand}),page.request.post(`/api/jobs/${jobId}/parties/import`,{data:importCommand})]);
+  for(const response of imports)expect(response.ok()).toBe(true);const importedJob=await imports[0]!.json();expect(await imports[1]!.json()).toEqual(importedJob);
+  const replay=await page.request.post(`/api/jobs/${jobId}/parties/import`,{data:importCommand});expect(await replay.json()).toEqual(importedJob);
+  const importedParties=await (await page.request.get(`/api/jobs/${importedJob.jobId}/parties`)).json();expect(importedParties.current.customerRevisionId).toBe(view.current.customerRevisionId);expect(importedParties.current.siteRevisionId).toBe(view.current.siteRevisionId);expect(importedParties.recognition.map((r:{jobId:string})=>r.jobId)).toEqual(expect.arrayContaining([jobId,importedJob.jobId]));
+  const denied=await page.request.get(`/api/jobs/${jobId}/parties?requested_tenant_id=33333333-3333-4333-8333-333333333333`);expect(denied.status()).toBe(403);
+  await expect(page.locator(".sandbox-banner")).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});
+
+test("CH-3a makes reuse explicit, leaves different flats separate, and rejects stale bindings",async({page,browser})=>{
+  test.setTimeout(180000);const jobId=await quotingJob(page);
+  await page.getByLabel("UK postcode").fill("invalid");await B(page,"Save customer and site").click();const error=page.getByRole("alert").filter({hasText:"INVALID_PARTIES"});await expect(error).toBeVisible();await expect(error).toBeFocused();
+  await page.getByLabel("UK postcode").fill("SW1A 1AA");await B(page,"Save customer and site").click();await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  const before=await (await page.request.get(`/api/jobs/${jobId}/parties`)).json();
+  await page.getByLabel("Choose a customer").selectOption(before.customers.find((c:{revisionId:string})=>c.revisionId===before.current.customerRevisionId).id);
+  await page.getByLabel("Possible existing places").selectOption(before.sites.find((s:{revisionId:string})=>s.revisionId===before.current.siteRevisionId).id);
+  await expect(B(page,"Save customer and site")).toBeDisabled();await page.getByLabel("I confirm this is the same place").check();await expect(B(page,"Save customer and site")).toBeEnabled();
+  await B(page,"Save customer and site").click();await expect(page.getByTestId("party-binding-id")).not.toHaveText(before.current.bindingId);
+  const reused=await (await page.request.get(`/api/jobs/${jobId}/parties`)).json();expect(reused.current.siteRevisionId).toBe(before.current.siteRevisionId);expect(reused.current.customerRevisionId).toBe(before.current.customerRevisionId);
+  await page.getByLabel("Flat or unit (optional)").fill("Flat 2");await expect(page.getByLabel("Possible existing places")).toHaveValue("");
+  await B(page,"Save customer and site").click();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
+  const after=await (await page.request.get(`/api/jobs/${jobId}/parties`)).json();expect(after.current.siteRevisionId).not.toBe(before.current.siteRevisionId);
+  const payload={version:"job-parties-command.v1",commandId:crypto.randomUUID(),action:"bind",expectedJobRevision:before.jobRevision,parties:{version:"job-parties.v1",customerRevisionId:before.current.customerRevisionId,siteRevisionId:before.current.siteRevisionId}};
+  const stale=await page.request.post(`/api/jobs/${jobId}/parties`,{data:payload});expect(stale.status()).toBe(409);expect((await stale.json()).code).toBe("REVISION_CONFLICT");
+  const other=await browser.newContext();await other.addCookies(await page.context().cookies());
+  const race={...payload,expectedJobRevision:after.jobRevision,parties:{version:"job-parties.v1",customerRevisionId:after.current.customerRevisionId,siteRevisionId:after.current.siteRevisionId}};
+  const outcomes=await Promise.all([page.request.post(`/api/jobs/${jobId}/parties`,{data:{...race,commandId:crypto.randomUUID()}}),other.request.post(`/api/jobs/${jobId}/parties`,{data:{...race,commandId:crypto.randomUUID()}})]);
+  expect(outcomes.map(r=>r.status()).sort()).toEqual([200,409]);expect((await outcomes.find(r=>r.status()===409)!.json()).code).toBe("REVISION_CONFLICT");await other.close();
+  await page.reload();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
+  await page.goto("/");await page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)}).getByRole("link").click();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
+  await expect(page.locator(".sandbox-banner")).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});

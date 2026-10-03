@@ -7,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, type VerifiedTenantContext, withTenant } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T="11000000-0000-4000-8000-000000000001", A="21000000-0000-4000-8000-000000000002", U="31000000-0000-4000-8000-000000000003", M="41000000-0000-4000-8000-000000000004";
 const context={tenantId:T} as VerifiedTenantContext;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,repo:PracticeInvoiceRepository;
@@ -50,7 +50,7 @@ beforeAll(async()=>{
  legacy=await freshInvoice();legacyInput=command(legacy);legacyPayment=await repo.recordReceipt(context,legacyInput);legacyReverseCommand=randomUUID();
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
- await migrate(admin);
+ await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  expect(MIGRATION_URLS).toHaveLength(42);
  expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0041_evidence_packs.sql'`)).rowCount).toBe(42);
 },60000);

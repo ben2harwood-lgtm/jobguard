@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { migrate, withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { listConfirmedPracticeScopes, listPracticeFindingScopes } from "../src/practice-scope.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 const tenant=randomUUID(),otherTenant=randomUUID(),job=randomUUID();
@@ -16,7 +16,7 @@ const context={tenantId:tenant} as VerifiedTenantContext;
 beforeAll(async()=>{
  directory=await mkdtemp(join(tmpdir(),"jobguard-finding-scope-"));const port=59300+Math.floor(Math.random()*200);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);
+ await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id) VALUES('${tenant}'),('${otherTenant}');
  INSERT INTO app.job(id,tenant_id,title,status) VALUES('${job}','${tenant}','Synthetic draft finding scope','draft');
  INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES('${retired}','${tenant}','${job}','retired'),('${reserved}','${tenant}','${job}','reserved');

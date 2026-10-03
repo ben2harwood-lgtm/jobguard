@@ -28,7 +28,7 @@ export async function syntheticWorkspace() {
     tenants: seeded.tenants,
     jobs: seeded.jobs.map((job): JobSummary => ({
       id: job.id, tenantId: seeded.tenant.id, title: job.title,
-      customerLabel: "Synthetic customer · demo only", status: job.status as JobSummary["status"],
+      customerLabel: job.customerLabel??"Details needed", siteLabel: job.siteLabel||"Details needed", status: job.status as JobSummary["status"],
       document: job.title === "Kitchen extension"
         ? { kind: "quote", reference: "Q-1007", delivery: "delivered" }
         : job.title === "Loft conversion"
