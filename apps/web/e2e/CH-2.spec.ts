@@ -24,16 +24,17 @@ test("watchdog panels require the persisted live state and retain authoritative 
   expect(initial.job.status).toBe("quoting");
   expect(initial.environment).toBe("synthetic_demo");
   const scopeIds = initial.job.scopeIdentityIds;
+  // Quoting inputs remain available before live. The order form only renders once a
+  // material and agreed price exist, so save them first; then every primary action is disabled.
+  await page.getByLabel("SKU", { exact: true }).fill(`CH2-${info.project.name}-${jobId.slice(0, 8)}`);
+  await page.getByRole("button", { name: "Save agreed price and material", exact: true }).click();
+  await expect(page.getByTestId("required-material-net")).toHaveText("£200.00");
   for (const name of primaryActions) {
     const action = page.getByRole("button", { name, exact: true });
     await expect(action).toBeDisabled();
     await expect(action.locator('xpath=ancestor::div[@data-testid="watchdog-panel"]')).toContainText(beforeLive);
   }
   await assertSandbox(page);
-  // Quoting inputs remain available; the order does not.
-  await page.getByLabel("SKU", { exact: true }).fill(`CH2-${info.project.name}-${jobId.slice(0, 8)}`);
-  await page.getByRole("button", { name: "Save agreed price and material", exact: true }).click();
-  await expect(page.getByTestId("required-material-net")).toHaveText("£200.00");
   const readinessId = crypto.randomUUID(), readiness = { version: "readiness-plan.v1", commandId: readinessId, scenarioNow: "2026-03-27T09:00:00.000Z" };
   const refused = await page.request.post(`/api/jobs/${jobId}/readiness/plan`, { data: readiness });
   expect(refused.status()).toBe(409); expect(await refused.json()).toEqual({ code: "JOB_NOT_LIVE" });
@@ -76,8 +77,8 @@ test("watchdog panels require the persisted live state and retain authoritative 
   const proof = await jsonResult(page.request.get(`/api/jobs/${jobId}/proof`), "Read persisted proof");
   expect(proof.scopeItemId).toBe(scopeIds[0]); expect(proof.upload.state).toBe("verified"); expect(proof.realExternalActions).toBe(0);
   await page.reload(); await assertReadable(page);
-  await page.goto("/");
-  await page.locator(`a[href="/jobs/${jobId}"]`).first().click();
+  // The demo's Jobs list shows only its seeded jobs, so a captured job is reopened by deep link.
+  await page.goto(`/jobs/${jobId}`);
   await assertReadable(page);
   const secondContext = await browser.newContext({ storageState: await page.context().storageState() });
   const second = await secondContext.newPage(); await second.goto(`/jobs/${jobId}#work-proof`);
