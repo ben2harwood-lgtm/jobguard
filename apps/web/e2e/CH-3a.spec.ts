@@ -23,6 +23,8 @@ test("CH-3a captures structured parties, gates live, and preserves authoritative
   await expect(page.getByLabel("Who pays?")).toHaveValue("");
   await page.getByLabel("Customer type").selectOption("landlord_or_agent");await page.getByLabel("Customer name",{exact:true}).fill("Fictional Lettings");await page.getByLabel("UK postcode").fill("sw1a1aa");
   await B(page,"Save customer and site").focus();await expect(B(page,"Save customer and site")).toBeFocused();
+  // Script focus after mouse use does not match :focus-visible in Chromium; reach the button by keyboard, as a keyboard user does.
+  await page.keyboard.press("Shift+Tab");await page.keyboard.press("Tab");await expect(B(page,"Save customer and site")).toBeFocused();
   const size=await B(page,"Save customer and site").boundingBox();expect(size!.height).toBeGreaterThanOrEqual(44);expect(size!.width).toBeGreaterThanOrEqual(44);
   const outline=await B(page,"Save customer and site").evaluate(el=>getComputedStyle(el).outlineStyle);expect(outline).not.toBe("none");
   await B(page,"Save customer and site").click();await expect(page.getByTestId("party-customer")).toHaveText("Fictional Lettings");await expect(page.getByTestId("party-site")).toContainText("SW1A 1AA");
