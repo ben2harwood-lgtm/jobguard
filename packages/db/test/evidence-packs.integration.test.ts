@@ -121,6 +121,29 @@ describe('immutable evidence pack commands on PostgreSQL', () => {
     await repo.approveAttachment(context, fixture.customerCaseId, pack.id, { commandId: approvalId, expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor);
     await expect(repo.generate(context, fixture.customerCaseId, { commandId: approvalId }, actor)).rejects.toThrow('EVIDENCE_PACK_COMMAND_CONFLICT');
   });
+  it('treats upper- and lower-case spellings of one case UUID as the same case for replay', async () => {
+    const input = { commandId: randomUUID() };
+    const pack = await repo.generate(context, fixture.customerCaseId.toLowerCase(), input, actor);
+    expect(await repo.generate(context, fixture.customerCaseId.toUpperCase(), input, actor)).toMatchObject({ id: pack.id, caseId: fixture.customerCaseId });
+  });
+  it('serializes on one case lock key whatever the UUID spelling', async () => {
+    const holder = await admin.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [fixture.tenantId, fixture.customerCaseId.toLowerCase()]);
+      let settled = false;
+      const pending = repo.generate(context, fixture.customerCaseId.toUpperCase(), { commandId: randomUUID() }, actor).finally(() => { settled = true; });
+      // Observe the lock queue instead of sleeping: a waiter on the held advisory lock must appear before the call can finish.
+      let waiting = false;
+      for (let i = 0; i < 200 && !waiting && !settled; i += 1) {
+        waiting = Number((await admin.query("SELECT count(*) n FROM pg_locks WHERE locktype='advisory' AND NOT granted")).rows[0].n) > 0;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      expect(waiting).toBe(true);
+      await holder.query('COMMIT');
+      await expect(pending).resolves.toMatchObject({ caseId: fixture.customerCaseId });
+    } finally { await holder.query('ROLLBACK').catch(() => undefined); holder.release(); }
+  });
   it('rejects runtime approval inserts with hashes that do not belong to the exact pack', async () => {
     const pack = await repo.generate(context, fixture.caseId, { commandId: randomUUID() }, actor);
     await expect(withTenant(runtime, context, db => db.$client.query(`INSERT INTO app.evidence_pack_attachment_approval(id,tenant_id,job_id,case_id,pack_id,command_id,request_hash,manifest_hash,content_hash,actor_ref) VALUES($1,$2,$3,$4,$5,$6,$7,$7,$7,'fixture-owner')`, [randomUUID(), fixture.tenantId, fixture.jobId, fixture.caseId, pack.id, randomUUID(), '0'.repeat(64)]))).rejects.toMatchObject({ code: '23503' });

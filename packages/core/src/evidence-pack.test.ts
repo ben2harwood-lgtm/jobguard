@@ -124,6 +124,30 @@ describe("standalone text evidence pack verification", () => {
     expect(result.findings).toEqual(inspectEvidenceManifest(manifest, actual, true).findings);
   });
 
+  it.each([
+    ["another version of a manifested source with changed content", { version: 2, content: "unmanifested changed content" }],
+    ["an unmanifested version with identical content", { version: 2 }],
+    ["another job's content at an unmanifested version", { version: 2, jobId: "other-job", content: "other job content" }],
+  ] as const)("does not call a pack complete when it carries %s", (_name, extra) => {
+    const { manifest, sources } = fixture();
+    const actual = [...sources, source(extra)];
+    const trusted = { trustedManifestDigest: manifestDigest(manifest) };
+    const result = verifyStandalonePack(renderStandalonePack(manifest, actual), trusted);
+    expect(result.findings).toEqual(["Wrong source version"]);
+    expect(result.contentMatches).toBe(false);
+    expect(result.complete).toBe(false);
+    expect(inspectEvidenceManifest(manifest, actual, true).findings).toEqual(["Wrong source version"]);
+  });
+
+  it("does not call a pack complete when a supplied source belongs to another job, even at a manifested version", () => {
+    const { manifest, sources } = fixture();
+    const actual = [...sources, source({ jobId: "other-job", content: "other job content" })];
+    const result = verifyStandalonePack(renderStandalonePack(manifest, actual), { trustedManifestDigest: manifestDigest(manifest) });
+    expect(result.complete).toBe(false);
+    expect(result.contentMatches).toBe(false);
+    expect(result.findings).toContain("Wrong source version");
+  });
+
   it.each(["not JSON", "null", "{}", JSON.stringify({ version: "evidence-pack-export.v2" })])("returns a typed parse error for malformed input %s", (input) => {
     expect(() => parseStandalonePack(input)).toThrow(EvidencePackVerificationError);
   });
