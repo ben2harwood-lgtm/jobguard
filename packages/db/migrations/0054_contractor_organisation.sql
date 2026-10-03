@@ -71,7 +71,7 @@ DO $$ DECLARE n text; BEGIN FOREACH n IN ARRAY ARRAY['commercial_track_assignmen
  EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
  EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
  EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
- EXECUTE format('CREATE POLICY tenant_isolation ON app.%I FOR ALL TO jobguard_runtime,jobguard_migration USING (tenant_id=nullif(current_setting(''app.tenant_id'',true),)::uuid) WITH CHECK (tenant_id=nullif(current_setting(app.tenant_id,true),)::uuid)',n);
+ EXECUTE format('CREATE POLICY tenant_isolation ON app.%I FOR ALL TO jobguard_runtime,jobguard_migration USING (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
  EXECUTE format('GRANT SELECT ON app.%I TO jobguard_runtime',n);
  EXECUTE format('REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON app.%I FROM jobguard_runtime',n);
  EXECUTE format('CREATE TRIGGER immutable BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_authorization_record()',n);
@@ -298,11 +298,11 @@ BEGIN
  IF jsonb_typeof(d)<>'object' OR d->>'version' IS DISTINCT FROM 'approval-rules.v1'
  OR d-ARRAY['version','proceedLimit','bands','clientApproval','evidence']<>'{}'::jsonb
  OR NOT d ?& ARRAY['version','proceedLimit','bands','clientApproval','evidence']
- OR jsonb_typeof(d->'proceedLimit')<>'object' OR d->'proceedLimit'-ARRAY['pence','currency']<>'{}'::jsonb
+ OR jsonb_typeof(d->'proceedLimit')<>'object' OR (d->'proceedLimit')-ARRAY['pence','currency']<>'{}'::jsonb
  OR NOT d->'proceedLimit' ?& ARRAY['pence','currency'] OR d->'proceedLimit'->>'currency' IS DISTINCT FROM 'GBP' OR jsonb_typeof(d->'proceedLimit'->'pence')<>'number'
  OR NOT (d->'proceedLimit'->>'pence') ~ '^[0-9]+$' OR (d->'proceedLimit'->>'pence')::numeric>1000000000000
  OR jsonb_typeof(d->'bands')<>'array' OR jsonb_typeof(d->'evidence')<>'object'
- OR d->'evidence'-ARRAY['photosRequired','residentConfirmationRequired']<>'{}'::jsonb
+ OR (d->'evidence')-ARRAY['photosRequired','residentConfirmationRequired']<>'{}'::jsonb
  OR jsonb_typeof(d->'evidence'->'photosRequired') IS DISTINCT FROM 'boolean' OR jsonb_typeof(d->'evidence'->'residentConfirmationRequired') IS DISTINCT FROM 'boolean' THEN RETURN false; END IF;
  count_bands:=jsonb_array_length(d->'bands'); IF count_bands<1 OR count_bands>20 THEN RETURN false; END IF;
  FOR band IN SELECT value FROM jsonb_array_elements(d->'bands') LOOP
@@ -322,8 +322,8 @@ BEGIN
   END LOOP;
  END LOOP;
  IF jsonb_typeof(d->'clientApproval')<>'object' THEN RETURN false; END IF;
- IF d->'clientApproval'->>'kind'='none' THEN RETURN d->'clientApproval'-'kind'='{}'::jsonb; END IF;
- IF d->'clientApproval'->>'kind' IS DISTINCT FROM 'threshold' OR NOT d->'clientApproval' ?& ARRAY['kind','abovePence','beforeWorkAbovePence','timeLimitMinutes'] OR d->'clientApproval'-ARRAY['kind','abovePence','beforeWorkAbovePence','timeLimitMinutes']<>'{}'::jsonb THEN RETURN false; END IF;
+ IF d->'clientApproval'->>'kind'='none' THEN RETURN (d->'clientApproval')-'kind'='{}'::jsonb; END IF;
+ IF d->'clientApproval'->>'kind' IS DISTINCT FROM 'threshold' OR NOT d->'clientApproval' ?& ARRAY['kind','abovePence','beforeWorkAbovePence','timeLimitMinutes'] OR (d->'clientApproval')-ARRAY['kind','abovePence','beforeWorkAbovePence','timeLimitMinutes']<>'{}'::jsonb THEN RETURN false; END IF;
  FOR alt IN SELECT d->'clientApproval'->'abovePence' UNION ALL SELECT d->'clientApproval'->'beforeWorkAbovePence' LOOP IF jsonb_typeof(alt)<>'number' OR NOT (alt#>>'{}') ~ '^[0-9]+$' OR (alt#>>'{}')::numeric>1000000000000 THEN RETURN false; END IF; END LOOP;
  RETURN jsonb_typeof(d->'clientApproval'->'timeLimitMinutes')='number' AND (d->'clientApproval'->>'timeLimitMinutes') ~ '^[0-9]+$' AND (d->'clientApproval'->>'timeLimitMinutes')::numeric BETWEEN 1 AND 525600;
 EXCEPTION WHEN OTHERS THEN RETURN false;
@@ -340,7 +340,7 @@ DECLARE item jsonb; BEGIN
  OR jsonb_typeof(d->'startsOn') IS DISTINCT FROM 'string' OR NOT (d->>'startsOn') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
  OR jsonb_typeof(d->'sorVersionIds') IS DISTINCT FROM 'array' OR jsonb_array_length(d->'sorVersionIds')>100
  OR jsonb_typeof(d->'tenderedAdjustment') IS DISTINCT FROM 'object' OR NOT d->'tenderedAdjustment' ?& ARRAY['numerator','denominator']
- OR d->'tenderedAdjustment'-ARRAY['numerator','denominator']<>'{}'::jsonb
+ OR (d->'tenderedAdjustment')-ARRAY['numerator','denominator']<>'{}'::jsonb
  OR jsonb_typeof(d->'tenderedAdjustment'->'numerator') IS DISTINCT FROM 'string' OR NOT (d->'tenderedAdjustment'->>'numerator') ~ '^-?(0|[1-9][0-9]{0,11})$'
  OR jsonb_typeof(d->'tenderedAdjustment'->'denominator') IS DISTINCT FROM 'string' OR NOT (d->'tenderedAdjustment'->>'denominator') ~ '^[1-9][0-9]{0,11}$'
  OR jsonb_typeof(d->'photoRule') IS DISTINCT FROM 'string' OR NOT d->>'photoRule'=ANY(ARRAY['required','optional'])
