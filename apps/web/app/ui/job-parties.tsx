@@ -31,13 +31,16 @@ export function JobParties({ jobId }: { jobId: string }) {
   async function save() {
     if (!view || busy) return; setBusy(true); setError("");
     try {
-      const selected = view.customers.find(c => c.id === customerId);
+      // The job moves on without this panel (scope confirmed, quote saved), so bind against the revision and customer
+      // revisions the server holds now. Concurrent writers are still decided by the database's expected-revision check.
+      const latest = await load();
+      const selected = latest.customers.find(c => c.id === customerId);
       const customer = { version: "customer.v1" as const, name, type, ...(email ? { email } : {}), ...(phone ? { phone } : {}), ...(companyNumber ? { companyNumber } : {}) };
       const customerResult = selected ? selected.customer.name === name && selected.customer.type === type && (selected.customer.email ?? "") === email && (selected.customer.phone ?? "") === phone && (selected.customer.companyNumber ?? "") === companyNumber
         ? { revisionId: selected.revisionId } : await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "revise_customer", customerId: selected.id, expectedRevision: selected.revision, customer })
         : await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_customer", customer });
       const siteResult = await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_site", site, confirmSamePlace: confirm, ...(reuse ? { reuseSiteId: reuse } : {}) });
-      await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: ["live", "invoiced", "paid"].includes(view.status) ? "correct" : "bind", expectedJobRevision: view.jobRevision,
+      await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: ["live", "invoiced", "paid"].includes(latest.status) ? "correct" : "bind", expectedJobRevision: latest.jobRevision,
         parties: { version: "job-parties.v1", customerRevisionId: customerResult.revisionId, siteRevisionId: siteResult.revisionId, payingPartyRevisionId: payer || null }, ...(reason ? { reason } : {}) });
       await load(); window.dispatchEvent(new CustomEvent("job-parties-saved", { detail: jobId }));
     } catch (e) { setError(e instanceof Error ? e.message : "Details could not be saved."); } finally { setBusy(false); }
