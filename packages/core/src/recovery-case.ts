@@ -30,17 +30,40 @@ export class RecoveryTransitionError extends Error {
   constructor(state: RecoveryCaseState, event: RecoveryEventType) { super(`${event} is not allowed from ${state}`); }
 }
 
+export class RecoveryClaimBelowSettledError extends Error {
+  readonly code = "RECOVERY_CLAIM_BELOW_SETTLED";
+  constructor() { super("RECOVERY_CLAIM_BELOW_SETTLED"); }
+}
+
+/**
+ * A claim can never be amended to less than the money already landed plus the money already
+ * written off: outstanding = claimed - landed - writtenOff must stay >= 0 without clamping.
+ */
+export function assertClaimCoversSettled(input: Readonly<{ claimedPence: number; landedPence: number; writtenOffPence: number }>): void {
+  const claimed: number = money(input.claimedPence).pence;
+  const settled: number = money(input.landedPence).pence + money(input.writtenOffPence).pence;
+  if (claimed < settled) throw new RecoveryClaimBelowSettledError();
+}
+
+/**
+ * `writtenOffPence` is the cumulative amount already written off by earlier events. The returned
+ * `writtenOffPence` is the amount written off by THIS event only (never a running total), so event
+ * amounts can be summed. Landing is bounded by claimed - writtenOff - landed, so a later landing
+ * after a write-off and a reversal can never re-claim written-off value.
+ */
 export function transitionRecoveryCase(input: Readonly<{
   state: RecoveryCaseState; event: RecoveryEventType; claimedPence: number; landedPence: number;
-  amountPence?: number;
+  writtenOffPence?: number; amountPence?: number;
 }>): { state: RecoveryCaseState; landedPence: number; writtenOffPence: number } {
   if (!allowed[input.state].includes(input.event)) throw new RecoveryTransitionError(input.state, input.event);
   const claimed: number = money(input.claimedPence).pence;
   let landed: number = money(input.landedPence).pence;
+  const priorWrittenOff: number = money(input.writtenOffPence ?? 0).pence;
+  if (landed + priorWrittenOff > claimed) throw new RecoveryTransitionError(input.state, input.event);
   let writtenOffPence = 0;
   if (input.event === "record_landing") {
     const amount = money(input.amountPence ?? Number.NaN).pence;
-    if (amount <= 0 || landed + amount > claimed) throw new RecoveryTransitionError(input.state, input.event);
+    if (amount <= 0 || landed + priorWrittenOff + amount > claimed) throw new RecoveryTransitionError(input.state, input.event);
     landed += amount;
     return { state: landed === claimed ? "landed" : "partially_landed", landedPence: landed, writtenOffPence };
   }
@@ -56,8 +79,51 @@ export function transitionRecoveryCase(input: Readonly<{
     : input.event === "prevent" ? "prevented"
     : input.event === "close_recovered" ? "closed_recovered"
     : "closed_no_recovery";
-  if (input.event === "write_off") writtenOffPence = claimed - landed;
+  if (input.event === "write_off") {
+    writtenOffPence = claimed - landed - priorWrittenOff;
+    if (writtenOffPence <= 0) throw new RecoveryTransitionError(input.state, input.event);
+  }
   return { state, landedPence: landed, writtenOffPence };
+}
+
+/**
+ * Closed server-side catalogue of the fictional practice source documents a case may cite.
+ * The browser can no longer invent a source label: a case's sources must be entries here, and
+ * the supplier-versus-customer split is enforced rather than left to free text. Linking a case
+ * to a stored supplier-document record is a separate, later design (see M4-1-S-R receipt).
+ */
+export const recoverySourceCatalogueV1 = {
+  supplier_documents: [
+    { ref: "Supplier agreement AG-320", kind: "Supplier agreement" },
+    { ref: "Delivery note DN-320", kind: "Delivery note" },
+    { ref: "Supplier invoice INV-320", kind: "Supplier invoice" },
+  ],
+  customer_invoice: [{ ref: "Generated customer invoice INV-18800", kind: "Customer invoice" }],
+} as const;
+
+export class RecoverySourceError extends Error {
+  readonly code = "RECOVERY_SOURCE_NOT_RECOGNISED";
+  constructor() { super("RECOVERY_SOURCE_NOT_RECOGNISED"); }
+}
+
+export function describeRecoverySource(ref: string): { ref: string; kind: string; sourceType: "supplier_documents" | "customer_invoice" } | undefined {
+  for (const sourceType of ["supplier_documents", "customer_invoice"] as const) {
+    const found = recoverySourceCatalogueV1[sourceType].find(entry => entry.ref === ref);
+    if (found) return { ref: found.ref, kind: found.kind, sourceType };
+  }
+  return undefined;
+}
+
+export function assertRecoverySources(input: Readonly<{
+  caseType: z.infer<typeof recoveryCaseTypeV1>; book: "supplier_cost" | "builder_customer";
+  sourceType: "supplier_documents" | "customer_invoice"; sourceRefs: readonly string[];
+}>): void {
+  const bookMatches = input.book === (input.sourceType === "supplier_documents" ? "supplier_cost" : "builder_customer");
+  const caseMatches = input.caseType === "prevention"
+    || input.caseType === (input.sourceType === "supplier_documents" ? "merchant_overcharge" : "withheld_customer_payment");
+  const unique = new Set(input.sourceRefs);
+  const known = input.sourceRefs.every(ref => describeRecoverySource(ref)?.sourceType === input.sourceType);
+  if (!bookMatches || !caseMatches || unique.size !== input.sourceRefs.length || !known) throw new RecoverySourceError();
 }
 
 export const recoveryCaseCommandV1 = z.discriminatedUnion("action", [

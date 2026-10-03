@@ -114,8 +114,11 @@ workbench history is excluded. No data backfill or historical rewrite is needed.
 Runtime gets SELECT on the view and retains forced RLS on its source tables.
 
 Replaces the existing narrowly granted `approve_synthetic_landing(jsonb)` body to
-read that projection after locking job, case advisory key and original row. The
-workbench command uses the same job-to-case order, before audit append. Existing
+read that projection after taking locks in this order: case advisory key, job row,
+case row. The workbench command (runtime role, no UPDATE privilege on `app.job`, so
+it cannot take a job-row lock) holds only the case advisory key, before its
+foreign-key share locks and audit append; because the landing routine also takes the
+advisory key first, the two paths cannot wait on each other. Existing
 function ownership, search path and EXECUTE grants are retained; no new SECURITY
 DEFINER function or runtime mutation grant. Repository, eligibility, demo and
 pack readers use the same projection. Deploy migration before the new readers;
