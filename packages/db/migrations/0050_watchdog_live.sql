@@ -1,6 +1,25 @@
 BEGIN;
 -- Close same-tenant cross-job links at shared order/proof boundaries. Existing
 -- rows remain immutable; validation fails closed if legacy mislinks are found.
+--
+-- Adding a foreign key scans both tables as their owner (the migration role).
+-- FORCE ROW LEVEL SECURITY makes that scan evaluate the tenant policies with no
+-- tenant context: a strict policy raises "unrecognized configuration parameter
+-- app.tenant_id", and a lenient one hides every row so a legacy mislink would
+-- pass unseen. Suspend FORCE on exactly the tables involved, validate across
+-- all tenants, and restore FORCE before COMMIT. The ALTER TABLE locks are
+-- ACCESS EXCLUSIVE and held to the end of this transaction, so no runtime
+-- session can read these tables while FORCE is suspended. Only the owner could
+-- ever bypass RLS in that window; the runtime role is never exempt.
+ALTER TABLE app.job NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.scope_identity NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.material_requirement NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.purchase_order_draft NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.evidence_upload NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.evidence_object NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.evidence_link NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.stage_completion NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.synthetic_evidence_original NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.purchase_order_draft ADD CONSTRAINT purchase_order_requirement_job_fk
   FOREIGN KEY (tenant_id,job_id,requirement_id) REFERENCES app.material_requirement(tenant_id,job_id,id);
 ALTER TABLE app.evidence_upload ADD CONSTRAINT evidence_upload_job_identity_uq UNIQUE(tenant_id,job_id,id);
@@ -15,6 +34,22 @@ ALTER TABLE app.evidence_link ADD CONSTRAINT evidence_link_job_identity_uq UNIQU
 ALTER TABLE app.evidence_link ADD CONSTRAINT evidence_link_evidence_job_fk FOREIGN KEY(tenant_id,job_id,evidence_id) REFERENCES app.evidence_object(tenant_id,job_id,id);
 ALTER TABLE app.stage_completion ADD CONSTRAINT stage_completion_evidence_job_fk FOREIGN KEY(tenant_id,job_id,scope_item_id,evidence_link_id) REFERENCES app.evidence_link(tenant_id,job_id,scope_item_id,id);
 ALTER TABLE app.synthetic_evidence_original ADD CONSTRAINT synthetic_original_upload_job_fk FOREIGN KEY(tenant_id,job_id,upload_id) REFERENCES app.evidence_upload(tenant_id,job_id,id);
+
+ALTER TABLE app.job FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.scope_identity FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.material_requirement FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.purchase_order_draft FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.evidence_upload FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.evidence_object FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.evidence_link FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.stage_completion FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.synthetic_evidence_original FORCE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='app' AND c.relname IN ('job','scope_identity','material_requirement','purchase_order_draft','evidence_upload','evidence_object','evidence_link','stage_completion','synthetic_evidence_original')
+      AND NOT (c.relrowsecurity AND c.relforcerowsecurity))
+  THEN RAISE EXCEPTION 'FORCE ROW LEVEL SECURITY was not restored'; END IF;
+END $$;
 
 -- Runtime has no UPDATE privilege on job, hence cannot take a locking read by
 -- another path. This helper exposes only a tenant-bound share lock, no writes.
