@@ -4,7 +4,7 @@ Date: 2026-10-03. Builder: **Claude Sonnet 5.5** (repair 3, after Codex repair 1
 **Implementation and test evidence only. Not an independent verdict, not independently verified, not technically accepted.**
 The earlier PASS (Claude Opus, head `e957ef6`) and REPAIR (GPT-6.1 Sol high, head `e957ef6`) are bound to that head. This repair changes the code, so both need a fresh or explicitly rebound verdict.
 
-Branch `codex/sandbox/m4-2-s-repair`, PR #102. Starting point `e957ef6` (repair 2 merged with `origin/main` `3e0764b`). Implementation head for this receipt: `6f78d8f` (this receipt is committed on top, docs only).
+Branch `codex/sandbox/m4-2-s-repair`, PR #102. Starting point `e957ef6` (repair 2 merged with `origin/main` `3e0764b`). Implementation head for this receipt: `6f78d8f`. After the first push `origin/main` moved to `b039abf` (#96, D13-16-IDS) and PR #102 became CONFLICTING, which also stopped GitHub Actions from starting, so `544647b` merges `origin/main` into the branch (a merge commit, no rebase, no force). The only conflict was the one-line lane registry: main's registry was kept (including its new `d13-16-ids` lane) and this task's own entry was re-applied; a JSON comparison shows the result differs from `origin/main` only in lane `m4-2-s-repair`. This receipt is committed on top of the merge, docs only.
 Inputs: `~/.local/share/full-steam/jg-verdicts/M4-2-S-R-e957ef6.md` (Opus) and `~/.local/share/full-steam/jg-runs/m4-2-s-r-solcheck-20261003T214601.md` (Sol).
 
 ## Findings from the two checks
@@ -32,7 +32,9 @@ No migration (0044 stays unused). No grant, RLS, role, routine, posting, fee or 
 |---|---|
 | `89b1fd9` | fix(db): lower-revision review refusal, canonical case ID, membership-lock comment (with 3 new DB tests) |
 | `6f78d8f` | fix(web): revisions from the saved review; pure command module and unit test; new browser journey; lane entry paths |
-| this receipt | docs only |
+| `4fcb4c8` | docs: this receipt (first version) |
+| `544647b` | Merge `origin/main` `b039abf` (lane registry conflict resolved as described above) |
+| this receipt update | docs only |
 
 Lane registry: own entry `m4-2-s-repair` only; added exact paths `apps/web/app/ui/recovery-eligibility-command.ts` and `.test.ts` (JSON comparison against `HEAD`: no other lane changed).
 
@@ -53,6 +55,10 @@ Node v24.17.0, pnpm 10.28.1 (pinned, corepack). All database and browser command
 | `CI=1 pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M4-2-S.spec.ts -c <local override>` | 0 | 6 passed (3 tests in each of 2 projects), 14.1 s |
 | Same for `M4-1-S.spec.ts M4-3-S.spec.ts` (same component) | 0 | 4 passed |
 
+After the merge with `b039abf` (config and tooling files only), on the merged tree: `pnpm typecheck --force`, `pnpm lint --force`, `pnpm lint:lanes` and `pnpm build --force` exit 0 (7 of 7 tasks each, 0 cached); `pnpm test --force` exit 0 (13 of 13 tasks; tool tests 39; core 384; api 83; web 63; ai 72; config 2; storage 4; db 34 files / 158 tests); `CI=1 ... M4-2-S.spec.ts` exit 0, 6 passed. `pnpm test:db`, `pnpm test:migrations` and the M4-1-S/M4-3-S e2e were not re-run on the merged tree (their code and files are unchanged by the merge; the first and third are covered by `pnpm test` and CI).
+
+GitHub Actions on `544647b` (run 37158477833): `checks` success (typecheck, lint, `pnpm test` with web 63, api 83, ai 72 and db 33 files / 155 tests, build, Playwright 164 passed on the pinned Chromium), `secrets` success, `dependency-review` success; PR mergeable again.
+
 Two earlier attempts of the DB and regression commands failed for environment reasons and are **not counted**; the passing reruns above are on the identical tree:
 - `pnpm test --force` (ledger suite) and `pnpm test:db` (UIWIRE-12 suite): "Postgres init script exited with code 1". Cause: SysV shared memory was exhausted again (33 segments against a limit of 32; 30 were leaked by dead processes from other agents' runs, 0 attached). I removed those 30 with `ipcrm` (creator dead, nothing attached; the 2 live ones were kept). The leak recurs within hours, so someone should schedule that cleanup.
 - Regression e2e: `http://127.0.0.1:3000 is already used`. Another project's e2e held the fixed ports 3000 and 55432. The rerun waited until both ports were free.
@@ -60,7 +66,7 @@ Two earlier attempts of the DB and regression commands failed for environment re
 ## NOT RUN, deviations and environment
 
 - **Browser binary deviation, unchanged from repair 2.** Playwright 1.55.1 needs `chromium_headless_shell-1193`, which is not installed here and was not downloaded. The runs use a local override config outside the repo (not committed) that imports the real `playwright.config.ts` and only sets `executablePath` to the installed `chromium_headless_shell-1234` (Google Chrome for Testing 151.0.7922.34). Tests, projects, viewports, timeouts, retries and assertions are the repo's.
-- Not run: `pnpm eval`, the full `pnpm test:e2e` across every spec, `pnpm test:regression`, `pnpm test:restore`, a clean (non-offline) install, GitHub CI at the time of writing (see the PR for its result).
+- Not run: `pnpm eval`, the full `pnpm test:e2e` across every spec, `pnpm test:regression`, `pnpm test:restore`, a clean (non-offline) install, GitHub CI for the final docs-only head (see the PR; the code head `544647b` is green as stated above).
 - Seen, not changed: evidence and policy revisions remain client-supplied numbers in this synthetic build (the server now only refuses going backwards); the case-level `practice-owner` literal belongs to M4-1-S.
 
 Environment: macOS 26.4 (Darwin 25.4.0, arm64); Node v24.17.0; pnpm 10.28.1; TypeScript 5.8.3; vitest 4.1.11; Playwright 1.55.1; embedded-postgres 16.10.0-beta.15 (PostgreSQL 16.10); headless shell: Google Chrome for Testing 151.0.7922.34.
