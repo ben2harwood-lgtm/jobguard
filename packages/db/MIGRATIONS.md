@@ -103,7 +103,7 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
 
-## 0046_recovery_case_current.sql — M4-1-S retrospective repair
+## 0043_recovery_case_current.sql — M4-1-S retrospective repair
 
 Expand-compatible: keeps immutable `recovery_case` creation columns for existing
 writers and foreign keys, and documents them as legacy snapshots. The
