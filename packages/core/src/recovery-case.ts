@@ -16,8 +16,8 @@ export type RecoveryEventType = z.infer<typeof recoveryEventTypeV1>;
 const allowed: Readonly<Record<RecoveryCaseState, readonly RecoveryEventType[]>> = {
   identified: ["assemble_evidence", "prevent", "close_no_recovery"],
   evidence_assembled: ["start_pursuit", "start_negotiation", "record_landing", "close_no_recovery", "dispute"],
-  pursuing: ["start_negotiation", "record_landing", "close_no_recovery", "write_off", "dispute"],
-  negotiating: ["resume_pursuit", "record_landing", "close_no_recovery", "write_off", "dispute"],
+  pursuing: ["start_negotiation", "record_landing", "close_no_recovery", "write_off", "dispute", "reverse_landing"],
+  negotiating: ["resume_pursuit", "record_landing", "close_no_recovery", "write_off", "dispute", "reverse_landing"],
   partially_landed: ["record_landing", "write_off", "dispute", "reverse_landing"],
   landed: ["close_recovered", "dispute", "reverse_landing"],
   closed_recovered: ["dispute", "reverse_landing"],
@@ -87,10 +87,10 @@ export function transitionRecoveryCase(input: Readonly<{
 }
 
 /**
- * Closed server-side catalogue of the fictional practice source documents a case may cite.
- * The browser can no longer invent a source label: a case's sources must be entries here, and
- * the supplier-versus-customer split is enforced rather than left to free text. Linking a case
- * to a stored supplier-document record is a separate, later design (see M4-1-S-R receipt).
+ * A case cites its sources in one of two server-checked ways: a label from this closed catalogue of
+ * fictional practice sources, or the id of a RECORDED source (customer invoice, supplier agreement
+ * rate, ready supplier document). Ids are only shape-checked here; the database layer resolves each
+ * one to a stored row of the right kind for the same tenant and job. Free text is never accepted.
  */
 export const recoverySourceCatalogueV1 = {
   supplier_documents: [
@@ -106,6 +106,9 @@ export class RecoverySourceError extends Error {
   constructor() { super("RECOVERY_SOURCE_NOT_RECOGNISED"); }
 }
 
+const recordedSourceId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const isRecordedSourceId = (ref: string): boolean => recordedSourceId.test(ref);
+
 export function describeRecoverySource(ref: string): { ref: string; kind: string; sourceType: "supplier_documents" | "customer_invoice" } | undefined {
   for (const sourceType of ["supplier_documents", "customer_invoice"] as const) {
     const found = recoverySourceCatalogueV1[sourceType].find(entry => entry.ref === ref);
@@ -114,6 +117,7 @@ export function describeRecoverySource(ref: string): { ref: string; kind: string
   return undefined;
 }
 
+/** Shape and split checks only (no database): book, source type and case type must agree, refs are unique, and each is a catalogue label of the right source type or a recorded-id shape. */
 export function assertRecoverySources(input: Readonly<{
   caseType: z.infer<typeof recoveryCaseTypeV1>; book: "supplier_cost" | "builder_customer";
   sourceType: "supplier_documents" | "customer_invoice"; sourceRefs: readonly string[];
@@ -122,8 +126,8 @@ export function assertRecoverySources(input: Readonly<{
   const caseMatches = input.caseType === "prevention"
     || input.caseType === (input.sourceType === "supplier_documents" ? "merchant_overcharge" : "withheld_customer_payment");
   const unique = new Set(input.sourceRefs);
-  const known = input.sourceRefs.every(ref => describeRecoverySource(ref)?.sourceType === input.sourceType);
-  if (!bookMatches || !caseMatches || unique.size !== input.sourceRefs.length || !known) throw new RecoverySourceError();
+  const shaped = input.sourceRefs.every(ref => describeRecoverySource(ref)?.sourceType === input.sourceType || isRecordedSourceId(ref));
+  if (!bookMatches || !caseMatches || unique.size !== input.sourceRefs.length || !shaped) throw new RecoverySourceError();
 }
 
 export const recoveryCaseCommandV1 = z.discriminatedUnion("action", [
