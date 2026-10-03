@@ -28,6 +28,9 @@ afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();if
 const query=(p:AuthenticatedMembership,resource:'organisation'|'contracts'='organisation',id?:string)=>repo.query(p,{version:'contractor-query.v1',tenantId:p.tenantId,resource,...(id?{id}:{})});
 // Earlier roles in these loops legitimately append immutable revisions of the same contract, so a reader must see exactly the persisted versions (not a hard-coded one).
 const persistedVersions=async(contractId:string)=>(await admin.query<{n:number}>('SELECT count(*)::int n FROM app.client_contract_version WHERE contract_id=$1',[contractId])).rows[0]!.n;
+// Expected organisation revision = persisted count of contractor command receipts (the definition the view reports). Reading it directly
+// keeps the two hot conformance loops from building a full projection before every command; the view itself is still asserted elsewhere.
+const revisionOf=async(p:AuthenticatedMembership)=>(await admin.query<{n:number}>("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type LIKE 'contractor.%'",[p.tenantId])).rows[0]!.n;
 async function setup(){const session=randomUUID();const p=await repo.startPractice(session);const v=await query(p);return {session,p,v};}
 async function command(p:AuthenticatedMembership,fields:Record<string,unknown>){const v=await query(p);return repo.command(p,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:v.revision,...fields});}
 async function fixtureMember(p:AuthenticatedMembership,role:string,kind:string,scopeId:string,clientId:string|null=null,contractId:string|null=null){
@@ -149,7 +152,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
    ];
    for(const operation of operations){
     const expected=isAdmin||(role==='commercial_manager'&&['member.invite','contract.revise'].includes(operation.kind as string));
-    const rev=(await query(p)).revision;
+    const rev=await revisionOf(p);
     const promise=repo.command(actor,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:rev,...operation});
     if(expected)await expect(promise).resolves.toMatchObject({environment:'synthetic_demo'});else await expect(promise).rejects.toMatchObject({code:'NOT_FOUND'});
    }
@@ -194,7 +197,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
      {fields:{kind:'contract.revise',clientId:target.client,contractId:target.contract,document,rules:referenceApprovalRulesV1},permission:'contract.manage',allowedScope:inScope},
     ];
     for(const item of cases){
-     const revision=(await query(p)).revision;const promise=repo.command(actor,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:revision,...item.fields});
+     const revision=await revisionOf(p);const promise=repo.command(actor,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:revision,...item.fields});
      const permitted=contractorPermissionMatrix[role].includes(item.permission as typeof contractorPermissions[number])&&item.allowedScope;
      if(permitted)await expect(promise).resolves.toMatchObject({environment:'synthetic_demo'});else await expect(promise).rejects.toMatchObject({code:'NOT_FOUND'});
     }
