@@ -47,7 +47,7 @@ export class JobPartiesRepository {
         await this.authorize(db, context.tenantId, actor);
         if (!(await db.$client.query(`SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2`, [context.tenantId, jobId])).rowCount) throw new JobPartiesError("NOT_FOUND");
         const claim = await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-          VALUES($1,$2,'job.parties',$1::text,$3,'processing',$4) ON CONFLICT DO NOTHING RETURNING command_id`, [input.commandId, context.tenantId, requestHash, actor]);
+          VALUES($1,$2,'job.parties',$5,$3,'processing',$4) ON CONFLICT DO NOTHING RETURNING command_id`, [input.commandId, context.tenantId, requestHash, actor, input.commandId]);
         if (!claim.rowCount) {
           const prior = (await db.$client.query(`SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`, [context.tenantId, input.commandId])).rows[0];
           if (!prior || prior.request_hash !== requestHash || prior.status !== "succeeded") throw new JobPartiesError("COMMAND_CONFLICT");
