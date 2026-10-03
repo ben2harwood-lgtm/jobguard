@@ -18,6 +18,18 @@ const command = (action: string, data: Record<string, unknown> = {}) => ({ versi
 const customer = { version: "customer.v1", name: "Fictional Person", type: "person", email: "fixture@example.invalid", phone: "00000000000" };
 const site = { version: "site.v1", addressLines: ["14 Fictional Street"], town: "London", postcode: "sw1a1aa", unit: "Flat 1" };
 const createJob = async () => { const id=randomUUID();await admin.query(`INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional job','quoting')`,[tenant,id]);return id; };
+/** Direct status write as the migration-owner session, in a transaction carrying the tenant context that every
+ * application write has: the live guard reads the tenant's current binding through FORCE RLS, so without the context
+ * it would see no binding and refuse for the wrong reason. */
+const setLiveDirectly = async (job: string) => {
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+    await client.query(`UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2`, [tenant, job]);
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+};
 const saveParties = async (job: string, unit = "Flat 1") => {
   const c = await repository.command(context, member, job, command("create_customer", { customer }));
   const s = await repository.command(context, member, job, command("create_site", { site: { ...site, unit } }));
@@ -26,7 +38,7 @@ const saveParties = async (job: string, unit = "Flat 1") => {
 };
 beforeAll(async () => {
   dir=await mkdtemp(join(tmpdir(),"ch3a-pg16-"));const port=58000+Math.floor(Math.random()*300);
-  postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
+  postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
   await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
   // Upgrade from the exact previous supported schema with each lifecycle state.
   for (const url of MIGRATION_URLS.slice(0,-1)) await admin.query(await readFile(url,"utf8"));
@@ -80,7 +92,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
   });
   it("refuses live and adoption without parties in the PostgreSQL boundary and rolls back",async()=>{
     const job=await createJob();
-    await expect(admin.query(`UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rejects.toThrow("JOB_PARTIES_REQUIRED");
+    await expect(setLiveDirectly(job)).rejects.toThrow("JOB_PARTIES_REQUIRED");
     await expect(withTenant(runtime,context,db=>db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,'Fictional import','live',$4,'Fictional baseline',100000,1500,'reference_fee_policy_v1','synthetic_import_terms_candidate.v1',$5,now())`,[tenant,randomUUID(),randomUUID(),"b".repeat(64),member]))).rejects.toThrow("JOB_PARTIES_REQUIRED");
     expect((await repository.view(context,member,job)).current).toBeNull();
   });
@@ -114,7 +126,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     for(const job of [one,two])await repository.command(context,member,job,command("bind",{expectedJobRevision:0,parties}));
     const before=(await repository.view(context,member,one)).current!;
     expect((await repository.view(context,member,one)).recognition.map(r=>r.jobId).sort()).toEqual([one,two].sort());
-    await admin.query(`UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2`,[tenant,one]);
+    await setLiveDirectly(one);
     await expect(repository.command(context,member,one,command("bind",{expectedJobRevision:1,parties}))).rejects.toThrow("CORRECTION_REASON_REQUIRED");
     await expect(repository.command(context,member,one,command("correct",{expectedJobRevision:1,parties}))).rejects.toThrow("CORRECTION_REASON_REQUIRED");
     await repository.command(context,member,one,command("correct",{expectedJobRevision:1,parties,reason:"Correct fictional payer"}));
@@ -156,7 +168,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     expect((await admin.query(`SELECT payload FROM app.customer_revision WHERE tenant_id=$1 AND id=$2`,[tenant,c.revisionId])).rows[0].payload).toEqual(customer);
   });
   it("fresh installation invents no non-synthetic parties and raises details-needed Decisions",async()=>{
-    await admin.query(`CREATE DATABASE ch3a_fresh`);const fresh=new Pool({...admin.options,database:"ch3a_fresh"});
+    await admin.query(`CREATE DATABASE ch3a_fresh`);const fresh=new Pool({...admin.options,password:"synthetic",database:"ch3a_fresh"});
     try{
       for(const url of MIGRATION_URLS.slice(0,-1))await fresh.query(await readFile(url,"utf8"));
       const t=randomUUID(),j=randomUUID();await fresh.query(`INSERT INTO control_plane.tenant(id) VALUES($1)`,[t]);await fresh.query(`INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'No invented details')`,[t,j]);

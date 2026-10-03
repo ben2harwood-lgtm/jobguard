@@ -33,7 +33,7 @@ async function rawRecord(c:ReceiptInput,overrides:Record<string,unknown>={}) {
 beforeAll(async()=>{
  dir=await mkdtemp(join(tmpdir(),"uiwire12-pg-"));
  const port=59000+Math.floor(Math.random()*400);
- pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
+ pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await pg.initialise();await pg.start();
  admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
  // Establish a real 0029 database, issue/record/reverse there, then upgrade it.
@@ -51,14 +51,14 @@ beforeAll(async()=>{
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
  await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
- expect(MIGRATION_URLS).toHaveLength(42);
- expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0041_evidence_packs.sql'`)).rowCount).toBe(42);
+ expect(MIGRATION_URLS).toHaveLength(43);
+ expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0051_job_parties.sql'`)).rowCount).toBe(43);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 
 describe("UIWIRE-12 customer receipts",()=>{
  it("upgrades without changing old command hashes and replays old receipts and reversals",async()=>{
-  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(42);
+  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(43);
   expect((await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows).toEqual(legacyHashes);
   expect(await repo.recordReceipt(context,legacyInput)).toEqual(legacyPayment);
   expect(await repo.reverseReceipt(context,{...reversal(legacy,legacyPayment.paymentId),commandId:legacyReverseCommand})).toEqual({reversalId:legacyReversal});
