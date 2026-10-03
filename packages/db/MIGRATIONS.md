@@ -118,10 +118,32 @@ evidence tables retain the exact generated bank-evidence class written by the
 existing migration-owned recovery routine; a runtime insert cannot forge this
 exception. Reads remain available.
 
+The new foreign keys are validated by the migration owner (`jobguard_migration`:
+not a superuser, no BYPASSRLS, no tenant context), exactly as deployments and the
+e2e bootstrap apply it. Their tables FORCE row-level security, so that scan would
+otherwise evaluate the tenant policies without a tenant: a strict policy raises
+"unrecognized configuration parameter app.tenant_id" and a lenient one hides
+every row, letting a legacy cross-job link pass unseen. The migration therefore
+suspends FORCE on exactly the nine tables involved (`job`, `scope_identity`,
+`material_requirement`, `purchase_order_draft`, `evidence_upload`,
+`evidence_object`, `evidence_link`, `stage_completion`,
+`synthetic_evidence_original`), validates across all tenants, restores FORCE and
+asserts it was restored, all inside the migration transaction. The ALTER TABLE
+locks are ACCESS EXCLUSIVE and held to commit, so no runtime session can read
+these tables while FORCE is suspended; the runtime role is never exempt. The
+cost is a brief exclusive lock on those tables, so apply it in a quiet window.
+A legacy mislink makes the whole migration fail and roll back (SQLSTATE 23503);
+repair the named row with a forward-fix update, never by weakening a constraint.
+
 Expand-compatible upgrade from 0041; no backfill. The CH-2 PostgreSQL suite
 constructs previous-schema uploads, applies 0050, verifies preservation and
 idempotent migration, all non-live failures, actual runtime grants and race
-orders. Existing fresh-schema PostgreSQL suites apply 0050 too.
+orders. A second suite (`watchdog-migration-owner.integration.test.ts`) applies
+0050 as `jobguard_migration` to a previous-schema database holding a legacy
+cross-job link in another tenant: the link is found, nothing is half-applied,
+FORCE RLS is intact, and after a forward-fix the same migration applies with
+every constraint validated. Existing fresh-schema PostgreSQL suites apply 0050
+too, including the owner-role synthetic bootstrap.
 
 Forward-fix: retain the guards and repair affected fixtures/commands through
 normal lifecycle commands; never directly set status or disable a guard to
