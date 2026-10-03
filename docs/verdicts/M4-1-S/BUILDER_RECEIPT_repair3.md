@@ -47,7 +47,7 @@ All pnpm commands `CI=1`, `LANE_BASE_REF=origin/main`; database and browser comm
 | `pnpm lint:lanes` | 0 | passed |
 | `pnpm build` | 0 | 7/7 (5 cached) |
 | `pnpm openapi:check` | 0 | matches |
-| `TURBO_FORCE=true heavy-slot m41r pnpm test` | 0 | 0 of 13 cached: `node --test` 39/39; core 608 (68 files); ai 72; api 78; web 56 (7 files); db 163 (34 files); storage 4; config 2 |
+| `TURBO_FORCE=true heavy-slot m41r pnpm test` | 0 | 0 of 13 cached: `node --test` 39/39; core 608 (68 files = 34 test files run from `src` and again from their compiled `dist` copies, so 304 unique tests; CI reports 304); ai 72; api 78; web 56 (7 files); db 163 (34 files); storage 4; config 2 |
 | `heavy-slot m41r pnpm test:db` | 0 | 34 files, 163 tests |
 | `heavy-slot m41r pnpm test:migrations` | 0 | 2 files, 11 tests |
 | full e2e: `CI=1 pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop -c <shim outside repo>` under `heavy-slot` | 0 | **162 passed**, 0 failed, 0 flaky, both projects, all specs (the same 162 CI ran; production Next build, real PostgreSQL) |
@@ -62,4 +62,4 @@ All pnpm commands `CI=1`, `LANE_BASE_REF=origin/main`; database and browser comm
 
 ## Status
 
-Prepared, built, locally tested (full unit, database, migration and complete browser suite) and committed. CI result on GitHub is recorded in the coordinator report after the push. Not independently verified, not accepted, not merged.
+Prepared, built, locally tested (full unit, database, migration and complete browser suite), committed and pushed (fast-forward, no force). **GitHub CI on `55d942c` (code identical to this receipt's head): `checks` pass in 7m50s including Playwright 162 passed on the pinned Chromium (both projects), `dependency-review` pass, `secrets` pass** (run 37159709092). Not independently verified, not accepted, not merged.
