@@ -26,6 +26,8 @@ beforeAll(async()=>{
 },120000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 const query=(p:AuthenticatedMembership,resource:'organisation'|'contracts'='organisation',id?:string)=>repo.query(p,{version:'contractor-query.v1',tenantId:p.tenantId,resource,...(id?{id}:{})});
+// Earlier roles in these loops legitimately append immutable revisions of the same contract, so a reader must see exactly the persisted versions (not a hard-coded one).
+const persistedVersions=async(contractId:string)=>(await admin.query<{n:number}>('SELECT count(*)::int n FROM app.client_contract_version WHERE contract_id=$1',[contractId])).rows[0]!.n;
 async function setup(){const session=randomUUID();const p=await repo.startPractice(session);const v=await query(p);return {session,p,v};}
 async function command(p:AuthenticatedMembership,fields:Record<string,unknown>){const v=await query(p);return repo.command(p,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:v.revision,...fields});}
 async function fixtureMember(p:AuthenticatedMembership,role:string,kind:string,scopeId:string,clientId:string|null=null,contractId:string|null=null){
@@ -131,7 +133,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
    const actor=role==='owner'?p:await fixtureMember(p,role,role==='client_approver'?'client':'tenant',role==='client_approver'?client:p.tenantId,role==='client_approver'?client:null);
    const isAdmin=role==='owner'||role==='admin';
    if(isAdmin)await expect(query(actor)).resolves.toMatchObject({tenantId:p.tenantId});else await expect(query(actor)).rejects.toMatchObject({code:'NOT_FOUND'});
-   const canRead=role!=='operative';if(canRead)expect((await query(actor,'contracts',contract)).contracts).toHaveLength(1);else await expect(query(actor,'contracts',contract)).rejects.toMatchObject({code:'NOT_FOUND'});
+   const canRead=role!=='operative';if(canRead)expect((await query(actor,'contracts',contract)).contracts).toHaveLength(await persistedVersions(contract));else await expect(query(actor,'contracts',contract)).rejects.toMatchObject({code:'NOT_FOUND'});
    const target=await fixtureMember(p,'operative','team',team);
    const grant=(await query(p)).grants.find(x=>x.membership_id===target.membershipId)!;
    const operations:Record<string,unknown>[]=[
@@ -175,7 +177,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
    for(const [index,target]of targets.entries()){
     const inScope=role==='owner'||role==='finance'||(role==='client_approver'||role==='operative'?index===0:index<3);
     const readsContract=role!=='operative'&&inScope;
-    if(readsContract)expect((await query(actor,'contracts',target.contract)).contracts).toHaveLength(1);else await expect(query(actor,'contracts',target.contract)).rejects.toMatchObject({code:'NOT_FOUND'});
+    if(readsContract)expect((await query(actor,'contracts',target.contract)).contracts).toHaveLength(await persistedVersions(target.contract));else await expect(query(actor,'contracts',target.contract)).rejects.toMatchObject({code:'NOT_FOUND'});
     const organisationRead=(role==='owner'||role==='admin')&&inScope;
     const orgRead=repo.query(actor,{version:'contractor-query.v1',tenantId:p.tenantId,resource:'organisation',id:target.team});
     if(organisationRead)await expect(orgRead).resolves.toMatchObject({tenantId:p.tenantId});else await expect(orgRead).rejects.toMatchObject({code:'NOT_FOUND'});
