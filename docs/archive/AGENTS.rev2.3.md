@@ -1,20 +1,14 @@
 # AGENTS.md — JobGuard build conventions
 
-**Revision:** 3.0 · 30 September 2026 (consolidated with `BUILD_PLAN.md` rev 3.0)  
-**Companion:** `BUILD_PLAN.md`, revision 3.0  
+**Revision:** 2.3 · 24 September 2026 (shadow bill, subscription and success-fee amendment; see `BUILD_PLAN.md` rev 2.3 change log and §14)  
+**Companion:** `BUILD_PLAN.md`, revision 2.3  
 **Status:** implementation instructions, not a statement that the repository or any feature has been verified.
 
-> **Rev 3.0 note:** `BUILD_PLAN.md` is now one consolidated plan (rev 3.0): contractor track §9, small-builder track §10, the build loop §2 (Codex builds locally, Claude checks, Ben merges), one dependency graph §12. The line between the deals is 7 jobs at once, per company; the Firm and Contractor subscription plans are withdrawn. §5.10 and §5.15 are scoped per track. Rev 2.5 is preserved at `docs/archive/AGENTS.rev2.5.md`.
->
-> **Rev 2.5 note:** JobGuard now has two commercial tracks. The enterprise track (contractors; rev 2.5 `BUILD_PLAN.md` §16, now §9) charges 10% of site-originated extras and surfaces possible extras live; the SME track (small builders; §14/§15) is unchanged. §5.14 is scoped to the SME track and a new §5.16 sets the enterprise rules. Rev 2.4 is preserved at `docs/archive/AGENTS.rev2.4.md`.
->
-> **Rev 2.4 note:** the subscription is priced by jobs on the go (D09 v3, proposed). §5.10 clarifies the extra-job charge, §5.14 severs the meter from the shadow bill, and a new §5.15 lists money JobGuard never takes. Rev 2.3 is preserved at `docs/archive/AGENTS.rev2.3.md`.
->
 > **Rev 2.3 note:** the commercial model is now a recurring subscription plus a separate 10% success fee (`reference_fee_policy_v3`, proposed). §5.6 and §5.10 are amended and a new §5.14 makes the shadow-bill rules invariants. Rev 2.2 is preserved at `docs/archive/AGENTS.rev2.2.md`.
 >
 > **Rev 2.2 note:** an independent seven-lens check (2026-09-11) confirmed the fee model, dependency graph, gate coherence, security architecture and regulatory deferrals. The surviving fixes are logged in `BUILD_PLAN.md` rev 2.2. The two AGENTS changes are: Node 24 recorded as an approved deviation (§3), and a new §5.13 making the independent-checker loop a durable invariant. Rev 2.1 is preserved at `docs/archive/AGENTS.rev2.1.md`.
 
-You are an autonomous coding agent building **JobGuard**, a UK “profit watchdog for builders”: a builder talks through a job on site; it becomes a reviewed quote; the same job goes live; JobGuard watches the job and the money, asks the builder only for decisions that are genuinely theirs, and assembles the final account without re-typing. For large contractors (the primary customer, `BUILD_PLAN.md` §9) the same engine lets site operatives log extras in seconds so they get approved and billed. For small builders, after the builder completes the final account, JobGuard runs an independent final check and reveals work it found in the job's evidence that is missing from the bill (§5.14).
+You are an autonomous coding agent building **JobGuard**, a UK “profit watchdog for builders”: a builder talks through a job on site; it becomes a reviewed quote; the same job goes live; JobGuard watches the job and the money, asks the builder only for decisions that are genuinely theirs, and assembles the final account without re-typing. After the builder completes the final account, JobGuard runs an independent final check and reveals work it found in the job's evidence that is missing from the bill (§5.14).
 
 Read this file before every task. Read the applicable contracts and task in `BUILD_PLAN.md` before changing code. The original documents have been replaced in full; old task numbers are not authoritative.
 
@@ -22,7 +16,7 @@ Read this file before every task. Read the applicable contracts and task in `BUI
 
 - **Document authority:** this file controls engineering invariants and working conventions. `BUILD_PLAN.md` controls task order, domain contracts, commercial-policy candidates, and release gates. A signed, versioned decision record can amend a contract only when both documents and affected tests are updated in the same change. Conflicts are blockers for the affected behavior, not permission to choose the weaker rule.
 - **Start with repository inspection.** Establish what exists, which tests run, and which versions are installed. Map existing work to the new tasks; do not regenerate working applications, reset data, or treat this plan as evidence that code exists.
-- **One task = one reviewable PR.** Order work by real dependencies, not document order: build any task whose dependencies are all merged, and run independent tasks concurrently on separate agents (see `BUILD_PLAN.md` §§2.2 and 12). Task numbers are identifiers, not a sequence. Milestone gates (G0–G5) still hold — a gate blocks the production features behind it, not parallel construction of foundation or later synthetic work. Two tasks that touch the same files serialize even when logically independent; say so in the PR. Split an oversized task into named sub-tasks, preserving its dependencies and aggregate acceptance criteria. Do not bundle unrelated features.
+- **One task = one reviewable PR.** Order work by real dependencies, not document order: build any task whose dependencies are all merged, and run independent tasks concurrently on separate agents (see `BUILD_PLAN.md` §"Execution model"). Task numbers are identifiers, not a sequence. Milestone gates (G0–G5) still hold — a gate blocks the production features behind it, not parallel construction of foundation or later synthetic work. Two tasks that touch the same files serialize even when logically independent; say so in the PR. Split an oversized task into named sub-tasks, preserving its dependencies and aggregate acceptance criteria. Do not bundle unrelated features.
 - **Tests are part of the task.** Money, tenant isolation, authorization, audit, and retries require adversarial tests, not only examples of successful use. Do not close a task until every “Done when” assertion is satisfied or a formally approved change has replaced it.
 - **Preserve earlier guarantees.** A new task must keep earlier acceptance tests passing. Do not delete or weaken a failing test merely to make a change pass.
 - **Resolve reversible details locally.** Choose a simple implementation where the contract permits it, and record the choice in the PR. Do not ask a human to repeat an answer already present in the plan.
@@ -144,7 +138,7 @@ A journal has immutable headers and balanced debit/credit lines. Posted entries 
 
 A positive recovery-fee posting must be derived from approved, immutable, qualifying landing allocations for the same tenant/job, with finalized evidence and available unallocated settled value. A non-null evidence ID, pending transaction, claim letter, builder’s “mark paid”, or classifier score is not enough.
 
-Under `reference_fee_policy_v3` (proposed) the success fee is 10% of cumulative qualifying recovered net principal, with no cap, no base-plan credit and no subscription offset. Aggregate qualifying principal, prior postings and reversals are evaluated under locking, rounding once on the cumulative exact value. A unique derivation/source identity prevents duplicates. A `missed_variation_final_account` recovery additionally requires an immutable attribution revision satisfying `BUILD_PLAN.md` §10.2.8. The v1 cap and plan-credit rules apply only to existing v1 synthetic data.
+Under `reference_fee_policy_v3` (proposed) the success fee is 10% of cumulative qualifying recovered net principal, with no cap, no base-plan credit and no subscription offset. Aggregate qualifying principal, prior postings and reversals are evaluated under locking, rounding once on the cumulative exact value. A unique derivation/source identity prevents duplicates. A `missed_variation_final_account` recovery additionally requires an immutable attribution revision satisfying `BUILD_PLAN.md` §14.6. The v1 cap and plan-credit rules apply only to existing v1 synthetic data.
 
 Use same-row checks and composite foreign keys where they apply, plus controlled posting routines and triggers for cross-row invariants. An ordinary PostgreSQL `CHECK` is not a cross-table integrity mechanism. The runtime cannot bypass the controlled financial write path.
 
@@ -178,7 +172,7 @@ Golden sets measure omission, unsupported additions, citation validity, ambiguit
 
 ### 5.10 Free quoting never bills; simulations never become production facts
 
-Creating, editing, reviewing, generating, or sending a quote cannot create platform fee obligations, payment requests, or platform ledger postings. Quote acceptance alone also does not create a charge; **switch-live** is an explicit, separately authorized boundary that freezes the baseline. On the small-builder track the platform charge is a tenant-level subscription (D09), never a per-job base fee, and subscription payments never offset success fees; the contractor track has no platform charge by default (D16). The D09 extra-job charge is a capacity charge on the tenant, measured only by how many jobs are live at once; it is never attached to a job's value, a quote, an acceptance or a finding.
+Creating, editing, reviewing, generating, or sending a quote cannot create platform fee obligations, payment requests, or platform ledger postings. Quote acceptance alone also does not create a charge; **switch-live** is an explicit, separately authorized boundary that freezes the baseline. Under v3 the platform charge is a tenant-level subscription (D09), never a per-job base fee, and subscription payments never offset success fees.
 
 The M1 real-user pilot is `pilot_no_charge`. It may send real builder documents only after its release gate, but it does not accrue or collect JobGuard fees. Hypothetical fee statements are clearly labelled. Synthetic paid examples run in an isolated demo/sandbox environment using the same command contracts, not production settlement overrides.
 
@@ -202,32 +196,14 @@ Offline intent may be queued, but stale approval, changed price, revoked members
 
 This build runs a cross-model loop: a builder agent (Codex) builds one task as one reviewable PR with a truthful run receipt; a **different** model records an independent verdict bound to the exact commit before technical acceptance; a separate actor records acceptance; the founder issues work and owns merge/push/release. A builder never accepts its own work. A deterministic check result is labelled as such and is not presented as a model review. Recorded verdicts live in `docs/verdicts/`. "Reviewed" requires a real recorded response for the relevant diff, not an assertion. Treat "source-inspected", "test-executed" and "independently-verified" as three different claims; missing evidence is a hold, not a pass. This mirrors the OWN MIND cross-model working agreement and makes it a durable JobGuard invariant rather than a one-off packet instruction.
 
-### 5.14 The shadow bill is hidden, fair and fee-bounded (rev 2.3; SME track only from rev 2.5)
+### 5.14 The shadow bill is hidden, fair and fee-bounded (rev 2.3)
 
 - **Builder capture is always fee-free.** Capture means a **Log an extra** record in any state (draft, priced, approved, rejected, withdrawn), a line the builder adds at final review before lock, or baseline scope. Everything else JobGuard holds — diary and voice notes not submitted as Log an extra, photos, supplier documents, purchase orders, customer messages — is evidence. Matching between a signal and a capture resolves ambiguity in the builder's favour.
 - **Hidden until lock, structurally.** Shadow signals live in tables the builder runtime role cannot read. Before the final-account lock, no builder-facing response, notification, count, export, error, cache key or timing path may vary with their existence. Support access is break-glass and audited.
 - **Any disclosure before lock is permanent ineligibility.** Early surfacing under a D13 must-surface rule (safety, significant work needing prior written agreement, a worsening dispute, a legal duty), a support conversation, an export or a data-subject access response all set `disclosed_before_lock`, and that signal can never earn a fee. When a must-surface rule fires, surface it; never suppress it to protect a fee.
 - **One immutable lock per job.** The lock binds the exact final-account revision, baseline, capture-register snapshot, declaration text, actor and server time. Only evidence received before lock can qualify (v1). Final customer invoice issue requires the lock, so the final check always precedes the invoice.
-- **Signals are proposals, never liability.** No detector, model or confidence score creates a variation, invoice line, debt or fee. A catch becomes billable only by explicit builder confirmation through the normal variation path, and a fee arises only from settled, allocated, unreversed cash (`BUILD_PLAN.md` §§10.2.8 and 10.3.1–10.3.3).
-- **The meter is severed from the shadow bill.** The jobs-on-the-go count is computed only from the builder's own commands and server timestamps. No hidden signal, finding or document count may change a count, a plan, a bill or anything a builder sees before lock.
+- **Signals are proposals, never liability.** No detector, model or confidence score creates a variation, invoice line, debt or fee. A catch becomes billable only by explicit builder confirmation through the normal variation path, and a fee arises only from settled, allocated, unreversed cash (`BUILD_PLAN.md` §14.6–14.9).
 - **Never degrade the builder's own billing to create fees.** JobGuard keeps tracking and billing every builder capture fully; the shadow bill only withholds JobGuard's own findings until the final check.
-
-### 5.15 Money JobGuard never takes (rev 2.4; rate rule scoped in rev 3.0)
-
-- No money from merchants or suppliers (connector fees, rebates, commissions), lenders, lead platforms or the builder's customers. Insurer and professional-body commissions only under an approved D15, never in the pilot.
-- No fee, credit, signal or feature depends on which merchant a builder uses.
-- No fee is measured on a tax outcome (VAT, CIS, bad-debt relief).
-- No change to the small-builder 10% rate by automatic minimums or bands; optional services are separate, builder-chosen charges. Contractor rates, minimums or bands exist only as negotiated terms recorded per agreement version under D16, and the fee engine refuses them until D16 defines their formula.
-- No paid disclosure of findings held for the Final Check.
-- The builder's customers' payments always go to the builder's own provider account; JobGuard never holds them.
-
-### 5.16 Enterprise track: fees follow site origin (rev 2.5)
-
-- **The fee base is site-originated extras only:** first raised in JobGuard by a site user, or surfaced by JobGuard and confirmed by the contractor; not on the work order, quote or instructed schedule; approved, billed and paid. Order lines, office entries and client-instructed variations are never fee-bearing.
-- **Origin is written once by the server** from the command that first raised the extra (user, role, device, time) and can't be changed by an edit, an AI output, an office action or a later formal instruction. Duplicates collapse to one fee line.
-- **Nothing is held back on this track.** Possible extras are surfaced live to the contractor's supervisors; the §5.14 shadow bill is off unless a contract enables an end-of-job check.
-- **Only the contractor's approval chain makes an extra billable.** Operatives may log anything; no detector, model or operative can make an amount fee-bearing without the required approvals, billing and payment.
-- **Settlement comes from the contractor's own billing and payment data** with audit rights; every fee line is traceable to its origin, approvals, invoice and payment. JobGuard acts as processor for residents' and clients' data (D12 v4).
 
 ## 6. M1 core loop and success claim
 
