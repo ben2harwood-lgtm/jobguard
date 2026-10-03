@@ -18,7 +18,7 @@
 | `pnpm build` | 0 |
 | `pnpm test` | 0 |
 
-`pnpm test` counts: node test runner (tools) 39 tests, 39 pass, 0 fail. Vitest test files passed: config 2, storage 2, web 7, ai 3, api 10, core 68, db 34.
+`pnpm test` counts: node test runner (tools) 39 tests, 39 pass, 0 fail. Vitest tests passed (files): config 2 (2), storage 4 (2), web 56 (7), ai 72 (3), api 75 (10), core 380 (68), db 150 (34); total 739 vitest tests, 0 failed.
 
 ## Not run, and why
 - `pnpm test:e2e`: not needed; pure-config leaf with no web/UI behaviour change.
