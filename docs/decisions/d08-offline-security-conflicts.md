@@ -5,7 +5,7 @@
 - **Policy version:** `offline_security_policy_v1`
 - **Dated approver evidence:** None — proposed on 2026-09-13. Approval is founder-reserved; a future approval must identify approver, date, evidence URI/reference, and the exact policy version.
 - **Applicable environment / jurisdiction:** native real-data distribution; United Kingdom and approved EU/UK sync route
-- **Source / supporting review:** BUILD_PLAN.md §§2, 5.12; security review and physical-device tests required
+- **Source / supporting review:** `BUILD_PLAN.md` §§4 and 11.4; `AGENTS.md` §5.12 (rev 3.0); security review and physical-device tests required
 - **Executable feature gate:** `G3; native_real_data_distribution requires D08`
 
 ## Exact proposed policy

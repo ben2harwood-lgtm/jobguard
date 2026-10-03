@@ -55,3 +55,16 @@ export function assertSameCurrency(left: { currency: string }, right: { currency
     throw new MoneyError("currency_mismatch", "Money currencies must both be GBP");
   }
 }
+
+/** Parse a non-negative GBP input without rounding or binary-float arithmetic. */
+export function parsePoundsToPence(input: string): Pence {
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(input)) {
+    throw new MoneyError("invalid_pence", "Enter a non-negative price in pounds with at most two decimal places (for example 20.00).");
+  }
+  const [whole, fraction = ""] = input.split(".");
+  const pence = BigInt(`${whole}${fraction.padEnd(2, "0")}`);
+  if (pence > BigInt(MAX_MONEY_PENCE)) {
+    throw new MoneyError("magnitude_exceeded", "Price exceeds the application limit.");
+  }
+  return money(Number(pence)).pence;
+}
