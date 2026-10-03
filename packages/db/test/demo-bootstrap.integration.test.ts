@@ -16,7 +16,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
   const runtimeUrl = `postgresql://jobguard_runtime:runtime-synthetic-only@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), "jobguard-bootstrap-"));
-    postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
+    postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
     await postgres.initialise(); await postgres.start();
     const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "postgres" });
     await control.query(`CREATE ROLE neondb_owner LOGIN PASSWORD '${password}' CREATEROLE NOSUPERUSER NOCREATEDB NOINHERIT NOBYPASSRLS`);

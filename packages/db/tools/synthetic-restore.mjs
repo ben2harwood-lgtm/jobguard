@@ -80,7 +80,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
   const sourcePath = join(root, "source"), backupPath = join(root, "backup"), restoredPath = join(root, "restored");
   const sourcePort = await vacantPort(), password = randomUUID();
   let restoredPort = await vacantPort(); while (restoredPort === sourcePort) restoredPort = await vacantPort();
-  const clusterOptions = { user: "postgres", password, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], postgresFlags: ["-c", "listen_addresses=127.0.0.1"], onLog: () => undefined, onError: () => undefined };
+  const clusterOptions = { user: "postgres", password, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], postgresFlags: ["-c", "listen_addresses=127.0.0.1"], onLog: () => undefined, onError: () => undefined };
   const source = new EmbeddedPostgres({ ...clusterOptions, databaseDir: sourcePath, port: sourcePort });
   const restored = new EmbeddedPostgres({ ...clusterOptions, databaseDir: restoredPath, port: restoredPort });
   const pools = new Set();

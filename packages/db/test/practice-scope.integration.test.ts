@@ -18,7 +18,7 @@ const context={tenantId:tenant} as VerifiedTenantContext,foreignContext={tenantI
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 beforeAll(async()=>{
  directory=await mkdtemp(join(tmpdir(),"jobguard-practice-scope-"));const port=59000+Math.floor(Math.random()*300);
- postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
+ postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
  admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id) VALUES('${tenant}'),('${otherTenant}');
  INSERT INTO identity.identity_user(id) VALUES('a4000000-0000-4000-8000-000000000001');

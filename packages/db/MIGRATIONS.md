@@ -112,6 +112,13 @@ hashes are untouched. New quote PDFs and synthetic invoices include the exact
 party revisions. Customer/site/binding mutations are denied to runtime; only the
 narrow binding routine can advance the current pointer and job revision.
 
+Encoding: 0051 needs a UTF8 database. Site match keys apply NFKC `normalize()`,
+which PostgreSQL only allows when the server encoding is UTF8 (otherwise every
+site revision insert fails with "Unicode normalization can only be performed if
+server encoding is UTF8"). Neon and the standard PostgreSQL images are UTF8; the
+embedded test clusters pass `--encoding=UTF8` to `initdb` because `embedded-postgres`
+starts `initdb` with no locale environment, which would otherwise create SQL_ASCII.
+
 The runner sets the backfill mode inside 0051's transaction. Only an explicit
 `JOBGUARD_ENV=synthetic_demo` uses the generated recipe (Practice Customer,
 14 Fictional Street, London, SW1A 1AA), preserving the latest issued quote's
