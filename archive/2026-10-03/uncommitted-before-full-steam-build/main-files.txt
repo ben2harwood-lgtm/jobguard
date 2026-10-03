@@ -1,0 +1,57 @@
+AGENTS.md
+BUILD_PLAN.md
+JOBGUARD_BUILD_PACK.md
+JOBGUARD_REVIEW_HANDOFF.md
+docs/archive/AGENTS.rev2.2.md
+docs/archive/AGENTS.rev2.3.md
+docs/archive/AGENTS.rev2.4.md
+docs/archive/AGENTS.rev2.5.md
+docs/archive/BUILD_PLAN.rev2.2.md
+docs/archive/BUILD_PLAN.rev2.3.md
+docs/archive/BUILD_PLAN.rev2.4.md
+docs/archive/BUILD_PLAN.rev2.5.md
+docs/decisions/d01-commercial-fees-cap.md
+docs/decisions/d02-vat-rounding-invoicing.md
+docs/decisions/d03-eligible-recovery-reversals.md
+docs/decisions/d04-providers-residency.md
+docs/decisions/d05-authority-standing-consent.md
+docs/decisions/d06-builder-invoices-customer-approval-jurisdiction.md
+docs/decisions/d07-retention-recovery-operations.md
+docs/decisions/d08-offline-security-conflicts.md
+docs/decisions/d09-plan-tiers-metering.md
+docs/decisions/d10-pursuit-banking-route.md
+docs/decisions/d11-commercial-integrity-anti-gaming.md
+docs/decisions/d12-data-protection-role-third-party-transparency.md
+docs/decisions/d13-shadow-attribution-delayed-disclosure.md
+docs/decisions/d14-paid-data-services.md
+docs/decisions/d15-partner-commissions-introductions.md
+docs/decisions/d16-enterprise-commercial-terms.md
+docs/dispatch/2026-09-25-rev2.4-parallel-build.md
+docs/dispatch/2026-09-28-rev2.5-enterprise-build.md
+docs/review/PLAN_REV30_ASTRA_VERDICT_R1_2026-09-30.md
+docs/review/PLAN_REV30_ASTRA_VERDICT_R2_2026-09-30.md
+docs/review/PLAN_REV30_ASTRA_VERDICT_R3_2026-09-30.md
+docs/review/PLAN_REV30_DISPOSITION_R1_2026-09-30.md
+docs/review/PLAN_REV30_DISPOSITION_R2_2026-09-30.md
+docs/review/PLAN_REV30_DISPOSITION_R3_2026-09-30.md
+drafts/chatgpt-jobs/JOBGUARD-FULL-SYNTHETIC-DEMO-BUILD-PLAN-BRIEF.md
+packages/config/src/policy-gates.ts
+reports/JobGuard competitor and pricing research.md
+reports/JobGuard monetisation and jobs pricing.md
+reports/inputs/jobguard-monetisation-workflow-results.json
+research_notes/JobGuard competitor and pricing research/construction_platforms_and_ai.md
+research_notes/JobGuard competitor and pricing research/price_level_and_tier_psychology.md
+research_notes/JobGuard competitor and pricing research/success_fee_benchmarks.md
+research_notes/JobGuard competitor and pricing research/success_fee_psychology_and_trades_wtp.md
+research_notes/JobGuard competitor and pricing research/uk_trade_job_software.md
+sales/JobGuard Sales Bible/01 What JobGuard is and how it works.md
+sales/JobGuard Sales Bible/02 How JobGuard saves builders money.md
+sales/JobGuard Sales Bible/03 The Final Check and the 10 percent fee.md
+sales/JobGuard Sales Bible/04 Pricing and plans.md
+sales/JobGuard Sales Bible/05 Who to sell to.md
+sales/JobGuard Sales Bible/06 How to sell it.md
+sales/JobGuard Sales Bible/07 The market and the competition.md
+sales/JobGuard Sales Bible/08 FAQ and glossary.md
+sales/JobGuard-Sales-Bible.zip
+sales/NotebookLM setup guide for Tommy (do not upload).md
+tools/decision-records.test.mjs
