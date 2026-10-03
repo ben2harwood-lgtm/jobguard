@@ -29,7 +29,10 @@ describe("M4-1-S HOLD regressions", () => {
   expect(base.rows).toEqual([{state:"identified",claim_pence:"250000",revision:0}]);
   await expect(withTenant(runtime,ctx,db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[{version:"recovery.landing.approve.v1",policyVersion:"reference_fee_policy_v1",jobId:job,caseId:x.id,expectedCaseRevision:0}]))).rejects.toThrow("eligible current synthetic case required");
   expect((await withTenant(runtime,{tenantId:other} as VerifiedTenantContext,db => db.$client.query("SELECT * FROM app.recovery_case_current WHERE id=$1",[x.id]))).rows).toEqual([]);
-  await expect(withTenant(runtime,ctx,db=>db.$client.query("UPDATE app.recovery_case_current SET state='landed'"))).rejects.toMatchObject({code:"42501"});
+  // The projection is a read-only contract: it is not an auto-updatable view (PostgreSQL 55000) and
+  // the runtime role holds no write privilege on it at all.
+  await expect(withTenant(runtime,ctx,db=>db.$client.query("UPDATE app.recovery_case_current SET state='landed'"))).rejects.toMatchObject({code:"55000"});
+  expect((await admin.query("SELECT p AS privilege,has_table_privilege('jobguard_runtime','app.recovery_case_current',p) AS granted FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE']) p ORDER BY p")).rows).toEqual([{privilege:"DELETE",granted:false},{privilege:"INSERT",granted:false},{privilege:"SELECT",granted:true},{privilege:"TRUNCATE",granted:false},{privilege:"UPDATE",granted:false}]);
  });
  it("ignores forged reviewers in claim, event and audit records, including amendments and transitions", async () => {
   const repo = new RecoveryCaseRepository(runtime);

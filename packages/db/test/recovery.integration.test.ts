@@ -23,7 +23,7 @@ describe("structural recovery fee guard",()=>{
   c=await repo.command(context,J,{version:"recovery-case-command.v1",action:"amend_claim",commandId:randomUUID(),caseId:c.id,claimedNetPence:50,expectedRevision:c.revision},reviewer);
   c=await repo.command(context,J,{version:"recovery-case-command.v1",action:"transition",commandId:randomUUID(),caseId:c.id,eventType:"assemble_evidence",expectedRevision:c.revision},reviewer);
   const receipt=randomUUID(),eligibility=randomUUID(),landing=randomUUID();
-  await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1,$2,$3,$1,$1,'settled',100,'GBP',true,now())",[receipt,T,J]);
+  await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1::uuid,$2::uuid,$3::uuid,$1::text,$1::text,'settled',100,'GBP',true,now())",[receipt,T,J]);
   for(const [id,kind] of [[eligibility,"eligibility"],[landing,"landing"]])await admin.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id)VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',now()+interval '1 hour',$7)",[id,T,J,c.id,kind,c.revision,randomUUID()]);
   const p={...payload(c.id,eligibility,landing),receiptId:receipt,expectedCaseRevision:c.revision,grossPence:60,eligibleNetPence:60};
   await expect(withTenant(runtime,context,db=>db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[p]))).rejects.toThrow("allocation exceeds available receipt or claim");

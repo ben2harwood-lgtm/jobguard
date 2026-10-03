@@ -17,7 +17,7 @@ export class RecoveryCaseRepository{
   return rows.rows.map((x:any)=>({id:x.id,jobId:x.job_id,caseType:x.case_type,state:x.state,claimedNetPence:Number(x.claim_pence),landedNetPence:Number(x.landed),outstandingNetPence:Math.max(0,Number(x.claim_pence)-Number(x.landed)-Number(x.written_off)),writtenOffPence:Number(x.written_off),currency:"GBP",counterparty:x.counterparty,book:x.book,sourceType:x.source_type,sourceRefs:x.source_refs,revision:Number(x.revision),reviewerRef:x.reviewer_ref,createdDate:new Date(x.created_at).toISOString().slice(0,10),eligibility:x.eligibility_revision?{revision:Number(x.eligibility_revision),caseRevision:Number(x.eligibility_case_revision),evidenceRevision:Number(x.evidence_revision),policyVersion:x.policy_version,policyRevision:Number(x.policy_revision),classification:x.classification,eligibleNetPence:x.eligible_net_pence===null?null:Number(x.eligible_net_pence),reason:x.eligibility_reason,citations:x.citations,status:x.eligibility_status,reviewerRef:x.eligibility_reviewer}:null}));
  })}
  async eligibilityCommand(context:VerifiedTenantContext,jobId:string,raw:unknown,authorizedReviewer:string):Promise<RecoveryCaseView>{const input=recoveryEligibilityCommandV1.parse(raw),hash=digest(input);await withTenant(this.pool,context,async db=>{
-  await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,input.caseId]);
+  await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,input.caseId.toLowerCase()]);
   const replay=await db.$client.query<any>("SELECT subject_hash FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId]);if(replay.rowCount){if(replay.rows[0].subject_hash!==hash)throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");return;}
   const current=await db.$client.query<any>(`SELECT * FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND claim_revision IS NOT NULL`,[context.tenantId,jobId,input.caseId]);
   if(!current.rowCount)throw new Error("RECOVERY_CASE_NOT_FOUND");const c=current.rows[0],caseRevision=Number(c.revision);if(input.expectedCaseRevision!==caseRevision)throw new Error("ELIGIBILITY_STALE_REVISION");
@@ -33,8 +33,10 @@ export class RecoveryCaseRepository{
   if(!authorizedReviewer?.trim() || authorizedReviewer.length>200)throw new Error("RECOVERY_REVIEWER_REQUIRED");
   // Caller supplies a verified server principal; the legacy client field is ignored.
   const input={...recoveryCaseCommandV1.parse(raw),reviewerRef:authorizedReviewer},hash=digest(input);let caseId="";await withTenant(this.pool,context,async db=>{
-  await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[context.tenantId,jobId]);
-  await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,input.action==="open"?jobId:input.caseId]);
+  // Lock order shared with app.approve_synthetic_landing: case advisory key first, then
+  // (inside the routine) job row and case row. The runtime role cannot lock job rows
+  // (no UPDATE privilege), so it must never take a job-row lock before this key.
+  await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,(input.action==="open"?jobId:input.caseId).toLowerCase()]);
   const replay=await db.$client.query<any>("SELECT case_id,payload_hash FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId]);
   if(replay.rowCount){if(replay.rows[0].payload_hash!==hash)throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");caseId=replay.rows[0].case_id;return;}
   const job=await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2",[context.tenantId,jobId]);if(!job.rowCount)throw new Error("RECOVERY_JOB_NOT_FOUND");
