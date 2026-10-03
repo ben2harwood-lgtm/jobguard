@@ -9,8 +9,9 @@ import { appendAuditBatch } from './audit.js';
 import { loadEvidencePackSources } from './evidence-pack-sources.js';
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from './tenant-context.js';
 
-const generateInput = z.object({ commandId: z.string().uuid(), format: z.literal('TEXT').default('TEXT') }).strict();
-const approvalInput = z.object({ commandId: z.string().uuid(), expectedManifestHash: z.string().regex(/^[a-f0-9]{64}$/), expectedContentHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
+const commandIdSchema = z.string().uuid().transform(value => value.toLowerCase());
+const generateInput = z.object({ commandId: commandIdSchema, format: z.literal('TEXT').default('TEXT') }).strict();
+const approvalInput = z.object({ commandId: commandIdSchema, expectedManifestHash: z.string().regex(/^[a-f0-9]{64}$/), expectedContentHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 const scenarioInput = z.enum(['intact', 'missing', 'tampered', 'wrong-version', 'checkpoint']);
 export type EvidencePackScenario = z.infer<typeof scenarioInput>;
 export type EvidencePackView = {
@@ -30,6 +31,8 @@ export class EvidencePackError extends Error {
 }
 function fail(code: string): never { throw new EvidencePackError(code); }
 const actorSchema = z.string().min(1).max(200);
+/** One canonical spelling per UUID, so command hashes and advisory lock keys cannot differ by letter case. */
+const uuidArg = (value: string) => z.string().uuid().parse(value).toLowerCase();
 
 export class EvidencePackRepository {
   constructor(private readonly pool: Pool) {}
@@ -61,7 +64,7 @@ export class EvidencePackRepository {
   }
 
   async list(ctx: VerifiedTenantContext, caseId: string): Promise<EvidencePackView[]> {
-    z.string().uuid().parse(caseId);
+    caseId = uuidArg(caseId);
     return withTenant(this.pool, ctx, async db => {
       const rows = await this.rows(db, ctx.tenantId, caseId);
       if (!rows.length) return [];
@@ -95,7 +98,7 @@ export class EvidencePackRepository {
   }
 
   async generate(ctx: VerifiedTenantContext, caseId: string, raw: { commandId: string; format?: 'TEXT' }, actorRef: string) {
-    z.string().uuid().parse(caseId); const input = generateInput.parse(raw); actorSchema.parse(actorRef);
+    caseId = uuidArg(caseId); const input = generateInput.parse(raw); actorSchema.parse(actorRef);
     const requestHash = sha256(JSON.stringify({ action: 'generate', caseId, ...input, actorRef }));
     const packId = await withTenant(this.pool, ctx, async db => {
       await this.lock(db, ctx.tenantId, caseId, input.commandId);
@@ -121,7 +124,7 @@ export class EvidencePackRepository {
   }
 
   async approveAttachment(ctx: VerifiedTenantContext, caseId: string, packId: string, raw: z.input<typeof approvalInput>, actorRef: string) {
-    z.string().uuid().parse(caseId); z.string().uuid().parse(packId); actorSchema.parse(actorRef);
+    caseId = uuidArg(caseId); packId = uuidArg(packId); actorSchema.parse(actorRef);
     const input = approvalInput.parse(raw), requestHash = sha256(JSON.stringify({ action: 'approve_attachment', caseId, packId, ...input, actorRef }));
     await withTenant(this.pool, ctx, async db => {
       await this.lock(db, ctx.tenantId, caseId, input.commandId);
@@ -143,7 +146,7 @@ export class EvidencePackRepository {
   }
 
   async download(ctx: VerifiedTenantContext, caseId: string, packId: string) {
-    z.string().uuid().parse(caseId); z.string().uuid().parse(packId);
+    caseId = uuidArg(caseId); packId = uuidArg(packId);
     return withTenant(this.pool, ctx, async db => {
       const pack = (await this.rows(db, ctx.tenantId, caseId)).find(row => row.pack_id === packId);
       if (!pack) return fail('EVIDENCE_PACK_NOT_FOUND');

@@ -108,7 +108,10 @@ export function inspectEvidenceManifest(manifest: EvidenceManifest, actual: Evid
       inspectSource(entry.redactedFrom.sourceId, entry.redactedFrom.version, entry.redactedFrom.hash);
     }
   }
-  if (actual.some((source) => !manifest.entries.some((entry) => entry.sourceId === source.sourceId))) {
+  // Every supplied source must be one exact manifested identity/version of the manifest's own job. A source that is
+  // listed under another version, or belongs to another job, is unmanifested content and can never be "complete".
+  if (actual.some((source) => source.jobId !== manifest.jobId ||
+    !manifest.entries.some((entry) => entry.sourceId === source.sourceId && entry.version === source.version))) {
     findings.push("Wrong source version");
   }
   if (!checkpointTrusted) findings.push("Checkpoint not independently trusted");

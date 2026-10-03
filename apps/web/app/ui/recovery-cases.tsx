@@ -18,6 +18,8 @@ export function RecoveryCases({jobId}:{jobId:string}){const[cases,setCases]=useS
       if (!materialResponse.ok || !documentResponse.ok) throw new Error("Recorded supplier sources could not be loaded");
       const materials = (await materialResponse.json()).materials as Array<{rateId?:string;quantity:string;eachPence?:number}>;
       const documents = (await documentResponse.json()).state as {facts:Array<{document_id:string;document_number:string;version_id:string}>};
+      // Fixture-specific: this practice button selects the supplied materials-320 fictional rate (40 each at £20.00) and its
+      // fictional invoice INV-M320-001. It is a picker for the generated fixture, not a rule for real supplier records.
       const matchingRates = materials.filter(item => item.quantity === "40" && item.eachPence === 2000 && item.rateId);
       const invoice = documents.facts.filter(item => item.document_number === "INV-M320-001").at(-1);
       // The selectable materials-B delivery is a different fixture and must never be attached to this case.

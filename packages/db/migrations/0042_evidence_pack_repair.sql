@@ -15,8 +15,16 @@ ALTER TABLE app.evidence_pack_revision ADD COLUMN artifact_text text,
  ADD COLUMN request_hash char(64) CHECK (request_hash ~ '^[0-9a-f]{64}$'),
  ADD COLUMN source_omissions jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(source_omissions)='array');
 ALTER TABLE app.evidence_pack ADD CONSTRAINT evidence_pack_exact_case_key UNIQUE(tenant_id,job_id,case_id,id);
+-- PostgreSQL validates a new foreign key with the current user's row security. Under FORCE RLS the owner
+-- (jobguard_migration) has no tenant context, sees no rows, and would "validate" the constraint without checking
+-- any data. Lift FORCE for this one statement, in this same transaction, so every existing row is really checked,
+-- then restore it. Policies, ownership and runtime grants are untouched; FORCE is never off outside this migration.
+ALTER TABLE app.evidence_pack NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.evidence_pack_revision NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.evidence_pack_revision ADD CONSTRAINT evidence_pack_revision_exact_case_fk
  FOREIGN KEY(tenant_id,job_id,case_id,pack_id) REFERENCES app.evidence_pack(tenant_id,job_id,case_id,id);
+ALTER TABLE app.evidence_pack FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.evidence_pack_revision FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.evidence_pack_revision ADD CONSTRAINT evidence_pack_revision_exact_hash_key UNIQUE(tenant_id,job_id,case_id,pack_id,manifest_hash,content_hash);
 CREATE TABLE app.evidence_pack_attachment_approval (
  id uuid NOT NULL, tenant_id uuid NOT NULL, job_id uuid NOT NULL, case_id uuid NOT NULL, pack_id uuid NOT NULL,

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Header, HttpException, Param, Post, Query, Req }
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Pool } from "pg";
 import { EvidencePackApplication } from "./evidence-pack.application.js";
+import { evidencePackFailure } from "./evidence-pack.errors.js";
 
 type Request = { headers: { cookie?: string } };
 @ApiTags("evidence-packs")
@@ -12,10 +13,7 @@ export class EvidencePackController {
   private session(request: Request) { return request.headers.cookie?.split(";").map(value => value.trim()).find(value => value.startsWith("jg_session="))?.slice(11); }
   private async invoke<T>(run: () => Promise<T>) {
     try { return await run(); }
-    catch (error) {
-      const code = error instanceof Error ? error.message : "INVALID_COMMAND";
-      throw new HttpException({ code }, code === "UNAUTHENTICATED" ? 401 : code === "FORBIDDEN" ? 403 : code.includes("NOT_FOUND") ? 404 : /STALE|CONFLICT/u.test(code) ? 409 : 400);
-    }
+    catch (error) { const { status, code } = evidencePackFailure(error); throw new HttpException({ code }, status); }
   }
   @Get()
   @ApiOperation({ summary: "List immutable mapped, inspectable evidence packs" })
