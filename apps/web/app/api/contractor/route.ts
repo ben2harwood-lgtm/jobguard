@@ -3,6 +3,14 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createContractorApplication, contractorHttpStatus } from "@jobguard/api/workspace";
 import { syntheticPool } from "../../lib/synthetic-server";
+// Browser same-origin check. Next reports request.url with a normalised host (127.0.0.1 becomes localhost), so compare the
+// Origin header with the host and protocol the client actually addressed (Host / X-Forwarded-*), never with request.url's host.
+function sameOrigin(request:Request) {
+ const first=(name:string)=>request.headers.get(name)?.split(",")[0]?.trim()||null;
+ const origin=request.headers.get("origin"),host=first("x-forwarded-host")??first("host"),proto=first("x-forwarded-proto")??new URL(request.url).protocol.slice(0,-1);
+ if(!origin||!host) return false;
+ try {const o=new URL(origin);return o.host===host&&o.protocol===`${proto}:`;}catch{return false;}
+}
 const principal=async()=>({version:"contractor-principal.v1",sessionId:(await cookies()).get("jg_session")?.value});
 export async function GET(request:Request) {
  try {
@@ -12,7 +20,7 @@ export async function GET(request:Request) {
  }catch(error){return failure(error);}
 }
 export async function POST(request:Request) {
- if(request.headers.get("origin")!==new URL(request.url).origin) return NextResponse.json({code:"FORBIDDEN"},{status:403});
+ if(!sameOrigin(request)) return NextResponse.json({code:"FORBIDDEN"},{status:403});
  try {
   const application=createContractorApplication({pool:syntheticPool()}); const p=await principal();const body:unknown=await request.json();
   return NextResponse.json(new URL(request.url).searchParams.get('action')==='start'?await application.start(p,body):await application.command(p,body));
