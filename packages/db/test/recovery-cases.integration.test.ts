@@ -53,3 +53,28 @@ it("checks recorded owner membership, identity, tenant and expiry before any eli
  finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[tenant,reviewer.membershipId]);}
  expect((await repo.list(ctx,job)).find(c=>c.id===x.id)!.eligibility).toEqual(approved.eligibility);
 });
+it.each(["evidence","policy"] as const)("refuses a fresh review bound to a revision lower than the %s revision already recorded",async subject=>{
+ const repo=new RecoveryCaseRepository(runtime);let x=await reviewedCase();
+ x=await repo.eligibilityCommand(ctx,job,eligibility({action:"supersede",caseId:x.id,expectedCaseRevision:x.revision,subject}),reviewer);
+ const recorded=x.eligibility!;expect(subject==="evidence"?recorded.evidenceRevision:recorded.policyRevision).toBe(2);
+ const review=(revisions:{evidenceRevision:number;policyRevision:number})=>eligibility({action:"review",caseId:x.id,expectedCaseRevision:x.revision,scenario:"evidence_backed_withheld_payment",policyVersion:"reference-d03.v1",...revisions});
+ const counts=async()=>[(await admin.query("SELECT count(*) n FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND case_id=$2",[tenant,x.id])).rows[0].n,(await admin.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1",[tenant])).rows[0].n];
+ const before=await counts();
+ const lower=subject==="evidence"?{evidenceRevision:recorded.evidenceRevision-1,policyRevision:recorded.policyRevision}:{evidenceRevision:recorded.evidenceRevision,policyRevision:recorded.policyRevision-1};
+ await expect(repo.eligibilityCommand(ctx,job,review(lower),reviewer)).rejects.toThrow("ELIGIBILITY_STALE_REVISION");
+ expect(await counts()).toEqual(before);
+ expect((await repo.list(ctx,job)).find(c=>c.id===x.id)!.eligibility).toEqual(recorded);
+ // The recorded (superseded) revisions themselves are accepted, and the approval then carries exactly them.
+ x=await repo.eligibilityCommand(ctx,job,review({evidenceRevision:recorded.evidenceRevision,policyRevision:recorded.policyRevision}),reviewer);
+ x=await repo.eligibilityCommand(ctx,job,approval(x),reviewer);
+ expect(x.eligibility).toMatchObject({status:"approved",evidenceRevision:recorded.evidenceRevision,policyRevision:recorded.policyRevision});
+});
+it("serializes eligibility commands whose case ID differs only in letter case and records the canonical ID",async()=>{
+ const repo=new RecoveryCaseRepository(runtime),x=await reviewedCase();
+ const shouting={...approval(x),caseId:x.id.toUpperCase()};
+ const settled=await Promise.allSettled([repo.eligibilityCommand(ctx,job,approval(x),reviewer),repo.eligibilityCommand(ctx,job,shouting,reviewer)]);
+ expect(settled.filter(y=>y.status==="fulfilled")).toHaveLength(1);
+ const refused=settled.filter((y):y is PromiseRejectedResult=>y.status==="rejected");expect(refused).toHaveLength(1);
+ expect(["ELIGIBILITY_REVIEW_REQUIRED","ELIGIBILITY_STALE_REVISION"]).toContain((refused[0]!.reason as Error).message);
+ expect((await admin.query("SELECT subject_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='recovery.eligibility.approve' AND lower(subject_ref)=$2",[tenant,x.id])).rows).toEqual([{subject_ref:x.id}]);
+});
