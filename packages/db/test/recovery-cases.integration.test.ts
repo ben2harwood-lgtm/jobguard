@@ -28,6 +28,15 @@ it.each(["evidence","case","policy"])("rejects current revisions after %s supers
  const audit=await admin.query("SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.eligibility.approve'",[tenant,x.id]);
  expect(audit.rows).toEqual([{actor_ref:`membership:${reviewer.membershipId}`}]);
 });
+it("gives two concurrent approvals of one review exactly one effect and a typed re-review refusal",async()=>{
+ const repo=new RecoveryCaseRepository(runtime),x=await reviewedCase();
+ const settled=await Promise.allSettled([repo.eligibilityCommand(ctx,job,approval(x),reviewer),repo.eligibilityCommand(ctx,job,approval(x),reviewer)]);
+ expect(settled.filter(y=>y.status==="fulfilled")).toHaveLength(1);
+ const refused=settled.filter((y):y is PromiseRejectedResult=>y.status==="rejected");expect(refused).toHaveLength(1);
+ expect(["ELIGIBILITY_REVIEW_REQUIRED","ELIGIBILITY_STALE_REVISION"]).toContain((refused[0]!.reason as Error).message);
+ expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND case_id=$2 AND status='approved'",[tenant,x.id])).rows[0].n)).toBe(1);
+ expect(Number((await admin.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.eligibility.approve'",[tenant,x.id])).rows[0].n)).toBe(1);
+});
 it("checks recorded owner membership, identity, tenant and expiry before any eligibility effect or replay",async()=>{
  const repo=new RecoveryCaseRepository(runtime),x=await reviewedCase(),approve=approval(x);
  for(const invalid of [{...reviewer,membershipId:randomUUID()},{...reviewer,identityUserId:randomUUID()}])
