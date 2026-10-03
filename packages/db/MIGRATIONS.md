@@ -102,3 +102,30 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 ## 0039 readiness
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
+
+### 0050 — CH-2 live-only watchdog inputs
+
+Adds `app.require_watchdog_live(uuid)` (migration owned, fixed search path,
+runtime-only EXECUTE) and BEFORE INSERT guards on watchdog input tables. The
+helper checks the transaction tenant before taking a job SHARE lock; lifecycle
+transitions take UPDATE locks, so writes cannot commit after exit from live.
+Repositories call it before other business locks or audit appends. Trigger
+rechecks take the same already-held job lock. No existing row, money record, status or historical evidence is changed.
+Adds job-qualified order/proof foreign keys and narrows upload UPDATE to the
+existing lifecycle columns; identity edits are denied. Upload finalisation also
+has an UPDATE guard. Existing cleanup/rejection remains available. The shared
+evidence tables retain the exact generated bank-evidence class written by the
+existing migration-owned recovery routine; a runtime insert cannot forge this
+exception. Reads remain available.
+
+Expand-compatible upgrade from 0041; no backfill. The CH-2 PostgreSQL suite
+constructs previous-schema uploads, applies 0050, verifies preservation and
+idempotent migration, all non-live failures, actual runtime grants and race
+orders. Existing fresh-schema PostgreSQL suites apply 0050 too.
+
+Forward-fix: retain the guards and repair affected fixtures/commands through
+normal lifecycle commands; never directly set status or disable a guard to
+resume watchdog writes. If a deployment rollback is required, keep 0050 and
+roll back application code (the preceding application can still read all data).
+Removing the migration would reopen prohibited writes and requires a separate
+reviewed change. No new operational alerts or provider routes.

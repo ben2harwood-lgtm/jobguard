@@ -35,3 +35,5 @@ export * from "./discrepancy.js";
 export * from "./readiness.js";
 export * from "./inbox-relevance.js";
 export * from "./evidence-pack.js";
+
+export * from "./watchdog.js";

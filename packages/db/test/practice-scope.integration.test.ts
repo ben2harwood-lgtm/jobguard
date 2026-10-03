@@ -1,3 +1,4 @@
+import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,7 +25,9 @@ beforeAll(async()=>{
  INSERT INTO identity.identity_user(id) VALUES('a4000000-0000-4000-8000-000000000001');
  INSERT INTO app.account(id,tenant_id,name) VALUES('a5000000-0000-4000-8000-000000000001','${tenant}','Synthetic proof regression');
  INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES('${member}','${tenant}','a5000000-0000-4000-8000-000000000001','a4000000-0000-4000-8000-000000000001','owner');
- INSERT INTO app.job(id,tenant_id,title,status) VALUES('${job}','${tenant}','Synthetic dismissed-first regression','live'),('${otherJob}','${tenant}','Other synthetic job','live'),('${emptyJob}','${tenant}','No confirmed scope','live'),('${foreignJob}','${otherTenant}','Foreign synthetic job','live');
+`);
+ for(const [t,j] of [[tenant,job],[tenant,otherJob],[tenant,emptyJob],[otherTenant,foreignJob]]) await importWatchdogFixtureJob(admin,t!,j!);
+ await admin.query(`
  INSERT INTO app.scope_identity(id,tenant_id,job_id,state,created_at) VALUES
  ('${retired}','${tenant}','${job}','retired','2026-01-01T00:00:00Z'),('${reserved}','${tenant}','${job}','reserved','2026-01-01T00:00:00Z'),
  ('${first}','${tenant}','${job}','confirmed','2026-01-02T00:00:00Z'),('${second}','${tenant}','${job}','confirmed','2026-01-02T00:00:00Z'),

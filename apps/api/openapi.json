@@ -358,6 +358,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -638,6 +659,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append a synthetic purchase-order draft revision",
@@ -653,6 +695,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Authorize one exact simulated purchase-order placement",
@@ -683,6 +746,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Ingest one generated merchant fixture",
@@ -698,6 +782,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append an actual synthetic goods receipt",
@@ -713,6 +818,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Confirm or correct cited supplier facts",
@@ -741,6 +867,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Create a deterministic source match proposal",
@@ -756,6 +903,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append a human source-match correction",
@@ -829,6 +997,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Evaluate confirmed matched facts with a versioned pure rule",
@@ -844,6 +1033,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Dismiss or dispute a finding with a reason",
@@ -859,6 +1069,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Approve a confirmed source-backed replacement bill",
@@ -889,6 +1120,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Confirm an immutable synthetic work-plan revision",
@@ -904,6 +1156,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Advance the per-run scenario clock and deduplicate the due review",
@@ -934,6 +1207,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Record deterministic synthetic findings",
@@ -964,6 +1258,27 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Dismiss one job-bound advisory Decision idempotently",

@@ -42,3 +42,33 @@ export async function openQuote(page: Page) {
   const price = page.getByRole("button", { name: "Price the work" }); await expect(price).toBeVisible(); await expect(price).toBeEnabled(); await price.click();
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
 }
+
+/** Enter live through the persisted quote, acceptance and activation commands. */
+export async function startWatchdogJob(page: Page) {
+  const price = page.getByRole("button", { name: "Price the work", exact: true });
+  if (await price.isVisible()) await price.click();
+  await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
+  for (const name of ["Save draft revision", "Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) {
+    const action = page.getByRole("button", { name, exact: true });
+    await expect(action).toBeEnabled(); await action.click();
+    if (name === "Save draft revision") await expect(page.getByTestId("quote-revision")).toHaveText("1");
+  }
+  await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+  await expect(page.locator('[data-testid="watchdog-panel"]').first()).toHaveAttribute("data-watchdog-active", "true");
+}
+
+export async function openQuotingWatchdogJob(page: Page) {
+  await openReview(page);
+  for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) await page.getByRole("button", { name: `Accept ${name}`, exact: true }).click();
+  await page.getByRole("button", { name: "Dismiss Replace shelves", exact: true }).click();
+  await page.getByLabel("Dismissal reason Replace shelves").fill("Outside the fictional watchdog baseline");
+  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
+  await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
+  await page.getByRole("button", { name: "Price the work", exact: true }).click();
+  await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
+}
+
+export async function openLiveWatchdogJob(page: Page) {
+  await openQuotingWatchdogJob(page);
+  await startWatchdogJob(page);
+}
