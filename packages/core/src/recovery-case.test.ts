@@ -5,8 +5,8 @@ describe("complete recovery state machine",()=>{
  const expected = {
   identified: { assemble_evidence: "evidence_assembled", prevent: "prevented", close_no_recovery: "closed_no_recovery" },
   evidence_assembled: { start_pursuit: "pursuing", start_negotiation: "negotiating", record_landing: "partially_landed", close_no_recovery: "closed_no_recovery", dispute: "negotiating" },
-  pursuing: { start_negotiation: "negotiating", record_landing: "partially_landed", close_no_recovery: "closed_no_recovery", write_off: "closed_no_recovery", dispute: "negotiating" },
-  negotiating: { resume_pursuit: "pursuing", record_landing: "partially_landed", close_no_recovery: "closed_no_recovery", write_off: "closed_no_recovery", dispute: "negotiating" },
+  pursuing: { start_negotiation: "negotiating", record_landing: "partially_landed", close_no_recovery: "closed_no_recovery", write_off: "closed_no_recovery", dispute: "negotiating", reverse_landing: "evidence_assembled" },
+  negotiating: { resume_pursuit: "pursuing", record_landing: "partially_landed", close_no_recovery: "closed_no_recovery", write_off: "closed_no_recovery", dispute: "negotiating", reverse_landing: "evidence_assembled" },
   partially_landed: { record_landing: "partially_landed", write_off: "closed_no_recovery", dispute: "negotiating", reverse_landing: "evidence_assembled" },
   landed: { close_recovered: "closed_recovered", dispute: "negotiating", reverse_landing: "partially_landed" },
   closed_recovered: { dispute: "negotiating", reverse_landing: "partially_landed" },
@@ -17,7 +17,7 @@ describe("complete recovery state machine",()=>{
   for (const event of recoveryEventTypeV1.options) {
    it(`${state} / ${event} has an explicit allowed or forbidden result`, () => {
     const landedPence = ["landed", "closed_recovered"].includes(state) ? 250000
-     : ["partially_landed", "closed_no_recovery"].includes(state) ? 100000 : 0;
+     : ["partially_landed", "closed_no_recovery", "pursuing", "negotiating"].includes(state) ? 100000 : 0;
     const run = () => transitionRecoveryCase({ state, event, claimedPence: 250000, landedPence, amountPence: 100000 });
     const next = (expected[state] as Record<string, string>)[event];
     if (!next) expect(run).toThrowError(/is not allowed/);
@@ -78,6 +78,44 @@ describe("complete recovery state machine",()=>{
   it("names the kind of every catalogued source and nothing else", () => {
    expect(describeRecoverySource("Delivery note DN-320")).toEqual({ ref: "Delivery note DN-320", kind: "Delivery note", sourceType: "supplier_documents" });
    expect(describeRecoverySource("Anything else")).toBeUndefined();
+  });
+ });
+ describe("a payment can be reversed after a dispute (M4-1-S-R repair 3, Sol P2)", () => {
+  const base = { claimedPence: 250000 } as const;
+  it.each(["landed", "closed_recovered"] as const)("%s -> dispute -> reverse_landing keeps exact landed accounting", from => {
+   const disputed = transitionRecoveryCase({ ...base, state: from, landedPence: 250000, event: "dispute" });
+   expect(disputed).toEqual({ state: "negotiating", landedPence: 250000, writtenOffPence: 0 });
+   expect(transitionRecoveryCase({ ...base, state: disputed.state, landedPence: disputed.landedPence, event: "reverse_landing", amountPence: 100000 }))
+    .toEqual({ state: "partially_landed", landedPence: 150000, writtenOffPence: 0 });
+   expect(transitionRecoveryCase({ ...base, state: disputed.state, landedPence: disputed.landedPence, event: "reverse_landing", amountPence: 250000 }))
+    .toEqual({ state: "evidence_assembled", landedPence: 0, writtenOffPence: 0 });
+  });
+  it("still bounds a reversal by what has actually landed, in every chasing state", () => {
+   for (const state of ["pursuing", "negotiating"] as const) {
+    expect(() => transitionRecoveryCase({ ...base, state, landedPence: 100000, event: "reverse_landing", amountPence: 100001 })).toThrowError(/is not allowed/);
+    expect(() => transitionRecoveryCase({ ...base, state, landedPence: 0, event: "reverse_landing", amountPence: 1 })).toThrowError(/is not allowed/);
+    expect(() => transitionRecoveryCase({ ...base, state, landedPence: 100000, event: "reverse_landing" })).toThrow(); // an amount is mandatory
+   }
+  });
+  it("lets a case that resumed pursuit after a dispute still reverse the landed part", () => {
+   const resumed = transitionRecoveryCase({ ...base, state: "negotiating", landedPence: 100000, event: "resume_pursuit" });
+   expect(resumed.state).toBe("pursuing");
+   expect(transitionRecoveryCase({ ...base, state: resumed.state, landedPence: resumed.landedPence, event: "reverse_landing", amountPence: 40000 }))
+    .toMatchObject({ state: "partially_landed", landedPence: 60000 });
+  });
+ });
+
+ describe("recorded sources are admitted alongside the practice catalogue (M4-1-S-R repair 3, Opus P1)", () => {
+  const recordedInvoice = "7f1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f", recordedRate = "11111111-2222-4333-8444-555555555555";
+  it("accepts well-formed recorded ids of the right case shape without naming a label", () => {
+   expect(() => assertRecoverySources({ caseType: "withheld_customer_payment", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: [recordedInvoice] })).not.toThrow();
+   expect(() => assertRecoverySources({ caseType: "merchant_overcharge", book: "supplier_cost", sourceType: "supplier_documents", sourceRefs: [recordedRate, recordedInvoice, "Delivery note DN-320"] })).not.toThrow();
+  });
+  it("still refuses malformed ids, upper-case ids, duplicates and the supplier/customer split", () => {
+   const customer = { caseType: "withheld_customer_payment", book: "builder_customer", sourceType: "customer_invoice" } as const;
+   for (const sourceRefs of [["not-a-uuid"], [recordedInvoice.toUpperCase()], [recordedInvoice, recordedInvoice], ["Supplier invoice INV-320"], [`${recordedInvoice} `]])
+    expect(() => assertRecoverySources({ ...customer, sourceRefs })).toThrowError("RECOVERY_SOURCE_NOT_RECOGNISED");
+   expect(() => assertRecoverySources({ caseType: "merchant_overcharge", book: "builder_customer", sourceType: "supplier_documents", sourceRefs: [recordedRate] })).toThrowError("RECOVERY_SOURCE_NOT_RECOGNISED");
   });
  });
 });

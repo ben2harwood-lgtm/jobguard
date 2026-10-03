@@ -1,7 +1,9 @@
-import{expect,test,type Page}from"@playwright/test";import{openReview}from"./helpers/capture-journey";
+import{expect,test,type Locator,type Page}from"@playwright/test";import{openReview}from"./helpers/capture-journey";
 test.setTimeout(180_000);
 const V=async(page:Page,id:string,value:string)=>expect.poll(async()=>page.getByTestId(id).textContent(),{timeout:45_000}).toBe(value);
 const button=(page:Page,name:string)=>page.getByRole("button",{name,exact:true});
+// C7: primary actions, inputs and links in the workbench are at least 44x44 CSS px.
+const expectTouchTarget=async(target:Locator)=>{const box=await target.boundingBox();expect(box).not.toBeNull();expect(box!.width).toBeGreaterThanOrEqual(44);expect(box!.height).toBeGreaterThanOrEqual(44)};
 // C7: a keyboard user reaches the action and sees a real focus indicator (not outline:none with no replacement).
 const expectVisibleKeyboardFocus=async(page:Page,name:string)=>{const target=button(page,name);await expect(target).toBeFocused();expect(await target.evaluate(el=>{const s=getComputedStyle(el);return el.matches(":focus-visible")&&((s.outlineStyle!=="none"&&parseFloat(s.outlineWidth)>0)||s.boxShadow!=="none")})).toBe(true)};
 test("opens and manages evidence-linked recovery cases without inventing recovered money",async({page,context},testInfo)=>{
@@ -14,12 +16,14 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  await button(page,"Open materials-320 overcharge").focus();
  await page.keyboard.press("Tab");await expectVisibleKeyboardFocus(page,"Open £320 withheld payment");
  await page.keyboard.press("Shift+Tab");await expectVisibleKeyboardFocus(page,"Open materials-320 overcharge");
+ for(const name of["Open materials-320 overcharge","Open £320 withheld payment","Open £2,500 withheld payment","Record prevention"])await expectTouchTarget(button(page,name));
  // Merchant overcharge: supplier documents only, never customer debt.
  await button(page,"Open materials-320 overcharge").click();
  await V(page,"case-claimed-net","£320.00");await V(page,"case-landed-net","£0.00");await V(page,"case-state","Needs evidence");
  for(const source of["Supplier agreement AG-320","Delivery note DN-320","Supplier invoice INV-320"])await expect(page.getByRole("link",{name:source,exact:true})).toBeVisible();
  await expect(page.getByText("Generated customer invoice INV-18800",{exact:true})).toHaveCount(0);
  // A source link leads somewhere real: it moves focus to an in-page detail naming the kind of document and what is (not) attached (no hash change: the job workspace reloads on hashchange).
+ await expectTouchTarget(page.getByRole("link",{name:"Delivery note DN-320",exact:true}));
  await page.getByRole("link",{name:"Delivery note DN-320",exact:true}).click();
  const detail=page.locator("#source-delivery-note-dn-320");await expect(detail).toBeFocused();await expect(detail).toBeInViewport();await expect(detail).toContainText("Delivery note");await expect(detail).toContainText("no stored document file is attached");
  // recovery-18800 has TWO withheld-customer-payment claims against its generated customer invoice: open the £320 one too.
@@ -29,12 +33,17 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  for(const source of["Supplier agreement AG-320","Delivery note DN-320","Supplier invoice INV-320"])await expect(page.getByRole("link",{name:source,exact:true})).toHaveCount(0);
  await button(page,"Open £2,500 withheld payment").click();
  await V(page,"case-claimed-net","£2,500.00");await V(page,"case-book","Builder–customer");await V(page,"case-source-type","Customer invoice");
+ for(const name of["Evidence assembled","Record a landed recovery","Write off remainder","Record dispute"])await expectTouchTarget(button(page,name));
+ await expectTouchTarget(page.getByLabel("Received (£)",{exact:true}));
  await button(page,"Evidence assembled").click();
- // Negative path: a receipt larger than the claim is refused, shown as an alert, and nothing is recorded.
+ // Negative paths: each rejected command is announced in an alert that takes focus, and nothing is recorded.
+ // (a) a receipt larger than the claim is refused by the server; (b) float-style input such as 1e3 is refused before any command is sent.
  await page.getByLabel("Received (£)",{exact:true}).fill("2500.01");await button(page,"Record a landed recovery").click();
- await expect(page.locator("p[role=alert]")).toContainText("is not allowed");await V(page,"case-landed-net","£0.00");
+ await expect(page.locator("p[role=alert]")).toContainText("is not allowed");await expect(page.locator("p[role=alert]")).toBeFocused();await V(page,"case-landed-net","£0.00");
+ await page.getByLabel("Received (£)",{exact:true}).fill("1e3");await button(page,"Record a landed recovery").click();
+ await expect(page.locator("p[role=alert]")).toContainText("Enter a non-negative price in pounds");await expect(page.locator("p[role=alert]")).toBeFocused();await V(page,"case-landed-net","£0.00");
  await page.getByLabel("Received (£)",{exact:true}).fill("1000.00");await button(page,"Record a landed recovery").click();
- await V(page,"case-landed-net","£1,000.00");await V(page,"case-outstanding-net","£1,500.00");await V(page,"case-fee","Not calculated here");
+ await V(page,"case-landed-net","£1,000.00");await V(page,"case-outstanding-net","£1,500.00");await V(page,"case-fee","£0.00");await V(page,"case-fee-note","No approved qualifying landing yet, so no fee exists");
  await button(page,"Write off remainder").click();await expect(page.getByText("£1,500.00 written off",{exact:true})).toBeVisible();await expect(page.getByText("£2,500 recovered",{exact:true})).toHaveCount(0);
  await V(page,"case-outstanding-net","£0.00");
  await button(page,"Record prevention").click();

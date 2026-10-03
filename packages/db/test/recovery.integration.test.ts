@@ -36,5 +36,93 @@ describe("structural recovery fee guard",()=>{
    await db.$client.query("ROLLBACK TO SAVEPOINT valid_landing");
   });
  });
+ describe("M4-1-S-R repair 3: financial path and fee projection", () => {
+  const who = "verified-test-reviewer", E2 = randomUUID();
+  // These tests keep their landings; they use their own evidence object so that the later invalidation test (which invalidates E) sees only its own derivation.
+  beforeAll(async () => {
+   const upload = randomUUID();
+   await admin.query(`SET session_replication_role=replica;INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES('${upload}','${T}','${J}','synthetic/upload-r3','${"c".repeat(64)}','application/pdf',1,'standard_evidence','verified','v1',now(),now()+interval '1 hour');INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES('${E2}','${T}','${upload}','${J}','original','synthetic_bank_receipt','synthetic/key-r3','v1','${"c".repeat(64)}',1,'application/pdf','standard_evidence',now(),now());SET session_replication_role=origin`);
+  });
+  const open = (repo: RecoveryCaseRepository, claimedNetPence: number) => repo.command(context, J, { version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "withheld_customer_payment", claimedNetPence, counterparty: "Synthetic", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: ["Generated customer invoice INV-18800"], expectedRevision: 0 }, who);
+  const step = (repo: RecoveryCaseRepository, c: { id: string; revision: number }, extra: Record<string, unknown>) => repo.command(context, J, { version: "recovery-case-command.v1", action: "transition", commandId: randomUUID(), caseId: c.id, expectedRevision: c.revision, ...extra }, who);
+  // A settled synthetic receipt plus current eligibility and landing approvals for exactly this case revision.
+  async function readyToLand(c: { id: string; revision: number }, receiptGross: number) {
+    const receipt = randomUUID(), eligibility = randomUUID(), landing = randomUUID();
+    await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1::uuid,$2::uuid,$3::uuid,$1::text,$1::text,'settled',$4,'GBP',true,now())", [receipt, T, J, receiptGross]);
+    for (const [id, kind] of [[eligibility, "eligibility"], [landing, "landing"]]) await admin.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id)VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',now()+interval '1 hour',$7)", [id, T, J, c.id, kind, c.revision, randomUUID()]);
+    return (gross: number, eligible = gross) => ({ ...payload(c.id, eligibility, landing), receiptId: receipt, evidenceId: E2, expectedCaseRevision: c.revision, grossPence: gross, eligibleNetPence: eligible });
+  }
+  const land = (p: object) => withTenant(runtime, context, db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb) id", [p]));
+  const allocationsAndDerivations = async (caseId: string) => (await admin.query("SELECT (SELECT count(*) FROM app.landing_allocation WHERE tenant_id=$1 AND case_id=$2)::int allocations,(SELECT count(*) FROM app.recovery_fee_derivation d JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(d.tenant_id,d.source_allocation_id) WHERE d.tenant_id=$1 AND a.case_id=$2)::int derivations,(SELECT count(*) FROM app.recovery_fee_journal j JOIN app.recovery_fee_derivation d ON(d.tenant_id,d.id)=(j.tenant_id,j.derivation_id) JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(d.tenant_id,d.source_allocation_id) WHERE j.tenant_id=$1 AND a.case_id=$2)::int journal", [T, caseId])).rows[0];
+
+  it("shows a computed per-case fee; eligibility approval creates neither a landing nor a fee, and an approved landing does (Sol P2, Opus P1 fee label)", async () => {
+   const repo = new RecoveryCaseRepository(runtime);
+   let c = await open(repo, 100000);
+   c = await step(repo, c, { eventType: "assemble_evidence" });
+   await repo.eligibilityCommand(context, J, { version: "recovery-eligibility-command.v1", action: "review", commandId: randomUUID(), caseId: c.id, scenario: "evidence_backed_withheld_payment", expectedCaseRevision: c.revision, evidenceRevision: 1, policyVersion: "reference-d03.v1", policyRevision: 1 }, who);
+   const reviewed = (await repo.list(context, J)).find(x => x.id === c.id)!.eligibility!;
+   await repo.eligibilityCommand(context, J, { version: "recovery-eligibility-command.v1", action: "approve", commandId: randomUUID(), caseId: c.id, expectedCaseRevision: c.revision, expectedEvidenceRevision: reviewed.evidenceRevision, expectedPolicyRevision: 1, expectedReviewRevision: reviewed.revision }, who);
+   let view = (await repo.list(context, J)).find(x => x.id === c.id)!;
+   expect(view.eligibility?.status).toBe("approved");
+   expect(view).toMatchObject({ landedNetPence: 0, feeIllustrativePence: 0 });
+   expect(await allocationsAndDerivations(c.id)).toEqual({ allocations: 0, derivations: 0, journal: 0 });
+   const p = await readyToLand(c, 100000), landing = p(50000);
+   expect((await land(landing)).rows[0].id).toBeTruthy();
+   view = (await repo.list(context, J)).find(x => x.id === c.id)!;
+   const posted = Number((await admin.query("SELECT posting_delta_pence FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND source_allocation_id=$2", [T, landing.allocationId])).rows[0].posting_delta_pence);
+   expect(posted).toBeGreaterThan(0);
+   expect(view.feeIllustrativePence).toBe(posted);
+   expect(await allocationsAndDerivations(c.id)).toEqual({ allocations: 1, derivations: 1, journal: 1 });
+  });
+
+  it("refuses to allocate principal the workbench has written off (Sol P2: SQL landing path)", async () => {
+   const repo = new RecoveryCaseRepository(runtime);
+   let c = await open(repo, 250000);
+   c = await step(repo, c, { eventType: "assemble_evidence" });
+   c = await step(repo, c, { eventType: "record_landing", amountPence: 100000 });
+   c = await step(repo, c, { eventType: "write_off" });
+   expect(c).toMatchObject({ state: "closed_no_recovery", landedNetPence: 100000, writtenOffPence: 150000 });
+   const p = await readyToLand(c, 300000);
+   // Only 100,000 of principal remains recoverable (250,000 claimed - 150,000 written off).
+   await expect(land(p(100001))).rejects.toThrow("allocation exceeds available receipt or claim");
+   await withTenant(runtime, context, async db => {
+    await db.$client.query("SAVEPOINT within_remaining");
+    expect((await db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb) id", [p(100000)])).rows[0].id).toBeTruthy();
+    await db.$client.query("ROLLBACK TO SAVEPOINT within_remaining");
+   });
+   // Writing off everything leaves nothing to allocate at all.
+   let all = await open(repo, 250000);
+   all = await step(repo, all, { eventType: "assemble_evidence" });
+   all = await step(repo, all, { eventType: "start_pursuit" });
+   all = await step(repo, all, { eventType: "write_off" });
+   expect(all).toMatchObject({ writtenOffPence: 250000, outstandingNetPence: 0 });
+   const q = await readyToLand(all, 300000);
+   await expect(land(q(1))).rejects.toThrow("allocation exceeds available receipt or claim");
+   expect(await allocationsAndDerivations(all.id)).toEqual({ allocations: 0, derivations: 0, journal: 0 });
+  });
+
+  it("never deadlocks a landing against concurrent workbench writes on the same case (Opus P3)", async () => {
+   const repo = new RecoveryCaseRepository(runtime);
+   const rounds = await Promise.all(Array.from({ length: 6 }, async () => {
+    let c = await open(repo, 100000);
+    c = await step(repo, c, { eventType: "assemble_evidence" });
+    const p = await readyToLand(c, 1000);
+    const outcomes = await Promise.allSettled([land(p(10)), step(repo, c, { eventType: "record_landing", amountPence: 5 }), step(repo, c, { eventType: "dispute" })]);
+    return { caseId: c.id, outcomes };
+   }));
+   for (const { caseId, outcomes } of rounds) {
+    for (const outcome of outcomes) if (outcome.status === "rejected") {
+     const failure = outcome.reason as { code?: string; message?: string };
+     expect(failure.code).not.toBe("40P01");
+     expect(failure.code).not.toBe("55P03");
+     expect(String(failure.message)).not.toMatch(/deadlock/iu);
+     expect(String(failure.message)).toMatch(/RECOVERY_STALE_REVISION|current landing approval required|current eligibility approval required|eligible current synthetic case required|is not allowed/u);
+    }
+    const final = (await repo.list(context, J)).find(x => x.id === caseId)!;
+    expect(final.landedNetPence + final.writtenOffPence + final.outstandingNetPence).toBe(final.claimedNetPence);
+    expect((await allocationsAndDerivations(caseId)).allocations).toBe(outcomes[0].status === "fulfilled" ? 1 : 0);
+   }
+  });
+ });
  it("rejects incomplete proof, pending cash, prevented cases, and stale approval in PostgreSQL",async()=>{for(const statement of [`UPDATE app.synthetic_recovery_receipt SET status='pending',settled_at=NULL WHERE id='${R}'`,`UPDATE app.recovery_case SET state='prevented' WHERE id='${C2}'`,`UPDATE app.recovery_approval SET expires_at=now()-interval '1 second' WHERE id='${EA2}'`]){await admin.query(`SET session_replication_role=replica;${statement};SET session_replication_role=origin`);await expect(withTenant(runtime,context,db=>db.$client.query(`SELECT app.approve_synthetic_landing($1::jsonb)`,[payload(C2,EA2,LA2)]))).rejects.toBeTruthy();}await admin.query(`SELECT set_config('app.tenant_id','${T}',false);SET session_replication_role=replica;INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code)VALUES(gen_random_uuid(),'${T}','${E}',gen_random_uuid(),'verification_invalid');SET session_replication_role=origin`);expect((await admin.query(`SELECT reason FROM app.recovery_review WHERE tenant_id=$1`,[T])).rows).toEqual([{reason:"evidence_invalidated"}]);});
 });

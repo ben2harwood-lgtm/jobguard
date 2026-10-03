@@ -74,4 +74,72 @@ describe("M4-1-S HOLD regressions", () => {
   await expect(repo.command(ctx,job,{...openCase(),caseType:"merchant_overcharge",book:"supplier_cost",sourceType:"supplier_documents"},"server-reviewer")).rejects.toThrow("RECOVERY_SOURCE_NOT_RECOGNISED");
   expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_case WHERE tenant_id=$1",[tenant])).rows[0].n)).toBe(before);
  });
+ it("binds replay to the target job: the same command id and body against another job is a typed conflict (Sol P2)", async () => {
+  const repo = new RecoveryCaseRepository(runtime), who = "server-reviewer", opened = openCase();
+  const a = await repo.command(ctx,job,opened,who);
+  expect((await repo.command(ctx,job,opened,who)).id).toBe(a.id); // a legitimate replay on the same job still works
+  await expect(repo.command(ctx,wrongJob,opened,who)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  const assemble = command({action:"transition",caseId:a.id,eventType:"assemble_evidence",expectedRevision:a.revision});
+  const b = await repo.command(ctx,job,assemble,who);
+  expect((await repo.command(ctx,job,assemble,who)).revision).toBe(b.revision);
+  await expect(repo.command(ctx,wrongJob,assemble,who)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  const review = {version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:a.id,scenario:"evidence_backed_withheld_payment",expectedCaseRevision:b.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1};
+  await repo.eligibilityCommand(ctx,job,review,who);
+  await repo.eligibilityCommand(ctx,job,review,who); // same job: replay is a no-op
+  await expect(repo.eligibilityCommand(ctx,wrongJob,review,who)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  expect(Number((await admin.query("SELECT (SELECT count(*) FROM app.recovery_case_event WHERE job_id=$1)+(SELECT count(*) FROM app.recovery_eligibility_revision WHERE job_id=$1)+(SELECT count(*) FROM app.recovery_case WHERE job_id=$1) n",[wrongJob])).rows[0].n)).toBe(0);
+ });
+ it("lets a landed payment be reversed after a dispute, with exact accounting (Sol P2)", async () => {
+  const repo = new RecoveryCaseRepository(runtime), who = "server-reviewer";
+  const step = (x:{id:string;revision:number},extra:Record<string,unknown>) => repo.command(ctx,job,command({action:"transition",caseId:x.id,expectedRevision:x.revision,...extra}),who);
+  let x = await repo.command(ctx,job,openCase(),who);
+  x = await step(x,{eventType:"assemble_evidence"});
+  x = await step(x,{eventType:"record_landing",amountPence:250000});
+  expect(x.state).toBe("landed");
+  x = await step(x,{eventType:"dispute"});
+  expect(x).toMatchObject({state:"negotiating",landedNetPence:250000,outstandingNetPence:0});
+  x = await step(x,{eventType:"reverse_landing",amountPence:100000});
+  expect(x).toMatchObject({state:"partially_landed",landedNetPence:150000,outstandingNetPence:100000,writtenOffPence:0});
+  await expect(step(x,{eventType:"reverse_landing",amountPence:150001})).rejects.toThrow(/is not allowed/);
+  x = await step(x,{eventType:"dispute"});
+  x = await step(x,{eventType:"reverse_landing",amountPence:150000});
+  expect(x).toMatchObject({state:"evidence_assembled",landedNetPence:0,outstandingNetPence:250000});
+ });
+ describe("recorded sources (Opus P1: must still admit what M4-3-S-R records)", () => {
+  const sql = (statement:string) => admin.query(`SET session_replication_role=replica;${statement};SET session_replication_role=origin`);
+  const ids = {invoice:randomUUID(),otherJobInvoice:randomUUID(),otherTenantInvoice:randomUUID(),supplierInvoiceDoc:randomUUID(),supplierInvoiceVersion:randomUUID(),deliveryDoc:randomUUID(),deliveryVersion:randomUUID(),heldDoc:randomUUID(),heldVersion:randomUUID(),creditDoc:randomUUID(),creditVersion:randomUUID(),merchant:randomUUID(),sku:randomUUID(),otherSku:randomUUID(),usedRate:randomUUID(),unusedRate:randomUUID()};
+  const invoice = (id:string,tenantId:string,jobId:string,number:string) => `INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)VALUES('${id}','${tenantId}','${jobId}','${randomUUID()}','${randomUUID()}','${number}','2026-10-01','{}','candidate_m1_standard_v1','GBP',100,20,120,repeat('a',64),repeat('b',64),'\\x00'::bytea,true,'SYNTHETIC - NOT A REAL INVOICE')`;
+  const supplierDocument = (doc:string,version:string,type:string,status:string,number:string,hash="c") => `INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status)VALUES('${doc}','${tenant}','${job}','Fictional Builders Merchant','${type}','${number}',repeat('${hash}',64),'${status}');INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count)VALUES('${version}','${tenant}','${job}','${doc}',1,'text/plain',10,repeat('${hash}',64),1)`;
+  beforeAll(async () => {
+   await sql(`${invoice(ids.invoice,tenant,job,"INV-R3-1")};${invoice(ids.otherJobInvoice,tenant,wrongJob,"INV-R3-2")};${invoice(ids.otherTenantInvoice,other,randomUUID(),"INV-R3-3")}`);
+   await sql(`${supplierDocument(ids.supplierInvoiceDoc,ids.supplierInvoiceVersion,"invoice","ready","SI-R3-1","1")};${supplierDocument(ids.deliveryDoc,ids.deliveryVersion,"delivery","ready","DN-R3-1","2")};${supplierDocument(ids.heldDoc,ids.heldVersion,"invoice","held","SI-R3-HELD","3")};${supplierDocument(ids.creditDoc,ids.creditVersion,"credit","ready","CR-R3-1","4")}`);
+   await sql(`INSERT INTO app.merchant(id,tenant_id,name)VALUES('${ids.merchant}','${tenant}','Fictional Builders Merchant');INSERT INTO app.merchant_sku(id,tenant_id,merchant_id,sku,description,base_unit)VALUES('${ids.sku}','${tenant}','${ids.merchant}','SYN-R3-A','Used paint','each'),('${ids.otherSku}','${tenant}','${ids.merchant}','SYN-R3-B','Unused paint','each');INSERT INTO app.material_rate_revision(id,tenant_id,merchant_id,sku_id,version,price_pence,currency,price_unit,tax_basis,effective_from,source_label)VALUES('${ids.usedRate}','${tenant}','${ids.merchant}','${ids.sku}',1,2000,'GBP','each','net','2026-10-01','Agreement AG-R3-A'),('${ids.unusedRate}','${tenant}','${ids.merchant}','${ids.otherSku}',1,2000,'GBP','each','net','2026-10-01','Agreement AG-R3-B');INSERT INTO app.material_requirement(id,tenant_id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision)VALUES('${randomUUID()}','${tenant}','${job}','${randomUUID()}','${ids.sku}','40','each',1)`);
+  });
+  const customer = (sourceRefs:string[]) => ({...openCase(),sourceRefs});
+  const supplier = (sourceRefs:string[]) => ({...openCase(),caseType:"merchant_overcharge",claimedNetPence:32000,counterparty:"Fictional Builders Merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs});
+  it("accepts recorded customer-invoice ids and names them from the stored record", async () => {
+   const repo = new RecoveryCaseRepository(runtime);
+   const x = await repo.command(ctx,job,customer([ids.invoice]),"server-reviewer");
+   expect(x.sources).toEqual([{ref:ids.invoice,kind:"Customer invoice",label:"Customer invoice INV-R3-1",recorded:true}]);
+   const mixed = await repo.command(ctx,job,customer([ids.invoice,"Generated customer invoice INV-18800"]),"server-reviewer");
+   expect(mixed.sources.map(source=>source.recorded)).toEqual([true,false]);
+  });
+  it("accepts a recorded supplier agreement rate used on the job and ready supplier documents (by version id or document id)", async () => {
+   const repo = new RecoveryCaseRepository(runtime);
+   const x = await repo.command(ctx,job,supplier([ids.usedRate,ids.supplierInvoiceVersion,ids.deliveryDoc]),"server-reviewer");
+   expect(x.sources).toEqual([
+    {ref:ids.usedRate,kind:"Supplier agreement",label:"Supplier agreement Agreement AG-R3-A",recorded:true},
+    {ref:ids.supplierInvoiceVersion,kind:"Supplier invoice",label:"Supplier invoice SI-R3-1",recorded:true},
+    {ref:ids.deliveryDoc,kind:"Delivery note",label:"Delivery note DN-R3-1",recorded:true},
+   ]);
+  });
+  it("refuses unknown ids, other jobs, other tenants, wrong kinds, held or credit documents and unused rates, writing nothing", async () => {
+   const repo = new RecoveryCaseRepository(runtime), before = Number((await admin.query("SELECT count(*) n FROM app.recovery_case WHERE tenant_id=$1",[tenant])).rows[0].n);
+   for (const refs of [[randomUUID()],[ids.otherJobInvoice],[ids.otherTenantInvoice],[ids.supplierInvoiceVersion],[ids.usedRate],[ids.invoice,ids.invoice]])
+    await expect(repo.command(ctx,job,customer(refs),"server-reviewer")).rejects.toThrow("RECOVERY_SOURCE_NOT_RECOGNISED");
+   for (const refs of [[ids.invoice],[ids.heldVersion],[ids.heldDoc],[ids.creditVersion],[ids.unusedRate],[ids.usedRate,randomUUID()]])
+    await expect(repo.command(ctx,job,supplier(refs),"server-reviewer")).rejects.toThrow("RECOVERY_SOURCE_NOT_RECOGNISED");
+   expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_case WHERE tenant_id=$1",[tenant])).rows[0].n)).toBe(before);
+  });
+ });
 });
