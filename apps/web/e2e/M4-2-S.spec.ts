@@ -21,5 +21,18 @@ expect(denied.status()).toBe(409);expect(await denied.json()).toMatchObject({cod
 await page.reload();await V(page,"eligibility-status","Review superseded");
 const second=await context.newPage();await second.goto(`/jobs/${jobId}#recovery-cases`);await V(second,"eligibility-status","Review superseded");await V(second,"case-landed-net","£0.00");await second.close();
 const reviewAgain=page.getByRole("button",{name:"Review evidence-backed claim",exact:true}),approveAgain=page.getByRole("button",{name:"Approve this eligibility review",exact:true});await reviewAgain.click();await expect(approveAgain).toBeEnabled();await reviewAgain.focus();await keyboardFocus(page,approveAgain);await page.keyboard.press("Enter");await V(page,"eligibility-status","Approved for this simulation");await V(page,"case-landed-net","£0.00");
+// Evidence was superseded to revision 2: the re-review and its approval keep revision 2 (they do not reset to 1).
+await expect(page.getByText(/evidence revision 2 · policy reference-d03.v1 revision 1/u)).toBeVisible();
 await reopenSavedJob(page,jobId);await V(page,"eligibility-status","Approved for this simulation");await V(page,"case-landed-net","£0.00");await V(page,"case-fee","£0.00");await banner(page);
+});
+test("re-reviews and approves at the later policy revision after the policy is superseded",async({page,context})=>{await createJob(page);const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;await page.getByRole("button",{name:"Open £320 withheld payment",exact:true}).click();
+const reviewButton=page.getByRole("button",{name:"Review evidence-backed claim",exact:true}),approveButton=page.getByRole("button",{name:"Approve this eligibility review",exact:true}),revisions=/evidence revision 1 · policy reference-d03.v1 revision 2/u;
+await reviewButton.click();await V(page,"eligibility-status","Ready for approval");
+// The page has no policy-supersession control: supersede through the real route with the CURRENT revisions.
+const saved=await (await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json(),current=saved.cases.at(-1);
+const superseded=await page.request.post(`/api/jobs/${jobId}/recovery-cases/eligibility`,{data:{version:"recovery-eligibility-command.v1",commandId:crypto.randomUUID(),action:"supersede",caseId:current.id,expectedCaseRevision:current.revision,subject:"policy"}});expect(superseded.status()).toBe(200);
+await page.reload();await V(page,"eligibility-status","Review superseded");await expect(page.getByText(revisions)).toBeVisible();await expect(approveButton).toBeDisabled();
+await reviewButton.click();await V(page,"eligibility-status","Ready for approval");await expect(page.getByText(revisions)).toBeVisible();
+await expect(approveButton).toBeEnabled();await approveButton.click();await V(page,"eligibility-status","Approved for this simulation");await expect(page.getByText(revisions)).toBeVisible();await V(page,"case-landed-net","£0.00");await V(page,"case-fee","£0.00");
+const second=await context.newPage();await second.goto(`/jobs/${jobId}#recovery-cases`);await V(second,"eligibility-status","Approved for this simulation");await expect(second.getByText(revisions)).toBeVisible();await second.close();await banner(page);
 });
