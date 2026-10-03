@@ -71,13 +71,17 @@ export class ContractorRepository {
    await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))",[principal.tenantId]);
    await this.verify(db,principal);
    const m=principal.membershipId;
-   const admin=(await db.$client.query<{allowed:boolean}>("SELECT EXISTS(SELECT 1 FROM app.org_unit WHERE app.contractor_allowed($1,'organisation.read',id) UNION ALL SELECT 1 FROM app.team WHERE app.contractor_allowed($1,'organisation.read',id)) allowed",[m])).rows[0]!.allowed;
+   // Evaluate the per-row authorisation function once per addressable ID (not once per member x grant), then filter by that set.
+   const readable=(await db.$client.query<{id:string}>("SELECT id FROM (SELECT id FROM app.org_unit UNION SELECT id FROM app.team UNION SELECT id FROM app.client_organisation UNION SELECT nullif(current_setting('app.tenant_id',true),'')::uuid) x WHERE app.contractor_allowed($1,'organisation.read',id)",[m])).rows.map(x=>x.id);
+   const unitRows=(await db.$client.query<ContractorView['units'][number]>("SELECT id,kind,parent_id,name FROM app.org_unit WHERE id=ANY($1::uuid[]) ORDER BY kind,name",[readable])).rows;
+   const teamRows=(await db.$client.query<ContractorView['teams'][number]>("SELECT id,branch_id,name FROM app.team WHERE id=ANY($1::uuid[]) ORDER BY name",[readable])).rows;
+   const admin=unitRows.length>0||teamRows.length>0;
    if(query.resource==='organisation'&&!admin) throw new ContractorError("NOT_FOUND");
-   const units=admin?(await db.$client.query<ContractorView['units'][number]>("SELECT id,kind,parent_id,name FROM app.org_unit WHERE app.contractor_allowed($1,'organisation.read',id) ORDER BY kind,name",[m])).rows:[];
-   const teams=admin?(await db.$client.query<ContractorView['teams'][number]>("SELECT id,branch_id,name FROM app.team WHERE app.contractor_allowed($1,'organisation.read',id) ORDER BY name",[m])).rows:[];
-   const members=admin?(await db.$client.query<ContractorView['members'][number]>("SELECT c.membership_id,c.email,c.client_id,NOT app.contractor_member_active(c.membership_id) revoked FROM app.contractor_member c WHERE EXISTS(SELECT 1 FROM app.role_grant g WHERE g.membership_id=c.membership_id AND app.contractor_allowed($1,'organisation.read',g.scope_id)) ORDER BY c.email",[m])).rows:[];
-   const grants=admin?(await db.$client.query<ContractorView['grants'][number]>("SELECT g.*,EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE r.grant_id=g.id) revoked FROM app.role_grant g WHERE app.contractor_allowed($1,'organisation.read',g.scope_id)",[m])).rows:[];
-   const teamMemberships=admin?(await db.$client.query<ContractorView['teamMemberships'][number]>("SELECT DISTINCT ON(membership_id,team_id) membership_id,team_id,active FROM app.team_membership WHERE app.contractor_allowed($1,'organisation.read',team_id) ORDER BY membership_id,team_id,revision DESC",[m])).rows:[];
+   const units=admin?unitRows:[];
+   const teams=admin?teamRows:[];
+   const members=admin?(await db.$client.query<ContractorView['members'][number]>("SELECT c.membership_id,c.email,c.client_id,NOT app.contractor_member_active(c.membership_id) revoked FROM app.contractor_member c WHERE EXISTS(SELECT 1 FROM app.role_grant g WHERE g.membership_id=c.membership_id AND g.scope_id=ANY($1::uuid[])) ORDER BY c.email",[readable])).rows:[];
+   const grants=admin?(await db.$client.query<ContractorView['grants'][number]>("SELECT g.*,EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE r.grant_id=g.id) revoked FROM app.role_grant g WHERE g.scope_id=ANY($1::uuid[])",[readable])).rows:[];
+   const teamMemberships=admin?(await db.$client.query<ContractorView['teamMemberships'][number]>("SELECT DISTINCT ON(membership_id,team_id) membership_id,team_id,active FROM app.team_membership WHERE team_id=ANY($1::uuid[]) ORDER BY membership_id,team_id,revision DESC",[readable])).rows:[];
    const clients=(await db.$client.query<ContractorView['clients'][number]>("SELECT id,name,branch_id FROM app.client_organisation WHERE app.contractor_allowed($1,'contract.read',id) ORDER BY name",[m])).rows;
    const contracts=(await db.$client.query<ContractorView['contracts'][number]>(`SELECT v.id,v.contract_id,v.client_id,v.revision,v.document,v.rule_version_id,r.document rules FROM app.client_contract_version v JOIN app.approval_rule_version r ON(r.tenant_id,r.id)=(v.tenant_id,v.rule_version_id) WHERE app.contractor_allowed($1,'contract.read',v.client_id,v.contract_id) AND ($2::uuid IS NULL OR v.contract_id=$2) ORDER BY v.contract_id,v.revision`,[m,query.resource==='contracts'?query.id??null:null])).rows;
    if(query.id&&(query.resource==='contracts'?!contracts.length:![...units,...teams,...clients].some(x=>x.id===query.id))) throw new ContractorError("NOT_FOUND");
