@@ -172,7 +172,7 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
    await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')",[document,T,id,H]);
    await admin.query("UPDATE app.job SET accepted_quote_version_id=$1 WHERE tenant_id=$2 AND id=$3",[document,T,id]);
    await admin.query(`INSERT INTO app.quote_acceptance(id,tenant_id,job_id,document_id,document_version,document_hash,accepted_total_pence,currency,acceptance_kind,actor_membership_id,stated_customer_name,stated_method,accepted_at)
-    VALUES($1,$2,$3,$4,1,$5,12000,'GBP','builder_attestation',$6,'Fictional customer','synthetic attestation',now())`,[randomUUID(),T,id,document,H,M]);
+    VALUES($1,$2,$3,$4,1,$5,12000,'GBP','builder_attestation',$6,'Fictional customer','verbal',now())`,[randomUUID(),T,id,document,H,M]);
    const input={version:"switch-live.v1" as const,activationId:randomUUID(),capSnapshotId:randomUUID(),syntheticObligationId:randomUUID(),jobId:id,acceptedDocumentId:document,acceptedDocumentVersion:1,acceptedDocumentHash:H,expectedJobRevision:0,acceptedNetValuePence:10000,recoveryCapPence:150,mode:"synthetic_demo" as const,activationTermsVersion:"synthetic_demo_illustrative.v1" as const,feePolicyVersion:"reference_fee_policy_v1" as const,activatedAt:new Date()};
    const command={version:"command.v1" as const,commandId:randomUUID(),commandType:"job.switch_live",semanticKey:`switch:${id}`,actorMembershipId:M,subjectType:"job",subjectRef:id,action:{actionType:"job.switch_live",recipient:null,contentHash:H,aggregateRevision:1,amountPence:7900,currency:"GBP" as const,policyVersion:input.activationTermsVersion,expiresAt:new Date(Date.now()+60000)}};
    return {id,input,command};
