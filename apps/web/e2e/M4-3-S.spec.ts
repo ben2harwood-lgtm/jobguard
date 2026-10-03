@@ -38,6 +38,8 @@ async function persistedSources(page: Page) {
   await click(page, "Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
   await click(page, "Preview immutable quote"); await click(page, "Simulate sending this quote");
   await click(page, "Continue fake worker"); await click(page, "Record practice acceptance"); await click(page, "Start this practice job");
+  // Activation is asynchronous: wait for its persisted result (as m1-15 does) before calling live-job APIs.
+  await expect(page.getByRole("heading", { name: "Live · baseline frozen" })).toBeVisible();
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   const quote = await get(page, `/api/jobs/${jobId}/quotes/delivery`);
   const variationsPath = `/api/jobs/${jobId}/variations`, variationBefore = await get(page, variationsPath);
@@ -134,7 +136,11 @@ test("maps immutable customer sources, verifies exports server-side and invalida
   const unauthorized = await request.get(`/api/recovery-cases/${caseId}/evidence-packs`); expect(unauthorized.status()).toBe(401);
   const forged = await page.request.post(`/api/recovery-cases/${caseId}/evidence-packs`, { data: { version: "evidence-pack-command.v1", commandId: randomUUID(), actorRef: "forged", evidenceVersion: 99 } }); expect(forged.status()).toBe(400);
   await page.reload(); await expect(page.getByTestId("pack-manifest-hash")).toHaveText(changed.manifestHash);
-  await page.goto("/"); await page.locator(`a[href="/jobs/${source.jobId}"]`).click();
+  // The Jobs home is a deliberately filtered fixture list that hides capture-created jobs (packages/db/src/demo-runtime.ts)
+  // and a capture-created job page has no link back to it (workspace-shell.tsx), so no Jobs row exists to click for this
+  // job. Leave through Jobs, then reopen the saved job by a fresh navigation (not a reload) and read the persisted pack.
+  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
+  await page.goto(`/jobs/${source.jobId}#recovery-cases`);
   await expect(page.getByTestId("pack-manifest-hash")).toHaveText(changed.manifestHash);
   const second = await browser.newContext({ storageState: await page.context().storageState() });
   try { const deep = await second.newPage(); await deep.goto(`/jobs/${source.jobId}#recovery-cases`); await expect(deep.getByTestId("pack-manifest-hash")).toHaveText(changed.manifestHash); await expect(deep.getByTestId("pack-attachment-status")).toBeVisible(); }
@@ -146,6 +152,9 @@ test("includes only the merchant case's recorded supplier versions", async ({ pa
   const source = await persistedSources(page);
   const rate = await post(page, "/api/material-rates", { version: "material-rate-command.v1", merchantName: "Fictional Builders Merchant", sku: `PACK-${randomUUID()}`, description: "Fictional building material", pricePence: 2000, priceUnit: "each", taxBasis: "net", effectiveFrom: "2026-09-01", sourceLabel: "Entered synthetic agreement", expectedVersion: 0 });
   await post(page, `/api/jobs/${source.jobId}/materials`, { version: "material-requirement-command.v1", scopeItemId: source.scopeItemId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0 });
+  // A delivery note can only be receipted against an existing purchase-order draft (supplier-document intake rule).
+  const requirement = (await get(page, `/api/jobs/${source.jobId}/materials`)).materials.at(-1);
+  await post(page, `/api/jobs/${source.jobId}/purchase-orders/revisions`, { version: "purchase-order-draft.v1", requirementId: requirement.id, quantity: "40", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
   const documentsPath = `/api/jobs/${source.jobId}/supplier-documents`;
   for (const fixtureId of ["materials-B-delivery", "materials-320-invoice", "materials-B-credit"]) {
     const before = await get(page, documentsPath);
