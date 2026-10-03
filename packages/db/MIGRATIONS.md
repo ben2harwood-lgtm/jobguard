@@ -102,3 +102,37 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 ## 0039 readiness
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
+
+### 0052 — persisted entered-code identity (M0-6L)
+
+Expands the existing restricted `identity` control plane with keyed challenge/session
+hashes, rate windows, immutable invitation grants, a membership discovery index and
+append-only security events. `jobguard_identity` is a separate NOLOGIN group/credential
+boundary: no business table access, owner status, superuser, BYPASSRLS, role inheritance,
+role creation, DDL or truncate permission. Business/worker roles cannot read these tables
+or execute the three narrow identity routines. Identity updates are column-scoped to
+challenge counters/consumption/delivery and session revocation; issued token/user bindings
+and challenge email/digest cannot be rewritten by the identity credential. The operator provisions a separate login;
+Neon bootstrap creates the group before switching to `jobguard_migration` (which cannot
+create roles). The fixture browser harness enables LOGIN only in its disposable database.
+
+Provisioning takes a verified, consumed challenge, never arbitrary tenant/role parameters.
+Signup always creates a new tenant and owner. Acceptance uses the invitation's immutable
+email/tenant/account/role, with tenant-qualified account/membership FKs. FORCE RLS remains
+on `app.account`/`app.membership`; additional migration-owner policies retain the same
+transaction-local tenant predicate. The discovery routine visits only the identity's
+locator rows and rechecks canonical membership revocation/expiry. Identity credentials
+are part of the authentication trust boundary; possession of them is not protected by
+business RLS. SQL privileges and migration-owner-only routines require independent review.
+
+Existing users need no backfill: legacy synthetic users stay in their existing demo path.
+Do not auto-link email addresses to pre-existing identities. Migrations 0042–0051 are
+reserved outside this lane; the runner appends 0052 after the currently supported 0041.
+Fresh-install coverage remains in the tenancy/Neon suites; `identity.integration.test.ts`
+executes upgrade from 0041, repeat migration, races, privilege/catalog checks and rollback.
+These are PostgreSQL tests, not claimed executed in the restricted builder sandbox.
+
+Forward fix: disable identity endpoints/credential, preserve existing tables and add a
+reviewed corrective migration. Rollback of application code is expand compatible: the
+preceding demo ignores these tables. Never drop enrolled identities or tenants to roll
+back; restore rehearsal and real-data retention remain separate release gates.

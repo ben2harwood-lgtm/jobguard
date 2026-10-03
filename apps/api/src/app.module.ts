@@ -29,5 +29,15 @@ import { CommercialIntegrityController } from "./commercial-integrity.controller
 import { CommercialIntegrityApplication } from "./commercial-integrity.application.js";
 import { EvidencePackController } from "./evidence-pack.controller.js";
 
-@Module({ controllers: [HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController], providers:[{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,CommercialIntegrityApplication] })
+import { APP_GUARD } from "@nestjs/core";
+import { IdentityController } from "./auth/identity.controller.js";
+import { IDENTITY_APPLICATION } from "./auth/identity-http.js";
+import { ApplicationAuthGuard } from "./auth/application-auth.guard.js";
+import { createIdentityApplication, type IdentityApplication } from "./auth/identity.application.js";
+import { Inject } from "@nestjs/common";
+// The compiled graph must boot before its global authentication guard can protect routes.
+// DecisionsController's type-only Pool import otherwise emits Function as its DI token.
+Inject(Pool)(DecisionsController, undefined, 0);
+
+@Module({ controllers: [HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController,IdentityController], providers:[{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,CommercialIntegrityApplication,{provide:IDENTITY_APPLICATION,useFactory:()=>{let application:IdentityApplication|undefined;return ()=>application??=createIdentityApplication(process.env)}},{provide:APP_GUARD,useClass:ApplicationAuthGuard}] })
 export class AppModule {}

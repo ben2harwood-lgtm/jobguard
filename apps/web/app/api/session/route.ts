@@ -9,6 +9,7 @@ export async function GET() {
   catch { return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
 }
 export async function POST(request: Request) {
+  if (process.env.JOBGUARD_ENV !== "synthetic_demo") return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});
   try { await syntheticWorkspace(); } catch { return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
   const response = NextResponse.json({ ok: true });
   response.cookies.set("jg_session", randomUUID(), { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/" });

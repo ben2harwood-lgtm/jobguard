@@ -22,6 +22,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_migration NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_runtime LOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_infrastructure NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+  await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_identity NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`ALTER ROLE jobguard_migration NOLOGIN NOCREATEROLE NOINHERIT`);
   await admin.query(`ALTER ROLE jobguard_runtime LOGIN PASSWORD ${quoteLiteral(runtimePassword)} NOCREATEROLE NOINHERIT`);
   await admin.query(`ALTER ROLE jobguard_infrastructure NOLOGIN NOCREATEROLE NOINHERIT`);

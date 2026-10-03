@@ -1,0 +1,50 @@
+# M0-6L identity operations and handoff
+
+Use `/sign-in` for fictional entered-code signup/signin/invitation. `/api/auth/request`,
+`verify`, `session` and `invitations` are thin Next adapters to `IdentityApplication`;
+Nest exposes the same service at `/auth/...` with generated OpenAPI. The demo session
+at `/api/session` remains separate and only works in `synthetic_demo`. Existing synthetic
+business services are blocked outside this mode, including Nest requests bypassing Next.
+Real identity email remains blocked pending D04. No Auth.js dependency is used; a future
+Auth.js implementation belongs only inside `AuthProvider`'s adapter. Mobile clients may
+later exchange an opaque token through the provider-neutral authenticate/CSRF/principal
+contract; no mobile refresh or native sync is implemented here.
+
+Provision `jobguard_identity` separately from business and Graphile credentials; never
+use owner/superuser credentials. Configuration requires `IDENTITY_DATABASE_URL` with that
+username, `AUTH_CODE_SECRET` of at least 32 characters and exact `AUTH_ALLOWED_ORIGIN`.
+Use TLS/approved DB regions before real data. Do not rotate the HMAC key silently: rotation
+invalidates current challenges and sessions; an operator must explicitly plan revocation.
+Keep credentials and tokens out of request/response logging. Secure/HttpOnly/SameSite=strict
+cookies are used even on loopback; the fixture browser tests rely on loopback's secure-cookie
+support. Session expiry is one day and database revocation is checked on every request.
+
+Only the principal bridge constructs real verified tenant contexts. `x-tenant-id` and
+`requested_tenant_id` disagreeing or selecting a non-member tenant fail with
+`TENANT_FORBIDDEN`. The existing synthetic services retain their merged fixed demo context
+helpers; they cannot be used in pilot/production through either deployed composition seam.
+They are not a real-user business path. Revoked membership is checked by the bridge and
+again by the existing command dispatcher; a context alone never approves a commercial action.
+
+An owner can create an invitation via the authenticated endpoint, with session-bound CSRF
+and exact origin. The endpoint returns its immutable reference for fixture use; it sends
+nothing. `/sign-in?invitationId=<reference>` verifies the exact invited email; clients cannot
+supply a role during signup/verification. Owner invitation grants exclude ownership transfer.
+Unknown account/purpose requests share an acknowledgement shape; invitation selectors may
+be unknown without changing request acknowledgement. Fixture codes are displayed only for
+fictional addresses, are ephemeral browser drafts, and are never persisted in browser storage.
+
+The web adapter uses a conservative shared rate bucket because forwarded IP headers are
+untrusted. Before real-user release, the deployment needs a verified edge source for IP
+throttling, pending D04/pilot approval; do not relax throttling by accepting client headers.
+Nest uses socket peer IP, also subject to deployment proxy review. Operators should alert on
+persistent `IDENTITY_UNAVAILABLE`, `DELIVERY_UNAVAILABLE`, blocked route attempts and growing
+pending/unknown delivery records. This task specifies signals, not a deployed alert service.
+No automatic retry of unknown email delivery is implemented. Users can explicitly request a
+new challenge after cooldown; old codes are superseded. Security-event rows contain event type
+and UUID reference only. Retention/pruning of rate windows, events and expired sessions remains
+blocked for real data pending approved D12, with export/deletion and backup gates unchanged.
+
+Technical acceptance requires actual PostgreSQL 16 fresh/upgrade/catalog/race/rollback results,
+Playwright in both projects, prior regressions, and a Claude verdict on the dispatcher commit
+plus separate acceptance. Builder unit checks cannot substitute for those results.
