@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMoney, MAX_MONEY_PENCE, money, MoneyError, moneyFromBigInt, parseMoneyV1, serializeMoney, subtractMoney } from "./money.js";
+import { addMoney, MAX_MONEY_PENCE, money, MoneyError, moneyFromBigInt, parseMoneyV1, parsePoundsToPence, serializeMoney, subtractMoney } from "./money.js";
 import { divideRounded } from "./rational.js";
 
 describe("Money", () => {
@@ -29,5 +29,17 @@ describe("exact rounding", () => {
   });
   it("covers sign-symmetric half-up ties", () => {
     expect([1n, 3n, -1n, -3n].map((n) => divideRounded(n, 2n, "half_up"))).toEqual([1n, 2n, -1n, -2n]);
+  });
+});
+
+describe("decimal pounds input", () => {
+  it.each([["0", 0], ["0.00", 0], ["0.01", 1], ["1.1", 110], ["1.15", 115], ["2.55", 255], ["20.00", 2000], ["10000000000.00", MAX_MONEY_PENCE]])("parses %s exactly", (input, expected) => {
+    expect(parsePoundsToPence(String(input))).toBe(expected);
+  });
+  it.each(["", " ", " 20.00", "20.00 ", "-1.00", "+1", "01.00", ".50", "1.", "1.001", "1.999", "1e2", "NaN", "Infinity", "£20.00", "1,000.00", "1/2"])("rejects invalid input %s without rounding", input => {
+    expect(() => parsePoundsToPence(input)).toThrowError(expect.objectContaining({ code: "invalid_pence" }));
+  });
+  it.each(["10000000000.01", "9007199254740993.00"])("rejects out-of-range %s", input => {
+    expect(() => parsePoundsToPence(input)).toThrowError(expect.objectContaining({ code: "magnitude_exceeded" }));
   });
 });
