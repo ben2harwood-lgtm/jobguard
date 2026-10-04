@@ -7,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, type VerifiedTenantContext, withTenant } from "../src/index.js";
-import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T="11000000-0000-4000-8000-000000000001", A="21000000-0000-4000-8000-000000000002", U="31000000-0000-4000-8000-000000000003", M="41000000-0000-4000-8000-000000000004";
 const context={tenantId:T} as VerifiedTenantContext;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,repo:PracticeInvoiceRepository;
@@ -32,7 +32,7 @@ async function rawRecord(c:ReceiptInput,overrides:Record<string,unknown>={}) {
 }
 beforeAll(async()=>{
  dir=await mkdtemp(join(tmpdir(),"uiwire12-pg-"));
- const port=59000+Math.floor(Math.random()*400);
+ const port=await freePort(59000,400);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await pg.initialise();await pg.start();
  admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});

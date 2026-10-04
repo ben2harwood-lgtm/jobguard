@@ -1,4 +1,24 @@
+import { createServer } from "node:net";
 import type { Pool } from "pg";
+
+const canListen = (host: string, port: number) => new Promise<boolean>(resolve => {
+  const server = createServer();
+  // A host with no IPv6 loopback cannot bind ::1 at all, which is not a conflict.
+  server.once("error", (error: NodeJS.ErrnoException) => resolve(error.code === "EADDRNOTAVAIL" || error.code === "EAFNOSUPPORT"));
+  server.listen({ host, port }, () => server.close(() => resolve(true)));
+});
+/**
+ * A port in [base, base + span) that nothing is listening on, on IPv4 and IPv6 loopback, right now. Embedded clusters used to take a
+ * random port blindly; tools on a shared machine (a Lima VM forwards 59315 and 59316) sit inside those ranges, and a cluster that
+ * cannot bind 127.0.0.1 still reports "ready" while the test connects to whatever owns the port.
+ */
+export async function freePort(base: number, span: number): Promise<number> {
+  for (let attempt = 0; attempt < Math.max(50, span * 2); attempt++) {
+    const port = base + Math.floor(Math.random() * span);
+    if (await canListen("127.0.0.1", port) && await canListen("::1", port)) return port;
+  }
+  throw new Error(`no free port in ${base}..${base + span}`);
+}
 
 /**
  * Close test pools and let their socket shutdown events drain before terminating
