@@ -189,3 +189,26 @@ test("CH-3a quote preview shows its frozen customer and a changed binding needs 
   await expect(page.getByText("queued only for the deterministic fake worker", { exact: false })).toBeVisible();
   expect(await bytes(first.documentId)).toBe(first.contentHash);
 });
+
+// Round 3 (checker finding on 3576f9f): a background refresh must not advance what the draft was edited against.
+test("CH-3a a lifecycle refresh cannot carry a stale draft over another writer's customer revision", async ({ page }) => {
+  test.setTimeout(180000); const jobId = await quotingJob(page);
+  await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  const base = await partiesView(page, jobId); const customerId = base.currentIds.customerId as string;
+  await page.getByLabel("Choose a customer").selectOption(customerId);
+  await page.getByLabel("Customer name", { exact: true }).fill("Stale draft name"); await page.getByLabel("Customer phone (fictional, optional)").fill("07000000002");
+  // Another writer revises the customer (revision 2); the binding is unchanged.
+  const revised = await page.request.post(`/api/jobs/${jobId}/parties`, { data: { version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "revise_customer", customerId, expectedRevision: 1, customer: { version: "customer.v1", name: "Renamed elsewhere", type: "person", email: "practice-customer@example.invalid" } } });
+  expect(revised.status()).toBe(200);
+  // The app's own lifecycle event makes the panel re-read the job in the background.
+  const refreshed = page.waitForResponse(r => r.url().includes(`/api/jobs/${jobId}/parties`) && r.request().method() === "GET");
+  await page.evaluate(id => window.dispatchEvent(new CustomEvent("job-lifecycle-changed", { detail: id })), jobId); await refreshed;
+  // The stale draft is refused and reloaded from what is saved, not kept beside a refreshed baseline.
+  await expect(conflictAlert(page)).toBeVisible();
+  await expect(page.getByLabel("Customer name", { exact: true })).toHaveValue("Renamed elsewhere");
+  await expect(page.getByLabel("Customer phone (fictional, optional)")).toHaveValue("");
+  await B(page, "Save customer and site").click();
+  await expect(page.getByTestId("party-customer")).toHaveText("Renamed elsewhere");
+  const after = await partiesView(page, jobId); const customer = after.customers.find((c: { id: string }) => c.id === customerId);
+  expect(customer.revision).toBe(2); expect(customer.customer.name).toBe("Renamed elsewhere"); expect(customer.customer.phone).toBeUndefined();
+});

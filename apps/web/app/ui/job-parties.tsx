@@ -9,6 +9,21 @@ const CHANGED_MESSAGE = "This job changed. Reload the details before saving agai
 const WENT_LIVE_MESSAGE = "This job went live after you opened these details. The latest details are now shown; a change now needs a reason for the correction.";
 const REASON_MESSAGE = "A change to a live job needs a reason for the correction. Add the reason and save again.";
 class PartiesConflict extends Error {}
+type DraftRefs = { customerId: string; payer: string; reuse: string };
+const isLive = (status: string) => ["live", "invoiced", "paid"].includes(status);
+/** Has what the draft depends on (binding, referenced customer, payer or site revisions) changed since `observed`? Job progress alone is not a change. */
+function partiesChanged(observed: View, latest: View, refs: DraftRefs): boolean {
+  if ((observed.currentIds?.bindingId ?? null) !== (latest.currentIds?.bindingId ?? null)) return true;
+  const revisionOf = (view: View, id: string) => view.customers.find(c => c.id === id)?.revisionId ?? null;
+  const referenced = [refs.customerId, observed.customers.find(c => c.revisionId === refs.payer)?.id ?? ""].filter(Boolean);
+  if (referenced.some(id => revisionOf(observed, id) !== revisionOf(latest, id))) return true;
+  return !!refs.reuse && observed.sites.find(x => x.id === refs.reuse)?.revisionId !== latest.sites.find(x => x.id === refs.reuse)?.revisionId;
+}
+/** Why a save must be refused before anything is written, or null when the draft is still current. */
+function conflictSince(observed: View, latest: View, refs: DraftRefs): string | null {
+  if (isLive(observed.status) !== isLive(latest.status)) return WENT_LIVE_MESSAGE;
+  return partiesChanged(observed, latest, refs) ? CHANGED_MESSAGE : null;
+}
 export function JobParties({ jobId }: { jobId: string }) {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [customerId, setCustomerId] = useState(""), [name, setName] = useState("Practice Customer"), [type, setType] = useState<(typeof customerTypes)[number]>("person");
@@ -22,8 +37,23 @@ export function JobParties({ jobId }: { jobId: string }) {
     if (!response.ok) throw new Error("Customer and site could not load. Try again.");
     return jobPartiesWorkspaceV1.parse(await response.json());
   }, [jobId]);
-  const load = useCallback(async () => { const snapshot = await fetchView(); setView(snapshot); return snapshot; }, [fetchView]);
-  useEffect(() => { const refresh=(event:Event)=>{if((event as CustomEvent).detail===jobId)void load().catch(e=>setError(e.message));};void load().catch(e=>setError(e.message));window.addEventListener("job-lifecycle-changed",refresh);return()=>window.removeEventListener("job-lifecycle-changed",refresh); }, [load,jobId]);
+  // `view` is what the panel shows and may be refreshed at any time. `baseline` is what the draft was edited against: it is set when the
+  // panel first loads, after a save, and when a stale draft is reloaded. Background refreshes never advance it.
+  const baseline = useRef<View | null>(null), draftRefs = useRef({ customerId: "", payer: "", reuse: "" });
+  draftRefs.current = { customerId, payer, reuse };
+  const load = useCallback(async () => { const snapshot = await fetchView(); setView(snapshot); baseline.current ??= snapshot; return snapshot; }, [fetchView]);
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      if ((event as CustomEvent).detail !== jobId) return;
+      void fetchView().then(latest => {
+        setView(latest);
+        // Another writer changed what the draft depends on: reload the draft now rather than keep stale text beside a refreshed view.
+        if (baseline.current && partiesChanged(baseline.current, latest, draftRefs.current)) { baseline.current = latest; resetDraft(latest); setError(CHANGED_MESSAGE); }
+      }).catch(e => setError(e.message));
+    };
+    void load().catch(e => setError(e.message)); window.addEventListener("job-lifecycle-changed", refresh); return () => window.removeEventListener("job-lifecycle-changed", refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, fetchView, jobId]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
   const site = { version: "site.v1" as const, addressLines: [address], town, postcode, ...(unit ? { unit } : {}), ...(uprn ? { uprn } : {}) };
   let key: string | null = null; try { key = siteMatchKey(site); } catch { /* The form shows validation errors on save. */ }
@@ -47,27 +77,18 @@ export function JobParties({ jobId }: { jobId: string }) {
     setPayer(ids.payingPartyId === ids.customerId ? "" : snapshot.customers.find(c => c.id === ids.payingPartyId)?.revisionId ?? "");
     setAddress(saved.site.addressLines[0] ?? ""); setTown(saved.site.town); setPostcode(saved.site.postcode); setUnit(saved.site.unit ?? ""); setUprn(saved.site.uprn ?? "");
   }
-  /** What this draft was edited against is no longer what the server holds. Unrelated job progress (scope confirmed, quote saved) is not a conflict. */
-  function conflictSince(observed: View, latest: View): string | null {
-    const live = (status: string) => ["live", "invoiced", "paid"].includes(status);
-    if (live(observed.status) !== live(latest.status)) return WENT_LIVE_MESSAGE;
-    if ((observed.currentIds?.bindingId ?? null) !== (latest.currentIds?.bindingId ?? null)) return CHANGED_MESSAGE;
-    const revisionOf = (view: View, id: string) => view.customers.find(c => c.id === id)?.revisionId ?? null;
-    const referenced = [customerId, observed.customers.find(c => c.revisionId === payer)?.id ?? ""].filter(Boolean);
-    if (referenced.some(id => revisionOf(observed, id) !== revisionOf(latest, id))) return CHANGED_MESSAGE;
-    if (reuse && observed.sites.find(x => x.id === reuse)?.revisionId !== latest.sites.find(x => x.id === reuse)?.revisionId) return CHANGED_MESSAGE;
-    return null;
-  }
+  /** Choosing a customer, payer or site copies the values being shown into the draft, so the baseline now records those revisions. */
+  function rebase(change: (b: View) => View) { if (baseline.current) baseline.current = change(baseline.current); }
   async function save() {
-    if (!view || busy) return; setBusy(true); setError("");
+    const observed = baseline.current; if (!view || !observed || busy) return; setBusy(true); setError("");
     try {
       // The job moves on without this panel (scope confirmed, quote saved), so bind against the revision the server holds now,
       // but only when the parties and customer revisions this draft was edited against are unchanged. Otherwise nothing is
       // written: show the latest details and let the user decide. The database still compares the expected revision, so two
       // writers racing on one revision get one success and one typed conflict.
       const latest = await fetchView();
-      const conflict = conflictSince(view, latest);
-      if (conflict) { setView(latest); resetDraft(latest); setError(conflict); return; }
+      const conflict = conflictSince(observed, latest, draftRefs.current);
+      if (conflict) { setView(latest); baseline.current = latest; resetDraft(latest); setError(conflict); return; }
       setView(latest);
       const selected = latest.customers.find(c => c.id === customerId);
       const customer = { version: "customer.v1" as const, name, type, ...(email ? { email } : {}), ...(phone ? { phone } : {}), ...(companyNumber ? { companyNumber } : {}) };
@@ -77,9 +98,9 @@ export function JobParties({ jobId }: { jobId: string }) {
       const siteResult = await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_site", site, confirmSamePlace: confirm, ...(reuse ? { reuseSiteId: reuse } : {}) });
       await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: ["live", "invoiced", "paid"].includes(latest.status) ? "correct" : "bind", expectedJobRevision: latest.jobRevision,
         parties: { version: "job-parties.v1", customerRevisionId: customerResult.revisionId, siteRevisionId: siteResult.revisionId, payingPartyRevisionId: payer || null }, ...(reason ? { reason } : {}) });
-      await load(); window.dispatchEvent(new CustomEvent("job-parties-saved", { detail: jobId }));
+      const saved = await fetchView(); setView(saved); baseline.current = saved; window.dispatchEvent(new CustomEvent("job-parties-saved", { detail: jobId }));
     } catch (e) {
-      if (e instanceof PartiesConflict) { try { const latest = await fetchView(); setView(latest); resetDraft(latest); } catch { /* the message below still tells the user to reload */ } }
+      if (e instanceof PartiesConflict) { try { const latest = await fetchView(); setView(latest); baseline.current = latest; resetDraft(latest); } catch { /* the message below still tells the user to reload */ } }
       setError(e instanceof Error ? e.message : "Details could not be saved.");
     } finally { setBusy(false); }
   }
@@ -99,19 +120,19 @@ export function JobParties({ jobId }: { jobId: string }) {
     {!view ? <button onClick={() => void load().catch(e => setError(e.message))}>Try loading details again</button> : <form onSubmit={e => { e.preventDefault(); void save(); }} aria-label="Customer and site details">
       <p>Unsaved draft — use Save customer and site to record it.</p>
       <fieldset disabled={busy} style={{ minWidth: 0, border: 0, padding: 0 }}>
-        <label>Choose a customer<select aria-label="Choose a customer" value={customerId} onChange={e => { setCustomerId(e.target.value); const c = view.customers.find(x => x.id === e.target.value); if (c) { setName(c.customer.name); setType(c.customer.type); setEmail(c.customer.email ?? ""); setPhone(c.customer.phone ?? "");setCompanyNumber(c.customer.companyNumber ?? ""); } }}><option value="">Create a customer</option>{view.customers.map(c => <option key={c.id} value={c.id}>{c.customer.name}</option>)}</select></label>
+        <label>Choose a customer<select aria-label="Choose a customer" value={customerId} onChange={e => { setCustomerId(e.target.value); const c = view.customers.find(x => x.id === e.target.value); if (c) { rebase(b => ({ ...b, customers: [...b.customers.filter(x => x.id !== c.id), c] })); setName(c.customer.name); setType(c.customer.type); setEmail(c.customer.email ?? ""); setPhone(c.customer.phone ?? "");setCompanyNumber(c.customer.companyNumber ?? ""); } }}><option value="">Create a customer</option>{view.customers.map(c => <option key={c.id} value={c.id}>{c.customer.name}</option>)}</select></label>
         <label>Customer name<input aria-label="Customer name" value={name} onChange={e => setName(e.target.value)} required maxLength={160}/></label>
         <label>Customer type<select aria-label="Customer type" value={type} onChange={e => setType(e.target.value as typeof type)}>{customerTypes.map((t, i) => <option key={t} value={t}>{labels[i]}</option>)}</select></label>
         <label>Customer email (fictional, optional)<input aria-label="Customer email (fictional, optional)" value={email} onChange={e => setEmail(e.target.value)} type="email"/></label>
         <label>Customer phone (fictional, optional)<input aria-label="Customer phone (fictional, optional)" value={phone} onChange={e=>setPhone(e.target.value)} maxLength={40}/></label>
         <label>Company number (optional)<input aria-label="Company number (optional)" value={companyNumber} onChange={e=>setCompanyNumber(e.target.value.toUpperCase())} maxLength={8}/></label>
-        <label>Who pays?<select aria-label="Who pays?" value={payer} onChange={e => setPayer(e.target.value)}><option value="">Same as customer</option>{view.customers.map(c => <option key={c.id} value={c.revisionId}>{c.customer.name}</option>)}</select></label>
+        <label>Who pays?<select aria-label="Who pays?" value={payer} onChange={e => { const c = view.customers.find(x => x.revisionId === e.target.value); if (c) rebase(b => ({ ...b, customers: [...b.customers.filter(x => x.id !== c.id), c] })); setPayer(e.target.value); }}><option value="">Same as customer</option>{view.customers.map(c => <option key={c.id} value={c.revisionId}>{c.customer.name}</option>)}</select></label>
         <label>Premises address<input aria-label="Premises address" value={address} onChange={e => { setAddress(e.target.value); setReuse(""); setConfirm(false); }} required/></label>
         <label>Town<input aria-label="Town" value={town} onChange={e => setTown(e.target.value)} required/></label>
         <label>UK postcode<input aria-label="UK postcode" value={postcode} onChange={e => setPostcode(e.target.value)} required/></label>
         <label>Flat or unit (optional)<input aria-label="Flat or unit (optional)" value={unit} onChange={e => { setUnit(e.target.value); setReuse(""); setConfirm(false); }}/></label>
         <label>UPRN (optional)<input aria-label="UPRN (optional)" value={uprn} onChange={e => setUprn(e.target.value)} inputMode="numeric"/></label>
-        {suggestions.length > 0 && <><label>Possible existing places<select aria-label="Possible existing places" value={reuse} onChange={e => { setReuse(e.target.value); setConfirm(false); }}><option value="">Create a separate site</option>{suggestions.map(s => <option key={s.id} value={s.id}>{s.site.unit ?? "No unit recorded"} · {s.site.addressLines.join(", ")}{key && JSON.stringify(JSON.parse(s.matchKey)) === key ? " (matching address)" : " (near match)"}</option>)}</select></label>{reuse && <label><input type="checkbox" aria-label="I confirm this is the same place" checked={confirm} onChange={e => setConfirm(e.target.checked)}/>I confirm this is the same place</label>}<p>Suggestions are never merged automatically. Different flats remain separate.</p></>}
+        {suggestions.length > 0 && <><label>Possible existing places<select aria-label="Possible existing places" value={reuse} onChange={e => { const x = view.sites.find(y => y.id === e.target.value); if (x) rebase(b => ({ ...b, sites: [...b.sites.filter(y => y.id !== x.id), x] })); setReuse(e.target.value); setConfirm(false); }}><option value="">Create a separate site</option>{suggestions.map(s => <option key={s.id} value={s.id}>{s.site.unit ?? "No unit recorded"} · {s.site.addressLines.join(", ")}{key && JSON.stringify(JSON.parse(s.matchKey)) === key ? " (matching address)" : " (near match)"}</option>)}</select></label>{reuse && <label><input type="checkbox" aria-label="I confirm this is the same place" checked={confirm} onChange={e => setConfirm(e.target.checked)}/>I confirm this is the same place</label>}<p>Suggestions are never merged automatically. Different flats remain separate.</p></>}
         {["live", "invoiced", "paid"].includes(view.status) && <label>Reason for correction<input aria-label="Reason for correction" value={reason} onChange={e => setReason(e.target.value)} required maxLength={500}/></label>}
         <button type="submit" className="primary" disabled={!!reuse && !confirm} style={{ minHeight: 44, minWidth: 44 }}>Save customer and site</button>
       </fieldset>
