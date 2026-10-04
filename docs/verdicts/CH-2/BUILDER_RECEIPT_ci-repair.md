@@ -339,3 +339,53 @@ The first full run after the merge failed three things that the merge exposed (t
 - `beginUpload` returns a freshly signed upload URL on a replay by design (it expires in minutes); every other field is the first result.
 - The signed-URL point and the placement second-id rule are the two places where a command's identity is recorded by something other than one table row; both are in the contract test.
 - No new founder question. The Jobs-list question from rounds 2 to 4 stays open.
+
+---
+
+# Round 6 — one atomic identity across stores (Sol REPAIR on aaf2fa8)
+
+**Repair builder:** Claude Sonnet 5.5. **Not independently verified, not accepted.** Input: GPT-6.1 Sol high check `ch-2-solcheck-20261004T091221.md` (REPAIR, five P2, no P1). The C7 Jobs-list point is closed by Ben's decision that the deep-link substitute applies to all JobGuard tasks. Per the coordinator the new checks extend the registry-driven contract test rather than adding one-offs.
+
+## Findings
+
+| Finding | Status | How |
+|---|---|---|
+| P2-1 Command identity split across independent stores | **Fixed** | New `app.watchdog_command_identity` (still 0050, not renumbered): every one of the 17 commands claims its id first, in the transaction that completes it and before any audit lock, with job, kind and request hash, whichever store holds its result (command receipt, upload or evidence row, or `app.watchdog_command_result`, now keyed to the identity). A racing claim waits on the primary key and then conflicts. Both tables stay FORCE RLS, migration-owned, runtime SELECT/INSERT only; the identity table has the live-job insert trigger. |
+| P2-2 Finalisation no-ops lose their command identity | **Fixed** | Finalisation answered by an object that already exists claims the identity and stores its first result; the identity is claimed only where the command completes (the registering transaction or the no-op answer), the first transaction only reads. |
+| P2-3 Upload retries accept changed payload and return changed metadata | **Fixed** | The client's capture time is part of the identity (a change conflicts); the server-generated expiry is not (an exact retry carries a new one), and every replayed field, including the first expiry, is read back from the stored upload row. The round-5 receipt's claim that only the signed URL varies is now true. |
+| P2-4 Legacy evaluation replay depends on current sources | **Fixed** | A legacy evaluation is resolved before today's sources are read and is validated against the original, immutable sources of its own match revision, so it replays after the sources advance. |
+| P2-5 Evidence-pack fixture bypasses the lifecycle commands | **Fixed** | The fixture now reaches live through the real lifecycle routine (`start_quote`, `accept_quote`, `switch_live`, then `issue_invoice` where billing begins; the unrelated job likewise), with no direct status write and no temporary override. |
+
+## What the contract test now asserts, for each of the 17 registry-derived commands
+
+First-result replay after the job moves on; changed-payload and cross-job conflicts (as before); an id used by one kind of command cannot run in any of the other 16, including the id of a successful no-op (17 × 16 probes); two commands racing for one id in different kinds on different jobs leave exactly one winner (17 pairs); parallel duplicates of one command replay one result (17 cases); exact retries whose server-generated fields differ replay the first result, and a changed capture time conflicts; finalisation answered by an existing object keeps its identity. Two real defects surfaced and were fixed: writing the identity at the end of a transaction deadlocked against a command that claimed it early and then wanted the audit lock (every command now claims first), and parallel duplicate placements raced.
+
+## Commits
+
+| SHA | Subject |
+|---|---|
+| c5d9ab8 | test(db): extend the registry-driven replay contract across kinds, races and retries |
+| 951eb44 | fix(db): one atomic tenant-wide identity for all 17 commands; upload, finalise and legacy evaluate |
+| (this commit) | docs(verdicts): CH-2 round-6 receipt |
+
+## Commands run (same Mac and heavy-slot rules)
+
+| Command | Exit | Result |
+|---|---|---|
+| contract and legacy-evaluation suites, unchanged code | 1 | red as intended: 27 of 58 failed (all 17 per-command cases, 8 races, parallel placement duplicates, legacy evaluation) |
+| `pnpm test:db` (twice, final code) | 0 | 43 files, 291 tests |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| `pnpm typecheck` | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7/7 tasks plus custom lints |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `ch-2` passed |
+| `pnpm openapi:check` | 0 | matches |
+| `git diff --check` | 0 | clean |
+| `pnpm build` | 0 | 7/7 tasks |
+| `pnpm test` | 1, twice | node tools 39; config 2; storage 4; ai 72; core 446; api 133; web 63 all passed. The db step passed 269 of 291 then 285 of 291 with only `beforeAll` hook timeouts (UIWIRE-12 on the first run; practice-scope and sandbox on the second) while the Mac's load average was 28 to 44 from other agents' suites; the same db suite passed in full, 43 files and 291 tests, in `pnpm test:db` on both final-code runs. No test or timeout was changed. |
+| e2e, whole suite, both projects | 1 | 171 passed, 1 failed: `UIWIRE-1.spec.ts` "split and merge" (desktop), the intermittent capture-review race noted since round 1 (the spec reloads right after Save review without waiting for the confirmation); CH-2 touches none of that screen |
+
+## Residual
+
+- The local `pnpm test` timeouts are load-related; GitHub CI is the arbiter for the full run.
+- The UIWIRE-1 race is not fixed here (another task's lane) and is unchanged.
+- No new founder question; the Jobs-list question is closed by decision.
