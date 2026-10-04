@@ -3,6 +3,8 @@ import{createHash,randomUUID}from"node:crypto";import{mkdtemp,rm}from"node:fs/pr
 
 describe("readiness command replay returns the first result and is bound to its job",()=>{
  const at="2026-03-30T08:00:00.000Z",on="2026-03-27T09:00:00.000Z";
+ // Direct fixture inserts pass the same BEFORE INSERT live guard as the runtime role, so they carry the tenant context.
+ const asTenant=async(sql:string,params:unknown[])=>{const client=await admin.connect();try{await client.query("SELECT set_config('app.tenant_id',$1,false)",[tenant]);return await client.query(sql,params)}finally{await client.query("RESET app.tenant_id");client.release()}};
  const counts=async(j:string)=>(await admin.query("SELECT (SELECT count(*)::int FROM app.planned_work_revision WHERE job_id=$1) plans,(SELECT count(*)::int FROM app.readiness_snapshot WHERE job_id=$1) snapshots,(SELECT count(*)::int FROM app.readiness_decision WHERE job_id=$1) decisions",[j])).rows[0];
  it("replays an earlier plan and advance as they first returned, after later plans exist",async()=>{
   const repo=new ReadinessRepository(runtime),j=randomUUID();await importWatchdogFixtureJob(admin,tenant,j);
@@ -31,13 +33,44 @@ describe("readiness command replay returns the first result and is bound to its 
   expect(await repo.advance(ctx,a,{commandId:cmd,scenarioNow:at})).toEqual(advancedA);
   expect(await repo.record(ctx,a,{commandId:planA,scenarioNow:on})).toMatchObject({snapshot:{id:viewA.snapshot?.id}});
  });
- it("still replays a decision stored under the earlier request hash, on its own job only",async()=>{
+ it("still replays a decision stored before command results existed, on its own job only",async()=>{
+  const repo=new ReadinessRepository(runtime),a=randomUUID(),b=randomUUID();await importWatchdogFixtureJob(admin,tenant,a);await importWatchdogFixtureJob(admin,tenant,b);
+  const planned=await repo.record(ctx,a,{commandId:randomUUID(),scenarioNow:on});await repo.record(ctx,b,{commandId:randomUUID(),scenarioNow:on});
+  const cmd=randomUUID(),input={commandId:cmd,scenarioNow:at};
+  // Fixture: the decision row exactly as the earlier code wrote it (request hash over the input only), with no command-result row.
+  await asTenant("INSERT INTO app.readiness_decision(id,tenant_id,job_id,command_id,snapshot_id,revision,decision_kind,rule_revision,source_facts_hash,adapter_reading_hash,due_at,actor_ref,subject_ref,payload_hash,audit_event_id)SELECT $1,tenant_id,job_id,$2,id,1,'due_review',rule_revision,source_facts_hash,adapter_reading_hash,$3,'system:synthetic-scheduler',job_id,$4,audit_event_id FROM app.readiness_snapshot WHERE tenant_id=$5 AND id=$6",[randomUUID(),cmd,at,createHash("sha256").update(JSON.stringify(input)).digest("hex"),tenant,planned.snapshot?.id]);
+  const replayed=await repo.advance(ctx,a,input);expect(replayed).toMatchObject({dueReviewDecisions:1,snapshot:{id:planned.snapshot?.id}});
+  expect(await repo.advance(ctx,a,input)).toEqual(replayed);
+  await expect(repo.advance(ctx,a,{...input,scenarioNow:"2026-03-31T08:00:00.000Z"})).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+  await expect(repo.advance(ctx,b,input)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+  expect((await admin.query("SELECT count(*)::int n FROM app.watchdog_command_result WHERE command_id=$1",[cmd])).rows[0].n).toBe(0);
+ });
+ it("keeps a successful no-op advance's command identity: replay returns its first result, never a changed payload, another job or a later decision",async()=>{
   const repo=new ReadinessRepository(runtime),a=randomUUID(),b=randomUUID();await importWatchdogFixtureJob(admin,tenant,a);await importWatchdogFixtureJob(admin,tenant,b);
   await repo.record(ctx,a,{commandId:randomUUID(),scenarioNow:on});await repo.record(ctx,b,{commandId:randomUUID(),scenarioNow:on});
-  const cmd=randomUUID(),input={commandId:cmd,scenarioNow:at},advancedA=await repo.advance(ctx,a,input);
-  // Fixture: a decision written before request hashes were bound to the job (the earlier hash covered the input only).
-  await admin.query("UPDATE app.readiness_decision SET payload_hash=$1 WHERE tenant_id=$2 AND command_id=$3",[createHash("sha256").update(JSON.stringify(input)).digest("hex"),tenant,cmd]);
-  expect(await repo.advance(ctx,a,input)).toEqual(advancedA);
-  await expect(repo.advance(ctx,b,input)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+  const creating={commandId:randomUUID(),scenarioNow:at},noop={commandId:randomUUID(),scenarioNow:at};
+  const created=await repo.advance(ctx,a,creating),noopResult=await repo.advance(ctx,a,noop);
+  expect(created.dueReviewDecisions).toBe(1);expect(noopResult).toEqual(created);
+  expect((await admin.query("SELECT count(*)::int n FROM app.readiness_decision WHERE job_id=$1",[a])).rows[0].n).toBe(1);
+  await expect(repo.advance(ctx,a,{...noop,scenarioNow:"2026-03-31T08:00:00.000Z"})).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+  await expect(repo.advance(ctx,b,noop)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+  expect((await admin.query("SELECT count(*)::int n FROM app.readiness_decision WHERE job_id=$1",[b])).rows[0].n).toBe(0);
+  const later=await repo.record(ctx,a,{commandId:randomUUID(),scenarioNow:on,resolved:true});expect(later.snapshot?.revision).toBe(2);
+  expect(await repo.advance(ctx,a,noop)).toEqual(noopResult);
+  expect(await repo.advance(ctx,a,creating)).toEqual(created);
+  expect((await admin.query("SELECT count(*)::int n FROM app.readiness_decision WHERE job_id=$1",[a])).rows[0].n).toBe(1);
+  expect((await admin.query("SELECT command_id FROM app.watchdog_command_result WHERE job_id=$1 AND command_type='readiness.advance' ORDER BY created_at",[a])).rows.map(r=>r.command_id).sort()).toEqual([creating.commandId,noop.commandId].sort());
+ });
+ it("serialises concurrent duplicates into one stored command, and refuses a concurrent reuse on another job",async()=>{
+  const repo=new ReadinessRepository(runtime),a=randomUUID(),b=randomUUID();await importWatchdogFixtureJob(admin,tenant,a);await importWatchdogFixtureJob(admin,tenant,b);
+  await repo.record(ctx,a,{commandId:randomUUID(),scenarioNow:on});await repo.record(ctx,b,{commandId:randomUUID(),scenarioNow:on});
+  const same={commandId:randomUUID(),scenarioNow:at},results=await Promise.all([1,2,3,4].map(()=>repo.advance(ctx,a,same)));
+  for(const result of results)expect(result).toEqual(results[0]);
+  expect((await admin.query("SELECT count(*)::int n FROM app.watchdog_command_result WHERE command_id=$1",[same.commandId])).rows[0].n).toBe(1);
+  expect((await admin.query("SELECT count(*)::int n FROM app.readiness_decision WHERE job_id=$1",[a])).rows[0].n).toBe(1);
+  const shared={commandId:randomUUID(),scenarioNow:at},outcomes=await Promise.allSettled([repo.advance(ctx,a,shared),repo.advance(ctx,b,shared)]);
+  expect(outcomes.filter(o=>o.status==="fulfilled")).toHaveLength(1);
+  const refused=outcomes.find(o=>o.status==="rejected") as PromiseRejectedResult;expect(String(refused.reason)).toContain("IDEMPOTENCY_CONFLICT");
+  expect((await admin.query("SELECT count(*)::int n FROM app.watchdog_command_result WHERE command_id=$1",[shared.commandId])).rows[0].n).toBe(1);
  });
 });
