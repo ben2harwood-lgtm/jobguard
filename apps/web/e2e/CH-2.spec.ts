@@ -89,3 +89,43 @@ test("watchdog panels require the persisted live state and retain authoritative 
   await page.screenshot({ path: `test-results/CH-2-${info.project.name}.png`, fullPage: true });
   await secondContext.close();
 });
+
+// The Jobs list shows the demo's seeded jobs only: a captured job has its own "Continue this job" flow and
+// is reopened by deep link above. These two seeded jobs are reached through their actual Jobs links.
+const seededJobs = [
+  { title: "Kitchen extension", id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", label: "Work under way", status: "live" },
+  { title: "Loft conversion", id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", label: "Quote being prepared", status: "quoting" },
+] as const;
+async function signIn(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Start the demo", exact: true }).click();
+  const skip = page.getByRole("button", { name: "Skip tour", exact: true });
+  await skip.waitFor({ state: "visible" }); await skip.click();
+}
+for (const seeded of seededJobs) {
+  test(`${seeded.title} reopens through its Jobs link and the persisted ${seeded.status} state decides the watchdog`, async ({ page, browser }) => {
+    await signIn(page);
+    const link = page.getByRole("article").filter({ hasText: seeded.title }).locator(`a[href="/jobs/${seeded.id}"]`);
+    await expect(link).toBeVisible(); await link.click();
+    await page.waitForURL(`**/jobs/${seeded.id}`);
+    await expect(page.getByTestId("job-status")).toHaveText(seeded.label);
+    await expect(page.getByTestId("job-id")).toHaveText(seeded.id);
+    const read = async (client: Page, step: string) => (await jsonResult(client.request.get(`/api/jobs/${seeded.id}`), step)).job;
+    const persisted = await read(page, "Read persisted lifecycle");
+    expect(persisted.status).toBe(seeded.status); expect(persisted.id).toBe(seeded.id);
+    if (seeded.status !== "live") {
+      // A real write attempt is refused and leaves the job and its inputs exactly as they were.
+      const refused = await page.request.post(`/api/jobs/${seeded.id}/readiness/plan`, { data: { version: "readiness-plan.v1", commandId: crypto.randomUUID(), scenarioNow: "2026-03-27T09:00:00.000Z" } });
+      expect(refused.status()).toBe(409); expect(await refused.json()).toEqual({ code: "JOB_NOT_LIVE" });
+      expect((await jsonResult(page.request.get(`/api/jobs/${seeded.id}/readiness`), "Refused plan has no snapshot")).snapshot).toBeNull();
+      expect(await read(page, "Job unchanged by the refusal")).toEqual(persisted);
+    }
+    await page.reload();
+    await expect(page.getByTestId("job-status")).toHaveText(seeded.label);
+    const secondContext = await browser.newContext({ storageState: await page.context().storageState() });
+    const second = await secondContext.newPage(); await second.goto(`/jobs/${seeded.id}`);
+    await expect(second.getByTestId("job-status")).toHaveText(seeded.label);
+    expect(await read(second, "Second client lifecycle")).toEqual(persisted);
+    await secondContext.close();
+  });
+}
