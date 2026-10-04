@@ -5,8 +5,14 @@ Date: 2026-10-04. Builder: **Claude Sonnet 5.5** (repair 6, on top of repairs 1 
 
 ## Binding
 
-- Branch `codex/sandbox/m4-1-s-repair`, PR #103, previous head `2674fe4`. `origin/main` is still `b039abf` (already merged in). No lane change.
-- Commits (all end `Co-Authored-By: Claude Sonnet 5.5`): `614c5b1` tests written first; `d681012` the fix; `f216043` a one-line repair of a comment I broke in the e2e spec (it failed typecheck in the first full run and was fixed before anything was pushed).
+- Branch `codex/sandbox/m4-1-s-repair`, PR #103. Previous pushed head `f53d2be` (CI had passed on it, but the PR then became CONFLICTING because #101 reached main). Final head: see the coordinator report (this receipt is the last commit).
+- Commits (all end `Co-Authored-By: Claude Sonnet 5.5`): `614c5b1` tests written first; `d681012` the fix; `f216043` a one-line repair of a comment I broke in the e2e spec (it failed typecheck in the first full run and was fixed before anything was pushed); `9a1a7a5` the merge of `origin/main` 29826ee (#101, migration 0042); this receipt.
+- Lane `m4-1-s-repair` unchanged; lane lint passes against the new main.
+
+## Merge with main (#101, M4-3-S-R) and recorded sources
+
+- Resolved: `migrate.ts` registers 0042 then 0043; migration-count assertions are main's count plus one (**44**; the `0000..0042` range check stays 43); `MIGRATIONS.md` keeps 0041, 0042, then 0043; `evidence-pack-repository.ts` is main's version unchanged (it already canonicalises UUID lock keys and reads claims and events directly, so none of this branch's edit is needed); `recovery-cases.tsx` is main's UI (recorded-source picker) with this branch's behaviours re-applied (parsed money, error focus, job fee liability and postings, source links and details), and the client-asserted `reviewerRef: "practice-owner"` that #101 had re-added is removed again (the server derives the reviewer); the lane registry is main's file plus this lane.
+- **Recorded source references from #101 are accepted.** Case opening resolves a recorded id with the same predicates #101's pack loader uses (customer invoice for the job; supplier agreement rate used on the job; ready supplier invoice or delivery document by version or document id). Proof in the full browser run below: `M4-3-S.spec.ts` (#101) opens cases through the UI with recorded invoice and rate/invoice ids, then builds and checks evidence packs, in both projects; plus this branch's PostgreSQL tests for accepted and refused recorded ids. Practice labels remain accepted (Ben's decision) and fail closed in #101's pack loader, as #101 designed.
 
 ## Founder decision recorded (Sol P2-2 and P2-3)
 
@@ -29,27 +35,27 @@ Red before any fix (`m41r-logs/r6-red-db.log`): core, `prevent` with landed prin
 | 2 (P2) | C7 Jobs navigation | **CLOSED by founder decision** | see above |
 | 3 (P2) | Fictional-source disposition | **CLOSED by founder decision** | see above |
 
-## Commands actually run on the final code
+## Commands actually run on the merged head
 
-`CI=1`, `LANE_BASE_REF=origin/main`; database and browser commands inside `heavy-slot m41r`. Logs `m41r-logs/r6b-*.log`.
+`CI=1`, `LANE_BASE_REF=origin/main`; database and browser commands inside `heavy-slot m41r`. Logs `m41r-logs/r7-*.log`.
 
 | Command | Exit | Result |
 |---|---|---|
 | `pnpm install --frozen-lockfile` | 0 | up to date |
-| `pnpm typecheck` | 0 | 7/7 (6 cached) |
-| `pnpm lint` | 0 | 7/7 (6 cached); lane `m4-1-s-repair` passes |
+| `pnpm typecheck` | 0 | 7/7 |
+| `pnpm lint` | 0 | 7/7; lane `m4-1-s-repair` passes |
 | `pnpm lint:lanes` | 0 | passed |
-| `pnpm build` | 0 | 7/7 (6 cached) |
+| `pnpm build` | 0 | 7/7 |
 | `pnpm openapi:check` | 0 | matches |
-| `TURBO_FORCE=true heavy-slot m41r pnpm test` | 0 | 0 of 13 cached: `node --test` 39/39; core 612 (306 unique, also run from `dist`); ai 72; api 78; web 61 (8 files); db 169 (34 files); storage 4; config 2 |
-| `heavy-slot m41r pnpm test:db` | 0 | 34 files, 169 tests |
-| `heavy-slot m41r pnpm test:migrations` | 0 | 2 files, 11 tests |
-| full e2e, both projects, all specs (shim outside the repo) | 0 | **162 passed**, 0 failed, 0 flaky |
+| `TURBO_FORCE=true heavy-slot m41r pnpm test` | 0 | 0 of 13 cached: `node --test` 39/39; core 660 (330 unique, also run from `dist`); ai 72; api 103 (14 files); web 61 (8 files); db 194 (38 files); storage 4; config 2 |
+| `heavy-slot m41r pnpm test:db` | 0 | 38 files, 194 tests |
+| `heavy-slot m41r pnpm test:migrations` | 0 | 2 files, 11 tests (fresh install of all 44 migrations) |
+| full e2e, both projects, all specs, including #101's M4-3-S (shim outside the repo) | 0 | **164 passed**, 0 failed, 0 flaky |
 
 ## Failed runs that were re-run, and why (no test changed)
 
 - First pipeline of this round: `typecheck` (exit 2), `lint` (exit 1) and the e2e run (exit 1 within seconds) failed because of **my own** broken comment line in `M4-1-S.spec.ts`; fixed in `f216043` and the whole pipeline re-run green.
-- The same first pipeline's `pnpm test` exited 1 because `decision-inbox.integration.test.ts` reported `Connection terminated unexpectedly` once under machine load (a file I did not touch; the same suite passed in `pnpm test:db` seconds later and in the full re-run: 34 files, 169 tests). Pre-existing intermittent database-connection flake, not hidden.
+- The same first pipeline's `pnpm test` exited 1 because `decision-inbox.integration.test.ts` reported `Connection terminated unexpectedly` once under machine load (a file I did not touch; the same suite passed in `pnpm test:db` seconds later and in every later run). Pre-existing intermittent database-connection flake, not hidden.
 
 ## NOT RUN / deviations
 
