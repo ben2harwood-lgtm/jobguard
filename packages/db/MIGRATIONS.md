@@ -159,6 +159,15 @@ the same job, actor, baseline hash, amount and terms, and the adoption's own
 receipt and append both events cannot commit (`ADOPTION_RECORD_REQUIRED`,
 SQLSTATE 23514).
 
+Binding changes: `bind_job_parties` stores the exact `job.parties` receipt on the
+binding (`command_id`, unique per tenant, so one receipt authorizes one binding
+effect). A deferred constraint trigger requires, at commit, a succeeded receipt
+that is that command and names the binding in its result, and an audit event for
+the job naming that command and binding (`job.parties.bind`, or
+`job.parties.correct` when a correction reason was given); otherwise the
+transaction fails (`BINDING_RECORD_REQUIRED`, SQLSTATE 23514). Generated backfill
+and adoption bindings carry no command and are covered by their own rules.
+
 Quote send: `IssueQuoteMutation` takes the job lock (`require_current_job_parties`,
 `FOR SHARE`, which `bind_job_parties`' `FOR UPDATE` waits on) and compares the
 binding the document froze with the current binding before creating any send

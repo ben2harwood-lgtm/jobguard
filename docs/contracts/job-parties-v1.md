@@ -66,6 +66,11 @@ against) is not advanced by background refreshes: a refresh that finds the bindi
 or a referenced customer, payer or site revision changed reloads the draft at
 once, and a save is checked against the same baseline.
 
+Every binding change made through a command stores that command's receipt id on
+the binding (one receipt, one binding effect) and cannot commit unless the receipt
+is completed with that binding as its result and an audit event for the job names
+the command and the binding; direct database calls are held to the same rule.
+
 The PostgreSQL live guard and switch-live/adoption routines reject missing
 parties with `JOB_PARTIES_REQUIRED`. The adoption routine is also a controlled
 write that validates the actor, command receipt and exact approved authorization
