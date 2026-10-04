@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import { openCapture } from "./helpers/capture-journey";
 const B=(page:Page,name:string)=>page.getByRole("button",{name,exact:true});
 async function quotingJob(page:Page){
@@ -67,4 +68,124 @@ test("CH-3a makes reuse explicit, leaves different flats separate, and rejects s
   await page.reload();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
   await page.goto("/");await page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)}).getByRole("link").click();await expect(page.getByTestId("party-site")).toContainText("Flat 2");
   await expect(page.locator(".sandbox-banner")).toHaveText("Practice sandbox — synthetic data; nothing is sent or charged");expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});
+
+// Round 2 (checker findings on b0f88fb): stale editing must be refused, never silently overwritten.
+const CONFLICT = "This job changed. Reload the details before saving again.";
+const partiesView = async (page: Page, jobId: string) => (await page.request.get(`/api/jobs/${jobId}/parties`)).json();
+const conflictAlert = (page: Page) => page.getByRole("alert").filter({ hasText: CONFLICT });
+async function secondWriter(page: Page, browser: Browser, jobId: string) {
+  const context = await browser.newContext({ viewport: page.viewportSize()! });
+  await context.addCookies(await page.context().cookies());
+  const other = await context.newPage();
+  await other.goto(`/jobs/${jobId}`);
+  await expect(B(other, "Save customer and site")).toBeVisible();
+  return { context, other };
+}
+const saveAs = async (page: Page, name: string) => { await page.getByLabel("Customer name", { exact: true }).fill(name); await B(page, "Save customer and site").click(); };
+
+test("CH-3a refuses a save from a panel another writer has already superseded, and writes nothing", async ({ page, browser }) => {
+  const tag = crypto.randomUUID().slice(0, 8), nameA = `Writer A ${tag}`, nameB = `Writer B ${tag}`; test.setTimeout(180000); const jobId = await quotingJob(page);
+  await expect(B(page, "Save customer and site")).toBeVisible();
+  const { context, other } = await secondWriter(page, browser, jobId);
+  await saveAs(other, nameB); await expect(other.getByTestId("party-customer")).toHaveText(nameB);
+  const winner = await partiesView(page, jobId);
+  // The first panel was loaded before B saved and has not been reloaded: its save starts after B's commit.
+  await saveAs(page, nameA);
+  await expect(conflictAlert(page)).toBeVisible();
+  const after = await partiesView(page, jobId);
+  expect(after.current.bindingId).toBe(winner.current.bindingId); expect(after.jobRevision).toBe(winner.jobRevision);
+  expect(after.customers.map((c: { customer: { name: string } }) => c.customer.name)).not.toContain(nameA);
+  expect(after.customers).toHaveLength(winner.customers.length); expect(after.sites).toHaveLength(winner.sites.length);
+  // The panel reloads to the winner's details instead of keeping a stale draft.
+  await expect(page.getByTestId("party-customer")).toHaveText(nameB);
+  await expect(page.getByLabel("Customer name", { exact: true })).toHaveValue(nameB);
+  await saveAs(page, nameA); await expect(page.getByTestId("party-customer")).toHaveText(nameA);
+  await context.close();
+});
+
+test("CH-3a refuses a save against customer details another writer revised", async ({ page, browser }) => {
+  test.setTimeout(180000); const jobId = await quotingJob(page);
+  await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  const base = await partiesView(page, jobId); const customerId = base.currentIds.customerId as string;
+  await page.getByLabel("Choose a customer").selectOption(customerId);
+  await page.getByLabel("Customer phone (fictional, optional)").fill("07000000001");
+  // Another writer revises the same customer; the job's binding is unchanged.
+  const revised = await page.request.post(`/api/jobs/${jobId}/parties`, { data: { version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "revise_customer", customerId, expectedRevision: 1, customer: { version: "customer.v1", name: "Renamed elsewhere", type: "person", email: "practice-customer@example.invalid" } } });
+  expect(revised.status()).toBe(200);
+  await B(page, "Save customer and site").click(); await expect(conflictAlert(page)).toBeVisible();
+  const after = await partiesView(page, jobId);
+  const customer = after.customers.find((c: { id: string }) => c.id === customerId);
+  expect(customer.revision).toBe(2); expect(customer.customer.name).toBe("Renamed elsewhere"); expect(customer.customer.phone).toBeUndefined();
+  expect(after.current.bindingId).toBe(base.current.bindingId); expect(after.jobRevision).toBe(base.jobRevision);
+  await expect(page.getByLabel("Customer name", { exact: true })).toHaveValue("Renamed elsewhere");
+});
+
+test("CH-3a gives two writers on one revision one success and one typed conflict through the UI", async ({ page, browser }) => {
+  const tag = crypto.randomUUID().slice(0, 8), nameA = `Writer A ${tag}`, nameB = `Writer B ${tag}`; test.setTimeout(180000); const jobId = await quotingJob(page);
+  await expect(B(page, "Save customer and site")).toBeVisible();
+  const { context, other } = await secondWriter(page, browser, jobId);
+  const conflictCodes: string[] = [];
+  for (const p of [page, other]) p.on("response", async response => { if (response.url().includes(`/api/jobs/${jobId}/parties`) && response.request().method() === "POST" && response.status() === 409) conflictCodes.push((await response.json()).code); });
+  const before = await partiesView(page, jobId);
+  await page.getByLabel("Customer name", { exact: true }).fill(nameA); await other.getByLabel("Customer name", { exact: true }).fill(nameB);
+  await Promise.all([B(page, "Save customer and site").click(), B(other, "Save customer and site").click()]);
+  await expect.poll(async () => (await conflictAlert(page).count()) + (await conflictAlert(other).count())).toBe(1);
+  const after = await partiesView(page, jobId);
+  expect(after.jobRevision).toBe(before.jobRevision + 1);
+  expect([nameA, nameB]).toContain(after.current.customer.name);
+  const [winnerPage, loserPage] = after.current.customer.name === nameA ? [page, other] : [other, page];
+  await expect(conflictAlert(winnerPage)).toHaveCount(0); await expect(conflictAlert(loserPage)).toBeVisible();
+  await expect(loserPage.getByTestId("party-customer")).toHaveText(after.current.customer.name);
+  for (const code of conflictCodes) expect(code).toBe("REVISION_CONFLICT");
+  await context.close();
+});
+
+test("CH-3a tells a stale panel the job went live instead of showing a raw code", async ({ page, browser }) => {
+  test.setTimeout(240000); const jobId = await quotingJob(page);
+  await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  const before = await partiesView(page, jobId);
+  // The second panel loads while the job is still quoting; the first window then takes the job live.
+  const { context, other } = await secondWriter(page, browser, jobId);
+  await B(page, "Preview immutable quote").click(); await B(page, "Simulate sending this quote").click(); await B(page, "Continue fake worker").click();
+  await B(page, "Record practice acceptance").click(); await B(page, "Start this practice job").click();
+  await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+  // The second panel still believes the job is quoting.
+  await saveAs(other, "Late edit");
+  await expect(other.getByRole("alert").filter({ hasText: "went live" })).toBeVisible();
+  await expect(other.getByRole("alert").filter({ hasText: "CORRECTION_REASON_REQUIRED" })).toHaveCount(0);
+  const after = await partiesView(other, jobId);
+  expect(after.current.bindingId).toBe(before.current.bindingId); expect(after.customers).toHaveLength(before.customers.length);
+  await expect(other.getByLabel("Reason for correction")).toBeVisible();
+  await other.getByLabel("Reason for correction").fill("Correct the fictional customer after going live"); await saveAs(other, "Late edit");
+  await expect(other.getByTestId("party-customer")).toHaveText("Late edit");
+  await context.close();
+});
+
+test("CH-3a quote preview shows its frozen customer and a changed binding needs a new preview", async ({ page }) => {
+  test.setTimeout(180000); const jobId = await quotingJob(page);
+  await saveAs(page, "Original fictional customer"); await expect(page.getByTestId("party-customer")).toHaveText("Original fictional customer");
+  const previewed = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/quotes/preview`) && r.request().method() === "POST");
+  await B(page, "Preview immutable quote").click(); const first = (await (await previewed).json()).view as { documentId: string; contentHash: string; documentVersion: number };
+  const section = page.getByRole("region", { name: "Quote preview" }); await expect(section).toContainText("Original fictional customer");
+  await expect(page.getByTestId("quote-artifact-hash")).toHaveText(first.contentHash);
+  const bytes = async (id: string) => createHash("sha256").update(Buffer.from(await (await page.request.get(`/api/jobs/${jobId}/quotes/artifacts/${id}`)).body())).digest("hex");
+  expect(await bytes(first.documentId)).toBe(first.contentHash);
+  // The binding is corrected between preview and send.
+  await saveAs(page, "Corrected fictional customer"); await expect(page.getByTestId("party-customer")).toHaveText("Corrected fictional customer");
+  await expect(section).toContainText("Original fictional customer"); await expect(section).not.toContainText("Corrected fictional customer");
+  await expect(page.getByTestId("quote-artifact-hash")).toHaveText(first.contentHash);
+  await expect(section).toContainText("customer or site changed");
+  await B(page, "Simulate sending this quote").click();
+  await expect(page.getByText("The customer or site changed. Preview and approve it again.", { exact: false }).first()).toBeVisible();
+  const send = await page.request.post(`/api/jobs/${jobId}/quotes/delivery`, { data: { version: "quote-send-command.v1", commandId: crypto.randomUUID(), documentId: first.documentId, contentHash: first.contentHash, recipient: "practice-customer@example.invalid" } });
+  expect(send.status()).toBe(409); expect((await send.json()).code).toBe("QUOTE_CHANGED");
+  expect(await bytes(first.documentId)).toBe(first.contentHash);
+  const again = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/quotes/preview`) && r.request().method() === "POST");
+  await B(page, "Preview immutable quote").click(); const second = (await (await again).json()).view as { documentId: string; contentHash: string; documentVersion: number };
+  expect(second.documentId).not.toBe(first.documentId); expect(second.contentHash).not.toBe(first.contentHash); expect(second.documentVersion).toBe(first.documentVersion + 1);
+  await expect(section).toContainText("Corrected fictional customer"); await expect(section).not.toContainText("customer or site changed");
+  await B(page, "Simulate sending this quote").click();
+  await expect(page.getByText("queued only for the deterministic fake worker", { exact: false })).toBeVisible();
+  expect(await bytes(first.documentId)).toBe(first.contentHash);
 });
