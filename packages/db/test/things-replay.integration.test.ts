@@ -5,6 +5,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { evaluateBillDiscrepancy } from "@jobguard/core";
 import { DiscrepancyRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository, type VerifiedTenantContext } from "../src/index.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
@@ -15,7 +16,7 @@ import { closeTestPools } from "./pool-test-utils.js";
 const tenant = randomUUID(), job = randomUUID(), otherJob = randomUUID(), scope = randomUUID();
 const ctx = { tenantId: tenant } as VerifiedTenantContext;
 const RULE = "supplier-overcharge.v1";
-let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, repo: DiscrepancyRepository;
+let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, repo: DiscrepancyRepository, matches: SupplierMatchRepository;
 let originalFactId = "", replacementFactId = "", secondReplacementFactId = "";
 // Direct fixture inserts pass the same BEFORE INSERT live guard as the runtime role, so they carry the tenant context.
 async function asTenant(sql: string, params: unknown[]) {
@@ -51,7 +52,7 @@ beforeAll(async () => {
   const documentId = (await docs.view(ctx, job)).facts[0].document_id;
   const confirm = (expectedRevision: number, unitPricePence: number) => docs.confirm(ctx, job, { version: "supplier-fact-correction.v1", documentId, commandId: randomUUID(), documentType: "invoice", quantity: "10", unitPricePence, netPence: 10 * unitPricePence, expectedRevision });
   await confirm(0, 2500);
-  const match = new SupplierMatchRepository(runtime);
+  const match = matches = new SupplierMatchRepository(runtime);
   await match.create(ctx, job, { commandId: randomUUID(), expectedRevision: 0 });
   await confirm(1, 2000); await confirm(2, 1800);
   [originalFactId, replacementFactId, secondReplacementFactId] = (await admin.query("SELECT id FROM app.supplier_fact_revision WHERE document_id=$1 ORDER BY revision", [documentId])).rows.map(row => row.id);
@@ -110,6 +111,22 @@ describe("things to check: a replay returns the command's first result", () => {
     expect(replayed.finding?.outcome).toMatchObject({ revision: n + 1, outcome: "dismissed" });
     await expect(repo.review(ctx, job, { ...input, reason: "Changed" })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     await expect(repo.review(ctx, otherJob, input)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    expect(await stored(input.commandId)).toBe(0);
+  });
+  it("still replays an evaluation written before command results existed after its sources have moved on", async () => {
+    const ruleRevision = "supplier-overcharge.legacy", input = { commandId: randomUUID(), ruleRevision };
+    const latest = (await admin.query("SELECT * FROM app.discrepancy_finding_revision WHERE job_id=$1 ORDER BY revision DESC LIMIT 1", [job])).rows[0];
+    // The evaluation as the earlier code made it: 10 ordered at 2000, 8 accepted, 10 billed at 2500, request hash over input plus result.
+    const original = evaluateBillDiscrepancy({ version: "discrepancy-input.v1", ruleRevision, sourceDocumentId: latest.source_document_id, sourceVersionId: latest.source_version_id, matchRevisionId: latest.match_revision_id, confirmed: true, matched: true, orderedQuantity: 10, acceptedQuantity: 8, billedQuantity: 10, orderedUnitPricePence: 2000, billedUnitPricePence: 2500 });
+    await asTenant("INSERT INTO app.discrepancy_finding_revision(id,tenant_id,job_id,command_id,revision,rule_revision,source_document_id,source_version_id,match_revision_id,state,price_pence,quantity_pence,total_pence,supersedes_id,actor_ref,subject_ref,payload_hash,audit_event_id) SELECT $1,tenant_id,job_id,$2,revision+1,$3,source_document_id,source_version_id,match_revision_id,$4,$5,$6,$7,id,'system:discrepancy-rule',job_id,$8,$9 FROM app.discrepancy_finding_revision WHERE tenant_id=$10 AND id=$11",
+      [randomUUID(), input.commandId, ruleRevision, original.kind, original.pricePence, original.quantityPence, original.totalPence, hash({ ...input, ...original }), await legacyAudit(), tenant, latest.id]);
+    // The sources move on: a newer match revision allocates less, so evaluating today gives a different result.
+    const proposal = (await matches.view(ctx, job)).proposal;
+    await matches.correct(ctx, job, { version: "supplier-match-correction.v1", commandId: randomUUID(), proposalId: proposal.id, expectedRevision: (await matches.view(ctx, job)).revision, orderVersionId: proposal.orderVersionId, receiptVersionIds: proposal.receiptVersionIds, billVersionId: proposal.billVersionId, allocations: [{ receiptVersionId: proposal.receiptVersionIds[0], quantity: "6" }] });
+    const replayed = await repo.evaluate(ctx, job, input);
+    expect(replayed.finding).toMatchObject({ revision: latest.revision + 1, ruleRevision, totalPence: original.totalPence });
+    await expect(repo.evaluate(ctx, job, { ...input, ruleRevision: "supplier-overcharge.other" })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    await expect(repo.evaluate(ctx, otherJob, input)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     expect(await stored(input.commandId)).toBe(0);
   });
 });
