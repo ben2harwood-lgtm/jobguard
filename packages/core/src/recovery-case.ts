@@ -60,6 +60,8 @@ export function transitionRecoveryCase(input: Readonly<{
   let landed: number = money(input.landedPence).pence;
   const priorWrittenOff: number = money(input.writtenOffPence ?? 0).pence;
   if (landed + priorWrittenOff > claimed) throw new RecoveryTransitionError(input.state, input.event);
+  // Prevention means the money was never paid. Received principal (manual or approved) can never be relabelled "prevented".
+  if (input.event === "prevent" && landed > 0) throw new RecoveryTransitionError(input.state, input.event);
   let writtenOffPence = 0;
   if (input.event === "record_landing") {
     const amount = money(input.amountPence ?? Number.NaN).pence;
