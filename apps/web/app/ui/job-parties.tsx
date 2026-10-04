@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { customerTypes, jobPartiesCommandResultV1, jobPartiesImportResultV1, jobPartiesWorkspaceV1, siteMatchKey, type JobPartiesCommandV1 } from "@jobguard/core";
 import type { z } from "zod";
+import { MAX_ADDRESS_LINES, addressLinesFromDraft, moreAddressLines, sameSite } from "./job-parties-draft";
 import styles from "./job-parties.module.css";
 const labels = ["A person (homeowner)", "A business", "Landlord or letting agent", "Insurer", "Main contractor", "Housing association", "Council"];
 type View = z.infer<typeof jobPartiesWorkspaceV1>;
@@ -29,7 +30,7 @@ export function JobParties({ jobId }: { jobId: string }) {
   const [customerId, setCustomerId] = useState(""), [name, setName] = useState("Practice Customer"), [type, setType] = useState<(typeof customerTypes)[number]>("person");
   const [email, setEmail] = useState("practice-customer@example.invalid"), [payer, setPayer] = useState("");
   const [phone,setPhone]=useState(""),[companyNumber,setCompanyNumber]=useState("");
-  const [address, setAddress] = useState("14 Fictional Street"), [town, setTown] = useState("London"), [postcode, setPostcode] = useState("SW1A 1AA");
+  const [address, setAddress] = useState("14 Fictional Street"), [more, setMore] = useState(""), [town, setTown] = useState("London"), [postcode, setPostcode] = useState("SW1A 1AA");
   const [unit, setUnit] = useState(""), [uprn, setUprn] = useState(""), [reuse, setReuse] = useState(""), [confirm, setConfirm] = useState(false), [reason, setReason] = useState("");
   const errorRef = useRef<HTMLParagraphElement>(null);
   const fetchView = useCallback(async () => {
@@ -38,10 +39,11 @@ export function JobParties({ jobId }: { jobId: string }) {
     return jobPartiesWorkspaceV1.parse(await response.json());
   }, [jobId]);
   // `view` is what the panel shows and may be refreshed at any time. `baseline` is what the draft was edited against: it is set when the
-  // panel first loads, after a save, and when a stale draft is reloaded. Background refreshes never advance it.
+  // panel first loads (the draft is then filled from the saved parties), after a save, and when a stale draft is reloaded. Background
+  // refreshes never advance it.
   const baseline = useRef<View | null>(null), draftRefs = useRef({ customerId: "", payer: "", reuse: "" });
   draftRefs.current = { customerId, payer, reuse };
-  const load = useCallback(async () => { const snapshot = await fetchView(); setView(snapshot); baseline.current ??= snapshot; return snapshot; }, [fetchView]);
+  const load = useCallback(async () => { const snapshot = await fetchView(); setView(snapshot); if (baseline.current === null) { baseline.current = snapshot; resetDraft(snapshot); } return snapshot; }, [fetchView]);
   useEffect(() => {
     const refresh = (event: Event) => {
       if ((event as CustomEvent).detail !== jobId) return;
@@ -55,7 +57,7 @@ export function JobParties({ jobId }: { jobId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, fetchView, jobId]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
-  const site = { version: "site.v1" as const, addressLines: [address], town, postcode, ...(unit ? { unit } : {}), ...(uprn ? { uprn } : {}) };
+  const site = { version: "site.v1" as const, addressLines: addressLinesFromDraft(address, more), town, postcode, ...(unit ? { unit } : {}), ...(uprn ? { uprn } : {}) };
   let key: string | null = null; try { key = siteMatchKey(site); } catch { /* The form shows validation errors on save. */ }
   const suggestions = view?.sites.filter(s => (key!==null&&JSON.stringify(JSON.parse(s.matchKey))===key)||s.site.postcode.replace(/\s/gu, "") === postcode.toUpperCase().replace(/\s/gu, "")) ?? [];
   async function command(input: JobPartiesCommandV1) {
@@ -75,7 +77,7 @@ export function JobParties({ jobId }: { jobId: string }) {
     const customer = snapshot.customers.find(c => c.id === ids.customerId)?.customer ?? saved.customer;
     setCustomerId(ids.customerId); setName(customer.name); setType(customer.type); setEmail(customer.email ?? ""); setPhone(customer.phone ?? ""); setCompanyNumber(customer.companyNumber ?? "");
     setPayer(ids.payingPartyId === ids.customerId ? "" : snapshot.customers.find(c => c.id === ids.payingPartyId)?.revisionId ?? "");
-    setAddress(saved.site.addressLines[0] ?? ""); setTown(saved.site.town); setPostcode(saved.site.postcode); setUnit(saved.site.unit ?? ""); setUprn(saved.site.uprn ?? "");
+    setAddress(saved.site.addressLines[0] ?? ""); setMore(moreAddressLines(saved.site.addressLines)); setTown(saved.site.town); setPostcode(saved.site.postcode); setUnit(saved.site.unit ?? ""); setUprn(saved.site.uprn ?? "");
   }
   /** Choosing a customer, payer or site copies the values being shown into the draft, so the baseline now records those revisions. */
   function rebase(change: (b: View) => View) { if (baseline.current) baseline.current = change(baseline.current); }
@@ -90,15 +92,19 @@ export function JobParties({ jobId }: { jobId: string }) {
       const conflict = conflictSince(observed, latest, draftRefs.current);
       if (conflict) { setView(latest); baseline.current = latest; resetDraft(latest); setError(conflict); return; }
       setView(latest);
+      if (site.addressLines.length > MAX_ADDRESS_LINES) { setError("A site address can have at most four lines. Remove the extra lines and save again."); return; }
       const selected = latest.customers.find(c => c.id === customerId);
       const customer = { version: "customer.v1" as const, name, type, ...(email ? { email } : {}), ...(phone ? { phone } : {}), ...(companyNumber ? { companyNumber } : {}) };
       const customerResult = selected ? selected.customer.name === name && selected.customer.type === type && (selected.customer.email ?? "") === email && (selected.customer.phone ?? "") === phone && (selected.customer.companyNumber ?? "") === companyNumber
         ? { revisionId: selected.revisionId } : await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "revise_customer", customerId: selected.id, expectedRevision: selected.revision, customer })
         : await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_customer", customer });
-      const siteResult = await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_site", site, confirmSamePlace: confirm, ...(reuse ? { reuseSiteId: reuse } : {}) });
+      // The saved site keeps its identity unless the user chose another place or changed it; only then is a site created (or reused with confirmation).
+      const bound = latest.current;
+      const siteResult = !reuse && bound && sameSite(site, bound.site) ? { revisionId: bound.siteRevisionId }
+        : await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_site", site, confirmSamePlace: confirm, ...(reuse ? { reuseSiteId: reuse } : {}) });
       await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: ["live", "invoiced", "paid"].includes(latest.status) ? "correct" : "bind", expectedJobRevision: latest.jobRevision,
         parties: { version: "job-parties.v1", customerRevisionId: customerResult.revisionId, siteRevisionId: siteResult.revisionId, payingPartyRevisionId: payer || null }, ...(reason ? { reason } : {}) });
-      const saved = await fetchView(); setView(saved); baseline.current = saved; window.dispatchEvent(new CustomEvent("job-parties-saved", { detail: jobId }));
+      const saved = await fetchView(); setView(saved); baseline.current = saved; resetDraft(saved); window.dispatchEvent(new CustomEvent("job-parties-saved", { detail: jobId }));
     } catch (e) {
       if (e instanceof PartiesConflict) { try { const latest = await fetchView(); setView(latest); baseline.current = latest; resetDraft(latest); } catch { /* the message below still tells the user to reload */ } }
       setError(e instanceof Error ? e.message : "Details could not be saved.");
@@ -128,6 +134,7 @@ export function JobParties({ jobId }: { jobId: string }) {
         <label>Company number (optional)<input aria-label="Company number (optional)" value={companyNumber} onChange={e=>setCompanyNumber(e.target.value.toUpperCase())} maxLength={8}/></label>
         <label>Who pays?<select aria-label="Who pays?" value={payer} onChange={e => { const c = view.customers.find(x => x.revisionId === e.target.value); if (c) rebase(b => ({ ...b, customers: [...b.customers.filter(x => x.id !== c.id), c] })); setPayer(e.target.value); }}><option value="">Same as customer</option>{view.customers.map(c => <option key={c.id} value={c.revisionId}>{c.customer.name}</option>)}</select></label>
         <label>Premises address<input aria-label="Premises address" value={address} onChange={e => { setAddress(e.target.value); setReuse(""); setConfirm(false); }} required/></label>
+        <label>More address lines (optional, one per line)<textarea aria-label="More address lines (optional, one per line)" value={more} onChange={e => { setMore(e.target.value); setReuse(""); setConfirm(false); }} rows={3}/></label>
         <label>Town<input aria-label="Town" value={town} onChange={e => setTown(e.target.value)} required/></label>
         <label>UK postcode<input aria-label="UK postcode" value={postcode} onChange={e => setPostcode(e.target.value)} required/></label>
         <label>Flat or unit (optional)<input aria-label="Flat or unit (optional)" value={unit} onChange={e => { setUnit(e.target.value); setReuse(""); setConfirm(false); }}/></label>

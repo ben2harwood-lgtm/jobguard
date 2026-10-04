@@ -18,7 +18,9 @@ means the same exact revision as the customer. Identities may span several jobs
 in one tenant. Tenant-qualified revision FKs prevent foreign identity links.
 One current pointer per tenant/job references one immutable binding. Binding
 increments the existing job revision under its row lock; concurrent expected
-revisions conflict. After live/invoiced/paid, the correction action needs a reason.
+revisions conflict. After live/invoiced/paid, the correction action needs a reason:
+the routine requires the correction flag to be exactly true and the reason non-blank, so a
+null or false flag is refused for those jobs, with the whole transaction rolled back.
 Old bindings, activation/import references, quote artifacts and issued invoice
 bytes/hashes remain immutable. Revising a customer never silently changes a job.
 
@@ -65,6 +67,16 @@ refused) or waits for the send. The panel's baseline (what the draft was edited
 against) is not advanced by background refreshes: a refresh that finds the binding
 or a referenced customer, payer or site revision changed reloads the draft at
 once, and a save is checked against the same baseline.
+
+The panel fills its draft from the saved parties when it first loads and again after every
+successful save, so reopening a job shows the saved customer, paying party and site, and
+saving them unchanged creates no new customer or site: an unchanged customer keeps its
+revision, a changed one is revised (same customer, next revision), and a site is created
+only when the user changed it or chose another place (an unchanged site keeps its saved
+identity and revision). A site's address is edited as the first line plus a further-lines
+box (one line per row, up to four lines in all); every saved line is shown and carried
+through an edit of any other field, and a fifth line is refused in words before anything
+is written.
 
 Every binding change made through a command stores that command's receipt id on
 the binding (one receipt, one binding effect) and cannot commit unless the receipt
