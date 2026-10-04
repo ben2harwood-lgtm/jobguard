@@ -204,3 +204,62 @@ A first full run failed only the two exhaustive table-list checks in `tenancy.in
 ## OPEN FOR BEN
 
 Unchanged from round 2: whether a job created through the capture journey should appear in the demo's Jobs list (P2-4: the checker wants the captured job reopened through Jobs, or a formally approved C7 amendment). My lean: decide it as a product change after CH-2, not inside this repair.
+
+---
+
+# Round 4 — repair of the third Sol check (REPAIR on e3bb494)
+
+**Repair builder:** Claude Sonnet 5.5. **Not independently verified, not accepted.** Input: GPT-6.1 Sol high check `ch-2-solcheck-20261004T051925.md` (REPAIR, three P2) and the coordinator's instruction to fix P2-2 and P2-3 only if CH-2's card covers them. Tests were written first and run red on the unchanged code.
+
+## Scope decision for P2-2 and P2-3 (read against the card)
+
+The card's Done-when has two clauses that reach these commands. The first is "For each `watchdog_live_only` command ...", and the replay clause is not limited to named commands: "A refused command leaves no receipt, so the same command ID succeeds once after the job goes live; replaying it again returns the first result, and the same ID with a different payload conflicts." The card's own registry classifies supplier-match create, supplier-match correction and inbox dismissal as `watchdog_live_only`, and its prose list names "match corrections (M2-4-S)". So I read all three as covered and fixed them. If the coordinator reads the replay clause as limited to the commands named in the prose list, the part beyond it is match create and inbox dismissal; those two changes are small, share the round-3 mechanism and can be split out. The commands that were never flagged (purchase-order, supplier-document, evidence and proof) already replay through expected-revision checks or the command receipt and are unchanged.
+
+## Findings
+
+| Finding | Status | Tests (red first) | Fix |
+|---|---|---|---|
+| P2-1 Registry misses `"path"` as a quoted key in `@Controller({...})` | **Fixed** | 3cb2159 (the old reading found `nest:/` instead of the route) | 3cb2159 |
+| P2-2 Successful supplier-match no-ops discard command identity | **Fixed** | 91adfff | 89ee4e2 |
+| P2-3 Match correction and inbox dismissal replay the current view | **Fixed** | 91adfff | 89ee4e2 |
+
+**P2-1.** An options object is read by property name however it is quoted (`path`, `"path"`, `'path'`). A spread, a computed key, a shorthand `path`, a `path` set twice and a non-literal or substituted path fail closed with "cannot be read" instead of meaning "no path". Negative tests cover each, and show `@Controller({ "path": "jobs/:id/new-fact" })` is found and fails classification when unclassified.
+
+**P2-2 and P2-3.** The round-3 stored-result table gains three kinds in the same migration (0050, not renumbered): `supplier_match.create`, `supplier_match.correct`, `inbox.dismiss`. Each command writes its row in its own transaction for every success, including a no-op create on an existing digest, behind the live guard and a per-job advisory lock, so a replay returns the first result and the id cannot be reused for a changed payload, another job or another kind; parallel duplicates store one row. The earlier replay paths for rows written before the table existed now also refuse another job's command id (the match correction path did not check the job), and inbox dismissal checks a prior command before looking up the decision. Tests cover changed payloads, another job, parallel duplicates, replays after later corrections and dismissals, and rows written without a stored result.
+
+## Commits
+
+| SHA | Subject |
+|---|---|
+| 3cb2159 | test(api): read a quoted path key and refuse unreadable @Controller options |
+| 91adfff | test(db): supplier-match and inbox replays return the first result, bound to job and payload |
+| 89ee4e2 | fix(db): store supplier-match and inbox-dismissal first results; replay returns them |
+| (this commit) | docs(verdicts): CH-2 round-4 receipt |
+
+## Commands run (same Mac and heavy-slot rules)
+
+| Command | Exit | Result |
+|---|---|---|
+| registry tests with the old object-literal reading | 1 | red as intended: 1 failed of 25 |
+| `match-inbox-replay` suite, unchanged code | 1 | red as intended: 5 failed of 5 |
+| `pnpm typecheck` | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7/7 tasks plus custom lints |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `ch-2` passed |
+| `pnpm openapi:check` | 0 | matches |
+| `git diff --check` | 0 | clean |
+| `pnpm build` | 0 | 7/7 tasks |
+| `pnpm test` | 0 | node tools 39; config 2; storage 4; ai 72; web 56; core 394; api 100; db 204 in 38 files |
+| `pnpm test:db` | 0 | 38 files, 204 tests |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| e2e `CH-2` (3), `M2-1B-S` to `M2-7-S`, `UIWIRE-7`, `UIWIRE-9`, both projects, same uncommitted local browser config | 0 | 28 passed |
+
+A first full run failed one test in my new suite (a replay on another job returned "decision not found" instead of a conflict for a legacy row); I moved the prior-command check ahead of the decision lookup and re-ran the database suites, which then passed. The e2e run preceded that reorder; nothing else changed.
+
+## Not run, and residual
+
+- The other 38 e2e specs were not re-run locally; GitHub CI runs all of them.
+- **Follow-up if the coordinator reads the card narrowly:** none needed for the findings; the three commands above are covered under the broader reading.
+
+## OPEN FOR BEN
+
+Unchanged: whether a captured job should appear in the demo's Jobs list (the Sol checker's accepted substitute is deep link plus the seeded jobs through Jobs). My lean: decide as a product change after CH-2.
