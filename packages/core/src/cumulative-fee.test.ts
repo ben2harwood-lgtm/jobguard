@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addExactPence, calculateCumulativeFee, exactPence, serializeExactPence, type ExactPence } from "./cumulative-fee.js";
+import { addExactPence, calculateCumulativeFee, exactPence, MAX_ALLOCATION_LINES, MAX_EXACT_PENCE_DIGITS, MAX_EXACT_PENCE_INPUT_DIGITS, sumExactPence, serializeExactPence, type ExactPence } from "./cumulative-fee.js";
 import { MAX_MONEY_PENCE, money } from "./money.js";
 import { allocateMoney } from "./allocation.js";
 const link = "10000000-0000-4000-8000-000000000001";
@@ -69,5 +69,51 @@ describe("shared cumulative fee, commercial half-even v1", () => {
     }
     expect(() => fee(10000,0,"reference_fee_policy_v3","8")).toThrow("INVALID_SHARED_MONEY");
     expect(fee(MAX_MONEY_PENCE).cumulativeFee.pence).toBe(100000000000);
+  });
+  // Round 2: the rational contract is derived from the supported sizes, and aggregation stays exact and linear.
+  it("derives the supported rational size from the allocation limits", () => {
+    expect(MAX_ALLOCATION_LINES).toBe(10_000);
+    expect(MAX_EXACT_PENCE_INPUT_DIGITS).toBe(100);
+    expect(MAX_EXACT_PENCE_DIGITS).toBe(String(MAX_MONEY_PENCE).length*MAX_ALLOCATION_LINES + 3*MAX_EXACT_PENCE_INPUT_DIGITS + String(MAX_MONEY_PENCE).length);
+  });
+  it("accepts a principal exactly at the supported size, reduced or not, and rejects one digit more", () => {
+    const wide = (digits: number) => ({ numerator: "7", denominator: "1" + "0".repeat(digits - 1) });
+    const at = calculateCumulativeFee({ version:"cumulative-fee.v1", rate:{version:"fee-rate.v1",policyVersion:"v3",numerator:"10",denominator:"100"},
+      cumulativeQualifyingPrincipal: wide(MAX_EXACT_PENCE_DIGITS), priorNetPostedPence:0, priorPolicyVersion:"v3", compensatesDerivationId:null });
+    expect(at.cumulativeFee.pence).toBe(0);
+    expect(() => calculateCumulativeFee({ version:"cumulative-fee.v1", rate:{version:"fee-rate.v1",policyVersion:"v3",numerator:"10",denominator:"100"},
+      cumulativeQualifyingPrincipal: wide(MAX_EXACT_PENCE_DIGITS + 1), priorNetPostedPence:0, priorPolicyVersion:"v3", compensatesDerivationId:null })).toThrow("INVALID_SHARED_MONEY");
+    const scale = 10n ** 400n;   // 100000000000 pence written as 10^412 / 10^400 is the same value as 100000000000
+    expect(fee({ numerator: BigInt(MAX_MONEY_PENCE) * scale, denominator: scale }).cumulativeFee.pence).toBe(100_000_000_000);
+    expect(() => fee({ numerator: (BigInt(MAX_MONEY_PENCE) + 1n) * scale, denominator: scale })).toThrow("INVALID_SHARED_MONEY");
+  });
+  it("sums exactly and reduced, matching one-at-a-time addition, with zero and negative totals", () => {
+    let seed = 987654;
+    const next = () => (seed = (Math.imul(seed,1664525) + 1013904223) >>> 0);
+    for (let round = 0; round < 300; round++) {
+      const terms = Array.from({ length: 1 + next() % 40 }, () => exactPence(BigInt(next() % 2000001) - 1000000n, BigInt(next() % 9999 + 1)));
+      const folded = terms.reduce((total, term) => addExactPence(total, term), exactPence(0n));
+      const summed = sumExactPence(terms);
+      expect(summed).toEqual(folded);
+      expect(summed).toEqual(exactPence(summed.numerator, summed.denominator));
+    }
+    expect(sumExactPence([])).toEqual(exactPence(0n));
+    expect(sumExactPence([exactPence(1n,6n), exactPence(-1n,6n)])).toEqual(exactPence(0n));
+    expect(addExactPence(exactPence(1n,6n), exactPence(-1n,6n))).toEqual(exactPence(0n));
+    expect(addExactPence(exactPence(1n,6n), exactPence(1n,3n))).toEqual(exactPence(1n,2n));
+  });
+  it("addition matches the definition for reduced operands whose denominators share factors", () => {
+    let seed = 424242;
+    const next = () => (seed = (Math.imul(seed,1664525) + 1013904223) >>> 0);
+    for (let i = 0; i < 2000; i++) {
+      const a = exactPence(BigInt(next() % 100001) - 50000n, BigInt(next() % 360 + 1)), b = exactPence(BigInt(next() % 100001) - 50000n, BigInt(next() % 360 + 1));
+      expect(addExactPence(a,b)).toEqual(exactPence(a.numerator*b.denominator + b.numerator*a.denominator, a.denominator*b.denominator));
+    }
+  });
+  it("fails closed when a sum would exceed the digit limit, before doing unbounded work", () => {
+    const terms = [exactPence(1n, 10n**30n + 1n), exactPence(1n, 10n**30n + 3n), exactPence(1n, 10n**30n + 9n)];
+    expect(() => sumExactPence(terms, 60)).toThrow("INVALID_SHARED_MONEY");
+    expect(sumExactPence(terms, 100).denominator).toBe((10n**30n + 1n) * (10n**30n + 3n) * (10n**30n + 9n));
+    expect(() => sumExactPence([{ numerator: 1n, denominator: 0n }])).toThrow("INVALID_SHARED_MONEY");
   });
 });

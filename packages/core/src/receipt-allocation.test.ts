@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { allocateReceiptToLines, type ReceiptAllocationInput } from "./receipt-allocation.js";
-import { addExactPence, calculateCumulativeFee, exactPence, serializeExactPence } from "./cumulative-fee.js";
+import { addExactPence, calculateCumulativeFee, exactPence, MAX_EXACT_PENCE_DIGITS, serializeExactPence, sumExactPence } from "./cumulative-fee.js";
 const before = "2026-09-01T00:00:00Z", at = "2026-09-30T00:00:00Z", after = "2026-10-01T00:00:00Z";
 const p = (value: number) => ({numerator:String(value),denominator:"1"});
 const line = (id:string,net:number,gross:number,outstanding=gross,existedAt=before,invoiceId="blended") => ({id,invoiceId,netPence:net,grossPence:gross,outstandingGross:p(outstanding),existedAt});
@@ -108,5 +108,47 @@ describe("allocator totals enter the fee kernel",()=>{
   const total=sum(allocateReceiptToLines(input(100,lines)));
   expect(total.numerator.toString().length).toBeGreaterThan(100);
   expect(fee(total)).toBe(8);
+ });
+ // Distinct 12-digit amounts make the aggregate denominator the full product of the line amounts (about 12 digits a line).
+ const wide=(count:number)=>{
+  let seed=20261004;const next=()=>(seed=(Math.imul(seed,1664525)+1013904223)>>>0);
+  return Array.from({length:count},(_,i)=>{const g=900_000_000_000+next()%99_000_000_000;return line(`wide-${i}`,Math.floor(g/1.2),g,g-1);});
+ };
+ // Independent of the module: one exact fraction over the product of the line denominators, rounded half-even once.
+ const independentFee=(receipt:bigint,lines:ReturnType<typeof wide>)=>{
+  const total=lines.reduce((t,l)=>t+BigInt(l.outstandingGross.numerator),0n);
+  let numerator=0n,denominator=1n;
+  for(const l of lines){const n=receipt*BigInt(l.outstandingGross.numerator)*BigInt(l.netPence),d=total*BigInt(l.grossPence);numerator=numerator*d+n*denominator;denominator*=d;}
+  const scaled=numerator,divisor=denominator*10n,quotient=scaled/divisor,twice=(scaled%divisor)*2n;
+  return Number(twice>divisor||(twice===divisor&&quotient%2n===1n)?quotient+1n:quotient);
+ };
+ it.each([1000,2000])("%i lines of distinct 12-digit amounts aggregate exactly, within the contract size, and round once",(count)=>{
+  const lines=wide(count),out=allocateReceiptToLines(input(1_000_000,lines));
+  const folded=out.reduce((t,a)=>addExactPence(t,a.net),exactPence(0n)),summed=sumExactPence(out.map(a=>a.net));
+  expect(summed).toEqual(folded);
+  expect(summed).toEqual(exactPence(summed.numerator,summed.denominator));
+  expect(summed.denominator.toString().length).toBeGreaterThan(count*7);
+  expect(summed.denominator.toString().length).toBeLessThanOrEqual(MAX_EXACT_PENCE_DIGITS);
+  expect(fee(summed)).toBe(independentFee(1_000_000n,lines));
+ });
+ it("whole-penny pro-rata receipts against updated balances aggregate to one allocation's size however many arrive",()=>{
+  const lines=wide(60);let remaining=lines,summed=exactPence(0n);const receipts=[1,250,99_999,7,1_000_003,42,5_000_000,13];
+  for(const receipt of receipts){
+   const out=allocateReceiptToLines(input(receipt,remaining));
+   summed=sumExactPence([summed,...out.map(a=>a.net)]);
+   remaining=remaining.map(l=>{const a=out.find(x=>x.lineId===l.id)!;const left=addExactPence(exactPence(BigInt(l.outstandingGross.numerator),BigInt(l.outstandingGross.denominator)),exactPence(-a.gross.numerator,a.gross.denominator));return {...l,outstandingGross:serializeExactPence(left)};});
+  }
+  const once=sumExactPence(allocateReceiptToLines(input(receipts.reduce((a,b)=>a+b,0),lines)).map(a=>a.net));
+  expect(summed).toEqual(once);
+  expect(fee(summed)).toBe(independentFee(BigInt(receipts.reduce((a,b)=>a+b,0)),lines));
+ });
+ it("fails closed, with a typed error, when one allocation's total cannot be represented",()=>{
+  // Each balance is 100 pence plus a fraction with its own large denominator, so the balances' total needs both denominators.
+  const balance=(digits:bigint,n:bigint)=>{const d=10n**digits+n;return {numerator:String(100n*d+1n),denominator:String(d)};};
+  const pair=(digits:bigint)=>[{...line("a",100,120),outstandingGross:balance(digits,1n)},{...line("b",100,120),outstandingGross:balance(digits,3n)}];
+  const raw=input(1,pair(59n));
+  expect(()=>allocateReceiptToLines(raw)).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines({...raw,receiptGross:p(0)})).toThrow("INVALID_ALLOCATION");
+  expect(allocateReceiptToLines(input(1,pair(40n)))).toHaveLength(2);
  });
 });
