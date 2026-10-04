@@ -67,9 +67,32 @@ SH-1 adds no web workflow and has no `SH-1.spec.ts`; no existing spec was change
 - Pinned Playwright browser: not installed locally (above).
 - `pnpm eval` and live-provider checks: not in this repair's scope.
 
+## Addendum, 4 October: lane approvals, merge with main, final local results
+
+- **Lane approvals (Ben, Command Center cards `jobguard-sh-1-lane-allow-list` and `jobguard-sh-1-evidence-pack-fixture`):** the sh-1 lane now also allows
+  `packages/db/test/UIWIRE-12.integration.test.ts`, `packages/db/test/demo-bootstrap.integration.test.ts`, `docs/verdicts/SH-1/**` (`e6963b2`)
+  and `packages/db/test/evidence-pack-fixture.ts` (`9123fe9`). The coordinator applied both edits; the repair builder did not widen the lane itself.
+- **Merge of `origin/main` (`b0fbf9a`):** brings in #101 (M4-3-S-R, migration 0042), #102 (M4-2-S-R) and #96. Lane registry merged as a union
+  (`lane-union.py`), `migrate.ts` order 0042 then 0053, `MIGRATIONS.md` sections in that order. Migration counts are main's 43 plus 0053 = **44**
+  (UIWIRE-12 totals and BETWEEN bound, demo-bootstrap `migrations: 44`, range text "0000..0042 and 0053"). 0053 is not renumbered.
+- **Fixture conflict found by the merge:** the #101 evidence-pack fixture inserts a variation on a job with no `job_commercial_track` binding, which
+  SH-1 forbids by design (SQLSTATE 23502 on `variation.job_track`). `9123fe9` binds a `small_builder` track first, as SH-1's own tests do. The same
+  fixture also seeds the 0042 upgrade test (`evidence-pack-upgrade.integration.test.ts`) on a real 0041 database where `app.job_commercial_track` does not
+  exist, so the binding is guarded with `to_regclass` (this repair's last test commit). No assertion was changed.
+- **Final local results on the pushed head (Node 24.17, pnpm 10.28.1; database and browser runs in `heavy-slot sh-1`):**
+
+| Command | Exit | Counts |
+|---|---:|---|
+| `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm build`, `pnpm openapi:check` | 0 | typecheck and build 7 of 7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` and `pnpm lint:lanes` | 0 | lane boundary, core purity and money checks pass |
+| `pnpm test` | 0 | core 550; api 108; web 63; ai 72; config 2; storage 4; db 194 (39 files) |
+| `pnpm test:db` | 0 | 39 files, 194 tests |
+| `pnpm test:migrations` | 0 on rerun | 2 files, 11 tests. The first run on this head failed: the `tenancy.integration.test.ts` beforeAll died after 10.7 s ("Unknown Error: undefined") and its afterAll timed out while the Mac was running other suites. A second run, same code, passed. Treat as an embedded-Postgres start-up flake, not a code failure. |
+| Full e2e, both projects (earlier merged head `b0fbf9a`, local headless shell 1234) | 0 | 166 passed |
+
+The e2e run predates the two fixture-only commits above, which change no application code. GitHub CI with the pinned browser is the proof of record.
+The earlier UIWIRE-1 spec race (see above) did not recur in that run but is still unfixed in its own lane.
+
 ## Open
 
-`pnpm lint` (and the CI lint step, which runs before tests) stays red until the sh-1 lane in `config/agent-lane-assignments.json`
-allows the paths this repair had to touch: `packages/db/test/UIWIRE-12.integration.test.ts`,
-`packages/db/test/demo-bootstrap.integration.test.ts` and `docs/verdicts/SH-1/**`. The repair builder was not permitted to widen
-its own lane's allow list, so that edit and the push are left for the dispatcher or Ben.
+GitHub CI on the pushed head. Independent verdict and separate acceptance remain pending. Not independently verified, not accepted.
