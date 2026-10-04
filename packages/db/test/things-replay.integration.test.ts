@@ -5,7 +5,8 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DiscrepancyRepository, MaterialRepository, migrate, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository, type VerifiedTenantContext } from "../src/index.js";
+import { DiscrepancyRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository, type VerifiedTenantContext } from "../src/index.js";
+import { appendAuditBatch } from "../src/audit.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
@@ -22,6 +23,8 @@ async function asTenant(sql: string, params: unknown[]) {
   try { await client.query("SELECT set_config('app.tenant_id',$1,false)", [tenant]); return await client.query(sql, params); }
   finally { await client.query("RESET app.tenant_id"); client.release(); }
 }
+// A real audit event for a fixture row written "by the earlier code", so its place in the audit chain is genuine.
+const legacyAudit = async () => (await withTenant(runtime, ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType: "fixture.legacy_command", subjectType: "job", subjectRef: job, payload: { references: { jobId: job }, hashes: { payloadHash: "a".repeat(64) }, classifications: { action: "operational" } } }])))[0]!.id;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const count = async (table: string, jobId: string) => Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE job_id=$1`, [jobId])).rows[0].n);
 const stored = async (commandId: string) => Number((await admin.query("SELECT count(*) n FROM app.watchdog_command_result WHERE command_id=$1", [commandId])).rows[0].n);
@@ -96,13 +99,13 @@ describe("things to check: a replay returns the command's first result", () => {
     await expect(repo.supersede(ctx, otherJob, one)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     expect(await count("supplier_bill_supersession", job)).toBe(rows);
   });
-  it("still replays rows written before command results existed, on their own job only", async () => {
+  it("still replays rows written before command results existed, as they first returned, on their own job only", async () => {
     const finding = (await repo.evaluate(ctx, job, { commandId: randomUUID(), ruleRevision: RULE })).finding!;
-    const audit = (await admin.query("SELECT audit_event_id FROM app.discrepancy_finding_revision WHERE id=$1", [finding.id])).rows[0].audit_event_id;
     const n = Number((await admin.query("SELECT count(*) n FROM app.discrepancy_review_outcome WHERE finding_id=$1", [finding.id])).rows[0].n);
     const input = { commandId: randomUUID(), findingId: finding.id, expectedRevision: n, outcome: "dismissed" as const, reason: "Earlier fictional reason" };
     // Fixture: the outcome row exactly as the earlier code wrote it (request hash over the input), with no command-result row.
-    await asTenant("INSERT INTO app.discrepancy_review_outcome(id,tenant_id,job_id,finding_id,command_id,revision,outcome,reason,actor_ref,subject_ref,payload_hash,audit_event_id)VALUES($1,$2,$3,$4,$5,$6,'dismissed',$7,'member:synthetic-builder',$4,$8,$9)", [randomUUID(), tenant, job, finding.id, input.commandId, n + 1, input.reason, hash(input), audit]);
+    await asTenant("INSERT INTO app.discrepancy_review_outcome(id,tenant_id,job_id,finding_id,command_id,revision,outcome,reason,actor_ref,subject_ref,payload_hash,audit_event_id)VALUES($1,$2,$3,$4,$5,$6,'dismissed',$7,'member:synthetic-builder',$4,$8,$9)", [randomUUID(), tenant, job, finding.id, input.commandId, n + 1, input.reason, hash(input), await legacyAudit()]);
+    await repo.review(ctx, job, { commandId: randomUUID(), findingId: finding.id, expectedRevision: n + 1, outcome: "disputed", reason: "Later fictional reason" });
     const replayed = await repo.review(ctx, job, input);
     expect(replayed.finding?.outcome).toMatchObject({ revision: n + 1, outcome: "dismissed" });
     await expect(repo.review(ctx, job, { ...input, reason: "Changed" })).rejects.toThrow("IDEMPOTENCY_CONFLICT");

@@ -5,7 +5,8 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { InboxRelevanceRepository, MaterialRepository, migrate, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository, type VerifiedTenantContext } from "../src/index.js";
+import { InboxRelevanceRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository, type VerifiedTenantContext } from "../src/index.js";
+import { appendAuditBatch } from "../src/audit.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
@@ -17,6 +18,8 @@ let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, match: Suppli
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const count = async (table: string, jobId: string) => Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE job_id=$1`, [jobId])).rows[0].n);
 const stored = async (commandId: string) => Number((await admin.query("SELECT count(*) n FROM app.watchdog_command_result WHERE command_id=$1", [commandId])).rows[0].n);
+// A real audit event for a fixture row written "by the earlier code", so its place in the audit chain is genuine.
+const legacyAudit = async (jobId: string) => (await withTenant(runtime, ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType: "fixture.legacy_command", subjectType: "job", subjectRef: jobId, payload: { references: { jobId }, hashes: { payloadHash: "a".repeat(64) }, classifications: { action: "operational" } } }])))[0]!.id;
 // Direct fixture inserts pass the same BEFORE INSERT live guard as the runtime role, so they carry the tenant context.
 async function asTenant(sql: string, params: unknown[]) {
   const client = await admin.connect();
@@ -88,12 +91,15 @@ describe("supplier match: a replay returns the command's first result", () => {
     expect(await count("supplier_match_revision", job)).toBe(rows); expect(await count("supplier_match_revision", otherJob)).toBe(0);
     expect(await stored(one.commandId)).toBe(1);
   });
-  it("still replays a revision written before command results existed, on its own job only", async () => {
+  it("still replays a revision written before command results existed, as it first returned, on its own job only", async () => {
     const start = (await match.view(ctx, job)).revision, input = correction(randomUUID(), start, "5");
     // Fixture: the revision row exactly as the earlier code wrote it (request hash over the input), with no command-result row.
-    await asTenant("INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id)SELECT $1,tenant_id,job_id,proposal_id,$2,$3,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,$4,audit_event_id FROM app.supplier_match_revision WHERE tenant_id=$5 AND proposal_id=$6 ORDER BY revision DESC LIMIT 1", [randomUUID(), input.commandId, start + 1, hash(input), tenant, proposal.id]);
+    await asTenant("INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id)SELECT $1,tenant_id,job_id,proposal_id,$2,$3,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,$4,$7 FROM app.supplier_match_revision WHERE tenant_id=$5 AND proposal_id=$6 ORDER BY revision DESC LIMIT 1", [randomUUID(), input.commandId, start + 1, hash(input), tenant, proposal.id, await legacyAudit(job)]);
+    const later = await match.correct(ctx, job, correction(randomUUID(), start + 1, "4"));
+    expect(later.revision).toBe(start + 2);
     const replayed = await match.correct(ctx, job, input);
-    expect(replayed.revision).toBe(start + 1);
+    expect(replayed.revision).toBe(start + 1); expect(replayed.history).toHaveLength(start + 1);
+    expect(replayed.history.map((row: any) => row.revision)).toEqual(Array.from({ length: start + 1 }, (_, i) => i + 1));
     await expect(match.correct(ctx, job, { ...input, allocations: [{ receiptVersionId: proposal.receiptVersionIds[0], quantity: "4" }] })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     await expect(match.correct(ctx, otherJob, input)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     expect(await stored(input.commandId)).toBe(0);
@@ -117,13 +123,15 @@ describe("inbox dismissal: a replay returns the command's first result", () => {
     expect(await count("inbox_outcome_event", job)).toBe(rows); expect(await count("inbox_outcome_event", otherJob)).toBe(0);
     expect(await stored(one.commandId)).toBe(1);
   });
-  it("still replays an outcome written before command results existed, on its own job only", async () => {
-    const decision = decisions.find(d => d.lane === "mandatory"), input = { commandId: randomUUID() };
+  it("still replays an outcome written before command results existed, as it first returned, on its own job only", async () => {
+    const mandatory = decisions.filter(d => d.lane === "mandatory"), decision = mandatory[0], other = mandatory[1], input = { commandId: randomUUID() };
     // Fixture: the outcome row exactly as the earlier code wrote it (request hash over job, decision and input), with no command-result row.
-    await asTenant("INSERT INTO app.inbox_outcome_event(id,tenant_id,job_id,decision_id,decision_revision,command_id,event_kind,rule_id,rule_revision,finding_revision,scenario_clock_version,scenario_at,actor_ref,subject_ref,payload_hash,audit_event_id,created_at)SELECT $1,tenant_id,job_id,id,1,$2,'dismissed',rule_id,rule_revision,finding_revision,'scenario-clock.v1','2026-04-08T10:05:00.000Z','member:synthetic-builder',job_id,$3,audit_event_id,'2026-04-08T10:05:00.000Z' FROM app.inbox_decision_revision WHERE tenant_id=$4 AND id=$5", [randomUUID(), input.commandId, hash({ jobId: job, decisionId: decision.id, ...input }), tenant, decision.id]);
+    await asTenant("INSERT INTO app.inbox_outcome_event(id,tenant_id,job_id,decision_id,decision_revision,command_id,event_kind,rule_id,rule_revision,finding_revision,scenario_clock_version,scenario_at,actor_ref,subject_ref,payload_hash,audit_event_id,created_at)SELECT $1,tenant_id,job_id,id,1,$2,'dismissed',rule_id,rule_revision,finding_revision,'scenario-clock.v1','2026-04-08T10:05:00.000Z','member:synthetic-builder',job_id,$3,$6,'2026-04-08T10:05:00.000Z' FROM app.inbox_decision_revision WHERE tenant_id=$4 AND id=$5", [randomUUID(), input.commandId, hash({ jobId: job, decisionId: decision.id, ...input }), tenant, decision.id, await legacyAudit(job)]);
+    await inbox.dismiss(ctx, job, other.id, { commandId: randomUUID() }, member);
     const replayed = await inbox.dismiss(ctx, job, decision.id, input, member);
-    expect(replayed.mandatory.map((d: any) => d.id)).not.toContain(decision.id);
-    await expect(inbox.dismiss(ctx, job, decisions.find(d => d.lane === "mandatory" && d.id !== decision.id).id, input, member)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
+    // As first returned: this decision is gone, the other one (dismissed afterwards) was still open.
+    expect(replayed.mandatory.map((d: any) => d.id)).toEqual([other.id]);
+    await expect(inbox.dismiss(ctx, job, other.id, input, member)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     await expect(inbox.dismiss(ctx, otherJob, decision.id, input, member)).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     expect(await stored(input.commandId)).toBe(0);
   });
