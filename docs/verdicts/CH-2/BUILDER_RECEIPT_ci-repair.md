@@ -77,3 +77,71 @@ No product code was changed. No test was weakened, skipped, retry-wrapped or giv
 ## Remaining gates
 
 GitHub CI on the new head; an independent exact-commit verdict by a different model; Claude Opus review of the Codex code; separate technical acceptance; the integrator re-adjusting the migration counts and the lane file at merge time. Nothing here releases a hold, provider, spend, deploy or decision.
+
+---
+
+# Round 2 — repair of the Sol check (REPAIR on e12825c)
+
+**Repair builder:** Claude Sonnet 5.5, same rules as round 1. **Not independently verified, not accepted.** Inputs: GPT-6.1 Sol high check `ch-2-solcheck-20261003T233807.md` (REPAIR, four P2, no P1) and the Claude Opus PASS comment on e12825c with its two non-blocking notes. Every fix was written test-first: the new tests were run red against the unchanged code before the fix.
+
+## Findings
+
+| Finding | Status | Test (red first) | Fix |
+|---|---|---|---|
+| P2-1 Replay returns current state, not the first result | **Fixed** | 205ed19: plan and advance replays after a later plan exist must equal what they first returned (failed: replay returned revision 2) | ca3924e |
+| P2-2 Advance reuses a command id across jobs | **Fixed** | 205ed19: job A's advance id conflicts on live job B and creates nothing there (failed: it succeeded) | ca3924e |
+| P2-3 Registry misses non-POST mutations | **Fixed** | 9fc2b79: AST discovery with negative tests (below) | 9fc2b79 (the test file holds the discovery) |
+| P2-4 Jobs navigation absent from browser acceptance | **Addressed for every job the Jobs list can show; the captured job under test cannot be reached there. OPEN FOR BEN below** | ee2bd00 | none needed in product code |
+| Opus note 1: pre-deploy mislink query | **Done** | a01684e: the owner suite runs the documented text, finds the known mislink before 0050 and none after the forward-fix (it failed first: the text did not exist) | a01684e |
+| Opus note 2: drop `id` from `UPDATE(...)` on `evidence_upload` | **Not applied, with a test instead** | — | see below |
+
+**P2-1 and P2-2 (`packages/db/src/readiness-repository.ts`).** A replay of `record` or `advance` now returns the view as of that command. Snapshots and decisions are append-only and a decision only ever attaches to the latest snapshot, so the view is derived exactly from persisted rows: decisions on earlier snapshots, plus its own decision when the command was the advance. Nothing new is stored, so no migration changed for this. `advance` now refuses a prior command that belongs to another job, new request hashes cover the job id, and a decision stored under the earlier input-only hash still replays on its own job (tested by rewriting a stored hash to the earlier form, on its own job and on another). A changed payload still conflicts.
+
+**P2-3 (`apps/api/src/watchdog-registry.test.ts`).** Web route discovery now reads the TypeScript AST and sees function, const/let and destructured exports, `export { x as VERB }`, `export { VERB } from` and `export *` (followed), for POST, PUT, PATCH and DELETE; comments and strings do not count. Nest discovery covers every `@Post/@Put/@Patch/@Delete/@All` on any `@Controller` class in any file (not only `*controller.ts`), accepts string, array and `{path}` forms, and fails closed on a non-literal path. Non-POST verbs are keyed `VERB /path` (POST keeps the existing path-only key), so the registry convention for existing entries is unchanged. Negative tests prove an unclassified PATCH, PUT, DELETE, `@Patch`, `@Put`, `@Delete` and `@All` each fail, and the real tree is classified in both directions (no stale registry entry). The three existing guard tests are unchanged. The old discovery was one regular expression for `export function POST`, which cannot see any of the above.
+
+**P2-4 (`apps/web/e2e/CH-2.spec.ts`).** The Jobs list deliberately shows only the demo's seeded jobs: `readSyntheticDemo` excludes any job that has a capture proposal or a sandbox run, and other suites (`SBOX-1`, `shell`) click the single "Open this job" link. So the captured job cannot be a Jobs link without a product change. Two tests now click the real Jobs link of the seeded live job (Kitchen extension) and the seeded quoting job (Loft conversion) in both projects and assert the persisted status label, job identity, reload and a second browser context; for the quoting job a real readiness write is refused with 409 `JOB_NOT_LIVE` and the job and its readiness record are unchanged. The captured-job journey keeps refresh, deep link and a second context.
+
+**Opus note 2.** I dropped `id` from the grant and 13 PostgreSQL tests failed: `EvidenceService.beginUpload` retries with `ON CONFLICT (tenant_id,id) DO UPDATE SET id=EXCLUDED.id`, a no-op that returns the existing row, and that needs `UPDATE(id)`. Removing it means rewriting that upsert, which is outside CH-2 and not cheap, so I restored the grant, documented why in `MIGRATIONS.md`, and added a test that a real change of `id` by the runtime role is refused by the guard with 42501 and leaves one row.
+
+## Commits
+
+| SHA | Subject |
+|---|---|
+| 205ed19 | test(db): readiness replay returns the first result and is bound to its job |
+| ca3924e | fix(db): readiness replays return the first result; advance ids bind to the job |
+| 9fc2b79 | test(api): discover every mutation verb and form in the job-mutation registry |
+| ee2bd00 | test(e2e): reopen jobs through their Jobs links and check the persisted lifecycle |
+| a01684e | docs(db): pre-deploy mislink check for 0050; prove evidence_upload.id cannot change |
+| (this commit) | docs(verdicts): CH-2 round-2 receipt |
+
+Migration 0050 is byte-identical to round 1. No existing assertion, timeout or retry was changed.
+
+## Commands run (same Mac and heavy-slot rules)
+
+| Command | Exit | Result |
+|---|---|---|
+| `vitest run` readiness, owner and watchdog suites, new tests, unchanged code | 1 | red as intended: 6 failed, 38 passed |
+| `pnpm --filter @jobguard/api exec vitest run src/watchdog-registry.test.ts` | 0 | 24 tests |
+| first green attempt, with `id` dropped from the grant: `pnpm test:db` | 1 | 13 failed (evidence, practice-scope, restore rehearsal); led to restoring the grant |
+| `pnpm typecheck` | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7/7 tasks plus custom lints |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `ch-2` passed |
+| `pnpm openapi:check` | 0 | matches |
+| `git diff --check` | 0 | clean |
+| `pnpm build` | 0 | 7/7 tasks |
+| `pnpm test` | 0 | node tools 39; config 2; storage 4; ai 72; web 56; core 394; api 99; db 192 in 36 files (CI counts 3 fewer db tests because the local run also executes the compiled `dist` copy of `demo-seed.test`) |
+| `pnpm test:db` | 0 | 36 files, 192 tests |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| e2e `CH-2` (now 3 tests), `M2-1B-S`…`M2-7-S`, `UIWIRE-7`, `UIWIRE-9`, both projects, same uncommitted local browser config as round 1 | 0 | 28 passed |
+
+A first e2e run was interrupted (SIGINT, clean teardown) because it had started with the `id` grant dropped and so was invalid; ports 3000 and 55432 were free afterwards.
+
+## Not run, and residual
+
+- The other 38 e2e specs were not re-run locally (no product code outside the readiness repository changed); GitHub CI runs all of them.
+- **Residual, not in the Sol findings:** an `advance` that finds a decision already on the latest snapshot writes nothing, so that command id is never stored. Replaying it after a newer plan exists would create a decision for the newer snapshot instead of repeating the first no-op. Fixing that needs a stored command record (a schema change); I did not widen the migration.
+- Opus's note that 0050 holds nine ACCESS EXCLUSIVE locks (a short write pause) is already documented; run the pre-deploy check in a quiet window.
+
+## OPEN FOR BEN
+
+Should a job created through the capture journey appear in the demo's Jobs list? Today it does not, by design, and that is why the CH-2 browser tests reopen the captured job by deep link and use the seeded jobs for the Jobs-link path. My lean: not as part of CH-2. Changing the list touches `SBOX-1`, `shell` and the demo's story, so it is a product decision, not a repair.
