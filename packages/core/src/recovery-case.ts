@@ -30,6 +30,23 @@ export class RecoveryTransitionError extends Error {
   constructor(state: RecoveryCaseState, event: RecoveryEventType) { super(`${event} is not allowed from ${state}`); }
 }
 
+export class RecoveryClaimAmendmentOnClosedCaseError extends Error {
+  readonly code = "RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE";
+  constructor() { super("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE"); }
+}
+
+/**
+ * A claim amendment must cover the principal already received or written off (RECOVERY_CLAIM_BELOW_SETTLED), and it may not RAISE the
+ * claim of a case that is fully received or closed (landed, closed_recovered, closed_no_recovery): that would hide new outstanding
+ * principal inside a closed case and let it close as "recovered" without the full claim. The explicit reopen already in the transition
+ * table is a dispute; once the case is reopened (negotiating) the claim may rise, the rest must be received, and only then may it close.
+ */
+export function assertClaimAmendable(input: Readonly<{ state: RecoveryCaseState; currentClaimedPence: number; claimedPence: number; landedPence: number; writtenOffPence: number }>): void {
+  assertClaimCoversSettled(input);
+  const closedOrFullyReceived = input.state === "landed" || input.state === "closed_recovered" || input.state === "closed_no_recovery";
+  if (closedOrFullyReceived && money(input.claimedPence).pence > money(input.currentClaimedPence).pence) throw new RecoveryClaimAmendmentOnClosedCaseError();
+}
+
 export class RecoveryClaimBelowSettledError extends Error {
   readonly code = "RECOVERY_CLAIM_BELOW_SETTLED";
   constructor() { super("RECOVERY_CLAIM_BELOW_SETTLED"); }
@@ -62,6 +79,8 @@ export function transitionRecoveryCase(input: Readonly<{
   if (landed + priorWrittenOff > claimed) throw new RecoveryTransitionError(input.state, input.event);
   // Prevention means the money was never paid. Received principal (manual or approved) can never be relabelled "prevented".
   if (input.event === "prevent" && landed > 0) throw new RecoveryTransitionError(input.state, input.event);
+  // "Closed — recovered" means the whole CURRENT claim was received (BUILD_PLAN section 5.5); anything less closes by write-off or as no recovery.
+  if (input.event === "close_recovered" && landed !== claimed) throw new RecoveryTransitionError(input.state, input.event);
   let writtenOffPence = 0;
   if (input.event === "record_landing") {
     const amount = money(input.amountPence ?? Number.NaN).pence;

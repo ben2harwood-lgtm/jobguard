@@ -184,7 +184,7 @@ describe("M4-1-S HOLD regressions", () => {
  describe("claim amendment can not create a false 'Closed — recovered' case (Sol P2)", () => {
   const stepFor = (repo: RecoveryCaseRepository) => (x:{id:string;revision:number},extra:Record<string,unknown>) => repo.command(ctx,job,command({action:"transition",caseId:x.id,expectedRevision:x.revision,...extra}),owner);
   const amend = (repo: RecoveryCaseRepository, x:{id:string;revision:number}, claimedNetPence:number, extra:Record<string,unknown>={}) => repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence,expectedRevision:x.revision,...extra}),owner);
-  const footprint = async (caseId:string) => (await admin.query("SELECT (SELECT count(*) FROM app.recovery_claim_revision WHERE case_id=$1)::int claims,(SELECT count(*) FROM app.recovery_case_event WHERE case_id=$1)::int events,(SELECT count(*) FROM app.audit_event WHERE subject_ref=$1)::int audit",[caseId])).rows[0];
+  const footprint = async (caseId:string) => (await admin.query("SELECT (SELECT count(*) FROM app.recovery_claim_revision WHERE case_id=$1)::int claims,(SELECT count(*) FROM app.recovery_case_event WHERE case_id=$1)::int events,(SELECT count(*) FROM app.audit_event WHERE subject_ref=$1::text)::int audit",[caseId])).rows[0];
   it("rejects an upward amendment of a fully received case, with replay and stale-revision behaviour, and nothing changes", async () => {
    const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
    let x = await repo.command(ctx,job,openCase(),owner);
