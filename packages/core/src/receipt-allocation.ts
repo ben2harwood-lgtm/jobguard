@@ -13,6 +13,11 @@ const amount = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
  */
 const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)$/u;
 const instant = z.string().datetime({ offset: true }).refine(value => INSTANT.test(value), "Invalid UTC offset");
+const INTEGER_TEXT = /^-?\d+$/u;
+const isComparable = (line: { outstandingGross: { numerator: string; denominator: string }; grossPence: number }) =>
+  typeof line.outstandingGross?.numerator === "string" && INTEGER_TEXT.test(line.outstandingGross.numerator) &&
+  typeof line.outstandingGross.denominator === "string" && INTEGER_TEXT.test(line.outstandingGross.denominator) &&
+  Number.isSafeInteger(line.grossPence);
 export const receiptAllocationV1 = z.object({
   version: z.literal("receipt-allocation.v1"), sourceRef: z.string().min(1).max(300),
   receiptGross: exactPenceInputV1, effectiveAt: instant, direction: z.enum(["receipt", "reversal"]),
@@ -23,8 +28,9 @@ export const receiptAllocationV1 = z.object({
     existedAt: instant, outstandingGross: exactPenceInputV1,
     netPence: amount, grossPence: amount.refine(v => v > 0),
   }).strict().refine(v => v.netPence <= v.grossPence, "Net cannot exceed gross")
-    // Exact comparison: balance / denominator <= gross. A negative balance passes here and is rejected by the allocator.
-    .refine(v => BigInt(v.outstandingGross.numerator) <= BigInt(v.grossPence) * BigInt(v.outstandingGross.denominator),
+    // Exact comparison: balance numerator / denominator <= gross. A negative balance passes here and is rejected by the
+    // allocator. Zod runs a refinement even when a field already failed its own check, so only well-formed values are compared.
+    .refine(v => !isComparable(v) || BigInt(v.outstandingGross.numerator) <= BigInt(v.grossPence) * BigInt(v.outstandingGross.denominator),
       "Outstanding balance cannot exceed the line's original gross")).max(MAX_ALLOCATION_LINES),
 }).strict();
 export type ReceiptAllocationInput = z.infer<typeof receiptAllocationV1>;
