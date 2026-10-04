@@ -3,7 +3,7 @@
 **Builder:** Claude Sonnet 5.5 (repair builder). Branch `codex/sandbox/m0-6l`, PR #104. Starting head
 `757895c1542ab29266f796430d6765755f2b9cce` (Codex GPT-6.1 Sol build, based on `3e0764b`).
 **Migration number unchanged: 0052.**
-**Code commit every result below is bound to: `8ddb063d8ad9b60a1fb07434dcdf9f41ba6a3f19`.** This receipt is a later,
+**Code commit every result below is bound to: `56d3b7f78a83fe356691e27badd7941a0db87fa8`** (the second merge of `origin/main`; the last code change of my own is `8ddb063d8ad9b60a1fb07434dcdf9f41ba6a3f19`). This receipt is a later,
 documentation-only commit.
 
 **State: NOT independently verified, NOT technically accepted.** I repaired; I did not review or accept anything.
@@ -67,6 +67,22 @@ cause 2) and `decision-inbox.integration.test.ts` with `Connection terminated un
 `decision-inbox` is untouched by this branch; it passed when re-run alone (23 tests with UIWIRE-12) and in two further
 full runs. I did not establish the cause of that single connection drop (the Mac was running other builders'
 PostgreSQL instances at the time); it is recorded, not explained.
+
+## Second merge of main, and the final local gate on the merged head
+
+While I was working, #102 (M4-2-S repair, no migration) merged to main and the PR became `CONFLICTING` again (lane
+registry only). I merged `origin/main` a second time (non-force; `lane-union.py`, 79 lanes). The migration-count
+assertions are unchanged (still 0000..0042 plus 0052 = 44). Everything below ran on the merged head, in the real worktree:
+
+| Command (merged head) | Exit | Count / result |
+|---|---:|---|
+| `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm build` | 0 | 7/7 packages each |
+| `LANE_BASE_REF=origin/main pnpm lint`, `pnpm lint:lanes` | 0 | lane `m0-6l`, every changed file declared |
+| `pnpm test` | 0 | tools 39; core 432; config 2; storage 4; AI 72; API 113 (16 files); web 63 (8 files); db 190 (39 files) |
+| `pnpm test:db` | 0 | 39 files, 190 tests |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| `pnpm openapi:check` | 0 | matches |
+| Full browser suite, both projects, production build | 0 | 170 passed (85 specs x 2) |
 
 ## Clean-clone run of the whole CI sequence (the check that exposes build-order faults)
 
