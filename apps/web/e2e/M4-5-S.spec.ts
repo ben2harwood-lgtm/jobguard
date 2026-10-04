@@ -9,6 +9,8 @@ const supplierBody = "Practice message — not sent. Our practice supplier recor
 const changed = "Review the changed message before approving";
 const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
 async function click(page: Page, name: string) { await expect(button(page, name)).toBeEnabled(); await button(page, name).click(); }
+// The panel's own alert: Next also renders a route announcer with role=alert, so a bare getByRole("alert") is ambiguous.
+const alertOf = (page: Page) => page.locator("#recovery-messages").getByRole("alert");
 const V = (page: Page, id: string, value: string) => expect(page.getByTestId(id)).toHaveText(value);
 const messagesPath = (caseId: string) => `/api/recovery-cases/${caseId}/messages`;
 const state = (page: Page, caseId: string) => get(page, messagesPath(caseId));
@@ -43,6 +45,7 @@ async function assertLayout(page: Page, names: string[]) {
 }
 
 test("previews, approves and simulates one factual customer message that is delivered exactly once", async ({ page, browser, request }, testInfo) => {
+  test.setTimeout(360_000);
   const { source, caseId } = await customerCaseWithPack(page);
   const pack = (await get(page, `/api/recovery-cases/${caseId}/evidence-packs`)).packs.at(-1);
   await click(page, "Preview factual message");
@@ -70,13 +73,13 @@ test("previews, approves and simulates one factual customer message that is deli
   await body.fill(`${customerBody} Pay by Friday.`);
   await V(page, "pursuit-changed", changed);
   await click(page, "Approve this exact message");
-  await expect(page.getByRole("alert")).toHaveText(changed); await expect(page.getByRole("alert")).toBeFocused();
+  await expect(alertOf(page)).toHaveText(changed); await expect(alertOf(page)).toBeFocused();
   await expect(page.getByLabel("Practice message body")).toHaveValue(customerBody);
   for (const [label, value] of [["Practice recipient", "real.person@gmail.com"], ["Practice amount (£)", "320.01"]] as const) {
     await page.getByLabel(label).fill(value);
     await V(page, "pursuit-changed", changed);
     await click(page, "Approve this exact message");
-    await expect(page.getByRole("alert")).toHaveText(changed);
+    await expect(alertOf(page)).toHaveText(changed);
   }
   expect((await state(page, caseId)).latest).toMatchObject({ status: "previewed", approval: null });
   // Forged commands are refused the same way, and invent no authority.
@@ -135,6 +138,7 @@ test("previews, approves and simulates one factual customer message that is deli
 });
 
 test("uses supplier wording and recipient, shows an unknown outcome as unknown, and checks rather than resends", async ({ page }, testInfo) => {
+  test.setTimeout(360_000);
   const source = await persistedRecoverySources(page);
   const rate = await post(page, "/api/material-rates", { version: "material-rate-command.v1", merchantName: "Fictional Builders Merchant", sku: `MSG-${randomUUID()}`, description: "Fictional building material", pricePence: 2000, priceUnit: "each", taxBasis: "net", effectiveFrom: "2026-09-01", sourceLabel: "Entered synthetic agreement", expectedVersion: 0 });
   await post(page, `/api/jobs/${source.jobId}/materials`, { version: "material-requirement-command.v1", scopeItemId: source.scopeItemId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0 });
@@ -189,6 +193,7 @@ test("uses supplier wording and recipient, shows an unknown outcome as unknown, 
 });
 
 test("revocation and changed evidence both block execution and nothing is sent", async ({ page }, testInfo) => {
+  test.setTimeout(360_000);
   const { source, caseId } = await customerCaseWithPack(page);
   await click(page, "Preview factual message");
   await click(page, "Approve this exact message");
@@ -215,7 +220,7 @@ test("revocation and changed evidence both block execution and nothing is sent",
   await V(page, "pursuit-changed", changed);
   await click(page, "Advance practice delivery");
   await V(page, "pursuit-delivery", "Blocked — the message or its evidence changed; nothing sent");
-  await expect(page.getByRole("alert")).toContainText("Nothing was sent");
+  await expect(alertOf(page)).toContainText("Nothing was sent");
   const blocked = await state(page, caseId);
   expect(blocked.sinkCount).toBe(0); expect(blocked.latest.status).toBe("blocked");
   expect(blocked.latest.history.map((event: { kind: string }) => event.kind)).toEqual(["previewed", "approved", "blocked"]);

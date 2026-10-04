@@ -3,7 +3,7 @@
 .panel p{line-height:1.5}
 .panel button,.panel input,.panel select,.panel textarea,.panel summary,.panel a{min-height:44px;min-width:44px;max-width:100%}
 .panel button{padding:.55rem .8rem;white-space:normal}
-.panel button:focus-visible,.panel input:focus-visible,.panel select:focus-visible,.panel textarea:focus-visible,.panel summary:focus-visible,.panel a:focus-visible{outline:3px solid #bf7500;outline-offset:3px}
+.panel button:focus,.panel input:focus,.panel select:focus,.panel textarea:focus,.panel summary:focus,.panel a:focus,.panel button:focus-visible,.panel input:focus-visible,.panel select:focus-visible,.panel textarea:focus-visible,.panel summary:focus-visible,.panel a:focus-visible{outline:3px solid #bf7500;outline-offset:3px}
 .panel label{display:grid;gap:.35rem;margin-block:.8rem;font-weight:650}
 .panel input,.panel select,.panel textarea{width:100%;padding:.65rem;border:1px solid #a8b7ae;border-radius:.5rem;background:#fff;color:inherit;font:inherit;box-sizing:border-box}
 .panel textarea{resize:vertical;min-height:130px}
