@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { allocateReceiptToLines, type ReceiptAllocationInput } from "./receipt-allocation.js";
-import { addExactPence, calculateCumulativeFee, exactPence, MAX_EXACT_PENCE_DIGITS, serializeExactPence, sumExactPence } from "./cumulative-fee.js";
+import { allocateReceiptToLines, receiptAllocationV1, type ReceiptAllocationInput } from "./receipt-allocation.js";
+import { addExactPence, calculateCumulativeFee, exactPence, MAX_ALLOCATION_WORKING_DIGITS, MAX_EXACT_PENCE_DIGITS, serializeExactPence, sumExactPence } from "./cumulative-fee.js";
 const before = "2026-09-01T00:00:00Z", at = "2026-09-30T00:00:00Z", after = "2026-10-01T00:00:00Z";
 const p = (value: number) => ({numerator:String(value),denominator:"1"});
 const line = (id:string,net:number,gross:number,outstanding=gross,existedAt=before,invoiceId="blended") => ({id,invoiceId,netPence:net,grossPence:gross,outstandingGross:p(outstanding),existedAt});
@@ -150,5 +150,165 @@ describe("allocator totals enter the fee kernel",()=>{
   expect(()=>allocateReceiptToLines(raw)).toThrow("INVALID_ALLOCATION");
   expect(()=>allocateReceiptToLines({...raw,receiptGross:p(0)})).toThrow("INVALID_ALLOCATION");
   expect(allocateReceiptToLines(input(1,pair(40n)))).toHaveLength(2);
+ });
+});
+
+// Round 3 (independent check on 6075710): valid rational totals, balances capped by the original line, validated UTC offsets.
+type Fraction = {numerator:string;denominator:string};
+const frac = (numerator:bigint,denominator:bigint):Fraction => ({numerator:String(numerator),denominator:String(denominator)});
+const withBalance = (id:string,balance:Fraction,net=1,gross=1,existedAt=before,invoiceId="blended") => ({...line(id,net,gross,gross,existedAt,invoiceId),outstandingGross:balance});
+const receiptOf = (raw:ReceiptAllocationInput,gross:Fraction):ReceiptAllocationInput => ({...raw,receiptGross:gross});
+describe("balances whose exact total reduces to a short value",()=>{
+ // d1 and d2 are 61 digits, so the balances' common denominator is 121 digits but their exact total is 2 pence.
+ const d1=10n**60n+1n,d2=10n**60n+3n;
+ const complement=[frac(1n,d1),frac(d1-1n,d1),frac(1n,d2),frac(d2-1n,d2)];
+ const composition=complement.map((balance,i)=>withBalance(`c${i}`,balance));
+ const raw=(gross:bigint,lines=composition)=>receiptOf(input(0,lines),frac(gross,1n));
+ const grossOf=(out:ReturnType<typeof allocateReceiptToLines>)=>sumExactPence(out.map(a=>a.gross));
+ it("pro-rata allocates a 1p receipt across four balances whose exact total is 2p",()=>{
+  expect(receiptAllocationV1.safeParse(raw(1n)).success).toBe(true);
+  const out=allocateReceiptToLines(raw(1n));
+  expect(out.map(a=>a.gross)).toEqual([exactPence(1n,2n*d1),exactPence(d1-1n,2n*d1),exactPence(1n,2n*d2),exactPence(d2-1n,2n*d2)]);
+  expect(grossOf(out)).toEqual(exactPence(1n));
+  expect(sumExactPence(out.map(a=>a.net))).toEqual(exactPence(1n));
+ });
+ it("pro-rata settles the whole total and still rejects an overpayment",()=>{
+  const out=allocateReceiptToLines(raw(2n));
+  expect(out.map(a=>a.gross)).toEqual(complement.map(c=>exactPence(BigInt(c.numerator),BigInt(c.denominator))));
+  expect(grossOf(out)).toEqual(exactPence(2n));
+  expect(()=>allocateReceiptToLines(raw(3n))).toThrow("INVALID_ALLOCATION");
+ });
+ it("reversal over the same remaining settled balances is the exact negative",()=>{
+  const out=allocateReceiptToLines({...raw(1n),direction:"reversal"});
+  expect(grossOf(out)).toEqual(exactPence(-1n));
+  expect(out.map(a=>a.gross)).toEqual(allocateReceiptToLines(raw(1n)).map(a=>exactPence(-a.gross.numerator,a.gross.denominator)));
+ });
+ it("explicit allocation accepts such balances as line limits",()=>{
+  const shares=complement.map((c,i)=>({lineId:`c${i}`,gross:c}));
+  const out=allocateReceiptToLines({...raw(2n),explicit:shares});
+  expect(out.map(a=>a.rule)).toEqual(["explicit","explicit","explicit","explicit"]);
+  expect(grossOf(out)).toEqual(exactPence(2n));
+  expect(()=>allocateReceiptToLines({...raw(3n),explicit:shares})).toThrow("INVALID_ALLOCATION");
+ });
+ it("explicit shares whose exact total equals the receipt are accepted however long their common denominator",()=>{
+  const lines=complement.map((_,i)=>withBalance(`c${i}`,frac(1n,1n)));
+  const shares=complement.map((c,i)=>({lineId:`c${i}`,gross:c}));
+  const out=allocateReceiptToLines({...raw(2n,lines),explicit:shares});
+  expect(grossOf(out)).toEqual(exactPence(2n));
+  // the same shares against a receipt that is not their exact total are still incomplete
+  expect(()=>allocateReceiptToLines({...raw(1n,lines),explicit:shares})).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines({...raw(3n,lines),explicit:shares})).toThrow("INVALID_ALLOCATION");
+ });
+ it("an allocation total longer than the result limit still fails closed, whatever the working size",()=>{
+  const wide=(n:bigint)=>withBalance(`w${n}`,frac(1n,10n**60n+n));
+  const lines=[wide(1n),wide(3n)];  // total = (2*10^60 + 4) / ((10^60+1)(10^60+3)): 121 digits once reduced
+  expect(()=>allocateReceiptToLines(raw(1n,lines))).toThrow("INVALID_ALLOCATION");
+ });
+ // Distinct 100-digit denominators from a generator: every line adds about 100 digits to the common denominator.
+ const hundredDigits=(count:number)=>{
+  let seed=7;const next=()=>(seed=(Math.imul(seed,1664525)+1013904223)>>>0);
+  return Array.from({length:count},()=>{let digits=String(1+next()%9);for(let i=1;i<100;i++)digits+=String(next()%10);return BigInt(digits)|1n;});
+ };
+ it("the working size is bounded: more distinct denominators than the documented limit fail closed",()=>{
+  const lines=hundredDigits(1_600).map((d,i)=>withBalance(`w${i}`,frac(1n,d)));
+  for(const gross of [0n,1n]) expect(()=>allocateReceiptToLines(raw(gross,lines))).toThrow("INVALID_ALLOCATION");
+  const shares=lines.slice(0,2).map(l=>({lineId:l.id,gross:l.outstandingGross}));
+  expect(()=>allocateReceiptToLines({...raw(1n,lines),explicit:lines.map(l=>({lineId:l.id,gross:l.outstandingGross}))})).toThrow("INVALID_ALLOCATION");
+  expect(shares).toHaveLength(2);
+  expect(MAX_ALLOCATION_WORKING_DIGITS).toBe(130_000);
+ });
+ // Independent of the module: sum over the product of the denominators, no reduction anywhere.
+ const roundHalfEven=(n:bigint,d:bigint)=>{const q=n/d,twice=(n%d)*2n;return twice>d||(twice===d&&q%2n===1n)?q+1n:q;};
+ it("the exact net of many cancelling balances enters the fee kernel at the supported working size",()=>{
+  // 300 pairs, balances 1/e and (e-1)/e with a 100-digit e each: the total is 300p, the common denominator about 30,000 digits.
+  const pairs=300,denominators=hundredDigits(pairs);
+  const lines=denominators.flatMap((e,k)=>[withBalance(`a${k}`,frac(1n,e),100,120),withBalance(`b${k}`,frac(e-1n,e),90,120)]);
+  const out=allocateReceiptToLines(raw(7n,lines));
+  expect(grossOf(out)).toEqual(exactPence(7n));
+  const summed=sumExactPence(out.map(a=>a.net));
+  // receipt/300 x sum over pairs of (100/120)/e + (90/120)(e-1)/e = receipt/300 x (pairs x 3/4 + (1/12) x sum of 1/e)
+  let sumNumerator=0n,sumDenominator=1n;
+  for(const e of denominators){sumNumerator=sumNumerator*e+sumDenominator;sumDenominator*=e;}
+  const numerator=7n*(BigInt(pairs)*3n*sumDenominator+sumNumerator),denominator=300n*4n*sumDenominator;
+  expect(summed).toEqual(exactPence(numerator,denominator));
+  expect(summed.denominator.toString().length).toBeGreaterThan(25_000);
+  expect(summed.denominator.toString().length).toBeLessThanOrEqual(MAX_EXACT_PENCE_DIGITS);
+  expect(fee(summed)).toBe(Number(roundHalfEven(numerator,denominator*10n)));
+ });
+});
+
+describe("a line balance can never exceed the line's original gross",()=>{
+ const base=input(0,[]);
+ const over=(balance:Fraction,gross=120,net=100,id="catch")=>[withBalance(id,balance,net,gross)];
+ it("rejects a balance above the original gross for pro-rata, explicit and separate-invoice allocation",()=>{
+  const pro=(gross:number,balance:Fraction)=>input(gross,over(balance));
+  // 100p net / 120p gross with 240p outstanding would pay out 200p net for a 120p line
+  expect(()=>allocateReceiptToLines(pro(240,p(240)))).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines(pro(120,p(240)))).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines(pro(1,p(121)))).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines(pro(0,p(121)))).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines({...pro(240,p(240)),explicit:[{lineId:"catch",gross:p(240)}]})).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines({...pro(120,p(240)),explicit:[{lineId:"catch",gross:p(120)}]})).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines({...pro(120,p(240)),separateInvoiceId:"blended"})).toThrow("INVALID_ALLOCATION");
+  expect(receiptAllocationV1.safeParse(pro(120,p(240))).success).toBe(false);
+ });
+ it("rejects remaining settled balances above the original gross on a reversal",()=>{
+  const reversal=(balance:Fraction,gross=120)=>({...input(gross,over(balance)),direction:"reversal" as const});
+  expect(()=>allocateReceiptToLines(reversal(p(240),240))).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines(reversal(p(240),120))).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines({...reversal(p(240),120),explicit:[{lineId:"catch",gross:p(120)}]})).toThrow("INVALID_ALLOCATION");
+  expect(allocateReceiptToLines({...reversal(p(120),120),explicit:[{lineId:"catch",gross:p(120)}]})[0]?.net).toEqual(exactPence(-100n));
+ });
+ it("compares exactly: the original gross is allowed, one part in 10^97 more is not",()=>{
+  const d=10n**97n+1n,above=frac(120n*d+1n,d),at=frac(120n*d,d),below=frac(120n*d-1n,d);
+  expect(()=>allocateReceiptToLines(input(1,over(above)))).toThrow("INVALID_ALLOCATION");
+  expect(()=>allocateReceiptToLines({...input(1,over(above)),explicit:[{lineId:"catch",gross:p(1)}]})).toThrow("INVALID_ALLOCATION");
+  expect(allocateReceiptToLines(input(120,over(at)))[0]?.gross).toEqual(exactPence(120n));
+  expect(allocateReceiptToLines(input(1,over(below)))[0]?.gross).toEqual(exactPence(1n));
+  // a fraction written unreduced is compared by value
+  expect(allocateReceiptToLines(input(1,over(frac(240n,2n))))[0]?.gross).toEqual(exactPence(1n));
+  expect(()=>allocateReceiptToLines(input(1,over(frac(242n,2n))))).toThrow("INVALID_ALLOCATION");
+ });
+ it("checks every supplied line, including lines the receipt does not reach",()=>{
+  const lines=[line("baseline",100,120),withBalance("other",p(500),100,120,before,"other-invoice"),withBalance("later",p(500),100,120,after)];
+  expect(()=>allocateReceiptToLines(input(60,lines))).toThrow("INVALID_ALLOCATION");
+  expect(allocateReceiptToLines(input(60,[lines[0]!,{...lines[1]!,outstandingGross:p(120)},{...lines[2]!,outstandingGross:p(0)}]))).toHaveLength(1);
+  expect(base.lines).toEqual([]);
+ });
+});
+
+describe("UTC offsets are validated at the schema boundary",()=>{
+ const effective="2026-10-02T00:00:00Z";
+ const lines=(existedAt:string)=>[line("baseline",100,120),line("late",100,120,120,existedAt)];
+ const at=(existedAt:string,gross=60):ReceiptAllocationInput=>({...input(gross,lines(existedAt)),effectiveAt:effective});
+ const ids=(raw:ReceiptAllocationInput)=>allocateReceiptToLines(raw).map(l=>l.lineId);
+ const malformed=["+99:99","-99:99","+24:00","-24:00","+23:60","-23:60","+00:60","+2400","+9999","+1260","-0060","+30:00","+12:99"];
+ it("rejects an out-of-range offset on a line, so it cannot move the line before the receipt",()=>{
+  // 2026-10-03T00:00:00+99:99 would read as 2026-09-29T... and be allocated money
+  for(const offset of malformed) {
+   const raw=at(`2026-10-03T00:00:00${offset}`);
+   expect(receiptAllocationV1.safeParse(raw).success).toBe(false);
+   expect(()=>allocateReceiptToLines(raw)).toThrow("INVALID_ALLOCATION");
+   expect(()=>allocateReceiptToLines({...raw,explicit:[{lineId:"baseline",gross:p(60)}]})).toThrow("INVALID_ALLOCATION");
+  }
+ });
+ it("rejects an out-of-range offset on the receipt time",()=>{
+  for(const offset of malformed) {
+   const raw={...at("2026-10-01T00:00:00Z"),effectiveAt:`2026-10-02T00:00:00${offset}`};
+   expect(receiptAllocationV1.safeParse(raw).success).toBe(false);
+   expect(()=>allocateReceiptToLines(raw)).toThrow("INVALID_ALLOCATION");
+  }
+ });
+ it("accepts every offset from -23:59 to +23:59, colon or compact, and applies it exactly",()=>{
+  for(const [existed,included] of [
+   ["2026-10-03T00:00:00+23:59",false],["2026-10-03T00:00:00+2359",false],["2026-10-02T00:01:00+00:00",false],["2026-10-02T00:00:00+00:00",true],
+   ["2026-10-02T00:00:00-00:00",true],["2026-10-02T00:00:00+0000",true],["2026-10-02T00:00:00-0000",true],
+   ["2026-10-01T00:01:00-23:59",true],["2026-10-01T00:01:00-2359",true],["2026-10-01T00:01:00.000001-23:59",false],["2026-10-01T00:01:00.000001-2359",false],
+   ["2026-10-02T05:45:00+05:45",true],["2026-10-02T05:45:00+0545",true],["2026-10-02T05:45:00.000000001+05:45",false],["2026-10-01T18:30:00-05:30",true],
+   ["2026-10-02T00:00:00Z",true],["2026-10-02T00:00:00.000000Z",true],["2026-10-02T00:00:00.000000001Z",false],
+  ] as const) {
+   expect(receiptAllocationV1.safeParse(at(existed)).success).toBe(true);
+   expect(ids(at(existed))).toEqual(included?["baseline","late"]:["baseline"]);
+  }
  });
 });

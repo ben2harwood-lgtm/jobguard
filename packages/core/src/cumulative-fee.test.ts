@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addExactPence, calculateCumulativeFee, exactPence, MAX_ALLOCATION_LINES, MAX_EXACT_PENCE_DIGITS, MAX_EXACT_PENCE_INPUT_DIGITS, sumExactPence, serializeExactPence, type ExactPence } from "./cumulative-fee.js";
+import { addExactPence, calculateCumulativeFee, exactPence, MAX_ALLOCATION_LINES, MAX_ALLOCATION_WORKING_DIGITS, MAX_EXACT_PENCE_DIGITS, MAX_EXACT_PENCE_INPUT_DIGITS, sumExactPence, serializeExactPence, type ExactPence } from "./cumulative-fee.js";
 import { MAX_MONEY_PENCE, money } from "./money.js";
 import { allocateMoney } from "./allocation.js";
 const link = "10000000-0000-4000-8000-000000000001";
@@ -74,7 +74,8 @@ describe("shared cumulative fee, commercial half-even v1", () => {
   it("derives the supported rational size from the allocation limits", () => {
     expect(MAX_ALLOCATION_LINES).toBe(10_000);
     expect(MAX_EXACT_PENCE_INPUT_DIGITS).toBe(100);
-    expect(MAX_EXACT_PENCE_DIGITS).toBe(String(MAX_MONEY_PENCE).length*MAX_ALLOCATION_LINES + 3*MAX_EXACT_PENCE_INPUT_DIGITS + String(MAX_MONEY_PENCE).length);
+    // Round 3 corrected this derivation: it used the total's denominator where the balances' own common denominator is needed.
+    expect(MAX_EXACT_PENCE_DIGITS).toBe(String(MAX_MONEY_PENCE).length*MAX_ALLOCATION_LINES + MAX_ALLOCATION_WORKING_DIGITS + 2*MAX_EXACT_PENCE_INPUT_DIGITS + String(MAX_MONEY_PENCE).length);
   });
   it("accepts a principal exactly at the supported size, reduced or not, and rejects one digit more", () => {
     const wide = (digits: number) => ({ numerator: "7", denominator: "1" + "0".repeat(digits - 1) });
@@ -115,5 +116,35 @@ describe("shared cumulative fee, commercial half-even v1", () => {
     expect(() => sumExactPence(terms, 60)).toThrow("INVALID_SHARED_MONEY");
     expect(sumExactPence(terms, 100).denominator).toBe((10n**30n + 1n) * (10n**30n + 3n) * (10n**30n + 9n));
     expect(() => sumExactPence([{ numerator: 1n, denominator: 0n }])).toThrow("INVALID_SHARED_MONEY");
+  });
+  // Round 3 (independent check on 6075710): the size limit on a sum is a limit on its reduced result, with a separate working limit.
+  it("accepts a total whose reduced form fits even when the common denominator is longer than the result limit", () => {
+    const d1 = 10n**60n + 1n, d2 = 10n**60n + 3n;
+    const complements = [exactPence(1n, d1), exactPence(d1 - 1n, d1), exactPence(1n, d2), exactPence(d2 - 1n, d2)];
+    expect(complements.reduce(addExactPence, exactPence(0n))).toEqual(exactPence(2n));
+    expect(sumExactPence(complements, MAX_EXACT_PENCE_INPUT_DIGITS)).toEqual(exactPence(2n));
+    expect(sumExactPence(complements, 1)).toEqual(exactPence(2n));
+    expect(sumExactPence([...complements].reverse(), MAX_EXACT_PENCE_INPUT_DIGITS)).toEqual(exactPence(2n));
+  });
+  it("distinguishes the working limit from the result limit, and applies each to its own size", () => {
+    const d1 = 10n**60n + 1n, d2 = 10n**60n + 3n;
+    const complements = [exactPence(1n, d1), exactPence(d1 - 1n, d1), exactPence(1n, d2), exactPence(d2 - 1n, d2)];
+    // the common denominator has 121 digits: a working limit below that fails, one above it succeeds
+    expect(() => sumExactPence(complements, 100, 120)).toThrow("INVALID_SHARED_MONEY");
+    expect(sumExactPence(complements, 100, 121)).toEqual(exactPence(2n));
+    // the result limit applies to the reduced result (the product below has 91 digits)
+    const terms = [exactPence(1n, 10n**30n + 1n), exactPence(1n, 10n**30n + 3n), exactPence(1n, 10n**30n + 9n)];
+    const product = (10n**30n + 1n) * (10n**30n + 3n) * (10n**30n + 9n);
+    expect(product.toString().length).toBe(91);
+    expect(() => sumExactPence(terms, 90, 1000)).toThrow("INVALID_SHARED_MONEY");
+    expect(sumExactPence(terms, 91, 1000).denominator).toBe(product);
+    expect(() => sumExactPence([exactPence(10n**20n)], 20, 1000)).toThrow("INVALID_SHARED_MONEY");
+    expect(sumExactPence([exactPence(10n**20n - 1n)], 20, 1000)).toEqual(exactPence(10n**20n - 1n));
+  });
+  it("derives the working and kernel sizes from the allocator's limits, including the balances' own denominators", () => {
+    const moneyDigits = String(MAX_MONEY_PENCE).length;
+    expect(MAX_ALLOCATION_WORKING_DIGITS).toBe(MAX_ALLOCATION_LINES * moneyDigits);
+    // net denominators divide (receipt denominator) x (total numerator) x lcm(balance denominators) x lcm(line gross amounts)
+    expect(MAX_EXACT_PENCE_DIGITS).toBe(MAX_ALLOCATION_LINES * moneyDigits + MAX_ALLOCATION_WORKING_DIGITS + 2 * MAX_EXACT_PENCE_INPUT_DIGITS + moneyDigits);
   });
 });
