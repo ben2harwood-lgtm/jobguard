@@ -136,7 +136,21 @@ authorization bound to the same job, actor, content hash, amount, policy version
 and zero aggregate revision (`FORBIDDEN` / `AUTHORIZATION_INVALID`, SQLSTATE
 42501). The command dispatcher supplies the command and authorization ids and
 appends the audit events in the same transaction, so a refusal leaves no receipt,
-decision, job or audit row. Update the application before using adoption. The previous
+decision, job or audit row.
+
+The receipt must be the adoption's own (`semantic_key = import:<job>`). A
+deferred constraint trigger on `app.imported_job_baseline` makes the record
+mandatory at commit: a succeeded adoption receipt for that job and actor, a
+`command.succeeded` audit event naming that receipt and an authorization bound to
+the same job, actor, baseline hash, amount and terms, and the adoption's own
+`job.imported_baseline_attested` event. A direct call that does not complete the
+receipt and append both events cannot commit (`ADOPTION_RECORD_REQUIRED`,
+SQLSTATE 23514).
+
+Quote send: `IssueQuoteMutation` takes the job lock (`require_current_job_parties`,
+`FOR SHARE`, which `bind_job_parties`' `FOR UPDATE` waits on) and compares the
+binding the document froze with the current binding before creating any send
+effect; a mismatch raises `QUOTE_CHANGED` and the whole transaction rolls back. Update the application before using adoption. The previous
 synthetic demo's fixture bootstrap remains supported; fresh bootstrap explicitly
 seeds generated parties before marking its example job live.
 

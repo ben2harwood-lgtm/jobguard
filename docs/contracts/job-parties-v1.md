@@ -59,7 +59,12 @@ from the saved details, and the user chooses again. A server-side
 `REVISION_CONFLICT` (two writers on one revision) takes the same path. A quote
 preview shows the customer frozen into its own document; sending a preview whose
 binding is no longer current is refused (`QUOTE_CHANGED`) until it is previewed
-and approved again.
+and approved again. The check also runs inside the send transaction under the
+job lock, so a binding change racing with a send either commits first (the send is
+refused) or waits for the send. The panel's baseline (what the draft was edited
+against) is not advanced by background refreshes: a refresh that finds the binding
+or a referenced customer, payer or site revision changed reloads the draft at
+once, and a save is checked against the same baseline.
 
 The PostgreSQL live guard and switch-live/adoption routines reject missing
 parties with `JOB_PARTIES_REQUIRED`. The adoption routine is also a controlled
