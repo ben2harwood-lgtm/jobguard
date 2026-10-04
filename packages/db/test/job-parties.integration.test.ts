@@ -5,7 +5,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { AdoptInFlightJobMutation, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { AdoptInFlightJobMutation, appendAuditBatch, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
@@ -183,14 +183,14 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
   const OWNER_POLICY="synthetic_import_terms_candidate.v1";
   const adoptInput=(job:string,hash:string,customerRevisionId:string,siteRevisionId:string)=>({parties:{customerRevisionId,siteRevisionId},version:"adopt-job.v1" as const,jobId:job,baselineId:randomUUID(),title:"Fictional import",lifecyclePoint:"live" as const,provenance:"imported" as const,lineageStrength:"builder_attested_weaker" as const,baselineHash:hash,baselineDescription:"Fictional baseline",acceptedNetValuePence:100000,recoveryCapPence:1500,acceptedValueSource:"builder_attestation" as const,attestedByMembershipId:member,attestedAt:new Date(0),importTermsVersion:OWNER_POLICY as typeof OWNER_POLICY,feePolicyVersion:"reference_fee_policy_v1" as const,mode:"synthetic_candidate" as const});
   const commandFor=(job:string,hash:string)=>({version:"command.v1" as const,commandId:randomUUID(),commandType:"job.adopt_in_flight",semanticKey:`import:${job}`,actorMembershipId:member,subjectType:"job",subjectRef:job,action:{actionType:"job.adopt_in_flight",recipient:null,contentHash:hash,aggregateRevision:0,amountPence:100000,currency:"GBP" as const,policyVersion:OWNER_POLICY,expiresAt:new Date(Date.now()+60000)}});
-  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string})=>withTenant(runtime,context,db=>db.$client.query(
+  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string;baseline?:string})=>withTenant(runtime,context,db=>db.$client.query(
     `SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-    [tenant,a.job,randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]));
+    [tenant,a.job,a.baseline??randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]));
   // The rows the command dispatcher writes, created directly so each defect can be isolated.
   async function authority(o:{job:string;hash:string;actor?:string;net?:number;policy?:string;expiresInMs?:number;revoked?:boolean;receipt?:"processing"|"succeeded";subject?:string}){
     const command=randomUUID(),decision=randomUUID(),resolution=randomUUID(),authorization=randomUUID(),actor=o.actor??member,receipt=o.receipt??"processing";
     await admin.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'job.adopt_in_flight',$3,$4,$5,$6,$7,$8)`,
-      [command,tenant,`import:${o.job}:${command}`,"d".repeat(64),receipt,actor,receipt==="succeeded"?"{}":null,receipt==="succeeded"?new Date():null]);
+      [command,tenant,`import:${o.job}`,"d".repeat(64),receipt,actor,receipt==="succeeded"?"{}":null,receipt==="succeeded"?new Date():null]);
     await admin.query(`INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.adopt_in_flight')`,[decision,tenant,o.subject??o.job]);
     await admin.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolution,tenant,decision,actor]);
     await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at,revoked_at) VALUES($1,$2,$3,$4,$5,'job.adopt_in_flight',NULL,$6,0,$7,'GBP',$8,$9,$10)`,
@@ -204,6 +204,15 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
       [tenant,id,account,user,kind==="revoked"?new Date(Date.now()-3600_000):null,kind==="expired"?new Date(Date.now()-3600_000):null]);
     return id;
   }
+  // Everything the dispatcher does in one transaction: the routine, the audit events and the receipt completion.
+  const executeDirect=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string},steps:{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}={})=>withTenant(runtime,context,async db=>{
+    const baseline=randomUUID();
+    await db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,[tenant,a.job,baseline,"Fictional import","live",a.hash,"Fictional baseline",100000,1500,"reference_fee_policy_v1",OWNER_POLICY,member,new Date(0),a.customer,a.site,null,a.command,a.authorization]);
+    if(steps.audit!==false)await appendAuditBatch(db,[
+      {id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"job.imported_baseline_attested",subjectType:"job",subjectRef:a.job,payload:{references:{baselineId:baseline,attestedByMembershipId:member},classifications:{action:"commercial"}}},
+      {id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:"command.succeeded",subjectType:"job",subjectRef:a.job,payload:{references:{commandId:a.command,authorizationId:steps.auditedAuthorization??a.authorization},classifications:{action:"commercial"}}}]);
+    if(steps.receipt!==false)await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result='{"ok":true}'::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,a.command]);
+  });
   const exists=async(job:string)=>(await admin.query(`SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rowCount===1;
   const revisions=async()=>{const {c,s}=await saveParties(await createJob());return{customer:c.revisionId as string,site:s.revisionId as string};};
 
@@ -245,15 +254,28 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
       await expect(callAdopt({job,hash,customer,site,command,authorization,...call}),label).rejects.toMatchObject({code:"42501"});
       expect(await exists(job),label).toBe(false);
     }
-    // A command id paired with someone else's authorization is not authority either.
+    // A receipt for one job paired with another job's valid authorization, in a call that targets the second job.
     const a=randomUUID(),b=randomUUID(),first=await authority({job:a,hash}),second=await authority({job:b,hash});
-    await expect(callAdopt({job:a,hash,customer,site,command:first.command,authorization:second.authorization})).rejects.toMatchObject({code:"42501"});
+    await expect(callAdopt({job:b,hash,customer,site,command:first.command,authorization:second.authorization})).rejects.toMatchObject({code:"42501"});
+    expect(await exists(b)).toBe(false);
+    // And the reverse pairing.
+    await expect(callAdopt({job:a,hash,customer,site,command:second.command,authorization:first.authorization})).rejects.toMatchObject({code:"42501"});
     expect(await exists(a)).toBe(false);
   });
-  it("accepts the same direct call once actor, receipt and exact authorization are all current",async()=>{
+  it("cannot commit a direct execution that records no result or no audit",async()=>{
+    const {customer,site}=await revisions(),hash="e5".repeat(32);
+    for(const [label,steps] of [["no audit and no receipt completion",{audit:false,receipt:false}],["audit but receipt left processing",{receipt:false}],["receipt completed but no audit",{audit:false}],["audit naming a different authorization",{auditedAuthorization:randomUUID()}]] as Array<[string,{audit?:boolean;receipt?:boolean;auditedAuthorization?:string}]>){
+      const job=randomUUID(),{command,authorization}=await authority({job,hash});
+      await expect(executeDirect({job,hash,customer,site,command,authorization},steps),label).rejects.toMatchObject({code:"23514"});
+      expect(await exists(job),label).toBe(false);
+    }
+  });
+  it("commits a direct execution that completes the receipt and appends both audit events, bound to the exact receipt and authorization",async()=>{
     const {customer,site}=await revisions(),job=randomUUID(),hash="d4".repeat(32),{command,authorization}=await authority({job,hash});
-    await callAdopt({job,hash,customer,site,command,authorization});
+    await executeDirect({job,hash,customer,site,command,authorization});
     expect(await exists(job)).toBe(true);
     expect((await admin.query(`SELECT 1 FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rowCount).toBe(1);
+    expect((await admin.query(`SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[tenant,command])).rows[0].status).toBe("succeeded");
+    expect((await admin.query(`SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 ORDER BY event_type`,[tenant,job])).rows.map(r=>r.event_type)).toEqual(["command.succeeded","job.imported_baseline_attested"]);
   });
 });

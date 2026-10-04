@@ -193,7 +193,7 @@ BEGIN
  -- Controlled write: the actor must be a current owner and the exact adoption must carry a processing command and an
  -- unexpired, unrevoked, approved authorization bound to this job, actor, content hash, amount and terms.
  IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=p_tenant AND id=p_actor AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()))
- OR NOT EXISTS(SELECT 1 FROM app.command_receipt r WHERE r.tenant_id=p_tenant AND r.command_id=p_command AND r.actor_membership_id=p_actor AND r.command_type='job.adopt_in_flight' AND r.status='processing')
+ OR NOT EXISTS(SELECT 1 FROM app.command_receipt r WHERE r.tenant_id=p_tenant AND r.command_id=p_command AND r.actor_membership_id=p_actor AND r.command_type='job.adopt_in_flight' AND r.semantic_key='import:'||p_job::text AND r.status='processing')
  THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF NOT EXISTS(SELECT 1 FROM app.action_authorization a JOIN app.decision d ON(d.tenant_id,d.id)=(a.tenant_id,a.decision_id) JOIN app.decision_resolution x ON(x.tenant_id,x.id)=(a.tenant_id,a.resolution_id)
    WHERE a.tenant_id=p_tenant AND a.id=p_authorization AND a.actor_membership_id=p_actor AND x.actor_membership_id=p_actor AND x.resolution='approved'
@@ -220,6 +220,28 @@ END $$;
 ALTER FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) TO jobguard_runtime;
+-- Every permitted execution must leave its record. At commit (deferred, so the command dispatcher's audit append and receipt completion
+-- come first) an adopted baseline needs: a completed adoption receipt for this very job and actor; an audit event naming that receipt and an
+-- authorization bound to this job, actor, baseline hash, amount and terms; and the adoption's own audit event. Otherwise the whole transaction fails.
+CREATE FUNCTION app.require_adoption_record() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM app.audit_event e
+   JOIN app.command_receipt r ON(r.tenant_id=e.tenant_id AND r.command_id::text=e.payload->'references'->>'commandId')
+   JOIN app.action_authorization a ON(a.tenant_id=e.tenant_id AND a.id::text=e.payload->'references'->>'authorizationId')
+   JOIN app.decision d ON(d.tenant_id=a.tenant_id AND d.id=a.decision_id)
+   WHERE e.tenant_id=NEW.tenant_id AND e.event_type='command.succeeded' AND e.subject_type='job' AND e.subject_ref=NEW.job_id::text
+   AND r.command_type='job.adopt_in_flight' AND r.semantic_key='import:'||NEW.job_id::text AND r.status='succeeded' AND r.actor_membership_id=NEW.attested_by_membership_id
+   AND a.actor_membership_id=NEW.attested_by_membership_id AND a.action_type='job.adopt_in_flight' AND a.recipient IS NULL AND a.aggregate_revision=0 AND a.revoked_at IS NULL
+   AND d.subject_type='job' AND d.subject_ref=NEW.job_id::text AND a.content_hash=NEW.baseline_hash AND a.amount_pence=NEW.accepted_net_value_pence
+   AND a.currency='GBP' AND a.policy_version=NEW.import_terms_version)
+ OR NOT EXISTS(SELECT 1 FROM app.audit_event e WHERE e.tenant_id=NEW.tenant_id AND e.event_type='job.imported_baseline_attested' AND e.subject_type='job' AND e.subject_ref=NEW.job_id::text)
+ THEN RAISE EXCEPTION 'ADOPTION_RECORD_REQUIRED' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END $$;
+ALTER FUNCTION app.require_adoption_record() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.require_adoption_record() FROM PUBLIC;
+CREATE CONSTRAINT TRIGGER imported_baseline_record_required AFTER INSERT ON app.imported_job_baseline DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.require_adoption_record();
+
 CREATE OR REPLACE FUNCTION app.adopt_in_flight_job(p_tenant uuid,p_job uuid,p_baseline uuid,p_title varchar,p_lifecycle varchar,p_hash char(64),p_description varchar,p_net bigint,p_cap bigint,p_policy varchar,p_terms varchar,p_actor uuid,p_attested timestamptz)
 RETURNS app.imported_job_baseline LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN RAISE EXCEPTION 'JOB_PARTIES_REQUIRED' USING ERRCODE='22023'; END $$;
