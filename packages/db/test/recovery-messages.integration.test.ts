@@ -30,19 +30,19 @@ async function code(run: () => Promise<unknown>): Promise<string> {
   try { await run(); } catch (error) { return (error as { code?: string; message?: string }).code ?? (error as Error).message; }
   throw new Error('expected the call to fail');
 }
-async function newCase(caseType: 'withheld_customer_payment' | 'merchant_overcharge' | 'prevention' = 'withheld_customer_payment') {
+async function newCase(caseType: 'withheld_customer_payment' | 'merchant_overcharge' | 'prevention' = 'withheld_customer_payment', claimPence = 32000) {
   const id = randomUUID();
   const refs = caseType === 'merchant_overcharge' ? [fixture.rateId, fixture.supplierInvoiceId, fixture.supplierDeliveryId] : [fixture.invoiceId];
-  await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP','identified',0,true,$4,'Fictional counterparty',$5,$6,$7)",
-    [id, fixture.tenantId, fixture.jobId, caseType, caseType === 'merchant_overcharge' ? 'supplier_cost' : 'builder_customer', caseType === 'merchant_overcharge' ? 'supplier_documents' : 'customer_invoice', JSON.stringify(refs)]);
-  await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)", [randomUUID(), fixture.tenantId, fixture.jobId, id, hash(id)]);
+  await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,$8,'GBP','identified',0,true,$4,'Fictional counterparty',$5,$6,$7)",
+    [id, fixture.tenantId, fixture.jobId, caseType, caseType === 'merchant_overcharge' ? 'supplier_cost' : 'builder_customer', caseType === 'merchant_overcharge' ? 'supplier_documents' : 'customer_invoice', JSON.stringify(refs), claimPence]);
+  await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,$6,'GBP','fixture-owner',$5)", [randomUUID(), fixture.tenantId, fixture.jobId, id, hash(id), claimPence]);
   // A real case always starts with its opening event, so its revision is claim 1 + event 1.
   await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,$5,NULL,$6,'fixture-owner',$7,$8)",
     [randomUUID(), fixture.tenantId, fixture.jobId, id, caseType === 'prevention' ? 'prevent' : 'opened', caseType === 'prevention' ? 'prevented' : 'identified', randomUUID(), hash(`open:${id}`)]);
   return id;
 }
-async function attached(caseType: 'withheld_customer_payment' | 'merchant_overcharge' = 'withheld_customer_payment') {
-  const caseId = await newCase(caseType);
+async function attached(caseType: 'withheld_customer_payment' | 'merchant_overcharge' = 'withheld_customer_payment', claimPence = 32000) {
+  const caseId = await newCase(caseType, claimPence);
   const pack = await packs.generate(context, caseId, { commandId: randomUUID() }, actor.actorRef);
   await packs.approveAttachment(context, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
   return { caseId, pack };
@@ -125,6 +125,13 @@ describe('previewing a source-bound factual message', () => {
     // Preview alone grants nothing: no Decision, no authorization, no outbox action, nothing in the sink.
     expect(await count('SELECT count(*) n FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2', [fixture.tenantId, view.id])).toBe(0);
     expect(await count("SELECT count(*) n FROM app.action_outbox WHERE tenant_id=$1 AND provider_effect_key=$2", [fixture.tenantId, `recovery-message:${view.id}`])).toBe(0);
+  });
+
+  it.each([[1, '0.01'], [250000, '2,500.00'], [1_000_000_000_000, '10,000,000,000.00']])('states %i pence as £%s in the builder and in the database guard alike', async (claimPence, pounds) => {
+    const { caseId } = await attached('withheld_customer_payment', claimPence);
+    const state = await repo.preview(context, caseId, previewCommand(await repo.read(context, caseId)), actor);
+    expect(state.latest!.message.amountPence).toBe(claimPence);
+    expect(state.latest!.message.body).toBe(`Practice message — not sent. Our practice records show £${pounds} net remains in this case. Please review the attached example records.`);
   });
 
   it('uses supplier wording and a supplier recipient for a supplier correction', async () => {
