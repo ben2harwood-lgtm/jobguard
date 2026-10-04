@@ -280,6 +280,22 @@ describe("a line balance can never exceed the line's original gross",()=>{
   expect(allocateReceiptToLines(input(1,over(frac(240n,2n))))[0]?.gross).toEqual(exactPence(1n));
   expect(()=>allocateReceiptToLines(input(1,over(frac(242n,2n))))).toThrow("INVALID_ALLOCATION");
  });
+ it("a malformed amount is a typed INVALID_ALLOCATION, never a raw exception from the balance check",()=>{
+  const bad:unknown[]=[{numerator:"abc",denominator:"1"},{numerator:"1.5",denominator:"1"},{numerator:"1e5",denominator:"2"},{numerator:"",denominator:"1"},
+   {numerator:"1",denominator:"x"},{numerator:"1",denominator:"0"},{numerator:"1",denominator:"-3"},{numerator:"1",denominator:"1.5"},{numerator:"1"+"0".repeat(120),denominator:"1"},
+   {numerator:1,denominator:"1"},{numerator:"1"},{numerator:"1",denominator:"1",extra:"x"},"1",null,undefined,7];
+  for(const balance of bad) {
+   const raw=input(1,[{...line("catch",100,120),outstandingGross:balance as Fraction}]);
+   expect(()=>receiptAllocationV1.safeParse(raw)).not.toThrow();
+   expect(receiptAllocationV1.safeParse(raw).success).toBe(false);
+   expect(()=>allocateReceiptToLines(raw)).toThrow("INVALID_ALLOCATION");
+  }
+  for(const grossPence of [120.5,Number.POSITIVE_INFINITY,Number.NaN,-1,0,"120",null,2**53]) {
+   const raw=input(1,[{...line("catch",100,120),grossPence:grossPence as number}]);
+   expect(()=>receiptAllocationV1.safeParse(raw)).not.toThrow();
+   expect(()=>allocateReceiptToLines(raw)).toThrow("INVALID_ALLOCATION");
+  }
+ });
  it("checks every supplied line, including lines the receipt does not reach",()=>{
   const lines=[line("baseline",100,120),withBalance("other",p(500),100,120,before,"other-invoice"),withBalance("later",p(500),100,120,after)];
   expect(()=>allocateReceiptToLines(input(60,lines))).toThrow("INVALID_ALLOCATION");
