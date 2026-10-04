@@ -3312,7 +3312,7 @@ Basic backups, restore, privacy operations, permissions, and financial security 
 | M4-1-S-R | Repair of merged M4-1-S against its HOLD verdict (`docs/verdicts/M4-1-S/54adf02.md` on the branch) | `codex/sandbox/m4-1-s-repair` | 0043 (`recovery_case_current`; the branch currently uses 0046 and must rename) |
 | M4-2-S-R | Repair of merged M4-2-S against its HOLD verdict (`be81bd5`) | `codex/sandbox/m4-2-s-repair` | 0044 if needed |
 | M4-5-S | Committed §10.4 scope | `codex/sandbox/m4-5-s-v2` | 0045 if needed |
-| M4-7-S | Committed §10.4 scope | `codex/sandbox/m4-7-s` | 0046 (`practice_feed`; the branch currently uses 0043 and must rename) |
+| M4-7-S | Committed §10.4 scope | `codex/sandbox/m4-7-s-r3` | 0046 (`practice_feed`; the earlier attempts on `m4-7-s` and `m4-7-s-r2` are superseded) |
 | M4-6-S | After M4-5-S | `codex/sandbox/m4-6-s` | 0047 if needed |
 | M4-8-S (case allocation only) | The permitted in-flight part; the receipt-to-line allocator is the post-adoption extension in §12.3 | `codex/sandbox/m4-8-s` | 0048 |
 | — | Spare | — | 0049 |

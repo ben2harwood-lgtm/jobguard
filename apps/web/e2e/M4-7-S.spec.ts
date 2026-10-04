@@ -151,6 +151,21 @@ test("£384: pending cannot qualify, settled stays unallocated, only a matched r
   expect(matchedView.allocatedEligibleNetPence).toBe(0);
   await layout(page);
 
+  // A duplicate that arrives AFTER the match holds the receipt: the saved match is history, but it cannot be reported as qualifying
+  // until a human reconciles the duplicate. Reconciling restores it without a new match.
+  await advance(page, "receipt-384", "unknown_duplicate", ++expected);
+  await expect(panel(page).getByText("Possible duplicate movement — review needed", { exact: true })).toBeVisible();
+  await V(page, "receipt-qualification", "Builder-attested only — cannot qualify yet");
+  await V(page, "receipt-hint", "The matching movement is held as a possible duplicate, so this receipt cannot qualify until it is reconciled. The saved match is kept.");
+  await V(page, "receipt-matched-movement", "receipt-384");
+  expect((await saved(page, jobId)).receipts[0].assessment).toMatchObject({ status: "attested_only", reason: "duplicate_held", matchedMovementKey: "receipt-384" });
+  await page.reload(); await ready(page);
+  await V(page, "receipt-qualification", "Builder-attested only — cannot qualify yet");
+  await button(page, "Reconcile generated duplicate").click(); await revision(page, ++expected);
+  await expect(panel(page).getByText("Possible duplicate movement — review needed", { exact: true })).toHaveCount(0);
+  await V(page, "receipt-qualification", "Qualifies — verified by a simulated settled movement");
+  await V(page, "allocated-eligible-net", "£0.00");
+
   // Persistence: reload, reopen from Jobs and a second browser context all read the same saved facts and source identity.
   await page.reload(); await ready(page);
   await V(page, "receipt-qualification", "Qualifies — verified by a simulated settled movement");
@@ -177,7 +192,7 @@ test("£384: pending cannot qualify, settled stays unallocated, only a matched r
   await refused(page, jobId, body(expected, { action: "disconnect" }), 409, "PRACTICE_FEED_DISCONNECTED");
   await page.reload(); await ready(page);
   await V(page, "practice-feed-state", "Disconnected");
-  await expect(card(page, "receipt-384").getByTestId("movement-state")).toHaveText("Simulated settled movement"); await V(page, "practice-feed-event-count", "3");
+  await expect(card(page, "receipt-384").getByTestId("movement-state")).toHaveText("Simulated settled movement"); await V(page, "practice-feed-event-count", "4");
   await secondContextReads(browser, context, testInfo, jobId, async (json, view) => {
     expect(json).toMatchObject({ feedState: "disconnected", consent: { revokedAtRevision: expected }, movementCount: 1 });
     await V(view, "practice-feed-state", "Disconnected");
@@ -237,6 +252,15 @@ test("holds an unknown duplicate for review, then shows every fixed generated mo
 
 test("refuses forged, unauthorised and conflicting requests, and persists nothing from them", async ({ page, context, browser }, testInfo) => {
   const jobId = await createJob(page); await ready(page);
+  // Ownership is persisted by the owner's first touch, so another practice session is refused BEFORE anything is connected:
+  // it can neither read the job's receipts nor connect the feed first.
+  const early = await browser.newContext({ ...contextOptions(testInfo), storageState: { cookies: [{ name: "jg_session", value: crypto.randomUUID(), domain: "127.0.0.1", path: "/", expires: -1, httpOnly: false, secure: false, sameSite: "Lax" }], origins: [] } });
+  try {
+    const read = await early.request.get(feedPath(jobId)); expect(read.status()).toBe(403); expect(await read.json()).toEqual({ version: "practice-feed-error.v1", code: "PRACTICE_FEED_FORBIDDEN" });
+    const connect = await early.request.post(feedPath(jobId), { data: body(0, { action: "connect" }) });
+    expect(connect.status()).toBe(403); expect(await connect.json()).toEqual({ version: "practice-feed-error.v1", code: "PRACTICE_FEED_FORBIDDEN" });
+  } finally { await early.close(); }
+  await V(page, "practice-feed-state", "Not connected");
   await button(page, "Connect practice feed").click(); await revision(page, 1);
   const first = await saved(page, jobId);
   // Forged authority: amounts, states, identities, environments and accounts are never accepted from a browser.
@@ -287,10 +311,13 @@ test("refuses forged, unauthorised and conflicting requests, and persists nothin
 test("pauses further changes until the saved state is read after an unknown transport result", async ({ page }, testInfo) => {
   const jobId = await createJob(page); await ready(page);
   await button(page, "Connect practice feed").click(); await revision(page, 1);
-  let writes = 0;
+  let writes = 0, reads = 0, blockReads = false;
   // Fault injection aborts transport only; no successful business response is faked.
-  await page.route(`**${feedPath(jobId)}`, async (route) => {
-    if (route.request().method() === "POST") { writes++; await route.abort("failed"); } else await route.continue();
+  const route = new RegExp(`/api/jobs/${jobId}/practice-feed(\\?.*)?$`);
+  await page.route(route, async (request) => {
+    if (request.request().method() === "POST") { writes++; await request.abort("failed"); }
+    else if (blockReads) { reads++; await request.abort("failed"); }
+    else await request.continue();
   });
   await button(page, "Advance practice executor").click();
   const unknown = "The result is unknown. Read the saved practice feed before doing anything else.";
@@ -298,7 +325,19 @@ test("pauses further changes until the saved state is read after an unknown tran
   await expect(button(page, "Advance practice executor")).toBeDisabled(); await expect(button(page, "Disconnect practice feed")).toBeDisabled();
   await expect(page.getByLabel("Generated movement", { exact: true })).toBeDisabled();
   expect(writes).toBe(1);
-  await page.unroute(`**${feedPath(jobId)}`);
+  // Reading the saved state ALSO fails: the pause must survive (and must not claim that nothing was changed).
+  blockReads = true;
+  await button(page, "Load saved practice receipts").click();
+  await expect.poll(() => reads).toBeGreaterThan(0);
+  await expect(panel(page).getByRole("alert")).toContainText("Changes stay paused until it is read.");
+  await expect(panel(page).getByRole("alert")).not.toContainText("Nothing was changed");
+  await expect(button(page, "Advance practice executor")).toBeDisabled(); await expect(button(page, "Disconnect practice feed")).toBeDisabled();
+  await expect(page.getByLabel("Generated movement", { exact: true })).toBeDisabled(); await expect(page.getByLabel("Generated event", { exact: true })).toBeDisabled();
+  await button(page, "Load saved practice receipts").click();
+  await expect(button(page, "Advance practice executor")).toBeDisabled();
+  expect(writes).toBe(1);
+  // Only a successful read of the saved state lifts the pause.
+  blockReads = false; await page.unroute(route);
   await button(page, "Load saved practice receipts").click(); await ready(page);
   await expect(panel(page).getByRole("alert")).toHaveCount(0);
   await V(page, "practice-feed-state", "Connected"); await revision(page, 1); await expect(panel(page).getByTestId("practice-movement")).toHaveCount(0);
