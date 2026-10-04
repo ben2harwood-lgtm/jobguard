@@ -207,18 +207,41 @@ describe("M4-7-S builder-attested receipts qualify only against a settled moveme
   it("may be matched once the movement is settled, and qualifies only after the recorded match", () => {
     const movements = view("receipt-384", ["pending", "settled"]);
     expect(assessAttestedReceipt(receipt(38_400), movements, [])).toMatchObject({ status: "attested_only", reason: "ready_to_match", canMatch: true, candidateMovementKey: "receipt-384" });
-    expect(assessAttestedReceipt(receipt(38_400), movements, [{ paymentId: payment, movementKey: "receipt-384" }]))
+    expect(assessAttestedReceipt(receipt(38_400), movements, [{ paymentId: payment, movementKey: "receipt-384", paymentReversed: false }]))
       .toMatchObject({ status: "qualifies", matchedMovementKey: "receipt-384", canMatch: false });
   });
   it("one movement verifies one receipt only", () => {
     const movements = view("receipt-384", ["settled"]);
     const other = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-    expect(assessAttestedReceipt(receipt(38_400), movements, [{ paymentId: other, movementKey: "receipt-384" }]))
+    expect(assessAttestedReceipt(receipt(38_400), movements, [{ paymentId: other, movementKey: "receipt-384", paymentReversed: false }]))
       .toMatchObject({ status: "attested_only", reason: "movement_already_matched", canMatch: false });
+  });
+  it("a recorded match stops qualifying while its movement is held by a late duplicate, and qualifies again once reconciled", () => {
+    const matched = [{ paymentId: payment, movementKey: "receipt-384" as const, paymentReversed: false }];
+    // settle -> match -> an unidentified duplicate arrives: the movement is held, so the saved match cannot be reported as qualifying.
+    const held = view("receipt-384", ["settled", "unknown_duplicate"]);
+    expect(assessAttestedReceipt(receipt(38_400), held, matched))
+      .toMatchObject({ status: "attested_only", reason: "duplicate_held", canMatch: false, matchedMovementKey: "receipt-384", candidateMovementKey: "receipt-384" });
+    // The match is history and is preserved: reconciliation restores qualification without a new match.
+    expect(assessAttestedReceipt(receipt(38_400), view("receipt-384", ["settled", "unknown_duplicate"], ["receipt-384"]), matched))
+      .toMatchObject({ status: "qualifies", reason: "matched", matchedMovementKey: "receipt-384" });
+  });
+  it("a recorded match is never reported as qualifying unless its movement is currently settled", () => {
+    const matched = [{ paymentId: payment, movementKey: "receipt-384" as const, paymentReversed: false }];
+    expect(assessAttestedReceipt(receipt(38_400), [], matched)).toMatchObject({ status: "attested_only", reason: "no_movement_yet", matchedMovementKey: "receipt-384" });
+    expect(assessAttestedReceipt(receipt(38_400), view("receipt-384", ["pending"]), matched)).toMatchObject({ status: "attested_only", reason: "pending" });
+  });
+  it("explains that the receipt which used a movement was reversed, instead of saying another receipt uses it", () => {
+    const movements = view("receipt-384", ["settled"]);
+    const other = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    expect(assessAttestedReceipt(receipt(38_400), movements, [{ paymentId: other, movementKey: "receipt-384", paymentReversed: true }]))
+      .toMatchObject({ status: "attested_only", reason: "movement_used_by_reversed_receipt", canMatch: false, candidateMovementKey: "receipt-384" });
+    expect(assessAttestedReceipt(receipt(38_400), movements, [{ paymentId: other, movementKey: "receipt-384", paymentReversed: false }]))
+      .toMatchObject({ reason: "movement_already_matched" });
   });
   it("a reversed receipt never qualifies, even if it was matched", () => {
     const movements = view("receipt-384", ["settled"]);
-    expect(assessAttestedReceipt(receipt(38_400, true), movements, [{ paymentId: payment, movementKey: "receipt-384" }])).toMatchObject({ status: "reversed", canMatch: false });
+    expect(assessAttestedReceipt(receipt(38_400, true), movements, [{ paymentId: payment, movementKey: "receipt-384", paymentReversed: false }])).toMatchObject({ status: "reversed", canMatch: false });
   });
   it("a supplier refund can never verify a customer receipt", () => {
     expect(assessAttestedReceipt(receipt(54_000), view("supplier-refund-540", ["settled"]), [])).toMatchObject({ status: "attested_only", reason: "no_generated_amount", canMatch: false, candidateMovementKey: null });

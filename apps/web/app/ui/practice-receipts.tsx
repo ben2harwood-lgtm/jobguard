@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { practiceFeedResponseV1, type PracticeFeedResponse } from "@jobguard/api/practice-feed-contracts";
 import type { PracticeFeedStep, PracticeMovementKey } from "@jobguard/core";
 import { pounds } from "../lib/pounds";
 import {
-  advanceCommand, connectCommand, disconnectCommand, failureFromResponse, matchReceiptCommand, movementStateLabels, receiptHintLabels,
-  receiptStatusLabels, reconcileCommand, stepLabels, TRANSPORT_UNKNOWN, type Failure,
+  advanceCommand, connectCommand, disconnectCommand, failureFromResponse, initialUi, matchReceiptCommand, movementStateLabels, mutationsPaused, nextUi,
+  receiptHintLabels, receiptStatusLabels, reconcileCommand, stepLabels,
 } from "./practice-receipts-state";
 import styles from "./practice-receipts.module.css";
 
@@ -21,7 +21,7 @@ export function PracticeReceipts({ jobId }: { jobId: string }) {
   const [movement, setMovement] = useState<PracticeMovementKey>("receipt-384");
   const [step, setStep] = useState<PracticeFeedStep>("pending");
   const [busy, setBusy] = useState(true);
-  const [failure, setFailure] = useState<Failure | null>(null);
+  const [ui, dispatch] = useReducer(nextUi, initialUi);
   const [notice, setNotice] = useState("");
   const alertRef = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
@@ -33,16 +33,14 @@ export function PracticeReceipts({ jobId }: { jobId: string }) {
     active.current?.abort();
     const controller = new AbortController();
     active.current = controller;
-    setBusy(true); setFailure(null);
+    setBusy(true); dispatch({ type: "load_started" });
     try {
       const response = await fetch(`${path}?limit=50`, { cache: "no-store", signal: controller.signal });
       if (!response.ok) throw new Error("load");
       const snapshot = practiceFeedResponseV1.parse(await response.json());
-      if (current === generation.current) setView(snapshot);
+      if (current === generation.current) { setView(snapshot); dispatch({ type: "load_ok" }); }
     } catch {
-      if (current === generation.current && !controller.signal.aborted) {
-        setFailure({ kind: "rejected", message: "Practice receipts could not load. Nothing was changed. Load the saved facts again." });
-      }
+      if (current === generation.current && !controller.signal.aborted) dispatch({ type: "load_failed" });
     } finally {
       if (current === generation.current) setBusy(false);
     }
@@ -52,31 +50,35 @@ export function PracticeReceipts({ jobId }: { jobId: string }) {
     setView(null); setNotice(""); void load();
     return () => { generation.current++; active.current?.abort(); };
   }, [load]);
+  const failure = ui.failure;
   useEffect(() => { if (failure) alertRef.current?.focus(); }, [failure]);
 
-  const unknown = failure?.kind === "unknown";
   async function send(command: Command, done: string) {
-    if (!view || busy || unknown) return;
+    if (!view || mutationsPaused(ui, busy)) return;
     const current = ++generation.current;
     active.current?.abort();
-    setBusy(true); setFailure(null); setNotice("");
+    setBusy(true); dispatch({ type: "post_started" }); setNotice("");
     try {
       const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command) });
       let body: unknown = null;
       try { body = await response.json(); } catch { /* an unreadable body is judged by its status below */ }
       if (current !== generation.current) return;
-      if (!response.ok) { setFailure(failureFromResponse(response.status, body)); return; }
-      setView(practiceFeedResponseV1.parse(body)); setNotice(done);
+      if (!response.ok) {
+        const failed = failureFromResponse(response.status, body);
+        dispatch(failed.kind === "unknown" ? { type: "post_unknown" } : { type: "post_rejected", failure: failed });
+        return;
+      }
+      setView(practiceFeedResponseV1.parse(body)); dispatch({ type: "post_ok" }); setNotice(done);
     } catch {
-      // The request may or may not have been saved: pause further changes until the saved state is read.
-      if (current === generation.current) setFailure(TRANSPORT_UNKNOWN);
+      // The request may or may not have been saved: pause further changes until the saved state has been read successfully.
+      if (current === generation.current) dispatch({ type: "post_unknown" });
     } finally {
       if (current === generation.current) setBusy(false);
     }
   }
 
   const connected = view?.feedState === "connected";
-  const locked = busy || unknown;
+  const locked = mutationsPaused(ui, busy);
   const identified = view?.movements.filter((item) => item.state !== "possible_duplicate") ?? [];
   return <section id="practice-receipts" className={styles.panel} aria-labelledby="practice-receipts-title" aria-busy={busy}>
     <p className="eyebrow">Generated movement facts</p>
@@ -143,8 +145,8 @@ export function PracticeReceipts({ jobId }: { jobId: string }) {
           <div><dt>Qualification</dt><dd data-testid="receipt-qualification">{receiptStatusLabels[receipt.assessment.status]}</dd></div>
         </dl>
         <p data-testid="receipt-hint">{receiptHintLabels[receipt.assessment.reason]}</p>
-        {receipt.assessment.status === "qualifies" && receipt.assessment.matchedMovementKey && <p>Matched movement <code data-testid="receipt-matched-movement">{receipt.assessment.matchedMovementKey}</code></p>}
-        {receipt.assessment.status === "attested_only" && <button type="button" disabled={locked || !connected || !receipt.assessment.canMatch || !receipt.assessment.candidateMovementKey}
+        {receipt.assessment.matchedMovementKey && <p>Matched movement <code data-testid="receipt-matched-movement">{receipt.assessment.matchedMovementKey}</code></p>}
+        {receipt.assessment.status === "attested_only" && !receipt.assessment.matchedMovementKey && <button type="button" disabled={locked || !connected || !receipt.assessment.canMatch || !receipt.assessment.candidateMovementKey}
           onClick={() => void send(matchReceiptCommand(view.revision, receipt.assessment.candidateMovementKey!, receipt.paymentId), "Receipt matched to a simulated settled movement. Nothing has been allocated.")}>
           Match {pounds(receipt.amountPence)} receipt to its settled movement
         </button>}

@@ -21,7 +21,7 @@ export const practiceFeedMovementViewV1 = z.object({
 
 export const practiceFeedReceiptAssessmentV1 = z.object({
   status: z.enum(["attested_only", "qualifies", "reversed"]),
-  reason: z.enum(["no_generated_amount", "no_movement_yet", "pending", "duplicate_held", "movement_already_matched", "ready_to_match", "matched", "reversed"]),
+  reason: z.enum(["no_generated_amount", "no_movement_yet", "pending", "duplicate_held", "movement_already_matched", "movement_used_by_reversed_receipt", "ready_to_match", "matched", "reversed"]),
   canMatch: z.boolean(), candidateMovementKey: practiceMovementKeyV1.nullable(), matchedMovementKey: practiceMovementKeyV1.nullable(),
 }).strict();
 

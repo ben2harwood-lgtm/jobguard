@@ -158,19 +158,22 @@ export function projectPracticeFeedMovements(
 }
 
 export type AttestedReceiptInput = Readonly<{ paymentId: string; amountPence: number; currency: "GBP"; reversed: boolean }>;
-export type ReceiptMatchRecord = Readonly<{ paymentId: string; movementKey: PracticeMovementKey }>;
+/** A saved match. `paymentReversed` is whether the matched builder receipt has since been reversed (history is kept, never edited). */
+export type ReceiptMatchRecord = Readonly<{ paymentId: string; movementKey: PracticeMovementKey; paymentReversed: boolean }>;
 export type ReceiptAssessmentReason =
   | "no_generated_amount" | "no_movement_yet" | "pending" | "duplicate_held" | "movement_already_matched"
-  | "ready_to_match" | "matched" | "reversed";
+  | "movement_used_by_reversed_receipt" | "ready_to_match" | "matched" | "reversed";
 export type ReceiptAssessment = Readonly<{
   status: "attested_only" | "qualifies" | "reversed"; reason: ReceiptAssessmentReason; canMatch: boolean;
   candidateMovementKey: PracticeMovementKey | null; matchedMovementKey: PracticeMovementKey | null;
 }>;
 
 /**
- * A builder-attested receipt is the builder's own record, not settlement evidence. It qualifies only once it
- * is matched to a settled, identified, unheld simulated movement of exactly its amount, and it stops
- * qualifying if the receipt is reversed. Pure and deterministic: the database enforces the same rules.
+ * A builder-attested receipt is the builder's own record, not settlement evidence. It qualifies only while it is matched to a
+ * settled, identified, unheld simulated movement of exactly its amount, and it stops qualifying if the receipt is reversed.
+ * The saved match is history: if a late duplicate holds the movement the receipt reports why it cannot qualify (and qualifies
+ * again after reconciliation, with no new match). Pure and deterministic: the database enforces the same match rules.
+ * A reversed receipt's match is not undone: its movement stays used, which the explanation says (correction belongs to M4-8-S).
  */
 export function assessAttestedReceipt(
   receipt: AttestedReceiptInput,
@@ -181,18 +184,27 @@ export function assessAttestedReceipt(
   const done = (status: ReceiptAssessment["status"], reason: ReceiptAssessmentReason, candidate: PracticeMovementKey | null, canMatch = false): ReceiptAssessment => ({
     status, reason, canMatch, candidateMovementKey: candidate, matchedMovementKey: recorded?.movementKey ?? null,
   });
+  const movementFor = (key: PracticeMovementKey) => movements.find((entry) => entry.movementKey === key && entry.underlyingMovementId === key);
+  // Current state of a movement as a reason a receipt cannot (yet) qualify against it, or null when it is settled and unheld.
+  const blocked = (key: PracticeMovementKey): ReceiptAssessmentReason | null => {
+    const movement = movementFor(key);
+    if (!movement) return "no_movement_yet";
+    if (movement.state === "pending") return "pending";
+    return movement.eligibleForAllocation ? null : "duplicate_held";
+  };
   if (receipt.reversed) return done("reversed", "reversed", null);
-  if (recorded) return done("qualifies", "matched", recorded.movementKey);
+  if (recorded) {
+    const why = blocked(recorded.movementKey);
+    return why ? done("attested_only", why, recorded.movementKey) : done("qualifies", "matched", recorded.movementKey);
+  }
   const candidate = receipt.currency === "GBP"
     ? practiceMovementCatalogueV1.find((entry) => entry.kind === "customer_receipt" && entry.grossPence === receipt.amountPence) ?? null
     : null;
   if (!candidate) return done("attested_only", "no_generated_amount", null);
-  if (matches.some((match) => match.movementKey === candidate.movement)) return done("attested_only", "movement_already_matched", candidate.movement);
-  const movement = movements.find((entry) => entry.movementKey === candidate.movement && entry.underlyingMovementId === candidate.movement);
-  if (!movement) return done("attested_only", "no_movement_yet", candidate.movement);
-  if (movement.state === "pending") return done("attested_only", "pending", candidate.movement);
-  if (!movement.eligibleForAllocation) return done("attested_only", "duplicate_held", candidate.movement);
-  return done("attested_only", "ready_to_match", candidate.movement, true);
+  const holder = matches.find((match) => match.movementKey === candidate.movement);
+  if (holder) return done("attested_only", holder.paymentReversed ? "movement_used_by_reversed_receipt" : "movement_already_matched", candidate.movement);
+  const why = blocked(candidate.movement);
+  return why ? done("attested_only", why, candidate.movement) : done("attested_only", "ready_to_match", candidate.movement, true);
 }
 
 export type PracticeFeedReceiptView = Readonly<{

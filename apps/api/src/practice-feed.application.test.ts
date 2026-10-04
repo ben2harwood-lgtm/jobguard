@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { practiceMovementCatalogueV1 } from "@jobguard/core";
+import { assessAttestedReceipt, generatedPracticeFeedEvents, practiceMovementCatalogueV1, projectPracticeFeedMovements, type PracticeFeedStep } from "@jobguard/core";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "@jobguard/db";
 import { PracticeFeedApplication } from "./practice-feed.application.js";
-import { practiceFeedCommandV1, practiceFeedResponseV1 } from "./practice-feed.contracts.js";
+import { practiceFeedCommandV1, practiceFeedReceiptAssessmentV1, practiceFeedResponseV1 } from "./practice-feed.contracts.js";
 import { practiceFeedHttpError, practiceFeedHttpQuery, practiceFeedSession } from "./practice-feed.http.js";
 
 const jobId = randomUUID();
@@ -90,6 +90,24 @@ describe("practice feed API boundary (the repository is a unit-test double)", ()
     expect(practiceFeedResponseV1.safeParse({ ...response, movements: [{ ...movement, grossPence: Infinity }] }).success).toBe(false);
     expect(practiceFeedResponseV1.safeParse({ ...response, allocatedEligibleNetPence: 1 }).success).toBe(false);
     expect(practiceFeedResponseV1.safeParse({ ...response, realExternalActions: 1 }).success).toBe(false);
+  });
+
+  it("the response contract admits every reason the pure assessment can give, and nothing else", () => {
+    const acct = "11111111-1111-4111-8111-111111111111", pay = "22222222-2222-4222-8222-222222222222", other = "33333333-3333-4333-8333-333333333333";
+    const moves = (steps: PracticeFeedStep[], reconciled: Array<"receipt-384"> = []) => projectPracticeFeedMovements(acct,
+      steps.flatMap((step) => generatedPracticeFeedEvents("receipt-384", step)).map((event) => ({ ...event, sourceHash: "a".repeat(64) })), reconciled);
+    const r = (amountPence: number, reversed = false) => ({ paymentId: pay, amountPence, currency: "GBP" as const, reversed });
+    const m = (paymentId: string, paymentReversed = false) => [{ paymentId, movementKey: "receipt-384" as const, paymentReversed }];
+    const seen = new Set<string>();
+    for (const assessment of [
+      assessAttestedReceipt(r(38_500), moves(["settled"]), []), assessAttestedReceipt(r(38_400), [], []), assessAttestedReceipt(r(38_400), moves(["pending"]), []),
+      assessAttestedReceipt(r(38_400), moves(["settled", "unknown_duplicate"]), []), assessAttestedReceipt(r(38_400), moves(["settled"]), m(other)),
+      assessAttestedReceipt(r(38_400), moves(["settled"]), m(other, true)), assessAttestedReceipt(r(38_400), moves(["settled"]), []),
+      assessAttestedReceipt(r(38_400), moves(["settled"]), m(pay)), assessAttestedReceipt(r(38_400, true), moves(["settled"]), m(pay)),
+      assessAttestedReceipt(r(38_400), moves(["settled", "unknown_duplicate"]), m(pay)),
+    ]) { expect(practiceFeedReceiptAssessmentV1.parse(assessment)).toEqual(assessment); seen.add(assessment.reason); }
+    expect([...seen].sort()).toEqual(["duplicate_held", "matched", "movement_already_matched", "movement_used_by_reversed_receipt", "no_generated_amount", "no_movement_yet", "pending", "ready_to_match", "reversed"]);
+    expect(practiceFeedReceiptAssessmentV1.safeParse({ status: "qualifies", reason: "invented", canMatch: false, candidateMovementKey: null, matchedMovementKey: null }).success).toBe(false);
   });
 
   it("rejects malformed job identifiers without database access", async () => {

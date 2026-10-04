@@ -18,8 +18,9 @@ export const receiptHintLabels: Readonly<Record<Assessment["reason"], string>> =
   no_generated_amount: "No generated practice movement has this amount.",
   no_movement_yet: "No practice movement of this amount has arrived yet.",
   pending: "The matching movement is still pending, so this receipt cannot qualify yet.",
-  duplicate_held: "The matching movement is held as a possible duplicate until it is reconciled.",
+  duplicate_held: "The matching movement is held as a possible duplicate, so this receipt cannot qualify until it is reconciled. The saved match is kept.",
   movement_already_matched: "Another receipt already uses this movement.",
+  movement_used_by_reversed_receipt: "The receipt that used this movement was reversed. In this practice that movement stays used and cannot verify a corrected receipt; start a new practice run.",
   ready_to_match: "A settled simulated movement of this exact amount is ready to match.",
   matched: "Matched to a simulated settled movement. Nothing has been allocated.",
   reversed: "This receipt was reversed, so it can no longer qualify.",
@@ -61,3 +62,26 @@ export function failureFromResponse(status: number, body: unknown): Failure {
   if (status >= 400 && status < 500) return { kind: "rejected", message: rejected[code] ?? "The practice feed refused that request. Nothing was changed." };
   return TRANSPORT_UNKNOWN;
 }
+
+/**
+ * The pause after an unknown write result is its own state, not a message: only a successful, validated read of the saved
+ * practice feed lifts it. A failed reload therefore keeps changes paused (and never claims that nothing was changed).
+ */
+export type FeedUi = Readonly<{ failure: Failure | null; reconcile: boolean }>;
+export const initialUi: FeedUi = { failure: null, reconcile: false };
+const LOAD_FAILED: Failure = { kind: "rejected", message: "Practice receipts could not load. Nothing was changed. Load the saved facts again." };
+const LOAD_FAILED_PAUSED: Failure = { kind: "unknown", message: "The saved practice feed could not be read yet, and the last change may or may not have been saved. Changes stay paused until it is read." };
+export type UiEvent =
+  | { type: "load_started" } | { type: "load_ok" } | { type: "load_failed" }
+  | { type: "post_started" } | { type: "post_ok" } | { type: "post_rejected"; failure: Failure } | { type: "post_unknown" };
+export function nextUi(state: FeedUi, event: UiEvent): FeedUi {
+  switch (event.type) {
+    case "load_started": case "post_started": return state.reconcile ? state : { failure: null, reconcile: false };
+    case "load_ok": return initialUi;
+    case "post_ok": return initialUi;
+    case "load_failed": return state.reconcile ? { failure: LOAD_FAILED_PAUSED, reconcile: true } : { failure: LOAD_FAILED, reconcile: false };
+    case "post_rejected": return { failure: event.failure, reconcile: state.reconcile };
+    case "post_unknown": return { failure: TRANSPORT_UNKNOWN, reconcile: true };
+  }
+}
+export const mutationsPaused = (state: FeedUi, busy: boolean) => busy || state.reconcile;
