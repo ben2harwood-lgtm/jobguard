@@ -45,3 +45,6 @@ export * from "../inbox-relevance.application.js";
 
 export * from "../evidence-pack.contracts.js";
 export * from "../evidence-pack.application.js";
+
+export * from "../recovery-message.contracts.js";
+export * from "../recovery-message.application.js";

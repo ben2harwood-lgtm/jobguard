@@ -1,0 +1,22 @@
+.panel{margin-block:1.5rem;padding:clamp(.8rem,3vw,1.4rem);border:1px solid #b9cbbf;border-radius:1rem;background:#f7faf7;color:#16241c;min-width:0;overflow-wrap:anywhere}
+.panel h4{margin-top:0;font-size:1.2rem}
+.panel p{line-height:1.5}
+.panel button,.panel input,.panel select,.panel textarea,.panel summary,.panel a{min-height:44px;min-width:44px;max-width:100%}
+.panel button{padding:.55rem .8rem;white-space:normal}
+.panel button:focus-visible,.panel input:focus-visible,.panel select:focus-visible,.panel textarea:focus-visible,.panel summary:focus-visible,.panel a:focus-visible{outline:3px solid #bf7500;outline-offset:3px}
+.panel label{display:grid;gap:.35rem;margin-block:.8rem;font-weight:650}
+.panel input,.panel select,.panel textarea{width:100%;padding:.65rem;border:1px solid #a8b7ae;border-radius:.5rem;background:#fff;color:inherit;font:inherit;box-sizing:border-box}
+.panel textarea{resize:vertical;min-height:130px}
+.panel code,.panel pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+.panel a{display:inline-flex;align-items:center;color:#0c5038}
+.panel summary{cursor:pointer;display:list-item;padding-block:.75rem;font-weight:650}
+.panel ol,.panel ul{padding-left:1.2rem}
+.panel li{margin-block:.6rem}
+.actions{display:flex;flex-wrap:wrap;gap:.65rem;align-items:center}
+.status{padding:.85rem;border-radius:.6rem;background:#e4eee7;font-weight:750}
+.error{padding:.85rem;border:1px solid #ad4d36;border-radius:.6rem;background:#fff2ed;color:#762b1c}
+.changed{padding:.75rem;border-left:4px solid #a16a16;background:#fff4de;font-weight:700}
+.preview{margin-block:1rem;padding:.9rem;border:1px solid #cdd9d0;border-radius:.7rem;background:#fff}
+.history{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #ccd8cf}
+.sink{margin-top:1rem;padding:.8rem;border:1px dashed #7d9a87;border-radius:.6rem;background:#fff}
+@media (prefers-color-scheme:dark){.panel{background:#18241d;color:#e8f1ea;border-color:#47604f}.panel a{color:#9fd8b8}.preview,.sink,.panel input,.panel select,.panel textarea{background:#101a14;color:#e8f1ea}.status{background:#25382c}.error{background:#3a1d17;color:#ffd9cf}.changed{background:#3a2e12}}
