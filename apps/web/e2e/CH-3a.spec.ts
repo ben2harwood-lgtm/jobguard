@@ -237,7 +237,8 @@ const MORE_LINES = "More address lines (optional, one per line)";
 test("CH-3a reopening shows the saved details, and saving them unchanged creates no new customer or site", async ({ page }) => {
   test.setTimeout(180000); const jobId = await reviewJob(page);
   await page.getByLabel("Customer type").selectOption("business"); await page.getByLabel("Customer name", { exact: true }).fill("Reopened Fictional Ltd");
-  await page.getByLabel("Customer phone (fictional, optional)").fill("07000000011"); await page.getByLabel("Premises address").fill("9 Reopen Row");
+  await page.getByLabel("Customer phone (fictional, optional)").fill("07000000011"); await page.getByLabel("Customer email (fictional, optional)").fill("");
+  await page.getByLabel("Premises address").fill("9 Reopen Row");
   await page.getByLabel("Town").fill("Reopenshire"); await page.getByLabel("UK postcode").fill("sw1a 2aa"); await page.getByLabel("Flat or unit (optional)").fill("Flat 9");
   await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Reopened Fictional Ltd");
   const first = await partiesView(page, jobId); const actions = partyActions(page, jobId);
