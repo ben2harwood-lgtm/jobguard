@@ -6,7 +6,7 @@ const button=(page:Page,name:string)=>page.getByRole("button",{name,exact:true})
 const expectTouchTarget=async(target:Locator)=>{const box=await target.boundingBox();expect(box).not.toBeNull();expect(box!.width).toBeGreaterThanOrEqual(44);expect(box!.height).toBeGreaterThanOrEqual(44)};
 // C7: a keyboard user reaches the action and sees a real focus indicator (not outline:none with no replacement).
 const expectVisibleKeyboardFocus=async(page:Page,name:string)=>{const target=button(page,name);await expect(target).toBeFocused();expect(await target.evaluate(el=>{const s=getComputedStyle(el);return el.matches(":focus-visible")&&((s.outlineStyle!=="none"&&parseFloat(s.outlineWidth)>0)||s.boxShadow!=="none")})).toBe(true)};
-test("opens and manages evidence-linked recovery cases without inventing recovered money",async({page,context},testInfo)=>{
+test("opens and manages evidence-linked recovery cases without inventing recovered money",async({page,browser},testInfo)=>{
  await openReview(page);
  for(const n of["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await page.getByRole("button",{name:`Accept ${n}`,exact:true}).click();
  await page.getByRole("button",{name:"Dismiss Replace shelves",exact:true}).click();await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");
@@ -48,10 +48,23 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  await V(page,"case-outstanding-net","£0.00");
  await button(page,"Record prevention").click();
  await V(page,"case-state","Prevented before payment");await V(page,"case-fee","£0.00");await expect(button(page,"Record a landed recovery")).toBeDisabled();
+ // The authoritative read before reload: every case with its id, revision, amounts and source identities.
+ const persisted=await(await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();expect(persisted.cases).toHaveLength(4);
  await page.reload();await V(page,"case-state","Prevented before payment");
- // C7 (partly): a second page reads the same persisted state via a deep link. It cannot "open the job from Jobs": the Jobs list
- // (readSyntheticDemo) deliberately excludes capture-created jobs, so this is an OPEN FOR BEN item in BUILDER_RECEIPT_repair2.md, not a pass.
- const second=await context.newPage();await second.goto(`/jobs/${jobId}#recovery-cases`);await V(second,"case-state","Prevented before payment");
+ // C1/C7: a SECOND browser context (own cookies, own storage) signs in and reads the same persisted cases and source identities.
+ // It cannot "open the job from Jobs": the Jobs list (readSyntheticDemo) deliberately excludes capture-created jobs, so the job page is
+ // reached by its URL. That single step is an OPEN FOR BEN item in BUILDER_RECEIPT_repair4.md, not a pass.
+ const second=await browser.newContext(),secondPage=await second.newPage();
+ await secondPage.goto("/");await secondPage.getByRole("button",{name:"Start the demo"}).click();const skip=secondPage.getByRole("button",{name:"Skip tour"});await skip.waitFor({state:"visible"});await skip.click();
+ await secondPage.goto(`/jobs/${jobId}#recovery-cases`);await V(secondPage,"case-state","Prevented before payment");
+ expect(await(await secondPage.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()).toEqual(persisted);
+ await secondPage.getByRole("button",{name:"merchant overcharge · £320.00",exact:true}).click();
+ await V(secondPage,"case-claimed-net","£320.00");await V(secondPage,"case-state","Needs evidence");
+ for(const source of["Supplier agreement AG-320","Delivery note DN-320","Supplier invoice INV-320"])await expect(secondPage.getByRole("link",{name:source,exact:true})).toBeVisible();
+ await secondPage.getByRole("button",{name:"withheld customer payment · £2,500.00",exact:true}).click();
+ await V(secondPage,"case-landed-net","£1,000.00");await V(secondPage,"case-outstanding-net","£0.00");await expect(secondPage.getByText("£1,500.00 written off",{exact:true})).toBeVisible();
+ await expect(secondPage.getByRole("link",{name:"Generated customer invoice INV-18800",exact:true})).toBeVisible();
+ await second.close();
  await expect(page.getByText("Practice sandbox — synthetic data; nothing is sent or charged",{exact:true})).toHaveCount(1);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
  await page.screenshot({path:`test-results/M4-1-S-${testInfo.project.name}.png`,fullPage:true})

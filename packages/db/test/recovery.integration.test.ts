@@ -43,14 +43,14 @@ describe("structural recovery fee guard",()=>{
    const upload = randomUUID();
    await admin.query(`SET session_replication_role=replica;INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES('${upload}','${T}','${J}','synthetic/upload-r3','${"c".repeat(64)}','application/pdf',1,'standard_evidence','verified','v1',now(),now()+interval '1 hour');INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES('${E2}','${T}','${upload}','${J}','original','synthetic_bank_receipt','synthetic/key-r3','v1','${"c".repeat(64)}',1,'application/pdf','standard_evidence',now(),now());SET session_replication_role=origin`);
   });
-  const open = (repo: RecoveryCaseRepository, claimedNetPence: number) => repo.command(context, J, { version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "withheld_customer_payment", claimedNetPence, counterparty: "Synthetic", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: ["Generated customer invoice INV-18800"], expectedRevision: 0 }, who);
-  const step = (repo: RecoveryCaseRepository, c: { id: string; revision: number }, extra: Record<string, unknown>) => repo.command(context, J, { version: "recovery-case-command.v1", action: "transition", commandId: randomUUID(), caseId: c.id, expectedRevision: c.revision, ...extra }, who);
+  const open = (repo: RecoveryCaseRepository, claimedNetPence: number, jobId = J) => repo.command(context, jobId, { version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "withheld_customer_payment", claimedNetPence, counterparty: "Synthetic", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: ["Generated customer invoice INV-18800"], expectedRevision: 0 }, who);
+  const step = (repo: RecoveryCaseRepository, c: { id: string; revision: number }, extra: Record<string, unknown>, jobId = J) => repo.command(context, jobId, { version: "recovery-case-command.v1", action: "transition", commandId: randomUUID(), caseId: c.id, expectedRevision: c.revision, ...extra }, who);
   // A settled synthetic receipt plus current eligibility and landing approvals for exactly this case revision.
-  async function readyToLand(c: { id: string; revision: number }, receiptGross: number) {
+  async function readyToLand(c: { id: string; revision: number }, receiptGross: number, jobId = J, evidenceId = E2) {
     const receipt = randomUUID(), eligibility = randomUUID(), landing = randomUUID();
-    await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1::uuid,$2::uuid,$3::uuid,$1::text,$1::text,'settled',$4,'GBP',true,now())", [receipt, T, J, receiptGross]);
-    for (const [id, kind] of [[eligibility, "eligibility"], [landing, "landing"]]) await admin.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id)VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',now()+interval '1 hour',$7)", [id, T, J, c.id, kind, c.revision, randomUUID()]);
-    return (gross: number, eligible = gross) => ({ ...payload(c.id, eligibility, landing), receiptId: receipt, evidenceId: E2, expectedCaseRevision: c.revision, grossPence: gross, eligibleNetPence: eligible });
+    await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1::uuid,$2::uuid,$3::uuid,$1::text,$1::text,'settled',$4,'GBP',true,now())", [receipt, T, jobId, receiptGross]);
+    for (const [id, kind] of [[eligibility, "eligibility"], [landing, "landing"]]) await admin.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id)VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',now()+interval '1 hour',$7)", [id, T, jobId, c.id, kind, c.revision, randomUUID()]);
+    return (gross: number, eligible = gross) => ({ ...payload(c.id, eligibility, landing), jobId, receiptId: receipt, evidenceId, expectedCaseRevision: c.revision, grossPence: gross, eligibleNetPence: eligible });
   }
   const land = (p: object) => withTenant(runtime, context, db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb) id", [p]));
   const allocationsAndDerivations = async (caseId: string) => (await admin.query("SELECT (SELECT count(*) FROM app.landing_allocation WHERE tenant_id=$1 AND case_id=$2)::int allocations,(SELECT count(*) FROM app.recovery_fee_derivation d JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(d.tenant_id,d.source_allocation_id) WHERE d.tenant_id=$1 AND a.case_id=$2)::int derivations,(SELECT count(*) FROM app.recovery_fee_journal j JOIN app.recovery_fee_derivation d ON(d.tenant_id,d.id)=(j.tenant_id,j.derivation_id) JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(d.tenant_id,d.source_allocation_id) WHERE j.tenant_id=$1 AND a.case_id=$2)::int journal", [T, caseId])).rows[0];
@@ -73,6 +73,67 @@ describe("structural recovery fee guard",()=>{
    expect(posted).toBeGreaterThan(0);
    expect(view.feeIllustrativePence).toBe(posted);
    expect(await allocationsAndDerivations(c.id)).toEqual({ allocations: 1, derivations: 1, journal: 1 });
+  });
+
+  const reverseApproved = (allocationId: string, amount: number) => withTenant(runtime, context, db => db.$client.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7) id", [T, randomUUID(), randomUUID(), randomUUID(), allocationId, amount, "Practice receipt reversed"]));
+  const viewOf = async (repo: RecoveryCaseRepository, id: string, jobId = J) => (await repo.list(context, jobId)).find(x => x.id === id)!;
+
+  it("reconciles approved landings and their reversals with the case accounting exactly once, without double counting manual records (Sol P2)", async () => {
+   const repo = new RecoveryCaseRepository(runtime);
+   let c = await open(repo, 250000);
+   c = await step(repo, c, { eventType: "assemble_evidence" });
+   const p = await readyToLand(c, 300000), approved = p(50000);
+   await land(approved);
+   // The approved landing is received principal; the fee and the money agree.
+   let v = await viewOf(repo, c.id);
+   expect(v).toMatchObject({ landedNetPence: 50000, approvedLandedNetPence: 50000, outstandingNetPence: 200000, writtenOffPence: 0 });
+   expect(v.feeIllustrativePence).toBeGreaterThan(0);
+   // Recording the same 500.00 by hand does not count it twice; more than the approved amount raises the total to the larger figure.
+   c = await step(repo, c, { eventType: "record_landing", amountPence: 30000 });
+   expect(await viewOf(repo, c.id)).toMatchObject({ landedNetPence: 50000, outstandingNetPence: 200000 });
+   c = await step(repo, c, { eventType: "record_landing", amountPence: 30000 });
+   expect(await viewOf(repo, c.id)).toMatchObject({ landedNetPence: 60000, approvedLandedNetPence: 50000, outstandingNetPence: 190000 });
+   // A claim can not be amended below the received principal; a write-off covers only what is still outstanding.
+   await expect(repo.command(context, J, { version: "recovery-case-command.v1", action: "amend_claim", commandId: randomUUID(), caseId: c.id, claimedNetPence: 59999, expectedRevision: c.revision }, who)).rejects.toThrow("RECOVERY_CLAIM_BELOW_SETTLED");
+   c = await step(repo, c, { eventType: "write_off" });
+   expect(await viewOf(repo, c.id)).toMatchObject({ state: "closed_no_recovery", landedNetPence: 60000, writtenOffPence: 190000, outstandingNetPence: 0 });
+   // Reversing the approved landing removes only the approved principal and its fee; the manual 600.00 record stands.
+   await reverseApproved(approved.allocationId, 50000);
+   v = await viewOf(repo, c.id);
+   expect(v).toMatchObject({ landedNetPence: 60000, approvedLandedNetPence: 0, feeIllustrativePence: 0, writtenOffPence: 190000, outstandingNetPence: 0 });
+   // The workbench can reverse only its own manual records, never more than they hold.
+   await expect(step(repo, c, { eventType: "reverse_landing", amountPence: 60001 })).rejects.toThrow(/is not allowed/);
+   c = await step(repo, c, { eventType: "reverse_landing", amountPence: 60000 });
+   v = await viewOf(repo, c.id);
+   expect(v).toMatchObject({ landedNetPence: 0, writtenOffPence: 190000, outstandingNetPence: 60000 });
+   expect(v.landedNetPence + v.writtenOffPence + v.outstandingNetPence).toBe(v.claimedNetPence);
+  });
+
+  it("does not let the workbench reverse a landing that exists only as an approved allocation, and keeps the legacy landing path unchanged (Sol P2)", async () => {
+   const repo = new RecoveryCaseRepository(runtime);
+   let c = await open(repo, 100000);
+   c = await step(repo, c, { eventType: "assemble_evidence" });
+   await land((await readyToLand(c, 100000))(50000));
+   expect(await viewOf(repo, c.id)).toMatchObject({ landedNetPence: 50000, approvedLandedNetPence: 50000, outstandingNetPence: 50000 });
+   await expect(step(repo, c, { eventType: "reverse_landing", amountPence: 100 })).rejects.toThrow(/is not allowed/);
+   // A legacy case with no workbench history is still read from its own row by the routine.
+   const legacy = (await admin.query("SELECT state,claim_pence,revision FROM app.recovery_case_current WHERE id=$1", [C1])).rows[0];
+   expect(legacy).toMatchObject({ claim_pence: "100", revision: 0 });
+  });
+
+  it("describes an approved landing whose fee is fully offset by plan credit as approved with a zero fee (Sol P3)", async () => {
+   const repo = new RecoveryCaseRepository(runtime), J2 = randomUUID(), E3 = randomUUID(), upload = randomUUID(), activation = randomUUID(), obligation = randomUUID();
+   await admin.query(`SET session_replication_role=replica;INSERT INTO app.job(id,tenant_id,title,status,revision)VALUES('${J2}','${T}','Credit recovery','live',1);INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES('${activation}','${T}','${J2}',gen_random_uuid(),1,'${"a".repeat(64)}','synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',gen_random_uuid(),now());INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES(gen_random_uuid(),'${T}','${J2}','${activation}',gen_random_uuid(),1880000,'GBP',28200,'reference_fee_policy_v1',true);INSERT INTO app.synthetic_obligation(id,tenant_id,job_id,activation_id,principal_pence,currency,state,label)VALUES('${obligation}','${T}','${J2}','${activation}',7900,'GBP','owed_unpaid','illustrative_only');INSERT INTO app.simulated_settlement_event(id,tenant_id,job_id,obligation_id,provider_event_id,amount_pence,currency,label,simulated_at)VALUES(gen_random_uuid(),'${T}','${J2}','${obligation}','credit-settlement-${randomUUID()}',7900,'GBP','simulated_not_collected',now());INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES('${upload}','${T}','${J2}','synthetic/upload-credit','${"d".repeat(64)}','application/pdf',1,'standard_evidence','verified','v1',now(),now()+interval '1 hour');INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES('${E3}','${T}','${upload}','${J2}','original','synthetic_bank_receipt','synthetic/key-credit','v1','${"d".repeat(64)}',1,'application/pdf','standard_evidence',now(),now());SET session_replication_role=origin`);
+   let c = await open(repo, 100000, J2);
+   c = await step(repo, c, { eventType: "assemble_evidence" }, J2);
+   const landing = (await readyToLand(c, 100000, J2, E3))(5000);
+   await land(landing);
+   const derivation = (await admin.query("SELECT capped_fee_pence,credit_used_pence,liability_pence,posting_delta_pence FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND source_allocation_id=$2", [T, landing.allocationId])).rows[0];
+   expect(derivation).toEqual({ capped_fee_pence: "500", credit_used_pence: "500", liability_pence: "0", posting_delta_pence: "0" });
+   // A qualifying landing exists, yet no fee is posted: the view must say so, not "no approved landing".
+   const v = await viewOf(repo, c.id, J2);
+   expect(v).toMatchObject({ approvedLandedNetPence: 5000, feeIllustrativePence: 0, landedNetPence: 5000 });
+   expect((await allocationsAndDerivations(c.id)).allocations).toBe(1);
   });
 
   it("refuses to allocate principal the workbench has written off (Sol P2: SQL landing path)", async () => {
