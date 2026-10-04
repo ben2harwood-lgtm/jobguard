@@ -12,16 +12,22 @@ SELECT c.id,c.tenant_id,c.job_id,
  CASE WHEN q.id IS NULL THEN c.revision ELSE q.revision+s.event_count END AS revision,
  c.synthetic,c.created_at,c.case_type,c.counterparty,c.book,c.source_type,c.source_refs,c.environment,
  q.revision AS claim_revision,s.event_count,e.payload_hash AS previous_hash,
- e.reviewer_ref,s.landed,s.written_off
+ e.reviewer_ref,greatest(s.manual_landed,a.approved_landed) AS landed,s.manual_landed,a.approved_landed,s.written_off
 FROM app.recovery_case c
 LEFT JOIN LATERAL (SELECT * FROM app.recovery_claim_revision q WHERE q.tenant_id=c.tenant_id AND q.case_id=c.id ORDER BY revision DESC LIMIT 1) q ON true
 LEFT JOIN LATERAL (SELECT * FROM app.recovery_case_event e WHERE e.tenant_id=c.tenant_id AND e.case_id=c.id ORDER BY sequence DESC LIMIT 1) e ON true
 CROSS JOIN LATERAL (
  SELECT count(*)::integer AS event_count,
- coalesce(sum(CASE WHEN event_type='record_landing' THEN amount_pence WHEN event_type='reverse_landing' THEN -amount_pence ELSE 0 END),0) AS landed,
+ coalesce(sum(CASE WHEN event_type='record_landing' THEN amount_pence WHEN event_type='reverse_landing' THEN -amount_pence ELSE 0 END),0) AS manual_landed,
  coalesce(sum(CASE WHEN event_type='write_off' THEN amount_pence ELSE 0 END),0) AS written_off
  FROM app.recovery_case_event s WHERE s.tenant_id=c.tenant_id AND s.case_id=c.id
 ) s
+CROSS JOIN LATERAL (
+ -- Principal approved through the landing routine, net of approved reversals. It is the same money a builder may also
+ -- have recorded by hand, so the received principal is the LARGER of the two figures, never their sum.
+ SELECT coalesce((SELECT sum(x.eligible_net_pence) FROM app.landing_allocation x WHERE x.tenant_id=c.tenant_id AND x.case_id=c.id),0)
+      - coalesce((SELECT sum(r.eligible_net_pence) FROM app.landing_reversal r JOIN app.landing_allocation x ON(x.tenant_id,x.id)=(r.tenant_id,r.allocation_id) WHERE r.tenant_id=c.tenant_id AND x.case_id=c.id),0) AS approved_landed
+) a
 -- A partially written workbench history cannot fall back to a legacy snapshot.
 WHERE (q.id IS NULL AND e.id IS NULL) OR (q.id IS NOT NULL AND e.id IS NOT NULL);
 ALTER VIEW app.recovery_case_current OWNER TO jobguard_migration;

@@ -124,6 +124,16 @@ DEFINER function or runtime mutation grant. Repository, eligibility, demo and
 pack readers use the same projection. Deploy migration before the new readers;
 preceding code can still write/read its original tables during rollout.
 
+Received principal in the projection is the LARGER of the manually recorded landings
+(workbench events, net of manual reversals) and the principal approved through
+`approve_synthetic_landing` (allocations net of approved reversals), never their sum:
+a builder may record by hand the same money that is later approved, and approving it
+must not count it twice. Claim amendment, write-off and the outstanding figure all use
+that received principal; the workbench may reverse only its own manual records, and
+approved landings are reversed through the approved reversal routine. The case state
+remains the workflow stage set by workbench events (an approved landing does not move
+it). Legacy cases with no workbench history are unchanged.
+
 Tests cover upgrade from the preceding schema with existing event/claim history,
 repeat migration, legacy landing behavior, amended claim/revision in the landing
 routine, prevention, runtime read isolation and forbidden updates. Forward-fix
