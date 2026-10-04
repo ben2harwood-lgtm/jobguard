@@ -132,7 +132,11 @@ must not count it twice. Claim amendment, write-off and the outstanding figure a
 that received principal; the workbench may reverse only its own manual records, and
 approved landings are reversed through the approved reversal routine. The case state
 remains the workflow stage set by workbench events (an approved landing does not move
-it). Legacy cases with no workbench history are unchanged.
+it). Legacy cases with no workbench history are unchanged. The landing routine bounds a new
+allocation by the NET approved principal (allocations less approved reversals), so a reversal
+restores claim capacity even when part of the claim was written off. The reference fee is a job-level figure
+(one cap and one plan-fee credit shared by every case): the workbench reports the job's current
+fee liability separately from the signed obligation and compensation postings made because of the case.
 
 Tests cover upgrade from the preceding schema with existing event/claim history,
 repeat migration, legacy landing behavior, amended claim/revision in the landing
