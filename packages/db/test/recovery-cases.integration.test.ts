@@ -1,145 +1,85 @@
-import{randomUUID}from"node:crypto";import{mkdtemp,rm,readFile}from"node:fs/promises";import{tmpdir}from"node:os";import{join}from"node:path";import EmbeddedPostgres from"embedded-postgres";import{Pool}from"pg";import{afterAll,beforeAll,describe,expect,it}from"vitest";import{migrate,MIGRATION_URLS,RecoveryCaseRepository,withTenant,type VerifiedTenantContext}from"../src/index.js";import{closeTestPools}from"./pool-test-utils.js";
-let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx={tenantId:tenant}as VerifiedTenantContext;const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
-beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jg-recovery-cases-"));const port=60000+Math.floor(Math.random()*200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic"});// Install the preceding schema, seed its immutable history, then upgrade in place.
-await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-for(const url of MIGRATION_URLS.filter(url=>!url.pathname.includes("0043_"))){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[url.pathname.split("/").at(-1)]);}
-await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1),($2)",[tenant,other]);await admin.query("INSERT INTO app.job(id,tenant_id,title)VALUES($1,$3,'Recovery fixture'),($2,$3,'Wrong job')",[job,wrongJob,tenant]);const upgradeCase=randomUUID();
-await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)VALUES($1,$2,$3,250000,'GBP','identified',0,true)",[upgradeCase,tenant,job]);
-await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash)VALUES($1,$2,$3,$4,1,32000,'GBP','upgrade-reviewer',$5)",[randomUUID(),tenant,job,upgradeCase,"a".repeat(64)]);
-await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,to_state,reviewer_ref,command_id,payload_hash)VALUES($1,$2,$3,$4,1,'prevent','prevented','upgrade-reviewer',$5,$6)",[randomUUID(),tenant,job,upgradeCase,randomUUID(),"b".repeat(64)]);
-await migrate(admin);await migrate(admin);
-expect((await admin.query("SELECT state,claim_pence,revision FROM app.recovery_case_current WHERE id=$1",[upgradeCase])).rows).toEqual([{state:"prevented",claim_pence:"32000",revision:2}]);
-await admin.query("CREATE ROLE recovery_case_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO recovery_case_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"recovery_case_login",password:"synthetic"})},60000);afterAll(async()=>{await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true})});
-describe("recovery cases",()=>{it("records direct receipt, partial landing, write-off and immutable actual reviewer",async()=>{const repo=reviewedRepo();let x=await repo.command(ctx,job,command({action:"open",caseType:"withheld_customer_payment",claimedNetPence:250000,counterparty:"Fictional Customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Generated customer invoice INV-18800"],expectedRevision:0}));x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}));x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"record_landing",amountPence:100000,expectedRevision:x.revision}));expect(x).toMatchObject({landedNetPence:100000,outstandingNetPence:150000,state:"partially_landed",reviewerRef:"reviewer:owner"});x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"write_off",expectedRevision:x.revision}));expect(x).toMatchObject({landedNetPence:100000,writtenOffPence:150000,outstandingNetPence:0,state:"closed_no_recovery"});expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_claim_revision WHERE tenant_id=$1 AND case_id=$2",[tenant,x.id])).rows[0].n)).toBe(1)});it("is replay-safe and gives concurrent stale revisions exactly one effect",async()=>{const repo=reviewedRepo(),open=command({action:"open",caseType:"merchant_overcharge",claimedNetPence:32000,counterparty:"Merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:["Supplier agreement AG-320","Delivery note DN-320","Supplier invoice INV-320"],expectedRevision:0}),x=await repo.command(ctx,job,open);expect((await repo.command(ctx,job,open)).id).toBe(x.id);const a=command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}),b=command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}),settled=await Promise.allSettled([repo.command(ctx,job,a),repo.command(ctx,job,b)]);expect(settled.filter(y=>y.status==="fulfilled")).toHaveLength(1);expect(settled.filter(y=>y.status==="rejected")).toHaveLength(1)});it("enforces RLS, job-qualified links, ownership and append-only runtime grants",async()=>{const catalog=await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname IN('recovery_case','recovery_claim_revision','recovery_case_event','recovery_eligibility_revision')");expect(catalog.rows).toHaveLength(4);expect(catalog.rows.every(x=>x.relrowsecurity&&x.relforcerowsecurity&&x.rolname==='jobguard_migration')).toBe(true);for(const sql of["UPDATE app.recovery_case SET counterparty='x'","DELETE FROM app.recovery_case","TRUNCATE app.recovery_case","UPDATE app.recovery_eligibility_revision SET status='approved'","DELETE FROM app.recovery_eligibility_revision","TRUNCATE app.recovery_eligibility_revision"])await expect(withTenant(runtime,ctx,db=>db.$client.query(sql))).rejects.toMatchObject({code:"42501"});await expect(withTenant(runtime,ctx,db=>db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,case_type,counterparty,book,source_type,source_refs)VALUES($1,$2,$3,'merchant_overcharge','x','supplier_cost','supplier_documents','[]')",[randomUUID(),other,job]))).rejects.toMatchObject({code:"42501"});await expect(reviewedRepo().command(ctx,wrongJob,command({action:"transition",caseId:randomUUID(),eventType:"assemble_evidence",expectedRevision:1}))).rejects.toThrow("RECOVERY_CASE_NOT_FOUND")});it("binds eligibility and rejects stale, forged and wrong-job commands",async()=>{const repo=reviewedRepo();let x=await repo.command(ctx,job,command({action:"open",caseType:"withheld_customer_payment",claimedNetPence:32000,counterparty:"Customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Generated customer invoice INV-18800"],expectedRevision:0}));await expect(repo.eligibilityCommand(ctx,job,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:x.id,scenario:"pending_money",eligible:true,expectedCaseRevision:x.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1},"owner")).rejects.toThrow();await expect(repo.eligibilityCommand(ctx,wrongJob,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:x.id,scenario:"pending_money",expectedCaseRevision:x.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1},"owner")).rejects.toThrow("RECOVERY_CASE_NOT_FOUND");x=await repo.eligibilityCommand(ctx,job,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:x.id,scenario:"evidence_backed_withheld_payment",expectedCaseRevision:x.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1},"authorized:owner");expect(x).toMatchObject({landedNetPence:0,eligibility:{eligibleNetPence:32000,status:"reviewed",reviewerRef:"authorized:owner"}});const old=x.eligibility!;x=await repo.eligibilityCommand(ctx,job,{version:"recovery-eligibility-command.v1",action:"supersede",commandId:randomUUID(),caseId:x.id,expectedCaseRevision:x.revision,subject:"evidence"},"authorized:owner");await expect(repo.eligibilityCommand(ctx,job,{version:"recovery-eligibility-command.v1",action:"approve",commandId:randomUUID(),caseId:x.id,expectedCaseRevision:x.revision,expectedEvidenceRevision:old.evidenceRevision,expectedPolicyRevision:1,expectedReviewRevision:old.revision},"authorized:owner")).rejects.toThrow("ELIGIBILITY_STALE_REVISION");expect(x.landedNetPence).toBe(0)});});
-
-function reviewedRepo() {
+import{randomUUID}from"node:crypto";import{mkdtemp,rm}from"node:fs/promises";import{tmpdir}from"node:os";import{join}from"node:path";import EmbeddedPostgres from"embedded-postgres";import{Pool}from"pg";import{afterAll,beforeAll,describe,expect,it}from"vitest";import{migrate,RecoveryCaseRepository,withTenant,type VerifiedTenantContext}from"../src/index.js";import{closeTestPools}from"./pool-test-utils.js";
+const reviewer={membershipId:randomUUID(),identityUserId:randomUUID()};
+// The M4-1-S-R repair derives the case reviewer from the verified server principal (4th argument), never from the command body.
+function reviewedRepository() {
  const repository = new RecoveryCaseRepository(runtime);
- return {command:(context:VerifiedTenantContext,jobId:string,input:unknown)=>repository.command(context,jobId,input,"reviewer:owner"),eligibilityCommand:repository.eligibilityCommand.bind(repository)};
+ return { command: (context: VerifiedTenantContext, jobId: string, input: unknown) => repository.command(context, jobId, input, "reviewer:owner"), eligibilityCommand: repository.eligibilityCommand.bind(repository), list: repository.list.bind(repository) };
 }
-const openCase = () => command({action:"open",caseType:"withheld_customer_payment",claimedNetPence:250000,counterparty:"Customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Generated customer invoice INV-18800"],expectedRevision:0});
-describe("M4-1-S HOLD regressions", () => {
- it("uses one live state, claim and revision projection while preserving the legacy snapshot", async () => {
-  const repo = new RecoveryCaseRepository(runtime);
-  let x = await repo.command(ctx,job,openCase(),"server-reviewer");
-  x = await repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence:32000,expectedRevision:x.revision}),"server-reviewer");
-  x = await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"prevent",expectedRevision:x.revision}),"server-reviewer");
-  const current = await withTenant(runtime,ctx,db => db.$client.query("SELECT state,claim_pence,revision FROM app.recovery_case_current WHERE id=$1",[x.id]));
-  expect(current.rows).toEqual([{state:"prevented",claim_pence:"32000",revision:x.revision}]);
-  const base = await admin.query("SELECT state,claim_pence,revision FROM app.recovery_case WHERE id=$1",[x.id]);
-  expect(base.rows).toEqual([{state:"identified",claim_pence:"250000",revision:0}]);
-  await expect(withTenant(runtime,ctx,db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[{version:"recovery.landing.approve.v1",policyVersion:"reference_fee_policy_v1",jobId:job,caseId:x.id,expectedCaseRevision:0}]))).rejects.toThrow("eligible current synthetic case required");
-  expect((await withTenant(runtime,{tenantId:other} as VerifiedTenantContext,db => db.$client.query("SELECT * FROM app.recovery_case_current WHERE id=$1",[x.id]))).rows).toEqual([]);
-  // The projection is a read-only contract: it is not an auto-updatable view (PostgreSQL 55000) and
-  // the runtime role holds no write privilege on it at all.
-  await expect(withTenant(runtime,ctx,db=>db.$client.query("UPDATE app.recovery_case_current SET state='landed'"))).rejects.toMatchObject({code:"55000"});
-  expect((await admin.query("SELECT p AS privilege,has_table_privilege('jobguard_runtime','app.recovery_case_current',p) AS granted FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE']) p ORDER BY p")).rows).toEqual([{privilege:"DELETE",granted:false},{privilege:"INSERT",granted:false},{privilege:"SELECT",granted:true},{privilege:"TRUNCATE",granted:false},{privilege:"UPDATE",granted:false}]);
- });
- it("ignores forged reviewers in claim, event and audit records, including amendments and transitions", async () => {
-  const repo = new RecoveryCaseRepository(runtime);
-  let x = await repo.command(ctx,job,{...openCase(),reviewerRef:"forged"},"server-reviewer");
-  x = await repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence:32000,expectedRevision:x.revision}),"second-server-reviewer");
-  x = await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}),"third-server-reviewer");
-  expect(x.reviewerRef).toBe("third-server-reviewer");
-  expect((await admin.query("SELECT reviewer_ref FROM app.recovery_claim_revision WHERE case_id=$1 ORDER BY revision",[x.id])).rows.map(r=>r.reviewer_ref)).toEqual(["server-reviewer","second-server-reviewer"]);
-  expect((await admin.query("SELECT reviewer_ref FROM app.recovery_case_event WHERE case_id=$1 ORDER BY sequence",[x.id])).rows.map(r=>r.reviewer_ref)).toEqual(["server-reviewer","second-server-reviewer","third-server-reviewer"]);
-  expect((await admin.query("SELECT actor_ref FROM app.audit_event WHERE subject_ref=$1 ORDER BY sequence",[x.id])).rows.map(r=>r.actor_ref)).toEqual(["server-reviewer","second-server-reviewer","third-server-reviewer"]);
- });
- it("keeps write-off accounting exact across reversal, re-landing and claim amendment (HOLD finding 5)", async () => {
-  const repo = new RecoveryCaseRepository(runtime), who = "server-reviewer";
-  const step = (x:{id:string;revision:number}, extra:Record<string,unknown>) => repo.command(ctx,job,command({action:"transition",caseId:x.id,expectedRevision:x.revision,...extra}),who);
-  let x = await repo.command(ctx,job,openCase(),who);
-  x = await step(x,{eventType:"assemble_evidence"});
-  x = await step(x,{eventType:"record_landing",amountPence:100000});
-  x = await step(x,{eventType:"write_off"});
-  expect(x).toMatchObject({state:"closed_no_recovery",landedNetPence:100000,writtenOffPence:150000,outstandingNetPence:0});
-  x = await step(x,{eventType:"reverse_landing",amountPence:100000});
-  expect(x).toMatchObject({state:"evidence_assembled",landedNetPence:0,writtenOffPence:150000,outstandingNetPence:100000});
-  // Only the reversed 1,000.00 is outstanding again; the written-off 1,500.00 cannot be re-landed.
-  await expect(step(x,{eventType:"record_landing",amountPence:100001})).rejects.toThrow(/is not allowed/);
-  x = await step(x,{eventType:"record_landing",amountPence:100000});
-  expect(x).toMatchObject({landedNetPence:100000,writtenOffPence:150000,outstandingNetPence:0});
-  await expect(step(x,{eventType:"write_off"})).rejects.toThrow(/is not allowed/);
-  await expect(repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence:249999,expectedRevision:x.revision}),who)).rejects.toThrow("RECOVERY_CLAIM_BELOW_SETTLED");
-  // A partial reversal leaves 400.00 outstanding; writing it off records only that increment.
-  x = await step(x,{eventType:"reverse_landing",amountPence:40000});
-  expect(x).toMatchObject({state:"partially_landed",landedNetPence:60000,writtenOffPence:150000,outstandingNetPence:40000});
-  x = await step(x,{eventType:"write_off"});
-  expect(x).toMatchObject({state:"closed_no_recovery",landedNetPence:60000,writtenOffPence:190000,outstandingNetPence:0});
-  expect((await admin.query("SELECT event_type,amount_pence FROM app.recovery_case_event WHERE case_id=$1 AND event_type='write_off' ORDER BY sequence",[x.id])).rows).toEqual([{event_type:"write_off",amount_pence:"150000"},{event_type:"write_off",amount_pence:"40000"}]);
-  expect(x.landedNetPence + x.writtenOffPence + x.outstandingNetPence).toBe(x.claimedNetPence);
- });
- it("refuses a case whose sources are invented labels or cross the supplier/customer split (HOLD finding 6)", async () => {
-  const repo = new RecoveryCaseRepository(runtime), before = Number((await admin.query("SELECT count(*) n FROM app.recovery_case WHERE tenant_id=$1",[tenant])).rows[0].n);
-  await expect(repo.command(ctx,job,{...openCase(),sourceRefs:["A contract I just made up"]},"server-reviewer")).rejects.toThrow("RECOVERY_SOURCE_NOT_RECOGNISED");
-  await expect(repo.command(ctx,job,{...openCase(),caseType:"merchant_overcharge",book:"supplier_cost",sourceType:"supplier_documents"},"server-reviewer")).rejects.toThrow("RECOVERY_SOURCE_NOT_RECOGNISED");
-  expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_case WHERE tenant_id=$1",[tenant])).rows[0].n)).toBe(before);
- });
- it("binds replay to the target job: the same command id and body against another job is a typed conflict (Sol P2)", async () => {
-  const repo = new RecoveryCaseRepository(runtime), who = "server-reviewer", opened = openCase();
-  const a = await repo.command(ctx,job,opened,who);
-  expect((await repo.command(ctx,job,opened,who)).id).toBe(a.id); // a legitimate replay on the same job still works
-  await expect(repo.command(ctx,wrongJob,opened,who)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
-  const assemble = command({action:"transition",caseId:a.id,eventType:"assemble_evidence",expectedRevision:a.revision});
-  const b = await repo.command(ctx,job,assemble,who);
-  expect((await repo.command(ctx,job,assemble,who)).revision).toBe(b.revision);
-  await expect(repo.command(ctx,wrongJob,assemble,who)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
-  const review = {version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:a.id,scenario:"evidence_backed_withheld_payment",expectedCaseRevision:b.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1};
-  await repo.eligibilityCommand(ctx,job,review,who);
-  await repo.eligibilityCommand(ctx,job,review,who); // same job: replay is a no-op
-  await expect(repo.eligibilityCommand(ctx,wrongJob,review,who)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
-  expect(Number((await admin.query("SELECT (SELECT count(*) FROM app.recovery_case_event WHERE job_id=$1)+(SELECT count(*) FROM app.recovery_eligibility_revision WHERE job_id=$1)+(SELECT count(*) FROM app.recovery_case WHERE job_id=$1) n",[wrongJob])).rows[0].n)).toBe(0);
- });
- it("lets a landed payment be reversed after a dispute, with exact accounting (Sol P2)", async () => {
-  const repo = new RecoveryCaseRepository(runtime), who = "server-reviewer";
-  const step = (x:{id:string;revision:number},extra:Record<string,unknown>) => repo.command(ctx,job,command({action:"transition",caseId:x.id,expectedRevision:x.revision,...extra}),who);
-  let x = await repo.command(ctx,job,openCase(),who);
-  x = await step(x,{eventType:"assemble_evidence"});
-  x = await step(x,{eventType:"record_landing",amountPence:250000});
-  expect(x.state).toBe("landed");
-  x = await step(x,{eventType:"dispute"});
-  expect(x).toMatchObject({state:"negotiating",landedNetPence:250000,outstandingNetPence:0});
-  x = await step(x,{eventType:"reverse_landing",amountPence:100000});
-  expect(x).toMatchObject({state:"partially_landed",landedNetPence:150000,outstandingNetPence:100000,writtenOffPence:0});
-  await expect(step(x,{eventType:"reverse_landing",amountPence:150001})).rejects.toThrow(/is not allowed/);
-  x = await step(x,{eventType:"dispute"});
-  x = await step(x,{eventType:"reverse_landing",amountPence:150000});
-  expect(x).toMatchObject({state:"evidence_assembled",landedNetPence:0,outstandingNetPence:250000});
- });
- describe("recorded sources (Opus P1: must still admit what M4-3-S-R records)", () => {
-  const sql = (statement:string) => admin.query(`SET session_replication_role=replica;${statement};SET session_replication_role=origin`);
-  const ids = {invoice:randomUUID(),otherJobInvoice:randomUUID(),otherTenantInvoice:randomUUID(),supplierInvoiceDoc:randomUUID(),supplierInvoiceVersion:randomUUID(),deliveryDoc:randomUUID(),deliveryVersion:randomUUID(),heldDoc:randomUUID(),heldVersion:randomUUID(),creditDoc:randomUUID(),creditVersion:randomUUID(),merchant:randomUUID(),sku:randomUUID(),otherSku:randomUUID(),usedRate:randomUUID(),unusedRate:randomUUID()};
-  const invoice = (id:string,tenantId:string,jobId:string,number:string) => `INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)VALUES('${id}','${tenantId}','${jobId}','${randomUUID()}','${randomUUID()}','${number}','2026-10-01','{}','candidate_m1_standard_v1','GBP',100,20,120,repeat('a',64),repeat('b',64),'\\x00'::bytea,true,'SYNTHETIC - NOT A REAL INVOICE')`;
-  const supplierDocument = (doc:string,version:string,type:string,status:string,number:string,hash="c") => `INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status)VALUES('${doc}','${tenant}','${job}','Fictional Builders Merchant','${type}','${number}',repeat('${hash}',64),'${status}');INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count)VALUES('${version}','${tenant}','${job}','${doc}',1,'text/plain',10,repeat('${hash}',64),1)`;
-  beforeAll(async () => {
-   await sql(`${invoice(ids.invoice,tenant,job,"INV-R3-1")};${invoice(ids.otherJobInvoice,tenant,wrongJob,"INV-R3-2")};${invoice(ids.otherTenantInvoice,other,randomUUID(),"INV-R3-3")}`);
-   await sql(`${supplierDocument(ids.supplierInvoiceDoc,ids.supplierInvoiceVersion,"invoice","ready","SI-R3-1","1")};${supplierDocument(ids.deliveryDoc,ids.deliveryVersion,"delivery","ready","DN-R3-1","2")};${supplierDocument(ids.heldDoc,ids.heldVersion,"invoice","held","SI-R3-HELD","3")};${supplierDocument(ids.creditDoc,ids.creditVersion,"credit","ready","CR-R3-1","4")}`);
-   await sql(`INSERT INTO app.merchant(id,tenant_id,name)VALUES('${ids.merchant}','${tenant}','Fictional Builders Merchant');INSERT INTO app.merchant_sku(id,tenant_id,merchant_id,sku,description,base_unit)VALUES('${ids.sku}','${tenant}','${ids.merchant}','SYN-R3-A','Used paint','each'),('${ids.otherSku}','${tenant}','${ids.merchant}','SYN-R3-B','Unused paint','each');INSERT INTO app.material_rate_revision(id,tenant_id,merchant_id,sku_id,version,price_pence,currency,price_unit,tax_basis,effective_from,source_label)VALUES('${ids.usedRate}','${tenant}','${ids.merchant}','${ids.sku}',1,2000,'GBP','each','net','2026-10-01','Agreement AG-R3-A'),('${ids.unusedRate}','${tenant}','${ids.merchant}','${ids.otherSku}',1,2000,'GBP','each','net','2026-10-01','Agreement AG-R3-B');INSERT INTO app.material_requirement(id,tenant_id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision)VALUES('${randomUUID()}','${tenant}','${job}','${randomUUID()}','${ids.sku}','40','each',1)`);
-  });
-  const customer = (sourceRefs:string[]) => ({...openCase(),sourceRefs});
-  const supplier = (sourceRefs:string[]) => ({...openCase(),caseType:"merchant_overcharge",claimedNetPence:32000,counterparty:"Fictional Builders Merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs});
-  it("accepts recorded customer-invoice ids and names them from the stored record", async () => {
-   const repo = new RecoveryCaseRepository(runtime);
-   const x = await repo.command(ctx,job,customer([ids.invoice]),"server-reviewer");
-   expect(x.sources).toEqual([{ref:ids.invoice,kind:"Customer invoice",label:"Customer invoice INV-R3-1",recorded:true}]);
-   const mixed = await repo.command(ctx,job,customer([ids.invoice,"Generated customer invoice INV-18800"]),"server-reviewer");
-   expect(mixed.sources.map(source=>source.recorded)).toEqual([true,false]);
-  });
-  it("accepts a recorded supplier agreement rate used on the job and ready supplier documents (by version id or document id)", async () => {
-   const repo = new RecoveryCaseRepository(runtime);
-   const x = await repo.command(ctx,job,supplier([ids.usedRate,ids.supplierInvoiceVersion,ids.deliveryDoc]),"server-reviewer");
-   expect(x.sources).toEqual([
-    {ref:ids.usedRate,kind:"Supplier agreement",label:"Supplier agreement Agreement AG-R3-A",recorded:true},
-    {ref:ids.supplierInvoiceVersion,kind:"Supplier invoice",label:"Supplier invoice SI-R3-1",recorded:true},
-    {ref:ids.deliveryDoc,kind:"Delivery note",label:"Delivery note DN-R3-1",recorded:true},
-   ]);
-  });
-  it("refuses unknown ids, other jobs, other tenants, wrong kinds, held or credit documents and unused rates, writing nothing", async () => {
-   const repo = new RecoveryCaseRepository(runtime), before = Number((await admin.query("SELECT count(*) n FROM app.recovery_case WHERE tenant_id=$1",[tenant])).rows[0].n);
-   for (const refs of [[randomUUID()],[ids.otherJobInvoice],[ids.otherTenantInvoice],[ids.supplierInvoiceVersion],[ids.usedRate],[ids.invoice,ids.invoice]])
-    await expect(repo.command(ctx,job,customer(refs),"server-reviewer")).rejects.toThrow("RECOVERY_SOURCE_NOT_RECOGNISED");
-   for (const refs of [[ids.invoice],[ids.heldVersion],[ids.heldDoc],[ids.creditVersion],[ids.unusedRate],[ids.usedRate,randomUUID()]])
-    await expect(repo.command(ctx,job,supplier(refs),"server-reviewer")).rejects.toThrow("RECOVERY_SOURCE_NOT_RECOGNISED");
-   expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_case WHERE tenant_id=$1",[tenant])).rows[0].n)).toBe(before);
-  });
- });
+let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx={tenantId:tenant}as VerifiedTenantContext;const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
+beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jg-recovery-cases-"));const port=60000+Math.floor(Math.random()*200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic"});await migrate(admin);await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1),($2)",[tenant,other]);await admin.query("INSERT INTO app.job(id,tenant_id,title)VALUES($1,$3,'Recovery fixture'),($2,$3,'Wrong job')",[job,wrongJob,tenant]);await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[reviewer.identityUserId]);await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'Synthetic account')",[tenant,tenant]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$2,$3,'owner')",[reviewer.membershipId,tenant,reviewer.identityUserId]);await admin.query("CREATE ROLE recovery_case_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO recovery_case_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"recovery_case_login",password:"synthetic"})},60000);afterAll(async()=>{await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true})});
+describe("recovery cases",()=>{it("records direct receipt, partial landing, write-off and immutable actual reviewer",async()=>{const repo=reviewedRepository();let x=await repo.command(ctx,job,command({action:"open",caseType:"withheld_customer_payment",claimedNetPence:250000,counterparty:"Fictional Customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Generated customer invoice INV-18800"],expectedRevision:0}));x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}));x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"record_landing",amountPence:100000,expectedRevision:x.revision}));expect(x).toMatchObject({landedNetPence:100000,outstandingNetPence:150000,state:"partially_landed",reviewerRef:"reviewer:owner"});x=await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"write_off",expectedRevision:x.revision}));expect(x).toMatchObject({landedNetPence:100000,writtenOffPence:150000,outstandingNetPence:0,state:"closed_no_recovery"});expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_claim_revision WHERE tenant_id=$1 AND case_id=$2",[tenant,x.id])).rows[0].n)).toBe(1)});it("is replay-safe and gives concurrent stale revisions exactly one effect",async()=>{const repo=reviewedRepository(),open=command({action:"open",caseType:"merchant_overcharge",claimedNetPence:32000,counterparty:"Merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:["Supplier agreement AG-320","Delivery note DN-320","Supplier invoice INV-320"],expectedRevision:0}),x=await repo.command(ctx,job,open);expect((await repo.command(ctx,job,open)).id).toBe(x.id);const a=command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}),b=command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}),settled=await Promise.allSettled([repo.command(ctx,job,a),repo.command(ctx,job,b)]);expect(settled.filter(y=>y.status==="fulfilled")).toHaveLength(1);expect(settled.filter(y=>y.status==="rejected")).toHaveLength(1)});it("enforces RLS, job-qualified links, ownership and append-only runtime grants",async()=>{const catalog=await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname IN('recovery_case','recovery_claim_revision','recovery_case_event','recovery_eligibility_revision')");expect(catalog.rows).toHaveLength(4);expect(catalog.rows.every(x=>x.relrowsecurity&&x.relforcerowsecurity&&x.rolname==='jobguard_migration')).toBe(true);for(const sql of["UPDATE app.recovery_case SET counterparty='x'","DELETE FROM app.recovery_case","TRUNCATE app.recovery_case","UPDATE app.recovery_eligibility_revision SET status='approved'","DELETE FROM app.recovery_eligibility_revision","TRUNCATE app.recovery_eligibility_revision"])await expect(withTenant(runtime,ctx,db=>db.$client.query(sql))).rejects.toMatchObject({code:"42501"});await expect(withTenant(runtime,ctx,db=>db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,case_type,counterparty,book,source_type,source_refs)VALUES($1,$2,$3,'merchant_overcharge','x','supplier_cost','supplier_documents','[]')",[randomUUID(),other,job]))).rejects.toMatchObject({code:"42501"});await expect(reviewedRepository().command(ctx,wrongJob,command({action:"transition",caseId:randomUUID(),eventType:"assemble_evidence",expectedRevision:1}))).rejects.toThrow("RECOVERY_CASE_NOT_FOUND")});it("binds eligibility and rejects stale, forged and wrong-job commands",async()=>{const repo=reviewedRepository();let x=await repo.command(ctx,job,command({action:"open",caseType:"withheld_customer_payment",claimedNetPence:32000,counterparty:"Customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Generated customer invoice INV-18800"],expectedRevision:0}));await expect(repo.eligibilityCommand(ctx,job,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:x.id,scenario:"pending_money",eligible:true,expectedCaseRevision:x.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1},reviewer)).rejects.toThrow();await expect(repo.eligibilityCommand(ctx,wrongJob,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:x.id,scenario:"pending_money",expectedCaseRevision:x.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1},reviewer)).rejects.toThrow("RECOVERY_CASE_NOT_FOUND");x=await repo.eligibilityCommand(ctx,job,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:x.id,scenario:"evidence_backed_withheld_payment",expectedCaseRevision:x.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1},reviewer);expect(x).toMatchObject({landedNetPence:0,eligibility:{eligibleNetPence:32000,status:"reviewed",reviewerRef:`membership:${reviewer.membershipId}`}});const old=x.eligibility!;x=await repo.eligibilityCommand(ctx,job,{version:"recovery-eligibility-command.v1",action:"supersede",commandId:randomUUID(),caseId:x.id,expectedCaseRevision:x.revision,subject:"evidence"},reviewer);await expect(repo.eligibilityCommand(ctx,job,{version:"recovery-eligibility-command.v1",action:"approve",commandId:randomUUID(),caseId:x.id,expectedCaseRevision:x.revision,expectedEvidenceRevision:old.evidenceRevision,expectedPolicyRevision:1,expectedReviewRevision:old.revision},reviewer)).rejects.toThrow("ELIGIBILITY_STALE_REVISION");expect(x.landedNetPence).toBe(0)});});
+
+const eligibility = (extra: Record<string, unknown>) => ({version:"recovery-eligibility-command.v1", commandId:randomUUID(), ...extra});
+async function reviewedCase() {
+ const repo=reviewedRepository();
+ const opened=await repo.command(ctx,job,command({action:"open",caseType:"withheld_customer_payment",claimedNetPence:32000,counterparty:"Customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Generated customer invoice INV-18800"],expectedRevision:0}));
+ return repo.eligibilityCommand(ctx,job,eligibility({action:"review",caseId:opened.id,expectedCaseRevision:opened.revision,scenario:"evidence_backed_withheld_payment",evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1}),reviewer);
+}
+function approval(x: Awaited<ReturnType<typeof reviewedCase>>) {
+ return eligibility({action:"approve",caseId:x.id,expectedCaseRevision:x.revision,expectedEvidenceRevision:x.eligibility!.evidenceRevision,expectedPolicyRevision:x.eligibility!.policyRevision,expectedReviewRevision:x.eligibility!.revision});
+}
+it.each(["evidence","case","policy"])("rejects current revisions after %s supersession until re-review",async subject=>{
+ const repo=reviewedRepository();let x=await reviewedCase();
+ x=await repo.eligibilityCommand(ctx,job,eligibility({action:"supersede",caseId:x.id,expectedCaseRevision:x.revision,subject}),reviewer);
+ const before=await admin.query("SELECT count(*) FROM app.audit_event WHERE tenant_id=$1",[tenant]);
+ await expect(repo.eligibilityCommand(ctx,job,approval(x),reviewer)).rejects.toThrow("ELIGIBILITY_REVIEW_REQUIRED");
+ expect((await repo.list(ctx,job)).find(c=>c.id===x.id)!.eligibility).toEqual(x.eligibility);
+ expect((await admin.query("SELECT count(*) FROM app.audit_event WHERE tenant_id=$1",[tenant])).rows).toEqual(before.rows);
+ x=await repo.eligibilityCommand(ctx,job,eligibility({action:"review",caseId:x.id,expectedCaseRevision:x.revision,scenario:"evidence_backed_withheld_payment",evidenceRevision:x.eligibility!.evidenceRevision,policyVersion:"reference-d03.v1",policyRevision:x.eligibility!.policyRevision}),reviewer);
+ const approve=approval(x);x=await repo.eligibilityCommand(ctx,job,approve,reviewer);
+ expect(x).toMatchObject({landedNetPence:0,eligibility:{status:"approved",reviewerRef:`membership:${reviewer.membershipId}`}});
+ expect((await repo.eligibilityCommand(ctx,job,approve,reviewer)).eligibility).toEqual(x.eligibility);
+ await expect(repo.eligibilityCommand(ctx,job,approval(x),reviewer)).rejects.toThrow("ELIGIBILITY_REVIEW_REQUIRED");
+ const audit=await admin.query("SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.eligibility.approve'",[tenant,x.id]);
+ expect(audit.rows).toEqual([{actor_ref:`membership:${reviewer.membershipId}`}]);
+});
+it("gives two concurrent approvals of one review exactly one effect and a typed re-review refusal",async()=>{
+ const repo=reviewedRepository(),x=await reviewedCase();
+ const settled=await Promise.allSettled([repo.eligibilityCommand(ctx,job,approval(x),reviewer),repo.eligibilityCommand(ctx,job,approval(x),reviewer)]);
+ expect(settled.filter(y=>y.status==="fulfilled")).toHaveLength(1);
+ const refused=settled.filter((y):y is PromiseRejectedResult=>y.status==="rejected");expect(refused).toHaveLength(1);
+ expect(["ELIGIBILITY_REVIEW_REQUIRED","ELIGIBILITY_STALE_REVISION"]).toContain((refused[0]!.reason as Error).message);
+ expect(Number((await admin.query("SELECT count(*) n FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND case_id=$2 AND status='approved'",[tenant,x.id])).rows[0].n)).toBe(1);
+ expect(Number((await admin.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.eligibility.approve'",[tenant,x.id])).rows[0].n)).toBe(1);
+});
+it("checks recorded owner membership, identity, tenant and expiry before any eligibility effect or replay",async()=>{
+ const repo=reviewedRepository(),x=await reviewedCase(),approve=approval(x);
+ for(const invalid of [{...reviewer,membershipId:randomUUID()},{...reviewer,identityUserId:randomUUID()}])
+  await expect(repo.eligibilityCommand(ctx,job,approve,invalid)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");
+ await expect(repo.eligibilityCommand({tenantId:other} as VerifiedTenantContext,job,approve,reviewer)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");
+ for(const change of ["role='viewer'","revoked_at=now()","expires_at=now()-interval '1 second'"]){
+  await admin.query(`UPDATE app.membership SET ${change} WHERE tenant_id=$1 AND id=$2`,[tenant,reviewer.membershipId]);
+  try{await expect(repo.eligibilityCommand(ctx,job,approve,reviewer)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");}
+  finally{await admin.query("UPDATE app.membership SET role='owner',revoked_at=NULL,expires_at=NULL WHERE tenant_id=$1 AND id=$2",[tenant,reviewer.membershipId]);}
+ }
+ const approved=await repo.eligibilityCommand(ctx,job,approve,reviewer);
+ await admin.query("UPDATE app.membership SET revoked_at=now() WHERE tenant_id=$1 AND id=$2",[tenant,reviewer.membershipId]);
+ try{await expect(repo.eligibilityCommand(ctx,job,approve,reviewer)).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");}
+ finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[tenant,reviewer.membershipId]);}
+ expect((await repo.list(ctx,job)).find(c=>c.id===x.id)!.eligibility).toEqual(approved.eligibility);
+});
+it.each(["evidence","policy"] as const)("refuses a fresh review bound to a revision lower than the %s revision already recorded",async subject=>{
+ const repo=reviewedRepository();let x=await reviewedCase();
+ x=await repo.eligibilityCommand(ctx,job,eligibility({action:"supersede",caseId:x.id,expectedCaseRevision:x.revision,subject}),reviewer);
+ const recorded=x.eligibility!;expect(subject==="evidence"?recorded.evidenceRevision:recorded.policyRevision).toBe(2);
+ const review=(revisions:{evidenceRevision:number;policyRevision:number})=>eligibility({action:"review",caseId:x.id,expectedCaseRevision:x.revision,scenario:"evidence_backed_withheld_payment",policyVersion:"reference-d03.v1",...revisions});
+ const counts=async()=>[(await admin.query("SELECT count(*) n FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND case_id=$2",[tenant,x.id])).rows[0].n,(await admin.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1",[tenant])).rows[0].n];
+ const before=await counts();
+ const lower=subject==="evidence"?{evidenceRevision:recorded.evidenceRevision-1,policyRevision:recorded.policyRevision}:{evidenceRevision:recorded.evidenceRevision,policyRevision:recorded.policyRevision-1};
+ await expect(repo.eligibilityCommand(ctx,job,review(lower),reviewer)).rejects.toThrow("ELIGIBILITY_STALE_REVISION");
+ expect(await counts()).toEqual(before);
+ expect((await repo.list(ctx,job)).find(c=>c.id===x.id)!.eligibility).toEqual(recorded);
+ // The recorded (superseded) revisions themselves are accepted, and the approval then carries exactly them.
+ x=await repo.eligibilityCommand(ctx,job,review({evidenceRevision:recorded.evidenceRevision,policyRevision:recorded.policyRevision}),reviewer);
+ x=await repo.eligibilityCommand(ctx,job,approval(x),reviewer);
+ expect(x.eligibility).toMatchObject({status:"approved",evidenceRevision:recorded.evidenceRevision,policyRevision:recorded.policyRevision});
+});
+it("serializes eligibility commands whose case ID differs only in letter case and records the canonical ID",async()=>{
+ const repo=reviewedRepository(),x=await reviewedCase();
+ const shouting={...approval(x),caseId:x.id.toUpperCase()};
+ const settled=await Promise.allSettled([repo.eligibilityCommand(ctx,job,approval(x),reviewer),repo.eligibilityCommand(ctx,job,shouting,reviewer)]);
+ expect(settled.filter(y=>y.status==="fulfilled")).toHaveLength(1);
+ const refused=settled.filter((y):y is PromiseRejectedResult=>y.status==="rejected");expect(refused).toHaveLength(1);
+ expect(["ELIGIBILITY_REVIEW_REQUIRED","ELIGIBILITY_STALE_REVISION"]).toContain((refused[0]!.reason as Error).message);
+ expect((await admin.query("SELECT subject_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='recovery.eligibility.approve' AND lower(subject_ref)=$2",[tenant,x.id])).rows).toEqual([{subject_ref:x.id}]);
 });

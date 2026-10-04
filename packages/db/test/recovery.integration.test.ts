@@ -37,14 +37,14 @@ describe("structural recovery fee guard",()=>{
   });
  });
  describe("M4-1-S-R repair 3: financial path and fee projection", () => {
-  const who = "verified-test-reviewer", E2 = randomUUID(), T2 = randomUUID();
+  const who = "verified-test-reviewer", E2 = randomUUID(), T2 = randomUUID(), owner = { membershipId: randomUUID(), identityUserId: randomUUID() };
   type World = { tenant: string; ctx: VerifiedTenantContext; job: string; evidence: string };
   const base: World = { tenant: T, ctx: context, job: J, evidence: E2 };
   const second = { tenant: T2, ctx: { tenantId: T2 } as VerifiedTenantContext };
   // These tests keep their landings; they use their own evidence object so that the later invalidation test (which invalidates E) sees only its own derivation.
   beforeAll(async () => {
    const upload = randomUUID();
-   await admin.query(`SET session_replication_role=replica;INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES('${upload}','${T}','${J}','synthetic/upload-r3','${"c".repeat(64)}','application/pdf',1,'standard_evidence','verified','v1',now(),now()+interval '1 hour');INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES('${E2}','${T}','${upload}','${J}','original','synthetic_bank_receipt','synthetic/key-r3','v1','${"c".repeat(64)}',1,'application/pdf','standard_evidence',now(),now());INSERT INTO control_plane.tenant(id)VALUES('${T2}');SET session_replication_role=origin`);
+   await admin.query(`SET session_replication_role=replica;INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES('${upload}','${T}','${J}','synthetic/upload-r3','${"c".repeat(64)}','application/pdf',1,'standard_evidence','verified','v1',now(),now()+interval '1 hour');INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES('${E2}','${T}','${upload}','${J}','original','synthetic_bank_receipt','synthetic/key-r3','v1','${"c".repeat(64)}',1,'application/pdf','standard_evidence',now(),now());INSERT INTO control_plane.tenant(id)VALUES('${T2}');INSERT INTO identity.identity_user(id)VALUES('${owner.identityUserId}');INSERT INTO app.account(id,tenant_id,name)VALUES('${T}','${T}','Synthetic account');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${owner.membershipId}','${T}','${T}','${owner.identityUserId}','owner');SET session_replication_role=origin`);
   });
   // A job in its own tenant (so its landing reversals do not add rows the tenant-wide invalidation test counts) with a cap, evidence, and
   // optionally a settled plan fee, which is what lets the reference fee be offset by plan credit.
@@ -71,9 +71,9 @@ describe("structural recovery fee guard",()=>{
    const repo = new RecoveryCaseRepository(runtime);
    let c = await open(repo, 100000);
    c = await step(repo, c, { eventType: "assemble_evidence" });
-   await repo.eligibilityCommand(context, J, { version: "recovery-eligibility-command.v1", action: "review", commandId: randomUUID(), caseId: c.id, scenario: "evidence_backed_withheld_payment", expectedCaseRevision: c.revision, evidenceRevision: 1, policyVersion: "reference-d03.v1", policyRevision: 1 }, who);
+   await repo.eligibilityCommand(context, J, { version: "recovery-eligibility-command.v1", action: "review", commandId: randomUUID(), caseId: c.id, scenario: "evidence_backed_withheld_payment", expectedCaseRevision: c.revision, evidenceRevision: 1, policyVersion: "reference-d03.v1", policyRevision: 1 }, owner);
    const reviewed = (await repo.list(context, J)).find(x => x.id === c.id)!.eligibility!;
-   await repo.eligibilityCommand(context, J, { version: "recovery-eligibility-command.v1", action: "approve", commandId: randomUUID(), caseId: c.id, expectedCaseRevision: c.revision, expectedEvidenceRevision: reviewed.evidenceRevision, expectedPolicyRevision: 1, expectedReviewRevision: reviewed.revision }, who);
+   await repo.eligibilityCommand(context, J, { version: "recovery-eligibility-command.v1", action: "approve", commandId: randomUUID(), caseId: c.id, expectedCaseRevision: c.revision, expectedEvidenceRevision: reviewed.evidenceRevision, expectedPolicyRevision: 1, expectedReviewRevision: reviewed.revision }, owner);
    let view = (await repo.list(context, J)).find(x => x.id === c.id)!;
    expect(view.eligibility?.status).toBe("approved");
    expect(view).toMatchObject({ landedNetPence: 0, feeObligationsPostedPence: 0, feeCompensationsPostedPence: 0 });
