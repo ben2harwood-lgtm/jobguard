@@ -43,6 +43,8 @@ export const jobPartiesSnapshotV1 = z.object({ version: z.literal("job-parties-s
 export type JobPartiesSnapshotV1 = z.infer<typeof jobPartiesSnapshotV1>;
 export const jobPartiesWorkspaceV1 = z.object({ version: z.literal("job-parties-workspace.v1"), environment: z.literal("synthetic_demo"),
   jobId: uuid, jobRevision: z.number().int().nonnegative(), status: z.string(), current: jobPartiesSnapshotV1.nullable(),
+  /** Identities behind `current`, so an editor can reload its draft from the saved binding. */
+  currentIds: z.object({ bindingId: uuid, customerId: uuid, payingPartyId: uuid, siteId: uuid }).nullable(),
   customers: z.array(z.object({ id: uuid, revisionId: uuid, revision: z.number().int().positive(), customer: customerV1 })),
   sites: z.array(z.object({ id: uuid, revisionId: uuid, site: siteV1, matchKey: z.string() })),
   recognition: z.array(z.object({ jobId: uuid, status: z.string(), startedAt: z.string().nullable(), endedAt: z.string().nullable() })),

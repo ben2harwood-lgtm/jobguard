@@ -48,8 +48,23 @@ Next and Nest use `JobPartiesApplication` through the shared workspace seam:
   details not supplied by the existing shell projection are labelled unknown,
   rather than asserted to be absent or not due.
 
+The workspace response also carries `currentIds` (binding, customer, paying party
+and site identities behind `current`) so an editor can reload its draft from what
+is saved. The Customer and site panel records what it was edited against and, when
+saving, re-reads the server first. Unrelated job progress (scope confirmed, quote
+saved) only refreshes the expected job revision. If the binding, the job's
+live/not-live phase, or a customer or site revision the draft uses has changed,
+nothing is written: the panel shows a typed conflict message, reloads the draft
+from the saved details, and the user chooses again. A server-side
+`REVISION_CONFLICT` (two writers on one revision) takes the same path. A quote
+preview shows the customer frozen into its own document; sending a preview whose
+binding is no longer current is refused (`QUOTE_CHANGED`) until it is previewed
+and approved again.
+
 The PostgreSQL live guard and switch-live/adoption routines reject missing
-parties with `JOB_PARTIES_REQUIRED`. Quote preview requires a binding and locks
+parties with `JOB_PARTIES_REQUIRED`. The adoption routine is also a controlled
+write that validates the actor, command receipt and exact approved authorization
+inside the routine. Quote preview requires a binding and locks
 the job while creating the snapshot. New quote PDFs and synthetic invoice bytes
 contain the party snapshot before hashing. Older artifacts have nullable new
 snapshot columns and their original bytes/hashes.

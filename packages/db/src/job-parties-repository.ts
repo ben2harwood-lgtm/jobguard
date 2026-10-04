@@ -29,13 +29,13 @@ export class JobPartiesRepository {
   async view(context: VerifiedTenantContext, actor: string, jobId: string) {
     return withTenant(this.pool, context, async db => {
       await this.authorize(db, context.tenantId, actor);
-      const j = (await db.$client.query<{ revision: number; status: string; snapshot: unknown }>(`SELECT j.revision,j.status,s.snapshot FROM app.job j LEFT JOIN app.job_party_current x ON(x.tenant_id,x.job_id)=(j.tenant_id,j.id) LEFT JOIN app.job_party_snapshot s ON(s.tenant_id,s.binding_id)=(x.tenant_id,x.binding_id) WHERE j.tenant_id=$1 AND j.id=$2`, [context.tenantId, jobId])).rows[0];
+      const j = (await db.$client.query<{ revision: number; status: string; snapshot: unknown; ids: unknown }>(`SELECT j.revision,j.status,s.snapshot,CASE WHEN b.id IS NULL THEN NULL ELSE jsonb_build_object('bindingId',b.id,'customerId',b.customer_id,'payingPartyId',b.paying_party_id,'siteId',b.site_id) END AS ids FROM app.job j LEFT JOIN app.job_party_current x ON(x.tenant_id,x.job_id)=(j.tenant_id,j.id) LEFT JOIN app.job_party_snapshot s ON(s.tenant_id,s.binding_id)=(x.tenant_id,x.binding_id) LEFT JOIN app.job_party_binding b ON(b.tenant_id,b.id)=(x.tenant_id,x.binding_id) WHERE j.tenant_id=$1 AND j.id=$2`, [context.tenantId, jobId])).rows[0];
       if (!j) throw new JobPartiesError("NOT_FOUND");
       const current = j.snapshot ?? null;
       const customers = (await db.$client.query(`SELECT DISTINCT ON(customer_id) customer_id AS id,id AS "revisionId",revision,payload AS customer FROM app.customer_revision WHERE tenant_id=$1 ORDER BY customer_id,revision DESC`, [context.tenantId])).rows;
       const sites = (await db.$client.query(`SELECT DISTINCT ON(site_id) site_id AS id,id AS "revisionId",payload AS site,match_key::text AS "matchKey" FROM app.site_revision WHERE tenant_id=$1 ORDER BY site_id,revision DESC`, [context.tenantId])).rows;
       const recognition = (await db.$client.query(`SELECT r.job_id AS "jobId",r.status,r.started_at::text AS "startedAt",r.ended_at::text AS "endedAt" FROM app.job_party_recognition r JOIN app.job_party_recognition own ON(own.tenant_id,own.customer_id,own.site_id)=(r.tenant_id,r.customer_id,r.site_id) WHERE own.tenant_id=$1 AND own.job_id=$2 ORDER BY r.job_id`, [context.tenantId, jobId])).rows;
-      return jobPartiesWorkspaceV1.parse({ version: "job-parties-workspace.v1", environment: "synthetic_demo", jobId, jobRevision: j.revision, status: j.status, current, customers, sites, recognition, realExternalActions: 0 });
+      return jobPartiesWorkspaceV1.parse({ version: "job-parties-workspace.v1", environment: "synthetic_demo", jobId, jobRevision: j.revision, status: j.status, current, currentIds: j.ids ?? null, customers, sites, recognition, realExternalActions: 0 });
     });
   }
   async command(context: VerifiedTenantContext, actor: string, jobId: string, raw: unknown) {
