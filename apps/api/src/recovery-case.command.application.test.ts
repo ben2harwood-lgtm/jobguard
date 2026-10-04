@@ -7,7 +7,8 @@ vi.mock("@jobguard/db", async importOriginal => ({
   readSyntheticDemoJob: spies.verify,
   RecoveryCaseRepository: class { command = spies.command; list = spies.list; },
 }));
-import { DEMO_MEMBERSHIP_ID } from "@jobguard/db";
+import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID } from "@jobguard/db";
+const serverReviewer = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 import { RecoveryCaseApplication } from "./recovery-case.application.js";
 const jobId = randomUUID();
 const input = () => ({ version:"recovery-case-command.v1", action:"open", commandId:randomUUID(), caseType:"merchant_overcharge", claimedNetPence:32000, counterparty:"Merchant", book:"supplier_cost", sourceType:"supplier_documents", sourceRefs:["INV-320"], expectedRevision:0 });
@@ -16,11 +17,11 @@ it("derives the reviewer from verified sandbox membership with no client reviewe
   const pool = {} as Pool;
   await new RecoveryCaseApplication(pool).command(jobId,input());
   expect(spies.verify).toHaveBeenCalledWith(pool,jobId);
-  expect(spies.command).toHaveBeenCalledWith(expect.anything(),jobId,expect.anything(),DEMO_MEMBERSHIP_ID);
+  expect(spies.command).toHaveBeenCalledWith(expect.anything(),jobId,expect.anything(),serverReviewer);
 });
 it("does not authorize a client-supplied reviewer", async () => {
   await new RecoveryCaseApplication({} as Pool).command(jobId,{...input(),reviewerRef:"forged-reviewer"});
-  expect(spies.command.mock.calls[0]?.[3]).toBe(DEMO_MEMBERSHIP_ID);
+  expect(spies.command.mock.calls[0]?.[3]).toEqual(serverReviewer);
 });
 it("refuses the command when membership verification fails", async () => {
   spies.verify.mockRejectedValue(new Error("MEMBERSHIP_FORBIDDEN"));
