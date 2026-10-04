@@ -64,7 +64,7 @@ CREATE POLICY identity_provision_membership ON app.membership TO jobguard_migrat
 -- No supplied tenant/role: signup always creates one new tenant; invitation uses its immutable grant.
 CREATE FUNCTION identity.provision_verified_challenge(challenge_id uuid) RETURNS uuid
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,identity AS $$
-DECLARE c identity.challenge; i identity.invitation; u uuid; t uuid; a uuid; m uuid;
+DECLARE c identity.challenge; i identity.invitation; l identity.membership_locator; u uuid; t uuid; a uuid; m uuid;
 BEGIN
  SELECT * INTO c FROM identity.challenge WHERE id=challenge_id FOR UPDATE;
  IF NOT FOUND OR NOT c.verified OR c.consumed_at IS NULL OR c.expires_at<=clock_timestamp() THEN
@@ -93,10 +93,22 @@ BEGIN
   END IF;
  END IF;
  IF c.purpose='invitation' THEN
-  IF EXISTS(SELECT FROM identity.membership_locator WHERE user_id=u AND tenant_id=i.tenant_id) THEN RETURN NULL; END IF;
   PERFORM set_config('app.tenant_id',i.tenant_id::text,true); m:=gen_random_uuid();
-  INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(m,i.tenant_id,i.account_id,u,i.role);
-  INSERT INTO identity.membership_locator VALUES(u,i.tenant_id,m);
+  -- The locator outlives revocation and expiry, so it is not itself a reason to refuse. Lock it, then lock the linked
+  -- membership: only a currently ACTIVE membership blocks a fresh invitation (the invitation then stays unused).
+  SELECT * INTO l FROM identity.membership_locator WHERE user_id=u AND tenant_id=i.tenant_id FOR UPDATE;
+  IF FOUND THEN
+   PERFORM 1 FROM app.membership WHERE tenant_id=l.tenant_id AND id=l.membership_id AND identity_user_id=u
+    AND revoked_at IS NULL AND(expires_at IS NULL OR expires_at>clock_timestamp()) FOR SHARE;
+   IF FOUND THEN RETURN NULL; END IF;
+   -- Inactive: add the invitation-bound replacement and repoint the locator atomically. The revoked or expired
+   -- membership row is kept untouched as history (audit rows keep referring to it).
+   INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(m,i.tenant_id,i.account_id,u,i.role);
+   UPDATE identity.membership_locator SET membership_id=m WHERE user_id=u AND tenant_id=i.tenant_id;
+  ELSE
+   INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(m,i.tenant_id,i.account_id,u,i.role);
+   INSERT INTO identity.membership_locator VALUES(u,i.tenant_id,m);
+  END IF;
   UPDATE identity.invitation SET accepted_at=clock_timestamp() WHERE id=i.id;
  END IF;
  INSERT INTO identity.security_event VALUES(gen_random_uuid(),'identity.verified',c.id,clock_timestamp());

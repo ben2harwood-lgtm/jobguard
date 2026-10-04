@@ -142,4 +142,53 @@ describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
   expect((await admin.query("SELECT count(*)::int n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='identity' AND c.relkind='r' AND pg_get_userbyid(c.relowner)<>'jobguard_migration'")).rows[0].n).toBe(0);
   expect((await admin.query("SELECT count(*)::int n FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace WHERE ns.nspname='identity' AND p.prosecdef AND has_function_privilege('jobguard_runtime',p.oid,'EXECUTE')")).rows[0].n).toBe(0);
  });
+ // Round 2 (Sol P2 #2): a membership locator survives revocation/expiry, so a fresh invitation must be able to replace an
+ // INACTIVE membership (new membership row, locator repointed, history kept) while an ACTIVE one still blocks it.
+ async function invitationFor(owner:Awaited<ReturnType<typeof signup>>,recipient:string,role:string){
+  const app=new IdentityApplication(owner.provider,origin);
+  return (await app.invite({version:"identity-invitation.v1",requested_tenant_id:owner.membership.tenantId,email:recipient,role} as never,{sessionToken:owner.session.sessionToken,csrfToken:owner.session.csrfToken,origin})).id;
+ }
+ async function accept(address:string,invitationId:string){
+  await fixture().requestCode({email:address,purpose:"invitation",invitationId,ip:randomUUID()});
+  return fixture().verifyCode(address,"invitation","12345678",invitationId);
+ }
+ const membershipRows=(tenantId:string,userEmail:string)=>admin.query("SELECT m.id,m.role,m.revoked_at,m.expires_at FROM app.membership m JOIN identity.user_email e ON e.user_id=m.identity_user_id WHERE m.tenant_id=$1 AND e.email=$2 ORDER BY m.created_at,m.id",[tenantId,userEmail]).then(r=>r.rows);
+ for(const reason of ["revoked","expired"] as const)it(`lets a ${reason} member accept a fresh invitation, preserving the old membership row`,async()=>{
+  const owner=await signup(),tenantId=owner.membership.tenantId,recipient=email();
+  const first=await accept(recipient,await invitationFor(owner,recipient,"foreman")),principal=(await fixture().authenticate(first.sessionToken))!;
+  const before=await fixture().memberships(principal);expect(before).toEqual([expect.objectContaining({tenantId,role:"foreman"})]);
+  await admin.query(reason==="revoked"?"UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2":"UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2",[tenantId,before[0]!.id]);
+  expect(await fixture().memberships(principal)).toEqual([]);
+  now+=60001;const fresh=await invitationFor(owner,recipient,"estimator"),second=await accept(recipient,fresh);
+  const after=await fixture().memberships((await fixture().authenticate(second.sessionToken))!);
+  expect(after).toEqual([expect.objectContaining({tenantId,role:"estimator",email:recipient})]);expect(after[0]!.id).not.toBe(before[0]!.id);
+  const rows=await membershipRows(tenantId,recipient);expect(rows).toHaveLength(2);
+  const old=rows.find(r=>r.id===before[0]!.id)!;expect(old.role).toBe("foreman");expect(reason==="revoked"?old.revoked_at:old.expires_at).not.toBeNull();
+  expect((await admin.query("SELECT membership_id FROM identity.membership_locator WHERE user_id=$1 AND tenant_id=$2",[principal.identityUserId,tenantId])).rows).toEqual([{membership_id:after[0]!.id}]);
+  expect((await admin.query("SELECT accepted_at FROM identity.invitation WHERE id=$1",[fresh])).rows[0].accepted_at).not.toBeNull();
+  // The replaced membership stays dead: the original one is still revoked/expired and a stale session cannot revive it.
+  expect(await fixture().findMembership(principal,tenantId)).toMatchObject({id:after[0]!.id});
+ });
+ it("still refuses an invitation to a member whose membership is active, and leaves the invitation unused",async()=>{
+  const owner=await signup(),tenantId=owner.membership.tenantId,recipient=email();
+  const first=await accept(recipient,await invitationFor(owner,recipient,"foreman")),principal=(await fixture().authenticate(first.sessionToken))!;
+  now+=60001;const again=await invitationFor(owner,recipient,"admin");
+  await expect(accept(recipient,again)).rejects.toMatchObject({code:"INVALID_CODE"});
+  expect(await membershipRows(tenantId,recipient)).toHaveLength(1);
+  expect(await fixture().memberships(principal)).toEqual([expect.objectContaining({tenantId,role:"foreman"})]);
+  expect((await admin.query("SELECT accepted_at FROM identity.invitation WHERE id=$1",[again])).rows[0].accepted_at).toBeNull();
+ });
+ it("creates exactly one replacement membership when a revoked member's fresh invitation is verified concurrently",async()=>{
+  const owner=await signup(),tenantId=owner.membership.tenantId,recipient=email();
+  const first=await accept(recipient,await invitationFor(owner,recipient,"foreman")),principal=(await fixture().authenticate(first.sessionToken))!;
+  await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND identity_user_id=$2",[tenantId,principal.identityUserId]);
+  now+=60001;const fresh=await invitationFor(owner,recipient,"finance");
+  await fixture().requestCode({email:recipient,purpose:"invitation",invitationId:fresh,ip:randomUUID()});
+  const results=await Promise.allSettled([1,2,3].map(()=>fixture().verifyCode(recipient,"invitation","12345678",fresh)));
+  expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(1);
+  for(const failed of results.filter(r=>r.status==="rejected"))expect((failed as PromiseRejectedResult).reason).toMatchObject({code:"INVALID_CODE"});
+  expect(await membershipRows(tenantId,recipient)).toHaveLength(2);
+  expect((await admin.query("SELECT count(*)::int n FROM identity.membership_locator WHERE user_id=$1 AND tenant_id=$2",[principal.identityUserId,tenantId])).rows[0].n).toBe(1);
+  expect(await fixture().memberships(principal)).toEqual([expect.objectContaining({tenantId,role:"finance"})]);
+ });
 });

@@ -130,7 +130,11 @@ create roles). The fixture browser harness enables LOGIN only in its disposable 
 
 Provisioning takes a verified, consumed challenge, never arbitrary tenant/role parameters.
 Signup always creates a new tenant and owner. Acceptance uses the invitation's immutable
-email/tenant/account/role, with tenant-qualified account/membership FKs. FORCE RLS remains
+email/tenant/account/role, with tenant-qualified account/membership FKs. The membership locator outlives
+revocation and expiry, so it never blocks acceptance by itself: under row locks on the locator
+and its membership, only a currently active membership refuses a fresh invitation (which then
+stays unused). For a revoked or expired one, acceptance inserts a new invitation-bound membership
+and repoints the locator in the same transaction; the old membership row is kept as history. FORCE RLS remains
 on `app.account`/`app.membership`; additional migration-owner policies retain the same
 transaction-local tenant predicate. The discovery routine visits only the identity's
 locator rows and rechecks canonical membership revocation/expiry. Identity credentials
