@@ -269,6 +269,21 @@
         ]
       }
     },
+    "/jobs/{id}/quotes/preview": {
+      "post": {
+        "operationId": "QuoteController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview a quote with its immutable customer, paying party and site revisions",
+        "tags": [
+          "quotes"
+        ]
+      }
+    },
     "/jobs/{id}/variations": {
       "get": {
         "operationId": "VariationController_get",
@@ -1041,6 +1056,91 @@
         },
         "tags": [
           "evidence-packs"
+        ]
+      }
+    },
+    "/jobs/{id}/parties": {
+      "get": {
+        "operationId": "JobPartiesController_view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted customer, paying party, site and recognition projection"
+          }
+        },
+        "summary": "Read job-parties-workspace.v1 with tenant-scoped identity suggestions",
+        "tags": [
+          "job-parties"
+        ]
+      },
+      "post": {
+        "operationId": "JobPartiesController_command",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Typed revision, identity or idempotency conflict"
+          }
+        },
+        "summary": "Execute job-parties-command.v1 (operational; no commercial approval)",
+        "tags": [
+          "job-parties"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import": {
+      "post": {
+        "operationId": "JobPartiesController_adopt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "JOB_PARTIES_REQUIRED or stale source binding"
+          }
+        },
+        "summary": "Adopt the supplied fictional job using the exact saved party binding",
+        "tags": [
+          "job-parties"
+        ]
+      }
+    },
+    "/job-parties/jobs": {
+      "get": {
+        "operationId": "JobPartiesListController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read job-parties-list.v1 including captured jobs and saved customer/site labels",
+        "tags": [
+          "job-parties"
         ]
       }
     }

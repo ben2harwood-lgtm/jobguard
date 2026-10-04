@@ -80,7 +80,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
   const sourcePath = join(root, "source"), backupPath = join(root, "backup"), restoredPath = join(root, "restored");
   const sourcePort = await vacantPort(), password = randomUUID();
   let restoredPort = await vacantPort(); while (restoredPort === sourcePort) restoredPort = await vacantPort();
-  const clusterOptions = { user: "postgres", password, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], postgresFlags: ["-c", "listen_addresses=127.0.0.1"], onLog: () => undefined, onError: () => undefined };
+  const clusterOptions = { user: "postgres", password, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], postgresFlags: ["-c", "listen_addresses=127.0.0.1"], onLog: () => undefined, onError: () => undefined };
   const source = new EmbeddedPostgres({ ...clusterOptions, databaseDir: sourcePath, port: sourcePort });
   const restored = new EmbeddedPostgres({ ...clusterOptions, databaseDir: restoredPath, port: restoredPort });
   const pools = new Set();
@@ -103,7 +103,17 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [ids.identity]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional restore builder')", [ids.account, ids.tenant]);
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [ids.member, ids.tenant, ids.account, ids.identity]);
-    await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional restore job','live'),($3,$4,'Other tenant fictional job','draft')", [ids.job, ids.tenant, ids.otherJob, ids.otherTenant]);
+    await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional restore job','quoting'),($3,$4,'Other tenant fictional job','draft')", [ids.job, ids.tenant, ids.otherJob, ids.otherTenant]);
+    // Supply explicit generated parties before the existing live-state fixture.
+    const partyClient = await admin.connect();
+    try {
+      await partyClient.query("BEGIN");
+      await partyClient.query("SELECT set_config('app.tenant_id',$1,true)", [ids.tenant]);
+      await api.seedSyntheticPartyFixture(partyClient, ids.tenant, ids.job);
+      await partyClient.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [ids.tenant, ids.job]);
+      await partyClient.query("COMMIT");
+    } catch (error) { await partyClient.query("ROLLBACK"); throw error; }
+    finally { partyClient.release(); }
     await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [ids.scope, ids.tenant, ids.job]);
     await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')", [ids.tenant, ids.job, ids.scope]);
     await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [ids.quote, ids.tenant, ids.job, fixtureHash]);

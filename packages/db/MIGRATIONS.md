@@ -102,3 +102,46 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 ## 0039 readiness
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
+
+### 0051 — CH-3a job parties
+
+Expand-only customer/site identities and revisions, append-only party bindings,
+a unique current pointer, tenant/job-qualified activation/import references, and
+nullable document snapshot columns. Existing quote/invoice snapshots, bytes and
+hashes are untouched. New quote PDFs and synthetic invoices include the exact
+party revisions. Customer/site/binding mutations are denied to runtime; only the
+narrow binding routine can advance the current pointer and job revision.
+
+Encoding: 0051 needs a UTF8 database. Site match keys apply NFKC `normalize()`,
+which PostgreSQL only allows when the server encoding is UTF8 (otherwise every
+site revision insert fails with "Unicode normalization can only be performed if
+server encoding is UTF8"). Neon and the standard PostgreSQL images are UTF8; the
+embedded test clusters pass `--encoding=UTF8` to `initdb` because `embedded-postgres`
+starts `initdb` with no locale environment, which would otherwise create SQL_ASCII.
+
+The runner sets the backfill mode inside 0051's transaction. Only an explicit
+`JOBGUARD_ENV=synthetic_demo` uses the generated recipe (Practice Customer,
+14 Fictional Street, London, SW1A 1AA), preserving the latest issued quote's
+customer name when present. All other modes create details-needed Decisions and
+invent no parties. Backfill iterates control-plane tenant IDs and sets tenant
+context before reading each tenant's jobs, including under the Neon migration
+role and FORCE RLS. The migration registry makes reruns idempotent.
+
+The existing 13-argument adoption routine now refuses missing parties. The
+18-argument routine accepts verified customer/site revision references and binds
+before entering live. It is a controlled write: inside the routine it requires a
+current owner membership for the actor, a `processing` `job.adopt_in_flight`
+command receipt for that actor, and an unexpired, unrevoked, approved
+authorization bound to the same job, actor, content hash, amount, policy version
+and zero aggregate revision (`FORBIDDEN` / `AUTHORIZATION_INVALID`, SQLSTATE
+42501). The command dispatcher supplies the command and authorization ids and
+appends the audit events in the same transaction, so a refusal leaves no receipt,
+decision, job or audit row. Update the application before using adoption. The previous
+synthetic demo's fixture bootstrap remains supported; fresh bootstrap explicitly
+seeds generated parties before marking its example job live.
+
+Forward fix only after any new binding/document is recorded: retain immutable
+revisions and issued artifacts; append a corrective binding with a reason.
+Do not drop these tables/columns or rewrite historical documents as rollback.
+Database execution, fresh/upgrade, runtime catalog, Neon bootstrap and restore
+checks remain mandatory in CI; local collection/type checks are not DB evidence.
