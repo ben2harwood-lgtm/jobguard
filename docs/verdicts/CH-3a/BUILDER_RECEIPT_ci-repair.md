@@ -74,3 +74,94 @@ Earlier, failing local runs that led to the fixes: `pnpm test:db` after root cau
 2. After this merges, any new embedded-Postgres test cluster that creates jobs or sites must also pass `--encoding=UTF8`, because migration 0051 needs a UTF8 database. `packages/db/MIGRATIONS.md` says so.
 3. Migration-count assertions (`UIWIRE-12`, `demo-bootstrap`) and any "applies 0000..00NN" text count this branch only.
 4. Raw SQL writes that move a job to `live` as a superuser need `app.tenant_id` set in the same transaction; application code already does.
+
+---
+
+# Round 2 — repairs after the Opus and Sol checks on `b0f88fb`
+
+- **Repair builder:** Claude Sonnet 5.5, 4 October 2026. Same status: **not independently verified, not accepted.** This section is a builder receipt, not a verdict.
+- **Inputs:** Claude Opus (cloud) `VERDICT: REPAIR` in the PR #98 comment, and GPT-6.1 Sol high `REPAIR` at `/Users/benharwood/.local/share/full-steam/jg-runs/ch-3a-solcheck-20261003T235018.md`, both bound to `b0f88fb`.
+- **Code head tested:** `b43a999`. `origin/main` had not moved since `b039abf` (PR #98 mergeable: CLEAN), so no merge was needed this round.
+
+## Finding status
+
+| # | Source and priority | Finding | Status | Where |
+|---|---|---|---|---|
+| 1 | Opus blocking (medium) and Sol P1 | The pre-save re-read turned a real concurrent edit into a silent overwrite (binding or customer revision) | **Fixed** | `0e28644`; tests in `b43a999` |
+| 2 | Opus low | A job that went live after load was saved as a post-live correction without the reason field; the user saw a raw code | **Fixed** | `0e28644`; test in `b43a999` |
+| 3 | Sol P2 | The adoption overload (`SECURITY DEFINER`, granted to `jobguard_runtime`) checked no owner membership, command receipt or approved authorization and wrote no audit event | **Fixed** | `f0e7c75` |
+| 4 | Sol P2 | The immutable quote preview displayed the mutable current customer name beside the frozen document's hash; a new binding did not force a new preview | **Fixed** | `ceb1edb`; test in `b43a999` |
+| 5 | Opus merge-order note | #97 (0050), #98 (0051) and #100 (0054) each set the UIWIRE-12 count to 43 | **Noted for the integrator**, nothing to change on this branch | see "For the integrator" |
+
+**OPEN FOR BEN:** none. Every finding was a technical repair inside the existing contract. No live provider, production mode, real data, spending, decision approval or deployment is touched.
+
+## What changed
+
+1. **Stale edits (findings 1 and 2).** `job-parties.tsx` keeps what the draft was edited against. On save it re-reads the workspace and refreshes only the expected job revision when nothing the draft depends on has changed (unrelated scope or quote progress). It refuses, writing nothing, when the current binding differs, the job's live or not-live phase differs, or a customer, payer or site revision the draft uses differs. The refusal shows the typed conflict message, reloads the draft from the saved details (so a retry cannot write stale text over someone else's) and lets the user choose again. A server `REVISION_CONFLICT` from two writers on one revision takes the same reload path. A job that went live is explained in words, and `CORRECTION_REASON_REQUIRED` is a sentence. To reload a draft the workspace response gained an additive `currentIds` (binding, customer, payer, site ids). The database's expected-revision check is unchanged.
+2. **Adoption routine (finding 3).** Migration 0051's overload is now 18 arguments (adds command id and authorization id) and, inside the routine, requires: a current owner membership for the actor (not revoked, not expired); a `processing` `job.adopt_in_flight` command receipt for that actor; and an unexpired, unrevoked, approved authorization bound to the same job, actor, content hash, amount, currency, policy version and zero aggregate revision. Failures are SQLSTATE 42501 (`FORBIDDEN` or `AUTHORIZATION_INVALID`). The command dispatcher (`packages/db/src/commands.ts`, added to the ch-3a lane for this one line) now hands the effective decision, resolution and authorization ids to the mutation, so command, authorization, result and audit events still commit or roll back together. Migration 0051 is unmerged, so it was edited in place.
+3. **Quote preview (finding 4).** The preview keeps the returned document's frozen customer and binding, shows them, and marks itself out of date when the job's binding changes; send and download then ask for a new preview and approval. The server also refuses to send a document whose frozen binding is no longer current (`QUOTE_CHANGED`, 409). Earlier artifacts keep their bytes and hashes (the spec compares the old artifact's SHA-256 before and after).
+
+## Tests first
+
+Written before any fix and run against the `b0f88fb` code and build (red), then green after the fixes:
+
+| Suite | Red at `b0f88fb` | Green at `b43a999` |
+|---|---|---|
+| `job-parties.integration.test.ts` (14 tests) | 3 failed: direct runtime SQL with no authority, each-missing-authority cases, and the authorized direct call (the 18-argument routine did not exist). The dispatcher-success and rollback tests passed, as they should. | 14 of 14 |
+| `CH-3a.spec.ts`, five new tests × `mobile-360` and `desktop` | all 10 new tests failed for the intended reasons (no conflict shown, no `currentIds`, name changed under a frozen hash); the 4 earlier CH-3a/regression tests passed | 14 of 14 |
+
+New DB tests: adoption through the dispatcher with its audit events; atomic rollback of command, authorization and job when adoption fails inside the boundary; runtime SQL denial for absent authorization, revoked actor, expired actor, revoked authorization, expired authorization, spent receipt, authorization for another job, different amount, different policy, different content, and a command paired with another authorization; and the authorized direct call succeeding.
+
+New browser tests (both projects):
+- a save from a panel another writer has already superseded, started after that writer committed, is refused and writes nothing (customers, sites, binding and job revision unchanged; the panel reloads to the winner's details and a second save then succeeds);
+- a save against a customer another writer revised (binding unchanged) is refused, with no third revision written;
+- **two writers clicking save on one revision give one success, one visible conflict, exactly one new binding (job revision plus one) and only `REVISION_CONFLICT` 409s through the UI.** Repeated six times in each project (12 of 12) to check it is not timing-dependent;
+- a panel opened before the job went live is told so in words, nothing is written, the reason field appears, and a save with a reason then succeeds;
+- a quote preview keeps its frozen customer, a corrected binding marks it out of date, send is refused in the browser and by the server (409 `QUOTE_CHANGED`), the old artifact bytes and hash are unchanged, a new preview has a new document and hash, and sending it succeeds.
+
+The original case (save after scope confirmation or a quote save) stays green: the two CH-3a tests from round 1 and the four existing specs that use `openReview` all pass.
+
+## Commits
+
+| SHA | Subject |
+|---|---|
+| `f0e7c75` | fix(db): make the adoption routine a controlled write |
+| `0e28644` | fix(web): refuse a stale party edit instead of overwriting another writer |
+| `ceb1edb` | fix(web): show the quote preview's frozen customer and require a new preview after a binding change |
+| `b43a999` | test(web): CH-3a round-2 browser tests for stale panels, races and frozen previews |
+
+## Commands run at `b43a999` (Node 24.17.0, pnpm 10.28.1; database and browser commands inside `heavy-slot ch-3a`)
+
+| Command | Exit | Result |
+|---|---:|---|
+| `pnpm typecheck --force` | 0 | 7 of 7 |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7 of 7 |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | passed (includes `packages/db/src/commands.ts`) |
+| `pnpm openapi:check` | 0 | matches `apps/api/openapi.json` (the response schema is not described there, so `currentIds` changes nothing) |
+| `pnpm build` | 0 | 7 of 7 |
+| `pnpm test --force` | 0 | tools 39; core 388; storage 4; config 2; ai 72; api 76; web 56; db 167 (35 files) |
+| `pnpm test:db` | 0 | 35 files, 167 tests; run three times in all, see the note below |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| `CI=1 … test:e2e` `CH-3a.spec.ts -g "two writers on one revision" --repeat-each=6`, both projects | 0 | 12 passed |
+| `CI=1 … test:e2e`, whole suite, both projects, local browser | 0 | 176 passed, twice |
+
+**Flakes, stated plainly (no assertion, wait, retry or timeout was changed):**
+- `pnpm test:db` exited 1 once in the final script because `practice-finding-scope.integration.test.ts` reported "Connection terminated unexpectedly" on its first `migrate` query, as the embedded server died at start-up on this busy shared Mac. Two re-runs of `pnpm test:db` passed 35 of 35 files and 167 of 167 tests.
+- `UIWIRE-1.spec.ts` (unchanged, not in this lane) failed one test in each of two earlier full runs on this branch, and in 2 of 8 isolated repeats, always after its helper's hard navigation to the job page: the page was reloaded under the test, so the clicks were lost. A different test failed each time (desktop "omitted line", mobile-360 "split and merge"). The same spec passed 96 of 96 repeats on `b0f88fb` and 96 of 96 on `b43a999` in a quieter period, and passed in both of two later full runs at `b43a999`. I could not reproduce it on demand and have not shown that the round-2 changes affect its odds; the failing traces were overwritten by later runs. If it recurs in CI, treat it as a hydration race in that spec's navigation and report it separately.
+
+## Environment
+
+- **Shared memory exhausted.** The first red run could not start: `initdb` failed with "could not create shared memory segment: No space left on device". macOS allows 32 SysV segment ids (`kern.sysv.shmmni`) and leaked Postgres segments from killed test clusters (0 attached) had used them all. I removed leaked segments with `ipcrm -m`. My first clean-up checked the wrong `ipcs` column, so it removed segments with no attached process without confirming their creators were dead; no embedded Postgres process was running at that moment, so no live segment was lost. Later clean-ups checked that the creator pid was dead. Other sessions on this Mac leak segments again within minutes, so this can recur.
+- **Browser:** same uncommitted local config as round 1 (`chromium_headless_shell-1234`, nothing else changed); GitHub CI uses the pinned browser.
+- I checked out `b0f88fb` (detached) in this worktree to compare flake rates, then returned to the branch; nothing was reset or deleted.
+
+## Notes for the checker
+
+1. The conflict rule is stricter than the minimum: any change since load to a customer the draft selects or pays with, or to a reused site, refuses a plain bind as well as an edit, so a binding never silently points at an older revision than the user saw.
+2. `commands.ts` now passes `decisionId`, `resolutionId` and `authorizationId` into every mutation. Handlers that already read `command.authorizationId` get the same value as before; all 167 DB tests and 388 core tests pass.
+3. Documents previewed before CH-3a have no frozen binding, so they cannot be sent until previewed again. Sent documents are unaffected.
+4. Raw `INVALID_PARTIES` is still shown as the code; the existing test asserts it.
+
+## For the integrator
+
+#97 (0050), #98 (0051) and #100 (0054) each set the UIWIRE-12 migration count to 43 and #98's range check ends at `0051_job_parties.sql`. After the first of them merges the others need the count bumped (and the range updated) when they merge main. Any new embedded-Postgres cluster that creates jobs or sites must pass `--encoding=UTF8` (see `packages/db/MIGRATIONS.md`).
