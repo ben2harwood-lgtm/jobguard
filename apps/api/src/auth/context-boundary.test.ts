@@ -33,6 +33,9 @@ const CLIENT_TENANT = /requested_tenant_id|requestedTenantId/u;
 const CLIENT_TENANT_REFUSED = /requested_tenant_id\s*!==\s*DEMO_TENANT_ID/u;
 const CONSTRUCTOR = "verifiedTenantContextFromMembership";
 const DEMO_TENANT = new Set(["DEMO_TENANT_ID", "DEMO_EMPTY_TENANT_ID"]);
+// Cheap pre-filter so only files that can possibly hold an occurrence are parsed (a file without any of these words cannot
+// construct, alias, cast to or assign an effective tenant context). Keeps the whole-tree scan fast on a loaded machine.
+const RELEVANT = /verifiedTenantContextFromMembership|VerifiedTenantContext|effective_tenant_id|effectiveTenantId/u;
 
 interface SourceFile { path: string; text: string }
 type Occurrence =
@@ -55,12 +58,22 @@ const propertyInitializer = (literal: ts.ObjectLiteralExpression, name: string):
 const identifierIn = (value: ts.Expression | "shorthand" | undefined, allowed: (name: string) => boolean): boolean =>
   value !== undefined && value !== "shorthand" && ts.isIdentifier(value) && allowed(value.text);
 
+const parsed = new Map<string, { found: Occurrence[]; source: ts.SourceFile }>();
 function occurrences(file: SourceFile): { found: Occurrence[]; source: ts.SourceFile } {
+  const key = `${file.path}\0${file.text}`;
+  const cached = parsed.get(key);
+  if (cached) return cached;
+  const result = parse(file);
+  parsed.set(key, result);
+  return result;
+}
+function parse(file: SourceFile): { found: Occurrence[]; source: ts.SourceFile } {
+  if (!RELEVANT.test(file.text)) return { found: [], source: ts.createSourceFile(file.path, "", ts.ScriptTarget.Latest) };
   const kind = /\.(mjs|js)$/u.test(file.path) ? ts.ScriptKind.JS : file.path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(file.path, file.text, ts.ScriptTarget.Latest, true, kind);
   const found: Occurrence[] = [];
   const visit = (node: ts.Node): void => {
-    if ((ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) && node.type.getText(source) === "VerifiedTenantContext") {
+    if ((ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) && /\bVerifiedTenantContext\b/u.test(node.type.getText(source))) {
       found.push({ kind: "cast", operand: unwrap(node.expression), node });
     }
     const named = ts.isIdentifier(node) || ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.parent !== undefined && (ts.isElementAccessExpression(node.parent) && node.parent.argumentExpression === node || ts.isPropertyAssignment(node.parent) && node.parent.name === node));
@@ -174,9 +187,8 @@ async function walk(directory: string, out: string[] = []): Promise<string[]> {
 async function applicationSource(): Promise<SourceFile[]> {
   const roots = [join(repository, "apps/api/src"), join(repository, "apps/web/app")];
   for (const name of await readdir(join(repository, "packages"))) for (const folder of ["src", "tools"]) roots.push(join(repository, "packages", name, folder));
-  const files: SourceFile[] = [];
-  for (const root of roots) for (const path of await walk(root)) files.push({ path: relative(repository, path).split(sep).join("/"), text: await readFile(path, "utf8") });
-  return files;
+  const paths = (await Promise.all(roots.map(root => walk(root)))).flat();
+  return Promise.all(paths.map(async path => ({ path: relative(repository, path).split(sep).join("/"), text: await readFile(path, "utf8") })));
 }
 
 const validSynthetic = `import { DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, verifiedTenantContextFromMembership } from "@jobguard/db";
@@ -192,11 +204,14 @@ describe("M0-6L sole-constructor boundary across all application source", () => 
     const constructors = files.filter(f => occurrences(f).found.some(o => o.kind === "call")).map(f => f.path);
     expect(constructors).toContain(REAL);
     expect(constructors.filter(path => path.startsWith("apps/web/"))).toEqual([]);
-    // Planting one extra caller in the real tree, anywhere, must fail the same scan.
+    // Planting one extra caller in the real tree, anywhere, must fail the same scan (the files that cannot matter are
+    // skipped by the pre-filter, so the planted run uses the relevant subset to stay fast).
+    const relevant = files.filter(f => RELEVANT.test(f.text));
+    expect(relevant.map(f => f.path)).toEqual(expect.arrayContaining([REAL, DEFINITION, WORKER]));
     for (const planted of ["apps/api/src/planted.application.ts", "apps/web/app/lib/planted.ts", "packages/core/src/planted.ts", "apps/api/src/auth/planted.ts"]) {
-      expect(boundaryViolations([...files, { path: planted, text: "export const context = (tenantId: string) => verifiedTenantContextFromMembership({ tenantId } as never);" }]), planted).not.toEqual([]);
+      expect(boundaryViolations([...relevant, { path: planted, text: "export const context = (tenantId: string) => verifiedTenantContextFromMembership({ tenantId } as never);" }]), planted).not.toEqual([]);
     }
-    expect(boundaryViolations([...files, { path: WORKER, text: "const x = {} as VerifiedTenantContext;" }].filter((f, i, all) => f.path !== WORKER || i === all.length - 1))).not.toEqual([]);
+    expect(boundaryViolations([...relevant, { path: WORKER, text: "const x = {} as VerifiedTenantContext;" }].filter((f, i, all) => f.path !== WORKER || i === all.length - 1))).not.toEqual([]);
   });
 
   it("accepts the retained synthetic shape and rejects every other constructor, alias, cast or effective-tenant assignment", () => {
@@ -219,6 +234,8 @@ export const context = (tenantId: string, membershipId: string) => verifiedTenan
     expect(rogue("apps/api/src/x.ts", `import type { VerifiedTenantContext } from "@jobguard/db";\nexport const c = { tenantId: input } as VerifiedTenantContext;`)).not.toEqual([]);
     expect(rogue("apps/web/app/lib/x.ts", `import type { VerifiedTenantContext } from "@jobguard/db";\nexport const c = ({ tenantId: input } as unknown) as VerifiedTenantContext;`)).not.toEqual([]);
     expect(rogue("apps/api/src/x.ts", `import type { VerifiedTenantContext } from "@jobguard/db";\nexport const c = <VerifiedTenantContext>{ tenantId: input };`)).not.toEqual([]);
+    expect(rogue("apps/api/src/x.ts", `export const c = { tenantId: input } as import("@jobguard/db").VerifiedTenantContext;`)).not.toEqual([]);
+    expect(rogue("apps/api/src/x.ts", `import * as db from "@jobguard/db";\nexport const c = { tenantId: input } as Readonly<db.VerifiedTenantContext>;`)).not.toEqual([]);
     expect(rogue("apps/api/src/x.application.ts", `import { DEMO_TENANT_ID } from "@jobguard/db";\nexport const c = { tenantId: DEMO_TENANT_ID } as VerifiedTenantContext;`)).toEqual([]);
     expect(rogue("apps/api/src/x.ts", `import { verifiedTenantContextFromMembership } from "@jobguard/db";\nexport const make = verifiedTenantContextFromMembership;`)).toEqual(expect.arrayContaining([expect.stringContaining("aliases or passes")]));
     expect(rogue("apps/api/src/x.ts", `import * as db from "@jobguard/db";\nexport const make = db["verifiedTenantContextFromMembership"](input);`)).not.toEqual([]);
