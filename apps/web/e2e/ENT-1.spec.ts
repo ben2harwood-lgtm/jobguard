@@ -43,3 +43,28 @@ test('generated contractor tenants are separate and malformed policies return ty
  await page.reload();await expect(page.getByTestId('contractor-revision')).toHaveText('1');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
  await otherContext.close();
 });
+test('an acknowledged change whose refresh fails is shown as stale, never as saved, and blocks revision-dependent edits',async({page})=>{
+ // FAULT TEST (transport abort only): the real POST is allowed through and really commits; only the follow-up refresh GET is aborted.
+ // No JobGuard success response is fabricated or intercepted.
+ let dropRefresh=false;
+ await page.route('**/api/contractor',async route=>{if(dropRefresh&&route.request().method()==='GET'){dropRefresh=false;await route.abort('failed');}else await route.continue();});
+ await page.goto('/admin/contractor');await B(page,'Start generated contractor practice').click();await expect(page.getByTestId('contractor-revision')).toHaveText('0');
+ const main=page.getByRole('main');
+ dropRefresh=true;await page.getByLabel('Team name').fill('Fictional stale-check team');await B(page,'Add team').click();
+ // The server really committed revision 1 ...
+ await expect.poll(async()=>(await view(page)).revision).toBe(1);
+ // ... but the page could not refresh, so it must say so instead of claiming success.
+ await expect(main.getByRole('alert')).toContainText('could not be refreshed');await expect(main.getByRole('alert')).toBeFocused();
+ await expect(main.getByRole('status')).toContainText('out-of-date');await expect(main.getByRole('status')).not.toContainText('Saved to the organisation');
+ await expect(page.getByTestId('contractor-revision')).toHaveText('0');
+ for(const name of ['Add unit','Add team','Add fictional member','Add fictional client'])await expect(B(page,name)).toBeDisabled();
+ await expect(B(page,'Reload persisted organisation')).toBeEnabled();
+ // A successful refresh clears the stale state and unlocks editing against the new revision.
+ await B(page,'Reload persisted organisation').click();
+ await expect(page.getByTestId('contractor-revision')).toHaveText('1');await expect(main.getByRole('status')).toHaveText('Persisted organisation loaded');await expect(main.getByRole('alert')).toHaveCount(0);
+ await expect(B(page,'Add team')).toBeEnabled();
+ await B(page,'Add team').click();await expect(page.getByTestId('contractor-revision')).toHaveText('2');await expect(main.getByRole('status')).toHaveText('Saved to the organisation');
+ await page.reload();await expect(page.getByTestId('contractor-revision')).toHaveText('2');
+ await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toHaveCount(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});
