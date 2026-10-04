@@ -20,6 +20,15 @@ export class SupplierMatchRepository {
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
       const requestHash = hash({ jobId, ...input }), { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.create", requestHash: requestHashFor("supplier_match.create", jobId, request) });
       if (began.replay) return began.result;
+      // A creation written before results were stored: its revision row carries the command id and its audit event the hash of this very request.
+      // It replays as the match stood at that revision, on its own job and for its own request only.
+      const written = (await db.$client.query<any>(
+        `SELECT r.job_id,r.proposal_id,r.revision,ae.payload->'hashes'->>'payloadHash' AS request_hash FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.command_id=$2 AND ae.event_type='supplier_match.confirmed'`,
+        [context.tenantId, input.commandId])).rows[0];
+      if (written) {
+        if (written.job_id !== jobId || written.request_hash !== hash(input)) throw new Error("IDEMPOTENCY_CONFLICT");
+        return this.viewIn(db.$client, context.tenantId, jobId, { proposalId: written.proposal_id, revision: Number(written.revision) });
+      }
       const sources = await this.sources(db.$client, context.tenantId, jobId);
       const proposal = proposeSupplierMatch({
         version: "supplier-match-input.v1",

@@ -159,9 +159,59 @@ of the request), and reads every replayed field, including the first expiry, bac
 Rows written before these tables existed replay from their own tables, on their own job only, and
 return what they first returned where it can be derived: a match correction as of its revision, an
 inbox dismissal and the things-to-check findings, outcomes and supersessions as of their place in
-the audit chain (fact candidates by creation time, which carry no audit link); a legacy evaluation is
-validated against the original, immutable sources of its match revision, not today's. Only new commands get
-a stored result. Both tables are tenant-keyed, `FORCE`-RLS, owned by `jobguard_migration`, runtime
+the audit chain, and the fact candidates of an earlier evaluation by the audit event that confirmed each
+fact (never by `created_at`, which is the start time of the writing transaction: a confirmation that began
+earlier but committed later would look older than an evaluation it could not have been part of; audit
+appends serialise on the tenant's audit head and hold it to commit, so audit order is commit order); a legacy
+evaluation is validated against the original, immutable sources of its match revision, not today's. Only new
+commands get a stored result.
+
+An id the previous schema persisted is reserved for the command that persisted it. The identity table starts
+empty, so every claim also consults the stores that held command ids before 0050 (`LEGACY_COMMAND_OWNERS` in
+`packages/db/src/watchdog.ts`): an id found there can be claimed only by its own kind on its own job (its
+replay); any other kind, or the same kind on another job, is refused with `IDEMPOTENCY_CONFLICT`, before the
+original command has replayed, and the refused claim leaves nothing behind. The stores are the planned work
+revision (`readiness.record`), readiness decision (`advance`), discrepancy finding, review outcome and bill
+supersession (`evaluate`, `review`, `supersede`), supplier match revision (a creation's revision carries the audit event `supplier_match.confirmed`, a correction's `supplier_match.corrected`), supplier fact revision (`confirm`), the dismissed inbox events (`inbox.dismiss`), the `inbox.seed`
+command receipt, the purchase order placement (`place`), the stage completion (`proof.complete`) and the evidence
+upload, whose id is the begin-upload command id (`evidence.begin_upload`). Order revisions, document intake, goods
+receipts and finalisation had no command id before 0050, so there is nothing to reserve for them. Random ids a command
+writes for its own internal rows (a readiness snapshot's, an inbox "created" event's) are not command ids and are not
+listed. An id persisted by two kinds, or for two jobs, in the previous schema belongs to nobody: every claim of it is
+refused, so no winner is picked among commands that already had their effects. The consult runs inside the claiming
+transaction, behind the live guard and the per-job lock; the stores are append-only, so what it reads cannot change under
+it. Pre-deploy check, run like the one below (a role that bypasses row-level security; the suite runs this exact text against
+a database holding a known collision): it lists every such ambiguous id, which must be none.
+
+```sql
+-- 0050 pre-deploy collision check (read-only): command ids the previous schema persisted for more than one watchdog command kind or job.
+WITH owners(tenant_id, command_id, kind, job_id) AS (
+  SELECT tenant_id, command_id, 'readiness.record', job_id FROM app.planned_work_revision
+  UNION ALL SELECT tenant_id, command_id, 'readiness.advance', job_id FROM app.readiness_decision
+  UNION ALL SELECT tenant_id, command_id, 'things_to_check.evaluate', job_id FROM app.discrepancy_finding_revision
+  UNION ALL SELECT tenant_id, command_id, 'things_to_check.review', job_id FROM app.discrepancy_review_outcome
+  UNION ALL SELECT tenant_id, command_id, 'things_to_check.supersede', job_id FROM app.supplier_bill_supersession
+  UNION ALL SELECT r.tenant_id, r.command_id, CASE ae.event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' ELSE 'supplier_match.correct' END, r.job_id FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id)
+  UNION ALL SELECT tenant_id, command_id, 'supplier_document.confirm', job_id FROM app.supplier_fact_revision
+  UNION ALL SELECT tenant_id, command_id, 'inbox.dismiss', job_id FROM app.inbox_outcome_event WHERE event_kind='dismissed'
+  UNION ALL SELECT tenant_id, command_id, 'inbox.seed', nullif(split_part(semantic_key,':',2),'')::uuid FROM app.command_receipt WHERE command_type='inbox.seed'
+  UNION ALL SELECT tenant_id, command_id, 'purchase_order.place', job_id FROM app.purchase_order_placement
+  UNION ALL SELECT tenant_id, command_id, 'proof.complete', job_id FROM app.stage_completion
+  UNION ALL SELECT tenant_id, id, 'evidence.begin_upload', job_id FROM app.evidence_upload)
+SELECT tenant_id, command_id, count(DISTINCT kind) AS kinds, count(DISTINCT job_id) AS jobs
+  FROM owners GROUP BY tenant_id, command_id HAVING count(DISTINCT kind) > 1 OR count(DISTINCT job_id) > 1;
+```
+
+The proof application's first answer to each of its three live-only commands (select a generated file, finalise
+it, complete the stage) is recorded in `app.proof_application_response`: the answer is a projection of the job that
+changes as the job moves on, so it is stored once with the request it answered, bound by composite foreign key to the
+command's claimed identity (`(tenant, command id, job, kind)`, which is why the identity table also carries
+`UNIQUE(tenant_id,command_id,job_id,command_type)`), and a replay returns it as recorded, after re-checking the
+actor's membership (active and unexpired). It is append-only (runtime SELECT/INSERT), tenant-keyed, `FORCE`-RLS and owned
+by `jobguard_migration`. It is the replay record of a command that already succeeded, not a watchdog input, so it has no
+live-job insert guard: a job that has just left live must still be able to give the first answer back. When the
+application asks the server to derive the Decision for stage completion (`deriveDecision`), the Decision it finds is
+recorded in the command's first result, so a Decision opened later cannot change a replay. Both tables are tenant-keyed, `FORCE`-RLS, owned by `jobguard_migration`, runtime
 SELECT/INSERT only, and the identity table is guarded by the same live-job insert trigger. They add no data
 to existing rows.
 

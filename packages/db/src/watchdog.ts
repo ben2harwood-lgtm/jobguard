@@ -39,12 +39,44 @@ export function commandIdFor(kind: WatchdogCommandType, jobId: string, request: 
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${(8 + (parseInt(hex[16]!, 16) & 3)).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
+/** Where the previous schema (before migration 0050) persisted the id of each kind of watchdog command, as (kind, job) pairs. Every row is
+ * immutable, so reading it inside the claiming transaction is race-free for rows that already exist. Stores that exist for other commands
+ * (invoices, receipts of money, the like) are not watchdog commands and are not listed; neither are random ids a command writes for its
+ * own internal rows (a readiness snapshot's, an inbox "created" event's). */
+const LEGACY_COMMAND_OWNERS = `
+  SELECT 'readiness.record' AS kind, job_id FROM app.planned_work_revision WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'readiness.advance', job_id FROM app.readiness_decision WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'things_to_check.evaluate', job_id FROM app.discrepancy_finding_revision WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'things_to_check.review', job_id FROM app.discrepancy_review_outcome WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'things_to_check.supersede', job_id FROM app.supplier_bill_supersession WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT CASE ae.event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' ELSE 'supplier_match.correct' END, r.job_id FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.command_id=$2
+  UNION ALL SELECT 'supplier_document.confirm', job_id FROM app.supplier_fact_revision WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'inbox.dismiss', job_id FROM app.inbox_outcome_event WHERE tenant_id=$1 AND command_id=$2 AND event_kind='dismissed'
+  UNION ALL SELECT 'inbox.seed', nullif(split_part(semantic_key,':',2),'')::uuid FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 AND command_type='inbox.seed'
+  UNION ALL SELECT 'purchase_order.place', job_id FROM app.purchase_order_placement WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'proof.complete', job_id FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2
+  UNION ALL SELECT 'evidence.begin_upload', job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2`;
+
+/** An id the previous schema persisted belongs to the kind and job that persisted it. It can be claimed only by that kind on that job
+ * (its own replay); any other kind, or the same kind on another job, is a conflict, so a command whose original has not replayed yet cannot
+ * have its id taken and used for a new effect. An id persisted by two kinds, or for two jobs, belongs to nobody and is refused to every
+ * claim: no winner is picked among commands that already had their effects. */
+async function assertNotLegacyOwned(database: TenantTransaction, spec: { tenantId: string; commandId: string; jobId: string; kind: WatchdogCommandType }): Promise<void> {
+  const owners = (await database.$client.query<{ kind: string; job_id: string | null }>(LEGACY_COMMAND_OWNERS, [spec.tenantId, spec.commandId])).rows;
+  const kinds = new Set(owners.map(owner => owner.kind)), jobs = new Set(owners.flatMap(owner => owner.job_id ? [owner.job_id] : []));
+  if ((kinds.size && (kinds.size > 1 || !kinds.has(spec.kind))) || (jobs.size && (jobs.size > 1 || !jobs.has(spec.jobId)))) throw new Error("IDEMPOTENCY_CONFLICT");
+}
+
 /** The tenant-wide identity claim every watchdog command makes first, in the transaction that completes it and before any audit
  * lock. "same" means this id was already claimed by the same job, kind and request (a replay); any other claim conflicts. A claim
- * racing in another transaction waits on the primary key and then conflicts, so all 17 commands share one atomic namespace. */
+ * racing in another transaction waits on the primary key and then conflicts, so all 17 commands share one atomic namespace. An id the
+ * previous schema persisted is reserved for its own kind and job (see `assertNotLegacyOwned`), whether or not it has replayed yet. The insert
+ * names no conflict target on purpose: the table has a second unique key (the proof application's response record references it), and a
+ * conflict target arbitrates only its own index, so a racing duplicate could surface the other index's violation instead of conflicting. */
 export async function claimCommandIdentity(database: TenantTransaction, spec: { tenantId: string; commandId: string; jobId: string; kind: WatchdogCommandType; requestHash: string }): Promise<"new" | "same"> {
+  await assertNotLegacyOwned(database, spec);
   const inserted = await database.$client.query(
-    "INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash)VALUES($1,$2,$3,$4,$5) ON CONFLICT (tenant_id,command_id) DO NOTHING RETURNING command_id",
+    "INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash)VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING command_id",
     [spec.tenantId, spec.commandId, spec.jobId, spec.kind, spec.requestHash]);
   if (inserted.rowCount) return "new";
   const existing = (await database.$client.query<{ job_id: string; command_type: string; request_hash: string }>(
