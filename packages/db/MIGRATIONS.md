@@ -168,6 +168,11 @@ the job naming that command and binding (`job.parties.bind`, or
 transaction fails (`BINDING_RECORD_REQUIRED`, SQLSTATE 23514). Generated backfill
 and adoption bindings carry no command and are covered by their own rules.
 
+Post-live correction: for a `live`, `invoiced` or `paid` job `bind_job_parties`
+refuses unless the correction flag `IS TRUE` and the reason is non-blank
+(`CORRECTION_REASON_REQUIRED`, SQLSTATE 22023). The test is null-safe: a null flag
+with a reason cannot skip the refusal and be stored as a plain binding with no reason.
+
 Quote send: `IssueQuoteMutation` takes the job lock (`require_current_job_parties`,
 `FOR SHARE`, which `bind_job_parties`' `FOR UPDATE` waits on) and compares the
 binding the document froze with the current binding before creating any send

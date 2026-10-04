@@ -83,13 +83,13 @@ BEGIN
  SELECT * INTO j FROM app.job WHERE tenant_id=p_tenant AND id=p_job FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
  IF j.revision<>p_expected THEN RAISE EXCEPTION 'REVISION_CONFLICT' USING ERRCODE='40001'; END IF;
- IF j.status IN('live','invoiced','paid') AND (NOT p_correct OR length(trim(coalesce(p_reason,'')))=0) THEN RAISE EXCEPTION 'CORRECTION_REASON_REQUIRED' USING ERRCODE='22023'; END IF;
+ IF j.status IN('live','invoiced','paid') AND (p_correct IS DISTINCT FROM TRUE OR length(trim(coalesce(p_reason,'')))=0) THEN RAISE EXCEPTION 'CORRECTION_REASON_REQUIRED' USING ERRCODE='22023'; END IF;
  SELECT * INTO c FROM app.customer_revision WHERE tenant_id=p_tenant AND id=p_customer;
  SELECT * INTO p FROM app.customer_revision WHERE tenant_id=p_tenant AND id=coalesce(p_payer,p_customer);
  SELECT * INTO s FROM app.site_revision WHERE tenant_id=p_tenant AND id=p_site;
  IF c.id IS NULL OR p.id IS NULL OR s.id IS NULL THEN RAISE EXCEPTION 'PARTY_NOT_FOUND' USING ERRCODE='23503'; END IF;
  INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance,correction_reason,command_id)
- VALUES(p_tenant,p_id,p_job,p_expected+1,c.customer_id,c.id,p.customer_id,p.id,s.site_id,s.id,'entered',CASE WHEN p_correct THEN p_reason END,p_command) RETURNING * INTO b;
+ VALUES(p_tenant,p_id,p_job,p_expected+1,c.customer_id,c.id,p.customer_id,p.id,s.site_id,s.id,'entered',CASE WHEN p_correct IS TRUE THEN p_reason END,p_command) RETURNING * INTO b;
  INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES(p_tenant,p_job,p_id)
  ON CONFLICT(tenant_id,job_id) DO UPDATE SET binding_id=excluded.binding_id;
  UPDATE app.job SET revision=revision+1,updated_at=transaction_timestamp() WHERE tenant_id=p_tenant AND id=p_job;
