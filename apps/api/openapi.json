@@ -1339,7 +1339,37 @@
             "description": ""
           }
         },
-        "summary": "Generate an immutable evidence-pack revision",
+        "summary": "Generate an immutable text evidence-pack revision",
+        "tags": [
+          "evidence-packs"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/evidence-packs/{packId}/attachment-approval": {
+      "post": {
+        "operationId": "EvidencePackController_approve",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record approval bound to the current evidence pack hashes",
+        "tags": [
+          "evidence-packs"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/evidence-packs/{packId}/inspect": {
+      "get": {
+        "operationId": "EvidencePackController_inspect",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Inspect persisted pack or an explicitly synthetic malformed scenario on the server",
         "tags": [
           "evidence-packs"
         ]
