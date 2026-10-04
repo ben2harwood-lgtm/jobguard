@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventTypeV1, transitionRecoveryCase } from "./recovery-case.js";
+import { assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventTypeV1, transitionRecoveryCase } from "./recovery-case.js";
 
 describe("complete recovery state machine",()=>{
  const expected = {
@@ -125,6 +125,35 @@ describe("complete recovery state machine",()=>{
   });
   it("still prevents a case with nothing received", () => {
    expect(transitionRecoveryCase({ state: "identified", event: "prevent", claimedPence: 250000, landedPence: 0 })).toEqual({ state: "prevented", landedPence: 0, writtenOffPence: 0 });
+  });
+ });
+ describe("a recovered closure needs the full CURRENT claim, and an amendment cannot sneak outstanding principal into a closed case (M4-1-S-R repair 9, Sol P2)", () => {
+  const base = { claimedPence: 300000 } as const;
+  it("refuses close_recovered unless the whole current claim has been received", () => {
+   expect(() => transitionRecoveryCase({ ...base, state: "landed", landedPence: 250000, event: "close_recovered" })).toThrowError(/is not allowed/);
+   expect(() => transitionRecoveryCase({ ...base, state: "landed", landedPence: 299999, event: "close_recovered" })).toThrowError(/is not allowed/);
+   expect(transitionRecoveryCase({ ...base, state: "landed", landedPence: 300000, event: "close_recovered" })).toEqual({ state: "closed_recovered", landedPence: 300000, writtenOffPence: 0 });
+  });
+  it.each(["landed", "closed_recovered", "closed_no_recovery"] as const)("rejects an upward amendment in %s (the explicit reopen is a dispute first)", state => {
+   expect(() => assertClaimAmendable({ state, currentClaimedPence: 250000, claimedPence: 300000, landedPence: 250000, writtenOffPence: 0 })).toThrowError("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
+   expect(() => assertClaimAmendable({ state, currentClaimedPence: 250000, claimedPence: 250001, landedPence: 100000, writtenOffPence: 150000 })).toThrowError("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
+  });
+  it.each(["identified", "evidence_assembled", "pursuing", "negotiating", "partially_landed"] as const)("still allows an upward amendment in %s, and the settled-floor rule still applies", state => {
+   expect(() => assertClaimAmendable({ state, currentClaimedPence: 250000, claimedPence: 300000, landedPence: 100000, writtenOffPence: 0 })).not.toThrow();
+   expect(() => assertClaimAmendable({ state, currentClaimedPence: 250000, claimedPence: 99999, landedPence: 100000, writtenOffPence: 0 })).toThrowError("RECOVERY_CLAIM_BELOW_SETTLED");
+  });
+  it("allows an equal or lower amendment on a closed case as long as it still covers the settled principal", () => {
+   expect(() => assertClaimAmendable({ state: "closed_recovered", currentClaimedPence: 250000, claimedPence: 250000, landedPence: 250000, writtenOffPence: 0 })).not.toThrow();
+   expect(() => assertClaimAmendable({ state: "closed_no_recovery", currentClaimedPence: 250000, claimedPence: 249999, landedPence: 100000, writtenOffPence: 150000 })).toThrowError("RECOVERY_CLAIM_BELOW_SETTLED");
+  });
+  it("the explicit reopen path works end to end: landed -> dispute -> amend up -> land the rest -> close recovered", () => {
+   const disputed = transitionRecoveryCase({ claimedPence: 250000, state: "landed", landedPence: 250000, event: "dispute" });
+   expect(disputed.state).toBe("negotiating");
+   expect(() => assertClaimAmendable({ state: disputed.state, currentClaimedPence: 250000, claimedPence: 300000, landedPence: 250000, writtenOffPence: 0 })).not.toThrow();
+   expect(() => transitionRecoveryCase({ claimedPence: 300000, state: "negotiating", landedPence: 250000, event: "close_recovered" })).toThrowError(/is not allowed/);
+   const landedRest = transitionRecoveryCase({ claimedPence: 300000, state: "negotiating", landedPence: 250000, event: "record_landing", amountPence: 50000 });
+   expect(landedRest).toEqual({ state: "landed", landedPence: 300000, writtenOffPence: 0 });
+   expect(transitionRecoveryCase({ claimedPence: 300000, state: landedRest.state, landedPence: landedRest.landedPence, event: "close_recovered" }).state).toBe("closed_recovered");
   });
  });
 });

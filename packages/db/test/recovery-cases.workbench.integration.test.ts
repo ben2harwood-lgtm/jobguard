@@ -181,4 +181,64 @@ describe("M4-1-S HOLD regressions", () => {
    expect(await counts()).toEqual(before);
   });
  });
+ describe("claim amendment can not create a false 'Closed — recovered' case (Sol P2)", () => {
+  const stepFor = (repo: RecoveryCaseRepository) => (x:{id:string;revision:number},extra:Record<string,unknown>) => repo.command(ctx,job,command({action:"transition",caseId:x.id,expectedRevision:x.revision,...extra}),owner);
+  const amend = (repo: RecoveryCaseRepository, x:{id:string;revision:number}, claimedNetPence:number, extra:Record<string,unknown>={}) => repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence,expectedRevision:x.revision,...extra}),owner);
+  const footprint = async (caseId:string) => (await admin.query("SELECT (SELECT count(*) FROM app.recovery_claim_revision WHERE case_id=$1)::int claims,(SELECT count(*) FROM app.recovery_case_event WHERE case_id=$1)::int events,(SELECT count(*) FROM app.audit_event WHERE subject_ref=$1)::int audit",[caseId])).rows[0];
+  it("rejects an upward amendment of a fully received case, with replay and stale-revision behaviour, and nothing changes", async () => {
+   const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+   let x = await repo.command(ctx,job,openCase(),owner);
+   x = await step(x,{eventType:"assemble_evidence"});
+   x = await step(x,{eventType:"record_landing",amountPence:250000});
+   expect(x).toMatchObject({state:"landed",landedNetPence:250000,outstandingNetPence:0});
+   const before = await footprint(x.id), upward = {commandId:randomUUID()};
+   await expect(amend(repo,x,300000,upward)).rejects.toThrow("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
+   await expect(amend(repo,x,300000,upward)).rejects.toThrow("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE"); // a replay of the refused command is refused the same way and recorded nowhere
+   expect(await footprint(x.id)).toEqual(before);
+   // A stale revision is still reported as stale, never as a closed-case problem.
+   await expect(amend(repo,{...x,revision:x.revision-1},300000)).rejects.toThrow("RECOVERY_STALE_REVISION");
+   const same = await repo.list(ctx,job);
+   expect(same.find(c=>c.id===x.id)).toMatchObject({state:"landed",claimedNetPence:250000,outstandingNetPence:0,revision:x.revision});
+  });
+  it("the Sol sequence cannot end in closed_recovered with money outstanding; a legitimate closure is replay-safe", async () => {
+   const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+   let x = await repo.command(ctx,job,openCase(),owner);
+   x = await step(x,{eventType:"assemble_evidence"});
+   x = await step(x,{eventType:"record_landing",amountPence:250000});
+   await expect(amend(repo,x,300000)).rejects.toThrow("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
+   const close = command({action:"transition",caseId:x.id,eventType:"close_recovered",expectedRevision:x.revision});
+   const closed = await repo.command(ctx,job,close,owner);
+   expect(closed).toMatchObject({state:"closed_recovered",claimedNetPence:250000,landedNetPence:250000,outstandingNetPence:0});
+   expect((await repo.command(ctx,job,close,owner)).revision).toBe(closed.revision); // replay is a no-op
+   await expect(amend(repo,closed,250001)).rejects.toThrow("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
+   expect((await repo.list(ctx,job)).find(c=>c.id===x.id)).toMatchObject({state:"closed_recovered",outstandingNetPence:0});
+  });
+  it("the explicit reopen: dispute first, then the claim may rise, the rest must be received, and only then may it close as recovered", async () => {
+   const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+   let x = await repo.command(ctx,job,openCase(),owner);
+   x = await step(x,{eventType:"assemble_evidence"});
+   x = await step(x,{eventType:"record_landing",amountPence:250000});
+   x = await step(x,{eventType:"close_recovered"});
+   x = await step(x,{eventType:"dispute"});
+   expect(x.state).toBe("negotiating");
+   x = await amend(repo,x,300000);
+   expect(x).toMatchObject({state:"negotiating",claimedNetPence:300000,landedNetPence:250000,outstandingNetPence:50000});
+   await expect(step(x,{eventType:"close_recovered"})).rejects.toThrow(/is not allowed/);
+   x = await step(x,{eventType:"record_landing",amountPence:50000});
+   expect(x).toMatchObject({state:"landed",outstandingNetPence:0});
+   x = await step(x,{eventType:"close_recovered"});
+   expect(x).toMatchObject({state:"closed_recovered",claimedNetPence:300000,landedNetPence:300000,outstandingNetPence:0});
+  });
+  it("also protects a written-off closed case", async () => {
+   const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+   let x = await repo.command(ctx,job,openCase(),owner);
+   x = await step(x,{eventType:"assemble_evidence"});
+   x = await step(x,{eventType:"record_landing",amountPence:100000});
+   x = await step(x,{eventType:"write_off"});
+   expect(x.state).toBe("closed_no_recovery");
+   const before = await footprint(x.id);
+   await expect(amend(repo,x,250001)).rejects.toThrow("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
+   expect(await footprint(x.id)).toEqual(before);
+  });
+ });
 });
