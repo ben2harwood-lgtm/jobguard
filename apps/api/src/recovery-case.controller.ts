@@ -1,2 +1,29 @@
-import{Body,Controller,Get,Param,Post}from"@nestjs/common";import{ApiOperation,ApiTags}from"@nestjs/swagger";import{Pool}from"pg";import{RecoveryCaseApplication}from"./recovery-case.application.js";
-@ApiTags("recovery-cases")@Controller("jobs/:id/recovery-cases")export class RecoveryCaseController{private app;constructor(pool:Pool){this.app=new RecoveryCaseApplication(pool)}@Get()@ApiOperation({summary:"Read the append-only recovery-case workbench"})get(@Param("id")id:string){return this.app.list(id)}@Post()@ApiOperation({summary:"Open, revise or transition a synthetic recovery case"})post(@Param("id")id:string,@Body()body:unknown){return this.app.command(id,body)}@Post("eligibility")@ApiOperation({summary:"Review or approve synthetic reference D03 eligibility"})eligibility(@Param("id")id:string,@Body()body:unknown){return this.app.eligibility(id,body)}}
+import { Body, Controller, Get, HttpException, Param, Post, Req } from "@nestjs/common";
+import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Pool } from "pg";
+import { RecoveryCaseApplication } from "./recovery-case.application.js";
+
+@ApiTags("recovery-cases")
+@Controller("jobs/:id/recovery-cases")
+export class RecoveryCaseController {
+ private app;
+ constructor(pool: Pool) { this.app = new RecoveryCaseApplication(pool); }
+ @Get()
+ @ApiOperation({ summary: "Read the append-only recovery-case workbench" })
+ get(@Param("id") id: string) { return this.app.list(id); }
+ @Post()
+ @ApiOperation({ summary: "Open, revise or transition a synthetic recovery case" })
+ post(@Param("id") id: string, @Body() body: unknown) { return this.app.command(id, body); }
+ @Post("eligibility")
+ @ApiOperation({ summary: "Review or approve synthetic reference D03 eligibility" })
+ async eligibility(@Param("id") id: string, @Body() body: unknown, @Req() request: { headers: { cookie?: string } }) {
+  const sessionId = request.headers.cookie?.split(";").map(x => x.trim()).find(x => x.startsWith("jg_session="))?.slice(11);
+  try { return await this.app.eligibility(id, body, sessionId); }
+  catch (e) {
+   const code = e instanceof Error ? e.message : "INVALID_COMMAND";
+   const requiresReview = code === "ELIGIBILITY_STALE_REVISION" || code === "ELIGIBILITY_REVIEW_REQUIRED";
+   throw new HttpException({ code, message: requiresReview ? "Review the changed evidence before approving" : code },
+    code === "UNAUTHENTICATED" ? 401 : code === "ELIGIBILITY_REVIEWER_FORBIDDEN" ? 403 : requiresReview || code.includes("IDEMPOTENCY") ? 409 : 400);
+  }
+ }
+}
