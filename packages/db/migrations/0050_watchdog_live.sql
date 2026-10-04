@@ -99,6 +99,7 @@ CREATE TABLE app.watchdog_command_identity(
   request_hash char(64) NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   PRIMARY KEY(tenant_id,command_id),
+  UNIQUE(tenant_id,command_id,job_id,command_type),
   FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id));
 -- The exact result a command first returned, including a successful no-op, where the command has no receipt, object or row of its own.
 CREATE TABLE app.watchdog_command_result(
@@ -108,7 +109,25 @@ CREATE TABLE app.watchdog_command_result(
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   PRIMARY KEY(tenant_id,command_id),
   FOREIGN KEY(tenant_id,command_id) REFERENCES app.watchdog_command_identity(tenant_id,command_id));
-DO $$ DECLARE n text;BEGIN FOREACH n IN ARRAY ARRAY['watchdog_command_identity','watchdog_command_result'] LOOP
+-- The proof application's first answer to each of its three live-only commands (select a generated file, finalise it, complete the stage).
+-- The answer is a projection of the job that changes as the job moves on, so it is recorded once, with the request it answered, bound by
+-- foreign key to that command's claimed identity (hence its job and kind), and a replay returns it as recorded. Append-only for the
+-- runtime role. It is the replay record of a command that already succeeded, not a watchdog input, so it has no live-job insert guard:
+-- a job that has just left live must still be able to give the first answer back.
+CREATE TABLE app.proof_application_response(
+  tenant_id uuid NOT NULL,
+  command_id uuid NOT NULL,
+  job_id uuid NOT NULL,
+  action text NOT NULL CHECK(action IN ('select_generated','finalize','complete')),
+  command_type text NOT NULL,
+  request_hash char(64) NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
+  response jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  PRIMARY KEY(tenant_id,command_id),
+  CHECK((action='select_generated' AND command_type='evidence.begin_upload') OR (action='finalize' AND command_type='evidence.finalize') OR (action='complete' AND command_type='proof.complete')),
+  FOREIGN KEY(tenant_id,command_id,job_id,command_type) REFERENCES app.watchdog_command_identity(tenant_id,command_id,job_id,command_type),
+  FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id));
+DO $$ DECLARE n text;BEGIN FOREACH n IN ARRAY ARRAY['watchdog_command_identity','watchdog_command_result','proof_application_response'] LOOP
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);

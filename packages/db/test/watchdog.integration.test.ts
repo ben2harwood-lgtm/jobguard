@@ -110,7 +110,7 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     expect(protectedTables.rows.every(row=>row.relrowsecurity&&row.relforcerowsecurity&&row.rolname==='jobguard_migration')).toBe(true);
     expect((await admin.query("SELECT has_column_privilege('jobguard_runtime','app.evidence_upload','job_id','UPDATE') identity_edit,has_column_privilege('jobguard_runtime','app.evidence_upload','state','UPDATE') lifecycle_update")).rows[0]).toEqual({identity_edit:false,lifecycle_update:true});
     // Command identities and stored results are append-only for the runtime: select and insert, nothing else.
-    for (const table of ["watchdog_command_identity", "watchdog_command_result"]) {
+    for (const table of ["watchdog_command_identity", "watchdog_command_result", "proof_application_response"]) {
       const privilege = (role: string, kind: string) => `has_table_privilege('${role}','app.${table}','${kind}')`;
       expect((await admin.query(`SELECT ${privilege("jobguard_runtime", "SELECT")} s,${privilege("jobguard_runtime", "INSERT")} i,${privilege("jobguard_runtime", "UPDATE")} u,${privilege("jobguard_runtime", "DELETE")} d,${privilege("jobguard_runtime", "TRUNCATE")} t,${privilege("jobguard_infrastructure", "SELECT")} infra`)).rows[0]).toEqual({ s: true, i: true, u: false, d: false, t: false, infra: false });
     }
