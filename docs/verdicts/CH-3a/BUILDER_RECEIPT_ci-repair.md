@@ -282,3 +282,13 @@ Runtime-role PostgreSQL tests in `job-parties.integration.test.ts`: eight direct
 ## Environment
 
 Leaked SysV shared-memory segments were cleared before each heavy run (nothing attached, creator pid dead). Browser runs used the same uncommitted local `chromium_headless_shell-1234` config; GitHub CI uses the pinned browser.
+
+## Round 4 addendum: the CI failure on `6287510`, and its fix
+
+GitHub CI on the first round-4 push failed in `pnpm test` (run 37193008121, 2m51s): `practice-finding-scope.integration.test.ts` reported `connect ECONNREFUSED 127.0.0.1:59484` on its first `migrate` query; the other 37 DB files and every other package passed. This is the same file that failed twice locally earlier with "Connection terminated unexpectedly", and the only file that did.
+
+**Cause.** The suite drew its cluster port blindly from 59300-59499. On this Mac a Lima VM listens on 127.0.0.1:59315 and 59316 with an ssh tunnel beside it, inside that range (the other suite with a range over them is UIWIRE-12). A cluster that cannot bind 127.0.0.1 still logs "ready to accept connections", so the test connected to whatever owned the port. The file alone failed 1 run in 25 locally before the change. I could not identify the owner of the CI port, so I cannot claim the CI failure was this exact collision; it is the same symptom in the same file, and a verified-free port removes that class of failure.
+
+**Fix** (`ae039c2`). `freePort(base, span)` in `pool-test-utils.ts` picks a port in the same range that nothing is listening on, on IPv4 and IPv6 loopback (a host without IPv6 is not a conflict); `practice-finding-scope` and `UIWIRE-12` use it. A unit test (`free-port.test.ts`, written first, red with "freePort is not a function") occupies a port and requires it to be skipped, and requires a clear error when the whole range is taken. The same file passed 25 of 25 isolated runs afterwards. No assertion, skip, timeout or retry changed; the new test file is registered in the ch-3a lane.
+
+Re-run at `ae039c2` (database and browser commands inside `heavy-slot ch-3a`): `pnpm typecheck --force` 0; `LANE_BASE_REF=origin/main pnpm lint` 0; `lint:lanes` 0; `pnpm openapi:check` 0; `pnpm build` 0; `pnpm test:db` 0 (40 files, 207 tests); `pnpm test:migrations` 0 (11 tests); `pnpm test --force` 0 (tools 39; core 440; storage 4; config 2; ai 72; api 109; web 63; db 207); whole e2e suite, both projects, local browser, 0 (182 passed). The counts in the round-4 table above are for `b959ce9`, before this fix.
