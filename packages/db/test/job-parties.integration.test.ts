@@ -279,3 +279,57 @@ describe("CH-3a adoption authorization boundary (round 2)",()=>{
     expect((await admin.query(`SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 ORDER BY event_type`,[tenant,job])).rows.map(r=>r.event_type)).toEqual(["command.succeeded","job.imported_baseline_attested"]);
   });
 });
+
+describe("CH-3a binding changes leave their record (round 4)",()=>{
+  type Steps={complete?:boolean;audit?:boolean;auditBinding?:string;auditJob?:string;auditCommand?:string;resultId?:string;twice?:boolean;eventType?:string};
+  // Everything the repository does for one binding change in one transaction: claim the receipt, call the routine, complete the receipt, append the audit event.
+  const bindDirect=async(job:string,customerRevision:string,siteRevision:string,steps:Steps={})=>{
+    const command=randomUUID(),binding=randomUUID(),other=randomUUID();
+    const expected=(await repository.view(context,member,job)).jobRevision;
+    await withTenant(runtime,context,async db=>{
+      await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[command,tenant,command,"d".repeat(64),member]);
+      const bind=(id:string,revision:number)=>db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,id,revision,customerRevision,null,siteRevision,false,null,member,command]);
+      await bind(binding,expected);
+      if(steps.twice)await bind(other,expected+1);
+      if(steps.complete!==false)await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,command,JSON.stringify({id:steps.resultId??binding})]);
+      if(steps.audit!==false)await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType:steps.eventType??"job.parties.bind",subjectType:"job",subjectRef:steps.auditJob??job,payload:{references:{commandId:steps.auditCommand??command,identityId:steps.auditBinding??binding},hashes:{request:"d".repeat(64)},classifications:{action:"operational"}}}]);
+    });
+    return{command,binding};
+  };
+  const untouched=async(job:string,revision:number)=>{
+    expect((await admin.query(`SELECT count(*)::int n FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n).toBe(0);
+    expect((await admin.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rows[0].revision).toBe(revision);
+  };
+  it("cannot commit a binding change whose receipt is not completed or whose audit event is missing or does not match",async()=>{
+    const cases:Array<[string,Steps]>=[
+      ["no completion and no audit",{complete:false,audit:false}],
+      ["audit but the receipt left processing",{complete:false}],
+      ["completion but no audit",{audit:false}],
+      ["audit naming a different binding",{auditBinding:randomUUID()}],
+      ["audit naming a different command",{auditCommand:randomUUID()}],
+      ["audit for a different job",{auditJob:randomUUID()}],
+      ["receipt result naming a different binding",{resultId:randomUUID()}],
+      ["correction audit missing its reason's event type",{eventType:"job.parties.create_customer"}],
+    ];
+    for(const [label,steps] of cases){
+      const job=await createJob(),{c,s}=await saveParties(job);
+      await expect(bindDirect(job,c.revisionId,s.revisionId,steps),label).rejects.toMatchObject({code:"23514"});
+      await untouched(job,0);
+    }
+  });
+  it("commits a binding change that completes its receipt and appends its audit event, linked to that exact command",async()=>{
+    const job=await createJob(),{c,s}=await saveParties(job),{command,binding}=await bindDirect(job,c.revisionId,s.revisionId);
+    const row=(await admin.query(`SELECT command_id,revision FROM app.job_party_binding WHERE tenant_id=$1 AND id=$2`,[tenant,binding])).rows[0];
+    expect(row).toEqual({command_id:command,revision:1});
+    expect((await admin.query(`SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].binding_id).toBe(binding);
+  });
+  it("does not let one receipt authorize two binding effects",async()=>{
+    const job=await createJob(),{c,s}=await saveParties(job);
+    await expect(bindDirect(job,c.revisionId,s.revisionId,{twice:true}),"two in one transaction").rejects.toMatchObject({code:"23505"});
+    await untouched(job,0);
+    // A receipt that has already been used cannot be claimed again for another binding.
+    const used=await bindDirect(job,c.revisionId,s.revisionId),next=randomUUID();
+    await expect(withTenant(runtime,context,db=>db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,next,1,c.revisionId,null,s.revisionId,false,null,member,used.command]))).rejects.toMatchObject({code:"42501"});
+    expect((await admin.query(`SELECT count(*)::int n FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n).toBe(1);
+  });
+});

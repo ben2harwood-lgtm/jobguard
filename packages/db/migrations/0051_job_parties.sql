@@ -44,7 +44,8 @@ CREATE TABLE app.job_party_binding (
  site_id uuid NOT NULL, site_revision_id uuid NOT NULL,
  provenance text NOT NULL CHECK(provenance IN('entered','backfilled_from_quote_snapshot','backfilled_synthetic_fixture','work_order_import')),
  correction_reason text CHECK(correction_reason IS NULL OR length(trim(correction_reason)) BETWEEN 1 AND 500), created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
- PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id,revision), UNIQUE(tenant_id,job_id,id),
+ command_id uuid, -- the exact job.parties receipt that authorized this change; one receipt, one binding effect
+ PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id,revision), UNIQUE(tenant_id,job_id,id), UNIQUE(tenant_id,command_id),
  FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id) DEFERRABLE INITIALLY DEFERRED,
  FOREIGN KEY(tenant_id,customer_id,customer_revision_id) REFERENCES app.customer_revision(tenant_id,customer_id,id),
  FOREIGN KEY(tenant_id,paying_party_id,paying_party_revision_id) REFERENCES app.customer_revision(tenant_id,customer_id,id),
@@ -87,8 +88,8 @@ BEGIN
  SELECT * INTO p FROM app.customer_revision WHERE tenant_id=p_tenant AND id=coalesce(p_payer,p_customer);
  SELECT * INTO s FROM app.site_revision WHERE tenant_id=p_tenant AND id=p_site;
  IF c.id IS NULL OR p.id IS NULL OR s.id IS NULL THEN RAISE EXCEPTION 'PARTY_NOT_FOUND' USING ERRCODE='23503'; END IF;
- INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance,correction_reason)
- VALUES(p_tenant,p_id,p_job,p_expected+1,c.customer_id,c.id,p.customer_id,p.id,s.site_id,s.id,'entered',CASE WHEN p_correct THEN p_reason END) RETURNING * INTO b;
+ INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance,correction_reason,command_id)
+ VALUES(p_tenant,p_id,p_job,p_expected+1,c.customer_id,c.id,p.customer_id,p.id,s.site_id,s.id,'entered',CASE WHEN p_correct THEN p_reason END,p_command) RETURNING * INTO b;
  INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES(p_tenant,p_job,p_id)
  ON CONFLICT(tenant_id,job_id) DO UPDATE SET binding_id=excluded.binding_id;
  UPDATE app.job SET revision=revision+1,updated_at=transaction_timestamp() WHERE tenant_id=p_tenant AND id=p_job;
@@ -220,6 +221,24 @@ END $$;
 ALTER FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) TO jobguard_runtime;
+-- A binding change authorized by a command must leave its record. At commit (deferred, so the repository's receipt completion and audit
+-- append come first) the binding needs a succeeded job.parties receipt that is exactly its own command and names it as the result, and an
+-- audit event for this job naming that command and this binding (job.parties.correct when a correction reason was given). Otherwise the whole
+-- transaction fails. Bindings without a command (generated backfill, adoption) are covered by their own rules.
+CREATE FUNCTION app.require_binding_record() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM app.command_receipt r JOIN app.audit_event e ON(e.tenant_id=r.tenant_id)
+   WHERE r.tenant_id=NEW.tenant_id AND r.command_id=NEW.command_id AND r.command_type='job.parties' AND r.semantic_key=NEW.command_id::text
+   AND r.status='succeeded' AND r.result->>'id'=NEW.id::text
+   AND e.subject_type='job' AND e.subject_ref=NEW.job_id::text AND e.payload->'references'->>'commandId'=NEW.command_id::text AND e.payload->'references'->>'identityId'=NEW.id::text
+   AND e.event_type=CASE WHEN NEW.correction_reason IS NULL THEN e.event_type ELSE 'job.parties.correct' END AND e.event_type IN('job.parties.bind','job.parties.correct'))
+ THEN RAISE EXCEPTION 'BINDING_RECORD_REQUIRED' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END $$;
+ALTER FUNCTION app.require_binding_record() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.require_binding_record() FROM PUBLIC;
+CREATE CONSTRAINT TRIGGER job_party_binding_record_required AFTER INSERT ON app.job_party_binding DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.command_id IS NOT NULL) EXECUTE FUNCTION app.require_binding_record();
+
 -- Every permitted execution must leave its record. At commit (deferred, so the command dispatcher's audit append and receipt completion
 -- come first) an adopted baseline needs: a completed adoption receipt for this very job and actor; an audit event naming that receipt and an
 -- authorization bound to this job, actor, baseline hash, amount and terms; and the adoption's own audit event. Otherwise the whole transaction fails.
