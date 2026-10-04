@@ -279,7 +279,7 @@ Unchanged: whether a captured job should appear in the demo's Jobs list (the Sol
 
 ## The command list, generated from the registry
 
-The registry's `watchdog_live_only` keys (19 web routes and dynamic actions, 3 command literals, 15 Nest routes) resolve to the 17 guarded commands in `watchdogCommandGuards`. The new test builds its cases from that list and fails if either side drifts.
+The registry's `watchdog_live_only` keys (16 web routes and dynamic actions, 3 command literals, 15 Nest routes: 34 keys) resolve to the 17 guarded commands in `watchdogCommandGuards`. The new test builds its cases from that list and fails if either side drifts.
 
 | Guarded command | First result stored in | Legacy rows (no stored result) |
 |---|---|---|
