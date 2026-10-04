@@ -77,7 +77,7 @@ Run at `108520d` (the later `550b448` changes only the CH-3a spec; its spec was 
 ## Environment notes
 
 - The shared scratchpad directory is used by several builder sessions of the same coordinator, and log names such as `red-run.log` were written by another session's job as well; my first read of that file showed another worktree's output. I kept my evidence in a private subdirectory and used the DB and browser logs I wrote there. No test or code was affected.
-- Leaked SysV shared-memory segments had again used all 32 macOS ids; before each heavy run I removed only segments with nothing attached and a dead creator pid. The heavy-slot queue held this task for about 55 minutes before its first run.
+- Leaked SysV shared-memory segments had again used all 32 macOS ids; before each heavy run I removed only segments with nothing attached and a dead creator pid. The shared heavy-slot queue held this task for about half an hour before its first run.
 - No flake occurred in these runs: no re-run of a failed job was needed (the one failing e2e test was a defect in my own test, fixed).
 
 ## Notes for the checker
@@ -86,5 +86,11 @@ Run at `108520d` (the later `550b448` changes only the CH-3a spec; its spec was 
 2. A site has no revise command in the contract (card: create and revise a customer; create a site), so editing any part of a site creates a new site identity unless the user explicitly chooses an existing place and confirms it is the same.
 3. If a save fails part-way (for example an invalid postcode after the customer was revised), a retry meets the existing stale-draft conflict and reloads the saved details; this is the earlier round's behaviour, now reachable for bound jobs because the saved customer stays selected.
 4. Finding 1 was fixed in the routine only. The deferred record check is unchanged: it still accepts a plain bind event for a binding with no reason, which can no longer be produced for a live, invoiced or paid job.
+
+## GitHub CI
+
+- Run **37231179471** on code head `4cde49d` (the receipt commit on top of `550b448`): **success**, jobs `checks`, `secrets` and `dependency-review` all success (browser suite 194 passed in 8.0 min, both projects, pinned browser).
+- CI counts (source tests only): tools 39; core 220 (35 files); storage 4; config 2; ai 72; api 109 (16 files); web 68 (9 files); db 205 (39 files, including `free-port.test.ts`). My local counts above are higher for two reasons that are not test differences: `packages/core` and `packages/db` contain compiled copies of their tests under `dist/` on this Mac, which local vitest also runs (core exactly doubles, 440 of 70 files against CI's 220 of 35; db has one extra file, `dist/demo-seed.test.js`, with 3 tests, 208 of 40 files against CI's 205 of 39). Same offsets as in the earlier rounds' receipts.
+- No re-run of any failed job was needed on this round's heads.
 
 Not independently verified, not accepted.
