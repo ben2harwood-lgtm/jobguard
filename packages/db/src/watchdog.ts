@@ -23,7 +23,7 @@ export async function requireLiveJob(database: TenantTransaction, jobId: string)
   }
 }
 
-export type WatchdogCommandType = "readiness.advance" | "things_to_check.evaluate" | "things_to_check.review" | "things_to_check.supersede";
+export type WatchdogCommandType = "readiness.advance" | "things_to_check.evaluate" | "things_to_check.review" | "things_to_check.supersede" | "supplier_match.create" | "supplier_match.correct" | "inbox.dismiss";
 export interface StoredCommandResult { jobId: string; kind: string; requestHash: string; result: unknown }
 
 /** The stored command, if any. A command id is unique per tenant, whatever its job or type. */

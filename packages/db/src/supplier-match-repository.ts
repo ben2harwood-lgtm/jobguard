@@ -1,4 +1,4 @@
-import { requireLiveJob } from "./watchdog.js";
+import { findCommandResult, replayStoredResult, requireLiveJob, storeCommandResult, type WatchdogCommandType } from "./watchdog.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
@@ -17,6 +17,9 @@ export class SupplierMatchRepository {
     input: { commandId: string; expectedRevision: number },
   ) {
     return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
+      await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
+      const requestHash = hash({ jobId, ...input }), stored = await findCommandResult(db, context.tenantId, input.commandId);
+      if (stored) return replayStoredResult<any>(stored, jobId, "supplier_match.create", requestHash);
       const sources = await this.sources(db.$client, context.tenantId, jobId);
       const proposal = proposeSupplierMatch({
         version: "supplier-match-input.v1",
@@ -33,7 +36,7 @@ export class SupplierMatchRepository {
           [context.tenantId, jobId, proposal.digest],
         )
       ).rows[0];
-      if (existing) return this.viewIn(db.$client, context.tenantId, jobId);
+      if (existing) return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.create", requestHash);
       const payloadHash = hash(proposal);
       const audits = await appendAuditBatch(db, [
         {id:randomUUID(),version:"audit.v1",actorRef:"member:synthetic-builder",eventType:"supplier_match.proposed",subjectType:"job",subjectRef:jobId,payload:{references:{proposalId:proposal.id},hashes:{payloadHash},classifications:{action:"operational"}}},
@@ -77,7 +80,7 @@ export class SupplierMatchRepository {
           },
           audits[1]!.id,
         );
-      return this.viewIn(db.$client, context.tenantId, jobId);
+      return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.create", requestHash);
     });
   }
   async correct(
@@ -86,6 +89,9 @@ export class SupplierMatchRepository {
     input: SupplierMatchCorrection,
   ) {
     return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
+      await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
+      const requestHash = hash({ jobId, ...input }), stored = await findCommandResult(db, context.tenantId, input.commandId);
+      if (stored) return replayStoredResult<any>(stored, jobId, "supplier_match.correct", requestHash);
       if (
         new Set(input.allocations.map((x) => x.receiptVersionId)).size !==
         input.allocations.length
@@ -93,13 +99,13 @@ export class SupplierMatchRepository {
         throw new Error("RECEIVED_QUANTITY_ALREADY_ALLOCATED");
       const replay = (
           await db.$client.query<any>(
-            `SELECT payload_hash FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2`,
+            `SELECT payload_hash,job_id FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2`,
             [context.tenantId, input.commandId],
           )
         ).rows[0],
         payloadHash = hash(input);
       if (replay) {
-        if (replay.payload_hash !== payloadHash)
+        if (replay.job_id !== jobId || replay.payload_hash !== payloadHash)
           throw new Error("IDEMPOTENCY_CONFLICT");
         return this.viewIn(db.$client, context.tenantId, jobId);
       }
@@ -168,7 +174,7 @@ export class SupplierMatchRepository {
         input,
         audit.id,
       );
-      return this.viewIn(db.$client, context.tenantId, jobId);
+      return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.correct", requestHash);
     });
   }
   async view(context: VerifiedTenantContext, jobId: string) {
@@ -256,6 +262,12 @@ export class SupplierMatchRepository {
         `INSERT INTO app.supplier_match_allocation(id,tenant_id,job_id,match_revision_id,receipt_version_id,quantity_decimal,unit)VALUES($1,$2,$3,$4,$5,$6,'each')`,
         [randomUUID(), tenantId, jobId, id, a.receiptVersionId, a.quantity],
       );
+  }
+  /** The command's first result is stored with it, in the same transaction, so a replay (including of a no-op) returns exactly this. */
+  private async finish(db: any, tenantId: string, jobId: string, commandId: string, kind: WatchdogCommandType, requestHash: string) {
+    const result = await this.viewIn(db.$client, tenantId, jobId);
+    await storeCommandResult(db, { tenantId, commandId, jobId, kind, requestHash, result });
+    return result;
   }
   private async viewIn(db: any, tenantId: string, jobId: string) {
     const row = (

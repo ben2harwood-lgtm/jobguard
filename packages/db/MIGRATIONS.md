@@ -120,8 +120,8 @@ exception. Reads remain available.
 
 Stored command results: 0050 also adds `app.watchdog_command_result`, keyed by
 `(tenant_id, command_id)` with the job, command type (`readiness.advance`,
-`things_to_check.evaluate`, `things_to_check.review`, `things_to_check.supersede`),
-a request hash covering the job id and input, and the exact result the command first
+`things_to_check.evaluate`, `things_to_check.review`, `things_to_check.supersede`,
+`supplier_match.create`, `supplier_match.correct`, `inbox.dismiss`), a request hash covering the job id and input, and the exact result the command first
 returned. It is written in the same transaction as the command, for every success
 including a no-op, so a replay returns that stored result, and the same id can never
 be reused for a changed payload, another job or another command type (a concurrent
