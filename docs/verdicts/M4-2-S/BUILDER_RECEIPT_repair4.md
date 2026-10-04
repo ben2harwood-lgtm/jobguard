@@ -56,3 +56,27 @@ Environment: macOS 26.4 (Darwin 25.4.0, arm64); Node v24.17.0; pnpm 10.28.1; Pla
 ## Status
 
 Test-only repair implemented, run locally and committed. Not independently verified, not accepted. Open for Ben: finding 4 (Jobs-card click) and finding 5 (PR #85 text). A fresh or rebound different-model verdict on the final head and separate technical acceptance are still required.
+
+## Merge with `origin/main` `29826ee` (M4-3-S-R, #101) — added after repair 4
+
+`e2ca790` merges `origin/main` into this branch (merge commit, no rebase, no force). Two real conflicts:
+- `apps/web/app/ui/recovery-cases.tsx`: #101 rewrote the case-opening lines of `RecoveryCases` (recorded customer-invoice and supplier source IDs). The resolution takes main's version unchanged and re-applies only this branch's three behaviours: the alert takes focus (`useRef` and effect), review/approve/stale commands built from the saved review via `recovery-eligibility-command.ts` (revisions are never a literal 1), and the helper import. A diff of the result against `origin/main` is those lines only.
+- `config/agent-lane-assignments.json`: resolved as a union of lane entries with `~/.local/share/full-steam/lane-union.py`; the result differs from `origin/main` only in lane `m4-2-s-repair`, whose entry is identical to before.
+
+Migration-count assertions: none needed changing. This branch adds no migration; main's own `UIWIRE-12` (43 migrations, 0000..0042) and demo-bootstrap assertions arrived through the merge untouched and pass. 0044 stays unused.
+
+Re-run on the merged tree (`e2ca790`), same environment and override browser as above, DB and browser under `heavy-slot m42r`:
+
+| Command | Exit | Result |
+|---|---|---|
+| `pnpm typecheck --force` | 0 | 7 of 7 tasks, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | 0 | purity, lane, money guards, 7 of 7 tasks |
+| `pnpm lint:lanes` | 0 | lane `m4-2-s-repair` |
+| `pnpm build --force` | 0 | 7 of 7 tasks |
+| `pnpm openapi:check` | 0 | spec matches |
+| `pnpm test --force` | 0 | 13 of 13 tasks; tool tests 39; core 432; api 108; web 63; ai 72; config 2; storage 4; db 38 files / 183 tests |
+| `pnpm test:db` | 0 | 38 files, 183 tests |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| `CI=1 pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M4-2-S.spec.ts M4-3-S.spec.ts -c <local override>` | 0 | 10 passed (M4-2-S 3 and M4-3-S 2, in each of 2 projects) |
+
+GitHub CI for the final head is reported in the PR.
