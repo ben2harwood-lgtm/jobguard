@@ -5,7 +5,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MIGRATION_URLS, migrate, JobPartiesRepository, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { AdoptInFlightJobMutation, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
@@ -176,5 +176,84 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
       expect((await fresh.query(`SELECT count(*)::int n FROM app.customer`)).rows[0].n).toBe(0);
       expect((await fresh.query(`SELECT action_type FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2`,[t,j])).rows[0].action_type).toBe("job.parties.details_needed");
     }finally{await fresh.end();}
+  });
+});
+
+describe("CH-3a adoption authorization boundary (round 2)",()=>{
+  const OWNER_POLICY="synthetic_import_terms_candidate.v1";
+  const adoptInput=(job:string,hash:string,customerRevisionId:string,siteRevisionId:string)=>({parties:{customerRevisionId,siteRevisionId},version:"adopt-job.v1" as const,jobId:job,baselineId:randomUUID(),title:"Fictional import",lifecyclePoint:"live" as const,provenance:"imported" as const,lineageStrength:"builder_attested_weaker" as const,baselineHash:hash,baselineDescription:"Fictional baseline",acceptedNetValuePence:100000,recoveryCapPence:1500,acceptedValueSource:"builder_attestation" as const,attestedByMembershipId:member,attestedAt:new Date(0),importTermsVersion:OWNER_POLICY as typeof OWNER_POLICY,feePolicyVersion:"reference_fee_policy_v1" as const,mode:"synthetic_candidate" as const});
+  const commandFor=(job:string,hash:string)=>({version:"command.v1" as const,commandId:randomUUID(),commandType:"job.adopt_in_flight",semanticKey:`import:${job}`,actorMembershipId:member,subjectType:"job",subjectRef:job,action:{actionType:"job.adopt_in_flight",recipient:null,contentHash:hash,aggregateRevision:0,amountPence:100000,currency:"GBP" as const,policyVersion:OWNER_POLICY,expiresAt:new Date(Date.now()+60000)}});
+  const callAdopt=(a:{job:string;hash:string;customer:string;site:string;command:string;authorization:string;actor?:string;net?:number;policy?:string})=>withTenant(runtime,context,db=>db.$client.query(
+    `SELECT app.adopt_in_flight_job($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+    [tenant,a.job,randomUUID(),"Fictional import","live",a.hash,"Fictional baseline",a.net??100000,1500,"reference_fee_policy_v1",a.policy??OWNER_POLICY,a.actor??member,new Date(0),a.customer,a.site,null,a.command,a.authorization]));
+  // The rows the command dispatcher writes, created directly so each defect can be isolated.
+  async function authority(o:{job:string;hash:string;actor?:string;net?:number;policy?:string;expiresInMs?:number;revoked?:boolean;receipt?:"processing"|"succeeded";subject?:string}){
+    const command=randomUUID(),decision=randomUUID(),resolution=randomUUID(),authorization=randomUUID(),actor=o.actor??member,receipt=o.receipt??"processing";
+    await admin.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'job.adopt_in_flight',$3,$4,$5,$6,$7,$8)`,
+      [command,tenant,`import:${o.job}:${command}`,"d".repeat(64),receipt,actor,receipt==="succeeded"?"{}":null,receipt==="succeeded"?new Date():null]);
+    await admin.query(`INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.adopt_in_flight')`,[decision,tenant,o.subject??o.job]);
+    await admin.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolution,tenant,decision,actor]);
+    await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at,revoked_at) VALUES($1,$2,$3,$4,$5,'job.adopt_in_flight',NULL,$6,0,$7,'GBP',$8,$9,$10)`,
+      [authorization,tenant,decision,resolution,actor,o.hash,o.net??100000,o.policy??OWNER_POLICY,new Date(Date.now()+(o.expiresInMs??60000)),o.revoked?new Date():null]);
+    return {command,authorization};
+  }
+  async function extraOwner(kind:"revoked"|"expired"){
+    const user=randomUUID(),id=randomUUID(),account=(await admin.query(`SELECT id FROM app.account WHERE tenant_id=$1 LIMIT 1`,[tenant])).rows[0].id;
+    await admin.query(`INSERT INTO identity.identity_user(id) VALUES($1)`,[user]);
+    await admin.query(`INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role,revoked_at,expires_at) VALUES($1,$2,$3,$4,'owner',$5,$6)`,
+      [tenant,id,account,user,kind==="revoked"?new Date(Date.now()-3600_000):null,kind==="expired"?new Date(Date.now()-3600_000):null]);
+    return id;
+  }
+  const exists=async(job:string)=>(await admin.query(`SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rowCount===1;
+  const revisions=async()=>{const {c,s}=await saveParties(await createJob());return{customer:c.revisionId as string,site:s.revisionId as string};};
+
+  it("adopts through the dispatcher with command, authorization, result and audit recorded together",async()=>{
+    const {customer,site}=await revisions(),job=randomUUID(),hash="e".repeat(64),command=commandFor(job,hash);
+    await new UserCommandDispatcher(runtime).dispatch(context,command,new AdoptInFlightJobMutation(tenant,"synthetic_candidate",adoptInput(job,hash,customer,site)));
+    expect((await admin.query(`SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rows[0].status).toBe("live");
+    expect((await admin.query(`SELECT 1 FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rowCount).toBe(1);
+    expect((await admin.query(`SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[tenant,command.commandId])).rows[0].status).toBe("succeeded");
+    expect((await admin.query(`SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 ORDER BY event_type`,[tenant,job])).rows.map(r=>r.event_type)).toEqual(["command.succeeded","job.imported_baseline_attested"]);
+  });
+  it("rolls the command, authorization and job back together when the adoption fails inside the boundary",async()=>{
+    const {site}=await revisions(),job=randomUUID(),hash="f".repeat(64),command=commandFor(job,hash);
+    await expect(new UserCommandDispatcher(runtime).dispatch(context,command,new AdoptInFlightJobMutation(tenant,"synthetic_candidate",adoptInput(job,hash,randomUUID(),site)))).rejects.toMatchObject({code:"22023"});
+    expect(await exists(job)).toBe(false);
+    expect((await admin.query(`SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[tenant,command.commandId])).rowCount).toBe(0);
+    expect((await admin.query(`SELECT 1 FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2`,[tenant,job])).rowCount).toBe(0);
+  });
+  it("refuses runtime SQL that carries no command or authorization, and creates nothing",async()=>{
+    const {customer,site}=await revisions(),job=randomUUID(),hash="a1".repeat(32);
+    await expect(callAdopt({job,hash,customer,site,command:randomUUID(),authorization:randomUUID()})).rejects.toMatchObject({code:"42501"});
+    expect(await exists(job)).toBe(false);
+  });
+  it("refuses each missing authority on its own: actor, authorization and receipt",async()=>{
+    const {customer,site}=await revisions(),hash="b2".repeat(32),revoked=await extraOwner("revoked"),expired=await extraOwner("expired");
+    const cases:Array<[string,Partial<Parameters<typeof authority>[0]>,{actor?:string;net?:number;policy?:string}]>=[
+      ["revoked actor",{actor:revoked},{actor:revoked}],
+      ["expired actor",{actor:expired},{actor:expired}],
+      ["revoked authorization",{revoked:true},{}],
+      ["expired authorization",{expiresInMs:-1000},{}],
+      ["spent receipt",{receipt:"succeeded"},{}],
+      ["authorization for another job",{subject:randomUUID()},{}],
+      ["authorization for a different amount",{net:99999},{}],
+      ["authorization for a different policy",{policy:"synthetic_import_terms_other.v1"},{}],
+      ["authorization for different content",{hash:"c3".repeat(32)},{}],
+    ];
+    for(const [label,seed,call] of cases){
+      const job=randomUUID(),{command,authorization}=await authority({job,hash,...seed});
+      await expect(callAdopt({job,hash,customer,site,command,authorization,...call}),label).rejects.toMatchObject({code:"42501"});
+      expect(await exists(job),label).toBe(false);
+    }
+    // A command id paired with someone else's authorization is not authority either.
+    const a=randomUUID(),b=randomUUID(),first=await authority({job:a,hash}),second=await authority({job:b,hash});
+    await expect(callAdopt({job:a,hash,customer,site,command:first.command,authorization:second.authorization})).rejects.toMatchObject({code:"42501"});
+    expect(await exists(a)).toBe(false);
+  });
+  it("accepts the same direct call once actor, receipt and exact authorization are all current",async()=>{
+    const {customer,site}=await revisions(),job=randomUUID(),hash="d4".repeat(32),{command,authorization}=await authority({job,hash});
+    await callAdopt({job,hash,customer,site,command,authorization});
+    expect(await exists(job)).toBe(true);
+    expect((await admin.query(`SELECT 1 FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rowCount).toBe(1);
   });
 });

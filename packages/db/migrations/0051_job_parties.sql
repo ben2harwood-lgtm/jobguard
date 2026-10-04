@@ -185,11 +185,21 @@ DO $$ DECLARE t record; j record; c uuid; cr uuid; s uuid; sr uuid; b uuid; quot
  END LOOP;
 END $$;
 
-CREATE OR REPLACE FUNCTION app.adopt_in_flight_job(p_tenant uuid,p_job uuid,p_baseline uuid,p_title varchar,p_lifecycle varchar,p_hash char(64),p_description varchar,p_net bigint,p_cap bigint,p_policy varchar,p_terms varchar,p_actor uuid,p_attested timestamptz,p_customer uuid,p_site uuid,p_payer uuid)
+CREATE OR REPLACE FUNCTION app.adopt_in_flight_job(p_tenant uuid,p_job uuid,p_baseline uuid,p_title varchar,p_lifecycle varchar,p_hash char(64),p_description varchar,p_net bigint,p_cap bigint,p_policy varchar,p_terms varchar,p_actor uuid,p_attested timestamptz,p_customer uuid,p_site uuid,p_payer uuid,p_command uuid,p_authorization uuid)
 RETURNS app.imported_job_baseline LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE b app.imported_job_baseline; c app.customer_revision; s app.site_revision; p app.customer_revision; binding uuid:=gen_random_uuid();
 BEGIN
  IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'tenant context mismatch' USING ERRCODE='42501';END IF;
+ -- Controlled write: the actor must be a current owner and the exact adoption must carry a processing command and an
+ -- unexpired, unrevoked, approved authorization bound to this job, actor, content hash, amount and terms.
+ IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=p_tenant AND id=p_actor AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()))
+ OR NOT EXISTS(SELECT 1 FROM app.command_receipt r WHERE r.tenant_id=p_tenant AND r.command_id=p_command AND r.actor_membership_id=p_actor AND r.command_type='job.adopt_in_flight' AND r.status='processing')
+ THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM app.action_authorization a JOIN app.decision d ON(d.tenant_id,d.id)=(a.tenant_id,a.decision_id) JOIN app.decision_resolution x ON(x.tenant_id,x.id)=(a.tenant_id,a.resolution_id)
+   WHERE a.tenant_id=p_tenant AND a.id=p_authorization AND a.actor_membership_id=p_actor AND x.actor_membership_id=p_actor AND x.resolution='approved'
+   AND d.subject_type='job' AND d.subject_ref=p_job::text AND a.action_type='job.adopt_in_flight' AND a.recipient IS NULL AND a.content_hash=p_hash AND a.aggregate_revision=0
+   AND a.amount_pence=p_net AND a.currency='GBP' AND a.policy_version=p_terms AND a.expires_at>clock_timestamp() AND a.revoked_at IS NULL)
+ THEN RAISE EXCEPTION 'AUTHORIZATION_INVALID' USING ERRCODE='42501'; END IF;
  IF p_lifecycle NOT IN('live','invoiced') OR p_net<0 OR p_cap<>app.reference_recovery_cap(p_net) OR p_policy<>'reference_fee_policy_v1' OR p_terms<>'synthetic_import_terms_candidate.v1' OR p_attested>clock_timestamp() THEN RAISE EXCEPTION 'invalid imported terms' USING ERRCODE='22023';END IF;
  SELECT * INTO c FROM app.customer_revision WHERE tenant_id=p_tenant AND id=p_customer;
  SELECT * INTO s FROM app.site_revision WHERE tenant_id=p_tenant AND id=p_site;
@@ -207,9 +217,9 @@ BEGIN
  RETURN b;
 END $$;
 
-ALTER FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid) OWNER TO jobguard_migration;
-REVOKE ALL ON FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid) TO jobguard_runtime;
+ALTER FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.adopt_in_flight_job(uuid,uuid,uuid,varchar,varchar,character,varchar,bigint,bigint,varchar,varchar,uuid,timestamptz,uuid,uuid,uuid,uuid,uuid) TO jobguard_runtime;
 CREATE OR REPLACE FUNCTION app.adopt_in_flight_job(p_tenant uuid,p_job uuid,p_baseline uuid,p_title varchar,p_lifecycle varchar,p_hash char(64),p_description varchar,p_net bigint,p_cap bigint,p_policy varchar,p_terms varchar,p_actor uuid,p_attested timestamptz)
 RETURNS app.imported_job_baseline LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN RAISE EXCEPTION 'JOB_PARTIES_REQUIRED' USING ERRCODE='22023'; END $$;

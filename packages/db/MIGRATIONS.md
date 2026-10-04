@@ -128,8 +128,15 @@ context before reading each tenant's jobs, including under the Neon migration
 role and FORCE RLS. The migration registry makes reruns idempotent.
 
 The existing 13-argument adoption routine now refuses missing parties. The
-16-argument routine accepts verified customer/site revision references and binds
-before entering live. Update the application before using adoption. The previous
+18-argument routine accepts verified customer/site revision references and binds
+before entering live. It is a controlled write: inside the routine it requires a
+current owner membership for the actor, a `processing` `job.adopt_in_flight`
+command receipt for that actor, and an unexpired, unrevoked, approved
+authorization bound to the same job, actor, content hash, amount, policy version
+and zero aggregate revision (`FORBIDDEN` / `AUTHORIZATION_INVALID`, SQLSTATE
+42501). The command dispatcher supplies the command and authorization ids and
+appends the audit events in the same transaction, so a refusal leaves no receipt,
+decision, job or audit row. Update the application before using adoption. The previous
 synthetic demo's fixture bootstrap remains supported; fresh bootstrap explicitly
 seeds generated parties before marking its example job live.
 
