@@ -96,3 +96,38 @@ The earlier UIWIRE-1 spec race (see above) did not recur in that run but is stil
 ## Open
 
 GitHub CI on the pushed head. Independent verdict and separate acceptance remain pending. Not independently verified, not accepted.
+
+## Round 2: independent check on `71ee571` (Sol 6.1, verdict REPAIR, two P2 findings)
+
+Repair builder: Claude Sonnet 5.5 (same repair builder as above; not a reviewer, not the acceptor). Tests first: the regression tests were
+committed first (`2a6503a`) and failed on `71ee571` for the expected reasons; the fix followed (`0ba95c5`).
+
+| # | Finding | Root cause | Fix |
+|---|---|---|---|
+| 1 | P2: receipt cutoff loses timestamp precision | `Date.parse` truncates fractional milliseconds, so a line created at `.000900Z` was treated as existing at a receipt of `.000100Z`. | `receipt-allocation.ts` now compares exact instants: whole seconds (calendar arithmetic in `bigint`, timezone offset applied) plus the decimal fraction at any length. Covers every form the schema accepts (`Z`, `+hh:mm`, `+hhmm`, seconds optional). |
+| 2 | P2: valid allocation totals cannot always enter the fee kernel | Rational components were capped at 100 characters, but the exact net summed over a normal invoice has about 8 digits per line (150 lines: 130 digits). Raising the cap to fit one example would fail at larger sizes. | The kernel limit is derived from the supported allocation sizes: `MAX_EXACT_PENCE_DIGITS` = 10,000 lines x 13 money digits + 3 x 100 input digits + 13 = 130,313, with the derivation in the code and `docs/contracts/shared-money-origin-v1.md`. Allocation inputs stay at 100 digits and an allocation whose own total exceeds that fails closed (`INVALID_ALLOCATION`), so per-line work is bounded. The kernel no longer reduces its input (no full-length gcd) and rounds the exact product once, half-even; the money magnitude limit is checked by cross-multiplication. `addExactPence` now reduces with one short gcd, and new `sumExactPence` adds any number of terms exactly and reduced in time linear in the term count, failing closed (`INVALID_SHARED_MONEY`) beyond the limit. |
+
+New tests (in `packages/core/src/receipt-allocation.test.ts` and `cumulative-fee.test.ts`; no existing assertion changed):
+sub-millisecond, nanosecond, offset (`Z`, `+01:00`, `+0100`, `-05:00`, `+05:30`) and calendar-boundary (leap day, year end) cutoffs for pro-rata and explicit allocation;
+the 150-line example from the finding (fee 8p); allocator to fee kernel for 1,000 and 2,000 lines of distinct 12-digit amounts, checked against an independent
+product-denominator computation, with `addExactPence` folding and `sumExactPence` agreeing and the result inside the contract size; sequential whole-penny pro-rata receipts
+against updated balances aggregating to the same exact value as one allocation; fail-closed allocation total; kernel size boundary (exactly the limit accepted, one digit more
+rejected, unreduced fractions accepted and money limit still enforced); `sumExactPence` against folded addition on 300 random sets; `addExactPence` against its definition on 2,000
+random pairs with shared denominator factors; the size constants.
+
+Size and time (measured on this Mac with `tsx`, distinct 11-digit line amounts, allocation then `sumExactPence` then the kernel; not asserted in a unit test because the largest case takes seconds):
+150 lines about 10 ms (1,390 digits); 1,000 lines about 0.1 s (7,849 digits); 10,000 lines (the schema maximum) about 4 to 5 s with `sumExactPence` or with one-at-a-time `addExactPence`
+(72,641 digits, inside the 130,313 limit); every case returns fee 8p for a 100p receipt. The previous one-at-a-time addition took 8.6 s at 800 lines and was impractical beyond that.
+
+| Command (round 2, head `0ba95c5` plus this receipt) | Exit | Counts |
+|---|---:|---|
+| `pnpm typecheck`, `pnpm build`, `pnpm openapi:check` | 0 | typecheck and build 7 of 7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint`, `pnpm lint:lanes` | 0 | lane boundary, core purity, money arithmetic and commercial boundary checks pass; `tools/shared-money-origin.test.mjs` still requires bigint-only `*` and `/` in both kernels |
+| `pnpm test` (slot) | 0 | tools 42; core 580 (74 files); api 108; web 63; ai 72; config 2; storage 4; db 194 (39 files) |
+| `pnpm test:db` (slot) | 0 | 39 files, 194 tests |
+| `pnpm test:migrations` (slot) | 0 | 2 files, 11 tests |
+| `git diff --check origin/main...HEAD` | 0 | clean |
+
+Not run locally: the browser suite (this round changes only `packages/core` arithmetic and its contract text, and no web code calls these functions yet; GitHub CI runs the full suite).
+Still not independently verified, not accepted.
+
