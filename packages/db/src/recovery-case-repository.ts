@@ -9,6 +9,10 @@ const digest=(value:unknown)=>createHash("sha256").update(JSON.stringify(value,O
 export type EligibilityView={revision:number;caseRevision:number;evidenceRevision:number;policyVersion:"reference-d03.v1";policyRevision:number;classification:string;eligibleNetPence:number|null;reason:string;citations:string[];status:"reviewed"|"approved"|"superseded";reviewerRef:string};
 export type RecoveryCaseView={id:string;jobId:string;caseType:string;state:RecoveryCaseState;claimedNetPence:number;landedNetPence:number;outstandingNetPence:number;writtenOffPence:number;currency:"GBP";counterparty:string;book:string;sourceType:string;sourceRefs:string[];sources:RecoverySourceView[];feeJobLiabilityPence:number;feeObligationsPostedPence:number;feeCompensationsPostedPence:number;approvedLandedNetPence:number;revision:number;reviewerRef:string;createdDate:string;eligibility:EligibilityView|null};
 
+export class RecoveryReviewerError extends Error {
+ constructor(readonly code: "RECOVERY_REVIEWER_FORBIDDEN") { super(code); }
+}
+
 export class RecoveryEligibilityError extends Error {
  constructor(readonly code: "ELIGIBILITY_REVIEW_REQUIRED" | "ELIGIBILITY_REVIEWER_FORBIDDEN") { super(code); }
 }
@@ -46,10 +50,18 @@ export class RecoveryCaseRepository{
   await db.$client.query("INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash,previous_hash)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'GBP',$13,$14,$15,$16,$17,$18,$19)",[randomUUID(),context.tenantId,jobId,caseId,revision,caseRevision,row.evidenceRevision,row.policyVersion,row.policyRevision,row.scenario,row.classification,row.eligibleNetPence,row.reason,JSON.stringify(row.citations),row.status,authorizedReviewer,input.commandId,hash,old?.subject_hash??null]);
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:authorizedReviewer,eventType:`recovery.eligibility.${input.action}`,subjectType:"recovery_case",subjectRef:caseId,payload:{references:{jobId,commandId:input.commandId},hashes:{command:hash},classifications:{recovery:"financial"}}}]);
  });return (await this.list(context,jobId)).find(x=>x.id===caseId)!}
- async command(context:VerifiedTenantContext,jobId:string,raw:unknown,authorizedReviewer:string):Promise<RecoveryCaseView>{
-  if(!authorizedReviewer?.trim() || authorizedReviewer.length>200)throw new Error("RECOVERY_REVIEWER_REQUIRED");
-  // Caller supplies a verified server principal; the legacy client field is ignored.
-  const input={...recoveryCaseCommandV1.parse(raw),reviewerRef:authorizedReviewer},hash=digest(input);let caseId="";await withTenant(this.pool,context,async db=>{
+ async command(context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView>{
+  if(!reviewer?.membershipId||!reviewer?.identityUserId)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
+  // The caller supplies the server-selected principal; any client reviewer field is ignored and replaced below.
+  const parsed=recoveryCaseCommandV1.parse(raw);let caseId="";await withTenant(this.pool,context,async db=>{
+  // Recheck the principal INSIDE the write transaction, before replay, the advisory lock or any write, and hold the membership against
+  // revocation until the case, claim, event and audit commit (FOR SHARE needs UPDATE on app.membership, which jobguard_runtime already holds; do not tighten that grant without replacing this lock).
+  const membership=await db.$client.query<{id:string}>(`SELECT id FROM app.membership
+   WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role='owner'
+   AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())
+   FOR SHARE`,[context.tenantId,reviewer.membershipId,reviewer.identityUserId]);
+  if(membership.rowCount!==1)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
+  const input={...parsed,reviewerRef:`membership:${membership.rows[0]!.id}`},hash=digest(input);
   // Lock order shared with app.approve_synthetic_landing: case advisory key first, then
   // (inside the routine) job row and case row. The runtime role cannot lock job rows
   // (no UPDATE privilege), so it must never take a job-row lock before this key.

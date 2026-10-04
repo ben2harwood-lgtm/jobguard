@@ -12,9 +12,10 @@ export class RecoveryCaseApplication {
   return { version: "recovery-case-workbench.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, cases: await this.repo.list(context(), jobId) };
  }
  async command(jobId: string, raw: unknown) {
-  // M4-1-S-R: the reviewer is the verified synthetic membership, never a client value. Verify job access first.
+  // M4-1-S-R: the reviewer is the server-selected synthetic membership, never a client value. Job access is checked first as a cheap preflight;
+  // the repository rechecks the membership inside its own write transaction (revocation cannot race the write).
   await readSyntheticDemoJob(this.pool, jobId);
-  await this.repo.command(context(), jobId, recoveryCaseCommandV1.parse(raw), DEMO_MEMBERSHIP_ID);
+  await this.repo.command(context(), jobId, recoveryCaseCommandV1.parse(raw), { membershipId: membership.membershipId, identityUserId: membership.identityUserId });
   return this.list(jobId);
  }
  async eligibility(jobId: string, raw: unknown, sessionId: string | undefined) {
