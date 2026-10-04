@@ -193,6 +193,30 @@ describe("structural recovery fee guard",()=>{
    expect(await viewOf(repo, c.id, w)).toMatchObject({ approvedLandedNetPence: 100000, outstandingNetPence: 0 });
   });
 
+  it("refuses to relabel received money as 'Prevented before payment', and leaves case, allocations, journal and audit untouched (Sol P2)", async () => {
+   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(true);
+   // The landing routine accepts a landing while the workbench stage is still "identified"; prevention must not then erase it.
+   const c = await open(repo, 250000, w);
+   expect(c.state).toBe("identified");
+   const approved = (await readyToLand(c, 300000, w))(100000);
+   await land(approved, w);
+   const snapshot = async () => ({
+    view: await viewOf(repo, c.id, w),
+    parts: await allocationsAndDerivations(c.id, w),
+    events: Number((await admin.query("SELECT count(*) n FROM app.recovery_case_event WHERE tenant_id=$1 AND case_id=$2", [w.tenant, c.id])).rows[0].n),
+    audit: Number((await admin.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2", [w.tenant, c.id])).rows[0].n),
+    journal: Number((await admin.query("SELECT count(*) n FROM app.recovery_fee_journal WHERE tenant_id=$1 AND job_id=$2", [w.tenant, w.job])).rows[0].n),
+   });
+   const before = await snapshot();
+   expect(before.view).toMatchObject({ state: "identified", landedNetPence: 100000, approvedLandedNetPence: 100000 });
+   await expect(step(repo, c, { eventType: "prevent" }, w)).rejects.toThrow(/is not allowed/);
+   expect(await snapshot()).toEqual(before);
+   // Once the approved landing is reversed nothing remains received, so prevention is legitimate again.
+   await reverseApproved(approved.allocationId, 100000, w);
+   const prevented = await step(repo, c, { eventType: "prevent" }, w);
+   expect(prevented).toMatchObject({ state: "prevented", landedNetPence: 0 });
+  });
+
   it("refuses to allocate principal the workbench has written off (Sol P2: SQL landing path)", async () => {
    const repo = new RecoveryCaseRepository(runtime);
    let c = await open(repo, 250000);

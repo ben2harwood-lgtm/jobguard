@@ -118,4 +118,13 @@ describe("complete recovery state machine",()=>{
    expect(() => assertRecoverySources({ caseType: "merchant_overcharge", book: "builder_customer", sourceType: "supplier_documents", sourceRefs: [recordedRate] })).toThrowError("RECOVERY_SOURCE_NOT_RECOGNISED");
   });
  });
+ describe("prevention can never relabel money that has been received (M4-1-S-R repair 6, Sol P2)", () => {
+  it("refuses prevent while any landed principal remains, from any state", () => {
+   expect(() => transitionRecoveryCase({ state: "identified", event: "prevent", claimedPence: 250000, landedPence: 100000 })).toThrowError(/is not allowed/);
+   expect(() => transitionRecoveryCase({ state: "identified", event: "prevent", claimedPence: 250000, landedPence: 1 })).toThrowError(/is not allowed/);
+  });
+  it("still prevents a case with nothing received", () => {
+   expect(transitionRecoveryCase({ state: "identified", event: "prevent", claimedPence: 250000, landedPence: 0 })).toEqual({ state: "prevented", landedPence: 0, writtenOffPence: 0 });
+  });
+ });
 });
