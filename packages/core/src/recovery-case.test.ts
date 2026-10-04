@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventTypeV1, transitionRecoveryCase } from "./recovery-case.js";
+import { assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
 
 describe("complete recovery state machine",()=>{
  const expected = {
@@ -154,6 +154,41 @@ describe("complete recovery state machine",()=>{
    const landedRest = transitionRecoveryCase({ claimedPence: 300000, state: "negotiating", landedPence: 250000, event: "record_landing", amountPence: 50000 });
    expect(landedRest).toEqual({ state: "landed", landedPence: 300000, writtenOffPence: 0 });
    expect(transitionRecoveryCase({ claimedPence: 300000, state: landedRest.state, landedPence: landedRest.landedPence, event: "close_recovered" }).state).toBe("closed_recovered");
+  });
+ });
+ describe("an amendment that reduces the claim to the money already received records the fully received state (M4-1-S-R repair 10, Sol P2)", () => {
+  // Claim 2,500.00, 1,000.00 received, amended down to 1,000.00: nothing is outstanding, so the case must be able to close as recovered.
+  const amended = (state: Parameters<typeof stateAfterClaimAmendment>[0]["state"], extra: Partial<Parameters<typeof stateAfterClaimAmendment>[0]> = {}) =>
+   stateAfterClaimAmendment({ state, currentClaimedPence: 250000, claimedPence: 100000, landedPence: 100000, writtenOffPence: 0, ...extra });
+  it.each(["identified", "evidence_assembled", "pursuing", "negotiating", "partially_landed"] as const)("moves %s to landed when the reduced claim equals the received principal, and the case can then close as recovered", state => {
+   expect(amended(state)).toBe("landed");
+   expect(transitionRecoveryCase({ claimedPence: 100000, state: "landed", landedPence: 100000, event: "close_recovered" })).toEqual({ state: "closed_recovered", landedPence: 100000, writtenOffPence: 0 });
+  });
+  it("shows the stranded state the old behaviour produced: partially_landed with nothing outstanding has no recovered closure, no further receipt and nothing to write off", () => {
+   expect(() => transitionRecoveryCase({ claimedPence: 100000, state: "partially_landed", landedPence: 100000, event: "close_recovered" })).toThrowError(/is not allowed/);
+   expect(() => transitionRecoveryCase({ claimedPence: 100000, state: "partially_landed", landedPence: 100000, event: "record_landing", amountPence: 1 })).toThrowError(/is not allowed/);
+   expect(() => transitionRecoveryCase({ claimedPence: 100000, state: "partially_landed", landedPence: 100000, event: "write_off" })).toThrowError(/is not allowed/);
+  });
+  it("keeps the previous state while any principal is still outstanding", () => {
+   expect(amended("partially_landed", { claimedPence: 100001 })).toBe("partially_landed");
+   expect(amended("pursuing", { claimedPence: 150000 })).toBe("pursuing");
+   expect(amended("identified", { landedPence: 0, claimedPence: 50000 })).toBe("identified");
+  });
+  it("records the written-off closure when the reduced claim equals received plus written-off principal", () => {
+   expect(amended("partially_landed", { landedPence: 40000, writtenOffPence: 60000 })).toBe("closed_no_recovery");
+   expect(amended("negotiating", { landedPence: 0, writtenOffPence: 100000 })).toBe("closed_no_recovery");
+  });
+  it("never changes a closed, fully received or prevented case, and never on an equal or upward amendment", () => {
+   expect(amended("landed")).toBe("landed");
+   expect(amended("closed_recovered")).toBe("closed_recovered");
+   expect(amended("closed_no_recovery", { landedPence: 40000, writtenOffPence: 60000 })).toBe("closed_no_recovery");
+   expect(amended("prevented", { landedPence: 0, claimedPence: 50000 })).toBe("prevented");
+   // Outstanding was already nil and the claim is unchanged: no silent state change.
+   expect(amended("pursuing", { currentClaimedPence: 100000 })).toBe("pursuing");
+  });
+  it("still enforces the amendment rules itself, so the repository cannot skip them", () => {
+   expect(() => amended("pursuing", { claimedPence: 99999 })).toThrowError("RECOVERY_CLAIM_BELOW_SETTLED");
+   expect(() => amended("landed", { currentClaimedPence: 100000, claimedPence: 100001 })).toThrowError("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
   });
  });
 });

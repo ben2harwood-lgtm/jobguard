@@ -241,4 +241,75 @@ describe("M4-1-S HOLD regressions", () => {
    expect(await footprint(x.id)).toEqual(before);
   });
  });
+ describe("a downward amendment can not strand a fully received claim (M4-1-S-R repair 10, Sol P2)", () => {
+  const stepFor = (repo: RecoveryCaseRepository) => (x:{id:string;revision:number},extra:Record<string,unknown>) => repo.command(ctx,job,command({action:"transition",caseId:x.id,expectedRevision:x.revision,...extra}),owner);
+  const amendTo = (repo: RecoveryCaseRepository, x:{id:string;revision:number}, claimedNetPence:number, extra:Record<string,unknown>={}) => repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence,expectedRevision:x.revision,...extra}),owner);
+  const history = async (caseId:string) => (await admin.query("SELECT sequence,event_type,from_state,to_state FROM app.recovery_case_event WHERE case_id=$1 ORDER BY sequence",[caseId])).rows;
+  it("claim 2,500.00, receive 1,000.00, amend to 1,000.00: the case is received in full, closes as recovered, and every step replays safely", async () => {
+   const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+   let x = await repo.command(ctx,job,openCase(),owner);
+   x = await step(x,{eventType:"assemble_evidence"});
+   x = await step(x,{eventType:"record_landing",amountPence:100000});
+   expect(x).toMatchObject({state:"partially_landed",claimedNetPence:250000,landedNetPence:100000,outstandingNetPence:150000});
+   const amendment = command({action:"amend_claim",caseId:x.id,claimedNetPence:100000,expectedRevision:x.revision});
+   const amended = await repo.command(ctx,job,amendment,owner);
+   expect(amended).toMatchObject({state:"landed",claimedNetPence:100000,landedNetPence:100000,outstandingNetPence:0,writtenOffPence:0,revision:x.revision+2});
+   // Immutable history: the claim revisions keep both claims, and the amendment event records the state change from partially_landed to landed.
+   expect((await admin.query("SELECT revision,claimed_net_pence FROM app.recovery_claim_revision WHERE case_id=$1 ORDER BY revision",[x.id])).rows).toEqual([{revision:1,claimed_net_pence:"250000"},{revision:2,claimed_net_pence:"100000"}]);
+   expect((await history(x.id)).filter(e=>e.event_type==="claim_amended")).toEqual([{sequence:4,event_type:"claim_amended",from_state:"partially_landed",to_state:"landed"}]);
+   // Replay of the amendment is a no-op: same revision, no extra claim revision, event or audit row.
+   const footprint = async () => (await admin.query("SELECT (SELECT count(*) FROM app.recovery_claim_revision WHERE case_id=$1)::int claims,(SELECT count(*) FROM app.recovery_case_event WHERE case_id=$1)::int events,(SELECT count(*) FROM app.audit_event WHERE subject_ref=$1::text)::int audit",[x.id])).rows[0];
+   const before = await footprint();
+   expect((await repo.command(ctx,job,amendment,owner)).revision).toBe(amended.revision);
+   expect(await footprint()).toEqual(before);
+   // The case can now close as recovered, and replay of the closure is a no-op.
+   const close = command({action:"transition",caseId:x.id,eventType:"close_recovered",expectedRevision:amended.revision});
+   const closed = await repo.command(ctx,job,close,owner);
+   expect(closed).toMatchObject({state:"closed_recovered",claimedNetPence:100000,landedNetPence:100000,outstandingNetPence:0});
+   expect((await repo.command(ctx,job,close,owner)).revision).toBe(closed.revision);
+   expect((await history(x.id)).map(e=>e.to_state)).toEqual(["identified","evidence_assembled","partially_landed","landed","closed_recovered"]);
+   // The closure invariants still hold: nothing more can be received, and a later upward amendment is still refused.
+   await expect(step(closed,{eventType:"record_landing",amountPence:1})).rejects.toThrow(/is not allowed/);
+   await expect(amendTo(repo,closed,100001)).rejects.toThrow("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
+   expect(closed.landedNetPence+closed.writtenOffPence+closed.outstandingNetPence).toBe(closed.claimedNetPence);
+  });
+  it("an amendment that still leaves principal outstanding keeps the previous state, and a reduction to received plus written-off records the written-off closure", async () => {
+   const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+   let x = await repo.command(ctx,job,openCase(),owner);
+   x = await step(x,{eventType:"assemble_evidence"});
+   x = await step(x,{eventType:"record_landing",amountPence:100000});
+   x = await amendTo(repo,x,150000);
+   expect(x).toMatchObject({state:"partially_landed",claimedNetPence:150000,landedNetPence:100000,outstandingNetPence:50000});
+   // Write off the rest, reverse the receipt (reopening), then shrink the claim to exactly the written-off principal.
+   x = await step(x,{eventType:"write_off"});
+   expect(x).toMatchObject({state:"closed_no_recovery",writtenOffPence:50000});
+   x = await step(x,{eventType:"reverse_landing",amountPence:100000});
+   expect(x).toMatchObject({state:"evidence_assembled",landedNetPence:0,writtenOffPence:50000,outstandingNetPence:100000});
+   x = await amendTo(repo,x,50000);
+   expect(x).toMatchObject({state:"closed_no_recovery",claimedNetPence:50000,landedNetPence:0,writtenOffPence:50000,outstandingNetPence:0});
+  });
+ });
+ describe("case ids are matched in their canonical lower-case spelling (M4-1-S-R repair 10, Sol P3)", () => {
+  it("an upper-case case id commits, returns the case and replays as the same command in either spelling", async () => {
+   const repo = new RecoveryCaseRepository(runtime);
+   let x = await repo.command(ctx,job,openCase(),owner);
+   const upper = (id:string) => id.toUpperCase(), commandId = randomUUID();
+   const assemble = command({action:"transition",caseId:upper(x.id),eventType:"assemble_evidence",expectedRevision:x.revision,commandId});
+   const done = await repo.command(ctx,job,assemble,owner);
+   expect(done).toMatchObject({id:x.id,state:"evidence_assembled",revision:x.revision+1});
+   // Replay: same spelling, the lower-case spelling, and an upper-case command id are all the same command, not a conflict.
+   expect((await repo.command(ctx,job,assemble,owner)).revision).toBe(done.revision);
+   expect((await repo.command(ctx,job,{...assemble,caseId:x.id},owner)).revision).toBe(done.revision);
+   expect((await repo.command(ctx,job,{...assemble,commandId:upper(commandId)},owner)).revision).toBe(done.revision);
+   expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_event WHERE case_id=$1 AND event_type='assemble_evidence'",[x.id])).rows[0].n).toBe(1);
+   // Amendment and the eligibility command accept the upper-case spelling too.
+   x = await repo.command(ctx,job,command({action:"amend_claim",caseId:upper(x.id),claimedNetPence:240000,expectedRevision:done.revision}),owner);
+   expect(x).toMatchObject({claimedNetPence:240000,state:"evidence_assembled"});
+   const review = {version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:upper(x.id),scenario:"evidence_backed_withheld_payment",expectedCaseRevision:x.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1};
+   const reviewed = await repo.eligibilityCommand(ctx,job,review,owner);
+   expect(reviewed).toMatchObject({id:x.id});
+   await repo.eligibilityCommand(ctx,job,{...review,caseId:x.id},owner); // lower-case replay: no conflict
+   expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_revision WHERE case_id=$1",[x.id])).rows[0].n).toBe(1);
+  });
+ });
 });

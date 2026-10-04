@@ -28,3 +28,20 @@ it("refuses the command when membership verification fails", async () => {
   await expect(new RecoveryCaseApplication({} as Pool).command(jobId,{...input(),reviewerRef:"forged-reviewer"})).rejects.toThrow("MEMBERSHIP_FORBIDDEN");
   expect(spies.command).not.toHaveBeenCalled();
 });
+// M4-1-S-R repair 10 (Sol P2): reads are authorized exactly like writes. A revoked or expired membership, or a job outside the tenant, must not list cases.
+it("verifies the persisted membership and job access before it lists cases", async () => {
+  const pool = {} as Pool;
+  await expect(new RecoveryCaseApplication(pool).list(jobId)).resolves.toMatchObject({ cases: [] });
+  expect(spies.verify).toHaveBeenCalledWith(pool, jobId);
+  expect(spies.verify.mock.invocationCallOrder[0]).toBeLessThan(spies.list.mock.invocationCallOrder[0]!);
+});
+it.each(["MEMBERSHIP_FORBIDDEN", "JOB_NOT_FOUND"])("lists nothing when the membership or job check refuses with %s", async code => {
+  spies.verify.mockRejectedValue(new Error(code));
+  await expect(new RecoveryCaseApplication({} as Pool).list(jobId)).rejects.toThrow(code);
+  expect(spies.list).not.toHaveBeenCalled();
+});
+it("returns the refreshed list after a command without a second membership read", async () => {
+  await new RecoveryCaseApplication({} as Pool).command(jobId, input());
+  expect(spies.verify).toHaveBeenCalledTimes(1); // the preflight; the repository rechecks inside its own write transaction
+  expect(spies.list).toHaveBeenCalledTimes(1);
+});

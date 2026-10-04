@@ -26,3 +26,16 @@ it.each(["production","pilot_no_charge"])("refuses synthetic reviewer authority 
  await expect(new RecoveryCaseApplication({} as Pool).eligibility(randomUUID(),command(),randomUUID())).rejects.toThrow("ELIGIBILITY_REVIEWER_FORBIDDEN");
  expect(persist).not.toHaveBeenCalled();
 });
+// M4-1-S-R repair 10 (Sol P2): the real readSyntheticDemoJob boundary guards the read, not only the writes (no mock of it here).
+it.each(["production", "pilot_no_charge"])("refuses to list cases in %s before it reads anything", async mode => {
+ vi.stubEnv("JOBGUARD_ENV",mode);
+ const list=vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([]);
+ await expect(new RecoveryCaseApplication({} as Pool).list(randomUUID())).rejects.toThrow("MEMBERSHIP_FORBIDDEN");
+ expect(list).not.toHaveBeenCalled();
+});
+it("lists nothing when the membership and job lookup itself cannot be completed", async () => {
+ vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+ const list=vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([]);
+ await expect(new RecoveryCaseApplication({} as Pool).list(randomUUID())).rejects.toThrow("DATABASE_UNAVAILABLE");
+ expect(list).not.toHaveBeenCalled();
+});

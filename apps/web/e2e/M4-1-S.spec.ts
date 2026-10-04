@@ -70,3 +70,70 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
  await page.screenshot({path:`test-results/M4-1-S-${testInfo.project.name}.png`,fullPage:true})
 });
+
+// M4-1-S-R repair 10 (Sol P2): the workbench is a complete vertical slice. A claim can be amended, received in full, closed as recovered and
+// reversed to reopen, with pounds input, current revisions, announced and focused errors and persisted results; updating an OLDER case never
+// moves the selection to a newer one.
+test("amends a claim to what was received, closes it as recovered and reverses it to reopen, always on the case the user chose",async({page,browser},testInfo)=>{
+ await openReview(page);
+ for(const n of["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await page.getByRole("button",{name:`Accept ${n}`,exact:true}).click();
+ await page.getByRole("button",{name:"Dismiss Replace shelves",exact:true}).click();await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");
+ await page.getByRole("button",{name:"Confirm scope",exact:true}).click();
+ const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
+ const alert=page.locator("p[role=alert]"),received=page.getByLabel("Received (£)",{exact:true}),claim=page.getByLabel("New claimed amount (£)",{exact:true}),reversed=page.getByLabel("Reversed (£)",{exact:true});
+ const refuse=async(text:string)=>{await expect(alert).toContainText(text);await expect(alert).toBeFocused()};
+ // The OLDER case (£2,500) is opened and part-received first; the NEWER case (£320) is opened afterwards and is selected on opening.
+ await button(page,"Open £2,500 withheld payment").click();await V(page,"case-claimed-net","£2,500.00");
+ await button(page,"Evidence assembled").click();await V(page,"case-state","Evidence assembled");
+ await received.fill("1000.00");await button(page,"Record a landed recovery").click();await V(page,"case-landed-net","£1,000.00");await V(page,"case-state","Partly received");
+ await button(page,"Open £320 withheld payment").click();await V(page,"case-claimed-net","£320.00");await V(page,"case-state","Needs evidence");
+ // A second page in the same session, loaded now, will hold a STALE revision of the older case.
+ const stalePage=await page.context().newPage();await stalePage.goto(`/jobs/${jobId}#recovery-cases`);
+ await stalePage.getByRole("button",{name:"withheld customer payment · £2,500.00",exact:true}).click();await V(stalePage,"case-landed-net","£1,000.00");
+ // Updating the older case keeps THAT case selected: its own amounts stay visible and the newer £320 case is not shown or touched.
+ await page.getByRole("button",{name:"withheld customer payment · £2,500.00",exact:true}).click();await V(page,"case-claimed-net","£2,500.00");
+ await received.fill("500.00");await button(page,"Record a landed recovery").click();
+ await V(page,"case-landed-net","£1,500.00");await V(page,"case-claimed-net","£2,500.00");await V(page,"case-outstanding-net","£1,000.00");await V(page,"case-state","Partly received");
+ await expect(button(page,"Close as recovered")).toBeDisabled();
+ for(const target of[button(page,"Amend claim"),button(page,"Close as recovered"),button(page,"Reverse a landed recovery"),claim,reversed])await expectTouchTarget(target);
+ // Amendment errors: each is announced in an alert that takes focus, and nothing is recorded.
+ await claim.fill("");await button(page,"Amend claim").click();await refuse("Enter the new claimed amount in pounds");
+ await claim.fill("1e3");await button(page,"Amend claim").click();await refuse("Enter a non-negative price in pounds");
+ await claim.fill("1499.99");await button(page,"Amend claim").click();await refuse("cannot be lower than the money already received");
+ await V(page,"case-claimed-net","£2,500.00");await V(page,"case-state","Partly received");
+ // Amending down to exactly what was received records it as received in full, on the same (older) case, and it can then close as recovered.
+ const revisionBefore=Number(await page.getByTestId("case-revision").textContent());
+ await claim.fill("1500.00");await button(page,"Amend claim").click();
+ await V(page,"case-claimed-net","£1,500.00");await V(page,"case-landed-net","£1,500.00");await V(page,"case-outstanding-net","£0.00");await V(page,"case-state","Received in full");
+ expect(Number(await page.getByTestId("case-revision").textContent())).toBeGreaterThan(revisionBefore);
+ await expect(button(page,"Close as recovered")).toBeEnabled();await expect(button(page,"Record a landed recovery")).toBeDisabled();
+ await button(page,"Close as recovered").click();await V(page,"case-state","Closed — recovered");await V(page,"case-outstanding-net","£0.00");
+ // A closed case cannot be quietly enlarged: the user is told to record a dispute first.
+ await claim.fill("1600.00");await button(page,"Amend claim").click();await refuse("Record a dispute");await V(page,"case-claimed-net","£1,500.00");
+ // Reversal: more than was received is refused; a valid reversal reopens the closed case with the reversed money outstanding again.
+ await reversed.fill("1500.01");await button(page,"Reverse a landed recovery").click();await refuse("is not allowed");await V(page,"case-landed-net","£1,500.00");await V(page,"case-state","Closed — recovered");
+ await reversed.fill("500.00");await button(page,"Reverse a landed recovery").click();
+ await V(page,"case-state","Partly received");await V(page,"case-landed-net","£1,000.00");await V(page,"case-outstanding-net","£500.00");await V(page,"case-claimed-net","£1,500.00");
+ await expect(button(page,"Record a landed recovery")).toBeEnabled();await expect(button(page,"Close as recovered")).toBeDisabled();
+ // The stale page still holds the old revision: its action is refused with a plain message, focus on the alert, and nothing changes.
+ await stalePage.getByLabel("Received (£)",{exact:true}).fill("1.00");await stalePage.getByRole("button",{name:"Record a landed recovery",exact:true}).click();
+ await expect(stalePage.locator("p[role=alert]")).toContainText("changed since it was loaded");await expect(stalePage.locator("p[role=alert]")).toBeFocused();
+ await V(stalePage,"case-landed-net","£1,000.00");await stalePage.close();
+ // Persisted results: the authoritative read, the reloaded page and a SECOND browser context agree, and the untouched newer case is unchanged.
+ const persisted=await(await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();
+ expect(persisted.cases).toHaveLength(2);
+ expect(persisted.cases[0]).toMatchObject({claimedNetPence:150000,landedNetPence:100000,outstandingNetPence:50000,writtenOffPence:0,state:"partially_landed"});
+ expect(persisted.cases[1]).toMatchObject({claimedNetPence:32000,landedNetPence:0,state:"identified"});
+ await page.reload();await V(page,"case-claimed-net","£320.00");
+ await page.getByRole("button",{name:"withheld customer payment · £1,500.00",exact:true}).click();
+ await V(page,"case-landed-net","£1,000.00");await V(page,"case-outstanding-net","£500.00");await V(page,"case-state","Partly received");
+ const second=await browser.newContext(),secondPage=await second.newPage();
+ await secondPage.goto("/");await secondPage.getByRole("button",{name:"Start the demo"}).click();const skip=secondPage.getByRole("button",{name:"Skip tour"});await skip.waitFor({state:"visible"});await skip.click();
+ await secondPage.goto(`/jobs/${jobId}#recovery-cases`);
+ expect(await(await secondPage.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()).toEqual(persisted);
+ await secondPage.getByRole("button",{name:"withheld customer payment · £1,500.00",exact:true}).click();
+ await V(secondPage,"case-claimed-net","£1,500.00");await V(secondPage,"case-landed-net","£1,000.00");await V(secondPage,"case-state","Partly received");
+ await second.close();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+ await page.screenshot({path:`test-results/M4-1-S-amend-${testInfo.project.name}.png`,fullPage:true})
+});
