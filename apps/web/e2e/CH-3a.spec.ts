@@ -212,3 +212,104 @@ test("CH-3a a lifecycle refresh cannot carry a stale draft over another writer's
   const after = await partiesView(page, jobId); const customer = after.customers.find((c: { id: string }) => c.id === customerId);
   expect(customer.revision).toBe(2); expect(customer.customer.name).toBe("Renamed elsewhere"); expect(customer.customer.phone).toBeUndefined();
 });
+
+// Round 5 (checker findings on d812f99): reopening and repeated saving must keep the saved party identities, and a site's
+// additional address lines must survive an edit of any other field.
+async function reviewJob(page: Page) {
+  await openCapture(page); await B(page, "Make my draft").click(); await B(page, "Check and edit my draft").click();
+  await expect(page.getByRole("heading", { name: "Check the work items" })).toBeVisible();
+  await expect(B(page, "Save customer and site")).toBeVisible();
+  return new URL(page.url()).pathname.split("/").pop()!;
+}
+/** The party command actions this page sends from now on, in order. */
+function partyActions(page: Page, jobId: string) {
+  const seen: string[] = [];
+  page.on("request", request => { if (request.method() === "POST" && request.url().endsWith(`/api/jobs/${jobId}/parties`)) seen.push(request.postDataJSON().action); });
+  return seen;
+}
+/** Click save and wait until the saved binding has changed, which is the visible sign that the save finished. */
+async function saveAndWait(page: Page) {
+  const before = await page.getByTestId("party-binding-id").textContent();
+  await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-binding-id")).not.toHaveText(before!);
+}
+const MORE_LINES = "More address lines (optional, one per line)";
+
+test("CH-3a reopening shows the saved details, and saving them unchanged creates no new customer or site", async ({ page }) => {
+  test.setTimeout(180000); const jobId = await reviewJob(page);
+  await page.getByLabel("Customer type").selectOption("business"); await page.getByLabel("Customer name", { exact: true }).fill("Reopened Fictional Ltd");
+  await page.getByLabel("Customer phone (fictional, optional)").fill("07000000011"); await page.getByLabel("Premises address").fill("9 Reopen Row");
+  await page.getByLabel("Town").fill("Reopenshire"); await page.getByLabel("UK postcode").fill("sw1a 2aa"); await page.getByLabel("Flat or unit (optional)").fill("Flat 9");
+  await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Reopened Fictional Ltd");
+  const first = await partiesView(page, jobId); const actions = partyActions(page, jobId);
+  // Save again in the same session without editing: the editor still holds the saved customer.
+  await expect(page.getByLabel("Choose a customer")).toHaveValue(first.currentIds.customerId);
+  await saveAndWait(page);
+  await expect(page.getByLabel("Choose a customer")).toHaveValue(first.currentIds.customerId);
+  // Reopen the job: the editor shows what was saved, not the sample details.
+  await page.reload(); await expect(B(page, "Save customer and site")).toBeVisible();
+  await expect(page.getByLabel("Customer name", { exact: true })).toHaveValue("Reopened Fictional Ltd"); await expect(page.getByLabel("Customer type")).toHaveValue("business");
+  await expect(page.getByLabel("Customer phone (fictional, optional)")).toHaveValue("07000000011"); await expect(page.getByLabel("Customer email (fictional, optional)")).toHaveValue("");
+  await expect(page.getByLabel("Premises address")).toHaveValue("9 Reopen Row"); await expect(page.getByLabel("Town")).toHaveValue("Reopenshire");
+  await expect(page.getByLabel("UK postcode")).toHaveValue("SW1A 2AA"); await expect(page.getByLabel("Flat or unit (optional)")).toHaveValue("Flat 9");
+  await expect(page.getByLabel("Choose a customer")).toHaveValue(first.currentIds.customerId); await expect(page.getByLabel("Who pays?")).toHaveValue("");
+  await saveAndWait(page);
+  // Two saves of unchanged details wrote two bindings and nothing else: no customer or site was created.
+  expect(actions).toEqual(["bind", "bind"]);
+  const after = await partiesView(page, jobId);
+  expect(after.customers).toHaveLength(first.customers.length); expect(after.sites).toHaveLength(first.sites.length);
+  expect(after.currentIds.customerId).toBe(first.currentIds.customerId); expect(after.currentIds.siteId).toBe(first.currentIds.siteId);
+  expect(after.current.customerRevisionId).toBe(first.current.customerRevisionId); expect(after.current.siteRevisionId).toBe(first.current.siteRevisionId);
+  expect(after.current.customer.name).toBe("Reopened Fictional Ltd"); expect(after.current.site.unit).toBe("Flat 9");
+});
+
+test("CH-3a a changed customer revises the same customer and a changed site is a new site; nothing else is created", async ({ page }) => {
+  test.setTimeout(180000); const jobId = await reviewJob(page);
+  await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  const base = await partiesView(page, jobId); const actions = partyActions(page, jobId);
+  await page.getByLabel("Customer name", { exact: true }).fill("Renamed once"); await saveAndWait(page);
+  const renamed = await partiesView(page, jobId);
+  expect(actions).toEqual(["revise_customer", "bind"]);
+  expect(renamed.customers).toHaveLength(base.customers.length); expect(renamed.sites).toHaveLength(base.sites.length);
+  expect(renamed.currentIds.customerId).toBe(base.currentIds.customerId); expect(renamed.currentIds.siteId).toBe(base.currentIds.siteId);
+  expect(renamed.customers.find((c: { id: string }) => c.id === base.currentIds.customerId).revision).toBe(2);
+  await page.getByLabel("Town").fill("Elsewhere"); await saveAndWait(page);
+  const moved = await partiesView(page, jobId);
+  expect(actions).toEqual(["revise_customer", "bind", "create_site", "bind"]);
+  expect(moved.customers).toHaveLength(base.customers.length); expect(moved.sites).toHaveLength(base.sites.length + 1);
+  expect(moved.currentIds.customerId).toBe(base.currentIds.customerId); expect(moved.currentIds.siteId).not.toBe(base.currentIds.siteId);
+  expect(moved.current.site.town).toBe("Elsewhere"); expect(moved.current.customer.name).toBe("Renamed once");
+});
+
+for (const count of [2, 3, 4]) {
+  test(`CH-3a keeps all ${count} address lines when another detail changes, and edits them only deliberately`, async ({ page }) => {
+    test.setTimeout(180000); const jobId = await reviewJob(page);
+    const lines = ["1 Long Lane", "Fictional Court", "Fictional Village", "Fictional Parish"].slice(0, count);
+    await expect(page.getByLabel(MORE_LINES)).toBeVisible();
+    await page.getByLabel("Premises address").fill(lines[0]!); await page.getByLabel(MORE_LINES).fill(lines.slice(1).join("\n"));
+    await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-site")).toContainText(lines.join(", "));
+    expect((await partiesView(page, jobId)).current.site.addressLines).toEqual(lines);
+    // Reopen: every saved line is shown in the editor.
+    await page.reload(); await expect(B(page, "Save customer and site")).toBeVisible();
+    await expect(page.getByLabel("Premises address")).toHaveValue(lines[0]!); await expect(page.getByLabel(MORE_LINES)).toHaveValue(lines.slice(1).join("\n"));
+    // Change only the town: the other lines are carried into the new site.
+    await page.getByLabel("Town").fill("Changed Town"); await saveAndWait(page);
+    const moved = (await partiesView(page, jobId)).current.site;
+    expect(moved.addressLines).toEqual(lines); expect(moved.town).toBe("Changed Town");
+    // Deliberately edit the last line: only that line changes.
+    const edited = [...lines.slice(0, -1), "Edited last line"];
+    await page.getByLabel("Premises address").fill(edited[0]!); await page.getByLabel(MORE_LINES).fill(edited.slice(1).join("\n")); await saveAndWait(page);
+    expect((await partiesView(page, jobId)).current.site.addressLines).toEqual(edited);
+    await expect(page.getByTestId("party-site")).toContainText(edited.join(", "));
+  });
+}
+
+test("CH-3a refuses a fifth address line in words before anything is written", async ({ page }) => {
+  test.setTimeout(180000); const jobId = await reviewJob(page); const before = await partiesView(page, jobId); const actions = partyActions(page, jobId);
+  await expect(page.getByLabel(MORE_LINES)).toBeVisible();
+  await page.getByLabel(MORE_LINES).fill("Line two\nLine three\nLine four\nLine five");
+  await B(page, "Save customer and site").click();
+  const alert = page.getByRole("alert").filter({ hasText: "at most four lines" }); await expect(alert).toBeVisible(); await expect(alert).toBeFocused();
+  expect(actions).toEqual([]); const view = await partiesView(page, jobId); expect(view.current).toBeNull(); expect(view.sites).toHaveLength(before.sites.length); expect(view.customers).toHaveLength(before.customers.length);
+  const box = await page.getByLabel(MORE_LINES).boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

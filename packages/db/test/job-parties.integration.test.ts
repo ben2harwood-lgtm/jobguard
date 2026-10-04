@@ -333,3 +333,45 @@ describe("CH-3a binding changes leave their record (round 4)",()=>{
     expect((await admin.query(`SELECT count(*)::int n FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n).toBe(1);
   });
 });
+
+describe("CH-3a a null correction flag cannot bypass the post-live guard (round 5)",()=>{
+  // Everything the repository does for one binding change in one transaction, but with the routine's correction flag and reason
+  // supplied exactly as given, so a null flag reaches the routine. The receipt is completed and the plain bind audit event is
+  // appended, so the commit-time record check is satisfied: only the routine's own refusal can stop the change.
+  const bindWithFlag=async(job:string,customerRevision:string,siteRevision:string,flag:boolean|null,reason:string|null,eventType="job.parties.bind")=>{
+    const command=randomUUID(),binding=randomUUID(),expected=(await repository.view(context,member,job)).jobRevision;
+    await withTenant(runtime,context,async db=>{
+      await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[command,tenant,command,"d".repeat(64),member]);
+      await db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,binding,expected,customerRevision,null,siteRevision,flag,reason,member,command]);
+      await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,command,JSON.stringify({id:binding})]);
+      await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType,subjectType:"job",subjectRef:job,payload:{references:{commandId:command,identityId:binding},hashes:{request:"d".repeat(64)},classifications:{action:"operational"}}}]);
+    });
+    return{command,binding};
+  };
+  const state=async(job:string)=>({
+    bindings:(await admin.query(`SELECT count(*)::int n FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n,
+    revision:(await admin.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rows[0].revision,
+    current:(await admin.query(`SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].binding_id as string,
+    receipts:(await admin.query(`SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type='job.parties'`,[tenant])).rows[0].n,
+    audits:(await admin.query(`SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type LIKE 'job.parties.%'`,[tenant,job])).rows[0].n,
+  });
+  it("refuses a live job's binding change unless the correction flag is true, and rolls everything back",async()=>{
+    const job=await createJob(),{parties}=await saveParties(job);
+    await repository.command(context,member,job,command("bind",{expectedJobRevision:0,parties}));
+    await setLiveDirectly(job);
+    const next=await saveParties(job,"Flat 7");
+    const before=await state(job);
+    const cases:Array<[string,boolean|null,string|null]>=[
+      ["null flag with a non-empty reason",null,"A reason that is present"],
+      ["null flag with no reason",null,null],
+      ["false flag with a non-empty reason",false,"A reason that is present"],
+    ];
+    for(const [label,flag,reason] of cases){
+      await expect(bindWithFlag(job,next.c.revisionId,next.s.revisionId,flag,reason),label).rejects.toMatchObject({code:"22023",message:expect.stringContaining("CORRECTION_REASON_REQUIRED")});
+      expect(await state(job),label).toEqual(before);
+    }
+    // The permitted route still works: a true flag with a reason is a correction and keeps that reason.
+    const done=await bindWithFlag(job,next.c.revisionId,next.s.revisionId,true,"Correct the fictional site","job.parties.correct");
+    expect((await admin.query(`SELECT correction_reason FROM app.job_party_binding WHERE tenant_id=$1 AND id=$2`,[tenant,done.binding])).rows[0].correction_reason).toBe("Correct the fictional site");
+  });
+});
