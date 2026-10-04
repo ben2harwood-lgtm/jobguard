@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 const origin="http://127.0.0.1:3000";
 // The session cookie is Secure. Chromium sends it to http://127.0.0.1, but Playwright's APIRequestContext (the `request`
 // fixture and `page.request`) only treats "localhost" as secure and never attaches a Secure cookie to 127.0.0.1.
@@ -40,17 +40,61 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  // Jobs still uses its separately scoped demo session; returning to identity preserves its own tenant.
  await page.getByRole("link",{name:"Open practice Jobs"}).click();await page.goto("/sign-in");await expect(page.getByTestId("identity-tenant")).toHaveText(tenant!);
 });
-test("invitation joins only its stored tenant and role after email verification",async({browser})=>{
- const email=`owner-${crypto.randomUUID()}@practice.invalid`,recipient=`invite-${crypto.randomUUID()}@practice.invalid`;
- const ok=(r:Api)=>r.status>=200&&r.status<300;
- let tenant="",id="";
- const ownerContext=await browser.newContext();
+// The web adapter shares ONE identity request bucket ("web-bootstrap": 10 requests per 10 minutes) across the whole run, and
+// a code can be re-requested for the same email and purpose only after 60 s. This file therefore spends its requests
+// deliberately: 1 (first test) + 4 (below) = 5 per project, 10 for both projects, and never repeats an email/purpose.
+const ok=(r:Api)=>r.status>=200&&r.status<300;
+/** A new owner (own context, own tenant) invites each address; returns that tenant and the invitation references in order. */
+async function ownerInvites(browser:Browser,invitees:{email:string;role:string}[]){
+ const email=`owner-${crypto.randomUUID()}@practice.invalid`;
+ const context=await browser.newContext();
  try {
-  const owner=await ownerContext.newPage();await owner.goto("/sign-in");
+  const owner=await context.newPage();await owner.goto("/sign-in");
   const response=await api(owner,"/api/auth/request",{method:"POST",data:{version:"identity-request.v1",email,purpose:"signup"}});expect(ok(response)).toBe(true);const code=response.body.fixtureCode;
   const verified=await api(owner,"/api/auth/verify",{method:"POST",data:{version:"identity-verify.v1",email,purpose:"signup",code}});expect(ok(verified)).toBe(true);
-  const session=await api(owner,"/api/auth/session");expect(ok(session)).toBe(true);tenant=session.body.memberships[0].tenantId;
-  const invite=await api(owner,"/api/auth/invitations",{method:"POST",headers:{"x-csrf-token":session.body.csrfToken},data:{version:"identity-invitation.v1",requested_tenant_id:tenant,email:recipient,role:"foreman"}});expect(ok(invite)).toBe(true);id=invite.body.id;
- } finally {await ownerContext.close();}
- const context=await browser.newContext();try {const page=await context.newPage();await page.goto(`/sign-in?invitationId=${id}`);await page.getByLabel("Fictional email address").fill(recipient);await page.getByRole("button",{name:"Request code",exact:true}).click();const code=await page.getByTestId("fixture-code").textContent();await page.getByLabel("Eight-digit code").fill(code!);await page.getByRole("button",{name:"Verify code"}).click();await expect(page.getByText("Role: foreman",{exact:true})).toBeVisible();await expect(page.getByTestId("identity-tenant")).toHaveText(tenant);await page.reload();await expect(page.getByTestId("identity-tenant")).toHaveText(tenant);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);}finally{await context.close();}
+  const session=await api(owner,"/api/auth/session");expect(ok(session)).toBe(true);const tenant:string=session.body.memberships[0].tenantId;
+  const ids:string[]=[];
+  for(const invitee of invitees){
+   const invite=await api(owner,"/api/auth/invitations",{method:"POST",headers:{"x-csrf-token":session.body.csrfToken},data:{version:"identity-invitation.v1",requested_tenant_id:tenant,email:invitee.email,role:invitee.role}});expect(ok(invite)).toBe(true);ids.push(invite.body.id);
+  }
+  return {tenant,ids};
+ } finally {await context.close();}
+}
+async function enterCode(page:Page,email:string){
+ await page.getByLabel("Fictional email address").fill(email);await page.getByRole("button",{name:"Request code",exact:true}).click();
+ const code=await page.getByTestId("fixture-code").textContent();await page.getByLabel("Eight-digit code").fill(code!);await page.getByRole("button",{name:"Verify code"}).click();
+}
+test("invitation joins only its stored tenant and role, for a new user and for one who is already signed in",async({browser})=>{
+ const recipient=`invite-${crypto.randomUUID()}@practice.invalid`,member=`member-${crypto.randomUUID()}@practice.invalid`;
+ // The existing user signs up first (own business, own tenant) and stays signed in with a valid session cookie.
+ const memberContext=await browser.newContext(),recipientContext=await browser.newContext();
+ try {
+  const memberPage=await memberContext.newPage();await memberPage.goto("/sign-in");await enterCode(memberPage,member);
+  await expect(memberPage.getByRole("heading",{name:"Signed in",exact:true})).toBeVisible();await expect(memberPage.getByText("Role: owner",{exact:true})).toBeVisible();
+  const ownTenant=(await memberPage.getByTestId("identity-tenant").textContent())!;
+  const invited=await ownerInvites(browser,[{email:recipient,role:"foreman"},{email:member,role:"finance"}]);
+  expect(invited.tenant).not.toBe(ownTenant);
+
+  // A brand-new user joins only the stored tenant, with the stored role.
+  const page=await recipientContext.newPage();await page.goto(`/sign-in?invitationId=${invited.ids[0]}`);
+  await enterCode(page,recipient);
+  await expect(page.getByText("Role: foreman",{exact:true})).toBeVisible();await expect(page.getByTestId("identity-tenant")).toHaveText(invited.tenant);
+  await page.reload();await expect(page.getByTestId("identity-tenant")).toHaveText(invited.tenant);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+
+  // The already signed-in user follows an invitation from another tenant: the page must still let them accept it. Email
+  // and code verification are unchanged, and the memberships are reloaded afterwards.
+  await memberPage.goto(`/sign-in?invitationId=${invited.ids[1]}`);
+  await expect(memberPage.getByRole("heading",{name:"Signed in",exact:true})).toBeVisible();
+  await expect(memberPage.getByTestId("identity-tenant")).toHaveText(ownTenant);
+  await expect(memberPage.getByLabel("Invitation reference")).toHaveValue(invited.ids[1]!);
+  await expect(memberPage.getByRole("note",{name:"Practice sandbox notice"})).toContainText("Practice sandbox — synthetic data; nothing is sent or charged");
+  await enterCode(memberPage,member);
+  await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(2);
+  await expect(memberPage.getByText("Role: owner",{exact:true})).toBeVisible();await expect(memberPage.getByText("Role: finance",{exact:true})).toBeVisible();
+  expect(await memberPage.getByTestId("identity-tenant").allTextContents()).toEqual(expect.arrayContaining([ownTenant,invited.tenant]));
+  await expect(memberPage.getByRole("button",{name:"Verify code"})).toHaveCount(0);
+  await memberPage.goto("/sign-in");await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(2);
+  expect(await memberPage.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+ } finally {await memberContext.close();await recipientContext.close();}
 });
