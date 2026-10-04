@@ -118,6 +118,21 @@ evidence tables retain the exact generated bank-evidence class written by the
 existing migration-owned recovery routine; a runtime insert cannot forge this
 exception. Reads remain available.
 
+Stored command results: 0050 also adds `app.watchdog_command_result`, keyed by
+`(tenant_id, command_id)` with the job, command type (`readiness.advance`,
+`things_to_check.evaluate`, `things_to_check.review`, `things_to_check.supersede`),
+a request hash covering the job id and input, and the exact result the command first
+returned. It is written in the same transaction as the command, for every success
+including a no-op, so a replay returns that stored result, and the same id can never
+be reused for a changed payload, another job or another command type (a concurrent
+reuse on another job loses on the primary key and reports `IDEMPOTENCY_CONFLICT`).
+Same-job commands are serialised by a per-job advisory lock taken after the live
+guard and before any audit append. The table is tenant-keyed, `FORCE`-RLS, owned by
+`jobguard_migration`, guarded by the same live-job insert trigger, and
+runtime SELECT/INSERT only. Rows written before it existed (a decision, review outcome
+or supersession with no stored result) still replay from their own tables on their own
+job; only new commands get a stored result. It adds no data to existing rows.
+
 The new foreign keys are validated by the migration owner (`jobguard_migration`:
 not a superuser, no BYPASSRLS, no tenant context), exactly as deployments and the
 e2e bootstrap apply it. Their tables FORCE row-level security, so that scan would

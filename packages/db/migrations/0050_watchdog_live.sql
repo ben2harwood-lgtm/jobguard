@@ -86,6 +86,27 @@ BEGIN
 END $$;
 ALTER FUNCTION app.guard_watchdog_input() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.guard_watchdog_input() FROM PUBLIC, jobguard_runtime, jobguard_infrastructure;
+
+-- A watchdog command that succeeds is stored once with its request hash and the exact result it first returned,
+-- including a successful no-op, so a replay returns that result, and the same id can never be reused for a
+-- changed payload, another job or another command type. Append-only for the runtime role.
+CREATE TABLE app.watchdog_command_result(
+  tenant_id uuid NOT NULL,
+  command_id uuid NOT NULL,
+  job_id uuid NOT NULL,
+  command_type text NOT NULL CHECK(command_type IN ('readiness.advance','things_to_check.evaluate','things_to_check.review','things_to_check.supersede')),
+  request_hash char(64) NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
+  result jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  PRIMARY KEY(tenant_id,command_id),
+  FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id));
+ALTER TABLE app.watchdog_command_result OWNER TO jobguard_migration;
+ALTER TABLE app.watchdog_command_result ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.watchdog_command_result FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON app.watchdog_command_result FOR ALL TO jobguard_runtime,jobguard_migration
+  USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid) WITH CHECK(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+GRANT SELECT,INSERT ON app.watchdog_command_result TO jobguard_runtime;
+REVOKE UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON app.watchdog_command_result FROM jobguard_runtime;
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.purchase_order_draft FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.purchase_order_revision FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.purchase_order_placement FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
@@ -112,6 +133,7 @@ CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.evidence_objec
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.evidence_link FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.synthetic_evidence_original FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.stage_completion FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
+CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.watchdog_command_result FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
 -- Finalisation mutates the pending upload before registering its immutable
 -- object. Keep that phase guarded too; cleanup/rejection remains possible.
 CREATE FUNCTION app.guard_watchdog_upload_update() RETURNS trigger

@@ -302,6 +302,7 @@ describe("migration and privilege catalog", () => {
       { relname: "variation_rate_observation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "variation_rejection", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "variation_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "watchdog_command_result", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
     ]);
   });
 
@@ -452,6 +453,7 @@ describe("migration and privilege catalog", () => {
       { relname: "variation_rate_observation", owner: "jobguard_migration" },
       { relname: "variation_rejection", owner: "jobguard_migration" },
       { relname: "variation_revision", owner: "jobguard_migration" },
+      { relname: "watchdog_command_result", owner: "jobguard_migration" },
     ]);
   });
 });
