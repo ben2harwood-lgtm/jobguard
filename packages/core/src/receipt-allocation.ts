@@ -9,10 +9,11 @@ const amount = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
  * Timestamps this contract reads: an RFC 3339 date-time, seconds optional, any number of fractional digits, and a UTC
  * offset of `Z` or +/-hh:mm (colon optional) with hours 00-23 and minutes 00-59. The schema's own datetime check
  * validates the calendar date and clock time but not the offset's range, so the offset is validated here, once, by the
- * same expression that reads it.
+ * same expression that reads it. `instantV1` is the one schema for every timestamp in the shared money and origin
+ * contracts (receipt allocation and `extra-origin.v1` provenance), so no field can accept an offset the reader rejects.
  */
 const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)$/u;
-const instant = z.string().datetime({ offset: true }).refine(value => INSTANT.test(value), "Invalid UTC offset");
+export const instantV1 = z.string().datetime({ offset: true }).refine(value => INSTANT.test(value), "Invalid UTC offset");
 const INTEGER_TEXT = /^-?\d+$/u;
 const isComparable = (line: { outstandingGross: { numerator: string; denominator: string }; grossPence: number }) =>
   typeof line.outstandingGross?.numerator === "string" && INTEGER_TEXT.test(line.outstandingGross.numerator) &&
@@ -20,12 +21,12 @@ const isComparable = (line: { outstandingGross: { numerator: string; denominator
   Number.isSafeInteger(line.grossPence);
 export const receiptAllocationV1 = z.object({
   version: z.literal("receipt-allocation.v1"), sourceRef: z.string().min(1).max(300),
-  receiptGross: exactPenceInputV1, effectiveAt: instant, direction: z.enum(["receipt", "reversal"]),
+  receiptGross: exactPenceInputV1, effectiveAt: instantV1, direction: z.enum(["receipt", "reversal"]),
   invoiceId: z.string().min(1).max(200),
   separateInvoiceId: z.string().min(1).max(200).nullable(),
   explicit: z.array(z.object({ lineId: z.string().min(1).max(200), gross: exactPenceInputV1 }).strict()).max(MAX_ALLOCATION_LINES).nullable(),
   lines: z.array(z.object({ id: z.string().min(1).max(200), invoiceId: z.string().min(1).max(200),
-    existedAt: instant, outstandingGross: exactPenceInputV1,
+    existedAt: instantV1, outstandingGross: exactPenceInputV1,
     netPence: amount, grossPence: amount.refine(v => v > 0),
   }).strict().refine(v => v.netPence <= v.grossPence, "Net cannot exceed gross")
     // Exact comparison: balance numerator / denominator <= gross. A negative balance passes here and is rejected by the

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { instantV1 } from "./receipt-allocation.js";
 export const jobTrackV1 = z.enum(["small_builder", "contractor"]);
 export const smallBuilderOriginV1 = z.enum(["builder_logged", "final_review", "jobguard_catch"]);
 export const contractorOriginV1 = z.enum(["site_user", "jobguard_surfaced_confirmed", "office_entry", "client_instruction"]);
@@ -11,6 +12,6 @@ export type VariationOrigin = z.infer<typeof variationOriginV1>;
 export const extraOriginV1 = z.object({
   version: z.literal("extra-origin.v1"), tenantId: z.string().uuid(), jobId: z.string().uuid(), variationId: z.string().uuid(),
   origin: variationOriginV1, commandId: z.string().uuid(), raisingMembershipId: z.string().uuid(), raisingRole: z.string().min(1).max(40),
-  serverRecordedAt: z.string().datetime({ offset: true }), deviceId: z.string().min(1).max(200).nullable(),
-  deviceCapturedAt: z.string().datetime({ offset: true }).nullable(), evidenceHash: z.string().regex(/^[a-f0-9]{64}$/u).nullable(),
+  serverRecordedAt: instantV1, deviceId: z.string().min(1).max(200).nullable(),
+  deviceCapturedAt: instantV1.nullable(), evidenceHash: z.string().regex(/^[a-f0-9]{64}$/u).nullable(),
 }).strict();
