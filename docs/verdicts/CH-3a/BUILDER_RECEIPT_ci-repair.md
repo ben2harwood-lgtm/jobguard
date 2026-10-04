@@ -165,3 +165,67 @@ The original case (save after scope confirmation or a quote save) stays green: t
 ## For the integrator
 
 #97 (0050), #98 (0051) and #100 (0054) each set the UIWIRE-12 migration count to 43 and #98's range check ends at `0051_job_parties.sql`. After the first of them merges the others need the count bumped (and the range updated) when they merge main. Any new embedded-Postgres cluster that creates jobs or sites must pass `--encoding=UTF8` (see `packages/db/MIGRATIONS.md`).
+
+---
+
+# Round 3 — repairs after the Sol check on `3576f9f`
+
+- **Repair builder:** Claude Sonnet 5.5, 4 October 2026. Same status: **not independently verified, not accepted.** A builder receipt, not a verdict.
+- **Input:** GPT-6.1 Sol high `REPAIR` at `/Users/benharwood/.local/share/full-steam/jg-runs/ch-3a-solcheck-20261004T042250.md`.
+- **Code head tested:** `f239ae7` (the receipt commit is docs-only on top). `origin/main` moved to `29826ee` (M4-3-S-R, migration 0042) during the round, so PR #98 became CONFLICTING; I merged it in (non-force) and resolved six conflicts (below).
+
+## Finding status
+
+| # | Priority | Finding | Status | Commit |
+|---|---|---|---|---|
+| 1 | P1 | The lifecycle-event refresh advanced the view the save-time check compared against while the draft kept old text, so a stale customer overwrite got through | **Fixed** | `c3e213d` |
+| 2 | P2 | The stale-binding refusal for quote send ran in a transaction that ended before dispatch; the send mutation did not recheck the binding | **Fixed** | `26422f9` |
+| 3 | P2 | Adoption: any processing receipt for tenant and actor satisfied the checks (receipt not bound to the job or authorization), and a direct call committed without completing the receipt or appending audit | **Fixed** | `2a4e7b9` |
+
+OPEN FOR BEN: none. All three are technical repairs inside the existing contract.
+
+## What changed
+
+1. **Baseline (P1).** `job-parties.tsx` now keeps a `baseline`: what the draft was edited against. It is set at first load, after a save, after a stale draft is reloaded, and when the user picks a customer, payer or site (those copy the values being shown, so the baseline records exactly those revisions). Background refreshes update only what is displayed, never the baseline. A refresh that finds the binding or a referenced customer, payer or site revision changed reloads the draft at once with the conflict message; a save is checked against the same baseline before anything is written. A phase change (job went live) alone is not advanced by a refresh either, so the first save is refused and explained.
+2. **Quote send (P2).** `IssueQuoteMutation` takes the job lock first (`require_current_job_parties`, `FOR SHARE`, which `bind_job_parties`' `FOR UPDATE` waits on) and compares the binding the document froze with the current one before creating any send effect. A mismatch raises `QUOTE_CHANGED`; the dispatcher transaction rolls back the receipt, decision and authorization with it. The earlier pre-check stays as a fast refusal.
+3. **Adoption (P2).** The receipt must be the adoption's own (`semantic_key = import:<job>`). A deferred constraint trigger on `app.imported_job_baseline` makes the record mandatory at commit: a succeeded adoption receipt for that job and actor; a `command.succeeded` audit event naming that receipt and an authorization bound to the same job, actor, baseline hash, amount and terms; and the adoption's own `job.imported_baseline_attested` event. Otherwise the whole transaction fails with `ADOPTION_RECORD_REQUIRED` (SQLSTATE 23514). The dispatcher path already did all of this before commit and is unchanged. I did not reimplement the audit hash chain in SQL; a direct caller must use the same audit append the dispatcher uses.
+
+## Tests first (red at `3576f9f`, green after)
+
+| Test | Red at `3576f9f` |
+|---|---|
+| Browser (both projects): another writer revises the customer, the app's own `job-lifecycle-changed` event fires, the stale draft must be refused and reloaded and no new customer revision written | failed in both projects: no conflict shown, the stale draft stayed |
+| PostgreSQL race (`quote.integration.test.ts`): one session holds `bind_job_parties`' job lock, the send starts in another and is waited on until it is blocked on a lock, then the binding change commits: the send must fail with `QUOTE_CHANGED` and leave no quote-send, outbox, receipt or decision row; a plain later send of that document is refused the same way | the send resolved |
+| Runtime SQL (`job-parties.integration.test.ts`): a receipt for job A with job B's valid authorization in a call targeting B (and the reverse); direct executions with no audit and no receipt completion, audit without completion, completion without audit, audit naming a different authorization (all must fail at commit and leave no job); a direct execution that completes everything commits, with the receipt succeeded and both audit events present | the pairing resolved and the no-record executions committed |
+
+The two-writers-on-one-revision test and the new refresh test were repeated 6 times in each project: 24 of 24 passed.
+
+## Merge with main
+
+`29826ee` added migration 0042 and two new evidence-pack suites. Conflicts resolved: `config/agent-lane-assignments.json` (main's registry plus this branch's `ch-3a` lane), `packages/db/src/migrate.ts` (0042 then 0051), `apps/api/src/workspace/application.ts` (main's evidence-pack methods plus this branch's `parties`), `packages/db/MIGRATIONS.md` (both sections), and the migration counts in `UIWIRE-12` and `demo-bootstrap`, now **44** (this branch on top of current main; the range check ends at `0051_job_parties.sql`). Main's two new evidence-pack suites needed what every earlier suite got: `installLegacySyntheticPartyFixtures` after `migrate` and `--encoding=UTF8`; both files are registered in the lane. No assertion, skip, timeout or retry was changed.
+
+## Commands at `f239ae7` (database and browser commands inside `heavy-slot ch-3a`)
+
+| Command | Exit | Result |
+|---|---:|---|
+| `pnpm typecheck --force` | 0 | 7 of 7 |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7 of 7 |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | passed |
+| `pnpm openapi:check` | 0 | matches |
+| `pnpm build` | 0 | 7 of 7 |
+| `pnpm test --force` | 0 | tools 39; core 436; storage 4; config 2; ai 72; api 101; web 56; db 194 (39 files) |
+| `pnpm test:db` | 0 | 39 files, 194 tests |
+| `pnpm test:migrations` | 0 | 11 tests |
+| Whole e2e suite, both projects, local browser, `CI=1` | 0 | 180 passed |
+
+**Flake, stated plainly.** Twice earlier this round `pnpm test:db` exited 1 with `practice-finding-scope.integration.test.ts` reporting "Connection terminated unexpectedly" on its first `migrate` query, both times in a script where `test:db` started straight after `pnpm test --force` had finished the same suite on this busy shared Mac. Reruns passed. The final runs above ran `test:db` first in a fresh slot. No timeout, wait or retry was added. The UIWIRE-1 flake noted in round 2 did not recur in the four full browser runs this round (176, 178, 180, 180 passed).
+
+## Environment
+
+Leaked SysV shared-memory segments again exhausted macOS's 32 segment ids between runs; before each heavy run I removed only segments with nothing attached and a dead creator pid (checked against the creator column this time). Browser runs again used the uncommitted local `chromium_headless_shell-1234` config; GitHub CI uses the pinned browser.
+
+## Notes for the checker
+
+1. The adoption check at commit is a deferred constraint trigger: it can be tightened to immediate by a caller, never skipped.
+2. After a refresh-triggered reload the draft shows the other writer's details and the conflict message; a plain save then binds to those revisions without writing a customer revision.
+3. Migration count assertions are now 44 for this branch on top of `29826ee`; the integrator re-adjusts if other numbered migrations merge first.
