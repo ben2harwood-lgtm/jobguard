@@ -130,4 +130,3 @@ Size and time (measured on this Mac with `tsx`, distinct 11-digit line amounts, 
 
 Not run locally: the browser suite (this round changes only `packages/core` arithmetic and its contract text, and no web code calls these functions yet; GitHub CI runs the full suite).
 Still not independently verified, not accepted.
-
