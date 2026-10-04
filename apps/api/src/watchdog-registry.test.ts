@@ -72,26 +72,67 @@ function literalPaths(argument: ts.Expression | undefined, where: string): strin
   }
   throw new Error(`${where}: route path is not a literal, so it cannot be classified`);
 }
-const decoratorCall = (node: ts.Node, names: readonly string[]) => (ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : []).flatMap(decorator => {
-  const call = decorator.expression;
-  if (!ts.isCallExpression(call)) return [];
-  const callee = ts.isPropertyAccessExpression(call.expression) ? call.expression.name.text : ts.isIdentifier(call.expression) ? call.expression.text : "";
-  return names.includes(callee) ? [{ name: callee, argument: call.arguments[0] }] : [];
-});
-/** Nest mutation routes in any class with a @Controller decorator, whatever the file is called. */
+/** Where a decorator name really comes from: a named, renamed, namespace or one-hop-rebound import. */
+type Ref = { module: string | null; name: string };
+function importedRefs(tree: ts.SourceFile): { imports: Map<string, Ref>; consts: Map<string, ts.Expression> } {
+  const imports = new Map<string, Ref>(), consts = new Map<string, ts.Expression>();
+  for (const statement of tree.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && statement.importClause) {
+      const module = statement.moduleSpecifier.text, clause = statement.importClause;
+      if (clause.name) imports.set(clause.name.text, { module, name: "default" });
+      if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) imports.set(clause.namedBindings.name.text, { module, name: "*" });
+      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) for (const element of clause.namedBindings.elements) imports.set(element.name.text, { module, name: (element.propertyName ?? element.name).text });
+    }
+    if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) if (ts.isIdentifier(declaration.name) && declaration.initializer) consts.set(declaration.name.text, declaration.initializer);
+  }
+  return { imports, consts };
+}
+function resolveRef(node: ts.Expression, tables: ReturnType<typeof importedRefs>, depth = 0): Ref | null {
+  if (depth > 8) return null;
+  if (ts.isIdentifier(node)) {
+    const imported = tables.imports.get(node.text);
+    if (imported) return imported;
+    const bound = tables.consts.get(node.text);
+    if (bound && (ts.isIdentifier(bound) || ts.isPropertyAccessExpression(bound))) return resolveRef(bound, tables, depth + 1);
+    return { module: null, name: node.text };
+  }
+  if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+    const namespace = resolveRef(node.expression, tables, depth + 1);
+    return namespace?.name === "*" ? { module: namespace.module, name: node.name.text } : { module: null, name: node.getText() };
+  }
+  return null;
+}
+type Resolved = { kind: "controller" | "verb" | "other"; verb?: string | undefined; argument?: ts.Expression | undefined };
+/** Resolve a class or method decorator by its import. Only @nestjs packages are trusted; anything else (a local or
+ * imported wrapper, a computed decorator) could hide a route, so it fails closed instead of being skipped. */
+function resolveDecorator(file: string, decorator: ts.Decorator, tables: ReturnType<typeof importedRefs>): Resolved {
+  const call = ts.isCallExpression(decorator.expression) ? decorator.expression : undefined;
+  const callee = call ? call.expression : decorator.expression;
+  const ref = resolveRef(callee, tables);
+  if (!ref || ref.module === null || !ref.module.startsWith("@nestjs/")) throw new Error(`${file}: cannot tell whether @${callee.getText()} declares a route; use the @nestjs/common decorators directly`);
+  if (ref.module !== "@nestjs/common") return { kind: "other" };
+  if (ref.name === "Controller") return { kind: "controller", argument: call?.arguments[0] };
+  if (NEST_VERBS[ref.name]) return { kind: "verb", verb: NEST_VERBS[ref.name]!, argument: call?.arguments[0] };
+  return { kind: "other" };
+}
+const decoratorsOf = (node: ts.Node) => ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : [];
+/** Nest mutation routes in any class whose decorators resolve to @nestjs/common's Controller, whatever the file is called. */
 function nestKeys(file: string, text: string): string[] {
   const keys: string[] = [];
+  const tree = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true), tables = importedRefs(tree);
   const visit = (node: ts.Node) => {
     if (ts.isClassDeclaration(node)) {
-      const controller = decoratorCall(node, ["Controller"])[0];
+      const controller = decoratorsOf(node).map(decorator => resolveDecorator(file, decorator, tables)).find(resolved => resolved.kind === "controller");
       if (controller) {
         const prefixes = literalPaths(controller.argument, `${file} @Controller`);
         for (const member of node.members) {
           if (!ts.isMethodDeclaration(member)) continue;
-          for (const handler of decoratorCall(member, Object.keys(NEST_VERBS))) {
-            for (const prefix of prefixes) for (const sub of literalPaths(handler.argument, `${file} @${handler.name}`)) {
+          for (const decorator of decoratorsOf(member)) {
+            const resolved = resolveDecorator(file, decorator, tables);
+            if (resolved.kind !== "verb") continue;
+            for (const prefix of prefixes) for (const sub of literalPaths(resolved.argument, `${file} @${resolved.verb}`)) {
               const route = "/" + [prefix, sub].filter(Boolean).join("/").replace(/^\/+/u, "");
-              keys.push(`nest:${NEST_VERBS[handler.name] === "POST" ? "" : `${NEST_VERBS[handler.name]} `}${route}`);
+              keys.push(`nest:${resolved.verb === "POST" ? "" : `${resolved.verb} `}${route}`);
             }
           }
         }
@@ -99,7 +140,7 @@ function nestKeys(file: string, text: string): string[] {
     }
     ts.forEachChild(node, visit);
   };
-  visit(ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true));
+  visit(tree);
   return keys;
 }
 const inJobScope = (key: string) => { const route = key.replace(/^nest:(?:[A-Z]+ )?/u, ""); return route.includes("jobs") || route.startsWith("/decisions") || route.startsWith("/recovery-cases"); };
@@ -141,16 +182,39 @@ describe("CH-2 command coverage and lock order", () => {
     expect(() => assertClassified(routeKeys(files), { ...registry, "PATCH /api/jobs/[id]/site-note": "watchdog_live_only" })).not.toThrow();
   });
   it("discovers every Nest mutation decorator in any controller file, so an unclassified one fails", () => {
-    const keys = (source: string) => nestKeys("x.ts", source).sort();
+    const NEST = 'import { Controller, Get, Post, Put, Patch, Delete, All } from "@nestjs/common"; ';
+    const keys = (source: string) => nestKeys("x.ts", NEST + source).sort();
     expect(keys('@Controller("jobs/:id/a") class A { @Patch("b") p() {} @Put() u() {} @Delete(":x") d() {} @Get("g") g() {} @Post("c") c() {} @All("z") z() {} }'))
       .toEqual(["nest:/jobs/:id/a/c", "nest:ALL /jobs/:id/a/z", "nest:DELETE /jobs/:id/a/:x", "nest:PATCH /jobs/:id/a/b", "nest:PUT /jobs/:id/a"]);
     expect(keys('@Controller({ path: "jobs" }) export class B { @Put(["m", "n"]) u() {} }')).toEqual(["nest:PUT /jobs/m", "nest:PUT /jobs/n"]);
     expect(keys('@Controller() class C { @Patch("jobs/:id/q") p() {} }')).toEqual(["nest:PATCH /jobs/:id/q"]);
     expect(keys('class NotAController { @Patch("jobs/:id/q") p() {} }')).toEqual([]);
-    expect(() => nestKeys("x.ts", "const P = 'jobs'; @Controller(P) class D { @Post() p() {} }")).toThrow(/not a literal/u);
-    expect(() => nestKeys("x.ts", '@Controller("jobs") class E { @Patch(`${id}`) p() {} }')).toThrow(/not a literal/u);
+    expect(() => nestKeys("x.ts", NEST + "const P = 'jobs'; @Controller(P) class D { @Post() p() {} }")).toThrow(/not a literal/u);
+    expect(() => nestKeys("x.ts", NEST + '@Controller("jobs") class E { @Patch(`${id}`) p() {} }')).toThrow(/not a literal/u);
     const registry: Readonly<Record<string, string>> = { "nest:/jobs/:id/a": "watchdog_live_only" };
     expect(() => assertClassified(keys('@Controller("jobs/:id") class F { @Patch("a") p() {} }'), registry)).toThrow("nest:PATCH /jobs/:id/a");
+  });
+  it("resolves aliased, namespaced and re-bound Nest decorators, and refuses ones it cannot resolve", () => {
+    const keys = (source: string) => nestKeys("x.ts", source).sort();
+    const registry: Readonly<Record<string, string>> = { "nest:/jobs/:id/a": "watchdog_live_only" };
+    // Renamed imports.
+    expect(keys('import { Controller as Route, Patch as EditSiteFact, Post as Create } from "@nestjs/common"; @Route("jobs/:id/site") class A { @EditSiteFact("fact") e() {} @Create("note") c() {} }'))
+      .toEqual(["nest:/jobs/:id/site/note", "nest:PATCH /jobs/:id/site/fact"]);
+    expect(() => assertClassified(keys('import { Controller, Patch as EditSiteFact } from "@nestjs/common"; @Controller("jobs/:id") class B { @EditSiteFact("a") e() {} }'), registry)).toThrow("nest:PATCH /jobs/:id/a");
+    // Namespace import, aliased namespace, and a local const alias (one or more hops).
+    expect(keys('import * as Nest from "@nestjs/common"; @Nest.Controller("jobs/:id/n") class C { @Nest.Delete(":x") d() {} @Nest.Get("g") g() {} }')).toEqual(["nest:DELETE /jobs/:id/n/:x"]);
+    expect(keys('import { Controller, Put } from "@nestjs/common"; const Replace = Put; const Swap = Replace; @Controller("jobs/:id/r") class D { @Swap("z") s() {} }')).toEqual(["nest:PUT /jobs/:id/r/z"]);
+    // Non-HTTP decorators from Nest packages are ignored; a Get alias is not a mutation.
+    expect(keys('import { Controller, Get as Read } from "@nestjs/common"; import { ApiOperation as Doc } from "@nestjs/swagger"; @Controller("jobs/:id/g") class E { @Read("r") @Doc({ summary: "x" }) r() {} }')).toEqual([]);
+    // A name that merely looks like a verb but comes from elsewhere is not trusted either way: it fails closed.
+    expect(() => nestKeys("x.ts", 'import { Controller } from "@nestjs/common"; import { Patch } from "./my-routing"; @Controller("jobs/:id") class F { @Patch("a") p() {} }')).toThrow(/cannot tell whether/u);
+    // Custom wrapper decorators, locally declared or imported, and computed decorators, fail closed on a controller.
+    expect(() => nestKeys("x.ts", 'import { Controller } from "@nestjs/common"; import { SiteWrite } from "./wrappers"; @Controller("jobs/:id") class G { @SiteWrite("a") w() {} }')).toThrow(/cannot tell whether/u);
+    expect(() => nestKeys("x.ts", 'import { Controller, Patch } from "@nestjs/common"; const Local = () => Patch("a"); @Controller("jobs/:id") class H { @Local() w() {} }')).toThrow(/cannot tell whether/u);
+    expect(() => nestKeys("x.ts", 'import { Controller, Patch, Post } from "@nestjs/common"; @Controller("jobs/:id") class I { @(flag ? Patch : Post)("a") w() {} }')).toThrow(/cannot tell whether/u);
+    expect(() => nestKeys("x.ts", 'import { Controller } from "@nestjs/common"; import { Route } from "./wrappers"; @Route("jobs/:id") class J { @Patch("a") p() {} }')).toThrow(/cannot tell whether/u);
+    // A decorator imported from a Nest package we do not know cannot be an HTTP verb unless it is one we resolve.
+    expect(keys('import { Controller } from "@nestjs/common"; import { Cron } from "@nestjs/schedule"; @Controller("jobs/:id/c") class K { @Cron("* * * * *") tick() {} }')).toEqual([]);
   });
   it("classifies standalone job mutations and dispatcher command literals too", async () => {
     const files = new Map([...await readTree(new URL("apps/api/src/", root), name => name.endsWith(".ts") && !name.endsWith(".test.ts")), ...await readTree(new URL("packages/db/src/", root), name => name.endsWith(".ts") && !name.endsWith(".test.ts"))]);
