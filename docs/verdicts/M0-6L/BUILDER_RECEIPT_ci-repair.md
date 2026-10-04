@@ -119,4 +119,51 @@ are also collected there; the clean clone has none.)
   integrator re-adjusts when merging.
 * `config/agent-lane-assignments.json` and `apps/api/openapi.json` are shared registration files; both merged cleanly.
 
+---
+
+# Round 2: Sol check on `18b38fa` (REPAIR, three P2 findings)
+
+Specification: `/Users/benharwood/.local/share/full-steam/jg-runs/m0-6l-solcheck-20261004T084937.md` (VERDICT: REPAIR, HEAD
+`18b38fa`). Tests first for each finding (red for the stated reason, then fixed). Findings 1 and 2 are also the two
+open Codex review threads on the PR. Migration number unchanged (**0052**; unapplied anywhere, so edited in place).
+`origin/main` had not moved past `b717020` (#102, already merged here) when I started or when I pushed, and the PR was
+`MERGEABLE/CLEAN`, so no third merge was needed.
+
+| # | Sol finding | Red evidence (before the fix) | Fix | Green evidence | Commit |
+|---|---|---|---|---|---|
+| 1 | P2: a signed-in user cannot accept an invitation through the UI (the page showed only the account panel whenever a session existed) | `M0-6L.spec.ts` extended: a signed-in user (own tenant) follows another tenant's invitation link. Failed in both projects: `getByLabel("Invitation reference")` not found | `sign-in.tsx`: with an invitation reference in the URL the page shows the current account panel plus an "Accept an invitation" section (reference prefilled, purpose fixed). Email and code verification unchanged. On success the memberships are reloaded, the used reference is removed from the address bar and the form closes. | Same spec, both projects: the user ends with two memberships (owner of their own tenant, finance in the inviter's), shown after a reload, no horizontal overflow, sandbox notice present. The new-user invitation path in the same test is unchanged and passes. | `a1fd611` |
+| 2 | P2: a revoked or expired member cannot accept a fresh invitation (the locator survives revocation and `provision_verified_challenge` refused on its mere existence) | 3 new PostgreSQL tests failed: revoked and expired re-invitation (`INVALID_CODE`), and concurrent verification (0 successes instead of 1); 8 others passed | `0052_persisted_identity.sql`: under row locks on the locator and its membership, only a currently ACTIVE membership refuses (invitation left unused). For a revoked or expired one the function inserts a new invitation-bound membership and repoints the locator in the same transaction; the old membership row is untouched history. `MIGRATIONS.md` and the operations note updated. | `identity.integration.test.ts` 11/11: revoked and expired re-invitation (new membership id, role from the new invitation, old row kept, one locator, invitation accepted); an active member is still refused and the invitation stays unused; three concurrent verifications of one fresh invitation create exactly one replacement membership. | `6d49c68` |
+| 3 | P2: the sole-constructor test scanned only `apps/api/src/auth` and three web files | Sol's recursive scratch test found the retained callers; the old test could not see them | New `apps/api/src/auth/context-boundary.test.ts`: parses every application source file with the TypeScript parser (apps/api/src, apps/web/app, each package's src and tools; tests and generated output excluded) and fails on any `verifiedTenantContextFromMembership` call, alias or element-access use, cast to `VerifiedTenantContext` (any spelling that names the type), or `effective_tenant_id`/`effectiveTenantId` identifier outside five explicit categories, each with its own tested rule: **bridge** (exactly one call, fed by `asAuthenticatedMembership`), **definition** (`tenant-context.ts`, one frozen `{ tenantId }` cast), **worker** (one cast of a strictly validated queue payload), **retained synthetic sandbox** (API and db source only; every call and cast fed only fixed `DEMO_*` tenant and membership constants; a client tenant may be read only to refuse anything but the DEMO tenant; no header, cookie or bridge reference), **rehearsal** (`synthetic-restore.mjs`, refuses any non-synthetic mode). | 3 tests: the real tree passes; planting one extra caller anywhere (api, web, core, auth) fails; a double cast, `import()` and wrapped casts, an alias, a second bridge constructor, a second worker cast, an unstrict worker payload, and a request-fed synthetic call all fail; the retained synthetic shape passes. | `edc7e05`, `f1eb5fe` |
+
+Two things found while doing round 2, both fixed without touching a timeout:
+
+* The shared identity request bucket is 10 requests per 10 minutes across the whole browser run and a code can be
+  re-requested for the same email and purpose only after 60 s. My first signed-in test reused an email within 60 s (the
+  hidden `textContent()` wait ran into the 30 s test limit). The spec now spends 5 requests per project (10 total, the
+  budget exactly), never repeats an email and purpose, and the signed-in user signs up first and is then invited. The
+  spec comment records this budget so the next test author sees it.
+* The first clean-clone run of the new boundary test exceeded vitest's 5 s default on a loaded machine. The scan now parses
+  only files that can matter, reads in parallel and memoizes parses: 2.5 s down to 0.3 s locally. The default timeout is untouched.
+
+**C7 substitute:** the coordinator's note says Ben's C7 substitute applies to all JobGuard tasks. I do not have its text,
+so I changed nothing for it; the new browser assertions keep the sandbox notice and no-overflow checks.
+
+## Round-2 commands (merged head, database and browser steps inside `heavy-slot m0-6l`)
+
+| Command | Exit | Count / result |
+|---|---:|---|
+| `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm build` | 0 | 7/7 each |
+| `LANE_BASE_REF=origin/main pnpm lint`, `pnpm lint:lanes` | 0 | lane `m0-6l`, every changed file declared |
+| `pnpm test` | 0 | tools 39; core 432; config 2; storage 4; AI 72; API 116 (17 files); web 63; db 194 (39 files) |
+| `pnpm test:db` | 0 | 39 files, 194 tests (11 identity tests incl. 4 new) |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| `pnpm openapi:check` | 0 | matches |
+| `CI=1 playwright test --project=mobile-360 --project=desktop M0-6L.spec.ts` | 0 | 4 passed (red run before the UI fix: 2 failed, the two invitation tests) |
+| Full browser suite, both projects, production build, uncommitted browser-path config as before | 0 | 170 passed (85 specs x 2), 4.8 min |
+| Clean clone at `f1eb5fe` (earlier build leftovers present), `pnpm turbo run test --filter=@jobguard/db --filter=@jobguard/api`, no new build | 0 | API 116 (17 files), db 194 (39 files). The run before the speed fix failed 1 API test (5 s default timeout) and is recorded above. |
+
+Not run: GitHub-only checks (dependency-review, gitleaks) and the pinned browser, as before; CI on the pushed head is the
+proof. Not reviewed by me: whether Sol's remaining judgement on the retained synthetic callers (existing, merged code) is
+satisfied by a confinement test rather than a refactor; that is for the checker.
+
 Not independently verified, not accepted.
