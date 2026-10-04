@@ -8,7 +8,15 @@ const context = () => verifiedTenantContextFromMembership(membership as Paramete
 export class RecoveryCaseApplication {
  private repo;
  constructor(private readonly pool: Pool) { this.repo = new RecoveryCaseRepository(pool); }
+ // M4-1-S-R repair 10: a read is authorized exactly like a write. The persisted membership and the job are verified through the existing
+ // readSyntheticDemoJob boundary before any case is listed, so revocation or expiry stops reads as well as commands, and a job outside the
+ // tenant is indistinguishable from a missing one.
  async list(jobId: string) {
+  await readSyntheticDemoJob(this.pool, jobId);
+  return this.view(jobId);
+ }
+ // The refreshed list returned after a write that has just verified the membership inside its own transaction; it is never a way in for a read.
+ private async view(jobId: string) {
   return { version: "recovery-case-workbench.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, cases: await this.repo.list(context(), jobId) };
  }
  async command(jobId: string, raw: unknown) {
@@ -16,7 +24,7 @@ export class RecoveryCaseApplication {
   // the repository rechecks the membership inside its own write transaction (revocation cannot race the write).
   await readSyntheticDemoJob(this.pool, jobId);
   await this.repo.command(context(), jobId, recoveryCaseCommandV1.parse(raw), { membershipId: membership.membershipId, identityUserId: membership.identityUserId });
-  return this.list(jobId);
+  return this.view(jobId);
  }
  async eligibility(jobId: string, raw: unknown, sessionId: string | undefined) {
   if (!sessionId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(sessionId)) throw new Error("UNAUTHENTICATED");
@@ -26,6 +34,6 @@ export class RecoveryCaseApplication {
   await this.repo.eligibilityCommand(context(), jobId, recoveryEligibilityCommandV1.parse(raw), {
    membershipId: membership.membershipId, identityUserId: membership.identityUserId,
   });
-  return this.list(jobId);
+  return this.view(jobId);
  }
 }
