@@ -67,8 +67,20 @@ function literalPaths(argument: ts.Expression | undefined, where: string): strin
   if (ts.isStringLiteralLike(argument)) return [argument.text];
   if (ts.isArrayLiteralExpression(argument)) return argument.elements.flatMap(element => literalPaths(element, where));
   if (ts.isObjectLiteralExpression(argument)) {
-    const path = argument.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && p.name.getText() === "path");
-    return literalPaths(path?.initializer, where);
+    // Nest reads `path` from the options object. Anything that could hide or override it is refused, never treated as "no path".
+    let path: ts.Expression | undefined, seen = 0;
+    for (const property of argument.properties) {
+      if (ts.isSpreadAssignment(property)) throw new Error(`${where}: a spread in the options cannot be read, so the route prefix cannot be classified`);
+      if (ts.isShorthandPropertyAssignment(property)) { if (property.name.text === "path") throw new Error(`${where}: a shorthand path cannot be read, so the route prefix cannot be classified`); continue; }
+      const name = property.name;
+      if (ts.isComputedPropertyName(name)) throw new Error(`${where}: a computed option key cannot be read, so the route prefix cannot be classified`);
+      const text = ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name) ? name.text : name.getText();
+      if (text !== "path") continue;
+      if (++seen > 1) throw new Error(`${where}: path is set more than once and cannot be read, so the route prefix cannot be classified`);
+      if (!ts.isPropertyAssignment(property)) throw new Error(`${where}: path is not a plain property and cannot be read`);
+      path = property.initializer;
+    }
+    return literalPaths(path, where);
   }
   throw new Error(`${where}: route path is not a literal, so it cannot be classified`);
 }
@@ -206,6 +218,17 @@ describe("CH-2 command coverage and lock order", () => {
     expect(keys('import { Controller, Put } from "@nestjs/common"; const Replace = Put; const Swap = Replace; @Controller("jobs/:id/r") class D { @Swap("z") s() {} }')).toEqual(["nest:PUT /jobs/:id/r/z"]);
     // Non-HTTP decorators from Nest packages are ignored; a Get alias is not a mutation.
     expect(keys('import { Controller, Get as Read } from "@nestjs/common"; import { ApiOperation as Doc } from "@nestjs/swagger"; @Controller("jobs/:id/g") class E { @Read("r") @Doc({ summary: "x" }) r() {} }')).toEqual([]);
+    // @Controller({...}): a quoted "path" key is the same key; spreads, computed keys, shorthand and duplicate paths cannot be read, so they fail closed.
+    const NESTED = 'import { Controller, Post } from "@nestjs/common"; ';
+    expect(keys(NESTED + '@Controller({ "path": "jobs/:id/new-fact" }) class L { @Post() p() {} }')).toEqual(["nest:/jobs/:id/new-fact"]);
+    expect(keys(NESTED + "@Controller({ 'path': ['jobs/a', 'jobs/b'], version: '1' }) class M { @Post('x') p() {} }")).toEqual(["nest:/jobs/a/x", "nest:/jobs/b/x"]);
+    expect(keys(NESTED + '@Controller({ version: "1" }) class N { @Post("jobs/:id/y") p() {} }')).toEqual(["nest:/jobs/:id/y"]);
+    expect(() => assertClassified(keys(NESTED + '@Controller({ "path": "jobs/:id/new-fact" }) class O { @Post() p() {} }'), registry)).toThrow("nest:/jobs/:id/new-fact");
+    for (const [label, controller] of [
+      ["spread", '{ ...options }'], ["spread after path", '{ path: "jobs/:id/a", ...options }'], ["computed key", '{ ["path"]: "jobs/:id/a" }'],
+      ["computed identifier key", '{ [key]: "jobs/:id/a" }'], ["shorthand path", '{ path }'], ["duplicate path", '{ path: "jobs/:id/a", "path": "jobs/:id/b" }'],
+      ["template path with substitution", '{ path: `jobs/${id}` }'], ["non-literal path", '{ path: base }'],
+    ] as const) expect(() => nestKeys("x.ts", NESTED + `@Controller(${controller}) class P { @Post() p() {} }`), label).toThrow(/cannot be read|not a literal/u);
     // A name that merely looks like a verb but comes from elsewhere is not trusted either way: it fails closed.
     expect(() => nestKeys("x.ts", 'import { Controller } from "@nestjs/common"; import { Patch } from "./my-routing"; @Controller("jobs/:id") class F { @Patch("a") p() {} }')).toThrow(/cannot tell whether/u);
     // Custom wrapper decorators, locally declared or imported, and computed decorators, fail closed on a controller.
