@@ -99,7 +99,7 @@ export class SupplierMatchRepository {
         throw new Error("RECEIVED_QUANTITY_ALREADY_ALLOCATED");
       const replay = (
           await db.$client.query<any>(
-            `SELECT payload_hash,job_id FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2`,
+            `SELECT payload_hash,job_id,proposal_id,revision FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2`,
             [context.tenantId, input.commandId],
           )
         ).rows[0],
@@ -107,7 +107,8 @@ export class SupplierMatchRepository {
       if (replay) {
         if (replay.job_id !== jobId || replay.payload_hash !== payloadHash)
           throw new Error("IDEMPOTENCY_CONFLICT");
-        return this.viewIn(db.$client, context.tenantId, jobId);
+        // Its first result: the proposal and history as of the revision this command wrote, not the latest.
+        return this.viewIn(db.$client, context.tenantId, jobId, { proposalId: replay.proposal_id, revision: Number(replay.revision) });
       }
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [input.proposalId]);
       const proposal = (
@@ -269,18 +270,18 @@ export class SupplierMatchRepository {
     await storeCommandResult(db, { tenantId, commandId, jobId, kind, requestHash, result });
     return result;
   }
-  private async viewIn(db: any, tenantId: string, jobId: string) {
+  private async viewIn(db: any, tenantId: string, jobId: string, at?: { proposalId: string; revision: number }) {
     const row = (
       await db.query(
-        `SELECT p.*,r.id revision_id,r.revision,(SELECT quantity_decimal::text FROM app.purchase_order_revision o WHERE o.tenant_id=p.tenant_id AND o.id=p.order_revision_id) ordered,(SELECT quantity_decimal::text FROM app.supplier_fact_revision b WHERE b.tenant_id=p.tenant_id AND b.id=p.bill_revision_id) billed,COALESCE((SELECT sum(a.quantity_decimal)::text FROM app.supplier_match_allocation a WHERE a.tenant_id=p.tenant_id AND a.match_revision_id=r.id),'0') received FROM app.supplier_match_proposal p LEFT JOIN LATERAL(SELECT * FROM app.supplier_match_revision x WHERE x.tenant_id=p.tenant_id AND x.proposal_id=p.id ORDER BY x.revision DESC LIMIT 1)r ON true WHERE p.tenant_id=$1 AND p.job_id=$2 ORDER BY p.created_at DESC LIMIT 1`,
-        [tenantId, jobId],
+        `SELECT p.*,r.id revision_id,r.revision,(SELECT quantity_decimal::text FROM app.purchase_order_revision o WHERE o.tenant_id=p.tenant_id AND o.id=p.order_revision_id) ordered,(SELECT quantity_decimal::text FROM app.supplier_fact_revision b WHERE b.tenant_id=p.tenant_id AND b.id=p.bill_revision_id) billed,COALESCE((SELECT sum(a.quantity_decimal)::text FROM app.supplier_match_allocation a WHERE a.tenant_id=p.tenant_id AND a.match_revision_id=r.id),'0') received FROM app.supplier_match_proposal p LEFT JOIN LATERAL(SELECT * FROM app.supplier_match_revision x WHERE x.tenant_id=p.tenant_id AND x.proposal_id=p.id AND ($4::int IS NULL OR x.revision<=$4::int) ORDER BY x.revision DESC LIMIT 1)r ON true WHERE p.tenant_id=$1 AND p.job_id=$2 AND ($3::uuid IS NULL OR p.id=$3::uuid) ORDER BY p.created_at DESC LIMIT 1`,
+        [tenantId, jobId, at?.proposalId ?? null, at?.revision ?? null],
       )
     ).rows[0];
     if (!row) return { proposal: null, revision: 0, history: [] };
     const history = (
       await db.query(
-        `SELECT r.id,r.revision,r.order_revision_id,r.receipt_version_ids,r.bill_revision_id,r.payload_hash,e.sequence audit_sequence,r.invalidates_unresolved_findings FROM app.supplier_match_revision r JOIN app.audit_event e ON(e.tenant_id,e.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.proposal_id=$3 ORDER BY r.revision`,
-        [tenantId, jobId, row.id],
+        `SELECT r.id,r.revision,r.order_revision_id,r.receipt_version_ids,r.bill_revision_id,r.payload_hash,e.sequence audit_sequence,r.invalidates_unresolved_findings FROM app.supplier_match_revision r JOIN app.audit_event e ON(e.tenant_id,e.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.proposal_id=$3 AND ($4::int IS NULL OR r.revision<=$4::int) ORDER BY r.revision`,
+        [tenantId, jobId, row.id, at?.revision ?? null],
       )
     ).rows;
     return {

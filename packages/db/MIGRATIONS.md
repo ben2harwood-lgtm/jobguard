@@ -131,19 +131,34 @@ existing migration-owned recovery routine; a runtime insert cannot forge this
 exception. Reads remain available.
 
 Stored command results: 0050 also adds `app.watchdog_command_result`, keyed by
-`(tenant_id, command_id)` with the job, command type (`readiness.advance`,
-`things_to_check.evaluate`, `things_to_check.review`, `things_to_check.supersede`,
-`supplier_match.create`, `supplier_match.correct`, `inbox.dismiss`), a request hash covering the job id and input, and the exact result the command first
-returned. It is written in the same transaction as the command, for every success
-including a no-op, so a replay returns that stored result, and the same id can never
-be reused for a changed payload, another job or another command type (a concurrent
-reuse on another job loses on the primary key and reports `IDEMPOTENCY_CONFLICT`).
-Same-job commands are serialised by a per-job advisory lock taken after the live
-guard and before any audit append. The table is tenant-keyed, `FORCE`-RLS, owned by
-`jobguard_migration`, guarded by the same live-job insert trigger, and
-runtime SELECT/INSERT only. Rows written before it existed (a decision, review outcome
-or supersession with no stored result) still replay from their own tables on their own
-job; only new commands get a stored result. It adds no data to existing rows.
+`(tenant_id, command_id)` with the job, the command kind, a request hash covering the job
+id, the kind and the input, and the exact result the command first returned. The kinds are
+`readiness.record`, `readiness.advance`, `things_to_check.evaluate|review|supersede`,
+`supplier_match.create|correct`, `inbox.dismiss`, `purchase_order.revise|place`,
+`supplier_document.intake|receipt|confirm` and `evidence.finalize`. Together with the
+command receipts used by `inbox.seed` and `proof.complete`, and the upload id that is
+`beginUpload`'s identity, every `watchdog_live_only` command now follows one contract:
+a replayed id returns the first result (never the job's current state), and the same id with
+a changed payload, on another job or as another kind is refused (`IDEMPOTENCY_CONFLICT` or
+`COMMAND_CONFLICT`). A successful no-op keeps its identity.
+
+How: behind the live guard and a per-job advisory lock (`runStoredCommand`), the stored row is
+replayed or refused; otherwise a row written before results existed is replayed from its own
+table; otherwise the command runs and its result is stored in the same transaction, whether or
+not it changed anything. A concurrent reuse of an id on another job loses on the primary key and
+reports `IDEMPOTENCY_CONFLICT`. Purchase-order revisions, document intake and goods receipts had no
+command id in their boundary: each now accepts an optional `commandId` (compatible; omit it and a
+stable id is derived from the request, so an exact retry replays). `evidence.finalize` stores only
+the evidence id and replays the immutable evidence object itself; an object already registered for
+the upload must match the requested version and type. A placement answered by the first command's
+result (the dispatcher's semantic de-duplication) records the second id too.
+
+Rows written before the table existed replay from their own tables, on their own job only, and
+return what they first returned where it can be derived: a match correction as of its revision, an
+inbox dismissal and the things-to-check findings, outcomes and supersessions as of their place in
+the audit chain (fact candidates by creation time, which carry no audit link). Only new commands get a
+stored result. The table is tenant-keyed, `FORCE`-RLS, owned by `jobguard_migration`, guarded by the same
+live-job insert trigger, and runtime SELECT/INSERT only. It adds no data to existing rows.
 
 The new foreign keys are validated by the migration owner (`jobguard_migration`:
 not a superuser, no BYPASSRLS, no tenant context), exactly as deployments and the

@@ -94,7 +94,7 @@ CREATE TABLE app.watchdog_command_result(
   tenant_id uuid NOT NULL,
   command_id uuid NOT NULL,
   job_id uuid NOT NULL,
-  command_type text NOT NULL CHECK(command_type IN ('readiness.advance','things_to_check.evaluate','things_to_check.review','things_to_check.supersede','supplier_match.create','supplier_match.correct','inbox.dismiss')),
+  command_type text NOT NULL CHECK(command_type IN ('readiness.advance','things_to_check.evaluate','things_to_check.review','things_to_check.supersede','supplier_match.create','supplier_match.correct','inbox.dismiss','readiness.record','purchase_order.revise','supplier_document.intake','supplier_document.receipt','supplier_document.confirm','evidence.finalize','purchase_order.place')),
   request_hash char(64) NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
   result jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),

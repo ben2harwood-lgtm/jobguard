@@ -54,6 +54,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/decisions#evaluate": "pre_live_allowed",
   "/api/decisions#resolve": "pre_live_allowed",
   "/api/recovery-cases/[id]/evidence-packs": "post_live_billing",
+  "/api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval": "post_live_billing",
   "/api/jobs/[id]/proof#select_generated": "watchdog_live_only",
   "/api/jobs/[id]/proof#finalize": "watchdog_live_only",
   "/api/jobs/[id]/proof#complete": "watchdog_live_only",
@@ -111,6 +112,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/variations": "post_live_billing",
   "nest:/jobs/capture": "pre_live_allowed",
   "nest:/recovery-cases/:id/evidence-packs": "post_live_billing",
+  "nest:/recovery-cases/:id/evidence-packs/:packId/attachment-approval": "post_live_billing",
 };
 
 

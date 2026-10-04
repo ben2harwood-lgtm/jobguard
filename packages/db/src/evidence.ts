@@ -1,4 +1,4 @@
-import { requireLiveJob } from "./watchdog.js";
+import { commandIdFor, findCommandResult, replayStoredResult, requestHashFor, requireLiveJob, storeCommandResult } from "./watchdog.js";
 import { randomUUID } from "node:crypto";
 import { inflateSync } from "node:zlib";
 import type { Pool } from "pg";
@@ -14,7 +14,7 @@ export const beginEvidenceUploadSchema = z.object({
   retentionClass: z.enum(["transient_upload", "standard_evidence"]).default("transient_upload"),
   deviceCapturedAt: z.coerce.date().nullable().default(null), expiresAt: z.coerce.date(),
 });
-export const finalizeEvidenceSchema = z.object({ uploadId: UUID, objectVersionId: z.string().min(1).max(1024),
+export const finalizeEvidenceSchema = z.object({ commandId: UUID.optional(), uploadId: UUID, objectVersionId: z.string().min(1).max(1024),
   evidenceType: z.string().min(1).max(40) });
 export const evidenceAccessSchema = z.object({ evidenceId: UUID, jobId: UUID, scopeItemId: UUID.nullable(), expiresInSeconds: z.number().int().min(1).max(900).default(300) });
 export type EvidenceUpload = z.infer<typeof beginEvidenceUploadSchema> & { id: string; objectKey: string; serverReceivedAt: Date };
@@ -62,8 +62,8 @@ export class EvidenceService {
     const input=finalizeEvidenceSchema.parse(raw);
     const prepared=await withTenant(this.pool,context,async db=>{
       const target=(await db.$client.query<{job_id:string}>("SELECT job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[context.tenantId,input.uploadId])).rows[0]; if(!target)throw new EvidenceError("UPLOAD_NOT_FOUND"); await requireLiveJob(db,target.job_id);
-      const existing=await db.$client.query(`SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND upload_id=$2`,[context.tenantId,input.uploadId]);
-      if(existing.rows[0]) return {existing:existing.rows[0] as Record<string,unknown>};
+      const earlier=await this.replayFinalize(db,context.tenantId,target.job_id,input);
+      if(earlier) return {existing:earlier};
       const found=await db.$client.query<UploadRow>(`SELECT * FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[context.tenantId,input.uploadId]);
       const row=found.rows[0]; if(!row) throw new EvidenceError("UPLOAD_NOT_FOUND");
       if(row.expires_at.getTime()<=Date.now()) throw new EvidenceError("UPLOAD_EXPIRED");
@@ -80,13 +80,31 @@ export class EvidenceService {
     if(rejection){await this.reject(context,input.uploadId,rejection);throw new EvidenceError("OBJECT_INVALID",rejection);}
     return withTenant(this.pool,context,async db=>{
       const target=(await db.$client.query<{job_id:string}>("SELECT job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[context.tenantId,input.uploadId])).rows[0]; if(!target)throw new EvidenceError("UPLOAD_NOT_FOUND"); await requireLiveJob(db,target.job_id);
-      const existing=await db.$client.query(`SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND upload_id=$2`,[context.tenantId,input.uploadId]); if(existing.rows[0])return existing.rows[0];
+      const earlier=await this.replayFinalize(db,context.tenantId,target.job_id,input); if(earlier)return earlier;
       const locked=await db.$client.query<UploadRow>(`SELECT * FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[context.tenantId,input.uploadId]); const row=locked.rows[0];
       if(!row || row.state==="rejected" || row.object_version_id!==input.objectVersionId) throw new EvidenceError("OBJECT_INVALID");
       const verified=new Date(); await db.$client.query(`UPDATE app.evidence_upload SET state='verified',server_verified_at=$3,rejection_code=NULL WHERE tenant_id=$1 AND id=$2`,[context.tenantId,input.uploadId,verified]);
       const inserted=await db.$client.query(`INSERT INTO app.evidence_object (id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,device_captured_at,server_received_at,server_verified_at)
-       VALUES ($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,$9,$10,'standard_evidence',$11,$12,$13) RETURNING *`,[input.uploadId,context.tenantId,row.job_id,row.scope_item_id,input.evidenceType,row.object_key,input.objectVersionId,sha256(object.bytes),object.byteLength,object.contentType,row.device_captured_at,row.server_received_at,verified]); return inserted.rows[0];
+       VALUES ($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,$9,$10,'standard_evidence',$11,$12,$13) RETURNING *`,[input.uploadId,context.tenantId,row.job_id,row.scope_item_id,input.evidenceType,row.object_key,input.objectVersionId,sha256(object.bytes),object.byteLength,object.contentType,row.device_captured_at,row.server_received_at,verified]);
+      // The command's identity and first result are stored with the object, atomically; a replay returns this immutable row.
+      const key=this.finalizeKey(row.job_id,input); await storeCommandResult(db,{tenantId:context.tenantId,commandId:key.commandId,jobId:row.job_id,kind:"evidence.finalize",requestHash:key.requestHash,result:{evidenceId:input.uploadId}});
+      return inserted.rows[0];
     });
+  }
+
+  private finalizeKey(jobId:string,input:z.infer<typeof finalizeEvidenceSchema>){const request={uploadId:input.uploadId,objectVersionId:input.objectVersionId,evidenceType:input.evidenceType};
+    return {commandId:input.commandId ?? commandIdFor("evidence.finalize",jobId,request),requestHash:requestHashFor("evidence.finalize",jobId,request)};}
+
+  /** The stored finalisation for this command id, or the object already registered for the upload. Either is validated against
+   * the request: a different version or type, another upload or another job is a conflict, never a silent replay. */
+  private async replayFinalize(db:TenantTransaction,tenantId:string,jobId:string,input:z.infer<typeof finalizeEvidenceSchema>):Promise<Record<string,unknown>|undefined>{
+    await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`${tenantId}:${jobId}:watchdog-command`]);
+    const key=this.finalizeKey(jobId,input),stored=await findCommandResult(db,tenantId,key.commandId);
+    if(stored){try{replayStoredResult(stored,jobId,"evidence.finalize",key.requestHash)}catch{throw new EvidenceError("COMMAND_CONFLICT")}
+      const object=await db.$client.query("SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[tenantId,(stored.result as {evidenceId:string}).evidenceId]);return object.rows[0];}
+    const existing=(await db.$client.query<Record<string,unknown>>("SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND upload_id=$2",[tenantId,input.uploadId])).rows[0];
+    if(existing){if(existing.object_version_id!==input.objectVersionId||existing.evidence_type!==input.evidenceType)throw new EvidenceError("COMMAND_CONFLICT");return existing;}
+    return undefined;
   }
 
   private reject(context:VerifiedTenantContext,id:string,code:string){return withTenant(this.pool,context,db=>db.$client.query(`UPDATE app.evidence_upload SET state='rejected',rejection_code=$3 WHERE tenant_id=$1 AND id=$2`,[context.tenantId,id,code])).then(()=>undefined);}
