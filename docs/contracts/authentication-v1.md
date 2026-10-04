@@ -34,7 +34,9 @@ credentials. Signup verifies an eight-digit code before creating one tenant and 
 existing-email signup cannot create another tenant. Invitations carry an immutable UUID,
 normalized email, tenant, account, assigned role, issuer and expiry. Challenge request and
 verification may include `invitationId`; acceptance must match it and the email exactly.
-Clients cannot provide tenant/role during signup or verification. Creating an invitation
+Verification issues a session for the invited address, not for whoever was signed in: a browser signed in as a different
+address is switched to the invited account, and clients must say so rather than imply the business joins the previous
+account. Clients cannot provide tenant/role during signup or verification. Creating an invitation
 requires the current owner, CSRF and origin; owner transfer is not an invitation role.
 
 Challenges and sessions store keyed digests only, with a challenge-specific salt in the

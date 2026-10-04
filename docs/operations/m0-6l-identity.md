@@ -20,12 +20,18 @@ cookies are used even on loopback; the fixture browser tests rely on loopback's 
 support. Session expiry is one day and database revocation is checked on every request.
 
 Only the principal bridge constructs real verified tenant contexts. `apps/api/src/auth/context-boundary.test.ts`
-proves it by parsing all application source (apps/api/src, apps/web/app, every package's src and tools) and failing on any
-other constructor call, alias, cast to `VerifiedTenantContext` or effective-tenant identifier. Five categories are
-confined by explicit, individually tested rules: the bridge (one call, verified membership only), the definition,
-the worker queue (one cast fed only by a strictly validated payload), the retained synthetic practice sandbox (fixed
-DEMO tenant and membership constants only, no request-derived selector, API and db source only) and the synthetic
-restore rehearsal. A new caller anywhere else, or a synthetic one fed anything but the DEMO constants, fails the test. `x-tenant-id` and
+proves it by parsing all application source (apps/api/src, apps/web/app, the top-level files of both apps, every package's
+src and tools) and failing on any other constructor call, alias, cast to `VerifiedTenantContext` or effective-tenant
+identifier. Five categories are confined by explicit, individually tested rules: the bridge (one call, verified membership
+only), the definition, the worker queue (one cast fed only by a strictly validated payload), the retained synthetic practice
+sandbox and the synthetic restore rehearsal. The sandbox is an explicit list of existing files (each must still construct,
+and a new caller needs a reviewed edit to the list); its calls and casts may use only the fixed DEMO tenant and membership
+constants, which must be the unaliased imports from `@jobguard/db` (inside packages/db, from `./demo-seed`), never a local
+declaration, parameter, destructured or renamed look-alike, and the fixture module must define each as a literal UUID. The
+constructor and the context type may be imported, re-exported and destructured only under their own names; local aliases
+and derivations of the type are tracked as cast targets and may not be exported. The scan is syntactic: it cannot follow a
+context laundered through `any`/`never` or a member name computed at run time, which stay with the TypeScript compiler, the
+approved list and review. A new caller anywhere else, or a synthetic one fed anything but the DEMO constants, fails the test. `x-tenant-id` and
 `requested_tenant_id` disagreeing or selecting a non-member tenant fail with
 `TENANT_FORBIDDEN`. The existing synthetic services retain their merged fixed demo context
 helpers; they cannot be used in pilot/production through either deployed composition seam.
@@ -34,7 +40,10 @@ again by the existing command dispatcher; a context alone never approves a comme
 
 A signed-in user can accept an invitation to another tenant: `/sign-in?invitationId=<reference>` shows the current
 account and an "Accept an invitation" section; email and code verification are unchanged, and the memberships are reloaded
-afterwards. A revoked or expired former member can be re-invited: acceptance adds a new membership and repoints the locator,
+afterwards. Verification always issues a session for the address the invitation was sent to. If that is the address already
+signed in, the business is added to that account; if it is a different address, the browser is switched to that other account
+(its own memberships only) and the previous session cookie is replaced in this browser (the old session itself is not revoked server-side). The page says so before verification and
+reports which of the two happened afterwards; it never promises to add the business "to your account" unconditionally. A revoked or expired former member can be re-invited: acceptance adds a new membership and repoints the locator,
 keeping the old row as history; only a currently active membership refuses a fresh invitation.
 
 An owner can create an invitation via the authenticated endpoint, with session-bound CSRF

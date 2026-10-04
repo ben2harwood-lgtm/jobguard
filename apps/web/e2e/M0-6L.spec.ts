@@ -64,37 +64,68 @@ async function enterCode(page:Page,email:string){
  await page.getByLabel("Fictional email address").fill(email);await page.getByRole("button",{name:"Request code",exact:true}).click();
  const code=await page.getByTestId("fixture-code").textContent();await page.getByLabel("Eight-digit code").fill(code!);await page.getByRole("button",{name:"Verify code"}).click();
 }
-test("invitation joins only its stored tenant and role, for a new user and for one who is already signed in",async({browser})=>{
+test("invitation joins only its stored tenant and role, and the page says plainly whose account it signs you in as",async({browser})=>{
  const recipient=`invite-${crypto.randomUUID()}@practice.invalid`,member=`member-${crypto.randomUUID()}@practice.invalid`;
- // The existing user signs up first (own business, own tenant) and stays signed in with a valid session cookie.
+ // Request budget (see above): member sign-up, owner sign-up, member accepts, recipient accepts = 4 per project. The
+ // recipient's verification therefore happens in the member's already signed-in browser, which is exactly the case where
+ // the invited address differs from the signed-in one.
  const memberContext=await browser.newContext(),recipientContext=await browser.newContext();
  try {
+  // The existing user signs up first (own business, own tenant) and stays signed in with a valid session cookie.
   const memberPage=await memberContext.newPage();await memberPage.goto("/sign-in");await enterCode(memberPage,member);
   await expect(memberPage.getByRole("heading",{name:"Signed in",exact:true})).toBeVisible();await expect(memberPage.getByText("Role: owner",{exact:true})).toBeVisible();
-  const ownTenant=(await memberPage.getByTestId("identity-tenant").textContent())!;
-  const invited=await ownerInvites(browser,[{email:recipient,role:"foreman"},{email:member,role:"finance"}]);
+  const ownTenant=(await memberPage.getByTestId("identity-tenant").textContent())!,memberIdentity=(await memberPage.getByTestId("identity-id").textContent())!;
+  const invited=await ownerInvites(browser,[{email:member,role:"finance"},{email:recipient,role:"foreman"}]);
   expect(invited.tenant).not.toBe(ownTenant);
 
-  // A brand-new user joins only the stored tenant, with the stored role.
-  const page=await recipientContext.newPage();await page.goto(`/sign-in?invitationId=${invited.ids[0]}`);
-  await enterCode(page,recipient);
-  await expect(page.getByText("Role: foreman",{exact:true})).toBeVisible();await expect(page.getByTestId("identity-tenant")).toHaveText(invited.tenant);
-  await page.reload();await expect(page.getByTestId("identity-tenant")).toHaveText(invited.tenant);
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  // Someone who is not signed in opens the other invitation link: the form is prefilled and no account-switch warning applies.
+  // (Nothing is requested or verified here, so this spends no identity requests.)
+  const preview=await recipientContext.newPage();await preview.goto(`/sign-in?invitationId=${invited.ids[1]}`);
+  await expect(preview.getByRole("note",{name:"Practice sandbox notice"})).toContainText("Practice sandbox — synthetic data; nothing is sent or charged");
+  await expect(preview.getByLabel("Sign-in purpose")).toHaveValue("invitation");await expect(preview.getByLabel("Invitation reference")).toHaveValue(invited.ids[1]!);
+  await expect(preview.getByText("switches to that other account")).toHaveCount(0);await expect(preview.getByRole("heading",{name:"Signed in",exact:true})).toHaveCount(0);
 
-  // The already signed-in user follows an invitation from another tenant: the page must still let them accept it. Email
-  // and code verification are unchanged, and the memberships are reloaded afterwards.
-  await memberPage.goto(`/sign-in?invitationId=${invited.ids[1]}`);
+  // SAME address: the signed-in user follows an invitation from another tenant that was sent to their own address. The page
+  // says what verification does, and afterwards the business is one of THIS account's memberships (identity unchanged).
+  await memberPage.goto(`/sign-in?invitationId=${invited.ids[0]}`);
   await expect(memberPage.getByRole("heading",{name:"Signed in",exact:true})).toBeVisible();
   await expect(memberPage.getByTestId("identity-tenant")).toHaveText(ownTenant);
-  await expect(memberPage.getByLabel("Invitation reference")).toHaveValue(invited.ids[1]!);
+  await expect(memberPage.getByLabel("Invitation reference")).toHaveValue(invited.ids[0]!);
   await expect(memberPage.getByRole("note",{name:"Practice sandbox notice"})).toContainText("Practice sandbox — synthetic data; nothing is sent or charged");
+  const guidance=memberPage.getByRole("region",{name:"Accept an invitation"});
+  await expect(guidance).toContainText("signs this browser in as the address the invitation was sent to");
+  await expect(guidance).toContainText("If that is the address you are signed in with, the invited business is added to this account");
+  await expect(guidance).toContainText("If it is a different address, this browser switches to that other account and signs this one out here");
+  await expect(guidance).not.toContainText("to your account");
   await enterCode(memberPage,member);
   await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(2);
+  await expect(memberPage.getByTestId("identity-id")).toHaveText(memberIdentity);
   await expect(memberPage.getByText("Role: owner",{exact:true})).toBeVisible();await expect(memberPage.getByText("Role: finance",{exact:true})).toBeVisible();
   expect(await memberPage.getByTestId("identity-tenant").allTextContents()).toEqual(expect.arrayContaining([ownTenant,invited.tenant]));
+  await expect(memberPage.getByText("is now one of this account's memberships")).toBeVisible();await expect(memberPage.getByText("which is a different account")).toHaveCount(0);
   await expect(memberPage.getByRole("button",{name:"Verify code"})).toHaveCount(0);
   await memberPage.goto("/sign-in");await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(2);
   expect(await memberPage.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+
+  // DIFFERENT address: the same signed-in browser follows an invitation sent to someone else (a brand-new user). Verification
+  // signs the browser in as that invited address, so the identity changes, only the stored tenant and role appear, and the
+  // page says plainly that this is a different account.
+  await memberPage.goto(`/sign-in?invitationId=${invited.ids[1]}`);
+  await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(2);
+  await expect(memberPage.getByLabel("Invitation reference")).toHaveValue(invited.ids[1]!);
+  await expect(memberPage.getByRole("region",{name:"Accept an invitation"})).toContainText("If it is a different address, this browser switches to that other account and signs this one out here");
+  await enterCode(memberPage,recipient);
+  await expect(memberPage.getByText("Role: foreman",{exact:true})).toBeVisible();
+  await expect(memberPage.getByTestId("identity-tenant")).toHaveCount(1);await expect(memberPage.getByTestId("identity-tenant")).toHaveText(invited.tenant);
+  await expect(memberPage.getByTestId("identity-id")).not.toHaveText(memberIdentity);
+  await expect(memberPage.getByText(ownTenant,{exact:true})).toHaveCount(0);
+  await expect(memberPage.getByText("now signed in as the invited address, which is a different account from the one you were using")).toBeVisible();
+  await expect(memberPage.getByText("is now one of this account's memberships")).toHaveCount(0);
+  const recipientIdentity=(await memberPage.getByTestId("identity-id").textContent())!;
+  await memberPage.reload();await expect(memberPage.getByTestId("identity-tenant")).toHaveText(invited.tenant);await expect(memberPage.getByTestId("identity-id")).toHaveText(recipientIdentity);
+  expect(await memberPage.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  // A second browser context carrying the same cookies reads the same persisted result.
+  const second=await browser.newContext({storageState:await memberContext.storageState()});
+  try {const tab=await second.newPage();await tab.goto("/sign-in");await expect(tab.getByTestId("identity-tenant")).toHaveText(invited.tenant);await expect(tab.getByText("Role: foreman",{exact:true})).toBeVisible();await expect(tab.getByTestId("identity-id")).toHaveText(recipientIdentity);}finally{await second.close();}
  } finally {await memberContext.close();await recipientContext.close();}
 });
