@@ -58,7 +58,7 @@ afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)a
 
 describe("UIWIRE-12 customer receipts",()=>{
  it("upgrades without changing old command hashes and replays old receipts and reversals",async()=>{
-  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(43);
+  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(44);
   expect((await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows).toEqual(legacyHashes);
   expect(await repo.recordReceipt(context,legacyInput)).toEqual(legacyPayment);
   expect(await repo.reverseReceipt(context,{...reversal(legacy,legacyPayment.paymentId),commandId:legacyReverseCommand})).toEqual({reversalId:legacyReversal});
