@@ -102,3 +102,43 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 ## 0039 readiness
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
+
+## 0043_recovery_case_current.sql — M4-1-S retrospective repair
+
+Expand-compatible: keeps immutable `recovery_case` creation columns for existing
+writers and foreign keys, and documents them as legacy snapshots. The
+`security_invoker` view `recovery_case_current` is the single current-state read
+contract: latest immutable claim + latest event + claim/event revision count.
+Only cases with no workbench history fall back to the 0018 legacy row; incomplete
+workbench history is excluded. No data backfill or historical rewrite is needed.
+Runtime gets SELECT on the view and retains forced RLS on its source tables.
+
+Replaces the existing narrowly granted `approve_synthetic_landing(jsonb)` body to
+read that projection after taking locks in this order: case advisory key, job row,
+case row. The workbench command (runtime role, no UPDATE privilege on `app.job`, so
+it cannot take a job-row lock) holds only the case advisory key, before its
+foreign-key share locks and audit append; because the landing routine also takes the
+advisory key first, the two paths cannot wait on each other. Existing
+function ownership, search path and EXECUTE grants are retained; no new SECURITY
+DEFINER function or runtime mutation grant. Repository, eligibility, demo and
+pack readers use the same projection. Deploy migration before the new readers;
+preceding code can still write/read its original tables during rollout.
+
+Received principal in the projection is the LARGER of the manually recorded landings
+(workbench events, net of manual reversals) and the principal approved through
+`approve_synthetic_landing` (allocations net of approved reversals), never their sum:
+a builder may record by hand the same money that is later approved, and approving it
+must not count it twice. Claim amendment, write-off and the outstanding figure all use
+that received principal; the workbench may reverse only its own manual records, and
+approved landings are reversed through the approved reversal routine. The case state
+remains the workflow stage set by workbench events (an approved landing does not move
+it). Legacy cases with no workbench history are unchanged. The landing routine bounds a new
+allocation by the NET approved principal (allocations less approved reversals), so a reversal
+restores claim capacity even when part of the claim was written off. The reference fee is a job-level figure
+(one cap and one plan-fee credit shared by every case): the workbench reports the job's current
+fee liability separately from the signed obligation and compensation postings made because of the case.
+
+Tests cover upgrade from the preceding schema with existing event/claim history,
+repeat migration, legacy landing behavior, amended claim/revision in the landing
+routine, prevention, runtime read isolation and forbidden updates. Forward-fix
+only; do not delete immutable history or restore the stale landing routine.
