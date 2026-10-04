@@ -59,3 +59,54 @@ describe("receipt hierarchy and exact line allocation",()=>{
   expect(allocateReceiptToLines(input(0,[]))).toEqual([]);
  });
 });
+
+// Round 2 (independent check on 71ee571): the cutoff is an exact-instant comparison, not a millisecond one.
+describe("effective-time cutoff compares exact instants",()=>{
+ const baseLines=(existedAt:string)=>[line("baseline",100,120),line("late",100,120,120,existedAt)];
+ const at = (effectiveAt:string,existedAt:string,gross=60) => ({...input(gross,baseLines(existedAt)),effectiveAt});
+ const ids = (raw:ReceiptAllocationInput) => allocateReceiptToLines(raw).map(l=>l.lineId);
+ it("excludes a line created later within the same millisecond, for pro-rata and explicit allocation",()=>{
+  const raw=at("2026-09-30T00:00:00.000100Z","2026-09-30T00:00:00.000900Z");
+  expect(ids(raw)).toEqual(["baseline"]);
+  expect(allocateReceiptToLines(raw)[0]?.gross).toEqual(exactPence(60n));
+  expect(()=>allocateReceiptToLines({...raw,receiptGross:p(120),explicit:[{lineId:"late",gross:p(120)}]})).toThrow("INVALID_ALLOCATION");
+  expect(ids({...raw,receiptGross:p(60),explicit:[{lineId:"baseline",gross:p(60)}]})).toEqual(["baseline"]);
+ });
+ it("includes a line that existed at the same instant however the fraction is written",()=>{
+  for(const [effective,existed] of [
+   ["2026-09-30T00:00:00.000100Z","2026-09-30T00:00:00.000100Z"],["2026-09-30T00:00:00.0001Z","2026-09-30T00:00:00.000100Z"],
+   ["2026-09-30T00:00:00.1Z","2026-09-30T00:00:00.100000Z"],["2026-09-30T00:00:00Z","2026-09-30T00:00:00.000Z"],
+   ["2026-09-30T00:00Z","2026-09-30T00:00:00Z"],
+  ] as const) expect(ids(at(effective,existed))).toEqual(["baseline","late"]);
+ });
+ it("orders instants down to nanoseconds, and a later receipt includes an earlier line",()=>{
+  expect(ids(at("2026-09-30T00:00:00.000000000Z","2026-09-30T00:00:00.000000001Z"))).toEqual(["baseline"]);
+  expect(ids(at("2026-09-30T00:00:00.000000001Z","2026-09-30T00:00:00.000000000Z"))).toEqual(["baseline","late"]);
+  expect(ids(at("2026-09-30T00:00:00.999999999Z","2026-09-30T00:00:01Z"))).toEqual(["baseline"]);
+ });
+ it("applies timezone offsets at full precision",()=>{
+  expect(ids(at("2026-09-30T00:00:00.000500Z","2026-09-30T01:00:00.000500+01:00"))).toEqual(["baseline","late"]);
+  expect(ids(at("2026-09-30T00:00:00.000500Z","2026-09-30T01:00:00.000600+01:00"))).toEqual(["baseline"]);
+  expect(ids(at("2026-09-30T00:00:00.000500Z","2026-09-30T01:00:00.000500+0100"))).toEqual(["baseline","late"]);
+  expect(ids(at("2026-09-30T00:00:00.000100Z","2026-09-29T19:00:00.000100-05:00"))).toEqual(["baseline","late"]);
+  expect(ids(at("2026-09-30T00:00:00.000100Z","2026-09-29T19:00:00.000200-05:00"))).toEqual(["baseline"]);
+  expect(ids(at("2026-09-30T05:30:00.000100+05:30","2026-09-30T00:00:00.000100Z"))).toEqual(["baseline","late"]);
+ });
+ it("orders across month, leap-day and year boundaries",()=>{
+  expect(ids(at("2028-03-01T00:00:00Z","2028-02-29T23:59:59.999999Z"))).toEqual(["baseline","late"]);
+  expect(ids(at("2028-02-29T23:59:59.999999Z","2028-03-01T00:00:00Z"))).toEqual(["baseline"]);
+  expect(ids(at("2027-01-01T00:00:00Z","2026-12-31T23:59:59.9999999Z"))).toEqual(["baseline","late"]);
+  expect(ids(at("2026-12-31T23:59:59.9999999Z","2027-01-01T00:00:00Z"))).toEqual(["baseline"]);
+ });
+});
+
+// Round 2: allocation totals must be able to enter the fee kernel at the sizes the allocator supports.
+describe("allocator totals enter the fee kernel",()=>{
+ const sum = (items:readonly {net:ReturnType<typeof exactPence>}[]) => items.reduce((total,a)=>addExactPence(total,a.net),exactPence(0n));
+ it("a 150-line invoice with penny-rounded VAT and one penny already allocated per line yields the once-rounded fee",()=>{
+  const lines=Array.from({length:150},(_,i)=>{const n=101+i,g=n+Math.round(n/5);return line(`line-${i}`,n,g,g-1);});
+  const total=sum(allocateReceiptToLines(input(100,lines)));
+  expect(total.numerator.toString().length).toBeGreaterThan(100);
+  expect(fee(total)).toBe(8);
+ });
+});
