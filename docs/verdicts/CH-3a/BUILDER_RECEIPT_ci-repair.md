@@ -235,3 +235,50 @@ Leaked SysV shared-memory segments again exhausted macOS's 32 segment ids betwee
 After the first round-3 push (CI green on `b99d9f9`), `origin/main` moved again to `b717020` (M4-2-S-R, #102) and PR #98 became CONFLICTING, so I merged it in (`165b36b`, non-force). Two conflicts: the lane registry (main's plus this branch's `ch-3a` lane) and `recovery-cases.integration.test.ts`, which main reformatted and extended; I took main's version and re-applied only this branch's three earlier changes to it (`installLegacySyntheticPartyFixtures` after `migrate`, its import, and `--encoding=UTF8`). No assertion, skip, timeout or retry changed.
 
 Re-run at `165b36b` (database and browser commands inside `heavy-slot ch-3a`): `pnpm typecheck --force` 0 (7 of 7); `LANE_BASE_REF=origin/main pnpm lint` 0; `lint:lanes` 0; `pnpm openapi:check` 0; `pnpm build` 0; `pnpm test:db` 0 (39 files, 202 tests); `pnpm test:migrations` 0 (11 tests); `pnpm test --force` 0 (tools 39; core 440; storage 4; config 2; ai 72; api 109; web 63; db 202); whole e2e suite, both projects, local browser, 0 (182 passed). The counts in the table above are for `f239ae7`, before this merge.
+
+---
+
+# Round 4 — repair after the Sol check on `3b0aedd`
+
+- **Repair builder:** Claude Sonnet 5.5, 4 October 2026. Same status: **not independently verified, not accepted.** A builder receipt, not a verdict.
+- **Input:** GPT-6.1 Sol high `REPAIR` at `/Users/benharwood/.local/share/full-steam/jg-runs/ch-3a-solcheck-20261004T085533.md`: one P2, no P1 or P3. Ben's C7 substitute applies as before (nothing to change in code).
+- **Code head tested:** `b959ce9`. `origin/main` had not moved (still `b717020`), so no merge this round.
+
+## Finding status
+
+| # | Priority | Finding | Status | Commit |
+|---|---|---|---|---|
+| 1 | P2 | A binding correction could commit without its audit event or a completed command receipt: `bind_job_parties` accepted a processing receipt, changed the binding and job revision and returned, and the round-3 quote race fixture did exactly that | **Fixed** | `c0cb581` |
+
+OPEN FOR BEN: none.
+
+## What changed
+
+- `app.job_party_binding` gains `command_id`, the exact `job.parties` receipt that authorized the change, with `UNIQUE(tenant_id, command_id)`: one receipt, one binding effect. `bind_job_parties` stores it.
+- A deferred constraint trigger on `app.job_party_binding` (for bindings that carry a command) requires, at commit: a succeeded `job.parties` receipt that is that command and names this binding as its result, and an audit event for this job naming that command and this binding (`job.parties.bind`, or `job.parties.correct` when a correction reason was given). Otherwise the whole transaction fails (`BINDING_RECORD_REQUIRED`, SQLSTATE 23514).
+- The repository path already claims the receipt, calls the routine, completes the receipt (result `id` = binding id) and appends the audit event before commit, so it is unchanged. Generated backfill and adoption bindings carry no command and stay under their own rules. Runtime has no INSERT on the binding or current-pointer tables, so only these routines write them.
+- The quote race fixture now completes its receipt and appends its audit event in the same transaction, as the repository does.
+
+## Tests first (red at `3b0aedd`, green after)
+
+Runtime-role PostgreSQL tests in `job-parties.integration.test.ts`: eight direct-call cases that must not commit and must leave no binding and the job revision unchanged (no completion and no audit; audit but receipt left processing; completion but no audit; audit naming a different binding; a different command; a different job; receipt result naming a different binding; a wrong event type); the full protocol committing with the binding linked to that exact command and made current; one receipt used for two binding effects in one transaction (unique violation, nothing committed); and a used receipt claimed again for another binding (refused, one binding remains). Red: the direct calls resolved and committed, and the linked-command assertion had no column to read. Green after: 3 of 3 new tests, and the 14 earlier CH-3a DB tests, the quote race test and the adoption tests still pass.
+
+## Commands at `b959ce9` (database and browser commands inside `heavy-slot ch-3a`)
+
+| Command | Exit | Result |
+|---|---:|---|
+| `pnpm typecheck --force` | 0 | 7 of 7 |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7 of 7 |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | passed |
+| `pnpm openapi:check` | 0 | matches |
+| `pnpm build` | 0 | 7 of 7 |
+| `pnpm test:db` | 0 | 39 files, 205 tests |
+| `pnpm test:migrations` | 0 | 11 tests |
+| `pnpm test --force` | 0 | tools 39; core 440; storage 4; config 2; ai 72; api 109; web 63; db 205 |
+| Whole e2e suite, both projects, local browser, `CI=1` | 0 on the second run | first run 181 of 182 passed, second run 182 of 182 |
+
+**Flake, stated plainly.** In the first full browser run `UIWIRE-1.spec.ts` "split and merge retain explicit review lineage" failed in `mobile-360` (the same family as round 2); the second full run passed all 182. This round changed only a migration, tests and docs and no web code, so the failure cannot come from this round's change. The failing trace (kept in the scratch directory) shows the cause: the spec clicks "Check and edit my draft", which hard-navigates to the job page, and its next actions (Split, two checks, Merge, Save review) run within about 150 ms of the navigation starting, i.e. as soon as the server-rendered page appears and before React has hydrated. The Save review request is aborted ("-1") and a second document load of the same URL follows, so the page state is lost. This race is in the spec's timing, not in assertions I touched; it is more likely the heavier the job page is to hydrate, and CH-3a adds a form-heavy panel to that page. I did not edit the spec (another task's file); if it recurs in CI the smallest repair is for that spec's `capture` helper to wait for a hydrated control before acting, as the helpers CH-3a uses already do.
+
+## Environment
+
+Leaked SysV shared-memory segments were cleared before each heavy run (nothing attached, creator pid dead). Browser runs used the same uncommitted local `chromium_headless_shell-1234` config; GitHub CI uses the pinned browser.
