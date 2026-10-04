@@ -76,14 +76,17 @@ describe("structural recovery fee guard",()=>{
    await repo.eligibilityCommand(context, J, { version: "recovery-eligibility-command.v1", action: "approve", commandId: randomUUID(), caseId: c.id, expectedCaseRevision: c.revision, expectedEvidenceRevision: reviewed.evidenceRevision, expectedPolicyRevision: 1, expectedReviewRevision: reviewed.revision }, who);
    let view = (await repo.list(context, J)).find(x => x.id === c.id)!;
    expect(view.eligibility?.status).toBe("approved");
-   expect(view).toMatchObject({ landedNetPence: 0, feeIllustrativePence: 0 });
+   expect(view).toMatchObject({ landedNetPence: 0, feeObligationsPostedPence: 0, feeCompensationsPostedPence: 0 });
    expect(await allocationsAndDerivations(c.id)).toEqual({ allocations: 0, derivations: 0, journal: 0 });
    const p = await readyToLand(c, 100000), landing = p(50000);
    expect((await land(landing)).rows[0].id).toBeTruthy();
    view = (await repo.list(context, J)).find(x => x.id === c.id)!;
    const posted = Number((await admin.query("SELECT posting_delta_pence FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND source_allocation_id=$2", [T, landing.allocationId])).rows[0].posting_delta_pence);
    expect(posted).toBeGreaterThan(0);
-   expect(view.feeIllustrativePence).toBe(posted);
+   const jobLiability = Number((await admin.query("SELECT COALESCE(sum(CASE kind WHEN 'fee_obligation' THEN amount_pence ELSE -amount_pence END),0) liability FROM app.recovery_fee_journal WHERE tenant_id=$1 AND job_id=$2", [T, J])).rows[0].liability);
+   expect(view.feeObligationsPostedPence).toBe(posted);
+   expect(view.feeCompensationsPostedPence).toBe(0);
+   expect(view.feeJobLiabilityPence).toBe(jobLiability); // job-level: shared cap and plan credit, not attributed to one case
    expect(await allocationsAndDerivations(c.id)).toEqual({ allocations: 1, derivations: 1, journal: 1 });
   });
 
@@ -95,7 +98,7 @@ describe("structural recovery fee guard",()=>{
    await land(approved, w);
    // The approved landing is received principal; the fee and the money agree (100,000 earns a 10,000 fee, 7,900 offset by plan credit).
    let v = await viewOf(repo, c.id, w);
-   expect(v).toMatchObject({ landedNetPence: 100000, approvedLandedNetPence: 100000, outstandingNetPence: 150000, writtenOffPence: 0, feeIllustrativePence: 2100 });
+   expect(v).toMatchObject({ landedNetPence: 100000, approvedLandedNetPence: 100000, outstandingNetPence: 150000, writtenOffPence: 0, feeJobLiabilityPence: 2100, feeObligationsPostedPence: 2100, feeCompensationsPostedPence: 0 });
    // Recording the same 600.00 by hand does not count it twice; more than the approved amount raises the total to the larger figure.
    c = await step(repo, c, { eventType: "record_landing", amountPence: 60000 }, w);
    expect(await viewOf(repo, c.id, w)).toMatchObject({ landedNetPence: 100000, outstandingNetPence: 150000 });
@@ -108,7 +111,7 @@ describe("structural recovery fee guard",()=>{
    // Reversing the approved landing removes only the approved principal and its fee; the manual 1,200.00 record stands.
    await reverseApproved(approved.allocationId, 100000, w);
    v = await viewOf(repo, c.id, w);
-   expect(v).toMatchObject({ landedNetPence: 120000, approvedLandedNetPence: 0, feeIllustrativePence: 0, writtenOffPence: 130000, outstandingNetPence: 0 });
+   expect(v).toMatchObject({ landedNetPence: 120000, approvedLandedNetPence: 0, feeJobLiabilityPence: 0, feeObligationsPostedPence: 2100, feeCompensationsPostedPence: 2100, writtenOffPence: 130000, outstandingNetPence: 0 });
    // The workbench can reverse only its own manual records, never more than they hold.
    await expect(step(repo, c, { eventType: "reverse_landing", amountPence: 120001 }, w)).rejects.toThrow(/is not allowed/);
    c = await step(repo, c, { eventType: "reverse_landing", amountPence: 120000 }, w);
@@ -139,8 +142,55 @@ describe("structural recovery fee guard",()=>{
    expect(derivation).toEqual({ capped_fee_pence: "500", credit_used_pence: "500", liability_pence: "0", posting_delta_pence: "0" });
    // A qualifying landing exists, yet no fee is posted: the view must say so, not "no approved landing".
    const v = await viewOf(repo, c.id, w);
-   expect(v).toMatchObject({ approvedLandedNetPence: 5000, feeIllustrativePence: 0, landedNetPence: 5000 });
+   expect(v).toMatchObject({ approvedLandedNetPence: 5000, feeJobLiabilityPence: 0, feeObligationsPostedPence: 0, feeCompensationsPostedPence: 0, landedNetPence: 5000 });
    expect((await allocationsAndDerivations(c.id, w)).allocations).toBe(1);
+  });
+
+  it("keeps the job's current fee liability apart from signed per-case postings: approve A, approve B, reverse A (Sol P2)", async () => {
+   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(true);
+   const prepare = async () => { let c = await open(repo, 250000, w); c = await step(repo, c, { eventType: "assemble_evidence" }, w); return c; };
+   const a = await prepare(), b = await prepare();
+   const landingA = (await readyToLand(a, 300000, w))(100000), landingB = (await readyToLand(b, 300000, w))(100000);
+   await land(landingA, w); await land(landingB, w);
+   await reverseApproved(landingA.allocationId, 100000, w);
+   // Job level: 200,000 landed then A reversed leaves 100,000 landed = 10,000 fee less the 7,900 plan credit = 2,100 owed.
+   const [viewA, viewB] = [await viewOf(repo, a.id, w), await viewOf(repo, b.id, w)];
+   expect(viewA.feeJobLiabilityPence).toBe(2100);
+   expect(viewB.feeJobLiabilityPence).toBe(2100);
+   // Per-case postings are reported separately and honestly: A's own obligation and the job-level compensation its reversal triggered.
+   expect(viewA).toMatchObject({ approvedLandedNetPence: 0, feeObligationsPostedPence: 2100, feeCompensationsPostedPence: 10000 });
+   expect(viewB).toMatchObject({ approvedLandedNetPence: 100000, feeObligationsPostedPence: 10000, feeCompensationsPostedPence: 0 });
+   const journal = Number((await admin.query("SELECT COALESCE(sum(CASE kind WHEN 'fee_obligation' THEN amount_pence ELSE -amount_pence END),0) n FROM app.recovery_fee_journal WHERE tenant_id=$1 AND job_id=$2", [w.tenant, w.job])).rows[0].n);
+   expect(journal).toBe(2100);
+  });
+
+  it("restores claim capacity when an approved landing is reversed, with write-off history: a fresh receipt may land again (Sol P2)", async () => {
+   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(true);
+   const writtenOffCase = async (approvedAmount: number) => {
+    let c = await open(repo, 250000, w);
+    c = await step(repo, c, { eventType: "assemble_evidence" }, w);
+    c = await step(repo, c, { eventType: "start_pursuit" }, w);
+    const approved = (await readyToLand(c, 300000, w))(approvedAmount);
+    await land(approved, w);
+    c = await step(repo, c, { eventType: "write_off" }, w);
+    return { c, approved };
+   };
+   // Full reversal: 250,000 claim, 100,000 approved, 150,000 written off, 100,000 approved principal reversed -> 100,000 recoverable again.
+   let { c, approved } = await writtenOffCase(100000);
+   await reverseApproved(approved.allocationId, 100000, w);
+   expect(await viewOf(repo, c.id, w)).toMatchObject({ approvedLandedNetPence: 0, writtenOffPence: 150000, outstandingNetPence: 100000 });
+   const fresh = await readyToLand(c, 300000, w);
+   await expect(land(fresh(100001), w)).rejects.toThrow("allocation exceeds available receipt or claim");
+   await land(fresh(100000), w);
+   expect(await viewOf(repo, c.id, w)).toMatchObject({ approvedLandedNetPence: 100000, landedNetPence: 100000, outstandingNetPence: 0 });
+   // Partial reversal: 40,000 of a 100,000 approval reversed -> exactly 40,000 of capacity returns.
+   ({ c, approved } = await writtenOffCase(100000));
+   await reverseApproved(approved.allocationId, 40000, w);
+   expect(await viewOf(repo, c.id, w)).toMatchObject({ approvedLandedNetPence: 60000, writtenOffPence: 150000, outstandingNetPence: 40000 });
+   const partial = await readyToLand(c, 300000, w);
+   await expect(land(partial(40001), w)).rejects.toThrow("allocation exceeds available receipt or claim");
+   await land(partial(40000), w);
+   expect(await viewOf(repo, c.id, w)).toMatchObject({ approvedLandedNetPence: 100000, outstandingNetPence: 0 });
   });
 
   it("refuses to allocate principal the workbench has written off (Sol P2: SQL landing path)", async () => {
