@@ -1,3 +1,4 @@
+import { requireLiveJob } from "./watchdog.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
@@ -15,7 +16,7 @@ export class SupplierMatchRepository {
     jobId: string,
     input: { commandId: string; expectedRevision: number },
   ) {
-    return withTenant(this.pool, context, async (db) => {
+    return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
       const sources = await this.sources(db.$client, context.tenantId, jobId);
       const proposal = proposeSupplierMatch({
         version: "supplier-match-input.v1",
@@ -84,7 +85,7 @@ export class SupplierMatchRepository {
     jobId: string,
     input: SupplierMatchCorrection,
   ) {
-    return withTenant(this.pool, context, async (db) => {
+    return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
       if (
         new Set(input.allocations.map((x) => x.receiptVersionId)).size !==
         input.allocations.length

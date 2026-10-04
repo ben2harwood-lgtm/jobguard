@@ -102,3 +102,107 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 ## 0039 readiness
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
+
+### 0050 — CH-2 live-only watchdog inputs
+
+Adds `app.require_watchdog_live(uuid)` (migration owned, fixed search path,
+runtime-only EXECUTE) and BEFORE INSERT guards on watchdog input tables. The
+helper checks the transaction tenant before taking a job SHARE lock; lifecycle
+transitions take UPDATE locks, so writes cannot commit after exit from live.
+Repositories call it before other business locks or audit appends. Trigger
+rechecks take the same already-held job lock. No existing row, money record, status or historical evidence is changed.
+Adds job-qualified order/proof foreign keys and narrows upload UPDATE to the
+existing lifecycle columns; identity edits are denied. Upload finalisation also
+has an UPDATE guard. Existing cleanup/rejection remains available. The shared
+evidence tables retain the exact generated bank-evidence class written by the
+existing migration-owned recovery routine; a runtime insert cannot forge this
+exception. Reads remain available.
+
+Stored command results: 0050 also adds `app.watchdog_command_result`, keyed by
+`(tenant_id, command_id)` with the job, command type (`readiness.advance`,
+`things_to_check.evaluate`, `things_to_check.review`, `things_to_check.supersede`),
+a request hash covering the job id and input, and the exact result the command first
+returned. It is written in the same transaction as the command, for every success
+including a no-op, so a replay returns that stored result, and the same id can never
+be reused for a changed payload, another job or another command type (a concurrent
+reuse on another job loses on the primary key and reports `IDEMPOTENCY_CONFLICT`).
+Same-job commands are serialised by a per-job advisory lock taken after the live
+guard and before any audit append. The table is tenant-keyed, `FORCE`-RLS, owned by
+`jobguard_migration`, guarded by the same live-job insert trigger, and
+runtime SELECT/INSERT only. Rows written before it existed (a decision, review outcome
+or supersession with no stored result) still replay from their own tables on their own
+job; only new commands get a stored result. It adds no data to existing rows.
+
+The new foreign keys are validated by the migration owner (`jobguard_migration`:
+not a superuser, no BYPASSRLS, no tenant context), exactly as deployments and the
+e2e bootstrap apply it. Their tables FORCE row-level security, so that scan would
+otherwise evaluate the tenant policies without a tenant: a strict policy raises
+"unrecognized configuration parameter app.tenant_id" and a lenient one hides
+every row, letting a legacy cross-job link pass unseen. The migration therefore
+suspends FORCE on exactly the nine tables involved (`job`, `scope_identity`,
+`material_requirement`, `purchase_order_draft`, `evidence_upload`,
+`evidence_object`, `evidence_link`, `stage_completion`,
+`synthetic_evidence_original`), validates across all tenants, restores FORCE and
+asserts it was restored, all inside the migration transaction. The ALTER TABLE
+locks are ACCESS EXCLUSIVE and held to commit, so no runtime session can read
+these tables while FORCE is suspended; the runtime role is never exempt. The
+cost is a brief exclusive lock on those tables, so apply it in a quiet window.
+A legacy mislink makes the whole migration fail and roll back (SQLSTATE 23503);
+repair the named row with a forward-fix update, never by weakening a constraint.
+
+Pre-deploy check: run this read-only query before applying 0050 to any database
+that holds real rows, so the deploy does not stop on a legacy mislink. Run it as
+a role that bypasses row-level security (a superuser or BYPASSRLS owner): FORCE
+RLS hides every row from an ordinary role that has no tenant. Every `violations`
+value must be 0; a non-zero row names the constraint that 0050 would refuse. The
+owner-role test suite runs this exact text against a database with a known
+mislink (it reports one) and again after the forward-fix (it reports none).
+
+```sql
+-- 0050 pre-deploy check (read-only): rows the new job-qualified foreign keys would refuse.
+SELECT 'purchase_order_requirement_job_fk' AS constraint_name, count(*) AS violations FROM app.purchase_order_draft c
+  WHERE NOT EXISTS (SELECT 1 FROM app.material_requirement p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.requirement_id))
+UNION ALL SELECT 'evidence_upload_job_fk', count(*) FROM app.evidence_upload c
+  WHERE NOT EXISTS (SELECT 1 FROM app.job p WHERE (p.tenant_id,p.id)=(c.tenant_id,c.job_id))
+UNION ALL SELECT 'evidence_upload_scope_job_fk', count(*) FROM app.evidence_upload c
+  WHERE c.scope_item_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM app.scope_identity p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.scope_item_id))
+UNION ALL SELECT 'evidence_object_job_fk', count(*) FROM app.evidence_object c
+  WHERE NOT EXISTS (SELECT 1 FROM app.job p WHERE (p.tenant_id,p.id)=(c.tenant_id,c.job_id))
+UNION ALL SELECT 'evidence_object_scope_job_fk', count(*) FROM app.evidence_object c
+  WHERE c.scope_item_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM app.scope_identity p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.scope_item_id))
+UNION ALL SELECT 'evidence_object_upload_job_fk', count(*) FROM app.evidence_object c
+  WHERE c.upload_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM app.evidence_upload p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.upload_id))
+UNION ALL SELECT 'evidence_object_original_job_fk', count(*) FROM app.evidence_object c
+  WHERE c.original_evidence_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM app.evidence_object p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.original_evidence_id))
+UNION ALL SELECT 'evidence_link_evidence_job_fk', count(*) FROM app.evidence_link c
+  WHERE NOT EXISTS (SELECT 1 FROM app.evidence_object p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.evidence_id))
+UNION ALL SELECT 'stage_completion_evidence_job_fk', count(*) FROM app.stage_completion c
+  WHERE NOT EXISTS (SELECT 1 FROM app.evidence_link p WHERE (p.tenant_id,p.job_id,p.scope_item_id,p.id)=(c.tenant_id,c.job_id,c.scope_item_id,c.evidence_link_id))
+UNION ALL SELECT 'synthetic_original_upload_job_fk', count(*) FROM app.synthetic_evidence_original c
+  WHERE NOT EXISTS (SELECT 1 FROM app.evidence_upload p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.upload_id));
+```
+
+The runtime role's UPDATE on `evidence_upload` is limited to `id` and the lifecycle
+columns (`state`, `rejection_code`, `object_version_id`, `server_verified_at`).
+`id` stays granted only because `EvidenceService.beginUpload` retries with
+`ON CONFLICT (tenant_id,id) DO UPDATE SET id=EXCLUDED.id` (a no-op that returns the
+existing row); the BEFORE UPDATE guard refuses any real change of `id` or of the
+job, scope, key, hash, type or size columns, and the suite proves it. Removing the
+grant would first need that upsert rewritten, which is outside CH-2.
+
+Expand-compatible upgrade from 0041; no backfill. The CH-2 PostgreSQL suite
+constructs previous-schema uploads, applies 0050, verifies preservation and
+idempotent migration, all non-live failures, actual runtime grants and race
+orders. A second suite (`watchdog-migration-owner.integration.test.ts`) applies
+0050 as `jobguard_migration` to a previous-schema database holding a legacy
+cross-job link in another tenant: the link is found, nothing is half-applied,
+FORCE RLS is intact, and after a forward-fix the same migration applies with
+every constraint validated. Existing fresh-schema PostgreSQL suites apply 0050
+too, including the owner-role synthetic bootstrap.
+
+Forward-fix: retain the guards and repair affected fixtures/commands through
+normal lifecycle commands; never directly set status or disable a guard to
+resume watchdog writes. If a deployment rollback is required, keep 0050 and
+roll back application code (the preceding application can still read all data).
+Removing the migration would reopen prohibited writes and requires a separate
+reviewed change. No new operational alerts or provider routes.

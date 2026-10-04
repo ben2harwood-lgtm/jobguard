@@ -52,3 +52,5 @@ export * from "./discrepancy-repository.js";
 export * from "./readiness-repository.js";
 export * from "./inbox-relevance-repository.js";
 export * from "./evidence-pack-repository.js";
+
+export * from "./watchdog.js";
