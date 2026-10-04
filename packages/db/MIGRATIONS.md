@@ -102,3 +102,11 @@ Adds append-only tenant merchants, SKUs/aliases, explicit pack conversions, job/
 ## 0039 readiness
 
 Adds immutable planned-work revisions, pure-engine snapshots, and due-review Decisions bound to exact source/adapter hashes. All are append-only tenant tables. Roll forward to correct records; historical readiness evidence is retained.
+
+### 0054 — ENT-1 contractor organisation
+
+Expand-only after the existing supported 0000–0041 schema; numbers 0042–0053 are reserved by the dispatcher, not added here. Adds 12 tenant tables with FORCE RLS, migration ownership, SELECT-only runtime grants, immutable versions/events and qualified FKs. New identity/control-plane exception: `contractor_practice_session` maps a high-entropy bearer handle to its generated tenant/principal and is readable only through a narrowly scoped function. All fixture and admin routines refuse databases other than `jobguard_synthetic_demo`; the application independently requires `JOBGUARD_ENV=synthetic_demo`.
+
+Operations-only `assign_commercial_track` has no runtime/infrastructure EXECUTE grant. It requires a generated synthetic agreement reference, expected assignment revision and a same-transaction audit event enforced by a deferred trigger. It never rewrites jobs. Pending D12/D16 approvals mean real track assignment remains disabled. Contractor admin writes use one bounded function, a tenant advisory lock, current membership/grants, expected organisation revision and the existing command receipt/audit tables; no commercial Decision, outbox or money effect occurs. The audit append is the final lock. Team moves append membership events and replace affected team grants with explicit revocation/new grant facts. A member may still belong to other teams.
+
+Forward fix is preferred: revert application usage first, retain append-only data, then apply a separately reviewed corrective migration. Do not drop populated commercial history or rewrite versions. The preceding demo is unchanged apart from its expected migration count and expanded catalog assertions. Fresh install and Neon owner-role compatibility remain covered by existing migration/bootstrap tests; ENT-1 additionally tests upgrade from the previous schema. No seed modifies existing tenants.
