@@ -3,13 +3,13 @@
 **Builder:** Claude Sonnet 5.5 (repair builder). Branch `codex/sandbox/m0-6l`, PR #104. Starting head
 `757895c1542ab29266f796430d6765755f2b9cce` (Codex GPT-6.1 Sol build, based on `3e0764b`).
 **Migration number unchanged: 0052.**
-**Code commit every result below is bound to: `dd1ce9fb39ac4d0d3a92f103d6e750fec180a615`.** This receipt is a later,
+**Code commit every result below is bound to: `8ddb063d8ad9b60a1fb07434dcdf9f41ba6a3f19`.** This receipt is a later,
 documentation-only commit.
 
 **State: NOT independently verified, NOT technically accepted.** I repaired; I did not review or accept anything.
 A different model (GPT-6.1 Sol, high) checks these commits and a Claude Opus reviewer checks the Codex code.
 
-## Finding before any fix: no CI run had ever started on PR #104
+## Finding before any fix: no CI run had ever started on PR #104 (a first run on the repaired head then failed, root cause 6)
 
 `gh run list --branch codex/sandbox/m0-6l` returned nothing and `gh pr view 104` reported
 `mergeable: CONFLICTING / mergeStateStatus: DIRTY`. GitHub does not start `pull_request` workflows on a conflicting PR, so
@@ -25,6 +25,8 @@ there was no red CI log to read; only the two Vercel status contexts existed. Th
 | 3 | `pnpm lint` failed: lane `m0-6l` is not allowed to edit `packages/db/test/UIWIRE-12.integration.test.ts` (fix 2 needs it). | `config/agent-lane-assignments.json` | Added exactly that one file to the `m0-6l` allow list with a note that it is a count assertion only (same precedent as the `m4-3-s-repair` lane). No other lane touched; no wildcard. | `f367eee` |
 | 4 | M0-6L e2e, first real browser run: `getByRole("alert")` matched two elements, the sign-in error and Next's empty `#__next-route-announcer__` (also `role=alert`): strict-mode violation. | `apps/web/e2e/M0-6L.spec.ts` | Locator is now the alert carrying the error text; still asserts exactly one such alert (`toHaveCount(1)`) and that it holds focus. | `dd1ce9f` |
 | 5 | M0-6L e2e: calls needing the signed-in session got 401. The session cookie is `Secure`; Playwright's `APIRequestContext` (the `request` fixture and `page.request`) treats only `localhost`/`*.localhost` as secure, so it never sends a Secure cookie to `http://127.0.0.1` (trace: `GET /api/auth/session` carried no Cookie header). The product was right; the harness could not carry the cookie. | same spec | Authenticated calls (`/api/auth/session`, `/api/auth/invitations`, including the wrong-tenant `x-tenant-id` 403 case) now run as real same-origin `fetch` inside the browser, which uses the real cookie jar. Cookie-less negative calls (replay 400 `INVALID_CODE`, real address 403 `IDENTITY_ROUTE_BLOCKED`, role elevation 400) still use the API client. The invitation test's owner now signs in inside its own browser context. **No assertion, status code, timeout or retry changed.** The cookie-attribute assertion (`httpOnly`, `secure`, `SameSite=Strict`) is untouched. | `dd1ce9f` |
+
+| 6 | **The first GitHub CI run (on repair head `6e2b65b`) failed at `pnpm test`, and my local run had masked it.** `packages/db/test/identity.integration.test.ts` drives the API identity application layer against real PostgreSQL, so it imports `apps/api` sources, which import `@jobguard/db` and `@jobguard/config` by package name. Those resolve to each package's built `dist`. CI runs `pnpm test` *before* `pnpm build`, and turbo's `^build` only builds the db package's own dependencies, so on a clean checkout neither `dist` exists: `vite:import-analysis: Failed to resolve entry for package "@jobguard/db"` (CI run 37185484021: 37 db suites passed, 172 tests, 1 suite failed to load). It passed locally only because earlier builds had left `dist` behind. | new `packages/db/vitest.config.ts`; `config/agent-lane-assignments.json` | Reproduced in a fresh clone of `6e2b65b` with no build (same 1 failed suite / 172 tests). Added two `resolve.alias` entries so `@jobguard/db` and `@jobguard/config` resolve to their source in the db package's vitest run (`@jobguard/db` then is the same module the tests import as `../src/index.js`). Allowed that one file in the `m0-6l` lane. No test, assertion or timeout changed. Fresh clone after the fix: 38 files / 179 tests pass. | `8ddb063` |
 
 Product code was not changed by this repair beyond the merge resolution of `packages/db/src/migrate.ts` (0042 then 0052); `apps/api`, `apps/web/app` and the other `packages/*/src` files are exactly as Codex built them.
 The D04 block is still tested at three levels: `apps/api/src/auth/identity.test.ts` (adapter rejects every real
@@ -43,7 +45,7 @@ spec (real address returns 403 `IDENTITY_ROUTE_BLOCKED`).
   `launchOptions.executablePath` pointing at the installed `chromium_headless_shell-1234`. Same tests, projects,
   viewports, web server and global setup. **GitHub CI, with its pinned browser, is the proof for the browser flavour.**
 
-## Commands run on `dd1ce9f` (all inside `heavy-slot m0-6l` where they use a database or browser)
+## Commands run in the working tree on `dd1ce9f` (before fix 6, which only changes how the db vitest run resolves two package names; `LANE_BASE_REF=origin/main pnpm lint` was re-run on `8ddb063`, exit 0). All inside `heavy-slot m0-6l` where they use a database or browser
 
 | Command | Exit | Count / result |
 |---|---:|---|
@@ -66,12 +68,31 @@ cause 2) and `decision-inbox.integration.test.ts` with `Connection terminated un
 full runs. I did not establish the cause of that single connection drop (the Mac was running other builders'
 PostgreSQL instances at the time); it is recorded, not explained.
 
+## Clean-clone run of the whole CI sequence (the check that exposes build-order faults)
+
+After root cause 6 I cloned the repository afresh into the scratchpad (`git clone`, checkout `6e2b65b`, plus the
+uncommitted `vitest.config.ts` fix, identical to commit `8ddb063`), ran `pnpm install --frozen-lockfile` and hydrated the
+PostgreSQL symlinks, and ran the workflow's own order with **no prior build**:
+
+| Step (clean clone, CI order) | Exit | Result |
+|---|---:|---|
+| `pnpm turbo run test --filter=@jobguard/db`, before the fix | 1 | 1 suite failed to load, 172 tests (reproduces CI) |
+| same, after the fix | 0 | 38 files / 179 tests |
+| `pnpm typecheck` | 0 | 7/7 |
+| `pnpm test` | 0 | tools 39; db 179 (38 files); core 428; AI 72; API 105; web 56; storage 4; config 1 |
+| `pnpm build` | 0 | 7/7 |
+| `CI=1 playwright test --project=mobile-360 --project=desktop` (all specs, production build, uncommitted browser-path config) | 0 | 168 passed |
+
+(The in-worktree runs above count db 182 and config 2 because stale compiled `dist/*.test.js` files left by earlier builds
+are also collected there; the clean clone has none.)
+
 ## Not run, and why
 
 * The pinned-browser run (see above): GitHub CI is the pinned-browser proof.
 * `dependency-review` (`tools/dependency-audit.mjs`) and the gitleaks `secrets` job: GitHub-only checks (network, scan
   action); not run locally.
-* No clean `node_modules` reinstall: `pnpm install --frozen-lockfile` ran against the existing store and reported up to date.
+* `pnpm install` always used the local pnpm store (`--prefer-offline` in the clean clone); no registry-fresh install was attempted.
+* `LANE_BASE_REF=origin/main pnpm lint` was run in the real worktree, not in the clean clone (the clone has no `origin/main` of GitHub's).
 * No review of the Codex implementation (security design of migration 0052, the principal bridge, SQL privileges):
   that belongs to the Opus reviewer and the Sol checker. I did not look for new defects beyond what the suites exposed.
 
