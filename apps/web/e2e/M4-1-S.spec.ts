@@ -54,7 +54,7 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  // C1/C7: a SECOND browser context (own cookies, own storage) signs in and reads the same persisted cases and source identities.
  // It cannot "open the job from Jobs": the Jobs list (readSyntheticDemo) deliberately excludes capture-created jobs, so the job page is
  // reached by its URL (fresh sign-in, second context, identical persisted data). Ben accepted this substitute (card jobguard-open-from-jobs-substitute-2026-10-03,
- "Accept the substitute"); see BUILDER_RECEIPT_repair6.md.
+ // "Accept the substitute"); see BUILDER_RECEIPT_repair6.md.
  const second=await browser.newContext(),secondPage=await second.newPage();
  await secondPage.goto("/");await secondPage.getByRole("button",{name:"Start the demo"}).click();const skip=secondPage.getByRole("button",{name:"Skip tour"});await skip.waitFor({state:"visible"});await skip.click();
  await secondPage.goto(`/jobs/${jobId}#recovery-cases`);await V(secondPage,"case-state","Prevented before payment");
