@@ -1,0 +1,37 @@
+# Verdict M4-3-S — PR #92 — head fd56bdd09be1d804e996335d7e0e1211c6c0d195 — FAIL
+
+**Reviewer:** Claude reviewer agent, fresh context; did not build this. Retrospective independent verdict (merged to main as 694e9e1 without one). Bound to head `fd56bdd` only; merge-base with main-before-merge is `483e012`, so the reviewed diff is `git diff 483e012 fd56bdd` (23 files, +122/−12; five commits 8f4a2dd…fd56bdd). Lane `m4-3-s` lists branch `codex/build-jobguard-m4-3-s-with-evidence-pack-features`, which is the real PR head branch (corrected in 0509156).
+**Contract:** BUILD_PLAN.md §31 M4-3-S (lines 1856–1864) plus §13.2 C1–C8. Builder receipt under `docs/verdicts/`: none. The PR body itself states the Playwright spec never ran green ("no green local Playwright receipt yet").
+
+## Commands run (scratch worktree at fd56bdd, `pnpm install --frozen-lockfile` clean)
+| Command | Exit | Result |
+|---|---|---|
+| `pnpm -r build` | 0 | OK |
+| `pnpm typecheck` | 0 | 0 TS errors |
+| `pnpm openapi:check` | 0 | spec matches (adds `/recovery-cases/{id}/evidence-packs` GET/POST and `/{packId}/download`) |
+| `GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH=<head.ref=lane branch, base=483e012, head=fd56bdd> pnpm lint:lanes` | 0 | lane `m4-3-s`, 23 files inside allow-list |
+| same env, `pnpm lint` | 0 | core purity (69 files), lane, money-arithmetic, commercial-boundary passed |
+| `pnpm --filter @jobguard/core test` / `api` / `web` / `ai` | 0/0/0/0 | 326 / 75 / 36 / 72 passed (core includes 2 new evidence-pack tests) |
+| `pnpm test:db` | — | **NOT RUN**: embedded-postgres `initdb` aborts on this Mac (`dyld: Library not loaded: @loader_path/../lib/libicudata.68.dylib`); no Docker/system Postgres; not repaired per instruction. |
+| `pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M4-3-S.spec.ts` | — | **NOT RUN** here; **never passed anywhere** per the builder's own receipt. |
+
+## Findings (severity, file:line)
+1. **HIGH — the pack does not map real sources; it maps template strings.** `packages/db/src/evidence-pack-repository.ts:3` (`inputs()`) fabricates every "source" from string literals: `Accepted quote £…; approval revision 1`, `Relevant proof version N; private contact example.invalid`, `Approved variation revision 1`, `Generated customer invoice immutable revision 1`, and for merchant cases the hard-coded `Supplier agreement AG-320` / `Delivery note DN-320` / `Supplier invoice INV-320` regardless of the case's actual `source_refs`. Nothing reads the quote, proof, variation, invoice or supplier-document tables, so "open exact immutable versions" (Done-when 1) is not implemented; the manifest is deterministic only because it is constant, and the hashes are hashes of sentences the code just wrote. `evidenceVersion` is a client-supplied integer that merely changes the sentence.
+2. **HIGH — "invalidates previously approved attachments" is vacuous.** `attachment_approval_valid` (migration `0041_evidence_packs.sql:9`) defaults `false` and is never written by any code path (grep: only read in the repository view and `apps/web/app/ui/evidence-packs.tsx`). The UI line `Previous attachment approval invalidated by the new evidence version` renders whenever a second pack exists, because the previous flag is always false. No approval ever existed to invalidate (Done-when 3).
+3. **MEDIUM — malformed-scenario checks exist only in the browser; the server cannot report a finding.** `evidence-pack-repository.ts` `list()` calls `inspectEvidenceManifest(manifest, sources, true)` against the very rows it stored, with checkpoint trust hard-coded `true`, so `findings` is always empty server-side. The four findings in the e2e come from `evidence-packs.tsx` mutating the array client-side. There is no "standalone manifest verifier" and no "independent verifier reports the same findings as UI" beyond the same core function called twice on the same data.
+4. **MEDIUM — download is not a ZIP or PDF.** `download` returns `renderStandalonePack()` plain text; the Next route and Nest controller send it as `content-type: application/zip` with a `.zip` filename (`apps/web/app/api/recovery-cases/[id]/evidence-packs/[packId]/download/route.ts`, `apps/api/src/evidence-pack.controller.ts`). The stored `format` column is a label only. Users will receive a corrupt archive.
+5. **MEDIUM — no DB integration test for the two new tables.** Only catalog assertions were added to `tenancy.integration.test.ts` / `UIWIRE-12.integration.test.ts`. No test exercises `generate` replay, cross-tenant insert denial, runtime UPDATE/DELETE denial, wrong-case lookup or audit append (C4/C6 "test actual runtime SQL denial … as well as mutation/tenant attacks").
+6. **MEDIUM — C6 not met by the builder's own account.** The e2e spec was committed without a passing run in either project; C8 says missing evidence is a hold, and the PR was merged anyway.
+7. **LOW — hand-rolled SHA-256 in core** (`packages/core/src/evidence-pack.ts`) is tested against a single one-block vector (`"abc"`). Add a multi-block vector (e.g. the 448-bit NIST string) and a non-ASCII vector, or route hashing through an injected function.
+8. **LOW — process/docs.** `packages/db/MIGRATIONS.md` has no entry for 0041 (0034/0035 added theirs); actor is the client-supplied `actorRef` defaulting to `"practice-owner"`; no receipt in `docs/verdicts/M4-3-S/`.
+
+Checked and clean: migration 0041 — `jobguard_migration` ownership, ENABLE+FORCE RLS, tenant policy, runtime SELECT/INSERT only, tenant/job-qualified FKs to `recovery_case`, 64-char hash columns, `UNIQUE(tenant_id,command_id)`; replay by command id under a per-case advisory lock; manifest canonicalisation sorts keys and entries and excludes ids/time; `contentMatches` can be true while `complete` is false when the checkpoint is untrusted (matches the contract's distinction); original and redacted proof carry distinct hashes with `redactedFrom` lineage; wording uses "mapped, inspectable" and no `court-ready` / `tamper-proof` / `externally timestamped` / `verified recovery` / `bank-verified` phrases; single global banner asserted; no external calls; Next routes are thin authenticated adapters over the shared seam.
+
+## Why FAIL, and exact repairs
+FAIL rather than HOLD because, independent of the missing test runs, the code demonstrably does not meet Done-when 1 and 3: the "sources" are invented strings and attachment-approval invalidation cannot happen. Repairs:
+- R1. Build `inputs()` from the real immutable records (accepted quote revision, approvals, proof objects, variations, issued invoice, supplier agreement/delivery/invoice rows for the case's `source_refs`), selecting by tenant/job/case; drop the literals.
+- R2. Implement attachment approval as a recorded command (or remove the column and the UI line) and prove that a new evidence version flips the previous approval to invalid.
+- R3. Serve a real ZIP (or PDF) or change the content type and label to `text/plain`; store what was actually produced.
+- R4. Add `evidence-packs.integration.test.ts` on the embedded-postgres harness covering replay, wrong case, cross-tenant insert (42501), runtime UPDATE/DELETE denial and audit append.
+- R5. Make the server-side inspection honest (persist verifier results or drop the always-true call) and add the standalone verifier the contract names.
+- R6. Run `pnpm test:db` and the M4-3-S e2e in both projects and attach counts before re-review.
