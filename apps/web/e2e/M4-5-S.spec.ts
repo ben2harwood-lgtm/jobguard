@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { get, persistedRecoverySources, post, recordedProof } from "./helpers/recovery-sources";
 
-test.setTimeout(360_000);
 const banner = "Practice sandbox — synthetic data; nothing is sent or charged";
 const customerBody = "Practice message — not sent. Our practice records show £320.00 net remains in this case. Please review the attached example records.";
 const supplierBody = "Practice message — not sent. Our practice supplier records show £320.00 net is questioned in this supplier correction case. Please review the attached example supplier records.";
@@ -45,7 +44,6 @@ async function assertLayout(page: Page, names: string[]) {
 }
 
 test("previews, approves and simulates one factual customer message that is delivered exactly once", async ({ page, browser, request }, testInfo) => {
-  test.setTimeout(360_000);
   const { source, caseId } = await customerCaseWithPack(page);
   const pack = (await get(page, `/api/recovery-cases/${caseId}/evidence-packs`)).packs.at(-1);
   await click(page, "Preview factual message");
@@ -138,7 +136,6 @@ test("previews, approves and simulates one factual customer message that is deli
 });
 
 test("uses supplier wording and recipient, shows an unknown outcome as unknown, and checks rather than resends", async ({ page }, testInfo) => {
-  test.setTimeout(360_000);
   const source = await persistedRecoverySources(page);
   const rate = await post(page, "/api/material-rates", { version: "material-rate-command.v1", merchantName: "Fictional Builders Merchant", sku: `MSG-${randomUUID()}`, description: "Fictional building material", pricePence: 2000, priceUnit: "each", taxBasis: "net", effectiveFrom: "2026-09-01", sourceLabel: "Entered synthetic agreement", expectedVersion: 0 });
   await post(page, `/api/jobs/${source.jobId}/materials`, { version: "material-requirement-command.v1", scopeItemId: source.scopeItemId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0 });
@@ -193,7 +190,6 @@ test("uses supplier wording and recipient, shows an unknown outcome as unknown, 
 });
 
 test("revocation and changed evidence both block execution and nothing is sent", async ({ page }, testInfo) => {
-  test.setTimeout(360_000);
   const { source, caseId } = await customerCaseWithPack(page);
   await click(page, "Preview factual message");
   await click(page, "Approve this exact message");
@@ -229,6 +225,7 @@ test("revocation and changed evidence both block execution and nothing is sent",
   await page.reload();
   await V(page, "pursuit-delivery", "Blocked — the message or its evidence changed; nothing sent"); await V(page, "pursuit-sink-count", "0");
   await expect(button(page, "Preview factual message")).toBeDisabled();
-  await assertLayout(page, ["Preview factual message", "Refresh saved messages"]);
+  // The preview button is disabled here, and a disabled button cannot take focus, so the focus check starts from an enabled control.
+  await assertLayout(page, ["Refresh saved messages", "Preview factual message"]);
   await page.screenshot({ path: `test-results/M4-5-S-blocked-${testInfo.project.name}.png`, fullPage: true });
 });
