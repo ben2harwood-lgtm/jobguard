@@ -15,3 +15,31 @@ it("CH-3a binding correction preserves issued quote bytes, hash, snapshot and au
  expect((await admin.query(`SELECT id,snapshot,parties_snapshot,content_hash FROM app.quote_document_version WHERE tenant_id=$1 AND job_id=$2`,[TENANT,JOB])).rows[0]).toEqual(document);
  expect((await admin.query(`SELECT immutable_content,content_hash FROM app.action_outbox WHERE tenant_id=$1`,[TENANT])).rows).toEqual(outbox);
 });
+
+it("CH-3a refuses, inside the send transaction, a quote whose frozen binding changed, and rolls every send effect back",async()=>{
+ const revision=(await admin.query(`SELECT id FROM app.quote_revision WHERE tenant_id=$1 AND job_id=$2 AND issuable=true ORDER BY revision DESC LIMIT 1`,[TENANT,JOB])).rows[0].id as string;
+ const documentId=randomUUID(),document={schemaVersion:"quote-document.v1",documentVersion:3,reference:"Q-0003",quoteRevisionId:revision,currency:"GBP",issuer:{name:"A Builder Ltd",address:["1 Trade Road"],email:"builder@example.test"},customer:{name:"Synthetic Customer",address:["14 King Street"],email:"customer@example.test"},lines:[{scopeItemId:SCOPE,description:"Fit cabinets",quantity:"2.5",unit:"hour",netPence:29290}],exclusions:[],qualifications:["Synthetic only"],subtotalPence:30832,discountPence:1542,netPence:29290,taxPence:5858,totalPence:35148};
+ const artifact=await new QuoteDocumentRepository(runtime).create(context,{jobId:JOB,documentId,quoteRevisionId:revision,objectVersionId:"synthetic-object-v3",document});
+ const send=()=>{const commandId=randomUUID(),authorizationId=randomUUID(),outboxActionId=randomUUID(),recipients=JSON.stringify(["customer@example.test"]);
+  return{commandId,outboxActionId,promise:new UserCommandDispatcher(runtime).dispatch(context,{version:"command.v1",commandId,commandType:"quote.issue",semanticKey:`issue:${documentId}:${commandId}`,actorMembershipId:MEMBER,subjectType:"quote_document",subjectRef:documentId,authorizationId,action:{actionType:"quote.send",recipient:recipients,contentHash:artifact.content_hash,aggregateRevision:3,amountPence:null,currency:null,policyVersion:"free-quote-send.v1",expiresAt:new Date(Date.now()+60000)}},new IssueQuoteMutation({tenantId:TENANT,jobId:JOB,documentId,outboxActionId,recipients:["customer@example.test"],immutableContent:new TextDecoder().decode(artifact.pdf)}))};};
+ const effects=async(attempt:{commandId:string;outboxActionId:string})=>({
+  send:(await admin.query(`SELECT 1 FROM app.quote_send WHERE tenant_id=$1 AND document_id=$2`,[TENANT,documentId])).rowCount,
+  outbox:(await admin.query(`SELECT 1 FROM app.action_outbox WHERE tenant_id=$1 AND id=$2`,[TENANT,attempt.outboxActionId])).rowCount,
+  receipt:(await admin.query(`SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[TENANT,attempt.commandId])).rowCount,
+  decision:(await admin.query(`SELECT 1 FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2`,[TENANT,documentId])).rowCount});
+ // A binding change holds the job lock exactly as bind_job_parties does, and commits only after the send is waiting on it.
+ const view=await new JobPartiesRepository(runtime).view(context,MEMBER,JOB),holder=await admin.connect(),bindCommand=randomUUID();
+ try{
+  await holder.query("BEGIN");await holder.query("SELECT set_config('app.tenant_id',$1,true)",[TENANT]);
+  await holder.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[bindCommand,TENANT,bindCommand,"d".repeat(64),MEMBER]);
+  await holder.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[TENANT,JOB,randomUUID(),view.jobRevision,view.current!.customerRevisionId,null,view.current!.siteRevisionId,true,"Race correction",MEMBER,bindCommand]);
+  const racing=send();let settled=false;racing.promise.then(()=>{settled=true;},()=>{settled=true;});
+  let waiting=false;for(let i=0;i<200&&!waiting&&!settled;i++){waiting=(await admin.query(`SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND pid<>pg_backend_pid()`)).rowCount===1;if(!waiting)await new Promise(r=>setTimeout(r,50));}
+  if(!waiting){await holder.query("ROLLBACK").catch(()=>undefined);throw new Error("the send did not wait for the binding change (it finished or never blocked)");}
+  await holder.query("COMMIT");
+  await expect(racing.promise).rejects.toThrow("QUOTE_CHANGED");
+  expect(await effects(racing)).toEqual({send:0,outbox:0,receipt:0,decision:0});
+ }finally{holder.release();}
+ // Once the new binding is committed, the same document is refused in a plain send as well.
+ const later=send();await expect(later.promise).rejects.toThrow("QUOTE_CHANGED");expect(await effects(later)).toEqual({send:0,outbox:0,receipt:0,decision:0});
+});
