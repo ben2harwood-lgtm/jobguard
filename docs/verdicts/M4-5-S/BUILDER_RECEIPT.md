@@ -56,11 +56,37 @@ AGENTS §5.3 (exact authorization bound to action, hash, recipient, amount, poli
 
 ## Commands actually run
 
-Node v24.17.0, pnpm 10.28.1, embedded PostgreSQL 16.10 (dylib symlinks hydrated from the package's own script, run from its directory). DB and browser runs inside `heavy-slot m45s`; ports 3000 and 55432 checked free first; shared memory listed before and after.
+Node v24.17.0, pnpm 10.28.1, embedded PostgreSQL 16.10 (dylib symlinks hydrated from the package's own script, run from its directory).
 
-RESULTS_TABLE_PLACEHOLDER
+Local gate on head `8f5dbdb` (the code and tests are identical to the final head; the final commit adds only this receipt). All database and browser stages ran in one `heavy-slot m45s` slot.
+
+| Command | Exit | Result |
+|---|---|---|
+| `pnpm typecheck --force` | 0 | 7 of 7 tasks, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | 0 | core purity (71 files), lane `m4-5-s` (all changed files inside the exact-path allow-list), money-arithmetic and commercial-boundary checks; 7 of 7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `m4-5-s`, branch `codex/sandbox/m4-5-s-r2` |
+| `pnpm build --force` | 0 | 7 of 7 tasks, 0 cached |
+| `pnpm openapi:check` | 0 | spec matches (adds `/recovery-cases/{id}/messages` GET/POST and `/{messageId}/commands` POST) |
+| `pnpm test --force` | 0 | 13 of 13 tasks: tool tests 39; config 2; storage 4; core 474; ai 72; api 148; web 63; db 40 files / 223 tests |
+| `pnpm test:db` | 0 | 40 files, 223 tests (real PostgreSQL 16 under the non-owner runtime role) |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests (fresh install, upgrade, catalog counts 44) |
+| `pnpm exec playwright test --project=mobile-360 --project=desktop M4-5-S.spec.ts M4-3-S.spec.ts M4-2-S.spec.ts` (private config, see below) | 0 | 16 passed in 1.9 min: M4-5-S 3 tests x 2 projects, plus the M4-3-S and M4-2-S specs (the two files whose UI this change touches) |
+
+New tests in this change: core 21 (`recovery-message.test.ts`); API 40 (application, controller, error mapping); database 40: 37 in `recovery-messages.integration.test.ts` (preview, amount grouping at 1p, £2,500.00 and the £10,000,000,000.00 limit, approval replay and races, advance, unknown/reconcile, revocation and blocking, forged raw INSERTs, runtime UPDATE/DELETE/TRUNCATE denial, missing and foreign tenant context, catalog and audit) and 3 in `recovery-message-upgrade.integration.test.ts`; browser 3 tests x 2 projects.
+
+**Browser run environment.** The pinned `chromium_headless_shell-1193` is not installed on this Mac. A private config kept outside the repository (`/private/tmp/.../m45s/pw2/playwright.config.ts` plus a copy of `global-setup.ts`) is generated from the repo's own files and changes only: the browser binary (installed `chromium_headless_shell-1234`) and the ports (web 3145, database 55445, so it cannot collide with another builder's run on 3000/55432). Test timeouts, retries, projects, viewports and expectations are the repo's, untouched. Ports were checked free first. `ipcs -m` was listed before and after: the segments shown are other builders' live PostgreSQL processes, not leaks of this run, and none was cleared.
+
+**GitHub CI history for this PR (all on the PR, nothing weakened between runs).**
+
+| Head | `checks` | What failed |
+|---|---|---|
+| `7ca7b29` | fail | 6 browser failures, all test-side: Next's route announcer is also `role=alert`, so a bare `getByRole("alert")` was ambiguous (4), and the panel styled only `:focus-visible`, so a programmatic focus showed no outline (2) |
+| `dc33cc6` | fail | 2 browser failures (the revocation test in both projects): its final layout check focused "Preview factual message", which is legitimately disabled in the blocked state, and a disabled button cannot take focus. 170 passed. That commit also added file-level and per-test timeouts |
+| `8f5dbdb` | **pass** (10m44s) | 172 passed in the browser step; `secrets` and `dependency-review` pass |
+
+**Timeouts.** `dc33cc6` added `test.setTimeout(360_000)` at file level and in each test. They were not needed and are removed in `8f5dbdb` (none remains in `M4-5-S.spec.ts`; no existing timeout was changed anywhere). The journeys finish inside Playwright's default 30 s, as the local run on repo timeouts and the green CI run show. The focus failure was fixed by focusing an enabled control, not by waiting longer.
 
 ## Not run, and why
 
-- `pnpm eval` (no prompt, model or extraction change; synthetic eval suite not applicable). The full e2e suite across every spec and `test:regression` were not re-run locally; CI runs them.
+- `pnpm eval` (no prompt, model or extraction change; synthetic eval suite not applicable). The full e2e suite across every spec and `test:regression` were not re-run locally; CI ran all of them (172 browser tests, green on `8f5dbdb`).
 - No live provider, spend, real send, production mode or real data. No decision record was approved or changed.
