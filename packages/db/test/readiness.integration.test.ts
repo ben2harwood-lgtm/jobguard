@@ -59,7 +59,7 @@ describe("readiness command replay returns the first result and is bound to its 
   expect(await repo.advance(ctx,a,noop)).toEqual(noopResult);
   expect(await repo.advance(ctx,a,creating)).toEqual(created);
   expect((await admin.query("SELECT count(*)::int n FROM app.readiness_decision WHERE job_id=$1",[a])).rows[0].n).toBe(1);
-  expect((await admin.query("SELECT command_id FROM app.watchdog_command_result WHERE job_id=$1 AND command_type='readiness.advance' ORDER BY created_at",[a])).rows.map(r=>r.command_id).sort()).toEqual([creating.commandId,noop.commandId].sort());
+  expect((await admin.query("SELECT command_id FROM app.watchdog_command_identity WHERE job_id=$1 AND command_type='readiness.advance' ORDER BY created_at",[a])).rows.map(r=>r.command_id).sort()).toEqual([creating.commandId,noop.commandId].sort());
  });
  it("serialises concurrent duplicates into one stored command, and refuses a concurrent reuse on another job",async()=>{
   const repo=new ReadinessRepository(runtime),a=randomUUID(),b=randomUUID();await importWatchdogFixtureJob(admin,tenant,a);await importWatchdogFixtureJob(admin,tenant,b);

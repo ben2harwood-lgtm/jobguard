@@ -51,8 +51,6 @@ export interface CommandMutation<TResult extends Record<string, unknown>> {
   lock?(database: TenantTransaction, command: ConsequentialCommand): Promise<void>;
   mutate(database: TenantTransaction, command: ConsequentialCommand): Promise<TResult>;
   auditEvents?(result: TResult, command: ConsequentialCommand): readonly AuditEventInput[];
-  /** Another command id with the same semantic effect was answered with the first command's result; the handler may record that identity. */
-  onDuplicate?(database: TenantTransaction, command: ConsequentialCommand, result: TResult): Promise<void>;
 }
 
 export class UserCommandDispatcher {
@@ -75,7 +73,7 @@ export class UserCommandDispatcher {
           `SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND
            (command_id=$2 OR (command_type=$3 AND semantic_key=$4))`,[context.tenantId,command.commandId,command.commandType,command.semanticKey])).rows[0];
         if(!prior || prior.request_hash!==requestHash) throw new CommandError("COMMAND_CONFLICT");
-        if(prior.status==="succeeded"){await handler.onDuplicate?.(database,command,prior.result);return prior.result;}
+        if(prior.status==="succeeded") return prior.result;
         throw new CommandError("COMMAND_CONFLICT");
       }
       // Do not upgrade the membership KEY SHARE lock already taken by the receipt's

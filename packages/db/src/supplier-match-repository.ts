@@ -1,4 +1,4 @@
-import { findCommandResult, replayStoredResult, requireLiveJob, storeCommandResult, type WatchdogCommandType } from "./watchdog.js";
+import { beginStoredCommand, requestHashFor, requireLiveJob, storeCommandResult, type WatchdogCommandType } from "./watchdog.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
@@ -18,8 +18,8 @@ export class SupplierMatchRepository {
   ) {
     return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
-      const requestHash = hash({ jobId, ...input }), stored = await findCommandResult(db, context.tenantId, input.commandId);
-      if (stored) return replayStoredResult<any>(stored, jobId, "supplier_match.create", requestHash);
+      const requestHash = hash({ jobId, ...input }), { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.create", requestHash: requestHashFor("supplier_match.create", jobId, request) });
+      if (began.replay) return began.result;
       const sources = await this.sources(db.$client, context.tenantId, jobId);
       const proposal = proposeSupplierMatch({
         version: "supplier-match-input.v1",
@@ -90,8 +90,8 @@ export class SupplierMatchRepository {
   ) {
     return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
-      const requestHash = hash({ jobId, ...input }), stored = await findCommandResult(db, context.tenantId, input.commandId);
-      if (stored) return replayStoredResult<any>(stored, jobId, "supplier_match.correct", requestHash);
+      const requestHash = hash({ jobId, ...input }), { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.correct", requestHash: requestHashFor("supplier_match.correct", jobId, request) });
+      if (began.replay) return began.result;
       if (
         new Set(input.allocations.map((x) => x.receiptVersionId)).size !==
         input.allocations.length
@@ -267,7 +267,7 @@ export class SupplierMatchRepository {
   /** The command's first result is stored with it, in the same transaction, so a replay (including of a no-op) returns exactly this. */
   private async finish(db: any, tenantId: string, jobId: string, commandId: string, kind: WatchdogCommandType, requestHash: string) {
     const result = await this.viewIn(db.$client, tenantId, jobId);
-    await storeCommandResult(db, { tenantId, commandId, jobId, kind, requestHash, result });
+    await storeCommandResult(db, { tenantId, commandId, result });
     return result;
   }
   private async viewIn(db: any, tenantId: string, jobId: string, at?: { proposalId: string; revision: number }) {
