@@ -10,15 +10,32 @@ export const MAX_ALLOCATION_LINES = 10_000;
 export const MAX_EXACT_PENCE_INPUT_DIGITS = 100;
 const MONEY_DIGITS = String(MAX_MONEY_PENCE).length;
 /**
+ * Working-size limit for one allocation sum (the line balances, or the explicit shares): the longest common
+ * denominator, in digits, that the sum may need before it is reduced. It limits the work, not the answer; the answer is
+ * limited separately to MAX_EXACT_PENCE_INPUT_DIGITS digits (a total that does not fit still fails closed). A total that
+ * cancels down to a short value is accepted when its common denominator is within this size, however long that
+ * denominator is compared with the result. Set at the lcm of money-sized amounts, one per line: every balance the
+ * allocator is built for is a line amount scaled by ratios of earlier allocation totals, so its denominator divides a
+ * money-sized total.
+ */
+export const MAX_ALLOCATION_WORKING_DIGITS = Number(BigInt(MAX_ALLOCATION_LINES) * BigInt(MONEY_DIGITS));
+/**
  * Longest numerator or denominator the fee kernel accepts for an exact principal, derived from the sizes the allocator
- * supports rather than fitted to an example. The exact net of every line in one allocation sums to a fraction whose
- * denominator divides (receipt denominator) x (total numerator) x (total denominator) x lcm(line gross amounts).
- * Each line gross has at most MONEY_DIGITS digits, so the lcm has at most MAX_ALLOCATION_LINES x MONEY_DIGITS digits,
- * and the three allocation values add at most 3 x MAX_EXACT_PENCE_INPUT_DIGITS. The numerator is at most the money
- * limit times the denominator, which adds MONEY_DIGITS. Larger sums fail closed with a typed error.
+ * supports rather than fitted to an example. Pro-rata gives a line the exact gross  receipt x balance / total  and the
+ * exact net  gross x (line net / line gross), so the net of one line has a denominator dividing
+ *   (receipt denominator) x (balance denominator) x (total numerator) x (line gross),
+ * and the exact net of every line in one allocation sums to a fraction whose denominator divides
+ *   (receipt denominator) x (total numerator) x lcm(balance denominators) x lcm(line gross amounts).
+ * The receipt denominator and the total numerator have at most MAX_EXACT_PENCE_INPUT_DIGITS digits each (the result
+ * limit of the allocation sum). The balance denominators' lcm is the allocation sum's common denominator, so it is
+ * within MAX_ALLOCATION_WORKING_DIGITS. Each line gross has at most MONEY_DIGITS digits, so their lcm has at most
+ * MAX_ALLOCATION_LINES x MONEY_DIGITS digits. Explicit allocation is covered the same way: the share denominators are
+ * summed under the same working limit. The numerator is at most the money limit times the denominator, which adds
+ * MONEY_DIGITS. Larger sums fail closed with a typed error.
  */
 export const MAX_EXACT_PENCE_DIGITS = Number(
-  BigInt(MAX_ALLOCATION_LINES) * BigInt(MONEY_DIGITS) + 3n * BigInt(MAX_EXACT_PENCE_INPUT_DIGITS) + BigInt(MONEY_DIGITS),
+  BigInt(MAX_ALLOCATION_LINES) * BigInt(MONEY_DIGITS) + BigInt(MAX_ALLOCATION_WORKING_DIGITS) +
+  2n * BigInt(MAX_EXACT_PENCE_INPUT_DIGITS) + BigInt(MONEY_DIGITS),
 );
 const integerOf = (limit: number) => z.string().regex(/^-?(?:0|[1-9]\d*)$/u).max(limit);
 const positiveOf = (limit: number) => z.string().regex(/^[1-9]\d*$/u).max(limit);
@@ -87,14 +104,29 @@ export function parseExactPence(raw: unknown, schema: z.ZodType<{ numerator: str
   if (magnitude > BigInt(MAX_MONEY_PENCE) * value.denominator) throw new SharedMoneyError("INVALID_SHARED_MONEY");
   return value;
 }
+/** 10^digits, remembered: the limits are few and fixed, and building one of 100,000 digits costs milliseconds. */
+const powersOfTen = new Map<number, bigint>();
+function powerOfTen(digits: number): bigint {
+  let power = powersOfTen.get(digits);
+  if (power === undefined) {
+    power = 10n ** BigInt(digits);
+    if (powersOfTen.size < 16) powersOfTen.set(digits, power);
+  }
+  return power;
+}
 /**
  * Exact sum of any number of terms, fully reduced, without the quadratic cost of adding one term at a time: the common
  * denominator is the running lcm (a gcd of a long number with a short one is one remainder), and the result is reduced
  * by lcm(gcd(numerator, d)) over the term denominators d, which equals gcd(numerator, lcm of the denominators).
- * A sum whose denominator or numerator would exceed `maxDigits` digits fails closed with INVALID_SHARED_MONEY.
+ * Two separate limits apply. `maxDigits` limits the reduced result: a numerator or denominator of more digits fails
+ * closed with INVALID_SHARED_MONEY. `maxWorkingDigits` limits the common denominator needed on the way, before any
+ * reduction, and so bounds the work; it defaults to the fee kernel's own limit, so a total that cancels to a short value
+ * is accepted whenever its terms are within the sizes the kernel supports.
  */
-export function sumExactPence(values: readonly ExactPence[], maxDigits = MAX_EXACT_PENCE_DIGITS): ExactPence {
-  const limit = 10n ** BigInt(maxDigits);
+export function sumExactPence(
+  values: readonly ExactPence[], maxDigits = MAX_EXACT_PENCE_DIGITS, maxWorkingDigits = Math.max(maxDigits, MAX_EXACT_PENCE_DIGITS),
+): ExactPence {
+  const resultLimit = powerOfTen(maxDigits), workingLimit = powerOfTen(maxWorkingDigits);
   const byDenominator = new Map<bigint, bigint>();
   for (const value of values) {
     if (value.denominator <= 0n) throw new SharedMoneyError("INVALID_SHARED_MONEY");
@@ -103,7 +135,7 @@ export function sumExactPence(values: readonly ExactPence[], maxDigits = MAX_EXA
   let common = 1n;
   for (const denominator of byDenominator.keys()) {
     common = common / gcd(common, denominator) * denominator;
-    if (common >= limit) throw new SharedMoneyError("INVALID_SHARED_MONEY");
+    if (common >= workingLimit) throw new SharedMoneyError("INVALID_SHARED_MONEY");
   }
   let numerator = 0n;
   for (const [denominator, sum] of byDenominator) numerator += sum * (common / denominator);
@@ -113,7 +145,9 @@ export function sumExactPence(values: readonly ExactPence[], maxDigits = MAX_EXA
     divisor = divisor / gcd(divisor, shared) * shared;
   }
   const result: ExactPence = Object.freeze({ numerator: numerator / divisor, denominator: common / divisor });
-  if ((result.numerator < 0n ? -result.numerator : result.numerator) >= limit) throw new SharedMoneyError("INVALID_SHARED_MONEY");
+  if (result.denominator >= resultLimit || (result.numerator < 0n ? -result.numerator : result.numerator) >= resultLimit) {
+    throw new SharedMoneyError("INVALID_SHARED_MONEY");
+  }
   return result;
 }
 export function serializeExactPence(value: ExactPence): z.infer<typeof exactPenceV1> {

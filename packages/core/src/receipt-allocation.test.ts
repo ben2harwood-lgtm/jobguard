@@ -220,18 +220,29 @@ describe("balances whose exact total reduces to a short value",()=>{
  // Independent of the module: sum over the product of the denominators, no reduction anywhere.
  const roundHalfEven=(n:bigint,d:bigint)=>{const q=n/d,twice=(n%d)*2n;return twice>d||(twice===d&&q%2n===1n)?q+1n:q;};
  it("the exact net of many cancelling balances enters the fee kernel at the supported working size",()=>{
-  // 300 pairs, balances 1/e and (e-1)/e with a 100-digit e each: the total is 300p, the common denominator about 30,000 digits.
+  // 300 pairs, balances 1/e and (e-1)/e with a 100-digit e each: the total is 300p and the balances' common denominator
+  // about 30,000 digits. Every line has its own 12-digit gross, so the line amounts add their own lcm on top.
   const pairs=300,denominators=hundredDigits(pairs);
-  const lines=denominators.flatMap((e,k)=>[withBalance(`a${k}`,frac(1n,e),100,120),withBalance(`b${k}`,frac(e-1n,e),90,120)]);
+  const gross=(k:number,side:number)=>100_000_000_000+4*k+side+1,net=(g:number,per:number)=>Math.floor(g/6)*per;
+  const lines=denominators.flatMap((e,k)=>[
+   withBalance(`a${k}`,frac(1n,e),net(gross(k,0),5),gross(k,0)),withBalance(`b${k}`,frac(e-1n,e),net(gross(k,2),4),gross(k,2)),
+  ]);
   const out=allocateReceiptToLines(raw(7n,lines));
   expect(grossOf(out)).toEqual(exactPence(7n));
   const summed=sumExactPence(out.map(a=>a.net));
-  // receipt/300 x sum over pairs of (100/120)/e + (90/120)(e-1)/e = receipt/300 x (pairs x 3/4 + (1/12) x sum of 1/e)
-  let sumNumerator=0n,sumDenominator=1n;
-  for(const e of denominators){sumNumerator=sumNumerator*e+sumDenominator;sumDenominator*=e;}
-  const numerator=7n*(BigInt(pairs)*3n*sumDenominator+sumNumerator),denominator=300n*4n*sumDenominator;
-  expect(summed).toEqual(exactPence(numerator,denominator));
-  expect(summed.denominator.toString().length).toBeGreaterThan(25_000);
+  // Independent of the module: one unreduced fraction over the product of every denominator, no reduction anywhere.
+  // receipt/total x sum over pairs of  netA/(grossA e) + netB (e-1)/(grossB e)
+  let fractionNumerator=0n,fractionDenominator=1n;
+  for(const [k,e] of denominators.entries()){
+   const a=lines[2*k]!,b=lines[2*k+1]!;
+   const numerator=BigInt(a.netPence)*BigInt(b.grossPence)+BigInt(b.netPence)*BigInt(a.grossPence)*(e-1n),denominator=BigInt(a.grossPence)*BigInt(b.grossPence)*e;
+   fractionNumerator=fractionNumerator*denominator+numerator*fractionDenominator;fractionDenominator*=denominator;
+  }
+  const numerator=7n*fractionNumerator,denominator=BigInt(pairs)*fractionDenominator;
+  // equal by value (cross-multiplication: reducing a 30,000-digit pair would cost a full-length gcd), and nothing the sum added
+  expect(summed.numerator*denominator).toBe(numerator*summed.denominator);
+  expect(denominator%summed.denominator).toBe(0n);
+  expect(summed.denominator.toString().length).toBeGreaterThan(30_000);
   expect(summed.denominator.toString().length).toBeLessThanOrEqual(MAX_EXACT_PENCE_DIGITS);
   expect(fee(summed)).toBe(Number(roundHalfEven(numerator,denominator*10n)));
  });

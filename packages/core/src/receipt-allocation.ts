@@ -1,20 +1,31 @@
 import { z } from "zod";
 import { MAX_MONEY_PENCE } from "./money.js";
 import {
-  compareExactPence, exactPence, exactPenceInputV1, MAX_ALLOCATION_LINES, MAX_EXACT_PENCE_INPUT_DIGITS, multiplyExactPence,
-  parseExactPence, SharedMoneyError, sumExactPence, type ExactPence,
+  compareExactPence, exactPence, exactPenceInputV1, MAX_ALLOCATION_LINES, MAX_ALLOCATION_WORKING_DIGITS, MAX_EXACT_PENCE_INPUT_DIGITS,
+  multiplyExactPence, parseExactPence, SharedMoneyError, sumExactPence, type ExactPence,
 } from "./cumulative-fee.js";
 const amount = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
+/**
+ * Timestamps this contract reads: an RFC 3339 date-time, seconds optional, any number of fractional digits, and a UTC
+ * offset of `Z` or +/-hh:mm (colon optional) with hours 00-23 and minutes 00-59. The schema's own datetime check
+ * validates the calendar date and clock time but not the offset's range, so the offset is validated here, once, by the
+ * same expression that reads it.
+ */
+const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)$/u;
+const instant = z.string().datetime({ offset: true }).refine(value => INSTANT.test(value), "Invalid UTC offset");
 export const receiptAllocationV1 = z.object({
   version: z.literal("receipt-allocation.v1"), sourceRef: z.string().min(1).max(300),
-  receiptGross: exactPenceInputV1, effectiveAt: z.string().datetime({ offset: true }), direction: z.enum(["receipt", "reversal"]),
+  receiptGross: exactPenceInputV1, effectiveAt: instant, direction: z.enum(["receipt", "reversal"]),
   invoiceId: z.string().min(1).max(200),
   separateInvoiceId: z.string().min(1).max(200).nullable(),
   explicit: z.array(z.object({ lineId: z.string().min(1).max(200), gross: exactPenceInputV1 }).strict()).max(MAX_ALLOCATION_LINES).nullable(),
   lines: z.array(z.object({ id: z.string().min(1).max(200), invoiceId: z.string().min(1).max(200),
-    existedAt: z.string().datetime({ offset: true }), outstandingGross: exactPenceInputV1,
+    existedAt: instant, outstandingGross: exactPenceInputV1,
     netPence: amount, grossPence: amount.refine(v => v > 0),
-  }).strict().refine(v => v.netPence <= v.grossPence, "Net cannot exceed gross")).max(MAX_ALLOCATION_LINES),
+  }).strict().refine(v => v.netPence <= v.grossPence, "Net cannot exceed gross")
+    // Exact comparison: balance / denominator <= gross. A negative balance passes here and is rejected by the allocator.
+    .refine(v => BigInt(v.outstandingGross.numerator) <= BigInt(v.grossPence) * BigInt(v.outstandingGross.denominator),
+      "Outstanding balance cannot exceed the line's original gross")).max(MAX_ALLOCATION_LINES),
 }).strict();
 export type ReceiptAllocationInput = z.infer<typeof receiptAllocationV1>;
 export type ReceiptLineAllocation = Readonly<{
@@ -23,7 +34,6 @@ export type ReceiptLineAllocation = Readonly<{
 }>;
 
 type Instant = Readonly<{ seconds: bigint; fraction: string }>;
-const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:?\d{2})$/u;
 /**
  * Exact instant for any string the schema accepts: whole seconds since a fixed origin, with the timezone offset applied,
  * plus the decimal fraction as written (trailing zeros dropped). Date.parse would truncate to milliseconds.
@@ -60,9 +70,12 @@ export function allocateReceiptToLines(raw: unknown): readonly ReceiptLineAlloca
   const fail = (): never => { throw new SharedMoneyError("INVALID_ALLOCATION"); };
   // Allocation inputs are short (schema-bounded), so reducing them is cheap and keeps every output in canonical form.
   const read = (raw: unknown): ExactPence => { const value = parseExactPence(raw, exactPenceInputV1); return exactPence(value.numerator, value.denominator); };
-  // A sum of inputs is bounded like an input, so per-line work stays bounded and every output fits the fee kernel.
+  // The total of the line balances (or of the explicit shares) is limited like an input, so per-line work stays bounded.
+  // The limit is on the reduced total: terms whose common denominator is longer but which cancel to a short value are
+  // accepted within the working-size limit, which bounds the work and, with it, the size of every output the fee kernel
+  // later sums (see MAX_EXACT_PENCE_DIGITS).
   const total = (values: readonly ExactPence[]): ExactPence => {
-    try { return sumExactPence(values, MAX_EXACT_PENCE_INPUT_DIGITS); } catch { return fail(); }
+    try { return sumExactPence(values, MAX_EXACT_PENCE_INPUT_DIGITS, MAX_ALLOCATION_WORKING_DIGITS); } catch { return fail(); }
   };
   const receipt = read(input.receiptGross);
   if (receipt.numerator < 0n || new Set(input.lines.map(l => l.id)).size !== input.lines.length) fail();
