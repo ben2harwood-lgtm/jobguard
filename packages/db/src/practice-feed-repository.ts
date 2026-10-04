@@ -57,7 +57,11 @@ export class PracticeFeedRepository {
     if (!uuid.safeParse(jobId).success) fail("PRACTICE_FEED_NOT_FOUND");
   }
 
-  /** Session ownership, live membership (locked for writes), a real synthetic job, and no pilot/production activation. */
+  /**
+   * Session ownership, live membership (locked for writes) and a real job in this tenant. The deployment environment, checked in
+   * guard() and again by the database trigger, is what refuses pilot and production use: a practice job's own activation mode is
+   * pilot_no_charge in the no-charge scenario, so it cannot be the discriminator.
+   */
   private async authorize(db: TenantTransaction, context: VerifiedTenantContext, actor: PracticeFeedActor, sessionId: string, jobId: string, lock: boolean) {
     await db.$client.query("SELECT set_config('app.practice_feed_session',$1,true),set_config('app.practice_feed_environment','synthetic_demo',true)", [sessionId]);
     // FOR SHARE needs UPDATE on app.membership, which jobguard_runtime already holds (0000_tenancy.sql). It keeps the
@@ -67,7 +71,6 @@ export class PracticeFeedRepository {
     [context.tenantId, actor.membershipId, actor.identityUserId]);
     if (member.rowCount !== 1) fail("PRACTICE_FEED_FORBIDDEN");
     if (!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2", [context.tenantId, jobId])).rowCount) fail("PRACTICE_FEED_NOT_FOUND");
-    if ((await db.$client.query("SELECT 1 FROM app.job_activation WHERE tenant_id=$1 AND job_id=$2 AND mode<>'synthetic_demo'", [context.tenantId, jobId])).rowCount) fail("PRACTICE_FEED_FORBIDDEN");
     const runs = await db.$client.query<{ session_id: string }>("SELECT session_id FROM app.sandbox_run WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, jobId]);
     if (runs.rows.some((row) => row.session_id !== sessionId)) fail("PRACTICE_FEED_FORBIDDEN");
   }

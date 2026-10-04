@@ -249,22 +249,31 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     expect(await count("SELECT count(*) n FROM app.practice_feed_event WHERE job_id=$1", [f.jobId])).toBe(0);
   });
 
-  it("refuses production, pilot and unconfigured consumption, and a pilot-activated job", async () => {
+  it("refuses production, pilot and unconfigured deployment environments; a no-charge practice job in the synthetic environment is allowed", async () => {
     const f = await connected();
     for (const environment of ["production", "production_billing", "pilot_no_charge", "provider_sandbox", "unconfigured"]) {
       await expect(repo(environment).view(context, actor, f.sessionId, f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
       await expect(cmd(repo(environment), f, advance(1, "receipt-384", "settled"))).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
     }
+    expect(await count("SELECT count(*) n FROM app.practice_feed_event WHERE job_id=$1", [f.jobId])).toBe(0);
+    // The practice sandbox itself starts jobs as pilot_no_charge (its no-charge scenario), so a job's activation mode cannot be what
+    // refuses pilot use: the deployment environment is. An activated practice job therefore works in the synthetic environment.
     const client = await admin.connect();
     try {
-      // Privileged fixture only: a pilot activation without the unrelated quote workflow.
+      // Privileged fixture only: the activation row without the unrelated quote workflow.
       await client.query("SET session_replication_role=replica");
       await client.query(`INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)
         VALUES($1,$2,$3,$4,1,$5,'pilot_no_charge','pilot_no_charge.v1','reference_fee_policy_v1',$6,now())`, [randomUUID(), DEMO_TENANT_ID, f.jobId, randomUUID(), "a".repeat(64), DEMO_MEMBERSHIP_ID]);
     } finally { await client.query("SET session_replication_role=origin"); client.release(); }
-    await expect(view(f)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
-    await expect(cmd(repo(), f, advance(1, "receipt-384", "settled"))).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
-    expect(await count("SELECT count(*) n FROM app.practice_feed_event WHERE job_id=$1", [f.jobId])).toBe(0);
+    const state = await cmd(repo(), f, advance(1, "receipt-384", "settled"));
+    expect(movement(state, "receipt-384").state).toBe("settled");
+    // ...while the same database refuses the write when the environment setting is not the synthetic one, even for raw SQL.
+    await expect(withTenant(runtime, context, async (db) => {
+      await settings(db, f.sessionId, "pilot_no_charge");
+      await db.$client.query(`INSERT INTO app.practice_feed_command(id,tenant_id,job_id,account_id,revision,action,actor_membership_id,payload_hash,environment) VALUES($1,$2,$3,$4,3,'disconnect',$5,$6,'synthetic_demo')`,
+        [randomUUID(), DEMO_TENANT_ID, f.jobId, state.accountId, DEMO_MEMBERSHIP_ID, "d".repeat(64)]);
+    })).rejects.toThrow("PRACTICE_FEED_FORBIDDEN");
+    expect(await count("SELECT count(*) n FROM app.practice_feed_command WHERE job_id=$1", [f.jobId])).toBe(2);
   });
 
   describe("actual runtime SQL cannot forge facts", () => {

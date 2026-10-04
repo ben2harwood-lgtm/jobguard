@@ -95,7 +95,9 @@ DO $$ DECLARE n text; BEGIN
 END $$;
 
 -- One SECURITY INVOKER guard for all four tables: it never bypasses FORCE RLS and grants no business write.
--- Every write must come from a live, session-owned, synthetic-only account whose command carries the exact generated effect.
+-- Every write must come from a live, session-owned account in the synthetic environment whose command carries the exact generated effect.
+-- A job's activation mode is deliberately not a discriminator: the practice sandbox itself starts jobs as pilot_no_charge (no-charge scenario),
+-- so the deployment environment setting is the authority, as for every other synthetic leaf.
 CREATE FUNCTION app.guard_practice_feed() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 DECLARE
  v_tenant uuid := nullif(current_setting('app.tenant_id',true),'')::uuid;
@@ -114,7 +116,6 @@ BEGIN
   v_actor := NEW.actor_membership_id;
   IF NEW.session_id IS DISTINCT FROM v_session
      OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=v_actor AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()))
-     OR EXISTS(SELECT 1 FROM app.job_activation j WHERE j.tenant_id=NEW.tenant_id AND j.job_id=NEW.job_id AND j.mode<>'synthetic_demo')
   THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN NEW;
  END IF;
@@ -127,7 +128,6 @@ BEGIN
  SELECT * INTO a FROM app.practice_feed_account WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND id=NEW.account_id;
  IF NOT FOUND OR a.session_id IS DISTINCT FROM v_session
     OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=a.actor_membership_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()))
-    OR EXISTS(SELECT 1 FROM app.job_activation j WHERE j.tenant_id=NEW.tenant_id AND j.job_id=NEW.job_id AND j.mode<>'synthetic_demo')
  THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
 
  IF TG_TABLE_NAME='practice_feed_command' THEN

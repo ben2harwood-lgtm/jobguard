@@ -142,7 +142,9 @@ test("£384: pending cannot qualify, settled stays unallocated, only a matched r
   await V(page, "receipt-qualification", "Qualifies — verified by a simulated settled movement");
   await V(page, "receipt-hint", "Matched to a simulated settled movement. Nothing has been allocated.");
   await V(page, "receipt-matched-movement", "receipt-384");
-  await V(page, "allocated-eligible-net", "£0.00"); await expect(page.getByTestId("eligible-recovery-principal")).toHaveText("GBP 0.00");
+  await V(page, "allocated-eligible-net", "£0.00");
+  // Settlement and a matched receipt opened and landed nothing: the job still has no recovery case at all.
+  expect(await (await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()).toMatchObject({ cases: [], realExternalActions: 0 });
   await expect(match).toHaveCount(0);
   const matchedView = await saved(page, jobId);
   expect(matchedView.receipts[0].assessment).toMatchObject({ status: "qualifies", reason: "matched", matchedMovementKey: "receipt-384" });
