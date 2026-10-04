@@ -145,3 +145,62 @@ A first e2e run was interrupted (SIGINT, clean teardown) because it had started 
 ## OPEN FOR BEN
 
 Should a job created through the capture journey appear in the demo's Jobs list? Today it does not, by design, and that is why the CH-2 browser tests reopen the captured job by deep link and use the seeded jobs for the Jobs-link path. My lean: not as part of CH-2. Changing the list touches `SBOX-1`, `shell` and the demo's story, so it is a product decision, not a repair.
+
+---
+
+# Round 3 — repair of the second Sol check (REPAIR on eed9a04)
+
+**Repair builder:** Claude Sonnet 5.5. **Not independently verified, not accepted.** Input: GPT-6.1 Sol high check `ch-2-solcheck-20261004T033348.md` (REPAIR, four P2). The coordinator allowed extending this task's own unmerged migration 0050 for a command record; 0050 is not renumbered. Each fix was written test-first and the tests were run red on the unchanged code.
+
+## Findings
+
+| Finding | Status | Tests (red first) | Fix |
+|---|---|---|---|
+| P2-1 Successful no-op advances lose their command identity | **Fixed** | 9f96961: no-op advance replays its first result, conflicts on a changed payload, another job and after a later plan; parallel duplicates store one command; a parallel reuse on another job loses (failed: it accepted a changed payload, worked on another job and created a decision after a newer plan) | 13e849f |
+| P2-2 Things-to-check replays return current state | **Fixed** | 9f96961: evaluate, review and bill supersession replay after later reviews and supersessions (failed: replay returned the latest finding, outcome and reduction) | 13e849f |
+| P2-3 Aliased Nest decorators evade discovery | **Fixed** | e7dfedf (failed: the aliased `Patch` found no route) | e7dfedf |
+| P2-4 C7 Jobs navigation for the captured job | **Left open as instructed: OPEN FOR BEN** | — | none |
+
+**P2-1 and P2-2: stored command results.** Migration 0050 gains `app.watchdog_command_result`, keyed by `(tenant_id, command_id)` with the job, the kind (`readiness.advance`, `things_to_check.evaluate`, `things_to_check.review`, `things_to_check.supersede`), a request hash over the job id and the input, and the exact result first returned (jsonb). It is tenant FORCE RLS with a lenient tenant policy, owned by `jobguard_migration`, runtime SELECT and INSERT only (no UPDATE, DELETE or TRUNCATE; `jobguard_infrastructure` has no access), guarded by the same live-job insert trigger, and has a composite foreign key to the job. Each command writes its row in the same transaction as its effects, for every success including a no-op, so the command id and result are atomic with the effect. Replay returns the stored result; the same id with a changed payload, on another job or as another command kind conflicts. Same-job commands are serialised by a per-job advisory lock taken after the live guard and before any audit append, so a parallel duplicate waits and replays; a parallel reuse on another job loses on the primary key and reports `IDEMPOTENCY_CONFLICT`. Rows from before it existed still replay from their own tables on their own job (`record` keeps its exact derivation from persisted rows, unchanged). `MIGRATIONS.md` documents the table. The two stored-command kinds that return state use the one rule, so evaluate, review and supersession now behave like readiness.
+
+**P2-3.** Every class and method decorator is resolved through its import: renamed and namespace imports and local const re-bindings of `@nestjs/common`'s `Controller`, `Post`, `Put`, `Patch`, `Delete` and `All` are found; decorators from other `@nestjs` packages are ignored; anything that does not resolve to a `@nestjs` package (a local or imported wrapper, a computed decorator) fails closed with "cannot tell whether … declares a route" instead of being skipped. Negative tests show aliased, namespaced and re-bound endpoints fail classification and wrappers are refused. The real tree still classifies both ways.
+
+## Commits
+
+| SHA | Subject |
+|---|---|
+| 9f96961 | test(db): no-op advances keep their command identity; things-to-check replays return the first result |
+| 13e849f | fix(db): store every successful watchdog command's first result; replay returns it |
+| e7dfedf | test(api): resolve aliased and namespaced Nest decorators in the mutation registry |
+| (this commit) | docs(verdicts): CH-2 round-3 receipt |
+
+The new test file and the existing tenancy catalog test are added to the CH-2 lane by exact path; the tenancy test's exhaustive table lists gain the new table (a necessary consequence of adding a table, not a loosened check).
+
+## Commands run (same Mac and heavy-slot rules)
+
+| Command | Exit | Result |
+|---|---|---|
+| readiness, things-replay and watchdog suites, new tests, unchanged code | 1 | red as intended: 15 failed |
+| registry test, alias tests, unchanged discovery | 1 | red as intended: 1 failed of 25 |
+| `pnpm typecheck` | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7/7 tasks plus custom lints |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `ch-2` passed |
+| `pnpm openapi:check` | 0 | matches |
+| `git diff --check` | 0 | clean |
+| `pnpm build` | 0 | 7/7 tasks |
+| `pnpm test` | 0 | node tools 39; config 2; storage 4; ai 72; web 56; core 394; api 100; db 199 in 37 files |
+| `pnpm test:db` | 0 | 37 files, 199 tests |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| e2e `CH-2` (3), `M2-1B-S` to `M2-7-S`, `UIWIRE-7`, `UIWIRE-9`, both projects, same uncommitted local browser config | 0 | 28 passed |
+
+A first full run failed only the two exhaustive table-list checks in `tenancy.integration.test.ts` (they list every table, and the new one was missing); after adding the table to those lists the suites above passed. The e2e run preceded that list-only edit and no product code changed after it.
+
+## Not run, and residual
+
+- The other 38 e2e specs were not re-run locally; GitHub CI runs all of them.
+- `record` (plan) still derives its replay from persisted rows rather than a stored result; it is correct by construction and covered by the round-2 tests.
+- Evaluate, review, supersede and advance now share one stored-result rule. The other live-only commands (orders, supplier documents, matches, inbox) were not part of these findings and are unchanged.
+
+## OPEN FOR BEN
+
+Unchanged from round 2: whether a job created through the capture journey should appear in the demo's Jobs list (P2-4: the checker wants the captured job reopened through Jobs, or a formally approved C7 amendment). My lean: decide it as a product change after CH-2, not inside this repair.
