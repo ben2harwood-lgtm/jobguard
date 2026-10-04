@@ -47,6 +47,24 @@ export function assertClaimAmendable(input: Readonly<{ state: RecoveryCaseState;
   if (closedOrFullyReceived && money(input.claimedPence).pence > money(input.currentClaimedPence).pence) throw new RecoveryClaimAmendmentOnClosedCaseError();
 }
 
+/**
+ * The state an ACCEPTED claim amendment leaves the case in. It applies the amendment rules first (assertClaimAmendable), then keeps the
+ * previous state, with one exception: when the amendment REDUCES the claim of an open case to exactly the principal already settled
+ * (received, plus any written off), nothing is outstanding and the case would otherwise be stranded (no receipt can be recorded, there is
+ * nothing to write off and "close_recovered" is only allowed from landed). That case is recorded as received in full (landed), the same
+ * state a final receipt produces, so it can close as recovered; when part of the settled principal was written off it is recorded as
+ * closed_no_recovery, the state the write-off itself produces. Equal or upward amendments, and cases already landed, closed or prevented,
+ * never change state here.
+ */
+export function stateAfterClaimAmendment(input: Readonly<{ state: RecoveryCaseState; currentClaimedPence: number; claimedPence: number; landedPence: number; writtenOffPence: number }>): RecoveryCaseState {
+  assertClaimAmendable(input);
+  const open = input.state === "identified" || input.state === "evidence_assembled" || input.state === "pursuing" || input.state === "negotiating" || input.state === "partially_landed";
+  const claimed = money(input.claimedPence).pence;
+  const settled = money(input.landedPence).pence + money(input.writtenOffPence).pence;
+  if (!open || claimed >= money(input.currentClaimedPence).pence || claimed !== settled) return input.state;
+  return money(input.writtenOffPence).pence === 0 ? "landed" : "closed_no_recovery";
+}
+
 export class RecoveryClaimBelowSettledError extends Error {
   readonly code = "RECOVERY_CLAIM_BELOW_SETTLED";
   constructor() { super("RECOVERY_CLAIM_BELOW_SETTLED"); }
