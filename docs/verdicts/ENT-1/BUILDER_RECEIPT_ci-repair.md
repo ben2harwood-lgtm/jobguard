@@ -75,3 +75,48 @@ Code under test is `bdad5fe` (every row that says "final") unless a row says oth
 * Independent Claude verdict on the Codex code, a separate acceptance, and the exact-commit rebinding of any earlier review remain outstanding. Any commit after `04d2dd2` needs a fresh or explicitly rebound review.
 
 **Not independently verified, not accepted.**
+
+---
+
+# Round 2 (4 October 2026): repairs for the GPT-6.1 Sol check
+
+Input: Sol check `ent-1-solcheck-20261003T234604.md`, **REPAIR** on `9a5b6ba` (two P2, no P1). Opus had given PASS on the same head (PR comment). Tests were written first and run red before each fix. **Not independently verified, not accepted.**
+
+## Finding status
+
+| Finding | Status | Fix and evidence |
+| --- | --- | --- |
+| P2: forwarded headers could bypass the Origin check | Fixed | The gate no longer reads `X-Forwarded-Host`, `X-Forwarded-Proto` or `Host`. Trusted origins now come only from server configuration: `JOBGUARD_ALLOWED_ORIGINS` (comma-separated, for custom domains or self-hosting), the Vercel system variables `VERCEL_URL`, `VERCEL_BRANCH_URL` and `VERCEL_PROJECT_PRODUCTION_URL`, and, only when `VERCEL` is unset, the loopback hosts (`127.0.0.1`, `localhost`, `[::1]`) on the port the server itself listens on (Next builds `request.url` from the server's own host and port configuration). Origins with credentials, `null`, missing, non-http(s) and lookalike hosts are rejected. Commit `d5d7ef4`. |
+| P2: failed refresh left stale state shown as success | Fixed | `load()` now reports whether the persisted organisation was read. After an acknowledged mutation whose refresh fails, the page keeps a visible focused error, says the organisation is out of date, keeps the old revision visibly distinct from success, and disables every revision-dependent control (unit, team, member, grant, revoke, move, client, contract) until a successful reload clears the state. Commit `035d626`. |
+
+## Tests first (commit `62d1efe`, red on purpose)
+
+* `apps/web/app/api/contractor/route.test.ts` calls the real POST handler with the downstream application replaced. Both Sol bypasses returned 200 instead of 403 on `9a5b6ba` (foreign Origin plus a matching supplied `X-Forwarded-Host`; http Origin on an https request plus `X-Forwarded-Proto: http`), as did the same forged headers on `?action=start`. Four of five cases failed. A fifth case asserts the configured deployment origin is accepted whatever forwarded headers say.
+* `apps/web/app/api/contractor/origin.test.ts` (added with the fix, 12 cases): configuration parsing, loopback only off Vercel and only on the server's port, and rejection of the two bypasses, lookalike hosts, credentials, `null` and missing Origin.
+* `apps/web/e2e/ENT-1.spec.ts`, new case "an acknowledged change whose refresh fails is shown as stale, never as saved, and blocks revision-dependent edits". **This is a fault test: it aborts only the follow-up refresh `GET` at the transport (`route.abort`); the real `POST` is allowed through and really commits (asserted through the API: revision 1), and no JobGuard success response is fabricated or fulfilled.** It then asserts the focused alert, the "out-of-date" status, the unchanged displayed revision, disabled edit buttons, an enabled Reload button, recovery after a successful reload, a further successful change, persistence after a page reload, the sandbox banner and no horizontal overflow. Failed at both viewports on `9a5b6ba` (page claimed "Saved to the organisation"); passes now.
+
+## Commands, exit codes and counts (round 2, head before this section)
+
+| Command | Exit | Result |
+| --- | ---: | --- |
+| `pnpm exec vitest run app/api/contractor` on `9a5b6ba` plus the new tests (red) | 1 | 4 of 5 route cases failed (200 instead of 403); `origin.test.ts` could not import the missing module. |
+| Same, after `d5d7ef4` | 0 | 2 files, 17 tests. |
+| `CI=1 … test:e2e -c <local config> --project=mobile-360 --project=desktop ENT-1.spec.ts` before the UI fix (red) | 1 | 4 passed, the new case failed at both viewports. |
+| Same, after `035d626` | 0 | 6 passed (3 cases at each viewport). |
+| `pnpm typecheck` | 0 | 7 of 7 tasks. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7 of 7 tasks; lane boundary passed (all new files are under the existing `apps/web/app/api/contractor/**` and `apps/web/e2e/ENT-1.spec.ts` entries). |
+| `pnpm build` | 0 | 7 of 7 tasks. |
+| `pnpm test` (in `heavy-slot`) | 0 | tools 39 pass; web 9 files, 73 tests (was 56; ran for real); core 1,648, ai 72, config 2, storage 4, api 77 and db 163 (35 files) are turbo cache replays of runs whose inputs are unchanged (db hash `7384a7d2`, the real run at `bdad5fe`). |
+| `pnpm test:migrations` (in `heavy-slot`) | 0 | 2 files, 11 tests. |
+| `pnpm openapi:check` (in `heavy-slot`) | 0 | passed. |
+| `CI=1 … test:e2e … ENT-1.spec.ts` (in `heavy-slot`, final) | 0 | 6 passed. |
+
+## Not run, and why
+
+* The whole existing e2e suite was not rerun locally after the two web changes; it passed locally at `6fe4985` and in CI at `9a5b6ba`, and GitHub CI on the new head runs it again with the pinned browser. The same local browser override as before was used (uncommitted config outside the repository).
+* Vercel ingress behaviour. Sol's reproductions were handler-level and so are these tests. The fix removes dependence on any request header, so it does not rely on how Vercel's proxy treats them.
+* Opus LOW notes (assert `contract_id` of every returned version; proxy-appended `X-Forwarded-Host`) were not actioned: the second no longer applies because forwarded headers are not read; the first is a test-strengthening suggestion outside the Sol REPAIR list.
+
+## OPEN FOR BEN
+
+* **Custom domain or self-hosting.** If the demo is served from a hostname other than the Vercel deployment, branch or production URLs, set `JOBGUARD_ALLOWED_ORIGINS` (for example `https://demo.example.org`) in that environment. Without it, browser writes from that hostname are refused with 403. Lean: set it only when a custom domain is actually attached; no value is needed for the current Vercel URLs or for local development.
