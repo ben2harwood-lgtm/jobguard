@@ -263,3 +263,79 @@ A first full run failed one test in my new suite (a replay on another job return
 ## OPEN FOR BEN
 
 Unchanged: whether a captured job should appear in the demo's Jobs list (the Sol checker's accepted substitute is deep link plus the seeded jobs through Jobs). My lean: decide as a product change after CH-2.
+
+---
+
+# Round 5 — one replay contract for every watchdog_live_only command (Sol REPAIR on c2abfcb)
+
+**Repair builder:** Claude Sonnet 5.5. **Not independently verified, not accepted.** Input: GPT-6.1 Sol high check `ch-2-solcheck-20261004T080304.md` (REPAIR, three P2) and the coordinator's instruction to stop fixing replay command by command: enumerate every live-only command from the registry, give each the same contract, and add one table-driven test that makes a new or missed command fail. Correction to the round-4 receipt: it said the purchase-order, supplier-document, evidence and proof commands "already replay through expected-revision checks or the command receipt". That was wrong for revisions, intake, goods receipts, confirmation and finalisation.
+
+## Merge with main first
+
+`origin/main` now has #101 and #102 (migration 0042). Merged non-force (`30e7266`); the lane registry was resolved as a union of lane entries with `lane-union.py`; `migrate.ts` lists 0042 then 0050; migration counts are main's 43 plus this PR's 0050, so 44 in `demo-bootstrap` and `UIWIRE-12` (its `0000..0042` range stays 43). Three things main did not know about CH-2's guards had to be adapted, none weakened:
+- main's evidence-pack fixture inserted evidence and supplier-document rows for a not-live job with no tenant context, so the live guard refused it; the fixture now sets the tenant context and switches its jobs live for those inserts, then restores their status;
+- my stricter route discovery found main's `POST .../evidence-packs/[packId]/attachment-approval` unclassified; it and its Nest route are `post_live_billing` (the card leaves evidence packs outside the watchdog);
+- `supplier-documents.integration.test.ts` asserted that replaying a confirmation returns `replayed:true`; the contract requires the first result, so it now expects `replayed:false` (the exact change Sol described).
+
+## The command list, generated from the registry
+
+The registry's `watchdog_live_only` keys (19 web routes and dynamic actions, 3 command literals, 15 Nest routes) resolve to the 17 guarded commands in `watchdogCommandGuards`. The new test builds its cases from that list and fails if either side drifts.
+
+| Guarded command | First result stored in | Legacy rows (no stored result) |
+|---|---|---|
+| `purchase-order-repository#revise` | `watchdog_command_result` | none existed (no command id) |
+| `purchase-order-repository#place` | command receipt, plus the table for a second id answered by the same effect | receipt |
+| `supplier-document-repository#intake` | table | none existed |
+| `supplier-document-repository#appendReceipt` | table | none existed |
+| `supplier-document-repository#confirm` | table | revision row, `replayed:false` |
+| `supplier-match-repository#create` | table | none existed |
+| `supplier-match-repository#correct` | table | derived as of its revision |
+| `discrepancy-repository#evaluate` / `#review` / `#supersede` | table | derived as of audit position |
+| `readiness-repository#record` / `#advance` | table | derived from plan or decision rows |
+| `inbox-relevance-repository#seed` | command receipt | receipt |
+| `inbox-relevance-repository#dismiss` | table | derived as of audit position |
+| `evidence#beginUpload` | the upload row (its id is the identity; fields validated; the signed URL is re-signed by design) | same |
+| `evidence#finalize` | table identity row; replay returns the immutable evidence object | object validated against version and type |
+| `proof-repository#complete` | command receipt, now checked before the evidence is re-read | receipt |
+
+## Findings
+
+| Finding | Status |
+|---|---|
+| P2-1 Proof finalisation lacks command identity and changed-payload conflicts | **Fixed.** Finalisation carries a command identity (the proof API passes its command id; omitted, a stable one is derived), is stored with the object in one transaction, conflicts on a changed version, type, upload or job, and both existing-object return paths are validated. |
+| P2-2 Expected-revision commands do not meet the replay contract | **Fixed.** Order revisions, document intake and goods receipts accept an optional `commandId` (compatible with the strict v1 schemas) and replay from the stored first result instead of failing on the stale revision; confirmation no longer changes `replayed:false` to `true`; the placement second-id gap and the proof-complete replay after invalidation are closed. |
+| P2-3 Legacy replay paths return current state | **Fixed.** Match correction is derived as of its revision; inbox dismissal and the things-to-check findings, outcomes and supersessions as of their audit position (fact candidates by creation time, because fact revisions carry no audit link); every legacy path refuses another job's id. Upgrade tests replay legacy rows after later changes. |
+
+## Commits
+
+| SHA | Subject |
+|---|---|
+| 30e7266 | merge: bring origin/main (#101, #102) into codex/sandbox/ch-2 |
+| 0c84a31 | test(db): one table-driven replay contract for every watchdog_live_only command |
+| c4dfe11 | fix(db): every watchdog_live_only command stores and replays its first result |
+| (this commit) | docs(verdicts): CH-2 round-5 receipt |
+
+## Commands run (same Mac and heavy-slot rules)
+
+| Command | Exit | Result |
+|---|---|---|
+| contract suite, unchanged code | 1 | red as intended: 7 of 17 commands failed (revise, place, intake, receipt, confirm, finalize, complete); the 10 already fixed passed |
+| contract + legacy suites, fixed code | 0 | 3 files, 28 tests |
+| `pnpm typecheck` | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7/7 tasks plus custom lints |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `ch-2` passed |
+| `pnpm openapi:check` | 0 | matches |
+| `git diff --check` | 0 | clean |
+| `pnpm build` | 0 | 7/7 tasks |
+| `pnpm test` | 0 | node tools 39; config 2; storage 4; ai 72; core 446; api 133; web 63; db 256 in 43 files |
+| `pnpm test:db` | 0 | 43 files, 256 tests |
+| `pnpm test:migrations` | 0 | 2 files, 11 tests |
+| e2e, the whole suite, both projects, same uncommitted local browser config | 0 | 172 passed |
+
+The first full run after the merge failed three things that the merge exposed (the unclassified route, main's fixture and the confirm assertion above); they were fixed and `pnpm test`, `pnpm test:db` and `pnpm test:migrations` re-run green. The whole e2e run preceded those test-only and registry-only fixes; no product code changed after it.
+
+## Residual
+
+- `beginUpload` returns a freshly signed upload URL on a replay by design (it expires in minutes); every other field is the first result.
+- The signed-URL point and the placement second-id rule are the two places where a command's identity is recorded by something other than one table row; both are in the contract test.
+- No new founder question. The Jobs-list question from rounds 2 to 4 stays open.
