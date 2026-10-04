@@ -1,1 +1,15 @@
-import{cookies}from"next/headers";import{NextResponse}from"next/server";import{hasSyntheticSession}from"../../../../lib/synthetic-server";import{workspaceApplication}from"../../../../lib/workspace-server";const auth=async()=>hasSyntheticSession((await cookies()).get("jg_session")?.value);export async function GET(_r:Request,{params}:{params:Promise<{id:string}>}){if(!await auth())return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{return NextResponse.json(await workspaceApplication().evidencePacks.list((await params).id))}catch(e){return NextResponse.json({code:e instanceof Error?e.message:"DATABASE_UNAVAILABLE"},{status:400})}}export async function POST(r:Request,{params}:{params:Promise<{id:string}>}){if(!await auth())return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{return NextResponse.json(await workspaceApplication().evidencePacks.generate((await params).id,await r.json()))}catch(e){return NextResponse.json({code:e instanceof Error?e.message:"INVALID_COMMAND"},{status:400})}}
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { workspaceApplication } from "../../../../lib/workspace-server";
+const failure = (error: unknown) => {
+  const { status, code } = workspaceApplication().evidencePacks.failure(error);
+  return NextResponse.json({ code }, { status });
+};
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try { return NextResponse.json(await workspaceApplication().evidencePacks.list((await cookies()).get("jg_session")?.value, (await params).id)); }
+  catch (error) { return failure(error); }
+}
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try { return NextResponse.json(await workspaceApplication().evidencePacks.generate((await cookies()).get("jg_session")?.value, (await params).id, await request.json())); }
+  catch (error) { return failure(error); }
+}
