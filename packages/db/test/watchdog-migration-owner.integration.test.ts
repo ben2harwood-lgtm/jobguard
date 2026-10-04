@@ -39,6 +39,13 @@ async function applyAsMigrationOwner() {
     client.release();
   }
 }
+// The pre-deploy mislink check is documented in MIGRATIONS.md; the suite runs that exact text.
+async function documentedMislinkCheck() {
+  const docs = await readFile(new URL("../MIGRATIONS.md", import.meta.url), "utf8");
+  const sql = docs.match(/```sql\n(-- 0050 pre-deploy check[\s\S]*?)```/u)?.[1];
+  expect(sql, "MIGRATIONS.md must contain the 0050 pre-deploy check").toBeTruthy();
+  return (await admin.query<{ constraint_name: string; violations: string }>(sql!)).rows.filter(row => Number(row.violations) > 0).map(row => [row.constraint_name, Number(row.violations)]);
+}
 const posture = async () => (await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname", [forcedTables])).rows;
 
 beforeAll(async () => {
@@ -68,6 +75,8 @@ describe("CH-2 migration 0050 as the non-superuser migration owner", () => {
     expect((await posture()).every(row => row.relrowsecurity && row.relforcerowsecurity && row.rolname === "jobguard_migration")).toBe(true);
   });
   it("finds a legacy cross-job link in another tenant, applies nothing and leaves FORCE RLS intact", async () => {
+    // The documented read-only pre-deploy query names the same row's constraint before anything is applied.
+    expect(await documentedMislinkCheck()).toEqual([["evidence_upload_scope_job_fk", 1]]);
     await expect(applyAsMigrationOwner()).rejects.toMatchObject({ code: "23503", constraint: "evidence_upload_scope_job_fk" });
     expect((await admin.query("SELECT conname FROM pg_constraint WHERE conname=ANY($1::text[])", [newConstraints])).rows).toEqual([]);
     expect((await admin.query("SELECT to_regprocedure('app.require_watchdog_live(uuid)')::text AS fn")).rows[0].fn).toBeNull();
@@ -78,6 +87,7 @@ describe("CH-2 migration 0050 as the non-superuser migration owner", () => {
   it("applies once the legacy row is repaired, validates every constraint and restores FORCE RLS", async () => {
     // Forward-fix: point the upload at its own job's scope; nothing is removed.
     await admin.query("UPDATE app.evidence_upload SET scope_item_id=$1 WHERE tenant_id=$2 AND id=$3", [scopeB1, tenantB, mislinkedUpload]);
+    expect(await documentedMislinkCheck()).toEqual([]);
     await applyAsMigrationOwner();
     const checked = await admin.query("SELECT conname,convalidated FROM pg_constraint WHERE conname=ANY($1::text[])", [newConstraints]);
     expect(checked.rows).toHaveLength(newConstraints.length);

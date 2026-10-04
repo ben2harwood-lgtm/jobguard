@@ -135,6 +135,46 @@ cost is a brief exclusive lock on those tables, so apply it in a quiet window.
 A legacy mislink makes the whole migration fail and roll back (SQLSTATE 23503);
 repair the named row with a forward-fix update, never by weakening a constraint.
 
+Pre-deploy check: run this read-only query before applying 0050 to any database
+that holds real rows, so the deploy does not stop on a legacy mislink. Run it as
+a role that bypasses row-level security (a superuser or BYPASSRLS owner): FORCE
+RLS hides every row from an ordinary role that has no tenant. Every `violations`
+value must be 0; a non-zero row names the constraint that 0050 would refuse. The
+owner-role test suite runs this exact text against a database with a known
+mislink (it reports one) and again after the forward-fix (it reports none).
+
+```sql
+-- 0050 pre-deploy check (read-only): rows the new job-qualified foreign keys would refuse.
+SELECT 'purchase_order_requirement_job_fk' AS constraint_name, count(*) AS violations FROM app.purchase_order_draft c
+  WHERE NOT EXISTS (SELECT 1 FROM app.material_requirement p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.requirement_id))
+UNION ALL SELECT 'evidence_upload_job_fk', count(*) FROM app.evidence_upload c
+  WHERE NOT EXISTS (SELECT 1 FROM app.job p WHERE (p.tenant_id,p.id)=(c.tenant_id,c.job_id))
+UNION ALL SELECT 'evidence_upload_scope_job_fk', count(*) FROM app.evidence_upload c
+  WHERE c.scope_item_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM app.scope_identity p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.scope_item_id))
+UNION ALL SELECT 'evidence_object_job_fk', count(*) FROM app.evidence_object c
+  WHERE NOT EXISTS (SELECT 1 FROM app.job p WHERE (p.tenant_id,p.id)=(c.tenant_id,c.job_id))
+UNION ALL SELECT 'evidence_object_scope_job_fk', count(*) FROM app.evidence_object c
+  WHERE c.scope_item_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM app.scope_identity p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.scope_item_id))
+UNION ALL SELECT 'evidence_object_upload_job_fk', count(*) FROM app.evidence_object c
+  WHERE c.upload_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM app.evidence_upload p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.upload_id))
+UNION ALL SELECT 'evidence_object_original_job_fk', count(*) FROM app.evidence_object c
+  WHERE c.original_evidence_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM app.evidence_object p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.original_evidence_id))
+UNION ALL SELECT 'evidence_link_evidence_job_fk', count(*) FROM app.evidence_link c
+  WHERE NOT EXISTS (SELECT 1 FROM app.evidence_object p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.evidence_id))
+UNION ALL SELECT 'stage_completion_evidence_job_fk', count(*) FROM app.stage_completion c
+  WHERE NOT EXISTS (SELECT 1 FROM app.evidence_link p WHERE (p.tenant_id,p.job_id,p.scope_item_id,p.id)=(c.tenant_id,c.job_id,c.scope_item_id,c.evidence_link_id))
+UNION ALL SELECT 'synthetic_original_upload_job_fk', count(*) FROM app.synthetic_evidence_original c
+  WHERE NOT EXISTS (SELECT 1 FROM app.evidence_upload p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.upload_id));
+```
+
+The runtime role's UPDATE on `evidence_upload` is limited to `id` and the lifecycle
+columns (`state`, `rejection_code`, `object_version_id`, `server_verified_at`).
+`id` stays granted only because `EvidenceService.beginUpload` retries with
+`ON CONFLICT (tenant_id,id) DO UPDATE SET id=EXCLUDED.id` (a no-op that returns the
+existing row); the BEFORE UPDATE guard refuses any real change of `id` or of the
+job, scope, key, hash, type or size columns, and the suite proves it. Removing the
+grant would first need that upsert rewritten, which is outside CH-2.
+
 Expand-compatible upgrade from 0041; no backfill. The CH-2 PostgreSQL suite
 constructs previous-schema uploads, applies 0050, verifies preservation and
 idempotent migration, all non-live failures, actual runtime grants and race
