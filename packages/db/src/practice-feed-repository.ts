@@ -39,14 +39,17 @@ type CommandRow = { id: string; revision: number; action: string; movement_key: 
 type EventRow = Record<string, unknown>;
 type Snapshot = {
   account: AccountRow | null; commands: CommandRow[]; events: EventRow[];
-  matches: Array<{ payment_id: string; movement_key: PracticeMovementKey }>;
+  matches: Array<{ payment_id: string; movement_key: PracticeMovementKey; reversed: boolean }>;
   payments: Array<{ id: string; invoice_id: string; paid_on: string; amount_pence: number; currency: "GBP"; reference: string; reversed: boolean }>;
 };
 
 /**
- * Internal deterministic adapter over fixed generated movement facts. There is no network, provider token or bank
- * consent anywhere in this class; it refuses to run outside the synthetic demo environment, and the database refuses
- * the same writes independently. A settled movement is never an allocation, landing, fee or qualifying recovery.
+ * Internal deterministic adapter over fixed generated movement facts. There is no network, provider token or bank consent in
+ * this class. The deployment environment is refused here (and by the application) unless it is `synthetic_demo`; the database
+ * trigger separately requires the synthetic environment setting, the owning session, a live owner membership and the exact
+ * generated effect, but that setting is written by this class, so the database cannot by itself tell a pilot deployment from a
+ * synthetic one: physical separation of pilot and production databases (BUILD_PLAN section 3) is the real boundary.
+ * A settled movement is never an allocation, landing, fee or qualifying recovery.
  */
 export class PracticeFeedRepository {
   constructor(private readonly pool: Pool, private readonly environment: string = process.env.JOBGUARD_ENV ?? "unconfigured") {}
@@ -58,21 +61,44 @@ export class PracticeFeedRepository {
   }
 
   /**
-   * Session ownership, live membership (locked for writes) and a real job in this tenant. The deployment environment, checked in
-   * guard() and again by the database trigger, is what refuses pilot and production use: a practice job's own activation mode is
-   * pilot_no_charge in the no-charge scenario, so it cannot be the discriminator.
+   * Live membership (locked for writes), a real job in this tenant, and persisted session ownership of that job. The first session to
+   * touch a job owns it: the claim is written (and audited) before any connection exists, and every other session is refused after it.
+   * A job that belongs to a sandbox run can only be owned by that run's session. Writes take the command and job locks first, so
+   * no business lock follows the audit append.
    */
-  private async authorize(db: TenantTransaction, context: VerifiedTenantContext, actor: PracticeFeedActor, sessionId: string, jobId: string, lock: boolean) {
+  private async authorize(db: TenantTransaction, context: VerifiedTenantContext, actor: PracticeFeedActor, sessionId: string, jobId: string, writeCommandId: string | null) {
     await db.$client.query("SELECT set_config('app.practice_feed_session',$1,true),set_config('app.practice_feed_environment','synthetic_demo',true)", [sessionId]);
     // FOR SHARE needs UPDATE on app.membership, which jobguard_runtime already holds (0000_tenancy.sql). It keeps the
     // membership from being revoked between this check and the commit.
     const member = await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role='owner'
-      AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>transaction_timestamp())${lock ? " FOR SHARE" : ""}`,
+      AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>transaction_timestamp())${writeCommandId ? " FOR SHARE" : ""}`,
     [context.tenantId, actor.membershipId, actor.identityUserId]);
     if (member.rowCount !== 1) fail("PRACTICE_FEED_FORBIDDEN");
+    const lockJob = () => db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [context.tenantId, jobId]);
+    if (writeCommandId) {
+      await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [context.tenantId, `practice-command:${writeCommandId}`]);
+      await lockJob();
+    }
     if (!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2", [context.tenantId, jobId])).rowCount) fail("PRACTICE_FEED_NOT_FOUND");
     const runs = await db.$client.query<{ session_id: string }>("SELECT session_id FROM app.sandbox_run WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, jobId]);
     if (runs.rows.some((row) => row.session_id !== sessionId)) fail("PRACTICE_FEED_FORBIDDEN");
+    const owner = async () => (await db.$client.query<{ session_id: string }>("SELECT session_id FROM app.practice_feed_job_owner WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, jobId])).rows[0];
+    let current = await owner();
+    if (!current) {
+      if (!writeCommandId) await lockJob();
+      current = await owner(); // a rival may have claimed it while this transaction waited for the job lock
+      if (!current) {
+        const ownerId = randomUUID();
+        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')",
+          [ownerId, context.tenantId, jobId, sessionId, actor.membershipId]);
+        await appendAuditBatch(db, [{
+          id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor.membershipId}`, eventType: "practice_feed.claimed", subjectType: "job", subjectRef: jobId,
+          payload: { references: { ownerId, sessionId }, hashes: { claim: sha256(`claim|${jobId}|${sessionId}`) }, classifications: { practiceFeed: "financial" } },
+        }]);
+        return;
+      }
+    }
+    if (current.session_id !== sessionId) fail("PRACTICE_FEED_FORBIDDEN");
   }
 
   /** One SQL statement, so commands, events, matches and receipts are read from the same snapshot. */
@@ -82,7 +108,8 @@ export class PracticeFeedRepository {
       coalesce((SELECT jsonb_agg(jsonb_build_object('id',c.id,'revision',c.revision,'action',c.action,'movement_key',c.movement_key,'payload_hash',c.payload_hash) ORDER BY c.revision)
         FROM app.practice_feed_command c WHERE c.tenant_id=$1 AND c.job_id=$2),'[]'::jsonb) commands,
       coalesce((SELECT jsonb_agg(to_jsonb(e) ORDER BY e.created_at,e.event_id) FROM app.practice_feed_event e WHERE e.tenant_id=$1 AND e.job_id=$2),'[]'::jsonb) events,
-      coalesce((SELECT jsonb_agg(jsonb_build_object('payment_id',m.payment_id,'movement_key',m.movement_key) ORDER BY m.created_at,m.id)
+      coalesce((SELECT jsonb_agg(jsonb_build_object('payment_id',m.payment_id,'movement_key',m.movement_key,
+          'reversed',EXISTS(SELECT 1 FROM app.customer_payment_reversal r WHERE r.tenant_id=m.tenant_id AND r.payment_id=m.payment_id)) ORDER BY m.created_at,m.id)
         FROM app.practice_feed_receipt_match m WHERE m.tenant_id=$1 AND m.job_id=$2),'[]'::jsonb) matches,
       coalesce((SELECT jsonb_agg(jsonb_build_object('id',p.id,'invoice_id',p.invoice_id,'paid_on',to_char(p.paid_on,'YYYY-MM-DD'),'amount_pence',p.amount_pence,'currency',p.currency,
           'reference',p.reference,'reversed',r.id IS NOT NULL) ORDER BY p.created_at,p.id)
@@ -99,7 +126,7 @@ export class PracticeFeedRepository {
       paymentId: payment.id, invoiceId: payment.invoice_id, paidOn: payment.paid_on, reference: payment.reference, amountPence: Number(payment.amount_pence),
       currency: payment.currency, reversed: payment.reversed,
       assessment: assessAttestedReceipt({ paymentId: payment.id, amountPence: Number(payment.amount_pence), currency: payment.currency, reversed: payment.reversed },
-        movements, snapshot.matches.map((match) => ({ paymentId: match.payment_id, movementKey: match.movement_key }))),
+        movements, snapshot.matches.map((match) => ({ paymentId: match.payment_id, movementKey: match.movement_key, paymentReversed: match.reversed }))),
     }));
     if (!account) {
       return { ...base, accountId: null, feedState: "not_connected", consent: null, revision: 0, movementCount: 0, movements: [], receipts: attested(snapshot.payments, []), eventCount: 0, nextCursor: null };
@@ -132,7 +159,7 @@ export class PracticeFeedRepository {
     const query = practiceFeedQueryV1.safeParse(rawQuery);
     if (!query.success) fail("INVALID_QUERY");
     return withTenant(this.pool, context, async (db) => {
-      await this.authorize(db, context, actor, sessionId, jobId, false);
+      await this.authorize(db, context, actor, sessionId, jobId, null);
       return this.readIn(db, context, sessionId, jobId, query.data!);
     });
   }
@@ -144,10 +171,8 @@ export class PracticeFeedRepository {
     const input = parsed.data!, payloadHash = sha256(canonical({ jobId, ...input }));
     try {
       return await withTenant(this.pool, context, async (db) => {
-        await this.authorize(db, context, actor, sessionId, jobId, true);
-        // Every business lock precedes the audit append; the database guard takes this same job lock.
-        await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [context.tenantId, `practice-command:${input.commandId}`]);
-        await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [context.tenantId, jobId]);
+        // authorize() takes the command and job locks before anything is appended to the audit chain; the database guard re-takes the same job lock.
+        await this.authorize(db, context, actor, sessionId, jobId, input.commandId);
         const before = await this.snapshot(db, context, sessionId, jobId);
         const replay = (await db.$client.query<{ payload_hash: string }>("SELECT payload_hash FROM app.practice_feed_command WHERE tenant_id=$1 AND id=$2", [context.tenantId, input.commandId])).rows[0];
         if (replay) {
@@ -232,6 +257,6 @@ function translate(error: unknown): unknown {
   if (typeof message === "string" && (PRACTICE_FEED_ERROR_CODES as readonly string[]).includes(message)) return new PracticeFeedRepositoryError(message as PracticeFeedErrorCode);
   if (code === "23505" && typeof constraint === "string" && constraint.startsWith("practice_feed_receipt_match")) return new PracticeFeedRepositoryError("PRACTICE_FEED_RECEIPT_ALREADY_MATCHED");
   if (code === "40001") return new PracticeFeedRepositoryError("PRACTICE_FEED_STALE_REVISION");
-  if (typeof message === "string" && /^PRACTICE_FEED_(AUDIT|CONNECTION|MATCH)_REQUIRED$|^PRACTICE_FEED_EVENT_INVALID$/u.test(message)) return new PracticeFeedRepositoryError("PRACTICE_FEED_FORBIDDEN");
+  if (typeof message === "string" && /^PRACTICE_FEED_(AUDIT|CONNECTION|MATCH|EFFECT)_REQUIRED$|^PRACTICE_FEED_EVENT_INVALID$/u.test(message)) return new PracticeFeedRepositoryError("PRACTICE_FEED_FORBIDDEN");
   return error;
 }

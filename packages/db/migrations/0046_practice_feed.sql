@@ -3,6 +3,18 @@ BEGIN;
 -- Everything here is simulated money. Nothing in this migration touches allocation, landing, fee or ledger tables,
 -- and a settled movement is a fact only. The runtime role keeps SELECT/INSERT on append-only tables and no routine grant.
 
+-- The first practice session to touch a job (a read or a connect) owns it for this feed; every later session is refused. A job that
+-- belongs to a sandbox run can only be owned by that run's session. Ownership is a persisted, audited fact, written before any
+-- connection exists, and an account can only be created for the owning session (foreign key plus guard).
+CREATE TABLE app.practice_feed_job_owner (
+ id uuid NOT NULL, tenant_id uuid NOT NULL, job_id uuid NOT NULL, session_id uuid NOT NULL, actor_membership_id uuid NOT NULL,
+ environment text NOT NULL CHECK(environment='synthetic_demo'),
+ created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+ PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id), UNIQUE(tenant_id,job_id,session_id),
+ FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id),
+ FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES app.membership(tenant_id,id)
+);
+
 CREATE TABLE app.practice_feed_account (
  id uuid NOT NULL, tenant_id uuid NOT NULL, job_id uuid NOT NULL, session_id uuid NOT NULL, actor_membership_id uuid NOT NULL,
  environment text NOT NULL CHECK(environment='synthetic_demo'),
@@ -12,6 +24,7 @@ CREATE TABLE app.practice_feed_account (
  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
  PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id), UNIQUE(tenant_id,job_id,id),
  FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id),
+ FOREIGN KEY(tenant_id,job_id,session_id) REFERENCES app.practice_feed_job_owner(tenant_id,job_id,session_id),
  FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES app.membership(tenant_id,id)
 );
 
@@ -84,7 +97,7 @@ CREATE TABLE app.practice_feed_receipt_match (
 );
 
 DO $$ DECLARE n text; BEGIN
- FOREACH n IN ARRAY ARRAY['practice_feed_account','practice_feed_command','practice_feed_event','practice_feed_receipt_match'] LOOP
+ FOREACH n IN ARRAY ARRAY['practice_feed_job_owner','practice_feed_account','practice_feed_command','practice_feed_event','practice_feed_receipt_match'] LOOP
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
@@ -94,7 +107,7 @@ DO $$ DECLARE n text; BEGIN
  END LOOP;
 END $$;
 
--- One SECURITY INVOKER guard for all four tables: it never bypasses FORCE RLS and grants no business write.
+-- One SECURITY INVOKER guard for all five tables: it never bypasses FORCE RLS and grants no business write.
 -- Every write must come from a live, session-owned account in the synthetic environment whose command carries the exact generated effect.
 -- A job's activation mode is deliberately not a discriminator: the practice sandbox itself starts jobs as pilot_no_charge (no-charge scenario),
 -- so the deployment environment setting is the authority, as for every other synthetic leaf.
@@ -112,9 +125,21 @@ BEGIN
     OR current_setting('app.practice_feed_environment',true) IS DISTINCT FROM 'synthetic_demo'
  THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
 
+ IF TG_TABLE_NAME='practice_feed_job_owner' THEN
+  v_actor := NEW.actor_membership_id;
+  PERFORM 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=v_actor FOR SHARE;
+  PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext(NEW.job_id::text));
+  IF NEW.session_id IS DISTINCT FROM v_session
+     OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=v_actor AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()))
+     OR EXISTS(SELECT 1 FROM app.sandbox_run r WHERE r.tenant_id=NEW.tenant_id AND r.job_id=NEW.job_id AND r.session_id<>NEW.session_id)
+  THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  RETURN NEW;
+ END IF;
+
  IF TG_TABLE_NAME='practice_feed_account' THEN
   v_actor := NEW.actor_membership_id;
   IF NEW.session_id IS DISTINCT FROM v_session
+     OR NOT EXISTS(SELECT 1 FROM app.practice_feed_job_owner o WHERE o.tenant_id=NEW.tenant_id AND o.job_id=NEW.job_id AND o.session_id=NEW.session_id)
      OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=v_actor AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()))
   THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN NEW;
@@ -187,15 +212,22 @@ BEGIN
  RETURN NEW;
 END $$;
 
+CREATE TRIGGER practice_feed_job_owner_guard BEFORE INSERT ON app.practice_feed_job_owner FOR EACH ROW EXECUTE FUNCTION app.guard_practice_feed();
 CREATE TRIGGER practice_feed_account_guard BEFORE INSERT ON app.practice_feed_account FOR EACH ROW EXECUTE FUNCTION app.guard_practice_feed();
 CREATE TRIGGER practice_feed_command_guard BEFORE INSERT ON app.practice_feed_command FOR EACH ROW EXECUTE FUNCTION app.guard_practice_feed();
 CREATE TRIGGER practice_feed_event_guard BEFORE INSERT ON app.practice_feed_event FOR EACH ROW EXECUTE FUNCTION app.guard_practice_feed();
 CREATE TRIGGER practice_feed_receipt_match_guard BEFORE INSERT ON app.practice_feed_receipt_match FOR EACH ROW EXECUTE FUNCTION app.guard_practice_feed();
 
--- Deferred completeness: an account needs its connect command, a command needs its transactional audit event, and a
--- match command needs its match row. A half-written effect cannot commit.
+-- Deferred completeness: an owner needs its claim audit event, an account needs its connect command, a command needs its transactional
+-- audit event, a match command needs its match row and an advance command needs every event it generates. A half-written effect cannot commit.
 CREATE FUNCTION app.require_practice_feed_effect() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 BEGIN
+ IF TG_TABLE_NAME='practice_feed_job_owner' THEN
+  IF NOT EXISTS(SELECT 1 FROM app.audit_event WHERE tenant_id=NEW.tenant_id AND subject_ref=NEW.job_id::text AND actor_ref='membership:'||NEW.actor_membership_id::text
+       AND event_type='practice_feed.claimed' AND payload->'references'->>'ownerId'=NEW.id::text)
+  THEN RAISE EXCEPTION 'PRACTICE_FEED_AUDIT_REQUIRED' USING ERRCODE='23514'; END IF;
+  RETURN NULL;
+ END IF;
  IF TG_TABLE_NAME='practice_feed_account' THEN
   IF NOT EXISTS(SELECT 1 FROM app.practice_feed_command WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND account_id=NEW.id AND actor_membership_id=NEW.actor_membership_id AND revision=1 AND action='connect')
   THEN RAISE EXCEPTION 'PRACTICE_FEED_CONNECTION_REQUIRED' USING ERRCODE='23514'; END IF;
@@ -206,8 +238,18 @@ BEGIN
  THEN RAISE EXCEPTION 'PRACTICE_FEED_AUDIT_REQUIRED' USING ERRCODE='23514'; END IF;
  IF NEW.action='match_receipt' AND NOT EXISTS(SELECT 1 FROM app.practice_feed_receipt_match WHERE tenant_id=NEW.tenant_id AND command_id=NEW.id)
  THEN RAISE EXCEPTION 'PRACTICE_FEED_MATCH_REQUIRED' USING ERRCODE='23514'; END IF;
+ -- An advance must leave every event identity its step generates. Each row was already validated against this command on insert;
+ -- an identity stored by an earlier command (a replay or an overlapping page) satisfies it, a missing one does not.
+ IF NEW.action='advance' AND EXISTS(
+     SELECT 1 FROM unnest(CASE NEW.step
+        WHEN 'pending' THEN ARRAY['pending'] WHEN 'settled' THEN ARRAY['settled'] WHEN 'replay' THEN ARRAY['settled']
+        WHEN 'page_overlap' THEN ARRAY['pending','settled'] WHEN 'alternate_representation' THEN ARRAY['statement'] WHEN 'unknown_duplicate' THEN ARRAY['unknown'] END) AS expected(kind)
+      WHERE NOT EXISTS(SELECT 1 FROM app.practice_feed_event e WHERE e.tenant_id=NEW.tenant_id AND e.account_id=NEW.account_id
+        AND e.event_id=expected.kind||'-'||NEW.movement_key AND e.event_kind=expected.kind AND e.movement_key=NEW.movement_key))
+ THEN RAISE EXCEPTION 'PRACTICE_FEED_EFFECT_REQUIRED' USING ERRCODE='23514'; END IF;
  RETURN NULL;
 END $$;
+CREATE CONSTRAINT TRIGGER practice_feed_job_owner_effect AFTER INSERT ON app.practice_feed_job_owner DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.require_practice_feed_effect();
 CREATE CONSTRAINT TRIGGER practice_feed_account_effect AFTER INSERT ON app.practice_feed_account DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.require_practice_feed_effect();
 CREATE CONSTRAINT TRIGGER practice_feed_command_effect AFTER INSERT ON app.practice_feed_command DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.require_practice_feed_effect();
 

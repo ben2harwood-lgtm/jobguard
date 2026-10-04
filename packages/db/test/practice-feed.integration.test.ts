@@ -8,7 +8,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { practiceMovementCatalogueV1, type PracticeFeedView } from "@jobguard/core";
 import {
-  migrate, MIGRATION_URLS, PracticeFeedRepository, PracticeInvoiceRepository, verifiedTenantContextFromMembership, withTenant,
+  appendAuditBatch, migrate, MIGRATION_URLS, PracticeFeedRepository, PracticeInvoiceRepository, verifiedTenantContextFromMembership, withTenant,
   type VerifiedTenantContext,
 } from "../src/index.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
@@ -182,6 +182,22 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     const after = await view(f);
     expect(after.receipts.find((r) => r.paymentId === paymentId)!).toMatchObject({ reversed: true, assessment: { status: "reversed", canMatch: false } });
     expect(await count("SELECT count(*) n FROM app.practice_feed_receipt_match WHERE job_id=$1", [f.jobId])).toBe(1);
+    // The reversed receipt's match is history and keeps its movement used: the corrected receipt gets a distinct, honest explanation.
+    expect(after.receipts.find((r) => r.paymentId === second)!.assessment).toMatchObject({ status: "attested_only", reason: "movement_used_by_reversed_receipt", canMatch: false });
+    await expect(cmd(repo(), f, command(after.revision, { action: "match_receipt", movement: "receipt-384", paymentId: second }))).rejects.toMatchObject({ code: "PRACTICE_FEED_RECEIPT_ALREADY_MATCHED" });
+  });
+
+  it("a duplicate that arrives after a match holds the receipt (history kept) until it is reconciled, then it qualifies again", async () => {
+    const f = await connected(), inv = await invoice(f.jobId), paymentId = await receipt(f, inv, 38_400);
+    let state = await cmd(repo(), f, advance(1, "receipt-384", "settled"));
+    state = await cmd(repo(), f, command(state.revision, { action: "match_receipt", movement: "receipt-384", paymentId }));
+    expect(state.receipts[0]!.assessment).toMatchObject({ status: "qualifies", reason: "matched" });
+    state = await cmd(repo(), f, advance(state.revision, "receipt-384", "unknown_duplicate"));
+    expect(state.receipts[0]!.assessment).toMatchObject({ status: "attested_only", reason: "duplicate_held", canMatch: false, matchedMovementKey: "receipt-384" });
+    expect(await count("SELECT count(*) n FROM app.practice_feed_receipt_match WHERE job_id=$1", [f.jobId])).toBe(1);
+    state = await cmd(repo(), f, command(state.revision, { action: "reconcile_duplicate", movement: "receipt-384" }));
+    expect(state.receipts[0]!.assessment).toMatchObject({ status: "qualifies", reason: "matched", matchedMovementKey: "receipt-384" });
+    expect(await count("SELECT count(*) n FROM app.practice_feed_receipt_match WHERE job_id=$1", [f.jobId])).toBe(1);
   });
 
   it("refuses to match receipts of the wrong amount, a reversed receipt, a held duplicate, another job's receipt and a supplier refund", async () => {
@@ -226,7 +242,8 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     expect(race.filter((row) => row.status === "fulfilled")).toHaveLength(1);
     expect(race.find((row) => row.status === "rejected")).toMatchObject({ reason: { code: "PRACTICE_FEED_STALE_REVISION" } });
     expect(await count("SELECT count(*) n FROM app.practice_feed_command WHERE job_id=$1", [f.jobId])).toBe(2);
-    expect(await count("SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'practice_feed.%'", [f.jobId])).toBe(2);
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1 AND event_type IN('practice_feed.connect','practice_feed.advance')", [f.jobId])).toBe(2);
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1 AND event_type='practice_feed.claimed'", [f.jobId])).toBe(1);
   });
 
   it("refuses a foreign session, a non-member tenant/job, forged fields and a revoked or expired membership", async () => {
@@ -357,6 +374,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     });
     it("rejects an orphan account, an un-audited command and a match command with no match row, rolling everything back", async () => {
       const f = await fixture();
+      await view(f); // the first touch binds the job to this session
       await expect(withTenant(runtime, context, async (db) => {
         await settings(db, f.sessionId);
         await db.$client.query("INSERT INTO app.practice_feed_account(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, f.jobId, f.sessionId, DEMO_MEMBERSHIP_ID]);
@@ -370,6 +388,111 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
       })).rejects.toThrow("PRACTICE_FEED_AUDIT_REQUIRED");
       expect((await view(c)).feedState).toBe("connected");
       expect(await count("SELECT count(*) n FROM app.practice_feed_command WHERE job_id=$1", [c.jobId])).toBe(1);
+    });
+  });
+
+  describe("session ownership of a job is persisted before any connection", () => {
+    const sandboxRun = async (jobId: string, sessionId: string) => admin.query(
+      "INSERT INTO app.sandbox_run(id,tenant_id,job_id,session_id,scenario,environment,status) VALUES($1,$2,$3,$4,'core-1000','synthetic_demo','active')", [randomUUID(), DEMO_TENANT_ID, jobId, sessionId]);
+    it("the first session to touch a job owns it: another session is refused before it connects, for reads and for the first connection", async () => {
+      const f = await fixture(), intruder = randomUUID();
+      const inv = await invoice(f.jobId); await receipt(f, inv, 38_400);
+      const first = await view(f);
+      expect(first.feedState).toBe("not_connected"); expect(first.receipts).toHaveLength(1);
+      const owners = (await admin.query("SELECT session_id,actor_membership_id,environment FROM app.practice_feed_job_owner WHERE job_id=$1", [f.jobId])).rows;
+      expect(owners).toEqual([{ session_id: f.sessionId, actor_membership_id: DEMO_MEMBERSHIP_ID, environment: "synthetic_demo" }]);
+      expect(await count("SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1 AND event_type='practice_feed.claimed'", [f.jobId])).toBe(1);
+      await expect(repo().view(context, actor, intruder, f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
+      await expect(cmd(repo(), { sessionId: intruder, jobId: f.jobId }, command(0, { action: "connect" }))).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
+      expect(await count("SELECT count(*) n FROM app.practice_feed_account WHERE job_id=$1", [f.jobId])).toBe(0);
+      // The owner is unaffected, and touching the job again is idempotent (one owner row, one claim audit).
+      expect((await view(f)).receipts).toHaveLength(1);
+      const state = await cmd(repo(), f, command(0, { action: "connect" }));
+      expect(state.feedState).toBe("connected");
+      expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [f.jobId])).toBe(1);
+      expect(await count("SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1 AND event_type='practice_feed.claimed'", [f.jobId])).toBe(1);
+    });
+    it("two sessions racing for an unowned job give exactly one owner and one typed refusal", async () => {
+      const f = await fixture(), rival = randomUUID();
+      const race = await Promise.allSettled([repo().view(context, actor, f.sessionId, f.jobId), repo().view(context, actor, rival, f.jobId)]);
+      expect(race.filter((row) => row.status === "fulfilled")).toHaveLength(1);
+      expect(race.find((row) => row.status === "rejected")).toMatchObject({ reason: { code: "PRACTICE_FEED_FORBIDDEN" } });
+      expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [f.jobId])).toBe(1);
+    });
+    it("a job that belongs to a sandbox run can only be claimed by that run's session", async () => {
+      const f = await fixture(), owner = randomUUID();
+      await sandboxRun(f.jobId, owner);
+      await expect(view(f)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
+      expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [f.jobId])).toBe(0);
+      expect((await view({ sessionId: owner, jobId: f.jobId })).feedState).toBe("not_connected");
+      // Raw SQL claim by another session is refused by the database as well.
+      const g = await fixture(), ownerG = randomUUID();
+      await sandboxRun(g.jobId, ownerG);
+      await expect(withTenant(runtime, context, async (db) => {
+        await settings(db, g.sessionId);
+        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, g.jobId, g.sessionId, DEMO_MEMBERSHIP_ID]);
+      })).rejects.toThrow("PRACTICE_FEED_FORBIDDEN");
+    });
+    it("runtime SQL cannot add a second owner, bind an account to another session, claim another tenant's or a non-synthetic way, or skip the audit", async () => {
+      const f = await fixture(); await view(f);
+      const other = randomUUID();
+      const claim = (jobId: string, session: string, extra: { tenantId?: string; environment?: string; actor?: string } = {}) => withTenant(runtime, context, async (db) => {
+        await settings(db, session, extra.environment ?? "synthetic_demo");
+        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')",
+          [randomUUID(), extra.tenantId ?? DEMO_TENANT_ID, jobId, session, extra.actor ?? DEMO_MEMBERSHIP_ID]);
+      });
+      await expect(claim(f.jobId, other)).rejects.toThrow(/duplicate key|PRACTICE_FEED_FORBIDDEN/u);
+      await expect(claim(f.jobId, f.sessionId)).rejects.toThrow(/duplicate key/u);
+      const g = await fixture();
+      await expect(claim(g.jobId, g.sessionId, { environment: "pilot_no_charge" })).rejects.toThrow("PRACTICE_FEED_FORBIDDEN");
+      await expect(claim(g.jobId, g.sessionId, { tenantId: otherTenant })).rejects.toThrow(/row-level security|PRACTICE_FEED_FORBIDDEN/u);
+      await expect(claim(g.jobId, g.sessionId)).rejects.toThrow("PRACTICE_FEED_AUDIT_REQUIRED"); // no claim audit event in this transaction
+      expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [g.jobId])).toBe(0);
+      // An account cannot be bound to a session that does not own the job, even with that session's own setting.
+      await expect(withTenant(runtime, context, async (db) => {
+        await settings(db, other);
+        await db.$client.query("INSERT INTO app.practice_feed_account(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, f.jobId, other, DEMO_MEMBERSHIP_ID]);
+      })).rejects.toThrow("PRACTICE_FEED_FORBIDDEN");
+      expect(await count("SELECT count(*) n FROM app.practice_feed_account WHERE job_id=$1", [f.jobId])).toBe(0);
+    });
+  });
+
+  describe("an advance command cannot commit without its generated movement effects", () => {
+    const rawAdvance = (f: { jobId: string; sessionId: string }, accountId: string, revision: number, movementKey: string, step: string, events: Array<{ kind: string; key?: string }>) => withTenant(runtime, context, async (db) => {
+      await settings(db, f.sessionId);
+      const commandId = randomUUID(), payloadHash = "e".repeat(64);
+      await db.$client.query(`INSERT INTO app.practice_feed_command(id,tenant_id,job_id,account_id,revision,action,movement_key,step,actor_membership_id,payload_hash,environment)
+        VALUES($1,$2,$3,$4,$5,'advance',$6,$7,$8,$9,'synthetic_demo')`, [commandId, DEMO_TENANT_ID, f.jobId, accountId, revision, movementKey, step, DEMO_MEMBERSHIP_ID, payloadHash]);
+      const defs: Record<string, { state: string; identity: string; representation: string }> = {
+        pending: { state: "pending", identity: "identified", representation: "feed" }, settled: { state: "settled", identity: "identified", representation: "feed" },
+        statement: { state: "settled", identity: "identified", representation: "statement-line" }, unknown: { state: "possible_duplicate", identity: "unidentified", representation: "unidentified-line" },
+      };
+      for (const event of events) {
+        const key = event.key ?? movementKey, d = defs[event.kind]!, pence = practiceMovementCatalogueV1.find((entry) => entry.movement === key)!.grossPence;
+        await db.$client.query(`INSERT INTO app.practice_feed_event(id,tenant_id,job_id,account_id,command_id,event_kind,movement_key,event_id,identity,representation_id,gross_pence,currency,state,environment,version,source_hash)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'GBP',$12,'synthetic_demo','practice-feed-event.v1',$13) ON CONFLICT(tenant_id,account_id,event_id) DO NOTHING`,
+        [randomUUID(), DEMO_TENANT_ID, f.jobId, accountId, commandId, event.kind, key, `${event.kind}-${key}`, d.identity, d.representation, pence, d.state, hashOf(f, accountId, { kind: event.kind, key, identity: d.identity, representation: d.representation, pence, state: d.state })]);
+      }
+      await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${DEMO_MEMBERSHIP_ID}`, eventType: "practice_feed.advance", subjectType: "job", subjectRef: f.jobId,
+        payload: { references: { commandId, accountId, sessionId: f.sessionId }, hashes: { command: payloadHash }, classifications: { practiceFeed: "financial" } } }]);
+    });
+    it("rolls back an audited advance with no events, or with only part of a page overlap, or with the wrong event for its step", async () => {
+      const f = await connected(), accountId = f.state.accountId!;
+      await expect(rawAdvance(f, accountId, 2, "receipt-384", "settled", [])).rejects.toThrow("PRACTICE_FEED_EFFECT_REQUIRED");
+      await expect(rawAdvance(f, accountId, 2, "receipt-384", "page_overlap", [{ kind: "pending" }])).rejects.toThrow("PRACTICE_FEED_EFFECT_REQUIRED");
+      await expect(rawAdvance(f, accountId, 2, "receipt-384", "pending", [])).rejects.toThrow("PRACTICE_FEED_EFFECT_REQUIRED");
+      await expect(rawAdvance(f, accountId, 2, "receipt-384", "unknown_duplicate", [])).rejects.toThrow(/PRACTICE_FEED_SETTLEMENT_REQUIRED|PRACTICE_FEED_EFFECT_REQUIRED/u);
+      expect(await count("SELECT count(*) n FROM app.practice_feed_command WHERE job_id=$1", [f.jobId])).toBe(1);
+      expect(await count("SELECT count(*) n FROM app.practice_feed_event WHERE job_id=$1", [f.jobId])).toBe(0);
+    });
+    it("accepts the complete generated effects (control), and a legitimate replay whose events already exist", async () => {
+      const f = await connected(), accountId = f.state.accountId!;
+      await rawAdvance(f, accountId, 2, "receipt-384", "page_overlap", [{ kind: "pending" }, { kind: "settled" }]);
+      // A replay of the settlement adds no row, because the identity already exists: that is complete, not missing.
+      await rawAdvance(f, accountId, 3, "receipt-384", "replay", [{ kind: "settled" }]);
+      await rawAdvance(f, accountId, 4, "receipt-384", "replay", []);
+      expect(await count("SELECT count(*) n FROM app.practice_feed_event WHERE job_id=$1", [f.jobId])).toBe(2);
+      expect(await count("SELECT count(*) n FROM app.practice_feed_command WHERE job_id=$1", [f.jobId])).toBe(4);
     });
   });
 
@@ -392,11 +515,11 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
   });
 
   it("catalogs enforce FORCE RLS, migration ownership, both policy roles, append-only grants and no SECURITY DEFINER writer", async () => {
-    const tables = ["practice_feed_account", "practice_feed_command", "practice_feed_event", "practice_feed_receipt_match"];
+    const tables = ["practice_feed_job_owner", "practice_feed_account", "practice_feed_command", "practice_feed_event", "practice_feed_receipt_match"];
     const rows = (await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1)", [tables])).rows;
-    expect(rows).toHaveLength(4); expect(rows.every((row) => row.relrowsecurity && row.relforcerowsecurity && row.owner === "jobguard_migration")).toBe(true);
+    expect(rows).toHaveLength(5); expect(rows.every((row) => row.relrowsecurity && row.relforcerowsecurity && row.owner === "jobguard_migration")).toBe(true);
     const policies = (await admin.query("SELECT roles FROM pg_policies WHERE schemaname='app' AND tablename=ANY($1)", [tables])).rows;
-    expect(policies).toHaveLength(4); expect(policies.every((row) => row.roles.includes("jobguard_migration") && row.roles.includes("jobguard_runtime"))).toBe(true);
+    expect(policies).toHaveLength(5); expect(policies.every((row) => row.roles.includes("jobguard_migration") && row.roles.includes("jobguard_runtime"))).toBe(true);
     const grants = (await admin.query("SELECT table_name,privilege_type FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name=ANY($1) ORDER BY 1,2", [tables])).rows;
     expect(grants).toEqual(tables.flatMap((table) => [{ table_name: table, privilege_type: "INSERT" }, { table_name: table, privilege_type: "SELECT" }]).sort((a, b) => a.table_name.localeCompare(b.table_name) || a.privilege_type.localeCompare(b.privilege_type)));
     for (const table of tables) for (const operation of [`UPDATE app.${table} SET environment='synthetic_demo'`, `DELETE FROM app.${table}`, `TRUNCATE app.${table}`]) {
