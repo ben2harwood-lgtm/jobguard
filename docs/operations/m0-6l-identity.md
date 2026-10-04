@@ -19,12 +19,23 @@ Keep credentials and tokens out of request/response logging. Secure/HttpOnly/Sam
 cookies are used even on loopback; the fixture browser tests rely on loopback's secure-cookie
 support. Session expiry is one day and database revocation is checked on every request.
 
-Only the principal bridge constructs real verified tenant contexts. `x-tenant-id` and
+Only the principal bridge constructs real verified tenant contexts. `apps/api/src/auth/context-boundary.test.ts`
+proves it by parsing all application source (apps/api/src, apps/web/app, every package's src and tools) and failing on any
+other constructor call, alias, cast to `VerifiedTenantContext` or effective-tenant identifier. Five categories are
+confined by explicit, individually tested rules: the bridge (one call, verified membership only), the definition,
+the worker queue (one cast fed only by a strictly validated payload), the retained synthetic practice sandbox (fixed
+DEMO tenant and membership constants only, no request-derived selector, API and db source only) and the synthetic
+restore rehearsal. A new caller anywhere else, or a synthetic one fed anything but the DEMO constants, fails the test. `x-tenant-id` and
 `requested_tenant_id` disagreeing or selecting a non-member tenant fail with
 `TENANT_FORBIDDEN`. The existing synthetic services retain their merged fixed demo context
 helpers; they cannot be used in pilot/production through either deployed composition seam.
 They are not a real-user business path. Revoked membership is checked by the bridge and
 again by the existing command dispatcher; a context alone never approves a commercial action.
+
+A signed-in user can accept an invitation to another tenant: `/sign-in?invitationId=<reference>` shows the current
+account and an "Accept an invitation" section; email and code verification are unchanged, and the memberships are reloaded
+afterwards. A revoked or expired former member can be re-invited: acceptance adds a new membership and repoints the locator,
+keeping the old row as history; only a currently active membership refuses a fresh invitation.
 
 An owner can create an invitation via the authenticated endpoint, with session-bound CSRF
 and exact origin. The endpoint returns its immutable reference for fixture use; it sends
