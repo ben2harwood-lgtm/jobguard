@@ -130,3 +130,43 @@ describe("things to check: a replay returns the command's first result", () => {
     expect(await stored(input.commandId)).toBe(0);
   });
 });
+
+// Holds every transaction that sends a statement matching `pattern` at that statement until `gate` opens; `reached` fires when one arrives.
+function pausedBefore(pool: Pool, pattern: RegExp, gate: Promise<void>, reached: () => void): Pool {
+  return new Proxy(pool, { get(target, property) {
+    if (property === "connect") return async () => { const client = await target.connect(); return new Proxy(client, { get(inner, name) {
+      if (name === "query") return async (...args: unknown[]) => { const text = typeof args[0] === "string" ? args[0] : (args[0] as { text?: string })?.text ?? ""; if (pattern.test(text)) { reached(); await gate; } return (inner.query as (...a: unknown[]) => unknown)(...args); };
+      const value = Reflect.get(inner, name, inner); return typeof value === "function" ? value.bind(inner) : value; } }); };
+    const value = Reflect.get(target, property, target); return typeof value === "function" ? value.bind(target) : value; } }) as Pool;
+}
+const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
+const forgetBookkeeping = async (commandId: string) => { await admin.query("DELETE FROM app.watchdog_command_result WHERE command_id=$1", [commandId]); await admin.query("DELETE FROM app.watchdog_command_identity WHERE command_id=$1", [commandId]); };
+
+describe("a legacy evaluation replays as the response it first returned, whatever transactions overlapped it", () => {
+  it("leaves out a confirmation whose transaction began before the evaluation but committed after it", async () => {
+    const documentId = (await admin.query("SELECT document_id FROM app.supplier_fact_revision WHERE id=$1", [originalFactId])).rows[0].document_id as string;
+    const revisions = Number((await admin.query("SELECT count(*) n FROM app.supplier_fact_revision WHERE document_id=$1", [documentId])).rows[0].n);
+    const gate = deferred(), arrived = deferred();
+    const confirming = new SupplierDocumentRepository(pausedBefore(runtime, /INSERT INTO app\.supplier_fact_revision/u, gate.promise, arrived.resolve));
+    // The confirmation's transaction begins (its created_at is its start time) and stops just before it writes its fact.
+    const lateCommand = randomUUID();
+    const late = confirming.confirm(ctx, job, { version: "supplier-fact-correction.v1", documentId, commandId: lateCommand, documentType: "invoice", quantity: "10", unitPricePence: 1700, netPence: 17000, expectedRevision: revisions });
+    await arrived.promise;
+    await new Promise(resolve => setTimeout(resolve, 30));
+    // The evaluation begins later and commits first, so its response cannot contain the late fact.
+    const input = { commandId: randomUUID(), ruleRevision: "supplier-overcharge.overlap" };
+    const first = await repo.evaluate(ctx, job, input);
+    gate.resolve(); await late;
+    const lateFact = (await admin.query("SELECT id,created_at FROM app.supplier_fact_revision WHERE command_id=$1", [lateCommand])).rows[0];
+    const evaluated = (await admin.query("SELECT created_at FROM app.discrepancy_finding_revision WHERE command_id=$1", [input.commandId])).rows[0];
+    expect(lateFact.created_at.getTime(), "the confirmation began first, so its created_at is earlier than the evaluation's").toBeLessThan(evaluated.created_at.getTime());
+    expect(first.factCandidates.map((fact: { id: string }) => fact.id)).not.toContain(lateFact.id);
+    // As written by the earlier code: no stored result and no identity row.
+    await forgetBookkeeping(input.commandId);
+    const replayed = await repo.evaluate(ctx, job, input);
+    expect(replayed.factCandidates.map((fact: { id: string }) => fact.id), "the replay must not include a fact the original response could not see").not.toContain(lateFact.id);
+    expect(replayed).toEqual(first);
+    // The confirmation that overlapped it is, of course, visible to everything that starts after it.
+    expect((await repo.view(ctx, job)).factCandidates.map((fact: { id: string }) => fact.id)).toContain(lateFact.id);
+  });
+});

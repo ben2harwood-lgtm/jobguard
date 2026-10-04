@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openQuotingWatchdogJob, startWatchdogJob } from "./helpers/capture-journey";
+import { openLiveWatchdogJob, openQuotingWatchdogJob, startWatchdogJob } from "./helpers/capture-journey";
 import { enterQuote, jsonResult } from "./helpers/customer-invoice-journey";
 test.setTimeout(300_000);
 const beforeLive = "Switch this job live to use the watchdog — it's free until work starts on site.";
@@ -129,3 +129,40 @@ for (const seeded of seededJobs) {
     await secondContext.close();
   });
 }
+
+// CH-2 Done-when, through the shared application/web boundary: a replayed command returns the response it FIRST gave. Each of the three
+// live-only proof actions is replayed after the job has moved on (the file finalised, the stage completed, the proof invalidated,
+// which opens a newer Decision), and none of them is answered from today's state or refused because the Decision changed.
+test("proof commands replay the response they first gave, after later finalisation, completion and invalidation", async ({ page }) => {
+  await openLiveWatchdogJob(page);
+  const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
+  const view = await jsonResult(page.request.get(`/api/jobs/${jobId}/proof`), "Read proof");
+  const version = "practice-proof-command.v1";
+  const post = (body: object) => page.request.post(`/api/jobs/${jobId}/proof`, { data: body });
+  const run = (body: object, step: string) => jsonResult(post(body), step);
+  const select = { version, action: "select_generated", commandId: crypto.randomUUID(), scopeItemId: view.scopeItemId, fixture: "completion-photo" };
+  const selected = await run(select, "Select a generated file");
+  expect(selected.upload.state).toBe("pending");
+  const finalize = { version, action: "finalize", commandId: crypto.randomUUID(), uploadId: selected.upload.id, objectVersionId: selected.upload.objectVersionId };
+  const finalized = await run(finalize, "Finalise the file");
+  expect(finalized.upload.state).toBe("verified");
+  const complete = { version, action: "complete", commandId: crypto.randomUUID(), evidenceId: finalized.upload.evidenceId, scopeItemId: view.scopeItemId };
+  const completed = await run(complete, "Complete the stage");
+  expect(completed.completion).not.toBeNull();
+  // The job moves on: invalidating the proof records rework and opens a newer Decision.
+  const invalidated = await run({ version, action: "invalidate", commandId: crypto.randomUUID(), evidenceId: finalized.upload.evidenceId, reasonCode: "verification_invalid" }, "Invalidate the proof");
+  expect(invalidated.completion.reviewRequired).toBe(true);
+  expect(invalidated.decisionId).not.toBe(completed.decisionId);
+  // Each command, unchanged, returns exactly what it first returned.
+  expect(await run(select, "Replay select"), "select_generated replay").toEqual(selected);
+  expect(await run(finalize, "Replay finalise"), "finalize replay").toEqual(finalized);
+  expect(await run(complete, "Replay complete"), "complete replay").toEqual(completed);
+  // The same id with a different request is a conflict, never a replay.
+  for (const [name, changed] of [["select_generated", { ...select, scopeItemId: crypto.randomUUID() }], ["finalize", { ...finalize, objectVersionId: "another-version" }], ["complete", { ...complete, scopeItemId: crypto.randomUUID() }]] as const) {
+    const refused = await post(changed);
+    expect(refused.status(), `${name} with a changed request`).toBe(409);
+  }
+  // Nothing was added by the replays, and the persisted state is what the invalidation left.
+  const after = await jsonResult(page.request.get(`/api/jobs/${jobId}/proof`), "Read proof after replays");
+  expect(after.upload.id).toBe(selected.upload.id); expect(after.completion.id).toBe(completed.completion.id); expect(after.realExternalActions).toBe(0);
+});
