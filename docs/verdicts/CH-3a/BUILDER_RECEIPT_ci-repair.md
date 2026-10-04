@@ -229,3 +229,9 @@ Leaked SysV shared-memory segments again exhausted macOS's 32 segment ids betwee
 1. The adoption check at commit is a deferred constraint trigger: it can be tightened to immediate by a caller, never skipped.
 2. After a refresh-triggered reload the draft shows the other writer's details and the conflict message; a plain save then binds to those revisions without writing a customer revision.
 3. Migration count assertions are now 44 for this branch on top of `29826ee`; the integrator re-adjusts if other numbered migrations merge first.
+
+## Round 3 addendum: second merge of main
+
+After the first round-3 push (CI green on `b99d9f9`), `origin/main` moved again to `b717020` (M4-2-S-R, #102) and PR #98 became CONFLICTING, so I merged it in (`165b36b`, non-force). Two conflicts: the lane registry (main's plus this branch's `ch-3a` lane) and `recovery-cases.integration.test.ts`, which main reformatted and extended; I took main's version and re-applied only this branch's three earlier changes to it (`installLegacySyntheticPartyFixtures` after `migrate`, its import, and `--encoding=UTF8`). No assertion, skip, timeout or retry changed.
+
+Re-run at `165b36b` (database and browser commands inside `heavy-slot ch-3a`): `pnpm typecheck --force` 0 (7 of 7); `LANE_BASE_REF=origin/main pnpm lint` 0; `lint:lanes` 0; `pnpm openapi:check` 0; `pnpm build` 0; `pnpm test:db` 0 (39 files, 202 tests); `pnpm test:migrations` 0 (11 tests); `pnpm test --force` 0 (tools 39; core 440; storage 4; config 2; ai 72; api 109; web 63; db 202); whole e2e suite, both projects, local browser, 0 (182 passed). The counts in the table above are for `f239ae7`, before this merge.
