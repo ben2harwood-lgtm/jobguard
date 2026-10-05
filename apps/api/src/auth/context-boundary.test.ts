@@ -1,4 +1,5 @@
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join, posix, relative, sep } from "node:path";
 import ts from "typescript";
@@ -6,7 +7,8 @@ import { describe, expect, it } from "vitest";
 
 /**
  * M0-6L card: "the only callers that construct a verifiedContext/effective_tenant_id for withTenant are the authenticated
- * principal bridge". This scans ALL application source (apps/api/src, apps/web/app, packages/<each>/src and /tools) with the
+ * principal bridge". This scans ALL application source (apps/api/src, apps/web/app, app-level files, packages/<each>/src
+ * and /tools, and repository-root tools/) with the
  * TypeScript parser, not text search, and fails on any constructor call, alias, cast to VerifiedTenantContext or
  * effective-tenant identifier outside four explicit, individually tested categories:
  *
@@ -24,13 +26,16 @@ import { describe, expect, it } from "vitest";
  * names, so every use is visible to the scan by name. A local type alias, interface, `import X = ns.T`,
  * `ReturnType<typeof constructor>` or `typeof withTenant` is a derivation of the context type: it is tracked to a fixed point
  * within the file when it is a cast target, and exporting one is refused (another file could import and cast it).
+ * Typed values and their inferred local aliases cannot be spread into replacement contexts; typed object initializers,
+ * returns and satisfies expressions are checked as well. Passing an existing context through is allowed.
  *
  * Fixture binding (round 3): a name such as DEMO_TENANT_ID is trusted because of WHERE IT COMES FROM, not because of how it
  * is spelled. In all application source such a name may only be an unaliased import from `@jobguard/db` or, inside
  * packages/db/src, from ./demo-seed; any local declaration, parameter, destructuring, catch variable, rename, default or
  * namespace import is refused, and packages/db/src/demo-seed.ts itself must hold each as an exported const literal UUID.
  * An object passed to the constructor by name resolves only to exactly one top-level const declaration, and every
- * constructor argument must be a plain literal (no spread, computed key, accessor or duplicate property).
+ * constructor argument must be a plain literal (no spread, computed key, accessor or duplicate property). Property uses
+ * are checked through expression wrappers and nested destructuring targets, including deletion and iteration assignments.
  *
  * Limits, stated so nobody mistakes the scan for a type-checker: it cannot see a context laundered through `any`/`never`
  * or a type derived through an arbitrary signature (for example Parameters<SomeClass["method"]>[0]), or a member name
@@ -103,6 +108,12 @@ const unwrap = (expression: ts.Expression): ts.Expression => {
   while (ts.isAsExpression(current) || ts.isTypeAssertionExpression(current) || ts.isParenthesizedExpression(current) || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current)) current = current.expression;
   return current;
 };
+/** Follow wrappers around a use, rather than just inspecting its immediate parent. */
+function outerExpression(node: ts.Node): ts.Node {
+  let current = node;
+  while ((ts.isAsExpression(current.parent) || ts.isTypeAssertionExpression(current.parent) || ts.isParenthesizedExpression(current.parent) || ts.isNonNullExpression(current.parent) || ts.isSatisfiesExpression(current.parent)) && current.parent.expression === current) current = current.parent;
+  return current;
+}
 const literalKey = (name: ts.PropertyName): string | undefined =>
   ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name) ? name.text : undefined;
 const propertyInitializer = (literal: ts.ObjectLiteralExpression, name: string): ts.Expression | "shorthand" | undefined => {
@@ -154,12 +165,18 @@ function parse(file: SourceFile): Analysis {
   const bindings = new Map<string, Binding[]>();
   const bind = (name: string, binding: Binding) => { const list = bindings.get(name); if (list) list.push(binding); else bindings.set(name, [binding]); };
   const assertions: (ts.AsExpression | ts.TypeAssertion)[] = [];
+  const values: (ts.VariableDeclaration | ts.ParameterDeclaration)[] = [];
+  const functions: (ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction)[] = [];
+  const objects: ts.ObjectLiteralExpression[] = [];
   // Type declarations that may be (an alias of) the context type, and local names exported without a module specifier.
   const typeNames: { name: string; text: string; node: ts.Node; exported: boolean }[] = [];
   const exportedLocals: { name: string; node: ts.Node }[] = [];
 
   const visit = (node: ts.Node): void => {
     if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) assertions.push(node);
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) values.push(node);
+    if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) functions.push(node);
+    if (ts.isObjectLiteralExpression(node)) objects.push(node);
 
     // Bindings of every name, at any scope (variables, parameters, patterns, functions, classes, imports).
     if (ts.isVariableDeclaration(node)) for (const id of bindingNames(node.name)) bind(id.text, ts.isIdentifier(node.name) ? { kind: "variable", node } : { kind: "other", node });
@@ -221,6 +238,46 @@ function parse(file: SourceFile): Analysis {
     for (const declared of typeNames) if (!tainted.has(declared.name) && (taint.test(declared.text) || CONTEXT_DERIVED.test(declared.text))) { tainted.add(declared.name); changed = true; }
   }
   const taintPattern = new RegExp(`\\b(?:${[...tainted].map(name => name.replace(/\$/gu, "\\$")).join("|")})\\b`, "u");
+  const contextType = (type: ts.TypeNode | undefined): boolean => type !== undefined && (taintPattern.test(type.getText(source)) || CONTEXT_DERIVED.test(type.getText(source)));
+
+  // A spread copies the compile-time brand without verifying membership. Track context values (including inferred aliases)
+  // to a fixed point; a typed return/initializer/satisfies expression must not mint a replacement object either.
+  const contextValues = new Set(values.filter(value => ts.isIdentifier(value.name) && contextType(value.type)).map(value => (value.name as ts.Identifier).text));
+  const contextFunctions = new Set<string>();
+  for (const fn of functions.filter(fn => contextType(fn.type))) {
+    if (fn.name && ts.isIdentifier(fn.name)) contextFunctions.add(fn.name.text);
+    else if (ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name)) contextFunctions.add(fn.parent.name.text);
+  }
+  const contextExpression = (expression: ts.Expression): boolean => {
+    if ((ts.isAsExpression(expression) || ts.isTypeAssertionExpression(expression) || ts.isSatisfiesExpression(expression)) && contextType(expression.type)) return true;
+    const value = unwrap(expression);
+    if (ts.isIdentifier(value)) return contextValues.has(value.text);
+    if (ts.isCallExpression(value)) {
+      const name = ts.isIdentifier(value.expression) ? value.expression.text : ts.isPropertyAccessExpression(value.expression) ? value.expression.name.text : undefined;
+      return name !== undefined && (name === CONSTRUCTOR || contextFunctions.has(name));
+    }
+    if (ts.isObjectLiteralExpression(value)) return value.properties.some(property => ts.isSpreadAssignment(property) && contextExpression(property.expression));
+    return false;
+  };
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const value of values) if (ts.isIdentifier(value.name) && value.initializer && !contextValues.has(value.name.text) && contextExpression(value.initializer)) { contextValues.add(value.name.text); changed = true; }
+  }
+  for (const object of objects) {
+    let contextual = false;
+    for (let wrapped: ts.Node = object; wrapped !== outerExpression(object); wrapped = wrapped.parent) {
+      if (ts.isSatisfiesExpression(wrapped.parent) && contextType(wrapped.parent.type)) contextual = true;
+    }
+    const outer = outerExpression(object), parent = outer.parent;
+    if (ts.isVariableDeclaration(parent) && parent.initializer === outer && contextType(parent.type)) contextual = true;
+    if (ts.isArrowFunction(parent) && parent.body === outer && contextType(parent.type)) contextual = true;
+    if (ts.isReturnStatement(parent)) {
+      for (let ancestor: ts.Node | undefined = parent.parent; ancestor; ancestor = ancestor.parent) {
+        if (ts.isFunctionLike(ancestor)) { contextual ||= contextType(ancestor.type); break; }
+      }
+    }
+    if (contextual || contextExpression(object)) problems.push(`${at(object)} reconstructs a verified tenant context; forward the verified value or use an authorized constructor instead`);
+  }
   for (const node of assertions) {
     const target = node.type.getText(source);
     if (taintPattern.test(target) || CONTEXT_DERIVED.test(target)) found.push({ kind: "cast", operand: unwrap(node.expression), node });
@@ -259,16 +316,24 @@ function fixtureBound(file: SourceFile, bindings: Map<string, Binding[]>, name: 
  */
 function onlyReadOrConstructed(source: ts.SourceFile, name: string): boolean {
   const isAssignmentOperator = (kind: ts.SyntaxKind) => kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
-  const allowed = (node: ts.Identifier): boolean => {
-    const parent = node.parent;
-    if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) && parent.expression === node) {
-      const use = parent.parent;
-      if (ts.isBinaryExpression(use) && use.left === parent && isAssignmentOperator(use.operatorToken.kind)) return false;
-      if (ts.isDeleteExpression(use) || ((ts.isPrefixUnaryExpression(use) || ts.isPostfixUnaryExpression(use)) && (use.operator === ts.SyntaxKind.PlusPlusToken || use.operator === ts.SyntaxKind.MinusMinusToken))) return false;
-      return !(ts.isCallExpression(use) && use.expression === parent);
+  const writeTarget = (node: ts.Node): boolean => {
+    let current = outerExpression(node);
+    for (;;) {
+      const parent = current.parent;
+      if (ts.isBinaryExpression(parent) && parent.left === current && isAssignmentOperator(parent.operatorToken.kind)) return true;
+      if (ts.isDeleteExpression(parent) || ((ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)) && (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken))) return true;
+      if ((ts.isForOfStatement(parent) || ts.isForInStatement(parent)) && parent.initializer === current) return true;
+      // In an assignment pattern the target can sit arbitrarily deep inside object/array/rest elements.
+      if ((ts.isPropertyAssignment(parent) && parent.initializer === current) || ts.isObjectLiteralExpression(parent) || ts.isArrayLiteralExpression(parent) || ((ts.isSpreadAssignment(parent) || ts.isSpreadElement(parent)) && parent.expression === current)) current = outerExpression(parent);
+      else return false;
     }
-    let outer: ts.Node = node;
-    while ((ts.isAsExpression(outer.parent) || ts.isTypeAssertionExpression(outer.parent) || ts.isParenthesizedExpression(outer.parent) || ts.isNonNullExpression(outer.parent) || ts.isSatisfiesExpression(outer.parent)) && outer.parent.expression === outer) outer = outer.parent;
+  };
+  const allowed = (node: ts.Identifier): boolean => {
+    const outer = outerExpression(node), parent = outer.parent;
+    if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) && parent.expression === outer) {
+      const property = outerExpression(parent), use = property.parent;
+      return !writeTarget(property) && !(ts.isCallExpression(use) && use.expression === property);
+    }
     const call = outer.parent;
     return ts.isCallExpression(call) && call.arguments[0] === outer && ((ts.isIdentifier(call.expression) && call.expression.text === CONSTRUCTOR) || (ts.isPropertyAccessExpression(call.expression) && call.expression.name.text === CONSTRUCTOR));
   };
@@ -378,25 +443,27 @@ function fixtureConstantNames(text: string): string[] {
 
 const repository = fileURLToPath(new URL("../../../../", import.meta.url));
 const SKIP = new Set(["node_modules", "dist", ".next", "test-results", "coverage"]);
+const applicationFile = (name: string): boolean => /\.(ts|tsx|mjs|js)$/u.test(name) && !/\.(test|spec)\.(ts|tsx|mjs|js)$/u.test(name) && !name.endsWith(".d.ts");
 async function walk(directory: string, out: string[] = []): Promise<string[]> {
   let entries;
   try { entries = await readdir(directory, { withFileTypes: true }); } catch { return out; }
-  for (const entry of entries) {
-    if (SKIP.has(entry.name)) continue;
+  await Promise.all(entries.map(async entry => {
+    if (SKIP.has(entry.name)) return;
     const path = join(directory, entry.name);
     if (entry.isDirectory()) await walk(path, out);
-    else if (/\.(ts|tsx|mjs|js)$/u.test(entry.name) && !/\.test\.(ts|tsx)$/u.test(entry.name) && !entry.name.endsWith(".d.ts")) out.push(path);
-  }
+    else if (applicationFile(entry.name)) out.push(path);
+  }));
   return out;
 }
-async function applicationSource(): Promise<SourceFile[]> {
-  const roots = [join(repository, "apps/api/src"), join(repository, "apps/web/app")];
+async function applicationSource(repositoryRoot: string = repository): Promise<SourceFile[]> {
+  const repository = repositoryRoot;
+  const roots = [join(repository, "apps/api/src"), join(repository, "apps/web/app"), join(repository, "tools")];
   for (const name of await readdir(join(repository, "packages"))) for (const folder of ["src", "tools"]) roots.push(join(repository, "packages", name, folder));
   const paths = (await Promise.all(roots.map(root => walk(root)))).flat();
   // Next conventions (middleware.ts, instrumentation.ts) and similar sit directly in the app folder, beside src/ or app/.
   for (const app of ["apps/api", "apps/web"]) {
     for (const entry of await readdir(join(repository, app), { withFileTypes: true })) {
-      if (entry.isFile() && /\.(ts|tsx|mjs|js)$/u.test(entry.name) && !/\.test\.(ts|tsx)$/u.test(entry.name) && !entry.name.endsWith(".d.ts")) paths.push(join(repository, app, entry.name));
+      if (entry.isFile() && applicationFile(entry.name)) paths.push(join(repository, app, entry.name));
     }
   }
   return Promise.all(paths.map(async path => ({ path: relative(repository, path).split(sep).join("/"), text: await readFile(path, "utf8") })));
@@ -478,6 +545,74 @@ await executor.execute({tenantId:parsed.tenantId} as VerifiedTenantContext,parse
     expect(rogue(DEFINITION, `export function verifiedTenantContextFromMembership(membership: M): VerifiedTenantContext { return Object.freeze({ tenantId: membership.tenantId }) as VerifiedTenantContext; }`)).toEqual([]);
     expect(rogue(DEFINITION, `export function verifiedTenantContextFromMembership(membership: M): VerifiedTenantContext { return Object.freeze({ tenantId: input }) as VerifiedTenantContext; }`)).not.toEqual([]);
     expect(rogue("apps/api/src/other.ts", `export function verifiedTenantContextFromMembership(m: M) { return m; }`)).not.toEqual([]);
+  });
+});
+
+describe("M0-6L round 4: reconstruction, mutation targets and root tools", () => {
+  const contextImport = `import type { VerifiedTenantContext } from "@jobguard/db";`;
+
+  it.each([
+    ["typed return", `function changeTenant(context: VerifiedTenantContext, tenantId: string): VerifiedTenantContext { return { ...context, tenantId }; }`],
+    ["inferred return", `function changeTenant(context: VerifiedTenantContext, tenantId: string) { return { ...context, tenantId }; }`],
+    ["typed variable", `function changeTenant(context: VerifiedTenantContext, tenantId: string) { const result: VerifiedTenantContext = { ...context, tenantId }; return result; }`],
+    ["satisfies", `function changeTenant(context: VerifiedTenantContext, tenantId: string) { return { ...context, tenantId } satisfies VerifiedTenantContext; }`],
+    ["value alias", `function changeTenant(context: VerifiedTenantContext, tenantId: string) { const original = context; return { ...original, tenantId }; }`],
+    ["type alias", `type Context = Readonly<VerifiedTenantContext>; function changeTenant(context: Context, tenantId: string) { return { ...context, tenantId }; }`],
+    ["inferred constructor result", `import { verifiedTenantContextFromMembership } from "@jobguard/db"; function changeTenant(membership: Parameters<typeof verifiedTenantContextFromMembership>[0], tenantId: string) { const context = verifiedTenantContextFromMembership(membership); return { ...context, tenantId }; }`],
+  ])("rejects context reconstruction via %s", (_name, code) => {
+    for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}\n${code}`), path).toEqual(mentions("reconstructs a verified tenant context"));
+    // Even an otherwise-approved synthetic constructor does not authorize cloning and changing its result.
+    expect(rogueAt(APPROVED_SYNTHETIC, `${IMPORT_FIXTURES}\n${CALL_FIXTURES}\n${contextImport}\n${code}`)).toEqual(mentions("reconstructs a verified tenant context"));
+  });
+
+  it("allows context forwarding and ordinary object spreads", () => {
+    expect(rogueAt(PLANT_PATHS[0]!, `${contextImport}
+function forward(context: VerifiedTenantContext): VerifiedTenantContext { return context; }
+const forwardArrow = (context: VerifiedTenantContext): VerifiedTenantContext => context;
+function ordinary(input: { tenantId: string }, tenantId: string) { return { ...input, tenantId }; }`)).toEqual([]);
+  });
+
+  const namedMembership = (extra: string) => `import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, verifiedTenantContextFromMembership } from "@jobguard/db";
+const membership = { identityUserId: DEMO_IDENTITY_USER_ID, membershipId: DEMO_MEMBERSHIP_ID, tenantId: DEMO_TENANT_ID };
+${extra}
+export const context = () => verifiedTenantContextFromMembership(membership as Parameters<typeof verifiedTenantContextFromMembership>[0]);`;
+  it.each([
+    ["parenthesized assignment", `(membership.tenantId) = input.tenant;`],
+    ["wrapped receiver", `((membership).tenantId) = input.tenant;`],
+    ["compound assignment", `((membership.tenantId)) += input.tenant;`],
+    ["object destructuring", `({ tenantId: membership.tenantId } = input);`],
+    ["nested destructuring", `({ nested: { values: [membership.tenantId] } } = { nested: { values: [input.tenant] } });`],
+    ["array destructuring", `[membership["tenantId"]] = [input.tenant];`],
+    ["destructuring default", `({ tenantId: membership.tenantId = input.tenant } = input);`],
+    ["bare parenthesized deletion", `delete (membership.tenantId);`],
+    ["parenthesized deletion", `delete ((membership as Partial<typeof membership>).tenantId);`],
+    ["parenthesized increment", `++((membership as unknown as { tenantId: number }).tenantId);`],
+    ["iteration target", `for (membership.tenantId of [input.tenant]) {}`],
+  ])("rejects fixed membership mutation via %s", (_name, mutation) => {
+    expect(rogueAt("apps/api/src/recovery-case.application.ts", namedMembership(`export const swap = (input: { tenantId: string; tenant: string }) => { ${mutation} };`))).toEqual(mentions("fixed, plain literal object"));
+  });
+
+  it("keeps wrapped property reads and destructuring source reads valid", () => {
+    expect(rogueAt("apps/api/src/recovery-case.application.ts", namedMembership(`export const read = () => { const value = { tenantId: (membership.tenantId) }; return value; };`))).toEqual([]);
+  });
+
+  it("collects repository-root tools and rejects a planted caller while excluding test files", async () => {
+    const fixture = await mkdtemp(join(tmpdir(), "jg-m0-6l-tools-"));
+    try {
+      for (const directory of ["apps/api/src", "apps/web/app", "packages/example/tools", "tools/nested"]) await mkdir(join(fixture, directory), { recursive: true });
+      const planted = `import { verifiedTenantContextFromMembership } from "@jobguard/db"; export const context = (tenantId) => verifiedTenantContextFromMembership({ tenantId });`;
+      const included = ["tools/planted.ts", "tools/nested/planted.tsx", "tools/planted.mjs", "tools/planted.js", "packages/example/tools/control.mjs"];
+      const excluded = ["tools/control.test.ts", "tools/control.test.tsx", "tools/control.test.mjs", "tools/control.test.js", "tools/control.spec.ts", "tools/control.spec.mjs", "tools/control.d.ts", "tools/node_modules/generated.ts", "tools/dist/generated.js"];
+      for (const path of [...included, ...excluded]) {
+        await mkdir(join(fixture, posix.dirname(path)), { recursive: true });
+        await writeFile(join(fixture, path), planted);
+      }
+      const files = await applicationSource(fixture);
+      expect(files.map(f => f.path).sort()).toEqual(included.sort());
+      for (const file of files) expect(boundaryViolations([file]), file.path).toEqual(mentions("outside the synthetic composition roots"));
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
+    }
   });
 });
 

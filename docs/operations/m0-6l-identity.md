@@ -21,7 +21,7 @@ support. Session expiry is one day and database revocation is checked on every r
 
 Only the principal bridge constructs real verified tenant contexts. `apps/api/src/auth/context-boundary.test.ts`
 proves it by parsing all application source (apps/api/src, apps/web/app, the top-level files of both apps, every package's
-src and tools) and failing on any other constructor call, alias, cast to `VerifiedTenantContext` or effective-tenant
+src and tools, and repository-root tools) and failing on any other constructor call, alias, cast to `VerifiedTenantContext` or effective-tenant
 identifier. Five categories are confined by explicit, individually tested rules: the bridge (one call, verified membership
 only), the definition, the worker queue (one cast fed only by a strictly validated payload), the retained synthetic practice
 sandbox and the synthetic restore rehearsal. The sandbox is an explicit list of existing files (each must still construct,
@@ -29,7 +29,11 @@ and a new caller needs a reviewed edit to the list); its calls and casts may use
 constants, which must be the unaliased imports from `@jobguard/db` (inside packages/db, from `./demo-seed`), never a local
 declaration, parameter, destructured or renamed look-alike, and the fixture module must define each as a literal UUID. The
 constructor and the context type may be imported, re-exported and destructured only under their own names; local aliases
-and derivations of the type are tracked as cast targets and may not be exported. The scan is syntactic: it cannot follow a
+and derivations of the type are tracked as cast targets and may not be exported. Typed context values and their inferred local
+aliases cannot be spread into replacement contexts; typed object initializers, returns and `satisfies` expressions are checked
+as well. Named synthetic membership objects cannot be mutated through wrapped property accesses, nested destructuring,
+deletion or iteration targets before construction. Root-tool collection excludes `.test`/`.spec` files in all supported source
+extensions and generated output. The scan is syntactic: it cannot follow a
 context laundered through `any`/`never` or a member name computed at run time, which stay with the TypeScript compiler, the
 approved list and review. A new caller anywhere else, or a synthetic one fed anything but the DEMO constants, fails the test. `x-tenant-id` and
 `requested_tenant_id` disagreeing or selecting a non-member tenant fail with
