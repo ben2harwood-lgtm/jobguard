@@ -254,7 +254,12 @@ function parse(file: SourceFile): Analysis {
     if (ts.isIdentifier(value)) return contextValues.has(value.text);
     if (ts.isCallExpression(value)) {
       const name = ts.isIdentifier(value.expression) ? value.expression.text : ts.isPropertyAccessExpression(value.expression) ? value.expression.name.text : undefined;
-      return name !== undefined && (name === CONSTRUCTOR || contextFunctions.has(name));
+      if (name !== undefined && (name === CONSTRUCTOR || contextFunctions.has(name))) return true;
+      if (name === "structuredClone" || name === "Object.create") return value.arguments.some(contextExpression);
+      if (name === "assign") return value.arguments.some(contextExpression);
+      if (name === "fromEntries") return value.arguments.some(argument => argument.getText(source).includes("Object.entries") && [...contextValues].some(context => argument.getText(source).includes(context)));
+      if (name === "parse") return value.arguments.some(argument => argument.getText(source).includes("JSON.stringify") && [...contextValues].some(context => argument.getText(source).includes(context)));
+      return false;
     }
     if (ts.isObjectLiteralExpression(value)) return value.properties.some(property => ts.isSpreadAssignment(property) && contextExpression(property.expression));
     return false;
@@ -263,6 +268,27 @@ function parse(file: SourceFile): Analysis {
     changed = false;
     for (const value of values) if (ts.isIdentifier(value.name) && value.initializer && !contextValues.has(value.name.text) && contextExpression(value.initializer)) { contextValues.add(value.name.text); changed = true; }
   }
+  const tenantKey = (expression: ts.Expression): boolean => {
+    const value = unwrap(expression);
+    return ts.isObjectLiteralExpression(value) && value.properties.some(property =>
+      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) && literalKey(property.name) === "tenantId");
+  };
+  const tenantReceiver = (expression: ts.Expression): boolean => {
+    const value = unwrap(expression);
+    return (ts.isPropertyAccessExpression(value) && value.name.text === "tenantId" && contextExpression(value.expression)) ||
+      (ts.isElementAccessExpression(value) && value.argumentExpression !== undefined && ts.isStringLiteralLike(value.argumentExpression) && value.argumentExpression.text === "tenantId" && contextExpression(value.expression));
+  };
+  const inspectMutation = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.expression.getText(source) === "Object" && node.expression.name.text === "assign" &&
+      node.arguments.some(contextExpression) && node.arguments.some(tenantKey)) {
+      problems.push(`${at(node)} reconstructs or mutates a verified tenant context; forward the verified value instead`);
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment && tenantReceiver(node.left)) {
+      problems.push(`${at(node)} mutates tenantId on an object derived from a verified tenant context`);
+    }
+    ts.forEachChild(node, inspectMutation);
+  };
+  inspectMutation(source);
   for (const object of objects) {
     let contextual = false;
     for (let wrapped: ts.Node = object; wrapped !== outerExpression(object); wrapped = wrapped.parent) {
@@ -613,6 +639,18 @@ export const context = () => verifiedTenantContextFromMembership(membership as P
     } finally {
       await rm(fixture, { recursive: true, force: true });
     }
+  });
+});
+
+describe("M0-6L round 5: copied contexts retain their boundary taint", () => {
+  const contextImport = `import type { VerifiedTenantContext } from "@jobguard/db";`;
+
+  it.each([
+    ["Object.assign reconstruction", `function change(context: VerifiedTenantContext, tenantId: string): VerifiedTenantContext { return Object.assign({}, context, { tenantId }); }`],
+    ["Object.assign mutation", `function change(context: VerifiedTenantContext, tenantId: string) { return Object.assign(context, { tenantId }); }`],
+    ["structuredClone mutation", `function change(context: VerifiedTenantContext, tenantId: string) { const copy = structuredClone(context); copy.tenantId = tenantId; return copy; }`],
+  ])("rejects %s", (_name, code) => {
+    for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}\n${code}`), path).toEqual(mentions("verified tenant context"));
   });
 });
 
