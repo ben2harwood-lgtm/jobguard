@@ -292,3 +292,48 @@ GitHub CI on the first round-4 push failed in `pnpm test` (run 37193008121, 2m51
 **Fix** (`ae039c2`). `freePort(base, span)` in `pool-test-utils.ts` picks a port in the same range that nothing is listening on, on IPv4 and IPv6 loopback (a host without IPv6 is not a conflict); `practice-finding-scope` and `UIWIRE-12` use it. A unit test (`free-port.test.ts`, written first, red with "freePort is not a function") occupies a port and requires it to be skipped, and requires a clear error when the whole range is taken. The same file passed 25 of 25 isolated runs afterwards. No assertion, skip, timeout or retry changed; the new test file is registered in the ch-3a lane.
 
 Re-run at `ae039c2` (database and browser commands inside `heavy-slot ch-3a`): `pnpm typecheck --force` 0; `LANE_BASE_REF=origin/main pnpm lint` 0; `lint:lanes` 0; `pnpm openapi:check` 0; `pnpm build` 0; `pnpm test:db` 0 (40 files, 207 tests); `pnpm test:migrations` 0 (11 tests); `pnpm test --force` 0 (tools 39; core 440; storage 4; config 2; ai 72; api 109; web 63; db 207); whole e2e suite, both projects, local browser, 0 (182 passed). The counts in the round-4 table above are for `b959ce9`, before this fix.
+
+
+## Main merge (SH-1)
+
+5 October 2026. Working-tree conflict resolution for PR #98 over CH-3a head
+`978ceec`, retaining SH-1 from `origin/main`. Builder receipt only; no new
+independent verdict or acceptance is claimed. The dispatcher commits and pushes.
+
+- `packages/core/src/index.ts`: retained `job-parties` and all three SH-1
+  exports (`cumulative-fee`, `receipt-allocation`, `extra-origin`).
+- `packages/db/MIGRATIONS.md`: retained both complete migration sections,
+  0051 before 0053.
+- `packages/db/src/migrate.ts`: retained both migration entries in numeric
+  order. Counted 45 SQL files (0000–0042, 0051, 0053), and verified the runner
+  registers every file exactly once in that order.
+- `packages/db/test/UIWIRE-12.integration.test.ts`: retained the party fixture
+  installation after migration; kept main's upper bound of 0053 and set all
+  three migration-count assertions to 45.
+- `packages/db/test/demo-bootstrap.integration.test.ts`: named both 0051 and
+  0053 in the test description and set all three migration-count assertions
+  to 45. No other assertion, skip, timeout or retry changed.
+
+Validation used installed dependencies, Node 24.17.0 and locally cached pinned
+pnpm 10.28.1, selected through a temporary PATH shim. The default pnpm launcher
+failed its attempted version switch; its empty local store was removed.
+
+| Command | Exit | Result |
+|---|---:|---|
+| `pnpm typecheck` | 0 | 7 tasks successful (2 cached) |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1 | Core purity passed; lane check rejects staged SH-1 paths in the pending merge |
+| `pnpm lint:lanes` | 1 | Same staged SH-1 paths outside the CH-3a lane |
+| `pnpm exec turbo run lint` | 0 | 7 tasks successful (2 cached) |
+| `node tools/money-arithmetic-lint.mjs` | 0 | Passed |
+| `node tools/commercial-boundary-lint.mjs` | 0 | Passed |
+| `pnpm build` | 0 | 7 tasks successful (2 cached) |
+| `pnpm --filter @jobguard/core test` | 0 | 73 files, 547 tests passed |
+| `pnpm openapi:check` | 1 | Sandbox blocks tsx CLI IPC socket (`listen EPERM`) |
+| `node --import tsx src/generate-openapi.ts --check` (in `apps/api`) | 0 | Same source OpenAPI comparison passed without CLI IPC |
+
+Repository conflict-marker scan returned no matches. Lane policy and the
+already-resolved registry were not changed; rerun lane checks after the dispatcher
+commits the merge. PostgreSQL/database, migration and browser suites were not run:
+this sandbox cannot bind localhost or start PostgreSQL. They run in GitHub CI
+after the dispatcher pushes. No Git command was invoked directly; the required
+lane scripts use read-only Git inspection internally.

@@ -47,6 +47,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0041_evidence_packs.sql", import.meta.url),
   new URL("../migrations/0042_evidence_pack_repair.sql", import.meta.url),
   new URL("../migrations/0051_job_parties.sql", import.meta.url),
+  new URL("../migrations/0053_shared_money_origin.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 
