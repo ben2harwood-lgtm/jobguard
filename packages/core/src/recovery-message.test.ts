@@ -169,3 +169,12 @@ describe("source-bound practice recovery messages", () => {
     for (const label of Object.values(RECOVERY_MESSAGE_STATUS_LABELS)) expect(label).not.toMatch(/sent successfully|delivered to|paid|received by/iu);
   });
 });
+
+
+describe("interrupted practice execution", () => {
+  it("distinguishes a fresh executing claim from an abandoned one (P2-6)", () => {
+    expect(deriveRecoveryMessageStatus({ approved: true, outboxStatus: "executing", revoked: false, claimAbandoned: false })).toBe("executing");
+    expect(deriveRecoveryMessageStatus({ approved: true, outboxStatus: "executing", revoked: false, claimAbandoned: true })).toBe("outcome_unknown");
+    expect(deriveRecoveryMessageStatus({ approved: true, outboxStatus: "succeeded", revoked: false, claimAbandoned: true })).toBe("simulated_delivery");
+  });
+});

@@ -7,8 +7,8 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildRecoveryMessage, recoveryMessageSourceOf, RECOVERY_MESSAGE_CHANGED } from '@jobguard/core';
 import {
-  ActionExecutor, EvidencePackRepository, RecoveryCaseRepository, RecoveryMessageRepository, migrate, withTenant,
-  type RecoveryMessageActor, type RecoveryMessageState, type VerifiedTenantContext,
+  ActionExecutor, EvidencePackRepository, FakeRecoveryMessageAdapter, RecoveryCaseRepository, RecoveryMessageRepository, migrate, withTenant,
+  type OutboundAdapter, type RecoveryMessageActor, type RecoveryMessageState, type VerifiedTenantContext,
 } from '../src/index.js';
 import { closeTestPools } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
@@ -59,7 +59,7 @@ const approveCommand = (view: NonNullable<RecoveryMessageState['latest']>, comma
   version: 'recovery-message-command.v1' as const, commandId, action: 'approve' as const, messageId: view.id, expectedRevision: view.revision,
   recipient: view.message.recipient, body: view.message.body, amountPence: view.message.amountPence, packId: view.message.packId, contentHash: view.message.contentHash,
 });
-const advanceCommand = (view: NonNullable<RecoveryMessageState['latest']>, outcome: 'success' | 'response_lost' | 'no_response' | 'definite_failure' = 'success', commandId = randomUUID()) => ({
+const advanceCommand = (view: NonNullable<RecoveryMessageState['latest']>, outcome: 'success' | 'response_lost' | 'no_response' | 'definite_failure' | 'process_stopped' = 'success', commandId = randomUUID()) => ({
   version: 'recovery-message-command.v1' as const, commandId, action: 'advance' as const, messageId: view.id, expectedRevision: view.revision, outcome,
 });
 const simple = (action: 'revoke' | 'reconcile', view: NonNullable<RecoveryMessageState['latest']>, commandId = randomUUID()) => ({
@@ -71,6 +71,65 @@ async function approved(caseType: 'withheld_customer_payment' | 'merchant_overch
   return { ...base, state, view: state.latest! };
 }
 async function viewOf(caseId: string) { return (await repo.read(context, caseId)).latest!; }
+
+
+/** A member of the current fixture's tenant (owner, member, or an already revoked owner). */
+async function makeMember(role: string, revoked: boolean): Promise<RecoveryMessageActor> {
+  const accountId = (await admin.query('SELECT account_id FROM app.membership WHERE id=$1', [fixture.memberId])).rows[0].account_id;
+  const identity = randomUUID(), membership = randomUUID();
+  await admin.query('INSERT INTO identity.identity_user(id) VALUES($1)', [identity]);
+  await admin.query('INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at) VALUES($1,$2,$3,$4,$5,$6)', [membership, fixture.tenantId, accountId, identity, role, revoked ? new Date() : null]);
+  return { membershipId: membership, actorRef: `membership:${membership}` };
+}
+/** Runs a test in a brand-new tenant, for changes (such as invalidating a proof) that must not leak into other tests. */
+async function inIsolatedWorld<T>(run: () => Promise<T>): Promise<T> {
+  const saved = { fixture, context, actor };
+  fixture = await seedEvidencePackFixture(admin);
+  context = { tenantId: fixture.tenantId } as VerifiedTenantContext;
+  actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
+  try { return await run(); } finally { ({ fixture, context, actor } = saved); }
+}
+type Sql = (sql: string, args?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>>; rowCount: number | null }>;
+async function inTenant<T>(run: (query: Sql) => Promise<T>) {
+  return withTenant(runtime, context, db => run((sql, args) => db.$client.query(sql, args)));
+}
+const writeCounts = async () => {
+  const one = async (table: string) => count(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1`, [fixture.tenantId]);
+  return { decision: await one('decision'), resolution: await one('decision_resolution'), authorization: await one('action_authorization'), receipt: await one('command_receipt'),
+    outbox: await one('action_outbox'), approval: await one('recovery_message_approval'), event: await one('recovery_message_event'), audit: await one('audit_event') };
+};
+const silent = { emit: () => undefined };
+/** The shared outbox executor, driven directly by a worker-like caller rather than through the repository. */
+const executorWith = (adapter: OutboundAdapter) => new ActionExecutor(runtime, new Map([[adapter.name, adapter]]), silent);
+const practiceAdapter = (mode: 'success' | 'response_lost' | 'no_response' | 'definite_failure' | 'process_stopped' = 'success') => new FakeRecoveryMessageAdapter(runtime, context, mode);
+const outboxStatus = async (outboxId: string) => (await admin.query('SELECT status FROM app.action_outbox WHERE id=$1', [outboxId])).rows[0].status as string;
+const sinkCount = (messageId: string) => count('SELECT count(*) n FROM app.recovery_message_sink WHERE message_id=$1', [messageId]);
+const attemptCount = (outboxId: string) => count('SELECT count(*) n FROM app.action_attempt WHERE action_id=$1', [outboxId]);
+const storedKinds = async (messageId: string) => (await admin.query('SELECT kind FROM app.recovery_message_event WHERE message_id=$1 ORDER BY revision', [messageId])).rows.map(row => row.kind as string);
+const auditTypes = async (messageId: string) => (await admin.query("SELECT event_type FROM app.audit_event WHERE subject_type='recovery_message' AND subject_ref=$1 ORDER BY sequence", [messageId])).rows.map(row => row.event_type as string);
+async function until(check: () => Promise<boolean>, what: string) {
+  for (let attempt = 0; attempt < 100; attempt++) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
+  throw new Error(`timed out waiting for ${what}`);
+}
+const amend = (caseId: string, claimedNetPence: number, expectedRevision = OPENED) => cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'amend_claim', commandId: randomUUID(), caseId, claimedNetPence, reviewerRef: 'practice-owner', expectedRevision });
+/** The sink insert a forging caller would run, with the message's own approved values. */
+const rawSink = (caseId: string, view: NonNullable<RecoveryMessageState['latest']>) => inTenant(query => query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
+  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)`, [randomUUID(), fixture.tenantId, view.message.jobId, caseId, view.id, view.approval!.outboxActionId, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash]));
+const rawEvent = (caseId: string, messageId: string, revision: number, kind: string, membershipId = fixture.memberId) => inTenant(query => query(
+  `INSERT INTO app.recovery_message_event(id,tenant_id,job_id,case_id,message_id,revision,kind,command_id,request_hash,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'synthetic_demo')`,
+  [randomUUID(), fixture.tenantId, fixture.jobId, caseId, messageId, revision, kind, randomUUID(), 'a'.repeat(64), membershipId]));
+const insertPreview = (over: Record<string, unknown>, base: Awaited<ReturnType<typeof attached>> & { approvalId: string }) => {
+  const message = buildRecoveryMessage({ caseId: base.caseId, jobId: fixture.jobId, caseType: 'withheld_customer_payment', caseRevision: OPENED, amountPence: 32000, sourceRefs: [fixture.invoiceId], packId: base.pack.id, packRevision: 1, manifestHash: base.pack.manifestHash, attachmentHash: base.pack.contentHash, ...(over.source as object | undefined) });
+  const row = { id: randomUUID(), sequence: 1, content: message.immutableContent, hash: message.contentHash, body: message.body, recipient: message.recipient, sender: message.sender, amount: message.amountPence, caseRevision: message.caseRevision, packRevision: message.packRevision, ...over };
+  return inTenant(query => query(`INSERT INTO app.recovery_message(id,tenant_id,job_id,case_id,case_sequence,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,command_id,request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'withheld_customer_payment',$13,$14,'GBP',$15,$16,$17,'practice-factual-message.v1',$18,$19,$20,'synthetic_demo')`,
+  [row.id, fixture.tenantId, (over.jobId as string | undefined) ?? fixture.jobId, base.caseId, row.sequence, base.pack.id, row.packRevision, base.pack.manifestHash, base.pack.contentHash, base.approvalId, randomUUID(), hash(randomUUID()), row.caseRevision, row.amount, row.sender, row.recipient, row.body, row.hash, row.content, fixture.memberId]));
+};
+async function rawBase() {
+  const base = await attached();
+  const approvalId = (await admin.query('SELECT id FROM app.evidence_pack_attachment_approval WHERE tenant_id=$1 AND pack_id=$2', [fixture.tenantId, base.pack.id])).rows[0].id as string;
+  return { ...base, approvalId };
+}
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'jg-recovery-messages-'));
@@ -87,14 +146,7 @@ beforeAll(async () => {
   repo = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   // A non-owner member and a revoked owner in the same tenant, for authority checks.
-  const accountId = (await admin.query('SELECT account_id FROM app.membership WHERE id=$1', [fixture.memberId])).rows[0].account_id;
-  const make = async (role: string, revoked: boolean) => {
-    const identity = randomUUID(), membership = randomUUID();
-    await admin.query('INSERT INTO identity.identity_user(id) VALUES($1)', [identity]);
-    await admin.query('INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at) VALUES($1,$2,$3,$4,$5,$6)', [membership, fixture.tenantId, accountId, identity, role, revoked ? new Date() : null]);
-    return { membershipId: membership, actorRef: `membership:${membership}` };
-  };
-  memberActor = await make('member', false); revokedActor = await make('owner', true);
+  memberActor = await makeMember('member', false); revokedActor = await makeMember('owner', true);
 }, 120_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
@@ -258,14 +310,23 @@ describe('approval is an exact Decision bound to the exact message hash', () => 
 
   it('rolls every approval write back when the evidence changed between preview and approval', async () => {
     const { caseId, view } = await previewed();
-    await cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'amend_claim', commandId: randomUUID(), caseId, claimedNetPence: 32200, reviewerRef: 'practice-owner', expectedRevision: OPENED });
+    await amend(caseId, 32200);
+    // Rows get their own generated ids, so a leaked write is found by comparing the whole tenant's counts before and after.
+    const before = await writeCounts();
     expect(await code(() => repo.command(context, caseId, approveCommand(view), actor))).toBe('RECOVERY_MESSAGE_CHANGED');
-    for (const table of ['decision', 'decision_resolution', 'action_authorization']) {
-      expect(await count(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1 AND ${table === 'decision' ? 'subject_ref' : 'id::text'}=$2`, [fixture.tenantId, view.id])).toBe(0);
-    }
+    expect(await writeCounts()).toEqual(before);
+    expect(await count('SELECT count(*) n FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2', [fixture.tenantId, view.id])).toBe(0);
     expect(await count("SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND semantic_key=$2", [fixture.tenantId, `recovery-message-approve:${view.id}`])).toBe(0);
     expect(await count("SELECT count(*) n FROM app.action_outbox WHERE tenant_id=$1 AND provider_effect_key=$2", [fixture.tenantId, `recovery-message:${view.id}`])).toBe(0);
     expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.message.approved'", [fixture.tenantId, view.id])).toBe(0);
+  });
+
+  it('counts exactly what an approval writes, so the rollback comparison can see a leaked write', async () => {
+    const { caseId, view } = await previewed();
+    const before = await writeCounts();
+    await repo.command(context, caseId, approveCommand(view), actor);
+    const after = await writeCounts();
+    expect(after).toEqual({ ...before, decision: before.decision + 1, resolution: before.resolution + 1, authorization: before.authorization + 1, receipt: before.receipt + 1, outbox: before.outbox + 1, approval: before.approval + 1, event: before.event + 1, audit: before.audit + 2 });
   });
 
   it('refuses a superseded preview and a second live approval on the same case', async () => {
@@ -275,8 +336,8 @@ describe('approval is an exact Decision bound to the exact message hash', () => 
     expect(await code(() => repo.command(context, caseId, approveCommand(view), actor))).toBe('RECOVERY_MESSAGE_CHANGED');
     const approvedState = await repo.command(context, caseId, approveCommand(newer.latest!), actor);
     expect(approvedState.latest!.status).toBe('queued');
-    const third = await repo.preview(context, caseId, previewCommand(await repo.read(context, caseId)), actor);
-    expect(await code(() => repo.command(context, caseId, approveCommand(third.latest!), actor))).toBe('RECOVERY_MESSAGE_EXISTING_EFFECT');
+    // Rejection is now earlier and stronger: the outstanding approval cannot be hidden by even a replacement preview.
+    expect(await code(async () => repo.preview(context, caseId, previewCommand(await repo.read(context, caseId)), actor))).toBe('RECOVERY_MESSAGE_EXISTING_EFFECT');
   });
 
   it('refuses a non-owner, a revoked owner and an unknown actor at the command boundary', async () => {
@@ -452,22 +513,6 @@ describe('revocation and changed evidence block execution', () => {
 });
 
 describe('raw runtime SQL stays fail-closed', () => {
-  async function inTenant<T>(run: (query: (sql: string, args?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>>; rowCount: number | null }>) => Promise<T>) {
-    return withTenant(runtime, context, db => run((sql, args) => db.$client.query(sql, args)));
-  }
-  const insertPreview = (over: Record<string, unknown>, base: Awaited<ReturnType<typeof attached>> & { approvalId: string }) => {
-    const message = buildRecoveryMessage({ caseId: base.caseId, jobId: fixture.jobId, caseType: 'withheld_customer_payment', caseRevision: OPENED, amountPence: 32000, sourceRefs: [fixture.invoiceId], packId: base.pack.id, packRevision: 1, manifestHash: base.pack.manifestHash, attachmentHash: base.pack.contentHash, ...(over.source as object | undefined) });
-    const row = { id: randomUUID(), sequence: 1, content: message.immutableContent, hash: message.contentHash, body: message.body, recipient: message.recipient, sender: message.sender, amount: message.amountPence, caseRevision: message.caseRevision, packRevision: message.packRevision, ...over };
-    return inTenant(query => query(`INSERT INTO app.recovery_message(id,tenant_id,job_id,case_id,case_sequence,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,command_id,request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'withheld_customer_payment',$13,$14,'GBP',$15,$16,$17,'practice-factual-message.v1',$18,$19,$20,'synthetic_demo')`,
-    [row.id, fixture.tenantId, (over.jobId as string | undefined) ?? fixture.jobId, base.caseId, row.sequence, base.pack.id, row.packRevision, base.pack.manifestHash, base.pack.contentHash, base.approvalId, randomUUID(), hash(randomUUID()), row.caseRevision, row.amount, row.sender, row.recipient, row.body, row.hash, row.content, fixture.memberId]));
-  };
-  async function rawBase() {
-    const base = await attached();
-    const approvalId = (await admin.query('SELECT id FROM app.evidence_pack_attachment_approval WHERE tenant_id=$1 AND pack_id=$2', [fixture.tenantId, base.pack.id])).rows[0].id as string;
-    return { ...base, approvalId };
-  }
-
   it('accepts a faithful preview row and refuses every forged one', async () => {
     const base = await rawBase();
     await insertPreview({}, base);
@@ -574,5 +619,451 @@ describe('audit and environment identity', () => {
     }
     expect(done.environment).toBe('synthetic_demo');
     expect(await count("SELECT count(*) n FROM app.recovery_message WHERE tenant_id=$1 AND environment<>'synthetic_demo'", [fixture.tenantId])).toBe(0);
+  });
+});
+
+// ---- Round 2 repairs (Sol check of 5c9acb0): each block names the finding it closes -------------------------------
+
+describe('the effect boundary re-checks the case, the evidence and the approver (P2-1)', () => {
+  it('records nothing when the shared executor is called directly after the case changed', async () => {
+    const { caseId, view } = await approved();
+    await amend(caseId, 32400);
+    await executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
+    expect(await sinkCount(view.id)).toBe(0);
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('retryable');
+    expect((await admin.query('SELECT error_code FROM app.action_attempt WHERE action_id=$1', [view.approval!.outboxActionId])).rows).toEqual([{ error_code: 'FAKE_BLOCKED_CHANGED' }]);
+    // The message is reported as changed, and advancing it afterwards blocks rather than delivers.
+    const state = await repo.read(context, caseId);
+    expect(state.latest).toMatchObject({ status: 'retryable', changedSinceReview: true });
+    expect(await code(() => repo.command(context, caseId, advanceCommand(state.latest!), actor))).toBe('RECOVERY_MESSAGE_BLOCKED');
+    expect(await sinkCount(view.id)).toBe(0);
+  });
+
+  it('records nothing when a proof was invalidated, although the case revision did not move', async () => {
+    await inIsolatedWorld(async () => {
+      const { caseId, view } = await approved();
+      await admin.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'object_revoked')", [randomUUID(), fixture.tenantId, fixture.proofId, fixture.memberId]);
+      expect((await repo.read(context, caseId)).latest).toMatchObject({ changedSinceReview: true });
+      await executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
+      expect(await sinkCount(view.id)).toBe(0);
+      expect(await outboxStatus(view.approval!.outboxActionId)).toBe('retryable');
+    });
+  });
+
+  it('records nothing when the approving member was revoked after the claim was taken', async () => {
+    const owner = await makeMember('owner', false);
+    const base = await previewed();
+    const state = await repo.command(context, base.caseId, approveCommand(base.view), owner);
+    const view = state.latest!;
+    const holder = await admin.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [fixture.tenantId, base.caseId]);
+      const running = executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
+      await until(async () => (await outboxStatus(view.approval!.outboxActionId)) !== 'pending', 'the claim');
+      await holder.query('UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1', [owner.membershipId]);
+      await holder.query('COMMIT');
+      await running;
+    } finally { await holder.query('ROLLBACK').catch(() => undefined); holder.release(); }
+    expect(await sinkCount(view.id)).toBe(0);
+  });
+
+  it('delivers once when nothing changed while the delivery waited for the case lock', async () => {
+    const { caseId, view } = await approved();
+    const holder = await admin.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [fixture.tenantId, caseId]);
+      const running = executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
+      await until(async () => (await outboxStatus(view.approval!.outboxActionId)) !== 'pending', 'the claim');
+      expect(await sinkCount(view.id)).toBe(0); // the delivery is held at the effect boundary, not already written
+      await holder.query('COMMIT');
+      await running;
+    } finally { await holder.query('ROLLBACK').catch(() => undefined); holder.release(); }
+    expect(await sinkCount(view.id)).toBe(1);
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('succeeded');
+  });
+
+  it('catches a case change that lands between the claim and the sink insert', async () => {
+    const { caseId, view } = await approved();
+    const holder = await admin.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [fixture.tenantId, caseId]);
+      const running = executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
+      await until(async () => (await outboxStatus(view.approval!.outboxActionId)) !== 'pending', 'the claim');
+      await holder.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,2,32400,'GBP','fixture-owner',$5)", [randomUUID(), fixture.tenantId, fixture.jobId, caseId, hash(randomUUID())]);
+      await holder.query('COMMIT');
+      await running;
+    } finally { await holder.query('ROLLBACK').catch(() => undefined); holder.release(); }
+    expect(await sinkCount(view.id)).toBe(0);
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('retryable');
+  });
+
+  it('refuses a raw sink row once the case, the pack, the proof set or the approver is no longer what was approved', async () => {
+    const claimExecuting = (outboxId: string) => admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [outboxId]);
+    // Control: an untouched approved message whose action is executing accepts its own sink row.
+    const ok = await approved();
+    await claimExecuting(ok.view.approval!.outboxActionId);
+    await rawSink(ok.caseId, ok.view);
+    expect(await sinkCount(ok.view.id)).toBe(1);
+    // The case amount moved.
+    const moved = await approved();
+    await claimExecuting(moved.view.approval!.outboxActionId);
+    await amend(moved.caseId, 32500);
+    expect(await code(() => rawSink(moved.caseId, moved.view)), 'case moved').toBe('23514');
+    // A newer pack revision exists.
+    const repacked = await approved();
+    await claimExecuting(repacked.view.approval!.outboxActionId);
+    await packs.generate(context, repacked.caseId, { commandId: randomUUID() }, actor.actorRef);
+    expect(await code(() => rawSink(repacked.caseId, repacked.view)), 'pack rebuilt').toBe('23514');
+    // The approving owner was revoked.
+    const owner = await makeMember('owner', false), base = await previewed();
+    const byOwner = (await repo.command(context, base.caseId, approveCommand(base.view), owner)).latest!;
+    await claimExecuting(byOwner.approval!.outboxActionId);
+    await admin.query('UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1', [owner.membershipId]);
+    expect(await code(() => rawSink(base.caseId, byOwner)), 'approver revoked').toBe('23514');
+    // The proof set changed (isolated: an invalidated proof would otherwise leak into every other test).
+    await inIsolatedWorld(async () => {
+      const proof = await approved();
+      await claimExecuting(proof.view.approval!.outboxActionId);
+      await admin.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'wrong_subject')", [randomUUID(), fixture.tenantId, fixture.proofId, fixture.memberId]);
+      expect(await code(() => rawSink(proof.caseId, proof.view)), 'proof invalidated').toBe('23514');
+    });
+  });
+});
+
+describe('a new preview never hides an authorized action (P2-3)', () => {
+  it('refuses another preview while an approved message is queued, retryable, unknown or delivered', async () => {
+    for (const stage of ['queued', 'retryable', 'outcome_unknown', 'simulated_delivery'] as const) {
+      const base = await approved();
+      let state = base.state;
+      if (stage === 'retryable') state = await repo.command(context, base.caseId, advanceCommand(base.view, 'definite_failure'), actor);
+      if (stage === 'outcome_unknown') state = await repo.command(context, base.caseId, advanceCommand(base.view, 'response_lost'), actor);
+      if (stage === 'simulated_delivery') state = await repo.command(context, base.caseId, advanceCommand(base.view, 'success'), actor);
+      expect(state.latest!.status, stage).toBe(stage);
+      const before = await count('SELECT count(*) n FROM app.recovery_message WHERE case_id=$1', [base.caseId]);
+      expect(await code(() => repo.preview(context, base.caseId, previewCommand(state), actor)), stage).toBe('RECOVERY_MESSAGE_EXISTING_EFFECT');
+      expect(await count('SELECT count(*) n FROM app.recovery_message WHERE case_id=$1', [base.caseId]), stage).toBe(before);
+      const after = await repo.read(context, base.caseId);
+      expect(after.latest, stage).toMatchObject({ id: base.view.id, status: stage });
+      expect(after.messages, stage).toHaveLength(1);
+    }
+  });
+
+  it('still previews a fresh message once the earlier approval was revoked or blocked', async () => {
+    const revoked = await approved();
+    const afterRevoke = await repo.command(context, revoked.caseId, simple('revoke', revoked.view), actor);
+    const next = await repo.preview(context, revoked.caseId, previewCommand(afterRevoke), actor);
+    expect(next.messages).toHaveLength(2);
+    expect(next.latest).toMatchObject({ status: 'previewed', sequence: 2 });
+    const blocked = await approved();
+    await amend(blocked.caseId, 32600);
+    expect(await code(() => repo.command(context, blocked.caseId, advanceCommand(blocked.view), actor))).toBe('RECOVERY_MESSAGE_BLOCKED');
+    const newPack = await packs.generate(context, blocked.caseId, { commandId: randomUUID() }, actor.actorRef);
+    await packs.approveAttachment(context, blocked.caseId, newPack.id, { commandId: randomUUID(), expectedManifestHash: newPack.manifestHash, expectedContentHash: newPack.contentHash }, actor.actorRef);
+    const afterBlock = await repo.preview(context, blocked.caseId, previewCommand(await repo.read(context, blocked.caseId)), actor);
+    expect(afterBlock.latest).toMatchObject({ status: 'previewed', sequence: 2 });
+  });
+
+  it('refuses a raw runtime preview row while an approved action is outstanding', async () => {
+    const base = await approved();
+    const approvalId = (await admin.query('SELECT id FROM app.evidence_pack_attachment_approval WHERE tenant_id=$1 AND pack_id=$2', [fixture.tenantId, base.pack.id])).rows[0].id as string;
+    expect(await code(() => insertPreview({ sequence: 2 }, { ...base, approvalId }))).toBe('23514');
+    expect(await count('SELECT count(*) n FROM app.recovery_message WHERE case_id=$1', [base.caseId])).toBe(1);
+  });
+});
+
+describe('message content must be the canonical representation, field for field (P2-4)', () => {
+  it('refuses missing, null, reordered, extra and non-JSON content even with a correct hash', async () => {
+    const base = await rawBase();
+    const good = buildRecoveryMessage({ caseId: base.caseId, jobId: fixture.jobId, caseType: 'withheld_customer_payment', caseRevision: OPENED, amountPence: 32000, sourceRefs: [fixture.invoiceId], packId: base.pack.id, packRevision: 1, manifestHash: base.pack.manifestHash, attachmentHash: base.pack.contentHash });
+    const parsed = JSON.parse(good.immutableContent) as Record<string, unknown>;
+    const without = (key: string) => { const { [key]: _gone, ...rest } = parsed; return JSON.stringify(rest); };
+    const variants: Array<[string, string]> = [
+      ['only the source references', JSON.stringify({ sourceRefs: [fixture.invoiceId] })],
+      ['a required field removed', without('sender')],
+      ['every column field removed but the references', without('body')],
+      ['a null identifier', JSON.stringify({ ...parsed, caseId: null })],
+      ['a null body', JSON.stringify({ ...parsed, body: null })],
+      ['a number where a string belongs', JSON.stringify({ ...parsed, packRevision: '1' })],
+      ['keys in another order', JSON.stringify(Object.fromEntries(Object.entries(parsed).reverse()))],
+      ['an extra key', JSON.stringify({ ...parsed, deadline: '7 days' })],
+      ['pretty-printed whitespace', JSON.stringify(parsed, null, 1)],
+      ['an escaped spelling of the same text', good.immutableContent.replace('£', '\\u00a3')],
+      ['text that is not JSON', 'not json at all'],
+    ];
+    for (const [name, content] of variants) {
+      expect(await code(() => insertPreview({ sequence: 1, content, hash: hash(content) }, base)), name).toBe('23514');
+    }
+    expect(await count('SELECT count(*) n FROM app.recovery_message WHERE case_id=$1', [base.caseId])).toBe(0);
+    await insertPreview({ sequence: 1 }, base);
+    expect(await count('SELECT count(*) n FROM app.recovery_message WHERE case_id=$1', [base.caseId])).toBe(1);
+  });
+});
+
+describe('an interrupted recording is finished by the next touch (P2-5)', () => {
+  const inject = async (table: 'recovery_message_event' | 'audit_event', column: 'kind' | 'event_type', value: string) => {
+    await admin.query(`CREATE OR REPLACE FUNCTION public.injected_recording_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.${column}='${value}' THEN RAISE EXCEPTION 'INJECTED_RECORDING_FAULT' USING ERRCODE='XX000'; END IF; RETURN NEW; END $$`);
+    await admin.query(`CREATE TRIGGER zz_injected_recording_fault BEFORE INSERT ON app.${table} FOR EACH ROW EXECUTE FUNCTION public.injected_recording_fault()`);
+    return () => admin.query(`DROP TRIGGER IF EXISTS zz_injected_recording_fault ON app.${table}`);
+  };
+  const failure = async (run: () => Promise<unknown>) => { try { await run(); } catch (error) { return (error as Error).message; } throw new Error('expected the call to fail'); };
+
+  it('records a committed reconciliation result in the history when the first recording failed, on a read', async () => {
+    const { caseId, view } = await approved();
+    const unknown = await repo.command(context, caseId, advanceCommand(view, 'response_lost'), actor);
+    const clear = await inject('recovery_message_event', 'kind', 'reconciled');
+    try { expect(await failure(() => repo.command(context, caseId, simple('reconcile', unknown.latest!), actor))).toContain('INJECTED_RECORDING_FAULT'); } finally { await clear(); }
+    // The practice provider's answer was committed to the outbox, but the history stopped at the check request.
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('succeeded');
+    expect(await storedKinds(view.id)).toEqual(['previewed', 'approved', 'started', 'outcome_unknown', 'reconcile_started']);
+    const healed = await repo.read(context, caseId);
+    expect(healed.latest).toMatchObject({ status: 'simulated_delivery' });
+    expect(kinds(healed.latest!)).toEqual(['previewed', 'approved', 'started', 'outcome_unknown', 'reconcile_started', 'reconciled']);
+    expect(await auditTypes(view.id)).toContain('recovery.message.reconciled');
+    expect(await sinkCount(view.id)).toBe(1);
+  });
+
+  it('finishes the same way when the identical command is replayed', async () => {
+    const { caseId, view } = await approved();
+    const unknown = await repo.command(context, caseId, advanceCommand(view, 'response_lost'), actor);
+    const command = simple('reconcile', unknown.latest!);
+    const clear = await inject('recovery_message_event', 'kind', 'reconciled');
+    try { await failure(() => repo.command(context, caseId, command, actor)); } finally { await clear(); }
+    const replayed = await repo.command(context, caseId, command, actor);
+    expect(kinds(replayed.latest!)).toEqual(['previewed', 'approved', 'started', 'outcome_unknown', 'reconcile_started', 'reconciled']);
+    expect(await count("SELECT count(*) n FROM app.recovery_message_event WHERE message_id=$1 AND kind='reconciled'", [view.id])).toBe(1);
+  });
+
+  it('finishes an interrupted delivery recording, on a replay of the advance command', async () => {
+    const { caseId, view } = await approved();
+    const command = advanceCommand(view);
+    const clear = await inject('recovery_message_event', 'kind', 'succeeded');
+    try { await failure(() => repo.command(context, caseId, command, actor)); } finally { await clear(); }
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('succeeded');
+    expect(await storedKinds(view.id)).toEqual(['previewed', 'approved', 'started']);
+    const replayed = await repo.command(context, caseId, command, actor);
+    expect(kinds(replayed.latest!)).toEqual(['previewed', 'approved', 'started', 'succeeded']);
+    expect(replayed.latest!.status).toBe('simulated_delivery');
+    expect(await sinkCount(view.id)).toBe(1);
+    expect(await attemptCount(view.approval!.outboxActionId)).toBe(1);
+  });
+
+  it('writes a terminal event and its audit record together or not at all', async () => {
+    const { caseId, view } = await approved();
+    const clear = await inject('audit_event', 'event_type', 'recovery.message.succeeded');
+    try { await failure(() => repo.command(context, caseId, advanceCommand(view), actor)); } finally { await clear(); }
+    expect(await storedKinds(view.id)).toEqual(['previewed', 'approved', 'started']);
+    expect(await auditTypes(view.id)).not.toContain('recovery.message.succeeded');
+    await repo.read(context, caseId);
+    expect(await storedKinds(view.id)).toEqual(['previewed', 'approved', 'started', 'succeeded']);
+    expect((await auditTypes(view.id)).filter(type => type === 'recovery.message.succeeded')).toHaveLength(1);
+  });
+
+  it('records what a worker-driven delivery did, from the attempt and sink facts, exactly once', async () => {
+    const { caseId, view } = await approved();
+    await executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
+    expect(await storedKinds(view.id)).toEqual(['previewed', 'approved']); // nothing recorded the delivery yet
+    const [first, second] = [await repo.read(context, caseId), await repo.read(context, caseId)];
+    expect(kinds(first.latest!)).toEqual(['previewed', 'approved', 'started', 'succeeded']);
+    expect(second.latest!.history).toEqual(first.latest!.history);
+    expect(first.latest).toMatchObject({ status: 'simulated_delivery', attempts: 1 });
+    expect(await auditTypes(view.id)).toEqual(expect.arrayContaining(['recovery.message.started', 'recovery.message.succeeded']));
+    const unknown = await approved();
+    await executorWith(practiceAdapter('response_lost')).execute(context, unknown.view.approval!.outboxActionId);
+    expect(kinds((await repo.read(context, unknown.caseId)).latest!)).toEqual(['previewed', 'approved', 'started', 'outcome_unknown']);
+  });
+});
+
+describe('an abandoned delivery can be checked and recovered through the application (P2-6)', () => {
+  const crashing = (afterRecording = false): OutboundAdapter => ({
+    name: 'fake_recovery_message', supportsProviderDeduplication: true,
+    deliver: async action => { if (afterRecording) await practiceAdapter().deliver(action); throw new Error('PROCESS_DIED'); },
+    reconcile: async () => 'unknown',
+  });
+  const age = (outboxId: string) => admin.query("UPDATE app.action_outbox SET claimed_at=clock_timestamp()-interval '10 minutes' WHERE id=$1", [outboxId]);
+
+  it('shows a fresh claim as in progress and an elapsed one as an unknown outcome, and checks it without resending', async () => {
+    const { caseId, view } = await approved();
+    const outboxId = view.approval!.outboxActionId;
+    await expect(executorWith(crashing()).execute(context, outboxId)).rejects.toThrow('PROCESS_DIED');
+    let state = await repo.read(context, caseId);
+    expect(state.latest).toMatchObject({ status: 'executing', claimAbandoned: false });
+    expect(await code(() => repo.command(context, caseId, advanceCommand(state.latest!), actor))).toBe('RECOVERY_MESSAGE_EXECUTION_PENDING');
+    expect(await code(() => repo.command(context, caseId, simple('reconcile', state.latest!), actor))).toBe('RECOVERY_MESSAGE_NOT_RECONCILABLE');
+    await age(outboxId);
+    state = await repo.read(context, caseId); // a reload
+    expect(state.latest).toMatchObject({ status: 'outcome_unknown', claimAbandoned: true });
+    expect(await code(() => repo.command(context, caseId, advanceCommand(state.latest!), actor))).toBe('RECOVERY_MESSAGE_RECONCILE_REQUIRED');
+    expect(await sinkCount(view.id)).toBe(0);
+    const checked = await repo.command(context, caseId, simple('reconcile', state.latest!), actor);
+    // Nothing was recorded by the practice provider, so one safe retry is offered and the uncertainty is in the history.
+    expect(checked.latest).toMatchObject({ status: 'retryable', claimAbandoned: false });
+    expect(kinds(checked.latest!)).toEqual(['previewed', 'approved', 'started', 'outcome_unknown', 'reconcile_started', 'retryable']);
+    expect(checked.sinkCount).toBe(0);
+    const delivered = await repo.command(context, caseId, advanceCommand(checked.latest!), actor);
+    expect(delivered.latest).toMatchObject({ status: 'simulated_delivery', attempts: 2 });
+    expect(await sinkCount(view.id)).toBe(1);
+  });
+
+  it('finds the provider record of an abandoned delivery that had already been written, and never sends again', async () => {
+    const { caseId, view } = await approved();
+    const outboxId = view.approval!.outboxActionId;
+    await expect(executorWith(crashing(true)).execute(context, outboxId)).rejects.toThrow('PROCESS_DIED');
+    await age(outboxId);
+    const state = await repo.read(context, caseId);
+    expect(state.latest).toMatchObject({ status: 'outcome_unknown', claimAbandoned: true });
+    const checked = await repo.command(context, caseId, simple('reconcile', state.latest!), actor);
+    expect(checked.latest).toMatchObject({ status: 'simulated_delivery', attempts: 1 });
+    expect(kinds(checked.latest!)).toEqual(['previewed', 'approved', 'started', 'outcome_unknown', 'reconcile_started', 'reconciled']);
+    expect(await sinkCount(view.id)).toBe(1);
+    expect(await attemptCount(outboxId)).toBe(1);
+  });
+
+  it('recovers through the application when the practice process stops mid-delivery', async () => {
+    const { caseId, view } = await approved();
+    expect(await code(() => repo.command(context, caseId, advanceCommand(view, 'process_stopped'), actor))).toBe('RECOVERY_MESSAGE_DELIVERY_INTERRUPTED');
+    const interrupted = await repo.read(context, caseId);
+    expect(interrupted.latest).toMatchObject({ status: 'executing', claimAbandoned: false });
+    expect(kinds(interrupted.latest!)).toEqual(['previewed', 'approved', 'started']);
+    await age(view.approval!.outboxActionId);
+    const unknown = (await repo.read(context, caseId)).latest!;
+    expect(unknown).toMatchObject({ status: 'outcome_unknown', claimAbandoned: true });
+    const checked = await repo.command(context, caseId, simple('reconcile', unknown), actor);
+    expect(checked.latest!.status).toBe('retryable');
+    expect(checked.sinkCount).toBe(0);
+  });
+});
+
+describe('history cannot be forged under the runtime role (P2-7)', () => {
+  const everyKind = ['approved', 'revoked', 'started', 'succeeded', 'retryable', 'failed', 'outcome_unknown', 'reconcile_started', 'reconciled', 'blocked'];
+
+  it('refuses every consequential kind on a message nobody approved', async () => {
+    const { caseId, view } = await previewed();
+    for (const kind of everyKind) expect(await code(() => rawEvent(caseId, view.id, 2, kind)), `${kind} on a preview`).toBe('23514');
+    expect(await storedKinds(view.id)).toEqual(['previewed']);
+  });
+
+  it('refuses kinds that no authorization, attempt, sink record or outcome supports on an approved message', async () => {
+    const { caseId, view } = await approved();
+    for (const kind of ['approved', 'succeeded', 'retryable', 'failed', 'outcome_unknown', 'reconcile_started', 'reconciled', 'revoked', 'blocked']) {
+      expect(await code(() => rawEvent(caseId, view.id, 3, kind)), `${kind} on a queued message`).toBe('23514');
+    }
+    expect(await storedKinds(view.id)).toEqual(['previewed', 'approved']);
+  });
+
+  it('refuses a forged outcome after a start that no delivery attempt followed, and after a real delivery', async () => {
+    const { caseId, view } = await approved();
+    await rawEvent(caseId, view.id, 3, 'started'); // a start backed by a live authorization on a queued action is a valid claim intent
+    for (const kind of ['succeeded', 'retryable', 'outcome_unknown', 'failed', 'reconciled', 'blocked']) {
+      expect(await code(() => rawEvent(caseId, view.id, 4, kind)), `${kind} with no attempt`).toBe('23514');
+    }
+    const delivered = await approved();
+    await repo.command(context, delivered.caseId, advanceCommand(delivered.view), actor);
+    const revision = (await viewOf(delivered.caseId)).revision;
+    for (const kind of everyKind) expect(await code(() => rawEvent(delivered.caseId, delivered.view.id, revision + 1, kind)), `${kind} after delivery`).toBe('23514');
+  });
+
+  it('refuses a reconciliation or a retry that the outbox does not show, and a forged revocation or block', async () => {
+    const unknown = await approved();
+    const state = await repo.command(context, unknown.caseId, advanceCommand(unknown.view, 'no_response'), actor);
+    const next = state.latest!.revision + 1;
+    expect(await code(() => rawEvent(unknown.caseId, unknown.view.id, next, 'reconciled'))).toBe('23514'); // no sink record, outbox still unknown
+    expect(await code(() => rawEvent(unknown.caseId, unknown.view.id, next, 'retryable'))).toBe('23514');
+    expect(await code(() => rawEvent(unknown.caseId, unknown.view.id, next, 'succeeded'))).toBe('23514');
+    expect(await code(() => rawEvent(unknown.caseId, unknown.view.id, next, 'revoked'))).toBe('23514');
+    expect(await code(() => rawEvent(unknown.caseId, unknown.view.id, next, 'blocked'))).toBe('23514');
+    await rawEvent(unknown.caseId, unknown.view.id, next, 'reconcile_started'); // the outbox really is unknown: a check may start
+    expect((await storedKinds(unknown.view.id)).at(-1)).toBe('reconcile_started');
+  });
+
+  it('accepts a start backed by a live approval and finishes an orphaned start with one delivery', async () => {
+    const { caseId, view } = await approved();
+    await rawEvent(caseId, view.id, 3, 'started');
+    const done = await repo.command(context, caseId, advanceCommand({ ...view, revision: 3 }), actor);
+    expect(done.latest!.status).toBe('simulated_delivery');
+    expect(kinds(done.latest!)).toEqual(['previewed', 'approved', 'started', 'started', 'succeeded']);
+    expect(await sinkCount(view.id)).toBe(1);
+  });
+});
+
+// These races exercise the real guards; the two connections never mock authoritative data.
+describe('source writes serialize with the final effect check (P2-1)', () => {
+  it('an invalidation committed after validation but before insertion prevents the sink effect', async () => {
+    await inIsolatedWorld(async () => {
+      const { caseId, view } = await approved();
+      const holder = await admin.connect();
+      try {
+        await holder.query('BEGIN');
+        await holder.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext('recovery-message-sources'))", [fixture.tenantId]);
+        const running = executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
+        await until(async () => await outboxStatus(view.approval!.outboxActionId) === 'executing', 'the executing claim');
+        await holder.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'object_revoked')", [randomUUID(), fixture.tenantId, fixture.proofId, fixture.memberId]);
+        await holder.query('COMMIT'); await running;
+      } finally { await holder.query('ROLLBACK').catch(() => undefined); holder.release(); }
+      expect(await sinkCount(view.id)).toBe(0);
+    });
+  });
+  it('a source invalidation waits for a sink transaction that already holds the effect lock', async () => {
+    await inIsolatedWorld(async () => {
+      const { caseId, view } = await approved();
+      await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [view.approval!.outboxActionId]);
+      const sink = await runtime.connect(), writer = await runtime.connect();
+      try {
+        await sink.query('BEGIN'); await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        await sink.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [fixture.tenantId, caseId]);
+        await sink.query("SELECT app.lock_recovery_message_sources($1)", [fixture.tenantId]);
+        await writer.query('BEGIN'); await writer.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        let completed = false;
+        const invalidation = writer.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'object_revoked')", [randomUUID(), fixture.tenantId, fixture.proofId, fixture.memberId]).then(() => { completed = true; });
+        await until(async () => (await admin.query("SELECT 1 FROM pg_stat_activity WHERE query LIKE 'INSERT INTO app.evidence_invalidation%' AND wait_event='advisory'")).rowCount !== 0, 'source writer held at the effect boundary');
+        expect(completed).toBe(false);
+        await sink.query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'locked','synthetic_demo',0)`, [randomUUID(), fixture.tenantId, fixture.jobId, caseId, view.id, view.approval!.outboxActionId, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash]);
+        await sink.query('COMMIT'); await invalidation; await writer.query('COMMIT');
+        expect(await sinkCount(view.id)).toBe(1);
+      } finally { await sink.query('ROLLBACK').catch(() => undefined); await writer.query('ROLLBACK').catch(() => undefined); sink.release(); writer.release(); }
+    });
+  });
+  it('a raw sink cannot use an old pack when supplier source validity changed', async () => {
+    await inIsolatedWorld(async () => {
+      const { caseId, view } = await approved('merchant_overcharge');
+      await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [view.approval!.outboxActionId]);
+      await admin.query("UPDATE app.supplier_document SET status='held' WHERE tenant_id=$1 AND id=$2", [fixture.tenantId, fixture.supplierInvoiceId]);
+      expect(await code(() => rawSink(caseId, view))).toBe('23514');
+      expect(await sinkCount(view.id)).toBe(0);
+    });
+  });
+});
+
+describe('the saved attachment keeps exact historical sources (P3-10)', () => {
+  it('preserves source bytes, identities and hashes when a proof is invalidated and a later pack omits it', async () => {
+    await inIsolatedWorld(async () => {
+      const { caseId, view } = await approved();
+      const savedProof = view.attachment.sources.find(source => source.sourceId === `evidence_object:${fixture.proofId}`)!;
+      expect(savedProof.content).toBeTruthy(); expect(savedProof.contentHash).toBe(hash(savedProof.content));
+      await admin.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'object_revoked')", [randomUUID(), fixture.tenantId, fixture.proofId, fixture.memberId]);
+      const rebuilt = await packs.generate(context, caseId, { commandId: randomUUID() }, actor.actorRef);
+      expect(rebuilt.sources.map(source => source.sourceId)).not.toContain(savedProof.sourceId);
+      const reloaded = await repo.read(context, caseId);
+      expect(reloaded.latest!.attachment).toEqual(view.attachment);
+      expect(reloaded.latest!.attachment.packId).not.toBe(rebuilt.id);
+      expect(reloaded.latest!.attachment.sources.find(source => source.sourceId === savedProof.sourceId)).toEqual(savedProof);
+      expect(reloaded.latest!.changedSinceReview).toBe(true);
+    });
+  });
+});
+
+
+describe('approval race preserves command identity (P2-8)', () => {
+  it('two distinct commands approving one revision yield one approval and one typed stale conflict', async () => {
+    const { caseId, view } = await previewed();
+    const first = approveCommand(view), second = approveCommand(view);
+    const outcomes = await Promise.allSettled([repo.command(context, caseId, first, actor), repo.command(context, caseId, second, actor)]);
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect((outcomes.find(outcome => outcome.status === 'rejected') as PromiseRejectedResult).reason.code).toBe('RECOVERY_MESSAGE_STALE_REVISION');
+    expect(await count('SELECT count(*) n FROM app.recovery_message_approval WHERE tenant_id=$1 AND message_id=$2', [fixture.tenantId, view.id])).toBe(1);
+    expect(kinds((await repo.read(context, caseId)).latest!)).toEqual(['previewed', 'approved']);
   });
 });

@@ -18,6 +18,7 @@ const outcomeLabels: Record<Outcome, string> = {
   response_lost: "Delivered, but the answer is lost",
   no_response: "No answer, nothing recorded",
   definite_failure: "Practice provider refuses it",
+  process_stopped: "Practice process stops before recording a result",
 };
 const notReady: Record<string, string> = {
   PACK_REQUIRED: "Build an evidence pack for this case first.",
@@ -38,6 +39,7 @@ const failureText = (code: string, action: Action) => {
     RECOVERY_MESSAGE_NOT_REVOCABLE: "This approval can no longer be revoked.",
     RECOVERY_MESSAGE_NOT_RECONCILABLE: "There is no unknown outcome to check.",
     RECOVERY_MESSAGE_EXECUTION_PENDING: "Delivery is still in progress. Refresh shortly.",
+    RECOVERY_MESSAGE_DELIVERY_INTERRUPTED: "The practice delivery process stopped. Refresh to see its saved claim; check the outcome when it becomes uncertain.",
     RECOVERY_MESSAGE_SOURCES_REQUIRED: notReady.PACK_REQUIRED!, RECOVERY_MESSAGE_ATTACHMENT_APPROVAL_REQUIRED: notReady.ATTACHMENT_APPROVAL_REQUIRED!,
     RECOVERY_MESSAGE_CASE_NOT_ELIGIBLE: notReady.CASE_NOT_ELIGIBLE!, UNAUTHENTICATED: "Start the practice session again to continue.",
   };
@@ -106,6 +108,8 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
   const edited = !!view && !!draft && (draft.recipient !== view.message.recipient || draft.body !== view.message.body || draftPence(draft.amount) !== view.message.amountPence);
   const showChanged = !!view && (edited || view.changedSinceReview);
   const awaiting = !!view && view.status === "previewed" && !view.superseded;
+  const existingEffect = state?.messages.some(message => !!message.approval && !["revoked", "blocked"].includes(message.status));
+  const sourceAnchor = (source: View["attachment"]["sources"][number]) => `pack-source-${view!.message.packId}-${view!.id}-${packSourceAnchor(source.sourceId, source.version)}`;
   const canRun = !!view && (view.status === "queued" || view.status === "retryable");
   return <section className={styles.panel} aria-labelledby={`pursuit-heading-${caseId}`} id="recovery-messages" aria-busy={busy || loading}>
     <h4 id={`pursuit-heading-${caseId}`}>Review a factual practice message</h4>
@@ -114,7 +118,7 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
     {error && <p className={styles.error} role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}
     {state && !state.readiness.eligible && state.readiness.reason && <p data-testid="pursuit-not-ready">{notReady[state.readiness.reason]}</p>}
     <div className={styles.actions}>
-      <button type="button" disabled={busy || loading || !state?.readiness.eligible} onClick={() => void act("preview")}>Preview factual message</button>
+      <button type="button" disabled={busy || loading || !state?.readiness.eligible || existingEffect} onClick={() => void act("preview")}>Preview factual message</button>
       <button type="button" disabled={busy || loading} onClick={() => void load()}>Refresh saved messages</button>
     </div>
     {state && state.messages.length === 0 && !loading && <p>No practice message has been previewed for this case yet.</p>}
@@ -129,7 +133,16 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
         <p data-testid="pursuit-body">{view.message.body}</p>
         <h5>Sources this message relies on</h5>
         <ul data-testid="pursuit-sources">{view.attachment.sources.map(source => <li key={`${source.sourceId}:${source.version}`}>
-          <a href={`#${packSourceAnchor(source.sourceId, source.version)}`}>{source.label} · exact version {source.version}</a></li>)}</ul>
+          <a href={`#${sourceAnchor(source)}`}>{source.label} · exact version {source.version}</a></li>)}</ul>
+        <section aria-label="Saved attachment source explorer">
+          <p>Saved evidence pack <code>{view.message.packId}</code> · revision {view.attachment.packRevision}. These are the exact records used by this message; current evidence may have changed.</p>
+          {view.attachment.sources.map(source => <details key={`${source.sourceId}:${source.version}`} id={sourceAnchor(source)}>
+            <summary>{source.label} · exact version {source.version}</summary>
+            <p>Source identity <code>{source.sourceId}</code> · version {source.version}</p>
+            <p>SHA-256 <code>{source.contentHash}</code></p>
+            <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{source.content}</pre>
+          </details>)}
+        </section>
         <a href={`/api/recovery-cases/${caseId}/evidence-packs/${view.message.packId}/download`} download>Download this message&apos;s exact attachment (.txt)</a>
         <p>Message hash <code data-testid="pursuit-content-hash">{view.message.contentHash}</code> · case revision {view.message.caseRevision}</p>
       </article>
@@ -150,6 +163,7 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
           <button type="button" disabled={busy} onClick={() => void act("revoke")}>Revoke approval</button>
         </div>
       </>}
+      {view.claimAbandoned && <p role="status">The delivery process stopped before its result was recorded. Check the practice provider before attempting anything else.</p>}
       {view.status === "outcome_unknown" && <div className={styles.actions}>
         <p>The practice provider may or may not have recorded this message. Check before doing anything else.</p>
         <button type="button" disabled={busy} onClick={() => void act("reconcile")}>Check outcome</button>

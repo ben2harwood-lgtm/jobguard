@@ -11,7 +11,7 @@ describe("recovery message failure mapping", () => {
     ["RECOVERY_MESSAGE_ALREADY_DELIVERED", 409], ["RECOVERY_MESSAGE_RECONCILE_REQUIRED", 409], ["RECOVERY_MESSAGE_NOT_RECONCILABLE", 409],
     ["RECOVERY_MESSAGE_NOT_REVOCABLE", 409], ["RECOVERY_MESSAGE_NOT_ADVANCEABLE", 409], ["RECOVERY_MESSAGE_EXECUTION_PENDING", 409],
     ["RECOVERY_MESSAGE_SOURCES_REQUIRED", 409], ["RECOVERY_MESSAGE_ATTACHMENT_APPROVAL_REQUIRED", 409], ["RECOVERY_MESSAGE_CASE_NOT_ELIGIBLE", 409],
-    ["RECOVERY_MESSAGE_CONTENT_INVALID", 409],
+    ["RECOVERY_MESSAGE_CONTENT_INVALID", 409], ["RECOVERY_MESSAGE_DELIVERY_INTERRUPTED", 409],
   ])("keeps the typed code %s as HTTP %i", (code, status) => {
     expect(recoveryMessageFailure(Object.assign(new Error(code), { code }))).toEqual({ status, code });
     expect(recoveryMessageFailure(new Error(code))).toEqual({ status, code });

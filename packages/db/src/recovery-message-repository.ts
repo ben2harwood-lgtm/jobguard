@@ -2,16 +2,16 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import {
-  RECOVERY_MESSAGE_ACTION, buildEvidenceManifest, buildRecoveryMessage, canonicalManifest, deriveRecoveryMessageStatus, manifestDigest,
-  matchesRecoveryMessageApproval, recoveryMessageCommandV1, recoveryMessagePreviewCommandV1, renderStandalonePack, sha256,
-  verifyRecoveryMessageContent, verifyStandalonePack,
+  RECOVERY_MESSAGE_ACTION, deriveRecoveryMessageStatus,
+  matchesRecoveryMessageApproval, recoveryMessageCommandV1, recoveryMessagePreviewCommandV1, sha256,
+  verifyRecoveryMessageContent,
   type RecoveryMessage, type RecoveryMessageCaseType, type RecoveryMessageCommand, type RecoveryMessageEventKind, type RecoveryMessageStatus,
 } from "@jobguard/core";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { CommandError, UserCommandDispatcher, type CommandMutation, type ConsequentialCommand } from "./commands.js";
-import { loadEvidencePackSources } from "./evidence-pack-sources.js";
 import { ActionExecutor, appendOutboundAction, reconcileOutbox, type SafeTelemetry } from "./outbox.js";
-import { FakeRecoveryMessageAdapter, RECOVERY_MESSAGE_ADAPTER, RECOVERY_MESSAGE_EFFECT_PREFIX, type RecoveryMessageDeliveryMode } from "./recovery-message-adapter.js";
+import { FakeRecoveryMessageAdapter, RECOVERY_MESSAGE_ADAPTER, RECOVERY_MESSAGE_EFFECT_PREFIX, PracticeProcessStopped, type RecoveryMessageDeliveryMode } from "./recovery-message-adapter.js";
+import { inspectRecoveryMessageCase, lockRecoveryCase, type Current, type RecoveryMessageReadinessReason } from "./recovery-message-current.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 export type RecoveryMessageActor = { membershipId: string; actorRef: string };
@@ -20,7 +20,7 @@ const ERROR_CODES = [
   "RECOVERY_MESSAGE_CASE_NOT_ELIGIBLE", "RECOVERY_MESSAGE_CHANGED", "RECOVERY_MESSAGE_EXPIRED", "RECOVERY_MESSAGE_STALE_REVISION", "RECOVERY_MESSAGE_COMMAND_CONFLICT",
   "RECOVERY_MESSAGE_EXISTING_EFFECT", "RECOVERY_MESSAGE_NOT_APPROVED", "RECOVERY_MESSAGE_REVOKED", "RECOVERY_MESSAGE_BLOCKED",
   "RECOVERY_MESSAGE_ALREADY_DELIVERED", "RECOVERY_MESSAGE_RECONCILE_REQUIRED", "RECOVERY_MESSAGE_NOT_RECONCILABLE", "RECOVERY_MESSAGE_NOT_REVOCABLE",
-  "RECOVERY_MESSAGE_NOT_ADVANCEABLE", "RECOVERY_MESSAGE_EXECUTION_PENDING", "RECOVERY_MESSAGE_CONTENT_INVALID",
+  "RECOVERY_MESSAGE_NOT_ADVANCEABLE", "RECOVERY_MESSAGE_EXECUTION_PENDING", "RECOVERY_MESSAGE_CONTENT_INVALID", "RECOVERY_MESSAGE_DELIVERY_INTERRUPTED",
 ] as const;
 export type RecoveryMessageErrorCode = (typeof ERROR_CODES)[number];
 export class RecoveryMessageError extends Error {
@@ -28,11 +28,11 @@ export class RecoveryMessageError extends Error {
 }
 const fail = (code: RecoveryMessageErrorCode): never => { throw new RecoveryMessageError(code); };
 
-export type RecoveryMessageReadinessReason = "CASE_NOT_ELIGIBLE" | "PACK_REQUIRED" | "ATTACHMENT_APPROVAL_REQUIRED";
+export type { RecoveryMessageReadinessReason } from "./recovery-message-current.js";
 export type RecoveryMessageView = {
-  id: string; sequence: number; revision: number; status: RecoveryMessageStatus; changedSinceReview: boolean; superseded: boolean;
+  id: string; sequence: number; revision: number; status: RecoveryMessageStatus; changedSinceReview: boolean; superseded: boolean; claimAbandoned: boolean;
   message: Omit<RecoveryMessage, "immutableContent">;
-  attachment: { packId: string; packRevision: number; manifestHash: string; contentHash: string; sources: Array<{ sourceId: string; version: number; label: string; kind: string }> };
+  attachment: { packId: string; packRevision: number; manifestHash: string; contentHash: string; sources: Array<{ sourceId: string; version: number; label: string; kind: string; content: string; contentHash: string }> };
   approval: { decisionId: string; authorizationId: string; outboxActionId: string; revoked: boolean; expiresAt: string } | null;
   attempts: number; history: Array<{ revision: number; kind: RecoveryMessageEventKind; at: string }>; createdAt: string;
 };
@@ -80,16 +80,12 @@ async function guarded<T>(run: () => Promise<T>): Promise<T> {
   try { return await run(); } catch (error) { throw translate(error); }
 }
 
-type CaseNow = { jobId: string; caseType: string; synthetic: boolean; environment: string; sourceRefs: string[]; caseRevision: number; outstandingPence: number };
-type Current =
-  | { ok: true; now: CaseNow; pack: { id: string; revision: number; manifestHash: string; contentHash: string; approvalId: string }; message: RecoveryMessage }
-  | { ok: false; reason: RecoveryMessageReadinessReason; now: CaseNow; pack: { id: string; revision: number } | null };
 type MessageRow = {
   id: string; job_id: string; case_id: string; case_sequence: number; pack_id: string; pack_revision: number; manifest_hash: string; attachment_hash: string;
   attachment_approval_id: string; command_id: string; request_hash: string; case_type: RecoveryMessageCaseType; case_revision: number; amount_pence: string;
   recipient: string; body: string; content_hash: string; immutable_content: string; created_at: Date;
   authorization_id: string | null; outbox_action_id: string | null; outbox_status: string | null; claimed_at: Date | null; decision_id: string | null;
-  authorization_expires_at: Date | null; authorization_revoked_at: Date | null; membership_active: boolean | null; pack_sources: unknown; attempts: number | null;
+  authorization_expires_at: Date | null; authorization_revoked_at: Date | null; membership_active: boolean | null; approving_membership_id: string | null; pack_sources: unknown; attempts: number | null;
 };
 type EventRow = { message_id: string; revision: number; kind: RecoveryMessageEventKind; created_at: Date };
 
@@ -103,7 +99,11 @@ export class RecoveryMessageRepository {
 
   async read(ctx: VerifiedTenantContext, caseId: string): Promise<RecoveryMessageState> {
     caseId = uuidArg(caseId);
-    return guarded(() => withTenant(this.pool, ctx, db => this.state(db, ctx.tenantId, caseId)));
+    return guarded(() => withTenant(this.pool, ctx, async db => {
+      await this.lockCase(db, ctx.tenantId, caseId);
+      await this.finishHistory(db, ctx.tenantId, caseId);
+      return this.state(db, ctx.tenantId, caseId);
+    }));
   }
 
   async preview(ctx: VerifiedTenantContext, caseId: string, raw: unknown, actor: RecoveryMessageActor): Promise<RecoveryMessageState> {
@@ -130,6 +130,7 @@ export class RecoveryMessageRepository {
   async command(ctx: VerifiedTenantContext, caseId: string, raw: unknown, actor: RecoveryMessageActor): Promise<RecoveryMessageState> {
     caseId = uuidArg(caseId);
     const input = recoveryMessageCommandV1.parse(raw);
+    await this.read(ctx, caseId);
     const messageId = uuidArg(input.messageId), requestHash = requestHashOf({ caseId, membershipId: actor.membershipId, ...input, messageId });
     if (input.action === "approve") await this.approve(ctx, caseId, messageId, input, actor, requestHash);
     else if (input.action === "revoke") await this.revoke(ctx, caseId, messageId, input, actor, requestHash);
@@ -187,6 +188,12 @@ export class RecoveryMessageRepository {
       auditEvents: () => [this.auditInput(actor, messageId, "approved", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash)],
     };
     await guarded(() => new UserCommandDispatcher(this.pool).dispatch(ctx, command, mutation));
+    // Shared semantic idempotency can return a different command's completed approval. This leaf binds the caller's
+    // expected message revision as well: only the same exact command is a replay; another client's approval is stale.
+    await guarded(() => withTenant(this.pool, ctx, async db => {
+      const owned = await db.$client.query("SELECT 1 FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 AND command_id=$3 AND request_hash=$4 AND kind='approved'", [ctx.tenantId, messageId, input.commandId, requestHash]);
+      if (!owned.rowCount) fail("RECOVERY_MESSAGE_STALE_REVISION");
+    }));
   }
 
   // ---- revoke: only before anything was claimed; it withdraws the authorization and cancels the queued action --
@@ -211,7 +218,13 @@ export class RecoveryMessageRepository {
     const claimed = await guarded(() => withTenant(this.pool, ctx, async db => {
       await this.begin(db, ctx.tenantId, caseId, input.commandId, actor);
       const replay = await this.isReplay(db, ctx.tenantId, input.commandId, ["started", "blocked"], caseId, requestHash);
-      if (replay) return { replayed: true as const, blocked: replay.kind === "blocked" };
+      if (replay) {
+        const m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
+        const last = (await db.$client.query<{ revision: number; kind: string }>("SELECT revision,kind FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision DESC LIMIT 1", [ctx.tenantId, messageId])).rows[0]!;
+        if (last.kind === "started" && (m.outbox_status === "pending" || m.outbox_status === "retryable"))
+          return { replayed: false as const, blocked: false as const, started: last.revision, outboxId: m.outbox_action_id!, row: m };
+        return { replayed: true as const, blocked: replay.kind === "blocked" };
+      }
       const m = await this.messageRow(db, ctx.tenantId, caseId, messageId), status = await this.statusOf(db, ctx.tenantId, m);
       const revision = await this.revisionOf(db, ctx.tenantId, messageId);
       if (revision !== input.expectedRevision) fail("RECOVERY_MESSAGE_STALE_REVISION");
@@ -241,24 +254,16 @@ export class RecoveryMessageRepository {
     if (claimed.blocked) return fail("RECOVERY_MESSAGE_BLOCKED");
     // Deliberate post-commit boundary: only the closed deterministic fake exists, with no transport or credential.
     const adapter = new FakeRecoveryMessageAdapter(this.pool, ctx, input.outcome satisfies RecoveryMessageDeliveryMode);
-    await new ActionExecutor(this.pool, new Map([[adapter.name, adapter]]), noTelemetry).execute(ctx, claimed.outboxId);
+    try { await new ActionExecutor(this.pool, new Map([[adapter.name, adapter]]), noTelemetry).execute(ctx, claimed.outboxId); }
+    catch (error) { if (error instanceof PracticeProcessStopped) fail("RECOVERY_MESSAGE_DELIVERY_INTERRUPTED"); throw error; }
     await guarded(() => withTenant(this.pool, ctx, async db => {
       await this.lockCase(db, ctx.tenantId, caseId);
-      const m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
-      const ref = { id: messageId, jobId: m.job_id, caseId };
-      const kinds: Record<string, RecoveryMessageEventKind> = { succeeded: "succeeded", outcome_unknown: "outcome_unknown", retryable: "retryable", dead_letter: "failed" };
-      const kind = kinds[m.outbox_status ?? ""];
-      if (!kind) {
-        if (m.outbox_status === "executing") return fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
-        // The shared executor declined (authority withdrawn or expired between claim and run): nothing was recorded.
-        await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status='pending'", [ctx.tenantId, m.outbox_action_id]);
-        await this.event(db, ctx.tenantId, ref, actor, "blocked", input.commandId, requestHash, claimed.started);
-        await this.audit(db, actor, messageId, "blocked", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
-        return undefined;
-      }
-      await this.event(db, ctx.tenantId, ref, actor, kind, input.commandId, requestHash, claimed.started);
-      await this.audit(db, actor, messageId, kind, { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
-      return undefined;
+      // A declined execution or a changed-source refusal has no effect. Persist the block before recording its history.
+      await db.$client.query(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
+        WHERE o.tenant_id=$1 AND o.id=$2 AND (o.status='pending' OR (o.status='retryable' AND EXISTS(
+          SELECT 1 FROM app.action_attempt t WHERE t.tenant_id=o.tenant_id AND t.action_id=o.id AND t.error_code='FAKE_BLOCKED_CHANGED'
+          AND t.attempt_number=(SELECT max(x.attempt_number) FROM app.action_attempt x WHERE x.tenant_id=o.tenant_id AND x.action_id=o.id))))`, [ctx.tenantId, claimed.outboxId]);
+      await this.finishHistory(db, ctx.tenantId, caseId);
     }));
     const after = await this.read(ctx, caseId);
     if (after.messages.find(item => item.id === messageId)?.status === "blocked") fail("RECOVERY_MESSAGE_BLOCKED");
@@ -269,18 +274,31 @@ export class RecoveryMessageRepository {
     const adapter = new FakeRecoveryMessageAdapter(this.pool, ctx, "success");
     const claimed = await guarded(() => withTenant(this.pool, ctx, async db => {
       await this.begin(db, ctx.tenantId, caseId, input.commandId, actor);
-      if (await this.isReplay(db, ctx.tenantId, input.commandId, ["reconcile_started"], caseId, requestHash)) return { replayed: true as const };
+      if (await this.isReplay(db, ctx.tenantId, input.commandId, ["reconcile_started", "outcome_unknown"], caseId, requestHash)) {
+        const m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
+        if (m.outbox_status !== "outcome_unknown") return { replayed: true as const };
+        return { replayed: false as const, started: await this.revisionOf(db, ctx.tenantId, messageId), outboxId: m.outbox_action_id!, jobId: m.job_id, contentHash: m.content_hash };
+      }
       let m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
       const revision = await this.revisionOf(db, ctx.tenantId, messageId);
       if (revision !== input.expectedRevision) fail("RECOVERY_MESSAGE_STALE_REVISION");
-      // A claim older than the shared executor's own window is treated by it as an unknown outcome.
+      const ref = { id: messageId, jobId: m.job_id, caseId }, audit: AuditEventInput[] = [];
+      let previous = revision;
+      // A stale executing claim is uncertain, never a retry. Record uncertainty and check intent atomically.
       if (m.outbox_status === "executing" && m.claimed_at && Date.now() - new Date(m.claimed_at).getTime() > STALE_EXECUTION_MS) {
-        await new ActionExecutor(this.pool, new Map(), noTelemetry).execute(ctx, m.outbox_action_id!);
+        const changed = await db.$client.query("UPDATE app.action_outbox SET status='outcome_unknown',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status='executing' AND claimed_at<clock_timestamp()-interval '5 minutes' RETURNING id", [ctx.tenantId, m.outbox_action_id]);
+        if (!changed.rowCount) fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
+        await db.$client.query("UPDATE app.action_attempt SET outcome='outcome_unknown',error_code='STALE_CLAIM',finished_at=clock_timestamp() WHERE tenant_id=$1 AND action_id=$2 AND outcome='started'", [ctx.tenantId, m.outbox_action_id]);
+        previous = await this.event(db, ctx.tenantId, ref, actor, "outcome_unknown", input.commandId, requestHash, previous);
+        audit.push(this.auditInput(actor, messageId, "outcome_unknown", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash));
         m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
       }
       if (m.outbox_status !== "outcome_unknown") return fail("RECOVERY_MESSAGE_NOT_RECONCILABLE");
-      const started = await this.event(db, ctx.tenantId, { id: messageId, jobId: m.job_id, caseId }, actor, "reconcile_started", input.commandId, requestHash, revision);
-      await this.audit(db, actor, messageId, "reconcile_started", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
+      const last = (await db.$client.query<{ kind: string }>("SELECT kind FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision DESC LIMIT 1", [ctx.tenantId, messageId])).rows[0];
+      if (last?.kind === "reconcile_started") fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
+      const started = await this.event(db, ctx.tenantId, ref, actor, "reconcile_started", input.commandId, requestHash, previous);
+      audit.push(this.auditInput(actor, messageId, "reconcile_started", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash));
+      await this.appendHistoryAudit(db, audit);
       return { replayed: false as const, started, outboxId: m.outbox_action_id!, jobId: m.job_id, contentHash: m.content_hash };
     }));
     if (claimed.replayed) return;
@@ -289,16 +307,17 @@ export class RecoveryMessageRepository {
     catch (error) { if (error instanceof Error && error.message === "NOT_RECONCILABLE") return fail("RECOVERY_MESSAGE_NOT_RECONCILABLE"); throw error; }
     await guarded(() => withTenant(this.pool, ctx, async db => {
       await this.lockCase(db, ctx.tenantId, caseId);
-      const kind: RecoveryMessageEventKind = result === "succeeded" ? "reconciled" : result === "not_found" ? "retryable" : "outcome_unknown";
-      await this.event(db, ctx.tenantId, { id: messageId, jobId: claimed.jobId, caseId }, actor, kind, input.commandId, requestHash, claimed.started);
-      await this.audit(db, actor, messageId, kind, { caseId, jobId: claimed.jobId, commandId: input.commandId }, claimed.contentHash, requestHash);
+      if (result === "unknown") {
+        await this.event(db, ctx.tenantId, { id: messageId, jobId: claimed.jobId, caseId }, actor, "outcome_unknown", input.commandId, requestHash, claimed.started);
+        await this.audit(db, actor, messageId, "outcome_unknown", { caseId, jobId: claimed.jobId, commandId: input.commandId }, claimed.contentHash, requestHash);
+      } else await this.finishHistory(db, ctx.tenantId, caseId);
     }));
   }
 
   // ---- shared helpers ---------------------------------------------------------------------------------------
   private lockCase(db: TenantTransaction, tenantId: string, caseId: string) {
     // Same key the evidence pack commands use, so a pack rebuild and a message approval serialize.
-    return db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [tenantId, caseId]);
+    return lockRecoveryCase(db, tenantId, caseId);
   }
 
   /** Lock order is fixed: command identity, then case, then rows; the audit append is always last. */
@@ -357,6 +376,54 @@ export class RecoveryMessageRepository {
     return appendAuditBatch(db, [this.auditInput(actor, messageId, kind, references, contentHash, requestHash)]);
   }
 
+  private appendHistoryAudit(db: TenantTransaction, events: AuditEventInput[]) { return appendAuditBatch(db, events); }
+
+  private async finishHistory(db: TenantTransaction, tenantId: string, caseId: string) {
+    const audits: AuditEventInput[] = [];
+    for (const m of await this.messageRows(db, tenantId, caseId)) {
+      if (!m.outbox_action_id) continue;
+      // Keep execution-result changes from racing the history's fact check. No business locks are taken after audit.
+      const fact = (await db.$client.query<{ status: string; claimed_at: Date | null }>(
+        "SELECT status,claimed_at FROM app.action_outbox WHERE tenant_id=$1 AND id=$2 FOR SHARE", [tenantId, m.outbox_action_id])).rows[0];
+      if (!fact) continue;
+      m.outbox_status = fact.status; m.claimed_at = fact.claimed_at;
+      const history = (await db.$client.query<EventRow & { command_id: string; request_hash: string; actor_membership_id: string }>(
+        "SELECT * FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision", [tenantId, m.id])).rows;
+      let last = history.at(-1);
+      if (!last) continue;
+      const ref = { id: m.id, jobId: m.job_id, caseId };
+      const append = async (kind: RecoveryMessageEventKind, commandId: string, requestHash: string, membershipId: string) => {
+        const actor = { membershipId, actorRef: `membership:${membershipId}` };
+        const revision = await this.event(db, tenantId, ref, actor, kind, commandId, requestHash, last!.revision);
+        audits.push(this.auditInput(actor, m.id, kind, { caseId, jobId: m.job_id, commandId }, m.content_hash, requestHash));
+        last = { message_id: m.id, revision, kind, command_id: commandId, request_hash: requestHash, actor_membership_id: membershipId, created_at: new Date() };
+      };
+      // A direct worker may have recorded an attempt without the application's start history.
+      const attempts = (await db.$client.query<{ id: string; attempt_number: number; outcome: string }>(
+        "SELECT id,attempt_number,outcome FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2 ORDER BY attempt_number", [tenantId, m.outbox_action_id])).rows;
+      // The shared executor can mark a stale claim unknown without closing its unfinished attempt.
+      // The committed unknown outbox state is positive evidence of uncertainty, never of a successful delivery.
+      if (m.outbox_status === "outcome_unknown" && attempts.at(-1)?.outcome === "started") {
+        await db.$client.query("UPDATE app.action_attempt SET outcome='outcome_unknown',error_code='STALE_CLAIM',finished_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND outcome='started'", [tenantId, attempts.at(-1)!.id]);
+      }
+      if ((last.kind === "approved" || last.kind === "retryable") && attempts.length > history.filter(event => event.kind === "started").length) {
+        const attempt = attempts.at(-1)!;
+        await append("started", attempt.id, requestHashOf({ attemptId: attempt.id, messageId: m.id }), m.approving_membership_id!);
+      }
+      let kind: RecoveryMessageEventKind | undefined;
+      if (last.kind === "started") {
+        const kinds: Record<string, RecoveryMessageEventKind> = { succeeded: "succeeded", outcome_unknown: "outcome_unknown", retryable: "retryable", dead_letter: "failed", cancelled: "blocked" };
+        kind = kinds[m.outbox_status ?? ""];
+      } else if (last.kind === "reconcile_started") {
+        if (m.outbox_status === "succeeded") kind = "reconciled";
+        else if (m.outbox_status === "retryable") kind = "retryable";
+      }
+      if (kind) await append(kind, last.command_id, last.request_hash, last.actor_membership_id);
+    }
+    // All business reads and event writes precede the single audit append. Event + audit either both commit or neither does.
+    if (audits.length) await this.appendHistoryAudit(db, audits);
+  }
+
   private verified(row: MessageRow) {
     try { return verifyRecoveryMessageContent(row.immutable_content, row.content_hash); }
     catch { return fail("RECOVERY_MESSAGE_CONTENT_INVALID"); }
@@ -365,7 +432,7 @@ export class RecoveryMessageRepository {
   private async messageRows(db: TenantTransaction, tenantId: string, caseId: string, messageId?: string) {
     return (await db.$client.query<MessageRow>(
       `SELECT m.*,ap.authorization_id,ap.outbox_action_id,o.status AS outbox_status,o.claimed_at,a.decision_id,
-        a.expires_at AS authorization_expires_at,a.revoked_at AS authorization_revoked_at,
+        a.expires_at AS authorization_expires_at,a.revoked_at AS authorization_revoked_at,a.actor_membership_id AS approving_membership_id,
         (SELECT true FROM app.membership mem WHERE mem.tenant_id=a.tenant_id AND mem.id=a.actor_membership_id AND mem.role='owner' AND mem.revoked_at IS NULL AND (mem.expires_at IS NULL OR mem.expires_at>clock_timestamp())) AS membership_active,
         p.sources AS pack_sources,(SELECT count(*)::int FROM app.action_attempt t WHERE t.tenant_id=m.tenant_id AND t.action_id=ap.outbox_action_id) AS attempts
        FROM app.recovery_message m
@@ -380,41 +447,12 @@ export class RecoveryMessageRepository {
   }
   private async statusOf(db: TenantTransaction, tenantId: string, m: MessageRow) {
     const revoked = (await db.$client.query("SELECT 1 FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 AND kind='revoked'", [tenantId, m.id])).rowCount !== 0;
-    return deriveRecoveryMessageStatus({ approved: !!m.outbox_action_id, outboxStatus: m.outbox_status, revoked });
+    const claimAbandoned = m.outbox_status === "executing" && !!m.claimed_at && Date.now() - new Date(m.claimed_at).getTime() > STALE_EXECUTION_MS;
+    return deriveRecoveryMessageStatus({ approved: !!m.outbox_action_id, outboxStatus: m.outbox_status, revoked, claimAbandoned });
   }
 
-  /** The case as it stands now, and the exact message it would produce. Never trusts a stored flag. */
-  private async inspect(db: TenantTransaction, tenantId: string, caseId: string): Promise<Current> {
-    const job = (await db.$client.query<{ job_id: string }>("SELECT job_id FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [tenantId, caseId])).rows[0];
-    if (!job) return fail("RECOVERY_MESSAGE_NOT_FOUND");
-    const snapshot = (await db.$client.query<{ case_type: string; synthetic: boolean; environment: string; source_refs: string[]; case_revision: number; outstanding_pence: string }>(
-      "SELECT * FROM app.recovery_message_case_snapshot($1,$2,$3)", [tenantId, job.job_id, caseId])).rows[0];
-    if (!snapshot) return fail("RECOVERY_MESSAGE_NOT_FOUND");
-    const now: CaseNow = { jobId: job.job_id, caseType: snapshot.case_type, synthetic: snapshot.synthetic, environment: snapshot.environment, sourceRefs: snapshot.source_refs, caseRevision: Number(snapshot.case_revision), outstandingPence: Number(snapshot.outstanding_pence) };
-    const pack = (await db.$client.query<{ pack_id: string; revision: number; manifest_hash: string; content_hash: string; canonical_manifest: string; artifact_text: string | null }>(
-      "SELECT pack_id,revision,manifest_hash,content_hash,canonical_manifest,artifact_text FROM app.evidence_pack_revision WHERE tenant_id=$1 AND case_id=$2 ORDER BY revision DESC LIMIT 1", [tenantId, caseId])).rows[0];
-    const eligible = now.synthetic && now.environment === "synthetic_demo" && (now.caseType === "withheld_customer_payment" || now.caseType === "merchant_overcharge") && now.outstandingPence > 0;
-    if (!eligible) return { ok: false, reason: "CASE_NOT_ELIGIBLE", now, pack: pack ? { id: pack.pack_id, revision: Number(pack.revision) } : null };
-    if (!pack) return { ok: false, reason: "PACK_REQUIRED", now, pack: null };
-    const summary = { id: pack.pack_id, revision: Number(pack.revision) };
-    const approval = (await db.$client.query<{ id: string }>(
-      "SELECT id FROM app.evidence_pack_attachment_approval WHERE tenant_id=$1 AND case_id=$2 AND pack_id=$3 AND manifest_hash=$4 AND content_hash=$5 ORDER BY created_at,id LIMIT 1",
-      [tenantId, caseId, pack.pack_id, pack.manifest_hash, pack.content_hash])).rows[0];
-    if (!approval || !pack.artifact_text) return { ok: false, reason: "ATTACHMENT_APPROVAL_REQUIRED", now, pack: summary };
-    // The approval counts only while the pack is intact and every source still hashes to what was approved.
-    let valid = false;
-    try {
-      const sources = await loadEvidencePackSources(db, tenantId, caseId);
-      const manifest = buildEvidenceManifest(caseId, now.jobId, sources.sources, sources.omissions), artifact = renderStandalonePack(manifest, sources.sources);
-      valid = sources.omissions.length === 0 && artifact === pack.artifact_text && sha256(pack.artifact_text) === pack.content_hash && manifestDigest(manifest) === pack.manifest_hash &&
-        canonicalManifest(manifest) === pack.canonical_manifest && verifyStandalonePack(pack.artifact_text).contentMatches;
-    } catch (error) { if (!(error instanceof Error) || !error.message.startsWith("EVIDENCE_PACK_")) throw error; }
-    if (!valid) return { ok: false, reason: "ATTACHMENT_APPROVAL_REQUIRED", now, pack: summary };
-    const message = buildRecoveryMessage({
-      caseId, jobId: now.jobId, caseType: now.caseType as RecoveryMessageCaseType, caseRevision: now.caseRevision, amountPence: now.outstandingPence, sourceRefs: now.sourceRefs,
-      packId: pack.pack_id, packRevision: Number(pack.revision), manifestHash: pack.manifest_hash, attachmentHash: pack.content_hash,
-    });
-    return { ok: true, now, pack: { ...summary, manifestHash: pack.manifest_hash, contentHash: pack.content_hash, approvalId: approval.id }, message };
+  private inspect(db: TenantTransaction, tenantId: string, caseId: string): Promise<Current> {
+    return inspectRecoveryMessageCase(db, tenantId, caseId);
   }
 
   private async state(db: TenantTransaction, tenantId: string, caseId: string): Promise<RecoveryMessageState> {
@@ -428,11 +466,12 @@ export class RecoveryMessageRepository {
       const content = this.verified(row), { immutableContent: _immutable, ...message } = content;
       const history = events.filter(event => event.message_id === row.id).map(event => ({ revision: Number(event.revision), kind: event.kind, at: new Date(event.created_at).toISOString() }));
       const revoked = history.some(event => event.kind === "revoked");
-      const status = deriveRecoveryMessageStatus({ approved: !!row.outbox_action_id, outboxStatus: row.outbox_status, revoked });
+      const claimAbandoned = row.outbox_status === "executing" && !!row.claimed_at && Date.now() - new Date(row.claimed_at).getTime() > STALE_EXECUTION_MS;
+      const status = deriveRecoveryMessageStatus({ approved: !!row.outbox_action_id, outboxStatus: row.outbox_status, revoked, claimAbandoned });
       const live = status === "previewed" || status === "queued" || status === "retryable";
-      const sources = Array.isArray(row.pack_sources) ? (row.pack_sources as Array<{ sourceId: string; version: number; label: string; kind: string }>).map(({ sourceId, version, label, kind }) => ({ sourceId, version: Number(version), label, kind })) : [];
+      const sources = Array.isArray(row.pack_sources) ? (row.pack_sources as Array<{ sourceId: string; version: number; label: string; kind: string; content: string; contentHash: string }>).map(({ sourceId, version, label, kind, content }) => ({ sourceId, version: Number(version), label, kind, content, contentHash: sha256(content) })) : [];
       return {
-        id: row.id, sequence: Number(row.case_sequence), revision: history.at(-1)?.revision ?? 0, status, superseded: row.case_sequence !== lastSequence,
+        id: row.id, sequence: Number(row.case_sequence), revision: history.at(-1)?.revision ?? 0, status, claimAbandoned, superseded: row.case_sequence !== lastSequence,
         changedSinceReview: live && !(current.ok && current.message.contentHash === row.content_hash),
         message, attachment: { packId: row.pack_id, packRevision: Number(row.pack_revision), manifestHash: row.manifest_hash, contentHash: row.attachment_hash, sources },
         approval: row.outbox_action_id ? { decisionId: row.decision_id!, authorizationId: row.authorization_id!, outboxActionId: row.outbox_action_id, revoked: !!row.authorization_revoked_at, expiresAt: new Date(row.authorization_expires_at!).toISOString() } : null,

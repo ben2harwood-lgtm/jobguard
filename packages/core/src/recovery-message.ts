@@ -103,7 +103,7 @@ export const recoveryMessagePreviewCommandV1 = z.object({
 }).strict();
 export type RecoveryMessagePreviewCommand = z.infer<typeof recoveryMessagePreviewCommandV1>;
 
-export const recoveryMessageOutcomesV1 = ["success", "response_lost", "no_response", "definite_failure"] as const;
+export const recoveryMessageOutcomesV1 = ["success", "response_lost", "no_response", "definite_failure", "process_stopped"] as const;
 const base = { version: z.literal("recovery-message-command.v1"), commandId: id, messageId: id, expectedRevision: revision };
 export const recoveryMessageCommandV1 = z.discriminatedUnion("action", [
   z.object({ ...base, action: z.literal("approve"), recipient: recoveryMessageRecipientV1, body: z.string().min(1).max(2000), amountPence: amount, packId: id, contentHash: digest }).strict(),
@@ -156,12 +156,16 @@ export const RECOVERY_MESSAGE_STATUS_LABELS: Readonly<Record<RecoveryMessageStat
   blocked: "Blocked — the message or its evidence changed; nothing sent",
 };
 
-/** The outbox row is the authority on delivery; events are history. An unapproved message is only a preview. */
-export function deriveRecoveryMessageStatus(input: { approved: boolean; outboxStatus: string | null; revoked: boolean }): RecoveryMessageStatus {
+/**
+ * The outbox row is the authority on delivery; events are history. An unapproved message is only a preview. A claim that has
+ * been `executing` for longer than the shared executor's own window is not "in progress" any more: whatever was running never
+ * reported back, so what it did is unknown and has to be checked.
+ */
+export function deriveRecoveryMessageStatus(input: { approved: boolean; outboxStatus: string | null; revoked: boolean; claimAbandoned?: boolean }): RecoveryMessageStatus {
   if (!input.approved || input.outboxStatus === null) return "previewed";
   switch (input.outboxStatus) {
     case "pending": return "queued";
-    case "executing": return "executing";
+    case "executing": return input.claimAbandoned ? "outcome_unknown" : "executing";
     case "succeeded": return "simulated_delivery";
     case "outcome_unknown": return "outcome_unknown";
     case "retryable": return "retryable";
