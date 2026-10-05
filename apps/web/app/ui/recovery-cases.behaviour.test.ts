@@ -92,6 +92,10 @@ let calls: Call[] = [];
 type Lookup = { status: number; body: unknown; notJson?: boolean };
 const emptyLookups = (): Record<string, Lookup> => ({ "customer-invoices": { status: 200, body: { invoices: [] } }, materials: { status: 200, body: { materials: [] } }, "supplier-documents": { status: 200, body: { state: { facts: [] } } } });
 let lookups = emptyLookups();
+// Repair 13: a test can hold every recorded-source lookup open and release them by hand, so a lookup can finish after the job has changed or the workbench is gone.
+let lookupGate: Promise<void> | undefined;
+let lookupRequests: string[] = [];
+const holdLookups = () => { let release: () => void = () => undefined; lookupGate = new Promise<void>(resolve => { release = resolve }); return { release: () => release() } };
 const reads = () => calls.filter(call => call.method === "GET");
 const writes = () => calls.filter(call => call.method === "POST");
 
@@ -105,11 +109,17 @@ beforeAll(() => {
 function start(jobId = JOB_A) {
   calls = [];
   lookups = emptyLookups();
+  lookupGate = undefined;
+  lookupRequests = [];
   vi.stubGlobal("fetch", (input: unknown, init?: { method?: string; body?: string }) => {
     const url = String(input), method = init?.method ?? "GET";
     // The practice buttons look up the job's recorded sources first; none are recorded, so the fixed fictional labels are used.
     const lookup = lookups[url.split("/").at(-1) ?? ""];
-    if (lookup) return Promise.resolve(lookup.notJson ? { ok: lookup.status < 300, status: lookup.status, json: async () => { throw new SyntaxError("Unexpected token < in JSON at position 0") } } : respond(lookup.body, lookup.status));
+    if (lookup) {
+      lookupRequests.push(url);
+      const answer = lookup.notJson ? { ok: lookup.status < 300, status: lookup.status, json: async () => { throw new SyntaxError("Unexpected token < in JSON at position 0") } } : respond(lookup.body, lookup.status);
+      return lookupGate ? lookupGate.then(() => answer) : Promise.resolve(answer);
+    }
     if (!url.includes("/recovery-cases")) return Promise.reject(new Error(`unexpected request ${url}`));
     return new Promise(resolve => {
       calls.push({
@@ -284,7 +294,7 @@ describe("M4-1-S-R repair 12, Sol P3-5: a malformed answer shows the failure sta
     ["a case has a nonsense state", call => call.json(answerBody([caseView({ state: "teleported" })], CASE_A))],
     ["the body is not JSON", call => call.raw()],
   ];
-  it.each(malformedWrites)("a command whose successful answer is malformed (%s) is announced, hides the register it can no longer vouch for, and can be re-read", async (_name, deliver) => {
+  it.each(malformedWrites)("a command whose successful answer is malformed (%s) is announced, hides the register it can no longer vouch for, and can be sent again unchanged", async (_name, deliver) => {
     const w = await readyWithCase();
     w.click("Evidence assembled");
     await w.settle();
@@ -295,10 +305,13 @@ describe("M4-1-S-R repair 12, Sol P3-5: a malformed answer shows the failure sta
     expect(w.screen().alert()).toContain("may or may not have been saved");
     expect(w.screen().testId("case-claimed-net")).toBe("");
     expect(w.screen().text()).not.toContain("No recovery cases yet");
-    // Not left locked: the user can re-read the register and carry on.
+    // Repair 13 (Sol P2-2): the outcome is unknown, so a re-read cannot settle it. The way on is the very same request again; the server then answers with what it already holds.
     w.click("Try again");
     await w.settle();
-    reads()[1]!.json(answerBody([caseView({ state: "evidence_assembled", revision: 2 })]));
+    expect(reads()).toHaveLength(1);
+    expect(writes()).toHaveLength(2);
+    expect(writes()[1]!.body).toEqual(writes()[0]!.body);
+    writes()[1]!.json(answerBody([caseView({ state: "evidence_assembled", revision: 2 })], CASE_A));
     await w.settle();
     expect(w.screen().testId("case-state")).toBe("Evidence assembled");
     expect(w.screen().alert()).toBe("");
@@ -308,14 +321,15 @@ describe("M4-1-S-R repair 12, Sol P3-5: a malformed answer shows the failure sta
     const w = await readyWithCase();
     w.click("Evidence assembled");
     await w.settle();
-    writes()[0]!.json(null, 500);
+    // Repair 13: a 4xx answer is the server examining the request and declining it. (A 5xx with no body is NOT a refusal: whether the command ran is unknown, see Sol P2-2 below.)
+    writes()[0]!.json(null, 400);
     await w.settle();
     expect(w.screen().alert()).toBe("Recovery case could not be saved");
     // The register read before the refusal is still the current one.
     expect(w.screen().testId("case-claimed-net")).toBe("£320.00");
     w.click("Evidence assembled");
     await w.settle();
-    writes()[1]!.raw(502);
+    writes()[1]!.raw(404);
     await w.settle();
     expect(w.screen().alert()).toBe("Recovery case could not be saved");
   });
@@ -393,5 +407,402 @@ describe("M4-1-S-R repair 12, Sol P3-5: a malformed answer to a lookup made befo
     // Nothing is left locked and the register is still the one that was read.
     for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
     expect(w.screen().text()).toContain("No recovery cases yet");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Repair 13 (Sol round 13). Every test below drives the real component, exactly as above.
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+describe("M4-1-S-R repair 13, Sol P2-1: a source lookup that outlives its job can send nothing and change nothing", () => {
+  // Each practice button, with the lookups it makes before it sends anything.
+  const presses: Array<[string, string]> = [["a £320 customer claim", "Open £320 withheld payment"], ["a £2,500 customer claim", "Open £2,500 withheld payment"], ["a prevention", "Record prevention"], ["a materials overcharge", "Open materials-320 overcharge"]];
+  const job2500 = () => answerBody([caseView({ id: CASE_B, jobId: JOB_B, claimedNetPence: 250000, outstandingNetPence: 250000 })]);
+
+  it.each(presses)("the job changes while the lookup for %s is still out: nothing is sent and job B's register is untouched", async (_name, press) => {
+    const w = start(JOB_A);
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    const gate = holdLookups();
+    w.click(press);
+    await w.settle();
+    expect(lookupRequests.length).toBeGreaterThan(0);
+    expect(writes()).toHaveLength(0);
+    w.rerender(JOB_B);
+    await w.settle();
+    reads()[1]!.json(job2500());
+    await w.settle();
+    expect(w.screen().testId("case-claimed-net")).toBe("£2,500.00");
+    // Job A's lookup finishes only now. It belongs to a job that is no longer on screen, so it must not become a command for the job that is.
+    gate.release();
+    await w.settle();
+    expect(writes()).toHaveLength(0);
+    expect(w.screen().testId("case-claimed-net")).toBe("£2,500.00");
+    expect(w.screen().alert()).toBe("");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+  });
+
+  it.each(presses)("the workbench is removed while the lookup for %s is still out: nothing is sent", async (_name, press) => {
+    const w = start(JOB_A);
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    const gate = holdLookups();
+    w.click(press);
+    await w.settle();
+    w.unmount();
+    gate.release();
+    await w.settle();
+    expect(writes()).toHaveLength(0);
+  });
+
+  it("a lookup for the previous job that finishes malformed or refused is not announced on the next job", async () => {
+    const w = start(JOB_A);
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    lookups["customer-invoices"] = { status: 500, body: null };
+    const gate = holdLookups();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    w.rerender(JOB_B);
+    await w.settle();
+    reads()[1]!.json(job2500());
+    await w.settle();
+    gate.release();
+    await w.settle();
+    expect(w.screen().alert()).toBe("");
+    expect(w.screen().testId("case-claimed-net")).toBe("£2,500.00");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+  });
+
+  it("a job change after the lookups, while the command is on its way, still drops the command's answer (the ticket is the one taken before the lookups)", async () => {
+    const w = start(JOB_A);
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    expect(writes()).toHaveLength(1);
+    w.rerender(JOB_B);
+    await w.settle();
+    reads()[1]!.json(job2500());
+    await w.settle();
+    writes()[0]!.json(answerBody([caseView()], CASE_A));
+    await w.settle();
+    expect(w.screen().testId("case-claimed-net")).toBe("£2,500.00");
+  });
+});
+
+describe("M4-1-S-R repair 13, Sol P2-2: an unknown save outcome never permits a duplicate opening", () => {
+  const MAY = "may or may not have been saved";
+  // The server's replay contract, in miniature: a command id that has already been committed returns the case it created, whatever the browser did or did not hear.
+  function fakeServer() {
+    const byCommand = new Map<string, string>(), cases: Array<ReturnType<typeof caseView>> = [];
+    const commit = (body: { commandId: string; claimedNetPence?: number }) => {
+      if (!byCommand.has(body.commandId)) { const id = crypto.randomUUID(); cases.push(caseView({ id, claimedNetPence: body.claimedNetPence ?? 32000, outstandingNetPence: body.claimedNetPence ?? 32000 })); byCommand.set(body.commandId, id) }
+      return byCommand.get(body.commandId)!;
+    };
+    return { cases, commit, answer: (call: Call) => { const id = commit(call.body as { commandId: string; claimedNetPence?: number }); call.json(answerBody(cases, id)) } };
+  }
+  const commandIdOf = (call: Call) => (call.body as { commandId: string }).commandId;
+  async function ready() {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    return w;
+  }
+
+  // What the browser can fail to learn. In every one of these the server may have committed the command.
+  const unknown: Array<[string, (call: Call) => void]> = [
+    ["the connection is lost (no answer at all)", call => call.reject()],
+    ["a 200 whose body is not JSON", call => call.raw(200)],
+    ["a 502 from a gateway, with a page instead of JSON", call => call.raw(502)],
+    ["a 500 with no body", call => call.json(null, 500)],
+    ["a 500 whose body is the framework's own", call => call.json({ statusCode: 500, message: "Internal server error" }, 500)],
+    ["a 200 that is not the response contract", call => call.json({ ok: true })],
+    ["a 200 with the cases but no affected case id", call => call.json(answerBody([caseView({ id: CASE_B, claimedNetPence: 250000, outstandingNetPence: 250000 })]))],
+    ["a 200 whose affected case id is not in the list", call => call.json(answerBody([caseView({ id: CASE_B, claimedNetPence: 250000, outstandingNetPence: 250000 })], CASE_A))],
+  ];
+
+  it.each(unknown)("opening a case when %s: announced, every way of opening is off, and the only retry re-sends the same command id and creates exactly one case", async (_name, lose) => {
+    const server = fakeServer();
+    const w = await ready();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    expect(writes()).toHaveLength(1);
+    const first = writes()[0]!;
+    // The server commits, then the browser fails to hear (or understand) the answer.
+    server.commit(first.body as { commandId: string; claimedNetPence: number });
+    lose(first);
+    await w.settle();
+    expect(w.screen().alert()).toContain(MAY);
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
+    // Even a press that gets past the disabled button (as the pre-repair page allowed) starts no new opening: no lookup, no command.
+    const lookupsBefore = lookupRequests.length;
+    for (const name of OPEN_BUTTONS) w.forceClick(name);
+    await w.settle();
+    expect(writes()).toHaveLength(1);
+    expect(lookupRequests).toHaveLength(lookupsBefore);
+    // The one way on is "Try again", and it re-sends exactly what was sent.
+    expect(w.screen().button("Try again").props.disabled).toBe(false);
+    w.click("Try again");
+    await w.settle();
+    expect(writes()).toHaveLength(2);
+    expect(writes()[1]!.body).toEqual(first.body);
+    expect(commandIdOf(writes()[1]!)).toBe(commandIdOf(first));
+    server.answer(writes()[1]!);
+    await w.settle();
+    expect(server.cases).toHaveLength(1);
+    expect(w.screen().testId("case-claimed-net")).toBe("£320.00");
+    expect(w.screen().alert()).toBe("");
+    expect(reads()).toHaveLength(1);
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+  });
+
+  it("lost POST, retry lost again, retry again: all three requests carry the identical command id, and the register ends with one case", async () => {
+    const server = fakeServer();
+    const w = await ready();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    server.commit(writes()[0]!.body as { commandId: string });
+    writes()[0]!.reject();
+    await w.settle();
+    w.click("Try again");
+    await w.settle();
+    writes()[1]!.reject();
+    await w.settle();
+    expect(w.screen().alert()).toContain(MAY);
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
+    w.click("Try again");
+    await w.settle();
+    expect(writes()).toHaveLength(3);
+    server.answer(writes()[2]!);
+    await w.settle();
+    expect(new Set(writes().map(commandIdOf)).size).toBe(1);
+    expect(server.cases).toHaveLength(1);
+    expect(w.screen().testId("case-claimed-net")).toBe("£320.00");
+  });
+
+  it("the uncertainty is announced and focused, with the register it can no longer vouch for hidden", async () => {
+    const w = await ready();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    writes()[0]!.reject();
+    await w.settle();
+    expect(w.screen().alert()).toContain(MAY);
+    expect(w.screen().alert()).not.toContain("Failed to fetch");
+    expect(w.screen().text()).not.toContain("No recovery cases yet");
+    expect(w.screen().testId("case-claimed-net")).toBe("");
+  });
+
+  it("an unknown outcome on a command for an existing case is held the same way: the same command id and revision are re-sent, and nothing else can be sent meanwhile", async () => {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([caseView()]));
+    await w.settle();
+    w.click("Evidence assembled");
+    await w.settle();
+    const first = writes()[0]!;
+    first.reject();
+    await w.settle();
+    expect(w.screen().alert()).toContain(MAY);
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
+    w.click("Try again");
+    await w.settle();
+    expect(writes()[1]!.body).toEqual(first.body);
+    writes()[1]!.json(answerBody([caseView({ state: "evidence_assembled", revision: 2 })], CASE_A));
+    await w.settle();
+    expect(w.screen().testId("case-state")).toBe("Evidence assembled");
+    expect(w.screen().alert()).toBe("");
+  });
+
+  const refusals: Array<[string, (call: Call) => void]> = [
+    ["a 409 stale revision", call => call.json({ code: "RECOVERY_STALE_REVISION" }, 409)],
+    ["a 400 naming the problem", call => call.json({ code: "Receipt is not allowed" }, 400)],
+    ["a 403", call => call.json({ code: "RECOVERY_REVIEWER_FORBIDDEN" }, 403)],
+    ["a 404 page", call => call.raw(404)],
+  ];
+  it.each(refusals)("%s is an explicit refusal: nothing was saved, so the user may start a new opening, with a new command id", async (_name, refuse) => {
+    const w = await ready();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    const first = writes()[0]!;
+    refuse(first);
+    await w.settle();
+    expect(w.screen().alert()).not.toBe("");
+    expect(w.screen().alert()).not.toContain(MAY);
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    expect(writes()).toHaveLength(2);
+    expect(commandIdOf(writes()[1]!)).not.toBe(commandIdOf(first));
+  });
+
+  it("when the re-sent request is itself refused, that is the definitive answer: the refusal is shown, the hold is released, and the register can be re-read", async () => {
+    const w = await ready();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    writes()[0]!.reject();
+    await w.settle();
+    w.click("Try again");
+    await w.settle();
+    writes()[1]!.json({ code: "IDEMPOTENCY_PAYLOAD_CONFLICT" }, 409);
+    await w.settle();
+    expect(w.screen().alert()).toBe("IDEMPOTENCY_PAYLOAD_CONFLICT");
+    expect(w.screen().alert()).not.toContain(MAY);
+    w.click("Try again");
+    await w.settle();
+    expect(reads()).toHaveLength(2);
+    reads()[1]!.json(answerBody([]));
+    await w.settle();
+    expect(w.screen().text()).toContain("No recovery cases yet");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+  });
+
+  it("moving to another job abandons the held request: job B starts clean and nothing is ever re-sent for job A", async () => {
+    const w = await ready();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    writes()[0]!.reject();
+    await w.settle();
+    expect(w.screen().alert()).toContain(MAY);
+    w.rerender(JOB_B);
+    await w.settle();
+    reads()[1]!.json(answerBody([]));
+    await w.settle();
+    expect(w.screen().alert()).toBe("");
+    expect(w.screen().hasButton("Try again")).toBe(false);
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+    expect(writes()).toHaveLength(1);
+  });
+
+  it("an answer that arrives for an abandoned attempt neither holds nor shows anything on the next job", async () => {
+    const w = await ready();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    w.rerender(JOB_B);
+    await w.settle();
+    reads()[1]!.json(answerBody([]));
+    await w.settle();
+    writes()[0]!.reject();
+    await w.settle();
+    expect(w.screen().alert()).toBe("");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+  });
+});
+
+describe("M4-1-S-R repair 13, Sol P3-4: an opening answer that does not name a listed case is never turned into a selection", () => {
+  const case2500 = () => caseView({ id: CASE_B, claimedNetPence: 250000, outstandingNetPence: 250000 });
+  it("does not show another case when the answer to a £320 opening holds only the £2,500 case and no affected id", async () => {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([case2500()]));
+    await w.settle();
+    expect(w.screen().testId("case-claimed-net")).toBe("£2,500.00");
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    writes()[0]!.json(answerBody([case2500()]));
+    await w.settle();
+    // No £2,500 case on screen as if it were the one just opened, and no silent success.
+    expect(w.screen().testId("case-claimed-net")).toBe("");
+    expect(w.screen().alert()).toContain("may or may not have been saved");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
+  });
+
+  it("does not show another case when the affected id is well-formed but not in the returned list", async () => {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    writes()[0]!.json(answerBody([case2500()], CASE_A));
+    await w.settle();
+    expect(w.screen().testId("case-claimed-net")).toBe("");
+    expect(w.screen().alert()).toContain("may or may not have been saved");
+  });
+
+  it("holds every kind of command to the same rule, not only openings", async () => {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([caseView()]));
+    await w.settle();
+    w.click("Evidence assembled");
+    await w.settle();
+    writes()[0]!.json(answerBody([caseView({ state: "evidence_assembled", revision: 2 })]));
+    await w.settle();
+    expect(w.screen().alert()).toContain("may or may not have been saved");
+    expect(w.screen().testId("case-state")).toBe("");
+  });
+
+  it("a plain read still needs no affected id", async () => {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([caseView()]));
+    await w.settle();
+    expect(w.screen().testId("case-claimed-net")).toBe("£320.00");
+    expect(w.screen().alert()).toBe("");
+  });
+});
+
+describe("M4-1-S-R repair 13, Sol P3-3: every row of a source lookup is checked before any of it is used", () => {
+  const RATE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc", VERSION = "dddddddd-dddd-4ddd-8ddd-dddddddddddd", DOC = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", INVOICE_1 = "f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1", INVOICE_2 = "f2f2f2f2-f2f2-4f2f-8f2f-f2f2f2f2f2f2";
+  const goodMaterial = { id: "m1", rateId: RATE, quantity: "40", eachPence: 2000, status: "applicable" };
+  const goodFact = { document_id: DOC, document_number: "INV-M320-001", version_id: VERSION, document_type: "invoice" };
+  const suppliers = "Recorded supplier sources could not be loaded", customers = "Recorded customer invoices could not be loaded";
+  type Bad = [string, string, string, unknown, string];
+  const bad: Bad[] = [
+    ["materials: a null row", "Open materials-320 overcharge", "materials", { materials: [null] }, suppliers],
+    ["materials: a row that is a number", "Open materials-320 overcharge", "materials", { materials: [42] }, suppliers],
+    ["materials: a row with no quantity", "Open materials-320 overcharge", "materials", { materials: [{ rateId: RATE, eachPence: 2000 }] }, suppliers],
+    ["materials: a quantity that is a number", "Open materials-320 overcharge", "materials", { materials: [{ rateId: RATE, quantity: 40, eachPence: 2000 }] }, suppliers],
+    ["materials: a rate id that is not an id", "Open materials-320 overcharge", "materials", { materials: [{ rateId: 7, quantity: "40", eachPence: 2000 }] }, suppliers],
+    ["materials: a price that is text", "Open materials-320 overcharge", "materials", { materials: [{ rateId: RATE, quantity: "40", eachPence: "2000" }] }, suppliers],
+    ["materials: one good row and one null row", "Open materials-320 overcharge", "materials", { materials: [goodMaterial, null] }, suppliers],
+    ["supplier facts: a null row", "Open materials-320 overcharge", "supplier-documents", { state: { facts: [null] } }, suppliers],
+    ["supplier facts: an empty row", "Open materials-320 overcharge", "supplier-documents", { state: { facts: [{}] } }, suppliers],
+    ["supplier facts: a row with no version id", "Open materials-320 overcharge", "supplier-documents", { state: { facts: [{ document_id: DOC, document_number: "INV-M320-001" }] } }, suppliers],
+    ["supplier facts: a version id that is a number", "Open materials-320 overcharge", "supplier-documents", { state: { facts: [{ ...goodFact, version_id: 7 }] } }, suppliers],
+    ["supplier facts: one good row and one null row", "Open materials-320 overcharge", "supplier-documents", { state: { facts: [goodFact, null] } }, suppliers],
+    ["customer invoices: a null row", "Open £320 withheld payment", "customer-invoices", { invoices: [null] }, customers],
+    ["customer invoices: an empty row", "Open £2,500 withheld payment", "customer-invoices", { invoices: [{}] }, customers],
+    ["customer invoices: an empty id", "Record prevention", "customer-invoices", { invoices: [{ id: "" }] }, customers],
+    ["customer invoices: an id that is a number", "Open £320 withheld payment", "customer-invoices", { invoices: [{ id: 5 }] }, customers],
+    ["customer invoices: an id that is not an id", "Open £320 withheld payment", "customer-invoices", { invoices: [{ id: "x" }] }, customers],
+    ["customer invoices: one good row and one null row", "Open £2,500 withheld payment", "customer-invoices", { invoices: [{ id: INVOICE_1 }, null] }, customers],
+  ];
+  it.each(bad)("%s shows the plain lookup failure and sends nothing", async (_name, press, lookup, body, message) => {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    lookups[lookup] = { status: 200, body };
+    w.click(press);
+    await w.settle();
+    expect(w.screen().alert()).toBe(message);
+    expect(writes()).toHaveLength(0);
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+    expect(w.screen().text()).toContain("No recovery cases yet");
+  });
+
+  it("well-formed rows are used as before: the newest invoice for a customer claim, the matching rate and invoice version for the materials claim", async () => {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    lookups["customer-invoices"] = { status: 200, body: { invoices: [{ id: INVOICE_1, number: "A" }, { id: INVOICE_2, number: "B" }] } };
+    w.click("Open £320 withheld payment");
+    await w.settle();
+    expect((writes()[0]!.body as { sourceRefs: string[] }).sourceRefs).toEqual([INVOICE_2]);
+    writes()[0]!.json(answerBody([caseView()], CASE_A));
+    await w.settle();
+    lookups.materials = { status: 200, body: { materials: [goodMaterial, { id: "m2", rateId: null, quantity: "10", status: "review" }] } };
+    lookups["supplier-documents"] = { status: 200, body: { state: { facts: [goodFact, { ...goodFact, document_number: "INV-OTHER", version_id: DOC }] } } };
+    w.click("Open materials-320 overcharge");
+    await w.settle();
+    expect((writes()[1]!.body as { sourceRefs: string[] }).sourceRefs).toEqual([RATE, VERSION]);
   });
 });

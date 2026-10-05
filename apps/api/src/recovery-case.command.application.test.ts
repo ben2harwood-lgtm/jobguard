@@ -10,6 +10,7 @@ vi.mock("@jobguard/db", async importOriginal => ({
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID } from "@jobguard/db";
 const serverReviewer = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 import { RecoveryCaseApplication } from "./recovery-case.application.js";
+import { recoveryCaseCommandResponseV1, recoveryCaseListResponseV1 } from "./recovery-case.contracts.js";
 const jobId = randomUUID();
 const input = () => ({ version:"recovery-case-command.v1", action:"open", commandId:randomUUID(), caseType:"merchant_overcharge", claimedNetPence:32000, counterparty:"Merchant", book:"supplier_cost", sourceType:"supplier_documents", sourceRefs:["INV-320"], expectedRevision:0 });
 const affectedId = randomUUID();
@@ -57,4 +58,40 @@ it("returns the id of the case the command affected, even when the refreshed lis
 });
 it("does not claim an affected case on a plain read", async () => {
   expect(await new RecoveryCaseApplication({} as Pool).list(jobId)).not.toHaveProperty("affectedCaseId");
+});
+
+// M4-1-S-R repair 13 (Sol P3-4): a command that creates or changes a case must say which case it affected, and that case must be in the list that comes with it. A browser
+// that cannot find the answer to "which case did my command touch?" treats the answer as unreadable instead of choosing a case for itself.
+const caseView = (id: string) => ({
+  id, jobId, caseType: "withheld_customer_payment", state: "identified", claimedNetPence: 32000, landedNetPence: 0, outstandingNetPence: 32000, writtenOffPence: 0, currency: "GBP",
+  counterparty: "Fictional Customer", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: ["Generated customer invoice INV-18800"],
+  sources: [{ ref: "Generated customer invoice INV-18800", kind: "Customer invoice", label: "Generated customer invoice INV-18800", recorded: false }],
+  feeJobLiabilityPence: 0, feeObligationsPostedPence: 0, feeCompensationsPostedPence: 0, approvedLandedNetPence: 0, revision: 1, reviewerRef: "membership:fictional", createdDate: "2026-10-05", eligibility: null,
+});
+const envelope = { version: "recovery-case-workbench.v1", environment: "synthetic_demo", realExternalActions: 0 };
+it("the command response contract requires an affected case id that is in the list", () => {
+  const mine = randomUUID(), other = randomUUID();
+  expect(recoveryCaseCommandResponseV1.safeParse({ ...envelope, cases: [caseView(mine)], affectedCaseId: mine }).success).toBe(true);
+  expect(recoveryCaseCommandResponseV1.safeParse({ ...envelope, cases: [caseView(mine), caseView(other)], affectedCaseId: other }).success).toBe(true);
+  // Missing: nothing says which case the command touched.
+  expect(recoveryCaseCommandResponseV1.safeParse({ ...envelope, cases: [caseView(mine)] }).success).toBe(false);
+  // Unknown: the id names a case that is not in the list (a client must never fall back to another case).
+  expect(recoveryCaseCommandResponseV1.safeParse({ ...envelope, cases: [caseView(mine)], affectedCaseId: other }).success).toBe(false);
+  expect(recoveryCaseCommandResponseV1.safeParse({ ...envelope, cases: [], affectedCaseId: mine }).success).toBe(false);
+  expect(recoveryCaseCommandResponseV1.safeParse({ ...envelope, cases: [caseView(mine)], affectedCaseId: "not-an-id" }).success).toBe(false);
+});
+it("the read response contract is a plain list that needs no affected case", () => {
+  const mine = randomUUID();
+  expect(recoveryCaseListResponseV1.safeParse({ ...envelope, cases: [caseView(mine)] }).success).toBe(true);
+  expect(recoveryCaseListResponseV1.safeParse({ ...envelope, cases: [] }).success).toBe(true);
+  expect(recoveryCaseListResponseV1.safeParse({ ...envelope, cases: null }).success).toBe(false);
+});
+it("every real command answer satisfies the command response contract, and a plain read satisfies the list contract", async () => {
+  const later = randomUUID();
+  spies.list.mockResolvedValue([caseView(affectedId), caseView(later)]);
+  const app = new RecoveryCaseApplication({} as Pool);
+  expect(recoveryCaseCommandResponseV1.safeParse(await app.command(jobId, input())).success).toBe(true);
+  const read = await app.list(jobId);
+  expect(recoveryCaseListResponseV1.safeParse(read).success).toBe(true);
+  expect(read).not.toHaveProperty("affectedCaseId");
 });

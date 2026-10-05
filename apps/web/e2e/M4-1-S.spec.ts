@@ -253,3 +253,38 @@ test("an unread case list is shown as loading or failed, never as empty, and the
  await page.unroute(readUrl);
  await button(page,"Try again").click();await V(page,"case-claimed-net","£320.00");await expect(alert).toHaveCount(0)
 });
+
+// Repair 13 (Sol P2-2): a save whose answer never reaches the browser may or may not have happened, so it can never be answered with a second, different opening.
+// The server really commits the first request; only the answer is lost. The retry must be the same command id, and the register must end with exactly one case.
+test("a lost save answer cannot be turned into a duplicate case: the only retry re-sends the same command id",async({page})=>{
+ const jobId=await confirmedJob(page);
+ const url=`**/api/jobs/${jobId}/recovery-cases`,alert=page.locator("p[role=alert]");
+ const openNames=["Open materials-320 overcharge","Open £320 withheld payment","Open £2,500 withheld payment","Record prevention"];
+ const commandIds:string[]=[];let lose=true;
+ await page.route(url,async route=>{
+  if(route.request().method()!=="POST")return route.continue();
+  commandIds.push((route.request().postDataJSON() as{commandId:string}).commandId);
+  if(lose){lose=false;await route.fetch();return route.abort("connectionreset")}
+  return route.continue()
+ });
+ const persistedCases=async()=>((await(await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()) as{cases:unknown[]}).cases;
+ await expect(page.getByRole("status").filter({hasText:"Loading recovery cases"})).toHaveCount(0);
+ await button(page,"Open £320 withheld payment").click();
+ // The uncertainty is announced and focused; the register is not shown as if it were current; no new opening is possible.
+ await expect(alert).toContainText("may or may not have been saved");await expect(alert).toBeFocused();
+ await expect(page.getByTestId("case-claimed-net")).toHaveCount(0);
+ for(const name of openNames)await expect(button(page,name)).toBeDisabled();
+ await expectTouchTarget(button(page,"Try again"));
+ // The server did commit the first request even though the browser never heard the answer.
+ expect(await persistedCases()).toHaveLength(1);
+ // The retry is the same request: it answers with the case the first request created, and nothing is created twice.
+ await button(page,"Try again").click();
+ await V(page,"case-claimed-net","£320.00");await V(page,"case-state","Needs evidence");await expect(alert).toHaveCount(0);
+ expect(commandIds).toHaveLength(2);expect(commandIds[1]).toBe(commandIds[0]);
+ expect(await persistedCases()).toHaveLength(1);
+ for(const name of openNames)await expect(button(page,name)).toBeEnabled();
+ // A later opening is a new attempt with a new command id, and adds a second case.
+ await button(page,"Open £2,500 withheld payment").click();await V(page,"case-claimed-net","£2,500.00");
+ expect(commandIds).toHaveLength(3);expect(commandIds[2]).not.toBe(commandIds[0]);
+ expect(await persistedCases()).toHaveLength(2)
+});
