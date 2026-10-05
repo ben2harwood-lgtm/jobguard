@@ -1,3 +1,5 @@
+import { PracticeAccess } from "./practice-access.js";
+import { PracticeAccessError } from "@jobguard/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { EvidencePackApplication } from "./evidence-pack.application.js";
@@ -17,8 +19,15 @@ const hash = "a".repeat(64);
 const membershipId = "18000000-0000-4000-8000-000000000005";
 
 describe("evidence pack API repair boundaries", () => {
-  beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); repository.list.mockResolvedValue([]); repository.membership.mockResolvedValue({ rows: [{ id: membershipId }] }); });
-  afterEach(() => vi.unstubAllEnvs());
+  beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); repository.list.mockResolvedValue([]); repository.membership.mockResolvedValue({ rows: [{ id: membershipId }] });
+    vi.spyOn(PracticeAccess.prototype,"case").mockImplementation(async function(this:any,id:unknown) {
+      if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new PracticeAccessError("SYNTHETIC_MODE_REQUIRED");
+      if(!this.sessionId||this.sessionId==="forged")throw new PracticeAccessError("UNAUTHENTICATED");
+      if(this.sessionId!==sessionId||id!==caseId)throw new PracticeAccessError("NOT_FOUND");
+      const member=(await repository.membership()).rows[0];if(!member)throw new Error("FORBIDDEN");
+      return {context:{tenantId:"11111111-1111-4111-8111-111111111111"},membershipId:member.id} as never;
+    }); });
+  afterEach(() => {vi.unstubAllEnvs();vi.restoreAllMocks();});
   it.each(["production_billing", "pilot_no_charge"])("refuses the synthetic pack seam in %s", async mode => {
     vi.stubEnv("JOBGUARD_ENV", mode);
     await expect(new EvidencePackApplication({} as Pool).list(sessionId, caseId)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED");
@@ -51,8 +60,8 @@ describe("evidence pack API repair boundaries", () => {
     const app = new EvidencePackApplication({} as Pool);
     const response = await app.generate(sessionId, caseId, { version: "evidence-pack-command.v1", commandId });
     expect(repository.generate).toHaveBeenCalledWith(expect.anything(), caseId, { commandId, format: "TEXT" }, `membership:${membershipId}`);
-    await app.generate("18000000-0000-4000-8000-000000000099", caseId, { version: "evidence-pack-command.v1", commandId });
-    expect(repository.generate.mock.calls[1]).toEqual(repository.generate.mock.calls[0]);
+    await expect(app.generate("18000000-0000-4000-8000-000000000099", caseId, { version: "evidence-pack-command.v1", commandId })).rejects.toThrow("NOT_FOUND");
+    expect(repository.generate).toHaveBeenCalledTimes(1);
     expect(response).toMatchObject({ version: "evidence-pack-response.v1", environment: "synthetic_demo", realExternalActions: 0, packs: [] });
   });
   it("uses the same persisted approval and inspection paths for API and web adapters", async () => {
