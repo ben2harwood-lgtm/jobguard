@@ -38,3 +38,4 @@ export * from "./evidence-pack.js";
 export * from "./cumulative-fee.js";
 export * from "./receipt-allocation.js";
 export * from "./extra-origin.js";
+export * from "./enterprise-domain/index.js";
