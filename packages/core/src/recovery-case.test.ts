@@ -45,7 +45,10 @@ describe("complete recovery state machine",()=>{
   });
   it("bounds a later landing by claimed minus written-off, not by claimed", () => {
    const common = { ...base, state: "evidence_assembled", landedPence: 0, writtenOffPence: 150000, event: "record_landing" } as const;
-   expect(transitionRecoveryCase({ ...common, amountPence: 100000 })).toEqual({ state: "partially_landed", landedPence: 100000, writtenOffPence: 0 });
+   // Repair 11 (Sol P2-2): this receipt uses up everything not written off, so the case keeps its written-off disposition. The repair 2 expectation here
+   // was "partially_landed", which is the stranded state (nothing outstanding, nothing to receive, write off or close); the amounts are unchanged.
+   expect(transitionRecoveryCase({ ...common, amountPence: 100000 })).toEqual({ state: "closed_no_recovery", landedPence: 100000, writtenOffPence: 0 });
+   expect(transitionRecoveryCase({ ...common, amountPence: 99999 })).toMatchObject({ state: "partially_landed", landedPence: 99999 });
    expect(() => transitionRecoveryCase({ ...common, amountPence: 100001 })).toThrowError(/is not allowed/);
    expect(() => transitionRecoveryCase({ ...common, landedPence: 100000, amountPence: 1, state: "partially_landed" })).toThrowError(/is not allowed/);
   });

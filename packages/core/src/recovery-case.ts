@@ -16,8 +16,10 @@ export type RecoveryEventType = z.infer<typeof recoveryEventTypeV1>;
 const allowed: Readonly<Record<RecoveryCaseState, readonly RecoveryEventType[]>> = {
   identified: ["assemble_evidence", "prevent", "close_no_recovery"],
   evidence_assembled: ["start_pursuit", "start_negotiation", "record_landing", "close_no_recovery", "dispute"],
-  pursuing: ["start_negotiation", "record_landing", "close_no_recovery", "write_off", "dispute", "reverse_landing"],
-  negotiating: ["resume_pursuit", "record_landing", "close_no_recovery", "write_off", "dispute", "reverse_landing"],
+  // close_recovered is listed for the two states a fully received case can be in after a dispute (dispute -> negotiating, then optionally resume_pursuit
+  // -> pursuing). It is not a way round the closure rule: transitionRecoveryCase below still refuses it unless the WHOLE current claim has been received.
+  pursuing: ["start_negotiation", "record_landing", "close_recovered", "close_no_recovery", "write_off", "dispute", "reverse_landing"],
+  negotiating: ["resume_pursuit", "record_landing", "close_recovered", "close_no_recovery", "write_off", "dispute", "reverse_landing"],
   partially_landed: ["record_landing", "write_off", "dispute", "reverse_landing"],
   landed: ["close_recovered", "dispute", "reverse_landing"],
   closed_recovered: ["dispute", "reverse_landing"],
@@ -104,7 +106,11 @@ export function transitionRecoveryCase(input: Readonly<{
     const amount = money(input.amountPence ?? Number.NaN).pence;
     if (amount <= 0 || landed + priorWrittenOff + amount > claimed) throw new RecoveryTransitionError(input.state, input.event);
     landed += amount;
-    return { state: landed === claimed ? "landed" : "partially_landed", landedPence: landed, writtenOffPence };
+    // A receipt that uses up everything not already written off leaves nothing outstanding. With nothing written off that is "landed" (received in full);
+    // with an earlier write-off (kept through a reversal) the written-off disposition is preserved, so the case is never stranded in partially_landed
+    // with no principal left to receive, write off or close.
+    const state: RecoveryCaseState = landed === claimed ? "landed" : landed + priorWrittenOff === claimed ? "closed_no_recovery" : "partially_landed";
+    return { state, landedPence: landed, writtenOffPence };
   }
   if (input.event === "reverse_landing") {
     const amount = money(input.amountPence ?? Number.NaN).pence;
