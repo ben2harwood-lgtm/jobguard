@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
+import { assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventAllowedFrom, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
 
 describe("complete recovery state machine",()=>{
  const expected = {
@@ -247,5 +247,27 @@ describe("complete recovery state machine",()=>{
    const rest = transitionRecoveryCase({ claimedPence: 300000, state: "negotiating", landedPence: 250000, event: "record_landing", amountPence: 50000 });
    expect(transitionRecoveryCase({ claimedPence: 300000, state: rest.state, landedPence: rest.landedPence, event: "close_recovered" }).state).toBe("closed_recovered");
   });
+ });
+});
+
+describe("M4-1-S-R repair 12, Sol P2-3 control: a control is enabled only for an event the transition table allows", () => {
+ // The workbench derives "Record dispute" from this one question, so it can never offer a command the server refuses on state alone.
+ const disputable = ["evidence_assembled", "pursuing", "negotiating", "partially_landed", "landed", "closed_recovered", "closed_no_recovery"] as const;
+ it("allows a dispute from exactly the states that can be reopened or contested, and not from identified or prevented", () => {
+  for (const state of disputable) expect(recoveryEventAllowedFrom(state, "dispute"), state).toBe(true);
+  for (const state of ["identified", "prevented"] as const) expect(recoveryEventAllowedFrom(state, "dispute"), state).toBe(false);
+ });
+ it("agrees with the transition itself: the server accepts a dispute exactly where the question says yes", () => {
+  for (const state of recoveryCaseStateFullV1.options) {
+   const attempt = () => transitionRecoveryCase({ claimedPence: 100000, state, landedPence: 0, event: "dispute" });
+   if (recoveryEventAllowedFrom(state, "dispute")) expect(attempt().state, state).toBe("negotiating");
+   else expect(attempt, state).toThrowError(/is not allowed/);
+  }
+ });
+ it("never says yes to an event the transition refuses on state alone, for every state and event", () => {
+  for (const state of recoveryCaseStateFullV1.options) for (const event of recoveryEventTypeV1.options) {
+   if (recoveryEventAllowedFrom(state, event)) continue;
+   expect(() => transitionRecoveryCase({ claimedPence: 100000, state, landedPence: 0, event, amountPence: 100 }), `${state} ${event}`).toThrowError(/is not allowed/);
+  }
  });
 });

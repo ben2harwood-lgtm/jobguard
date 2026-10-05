@@ -35,7 +35,10 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  await V(page,"case-claimed-net","£2,500.00");await V(page,"case-book","Builder–customer");await V(page,"case-source-type","Customer invoice");
  for(const name of["Evidence assembled","Record a landed recovery","Write off remainder","Record dispute"])await expectTouchTarget(button(page,name));
  await expectTouchTarget(page.getByLabel("Received (£)",{exact:true}));
+ // Repair 12 (Sol P2-3 control): the server refuses a dispute on a case that is only identified, so the control is off until evidence has been assembled.
+ await V(page,"case-state","Needs evidence");await expect(button(page,"Record dispute")).toBeDisabled();
  await button(page,"Evidence assembled").click();
+ await V(page,"case-state","Evidence assembled");await expect(button(page,"Record dispute")).toBeEnabled();
  // Negative paths: each rejected command is announced in an alert that takes focus, and nothing is recorded.
  // (a) a receipt larger than the claim is refused by the server; (b) float-style input such as 1e3 is refused before any command is sent.
  await page.getByLabel("Received (£)",{exact:true}).fill("2500.01");await button(page,"Record a landed recovery").click();
@@ -227,7 +230,11 @@ test("an unread case list is shown as loading or failed, never as empty, and the
  await page.route(readUrl,async route=>{if(!isRead(route))return route.continue();await gate;await route.continue()});
  await page.reload();
  await expect(page.getByRole("status").filter({hasText:"Loading recovery cases"})).toBeVisible();await expect(empty).toHaveCount(0);await expect(alert).toHaveCount(0);
+ // Repair 12 (Sol P2-1): nothing can be opened until the first read has settled, so no command can race it.
+ const openNames=["Open materials-320 overcharge","Open £320 withheld payment","Open £2,500 withheld payment","Record prevention"];
+ for(const name of openNames)await expect(button(page,name)).toBeDisabled();
  release();await expect(empty).toBeVisible();await expect(page.getByRole("status").filter({hasText:"Loading recovery cases"})).toHaveCount(0);
+ for(const name of openNames)await expect(button(page,name)).toBeEnabled();
  await page.unroute(readUrl);
  // Transport failure: the read is aborted. The failure is announced and focused, the empty claim is not made, and Try again works once the read can succeed.
  await page.route(readUrl,route=>isRead(route)?route.abort("failed"):route.continue());
