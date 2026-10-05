@@ -1,5 +1,6 @@
+import { ZodError } from "zod";
 import type { Pool } from "pg";
-import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, RecoveryCaseRepository, readSyntheticDemoJob, verifiedTenantContextFromMembership } from "@jobguard/db";
+import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, RecoveryCaseRepository, RecoveryCommandOutcomeUnknownError, readSyntheticDemoJob, verifiedTenantContextFromMembership } from "@jobguard/db";
 import { recoveryCaseCommandV1, recoveryEligibilityCommandV1 } from "./recovery-case.contracts.js";
 
 // Existing synthetic principal bridge: no client-selected identity or tenant.
@@ -21,12 +22,16 @@ export class RecoveryCaseApplication {
  private async view(jobId: string, affectedCaseId?: string) {
   return { version: "recovery-case-workbench.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, cases: await this.repo.list(context(), jobId), ...(affectedCaseId === undefined ? {} : { affectedCaseId }) };
  }
+ private async committedView(jobId: string, affectedCaseId: string) {
+  try { return await this.view(jobId, affectedCaseId); }
+  catch(cause) { throw new RecoveryCommandOutcomeUnknownError(cause); }
+ }
  async command(jobId: string, raw: unknown) {
   // M4-1-S-R: the reviewer is the server-selected synthetic membership, never a client value. Job access is checked first as a cheap preflight;
   // the repository rechecks the membership inside its own write transaction (revocation cannot race the write).
   await readSyntheticDemoJob(this.pool, jobId);
   const affected = await this.repo.command(context(), jobId, recoveryCaseCommandV1.parse(raw), { membershipId: membership.membershipId, identityUserId: membership.identityUserId });
-  return this.view(jobId, affected.id);
+  return this.committedView(jobId, affected.id);
  }
  async eligibility(jobId: string, raw: unknown, sessionId: string | undefined) {
   if (!sessionId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(sessionId)) throw new Error("UNAUTHENTICATED");
@@ -36,6 +41,25 @@ export class RecoveryCaseApplication {
   const affected = await this.repo.eligibilityCommand(context(), jobId, recoveryEligibilityCommandV1.parse(raw), {
    membershipId: membership.membershipId, identityUserId: membership.identityUserId,
   });
-  return this.view(jobId, affected.id);
+  return this.committedView(jobId, affected.id);
  }
+}
+
+// Shared by Next and Nest. Only known pre-commit domain refusals get 4xx;
+// unexpected database/commit failures and typed post-commit failures stay unknown.
+export function recoveryCommandFailure(error: unknown) {
+ const unknown = { status: 503, body: { version: "recovery-command-error.v1" as const, code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN", outcome: "unknown" as const, message: "Your last action may or may not have been saved. Retry with the same command id." } };
+ if(error instanceof RecoveryCommandOutcomeUnknownError)return unknown;
+ if(error instanceof ZodError)return { status: 400, body: { code: "INVALID_COMMAND" } };
+ const code=error instanceof Error ? ("code" in error && typeof error.code === "string" ? error.code : error.message) : undefined;
+ const statuses:Record<string,number>={
+  UNAUTHENTICATED:401, MEMBERSHIP_FORBIDDEN:403, RECOVERY_REVIEWER_FORBIDDEN:403, ELIGIBILITY_REVIEWER_FORBIDDEN:403,
+  JOB_NOT_FOUND:404, RECOVERY_JOB_NOT_FOUND:404, RECOVERY_CASE_NOT_FOUND:404, ELIGIBILITY_REVIEW_NOT_FOUND:404,
+  RECOVERY_STALE_REVISION:409, ELIGIBILITY_STALE_REVISION:409, ELIGIBILITY_REVIEW_REQUIRED:409, IDEMPOTENCY_PAYLOAD_CONFLICT:409,
+  RECOVERY_SOURCE_NOT_RECOGNISED:400, RECOVERY_TRANSITION_FORBIDDEN:400, RECOVERY_CLAIM_BELOW_SETTLED:400,
+  RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE:400, ELIGIBILITY_NOT_APPROVABLE:400,
+ };
+ if(code===undefined||statuses[code]===undefined)return unknown;
+ const requiresReview=code==="ELIGIBILITY_STALE_REVISION"||code==="ELIGIBILITY_REVIEW_REQUIRED";
+ return {status:statuses[code]!,body:{code,message:requiresReview ? "Review the changed evidence before approving" : code}};
 }

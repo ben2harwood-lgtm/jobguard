@@ -17,6 +17,12 @@ const sameCommand=(stored:{hash:string;reviewer?:string},current:string,legacy?:
 export type EligibilityView={revision:number;caseRevision:number;evidenceRevision:number;policyVersion:"reference-d03.v1";policyRevision:number;classification:string;eligibleNetPence:number|null;reason:string;citations:string[];status:"reviewed"|"approved"|"superseded";reviewerRef:string};
 export type RecoveryCaseView={id:string;jobId:string;caseType:string;state:RecoveryCaseState;claimedNetPence:number;landedNetPence:number;outstandingNetPence:number;writtenOffPence:number;currency:"GBP";counterparty:string;book:string;sourceType:string;sourceRefs:string[];sources:RecoverySourceView[];feeJobLiabilityPence:number;feeObligationsPostedPence:number;feeCompensationsPostedPence:number;approvedLandedNetPence:number;revision:number;reviewerRef:string;createdDate:string;eligibility:EligibilityView|null};
 
+// Once the write transaction has returned, no answer-building failure can be a refusal.
+export class RecoveryCommandOutcomeUnknownError extends Error {
+ readonly code = "RECOVERY_COMMAND_OUTCOME_UNKNOWN";
+ constructor(cause: unknown) { super("RECOVERY_COMMAND_OUTCOME_UNKNOWN", { cause }); }
+}
+
 export class RecoveryReviewerError extends Error {
  constructor(readonly code: "RECOVERY_REVIEWER_FORBIDDEN") { super(code); }
 }
@@ -27,6 +33,14 @@ export class RecoveryEligibilityError extends Error {
 
 export class RecoveryCaseRepository{
  constructor(private readonly pool:Pool){}
+ private async committedCase(context:VerifiedTenantContext,jobId:string,caseId:string):Promise<RecoveryCaseView> {
+  try {
+   const affected=(await this.list(context,jobId)).find(x=>x.id===caseId);
+   if(!affected)throw new Error("Committed case is absent from the answer");
+   return affected;
+  } catch(cause) { throw new RecoveryCommandOutcomeUnknownError(cause); }
+ }
+
  async list(context:VerifiedTenantContext,jobId:string):Promise<RecoveryCaseView[]>{return withTenant(this.pool,context,async db=>{
   const rows=await db.$client.query<any>(`SELECT c.*,
    er.revision eligibility_revision,er.case_revision eligibility_case_revision,er.evidence_revision,er.policy_version,er.policy_revision,er.classification,er.eligible_net_pence,er.reason eligibility_reason,er.citations,er.status eligibility_status,er.reviewer_ref eligibility_reviewer,
@@ -57,7 +71,7 @@ export class RecoveryCaseRepository{
   else {if(!old)throw new Error("ELIGIBILITY_REVIEW_NOT_FOUND");row={scenario:old.scenario,classification:old.classification,eligibleNetPence:old.eligible_net_pence===null?null:Number(old.eligible_net_pence),reason:old.reason,citations:old.citations,status:"superseded",evidenceRevision:Number(old.evidence_revision)+(input.subject==="evidence"?1:0),policyVersion:old.policy_version,policyRevision:Number(old.policy_revision)+(input.subject==="policy"?1:0)};}
   await db.$client.query("INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash,previous_hash)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'GBP',$13,$14,$15,$16,$17,$18,$19)",[randomUUID(),context.tenantId,jobId,caseId,revision,caseRevision,row.evidenceRevision,row.policyVersion,row.policyRevision,row.scenario,row.classification,row.eligibleNetPence,row.reason,JSON.stringify(row.citations),row.status,authorizedReviewer,input.commandId,hash,old?.subject_hash??null]);
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:authorizedReviewer,eventType:`recovery.eligibility.${input.action}`,subjectType:"recovery_case",subjectRef:caseId,payload:{references:{jobId,commandId:input.commandId},hashes:{command:hash},classifications:{recovery:"financial"}}}]);
- });return (await this.list(context,jobId)).find(x=>x.id===caseId)!}
+ });return this.committedCase(context,jobId,caseId)}
  async command(context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView>{
   if(!reviewer?.membershipId||!reviewer?.identityUserId)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
   // The caller supplies the server-selected principal; any client reviewer field is ignored and replaced below.
@@ -97,5 +111,5 @@ export class RecoveryCaseRepository{
    if(input.action==="amend_claim")await db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash,previous_hash) VALUES($1,$2,$3,$4,$5,'claim_amended',$6,$7,$8,$9,$10,$11)",[randomUUID(),context.tenantId,jobId,caseId,Number(x.event_count)+1,x.state,stateAfterAmendment,input.reviewerRef,input.commandId,hash,x.previous_hash]);
   }
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:input.reviewerRef,eventType:`recovery.${input.action}`,subjectType:"recovery_case",subjectRef:caseId,payload:{references:{jobId,commandId:input.commandId},hashes:{command:hash},classifications:{recovery:"financial"}}}]);
- });return (await this.list(context,jobId)).find(x=>x.id===caseId)!}
+ });return this.committedCase(context,jobId,caseId)}
 }

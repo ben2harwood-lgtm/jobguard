@@ -1,4 +1,4 @@
-import{createHash,randomUUID}from"node:crypto";import{mkdtemp,rm,readFile}from"node:fs/promises";import{tmpdir}from"node:os";import{join}from"node:path";import EmbeddedPostgres from"embedded-postgres";import{Pool}from"pg";import{afterAll,beforeAll,describe,expect,it}from"vitest";import{migrate,MIGRATION_URLS,RecoveryCaseRepository,withTenant,type VerifiedTenantContext}from"../src/index.js";import{closeTestPools}from"./pool-test-utils.js";import{recoveryCaseCommandV1,recoveryEligibilityCommandV1}from"@jobguard/core";
+import{createHash,randomUUID}from"node:crypto";import{mkdtemp,rm,readFile}from"node:fs/promises";import{tmpdir}from"node:os";import{join}from"node:path";import EmbeddedPostgres from"embedded-postgres";import{Pool}from"pg";import{afterAll,beforeAll,describe,expect,it,vi}from"vitest";import{migrate,MIGRATION_URLS,RecoveryCaseRepository,withTenant,type VerifiedTenantContext}from"../src/index.js";import{closeTestPools}from"./pool-test-utils.js";import{recoveryCaseCommandV1,recoveryEligibilityCommandV1}from"@jobguard/core";
 const member=()=>({membershipId:randomUUID(),identityUserId:randomUUID()}),owner=member(),owner2=member(),owner3=member(),ref=(m:{membershipId:string})=>`membership:${m.membershipId}`;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx={tenantId:tenant}as VerifiedTenantContext;const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jg-recovery-cases-"));const port=60000+Math.floor(Math.random()*200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic"});// Install the preceding schema, seed its immutable history, then upgrade in place.
@@ -468,4 +468,32 @@ describe("M4-1-S-R repair 11 (Sol P2-4): commands recorded before this upgrade s
   await expect(repo.eligibilityCommand(ctx,wrongJob,review,owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
   expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_revision WHERE case_id=$1",[h.caseId])).rows[0].n).toBe(before);
  });
+});
+
+
+// Repair 14: real PostgreSQL commits followed by injected answer-read faults.
+it("a committed opening with a failed repository answer replays the same case exactly once", async () => {
+ const repo=new RecoveryCaseRepository(runtime),body=openCase();
+ const list=vi.spyOn(repo,"list").mockRejectedValueOnce(new Error("RECOVERY_STALE_REVISION"));
+ try {
+  await expect(repo.command(ctx,job,body,owner)).rejects.toMatchObject({code:"RECOVERY_COMMAND_OUTCOME_UNKNOWN"});
+  const stored=await admin.query("SELECT case_id FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[tenant,body.commandId]);
+  expect(stored.rows).toHaveLength(1);
+  const replay=await repo.command(ctx,job,body,owner);
+  expect(replay.id).toBe(stored.rows[0].case_id);
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case WHERE tenant_id=$1 AND id=$2",[tenant,replay.id])).rows[0].n).toBe(1);
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[tenant,body.commandId])).rows[0].n).toBe(1);
+ } finally { list.mockRestore(); }
+});
+it("a committed eligibility revision with a failed repository answer replays exactly once", async () => {
+ const repo=new RecoveryCaseRepository(runtime),opened=await repo.command(ctx,job,openCase(),owner);
+ const body={version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:opened.id,expectedCaseRevision:opened.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"evidence_backed_withheld_payment"};
+ const list=vi.spyOn(repo,"list").mockRejectedValueOnce(new Error("ELIGIBILITY_STALE_REVISION"));
+ try {
+  await expect(repo.eligibilityCommand(ctx,job,body,owner)).rejects.toMatchObject({code:"RECOVERY_COMMAND_OUTCOME_UNKNOWN"});
+  const replay=await repo.eligibilityCommand(ctx,job,body,owner);
+  expect(replay.id).toBe(opened.id);
+  expect(replay.eligibility?.revision).toBe(1);
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND command_id=$2",[tenant,body.commandId])).rows[0].n).toBe(1);
+ } finally { list.mockRestore(); }
 });

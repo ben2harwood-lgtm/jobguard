@@ -24,3 +24,17 @@ it("passes only the session cookie to the shared application boundary", async ()
  await new RecoveryCaseController({} as Pool).eligibility(job, body, { headers: { cookie: `unrelated=value; jg_session=${session}` } });
  expect(execute).toHaveBeenCalledWith(job, body, session);
 });
+
+it.each(["post", "eligibility"] as const)("%s keeps unexpected/uncertain write failures on the 5xx unknown path", async method => {
+ vi.spyOn(RecoveryCaseApplication.prototype, method === "post" ? "command" : "eligibility").mockRejectedValue(new Error("connection lost during COMMIT"));
+ const controller = new RecoveryCaseController({} as Pool);
+ try {
+  if (method === "post") await controller.post(randomUUID(), {});
+  else await controller.eligibility(randomUUID(), {}, { headers: { cookie: `jg_session=${randomUUID()}` } });
+  expect.fail("Expected unknown outcome");
+ } catch (error) {
+  expect(error).toBeInstanceOf(HttpException);
+  expect((error as HttpException).getStatus()).toBe(503);
+  expect((error as HttpException).getResponse()).toMatchObject({ version: "recovery-command-error.v1", code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN", outcome: "unknown" });
+ }
+});

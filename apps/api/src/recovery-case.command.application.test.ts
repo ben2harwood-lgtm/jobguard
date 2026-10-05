@@ -95,3 +95,9 @@ it("every real command answer satisfies the command response contract, and a pla
   expect(recoveryCaseListResponseV1.safeParse(read).success).toBe(true);
   expect(read).not.toHaveProperty("affectedCaseId");
 });
+
+it("a command that committed cannot turn its answer-read failure into a refusal", async () => {
+ spies.list.mockRejectedValue(new Error("RECOVERY_STALE_REVISION"));
+ await expect(new RecoveryCaseApplication({} as Pool).command(jobId, input())).rejects.toMatchObject({ code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN" });
+ expect(spies.command).toHaveBeenCalledTimes(1);
+});

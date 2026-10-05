@@ -48,3 +48,11 @@ it("returns the id of the case an eligibility command affected, as the repositor
  const response=await new RecoveryCaseApplication({} as Pool).eligibility(randomUUID(),command(),randomUUID());
  expect(response.affectedCaseId).toBe(affected);
 });
+
+it("an eligibility command that committed cannot turn its answer-read failure into a refusal", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const persist = vi.spyOn(RecoveryCaseRepository.prototype, "eligibilityCommand").mockResolvedValue({ id: randomUUID() } as never);
+ vi.spyOn(RecoveryCaseRepository.prototype, "list").mockRejectedValue(new Error("ELIGIBILITY_STALE_REVISION"));
+ await expect(new RecoveryCaseApplication({} as Pool).eligibility(randomUUID(), command(), randomUUID())).rejects.toMatchObject({ code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN" });
+ expect(persist).toHaveBeenCalledTimes(1);
+});

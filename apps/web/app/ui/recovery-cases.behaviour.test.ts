@@ -806,3 +806,47 @@ describe("M4-1-S-R repair 13, Sol P3-3: every row of a source lookup is checked 
     expect((writes()[1]!.body as { sourceRefs: string[] }).sourceRefs).toEqual([RATE, VERSION]);
   });
 });
+
+describe("M4-1-S-R repair 14: the two-step stale approval belongs to one ticket", () => {
+ const eligibility = { revision: 1, caseRevision: 1, evidenceRevision: 1, policyVersion: "reference-d03.v1", policyRevision: 1, classification: "eligible_for_review", eligibleNetPence: 32000, reason: "Fictional evidence", citations: ["Generated customer invoice INV-18800"], status: "reviewed", reviewerRef: "membership:fictional" };
+ async function begin() {
+  const w = start(); await w.settle();
+  reads()[0]!.json(answerBody([caseView({ eligibility })])); await w.settle();
+  w.click("Test stale approval after evidence changes"); await w.settle();
+  expect(writes()).toHaveLength(1);
+  expect(writes()[0]!.body).toMatchObject({ action: "supersede", caseId: CASE_A });
+  return w;
+ }
+ it.each(["job switch", "unmount"])("stops before step two after %s while step one is pending", async abandon => {
+  const w = await begin();
+  if (abandon === "job switch") { w.rerender(JOB_B); await w.settle(); reads()[1]!.json(answerBody([])); await w.settle(); } else w.unmount();
+  const before = w.screen().text();
+  writes()[0]!.json(answerBody([caseView({ eligibility: { ...eligibility, status: "superseded", evidenceRevision: 2 } })], CASE_A));
+  await w.settle();
+  expect(writes()).toHaveLength(1);
+  expect(w.screen().text()).toBe(before);
+  expect(w.screen().alert()).toBe("");
+  if (abandon === "job switch") { expect(w.screen().text()).toContain("No recovery cases yet"); expect(w.screen().testId("case-claimed-net")).toBe(""); }
+ });
+ it("a refused first step never sends step two or replaces its error", async () => {
+  const w = await begin();
+  writes()[0]!.json({ code: "ELIGIBILITY_STALE_REVISION", message: "Review the changed evidence before approving" }, 409);
+  await w.settle();
+  expect(writes()).toHaveLength(1);
+  expect(w.screen().alert()).toBe("Review the changed evidence before approving");
+ });
+ it("an unknown first step stays held without sending step two", async () => {
+  const w = await begin(); writes()[0]!.reject(); await w.settle();
+  expect(writes()).toHaveLength(1);
+  expect(w.screen().alert()).toContain("may or may not have been saved");
+ });
+ it("sends the deliberate stale approval only after confirmed supersession on the same job", async () => {
+  const w = await begin();
+  writes()[0]!.json(answerBody([caseView({ eligibility: { ...eligibility, status: "superseded", evidenceRevision: 2 } })], CASE_A));
+  await w.settle();
+  expect(writes()).toHaveLength(2);
+  expect(writes()[1]!.body).toMatchObject({ action: "approve", caseId: CASE_A, expectedEvidenceRevision: 1 });
+  writes()[1]!.json({ code: "ELIGIBILITY_STALE_REVISION" }, 409); await w.settle();
+  expect(w.screen().alert()).toBe("ELIGIBILITY_STALE_REVISION");
+ });
+});
