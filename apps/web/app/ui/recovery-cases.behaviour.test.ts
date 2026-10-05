@@ -10,7 +10,7 @@ import { RecoveryCases } from "./recovery-cases";
  * real onClick handlers. Every answer is a plain object, so the order in which answers arrive is exactly the order the test chooses.
  */
 const rt = vi.hoisted(() => {
-  type Slot = { value?: unknown; deps?: readonly unknown[]; cleanup?: unknown; ref?: { current: unknown }; set?: (next: unknown) => void };
+  type Slot = { value?: unknown; deps?: readonly unknown[] | undefined; cleanup?: unknown; ref?: { current: unknown }; set?: (next: unknown) => void };
   type Instance = {
     slots: Slot[]; cursor: number; effects: Array<() => void>; props: unknown; tree: unknown; failure: unknown; scheduled: boolean; unmounted: boolean;
     component: (props: unknown) => unknown; flush: () => void; markDirty: () => void;
@@ -88,6 +88,10 @@ type Call = { url: string; method: string; body: unknown; json: (body: unknown, 
 const respond = (body: unknown, status: number) => ({ ok: status >= 200 && status < 300, status, json: async () => structuredClone(body) });
 
 let calls: Call[] = [];
+// The recorded-source lookups a practice button makes before it sends a command. Each answers at once, with a body a test can replace per lookup.
+type Lookup = { status: number; body: unknown; notJson?: boolean };
+const emptyLookups = (): Record<string, Lookup> => ({ "customer-invoices": { status: 200, body: { invoices: [] } }, materials: { status: 200, body: { materials: [] } }, "supplier-documents": { status: 200, body: { state: { facts: [] } } } });
+let lookups = emptyLookups();
 const reads = () => calls.filter(call => call.method === "GET");
 const writes = () => calls.filter(call => call.method === "POST");
 
@@ -100,10 +104,12 @@ beforeAll(() => {
 
 function start(jobId = JOB_A) {
   calls = [];
+  lookups = emptyLookups();
   vi.stubGlobal("fetch", (input: unknown, init?: { method?: string; body?: string }) => {
     const url = String(input), method = init?.method ?? "GET";
-    // The practice buttons look up the job's recorded customer invoices first; none are recorded, so the fixed fictional label is used.
-    if (url.endsWith("/customer-invoices")) return Promise.resolve(respond({ invoices: [] }, 200));
+    // The practice buttons look up the job's recorded sources first; none are recorded, so the fixed fictional labels are used.
+    const lookup = lookups[url.split("/").at(-1) ?? ""];
+    if (lookup) return Promise.resolve(lookup.notJson ? { ok: lookup.status < 300, status: lookup.status, json: async () => { throw new SyntaxError("Unexpected token < in JSON at position 0") } } : respond(lookup.body, lookup.status));
     if (!url.includes("/recovery-cases")) return Promise.reject(new Error(`unexpected request ${url}`));
     return new Promise(resolve => {
       calls.push({
@@ -359,5 +365,33 @@ describe("M4-1-S-R repair 12, Sol P2-3 control: Record dispute is enabled only w
     await w.settle();
     expect(w.screen().button("Record dispute").props.disabled).toBe(true);
     expect(writes()[0]!.body).toMatchObject({ action: "transition", eventType: "dispute" });
+  });
+});
+
+describe("M4-1-S-R repair 12, Sol P3-5: a malformed answer to a lookup made before a command is announced plainly and sends nothing", () => {
+  const customers = "Recorded customer invoices could not be loaded", suppliers = "Recorded supplier sources could not be loaded";
+  const cases: Array<[string, string, string, Lookup, string]> = [
+    ["customer invoices is an empty object", "Open £320 withheld payment", "customer-invoices", { status: 200, body: {} }, customers],
+    ["customer invoices is null", "Open £2,500 withheld payment", "customer-invoices", { status: 200, body: null }, customers],
+    ["customer invoices is not JSON", "Record prevention", "customer-invoices", { status: 200, body: undefined, notJson: true }, customers],
+    ["customer invoices is not a list", "Open £320 withheld payment", "customer-invoices", { status: 200, body: { invoices: "none" } }, customers],
+    ["materials is an empty object", "Open materials-320 overcharge", "materials", { status: 200, body: {} }, suppliers],
+    ["materials is null", "Open materials-320 overcharge", "materials", { status: 200, body: null }, suppliers],
+    ["supplier documents has no facts", "Open materials-320 overcharge", "supplier-documents", { status: 200, body: { state: {} } }, suppliers],
+    ["supplier documents is not JSON", "Open materials-320 overcharge", "supplier-documents", { status: 200, body: undefined, notJson: true }, suppliers],
+  ];
+  it.each(cases)("%s", async (_name, press, lookup, answer, message) => {
+    const w = start();
+    await w.settle();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    lookups[lookup] = answer;
+    w.click(press);
+    await w.settle();
+    expect(w.screen().alert()).toBe(message);
+    expect(writes()).toHaveLength(0);
+    // Nothing is left locked and the register is still the one that was read.
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+    expect(w.screen().text()).toContain("No recovery cases yet");
   });
 });
