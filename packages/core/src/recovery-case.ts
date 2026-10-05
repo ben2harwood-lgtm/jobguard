@@ -27,6 +27,15 @@ const allowed: Readonly<Record<RecoveryCaseState, readonly RecoveryEventType[]>>
   prevented: [],
 };
 
+/**
+ * Whether the transition table allows an event from a state, on the state alone. The workbench derives its controls from this question so it never offers a command the
+ * server refuses (for example a dispute on a case that is only identified). Amount guards (a receipt within what is outstanding, a recovered closure only when the whole
+ * claim is received) still live in transitionRecoveryCase; a control that depends on an amount adds that rule itself.
+ */
+export function recoveryEventAllowedFrom(state: RecoveryCaseState, event: RecoveryEventType): boolean {
+  return allowed[state].includes(event);
+}
+
 export class RecoveryTransitionError extends Error {
   readonly code = "RECOVERY_TRANSITION_FORBIDDEN";
   constructor(state: RecoveryCaseState, event: RecoveryEventType) { super(`${event} is not allowed from ${state}`); }
@@ -92,7 +101,7 @@ export function transitionRecoveryCase(input: Readonly<{
   state: RecoveryCaseState; event: RecoveryEventType; claimedPence: number; landedPence: number;
   writtenOffPence?: number; amountPence?: number;
 }>): { state: RecoveryCaseState; landedPence: number; writtenOffPence: number } {
-  if (!allowed[input.state].includes(input.event)) throw new RecoveryTransitionError(input.state, input.event);
+  if (!recoveryEventAllowedFrom(input.state, input.event)) throw new RecoveryTransitionError(input.state, input.event);
   const claimed: number = money(input.claimedPence).pence;
   let landed: number = money(input.landedPence).pence;
   const priorWrittenOff: number = money(input.writtenOffPence ?? 0).pence;
