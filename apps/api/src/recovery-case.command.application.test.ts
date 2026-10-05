@@ -12,7 +12,8 @@ const serverReviewer = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_
 import { RecoveryCaseApplication } from "./recovery-case.application.js";
 const jobId = randomUUID();
 const input = () => ({ version:"recovery-case-command.v1", action:"open", commandId:randomUUID(), caseType:"merchant_overcharge", claimedNetPence:32000, counterparty:"Merchant", book:"supplier_cost", sourceType:"supplier_documents", sourceRefs:["INV-320"], expectedRevision:0 });
-beforeEach(() => { vi.resetAllMocks(); spies.list.mockResolvedValue([]); spies.verify.mockResolvedValue({job:{id:jobId}}); });
+const affectedId = randomUUID();
+beforeEach(() => { vi.resetAllMocks(); spies.list.mockResolvedValue([]); spies.verify.mockResolvedValue({job:{id:jobId}}); spies.command.mockResolvedValue({id:affectedId}); });
 it("derives the reviewer from verified sandbox membership with no client reviewer", async () => {
   const pool = {} as Pool;
   await new RecoveryCaseApplication(pool).command(jobId,input());
@@ -44,4 +45,16 @@ it("returns the refreshed list after a command without a second membership read"
   await new RecoveryCaseApplication({} as Pool).command(jobId, input());
   expect(spies.verify).toHaveBeenCalledTimes(1); // the preflight; the repository rechecks inside its own write transaction
   expect(spies.list).toHaveBeenCalledTimes(1);
+});
+// M4-1-S-R repair 11 (Sol P2-5): the response names the case THIS command changed, as the repository returned it, so a browser never has to guess
+// which case it opened from a list that another browser may have changed in the meantime.
+it("returns the id of the case the command affected, even when the refreshed list ends with a later case from another browser", async () => {
+  const later = randomUUID();
+  spies.list.mockResolvedValue([{ id: affectedId }, { id: later }]);
+  const response = await new RecoveryCaseApplication({} as Pool).command(jobId, input());
+  expect(response.affectedCaseId).toBe(affectedId);
+  expect(response.cases.map(x => x.id)).toEqual([affectedId, later]);
+});
+it("does not claim an affected case on a plain read", async () => {
+  expect(await new RecoveryCaseApplication({} as Pool).list(jobId)).not.toHaveProperty("affectedCaseId");
 });

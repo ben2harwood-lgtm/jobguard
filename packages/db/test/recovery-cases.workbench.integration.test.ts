@@ -1,4 +1,4 @@
-import{randomUUID}from"node:crypto";import{mkdtemp,rm,readFile}from"node:fs/promises";import{tmpdir}from"node:os";import{join}from"node:path";import EmbeddedPostgres from"embedded-postgres";import{Pool}from"pg";import{afterAll,beforeAll,describe,expect,it}from"vitest";import{migrate,MIGRATION_URLS,RecoveryCaseRepository,withTenant,type VerifiedTenantContext}from"../src/index.js";import{closeTestPools}from"./pool-test-utils.js";
+import{createHash,randomUUID}from"node:crypto";import{mkdtemp,rm,readFile}from"node:fs/promises";import{tmpdir}from"node:os";import{join}from"node:path";import EmbeddedPostgres from"embedded-postgres";import{Pool}from"pg";import{afterAll,beforeAll,describe,expect,it}from"vitest";import{migrate,MIGRATION_URLS,RecoveryCaseRepository,withTenant,type VerifiedTenantContext}from"../src/index.js";import{closeTestPools}from"./pool-test-utils.js";import{recoveryCaseCommandV1,recoveryEligibilityCommandV1}from"@jobguard/core";
 const member=()=>({membershipId:randomUUID(),identityUserId:randomUUID()}),owner=member(),owner2=member(),owner3=member(),ref=(m:{membershipId:string})=>`membership:${m.membershipId}`;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx={tenantId:tenant}as VerifiedTenantContext;const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jg-recovery-cases-"));const port=60000+Math.floor(Math.random()*200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic"});// Install the preceding schema, seed its immutable history, then upgrade in place.
@@ -311,5 +311,161 @@ describe("M4-1-S HOLD regressions", () => {
    await repo.eligibilityCommand(ctx,job,{...review,caseId:x.id},owner); // lower-case replay: no conflict
    expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_revision WHERE case_id=$1",[x.id])).rows[0].n).toBe(1);
   });
+ });
+});
+
+describe("M4-1-S-R repair 11 (Sol P2-2): receipt plus write-off that exhausts the claim keeps the written-off disposition", () => {
+ const stepFor = (repo: RecoveryCaseRepository) => (x:{id:string;revision:number},extra:Record<string,unknown>) => repo.command(ctx,job,command({action:"transition",caseId:x.id,expectedRevision:x.revision,...extra}),owner);
+ it("claim 2,500.00, receive 1,000.00, write off 1,500.00, reverse 1,000.00, receive 1,000.00 again ends closed (no further recovery), not stranded", async () => {
+  const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+  let x = await repo.command(ctx,job,openCase(),owner);
+  x = await step(x,{eventType:"assemble_evidence"});
+  x = await step(x,{eventType:"record_landing",amountPence:100000});
+  x = await step(x,{eventType:"write_off"});
+  x = await step(x,{eventType:"reverse_landing",amountPence:100000});
+  expect(x).toMatchObject({state:"evidence_assembled",landedNetPence:0,writtenOffPence:150000,outstandingNetPence:100000});
+  const relanding = command({action:"transition",caseId:x.id,eventType:"record_landing",amountPence:100000,expectedRevision:x.revision});
+  const relanded = await repo.command(ctx,job,relanding,owner);
+  expect(relanded).toMatchObject({state:"closed_no_recovery",claimedNetPence:250000,landedNetPence:100000,writtenOffPence:150000,outstandingNetPence:0});
+  expect((await repo.command(ctx,job,relanding,owner)).revision).toBe(relanded.revision); // replay is a no-op
+  expect((await admin.query("SELECT event_type,from_state,to_state FROM app.recovery_case_event WHERE case_id=$1 ORDER BY sequence DESC LIMIT 1",[x.id])).rows).toEqual([{event_type:"record_landing",from_state:"evidence_assembled",to_state:"closed_no_recovery"}]);
+  // Nothing is outstanding: no further receipt, write-off or recovered closure; the explicit reopen paths still work.
+  for (const extra of [{eventType:"record_landing",amountPence:1},{eventType:"write_off"},{eventType:"close_recovered"}]) await expect(step(relanded,extra)).rejects.toThrow(/is not allowed/);
+  expect(relanded.landedNetPence+relanded.writtenOffPence+relanded.outstandingNetPence).toBe(relanded.claimedNetPence);
+  const reopened = await step(relanded,{eventType:"reverse_landing",amountPence:40000});
+  expect(reopened).toMatchObject({state:"partially_landed",landedNetPence:60000,writtenOffPence:150000,outstandingNetPence:40000});
+  const again = await step(reopened,{eventType:"record_landing",amountPence:40000});
+  expect(again).toMatchObject({state:"closed_no_recovery",landedNetPence:100000,outstandingNetPence:0});
+  const disputed = await step(again,{eventType:"dispute"});
+  expect(disputed).toMatchObject({state:"negotiating",outstandingNetPence:0});
+ });
+ it("a final receipt with nothing written off still records received in full", async () => {
+  const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+  let x = await repo.command(ctx,job,openCase(),owner);
+  x = await step(x,{eventType:"assemble_evidence"});
+  x = await step(x,{eventType:"record_landing",amountPence:100000});
+  x = await step(x,{eventType:"record_landing",amountPence:150000});
+  expect(x).toMatchObject({state:"landed",landedNetPence:250000,outstandingNetPence:0});
+ });
+});
+describe("M4-1-S-R repair 11 (Sol P2-3): a fully received case closes as recovered again after a dispute", () => {
+ const stepFor = (repo: RecoveryCaseRepository) => (x:{id:string;revision:number},extra:Record<string,unknown>) => repo.command(ctx,job,command({action:"transition",caseId:x.id,expectedRevision:x.revision,...extra}),owner);
+ it.each(["landed","closed_recovered"] as const)("%s -> dispute -> close as recovered, with no new money event and a replay-safe closure", async from => {
+  const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+  let x = await repo.command(ctx,job,openCase(),owner);
+  x = await step(x,{eventType:"assemble_evidence"});
+  x = await step(x,{eventType:"record_landing",amountPence:250000});
+  if (from === "closed_recovered") x = await step(x,{eventType:"close_recovered"});
+  x = await step(x,{eventType:"dispute"});
+  expect(x).toMatchObject({state:"negotiating",landedNetPence:250000,outstandingNetPence:0});
+  const moneyEvents = async () => Number((await admin.query("SELECT count(*) n FROM app.recovery_case_event WHERE case_id=$1 AND event_type IN('record_landing','reverse_landing','write_off')",[x.id])).rows[0].n);
+  const before = await moneyEvents();
+  const close = command({action:"transition",caseId:x.id,eventType:"close_recovered",expectedRevision:x.revision});
+  const closed = await repo.command(ctx,job,close,owner);
+  expect(closed).toMatchObject({state:"closed_recovered",claimedNetPence:250000,landedNetPence:250000,outstandingNetPence:0});
+  expect(await moneyEvents()).toBe(before);
+  expect((await repo.command(ctx,job,close,owner)).revision).toBe(closed.revision);
+  await expect(step(closed,{eventType:"close_recovered"})).rejects.toThrow(/is not allowed/);
+ });
+ it("closes again after the dispute was resolved by resuming the chase", async () => {
+  const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+  let x = await repo.command(ctx,job,openCase(),owner);
+  x = await step(x,{eventType:"assemble_evidence"});
+  x = await step(x,{eventType:"record_landing",amountPence:250000});
+  x = await step(x,{eventType:"dispute"});
+  x = await step(x,{eventType:"resume_pursuit"});
+  expect(x).toMatchObject({state:"pursuing",landedNetPence:250000,outstandingNetPence:0});
+  expect(await step(x,{eventType:"close_recovered"})).toMatchObject({state:"closed_recovered"});
+ });
+ it("still refuses a recovered closure while any principal is outstanding or written off", async () => {
+  const repo = new RecoveryCaseRepository(runtime), step = stepFor(repo);
+  let x = await repo.command(ctx,job,openCase(),owner);
+  x = await step(x,{eventType:"assemble_evidence"});
+  x = await step(x,{eventType:"record_landing",amountPence:100000});
+  x = await step(x,{eventType:"dispute"});
+  await expect(step(x,{eventType:"close_recovered"})).rejects.toThrow(/is not allowed/);
+  x = await step(x,{eventType:"resume_pursuit"});
+  await expect(step(x,{eventType:"close_recovered"})).rejects.toThrow(/is not allowed/);
+  x = await step(x,{eventType:"write_off"});
+  x = await step(x,{eventType:"dispute"});
+  expect(x).toMatchObject({state:"negotiating",landedNetPence:100000,writtenOffPence:150000,outstandingNetPence:0});
+  await expect(step(x,{eventType:"close_recovered"})).rejects.toThrow(/is not allowed/); // received plus written off is not received in full
+  const upward = await repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence:260000,expectedRevision:x.revision}),owner);
+  await expect(step(upward,{eventType:"close_recovered"})).rejects.toThrow(/is not allowed/);
+ });
+});
+describe("M4-1-S-R repair 11 (Sol P2-4): commands recorded before this upgrade still replay", () => {
+ // The code before this PR hashed the command exactly as the client sent it (reviewer included, ids as spelled) and stored the client's reviewer
+ // string on the immutable rows. These helpers reproduce that algorithm and those rows, so the tests start from a real preceding-version history.
+ const legacyDigest = (value:unknown) => createHash("sha256").update(JSON.stringify(value,Object.keys(value as object).sort())).digest("hex");
+ const legacyReviewer = "practice-owner";
+ const footprint = async (caseId:string) => (await admin.query("SELECT (SELECT count(*) FROM app.recovery_claim_revision WHERE case_id=$1)::int claims,(SELECT count(*) FROM app.recovery_case_event WHERE case_id=$1)::int events,(SELECT count(*) FROM app.audit_event WHERE subject_ref=$1::text)::int audits",[caseId])).rows[0];
+ const legacyOpen = async (raw:Record<string,unknown>) => {
+  const input = recoveryCaseCommandV1.parse(raw) as Extract<ReturnType<typeof recoveryCaseCommandV1.parse>,{action:"open"}>, hash = legacyDigest(input), caseId = randomUUID();
+  await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,$4,'GBP','identified',0,true,$5,$6,$7,$8,$9)",[caseId,tenant,job,input.claimedNetPence,input.caseType,input.counterparty,input.book,input.sourceType,JSON.stringify(input.sourceRefs)]);
+  await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,$5,'GBP',$6,$7)",[randomUUID(),tenant,job,caseId,input.claimedNetPence,input.reviewerRef,legacyDigest({caseId,revision:1,claimedNetPence:input.claimedNetPence,reviewerRef:input.reviewerRef})]);
+  await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified',$5,$6,$7)",[randomUUID(),tenant,job,caseId,input.reviewerRef,input.commandId,hash]);
+  return {caseId,hash};
+ };
+ const legacyEvent = async (raw:Record<string,unknown>,sequence:number,previousHash:string,eventType:string,from:string,to:string) => {
+  const input = recoveryCaseCommandV1.parse(raw) as unknown as {commandId:string;caseId:string;reviewerRef:string}, hash = legacyDigest(input);
+  await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash,previous_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",[randomUUID(),tenant,job,input.caseId.toLowerCase(),sequence,eventType,from,to,input.reviewerRef,input.commandId,hash,previousHash]);
+  return hash;
+ };
+ const legacyHistory = async (upperCase = false) => {
+  const openBody = {...openCase(),reviewerRef:legacyReviewer}, opened = await legacyOpen(openBody);
+  const id = upperCase ? opened.caseId.toUpperCase() : opened.caseId;
+  const assembleBody = command({action:"transition",caseId:id,eventType:"assemble_evidence",expectedRevision:2,reviewerRef:legacyReviewer});
+  const assembleHash = await legacyEvent(assembleBody,2,opened.hash,"assemble_evidence","identified","evidence_assembled");
+  const amendBody = command({action:"amend_claim",caseId:id,claimedNetPence:200000,expectedRevision:3,reviewerRef:legacyReviewer});
+  await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash,previous_hash) VALUES($1,$2,$3,$4,2,200000,'GBP',$5,$6,(SELECT subject_hash FROM app.recovery_claim_revision WHERE tenant_id=$2 AND case_id=$4 AND revision=1))",[randomUUID(),tenant,job,opened.caseId,legacyReviewer,legacyDigest(recoveryCaseCommandV1.parse(amendBody))]);
+  await legacyEvent(amendBody,3,assembleHash,"claim_amended","evidence_assembled","evidence_assembled");
+  return {caseId:opened.caseId,openBody,assembleBody,amendBody};
+ };
+ it.each([false,true])("an exact replay of a command the preceding version recorded (upper-case ids: %s) returns its case and writes nothing", async upperCase => {
+  const repo = new RecoveryCaseRepository(runtime), h = await legacyHistory(upperCase), before = await footprint(h.caseId);
+  const opened = await repo.command(ctx,job,h.openBody,owner);
+  expect(opened).toMatchObject({id:h.caseId,state:"evidence_assembled",claimedNetPence:200000,revision:5});
+  expect((await repo.command(ctx,job,h.assembleBody,owner)).id).toBe(h.caseId);
+  expect((await repo.command(ctx,job,h.amendBody,owner)).revision).toBe(5);
+  expect(await footprint(h.caseId)).toEqual(before);
+  // The history stays immutable: the stored rows still carry the preceding version's reviewer string and hashes.
+  expect((await admin.query("SELECT DISTINCT reviewer_ref FROM app.recovery_case_event WHERE case_id=$1",[h.caseId])).rows).toEqual([{reviewer_ref:legacyReviewer}]);
+ });
+ it("a changed payload under a historical command id is still a typed conflict, and so is the same command against another job", async () => {
+  const repo = new RecoveryCaseRepository(runtime), h = await legacyHistory(), before = await footprint(h.caseId);
+  await expect(repo.command(ctx,job,{...h.openBody,claimedNetPence:250001},owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  await expect(repo.command(ctx,job,{...h.openBody,counterparty:"Someone else"},owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  await expect(repo.command(ctx,job,{...h.assembleBody,eventType:"start_pursuit"},owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  await expect(repo.command(ctx,job,{...h.amendBody,claimedNetPence:200001},owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  await expect(repo.command(ctx,job,{...h.openBody,reviewerRef:"someone-else"},owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT"); // the stored reviewer is part of what was recorded
+  await expect(repo.command(ctx,wrongJob,h.openBody,owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  await expect(repo.command(ctx,wrongJob,h.assembleBody,owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  expect(await footprint(h.caseId)).toEqual(before);
+ });
+ it("still checks the membership first: a revoked owner cannot replay a historical command", async () => {
+  const repo = new RecoveryCaseRepository(runtime), h = await legacyHistory(), m = member();
+  await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[m.identityUserId]);
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at)VALUES($1,$2,$2,$3,'owner',now())",[m.membershipId,tenant,m.identityUserId]);
+  await expect(repo.command(ctx,job,h.openBody,m)).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");
+ });
+ it("new commands continue on a case whose history was written by the preceding version, and the new rows carry the verified reviewer", async () => {
+  const repo = new RecoveryCaseRepository(runtime), h = await legacyHistory();
+  const current = (await repo.list(ctx,job)).find(c=>c.id===h.caseId)!;
+  const next = command({action:"transition",caseId:h.caseId,eventType:"record_landing",amountPence:50000,expectedRevision:current.revision});
+  const landed = await repo.command(ctx,job,next,owner);
+  expect(landed).toMatchObject({state:"partially_landed",landedNetPence:50000,reviewerRef:ref(owner)});
+  expect((await repo.command(ctx,job,next,owner)).revision).toBe(landed.revision);
+  expect((await repo.command(ctx,job,h.openBody,owner)).id).toBe(h.caseId); // the historical command still replays after new activity
+ });
+ it("an eligibility command recorded with an upper-case case id by the preceding version replays; a changed one conflicts", async () => {
+  const repo = new RecoveryCaseRepository(runtime), h = await legacyHistory(), current = (await repo.list(ctx,job)).find(c=>c.id===h.caseId)!;
+  const review = {version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:h.caseId.toUpperCase(),scenario:"evidence_backed_withheld_payment",expectedCaseRevision:current.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1};
+  await admin.query("INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash,previous_hash)VALUES($1,$2,$3,$4,1,$5,1,'reference-d03.v1',1,'evidence_backed_withheld_payment','eligible_for_review',200000,'GBP','Recorded by the preceding version','[]'::jsonb,'reviewed',$6,$7,$8,NULL)",[randomUUID(),tenant,job,h.caseId,current.revision,legacyReviewer,review.commandId,legacyDigest(recoveryEligibilityCommandV1.parse(review))]);
+  const before = (await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_revision WHERE case_id=$1",[h.caseId])).rows[0].n;
+  expect((await repo.eligibilityCommand(ctx,job,review,owner)).id).toBe(h.caseId);
+  await expect(repo.eligibilityCommand(ctx,job,{...review,scenario:"manual_payment"},owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  await expect(repo.eligibilityCommand(ctx,wrongJob,review,owner)).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_revision WHERE case_id=$1",[h.caseId])).rows[0].n).toBe(before);
  });
 });

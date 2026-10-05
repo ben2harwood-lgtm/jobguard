@@ -137,3 +137,112 @@ test("amends a claim to what was received, closes it as recovered and reverses i
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
  await page.screenshot({path:`test-results/M4-1-S-amend-${testInfo.project.name}.png`,fullPage:true})
 });
+
+// M4-1-S-R repair 11. Each journey below starts from a freshly captured, scope-confirmed job, exactly like the journeys above.
+const confirmedJob=async(page:Page)=>{
+ await openReview(page);
+ for(const n of["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await page.getByRole("button",{name:`Accept ${n}`,exact:true}).click();
+ await page.getByRole("button",{name:"Dismiss Replace shelves",exact:true}).click();await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");
+ await page.getByRole("button",{name:"Confirm scope",exact:true}).click();
+ return(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!
+};
+const signedInSecondPage=async(browser:import("@playwright/test").Browser,jobId:string)=>{
+ const context=await browser.newContext(),secondPage=await context.newPage();
+ await secondPage.goto("/");await secondPage.getByRole("button",{name:"Start the demo"}).click();const skip=secondPage.getByRole("button",{name:"Skip tour"});await skip.waitFor({state:"visible"});await skip.click();
+ await secondPage.goto(`/jobs/${jobId}#recovery-cases`);
+ return{context,secondPage}
+};
+
+// Sol P2-2 and P2-3: a case never strands after write-off, reversal and re-landing, and a fully received case can close again after a dispute.
+test("a written-off case that is reversed and re-landed ends closed, and a fully received case closes again after a dispute",async({page},testInfo)=>{
+ const jobId=await confirmedJob(page);
+ const alert=page.locator("p[role=alert]"),received=page.getByLabel("Received (£)",{exact:true}),claim=page.getByLabel("New claimed amount (£)",{exact:true}),reversed=page.getByLabel("Reversed (£)",{exact:true});
+ // P2-2: claim 2,500.00 -> receive 1,000.00 -> write off 1,500.00 -> reverse 1,000.00 -> receive 1,000.00 again.
+ await button(page,"Open £2,500 withheld payment").click();await V(page,"case-claimed-net","£2,500.00");
+ await button(page,"Evidence assembled").click();await V(page,"case-state","Evidence assembled");
+ await received.fill("1000.00");await button(page,"Record a landed recovery").click();await V(page,"case-landed-net","£1,000.00");await V(page,"case-state","Partly received");
+ await button(page,"Write off remainder").click();await V(page,"case-state","Closed — no further recovery");await V(page,"case-outstanding-net","£0.00");await expect(page.getByText("£1,500.00 written off",{exact:true})).toBeVisible();
+ await reversed.fill("1000.00");await button(page,"Reverse a landed recovery").click();
+ await V(page,"case-state","Evidence assembled");await V(page,"case-landed-net","£0.00");await V(page,"case-outstanding-net","£1,000.00");
+ await received.fill("1000.00");await button(page,"Record a landed recovery").click();
+ await V(page,"case-state","Closed — no further recovery");await V(page,"case-landed-net","£1,000.00");await V(page,"case-outstanding-net","£0.00");await expect(page.getByText("£1,500.00 written off",{exact:true})).toBeVisible();
+ // Nothing is outstanding, so no further receipt, write-off or recovered closure is offered; the explicit reopen paths remain.
+ for(const name of["Record a landed recovery","Write off remainder","Close as recovered"])await expect(button(page,name)).toBeDisabled();
+ await expect(button(page,"Record dispute")).toBeEnabled();await expect(button(page,"Reverse a landed recovery")).toBeEnabled();
+ const midway=await(await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();
+ expect(midway.cases[0]).toMatchObject({claimedNetPence:250000,landedNetPence:100000,writtenOffPence:150000,outstandingNetPence:0,state:"closed_no_recovery"});
+ // The partial reversal and re-landing still balance: reverse 400.00 (400.00 outstanding), receive it again, closed again.
+ await reversed.fill("400.00");await button(page,"Reverse a landed recovery").click();await V(page,"case-state","Partly received");await V(page,"case-outstanding-net","£400.00");
+ await received.fill("400.00");await button(page,"Record a landed recovery").click();await V(page,"case-state","Closed — no further recovery");await V(page,"case-outstanding-net","£0.00");
+ // P2-3: a fully received case, closed as recovered, disputed, then closed as recovered again with no new money event.
+ await button(page,"Open £320 withheld payment").click();await V(page,"case-claimed-net","£320.00");
+ await button(page,"Evidence assembled").click();await V(page,"case-state","Evidence assembled");
+ await received.fill("320.00");await button(page,"Record a landed recovery").click();await V(page,"case-state","Received in full");
+ await button(page,"Close as recovered").click();await V(page,"case-state","Closed — recovered");
+ await button(page,"Record dispute").click();await V(page,"case-state","In dispute / negotiation");await V(page,"case-landed-net","£320.00");await V(page,"case-outstanding-net","£0.00");
+ await expect(button(page,"Close as recovered")).toBeEnabled();
+ const revisionBefore=Number(await page.getByTestId("case-revision").textContent());
+ await button(page,"Close as recovered").click();await V(page,"case-state","Closed — recovered");await V(page,"case-landed-net","£320.00");await V(page,"case-outstanding-net","£0.00");
+ expect(Number(await page.getByTestId("case-revision").textContent())).toBe(revisionBefore+1);
+ // The guard against closing with principal outstanding holds: dispute again, raise the claim, and the case cannot close until the rest is received.
+ await button(page,"Record dispute").click();await V(page,"case-state","In dispute / negotiation");
+ await claim.fill("400.00");await button(page,"Amend claim").click();await V(page,"case-claimed-net","£400.00");await V(page,"case-outstanding-net","£80.00");
+ await expect(button(page,"Close as recovered")).toBeDisabled();
+ await received.fill("80.00");await button(page,"Record a landed recovery").click();await V(page,"case-state","Received in full");
+ await button(page,"Close as recovered").click();await V(page,"case-state","Closed — recovered");await V(page,"case-claimed-net","£400.00");await V(page,"case-landed-net","£400.00");
+ await expect(alert).toHaveCount(0);
+ const persisted=await(await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();
+ expect(persisted.cases[0]).toMatchObject({claimedNetPence:250000,landedNetPence:100000,writtenOffPence:150000,outstandingNetPence:0,state:"closed_no_recovery"});
+ expect(persisted.cases[1]).toMatchObject({claimedNetPence:40000,landedNetPence:40000,outstandingNetPence:0,state:"closed_recovered"});
+ await page.reload();await V(page,"case-state","Closed — recovered");
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+ await page.screenshot({path:`test-results/M4-1-S-lifecycle-${testInfo.project.name}.png`,fullPage:true})
+});
+
+// Sol P2-5: two browsers open cases at the same moment; each one selects exactly the case its own command opened.
+test("two browsers opening cases at the same time each select the case they opened",async({page,browser})=>{
+ const jobId=await confirmedJob(page);
+ const{context,secondPage}=await signedInSecondPage(browser,jobId);
+ // Both workbenches have finished their first read (an empty register), so neither has seen the other's cases.
+ await expect(page.getByText("No recovery cases yet.",{exact:true})).toBeVisible();await expect(secondPage.getByText("No recovery cases yet.",{exact:true})).toBeVisible();
+ const open=(target:Page,name:string)=>button(target,name).click();
+ // Three rounds with different cases, each round fired together from both browsers.
+ const rounds:Array<[string,string,string,string]>=[["Open £320 withheld payment","£320.00","Open £2,500 withheld payment","£2,500.00"],["Open £2,500 withheld payment","£2,500.00","Open £320 withheld payment","£320.00"],["Open £320 withheld payment","£320.00","Open £2,500 withheld payment","£2,500.00"]];
+ for(const[firstName,firstAmount,secondName,secondAmount]of rounds){
+  await Promise.all([open(page,firstName),open(secondPage,secondName)]);
+  await V(page,"case-claimed-net",firstAmount);await V(secondPage,"case-claimed-net",secondAmount);
+ }
+ // The authoritative list holds all six cases, and a case opened later is never mistaken for the one that was just opened.
+ expect((await(await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()).cases).toHaveLength(6);
+ await context.close()
+});
+
+// Sol P3-8: a case list that is still loading, or that could not be read, is never presented as an empty register.
+test("an unread case list is shown as loading or failed, never as empty, and the failure can be retried",async({page})=>{
+ const jobId=await confirmedJob(page);
+ const readUrl=`**/api/jobs/${jobId}/recovery-cases`,alert=page.locator("p[role=alert]"),empty=page.getByText("No recovery cases yet.",{exact:true});
+ const isRead=(route:import("@playwright/test").Route)=>route.request().method()==="GET";
+ // Loading: the first read is held open, and nothing claims the register is empty meanwhile.
+ let release:()=>void=()=>undefined;const gate=new Promise<void>(resolve=>{release=resolve});
+ await page.route(readUrl,async route=>{if(!isRead(route))return route.continue();await gate;await route.continue()});
+ await page.reload();
+ await expect(page.getByRole("status").filter({hasText:"Loading recovery cases"})).toBeVisible();await expect(empty).toHaveCount(0);await expect(alert).toHaveCount(0);
+ release();await expect(empty).toBeVisible();await expect(page.getByRole("status").filter({hasText:"Loading recovery cases"})).toHaveCount(0);
+ await page.unroute(readUrl);
+ // Transport failure: the read is aborted. The failure is announced and focused, the empty claim is not made, and Try again works once the read can succeed.
+ await page.route(readUrl,route=>isRead(route)?route.abort("failed"):route.continue());
+ await page.reload();
+ await expect(alert).toContainText("could not be loaded");await expect(alert).toBeFocused();await expect(empty).toHaveCount(0);
+ await expect(button(page,"Try again")).toBeVisible();await expectTouchTarget(button(page,"Try again"));
+ await button(page,"Try again").click();await expect(alert).toContainText("could not be loaded");await expect(alert).toBeFocused();await expect(empty).toHaveCount(0);
+ await page.unroute(readUrl);
+ await button(page,"Try again").click();
+ await expect(empty).toBeVisible();await expect(alert).toHaveCount(0);await expect(button(page,"Try again")).toHaveCount(0);
+ // With a case on file, a later failed read still does not show an empty register or last session's numbers as current.
+ await button(page,"Open £320 withheld payment").click();await V(page,"case-claimed-net","£320.00");
+ await page.route(readUrl,route=>isRead(route)?route.abort("failed"):route.continue());
+ await page.reload();
+ await expect(alert).toContainText("could not be loaded");await expect(alert).toBeFocused();await expect(empty).toHaveCount(0);await expect(page.getByTestId("case-claimed-net")).toHaveCount(0);
+ await page.unroute(readUrl);
+ await button(page,"Try again").click();await V(page,"case-claimed-net","£320.00");await expect(alert).toHaveCount(0)
+});

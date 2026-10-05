@@ -191,4 +191,58 @@ describe("complete recovery state machine",()=>{
    expect(() => amended("landed", { currentClaimedPence: 100000, claimedPence: 100001 })).toThrowError("RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE");
   });
  });
+ describe("M4-1-S-R repair 11, Sol P2-2: a case that exhausts its claim by receipt plus write-off keeps the written-off disposition", () => {
+  // Claim 2,500.00 -> receive 1,000.00 -> write off 1,500.00 -> reverse 1,000.00 -> receive 1,000.00 again.
+  const claimed = 250000;
+  it("does not strand the case in partially_landed with nothing outstanding", () => {
+   const received = transitionRecoveryCase({ claimedPence: claimed, state: "evidence_assembled", landedPence: 0, event: "record_landing", amountPence: 100000 });
+   const writtenOff = transitionRecoveryCase({ claimedPence: claimed, state: received.state, landedPence: received.landedPence, event: "write_off" });
+   expect(writtenOff).toEqual({ state: "closed_no_recovery", landedPence: 100000, writtenOffPence: 150000 });
+   const reversed = transitionRecoveryCase({ claimedPence: claimed, state: writtenOff.state, landedPence: writtenOff.landedPence, writtenOffPence: writtenOff.writtenOffPence, event: "reverse_landing", amountPence: 100000 });
+   expect(reversed).toEqual({ state: "evidence_assembled", landedPence: 0, writtenOffPence: 0 });
+   const relanded = transitionRecoveryCase({ claimedPence: claimed, state: reversed.state, landedPence: reversed.landedPence, writtenOffPence: 150000, event: "record_landing", amountPence: 100000 });
+   expect(relanded).toEqual({ state: "closed_no_recovery", landedPence: 100000, writtenOffPence: 0 });
+   // Nothing is outstanding (2,500.00 = 1,000.00 received + 1,500.00 written off): no further receipt, write-off or recovered closure, but the explicit reopen paths remain.
+   const settled = { claimedPence: claimed, state: relanded.state, landedPence: relanded.landedPence, writtenOffPence: 150000 } as const;
+   for (const event of ["record_landing", "write_off", "close_recovered"] as const) expect(() => transitionRecoveryCase({ ...settled, event, amountPence: 1 })).toThrowError(/is not allowed/);
+   expect(transitionRecoveryCase({ ...settled, event: "dispute" }).state).toBe("negotiating");
+   expect(transitionRecoveryCase({ ...settled, event: "reverse_landing", amountPence: 100000 }).state).toBe("evidence_assembled");
+  });
+  it.each(["evidence_assembled", "pursuing", "negotiating", "partially_landed"] as const)("a final receipt from %s that uses up claimed minus written-off records closed_no_recovery", state => {
+   expect(transitionRecoveryCase({ claimedPence: claimed, state, landedPence: 60000, writtenOffPence: 150000, event: "record_landing", amountPence: 40000 }))
+    .toEqual({ state: "closed_no_recovery", landedPence: 100000, writtenOffPence: 0 });
+  });
+  it("still records landed when the whole claim is received with nothing written off, and partially_landed while principal remains outstanding", () => {
+   expect(transitionRecoveryCase({ claimedPence: claimed, state: "partially_landed", landedPence: 100000, event: "record_landing", amountPence: 150000 })).toMatchObject({ state: "landed", landedPence: 250000 });
+   expect(transitionRecoveryCase({ claimedPence: claimed, state: "evidence_assembled", landedPence: 0, writtenOffPence: 150000, event: "record_landing", amountPence: 99999 })).toMatchObject({ state: "partially_landed" });
+  });
+ });
+ describe("M4-1-S-R repair 11, Sol P2-3: a fully received case can close as recovered again after a dispute", () => {
+  const claimed = 250000;
+  it.each(["landed", "closed_recovered"] as const)("%s -> dispute -> close_recovered closes it again with no new money event", from => {
+   const disputed = transitionRecoveryCase({ claimedPence: claimed, state: from, landedPence: claimed, event: "dispute" });
+   expect(disputed.state).toBe("negotiating");
+   expect(transitionRecoveryCase({ claimedPence: claimed, state: disputed.state, landedPence: disputed.landedPence, event: "close_recovered" }))
+    .toEqual({ state: "closed_recovered", landedPence: claimed, writtenOffPence: 0 });
+  });
+  it("also closes after the dispute was resolved by resuming the chase", () => {
+   const resumed = transitionRecoveryCase({ claimedPence: claimed, state: "negotiating", landedPence: claimed, event: "resume_pursuit" });
+   expect(resumed.state).toBe("pursuing");
+   expect(transitionRecoveryCase({ claimedPence: claimed, state: resumed.state, landedPence: resumed.landedPence, event: "close_recovered" }).state).toBe("closed_recovered");
+  });
+  it.each(["negotiating", "pursuing"] as const)("still refuses a recovered closure from %s while any principal is outstanding or written off", state => {
+   expect(() => transitionRecoveryCase({ claimedPence: claimed, state, landedPence: 249999, event: "close_recovered" })).toThrowError(/is not allowed/);
+   expect(() => transitionRecoveryCase({ claimedPence: claimed, state, landedPence: 0, event: "close_recovered" })).toThrowError(/is not allowed/);
+   expect(() => transitionRecoveryCase({ claimedPence: claimed, state, landedPence: 100000, writtenOffPence: 150000, event: "close_recovered" })).toThrowError(/is not allowed/);
+  });
+  it("keeps refusing a recovered closure from every other open or closed state, whatever has been received", () => {
+   for (const state of ["identified", "evidence_assembled", "partially_landed", "closed_recovered", "closed_no_recovery", "prevented"] as const)
+    expect(() => transitionRecoveryCase({ claimedPence: claimed, state, landedPence: claimed, event: "close_recovered" })).toThrowError(/is not allowed/);
+  });
+  it("after a dispute and an upward amendment the rest must be received before the case can close", () => {
+   expect(() => transitionRecoveryCase({ claimedPence: 300000, state: "negotiating", landedPence: 250000, event: "close_recovered" })).toThrowError(/is not allowed/);
+   const rest = transitionRecoveryCase({ claimedPence: 300000, state: "negotiating", landedPence: 250000, event: "record_landing", amountPence: 50000 });
+   expect(transitionRecoveryCase({ claimedPence: 300000, state: rest.state, landedPence: rest.landedPence, event: "close_recovered" }).state).toBe("closed_recovered");
+  });
+ });
 });

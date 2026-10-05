@@ -8,7 +8,7 @@ afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 const command=()=>({version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:randomUUID(),expectedCaseRevision:2,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"evidence_backed_withheld_payment"});
 it("passes the server-selected synthetic membership for database verification, never a reviewer literal",async()=>{
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
- const persist=vi.spyOn(RecoveryCaseRepository.prototype,"eligibilityCommand").mockResolvedValue(undefined as never);
+ const persist=vi.spyOn(RecoveryCaseRepository.prototype,"eligibilityCommand").mockResolvedValue({id:randomUUID()} as never);
  vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([]);
  const body=command(),job=randomUUID();
  await new RecoveryCaseApplication({} as Pool).eligibility(job,body,randomUUID());
@@ -38,4 +38,13 @@ it("lists nothing when the membership and job lookup itself cannot be completed"
  const list=vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([]);
  await expect(new RecoveryCaseApplication({} as Pool).list(randomUUID())).rejects.toThrow("DATABASE_UNAVAILABLE");
  expect(list).not.toHaveBeenCalled();
+});
+// M4-1-S-R repair 11 (Sol P2-5): an eligibility command also names the case it affected.
+it("returns the id of the case an eligibility command affected, as the repository returned it",async()=>{
+ vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+ const affected=randomUUID(),later=randomUUID();
+ vi.spyOn(RecoveryCaseRepository.prototype,"eligibilityCommand").mockResolvedValue({id:affected} as never);
+ vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([{id:affected},{id:later}] as never);
+ const response=await new RecoveryCaseApplication({} as Pool).eligibility(randomUUID(),command(),randomUUID());
+ expect(response.affectedCaseId).toBe(affected);
 });
