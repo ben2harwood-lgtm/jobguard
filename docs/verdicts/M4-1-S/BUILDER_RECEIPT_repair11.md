@@ -50,7 +50,7 @@ Every new test was written and committed (`0a4de46`) before the fix. Red runs we
 
 ## Commands run on the final code
 
-All on code head `ec8420699b065bb2ee53bc79875337f5028711e8` (the only later commit is this docs-only receipt). Every database and browser command ran inside `heavy-slot m4-1-s-repair`; the e2e wrapper waited inside the slot for ports 3000 and 55432 to be free. Logs are in the builder's scratchpad `m41r11/logs/`.
+All on code head `ec8420699b065bb2ee53bc79875337f5028711e8` (the later commits are docs-only: this receipt and a line-reference correction to it). Every database and browser command ran inside `heavy-slot m4-1-s-repair`; the e2e wrapper waited inside the slot for ports 3000 and 55432 to be free. Logs are in the builder's scratchpad `m41r11/logs/`.
 
 | Command | Exit | Result |
 |---|---:|---|
