@@ -9,6 +9,7 @@ import { AdoptInFlightJobMutation, appendAuditBatch, MIGRATION_URLS, migrate, Jo
 import { closeTestPools } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
+const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0051_job_parties.sql"))!;
 const context = { tenantId: tenant } as VerifiedTenantContext;
 const foreignContext = { tenantId: foreignTenant } as VerifiedTenantContext;
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, repository: JobPartiesRepository, dir: string;
@@ -54,7 +55,7 @@ beforeAll(async () => {
   postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
   await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
   // Upgrade from the exact previous supported schema with each lifecycle state.
-  for (const url of MIGRATION_URLS.slice(0,-1)) await admin.query(await readFile(url,"utf8"));
+  for (const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.indexOf(migrationURL))) await admin.query(await readFile(url,"utf8"));
   const user=randomUUID(),account=randomUUID();
   await admin.query(`INSERT INTO control_plane.tenant(id) VALUES($1),($2)`,[tenant,foreignTenant]);
   await admin.query(`INSERT INTO identity.identity_user(id) VALUES($1)`,[user]);
@@ -73,7 +74,7 @@ beforeAll(async () => {
   const invoiceClient=await admin.connect();
   try {await invoiceClient.query("BEGIN");await invoiceClient.query(`SELECT set_config('app.tenant_id',$1,true)`,[tenant]);await invoiceClient.query(`SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'fixture@example.invalid','2026-09-17')`,[tenant,legacyJobs[0],finalRevision,member,randomUUID()]);await invoiceClient.query("COMMIT");}catch(error){await invoiceClient.query("ROLLBACK");throw error;}finally{invoiceClient.release();}
   legacyInvoice=(await admin.query(`SELECT id,pdf_bytes,pdf_sha256 FROM app.customer_invoice WHERE tenant_id=$1`,[tenant])).rows[0];
-  const migration=await readFile(MIGRATION_URLS.at(-1)!,"utf8");
+  const migration=await readFile(migrationURL,"utf8");
   await admin.query(migration.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);"));
   await admin.query(`CREATE ROLE ch3a_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch3a_login;`);
   runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"ch3a_login",password:"synthetic",max:5});repository=new JobPartiesRepository(runtime);
@@ -183,9 +184,9 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
   it("fresh installation invents no non-synthetic parties and raises details-needed Decisions",async()=>{
     await admin.query(`CREATE DATABASE ch3a_fresh`);const fresh=new Pool({...admin.options,password:"synthetic",database:"ch3a_fresh"});
     try{
-      for(const url of MIGRATION_URLS.slice(0,-1))await fresh.query(await readFile(url,"utf8"));
+      for(const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.indexOf(migrationURL)))await fresh.query(await readFile(url,"utf8"));
       const t=randomUUID(),j=randomUUID();await fresh.query(`INSERT INTO control_plane.tenant(id) VALUES($1)`,[t]);await fresh.query(`INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'No invented details')`,[t,j]);
-      await fresh.query(await readFile(MIGRATION_URLS.at(-1)!,"utf8"));
+      await fresh.query(await readFile(migrationURL,"utf8"));
       expect((await fresh.query(`SELECT count(*)::int n FROM app.customer`)).rows[0].n).toBe(0);
       expect((await fresh.query(`SELECT action_type FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2`,[t,j])).rows[0].action_type).toBe("job.parties.details_needed");
     }finally{await fresh.end();}
