@@ -9,6 +9,11 @@ import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 // therefore canonicalised BEFORE it is hashed, locked, queried or looked up, so an upper-case case or command id is the same command, never a commit that returns nothing.
 const canonicalIds=<T extends {commandId:string;caseId?:string}>(input:T):T=>({...input,commandId:input.commandId.toLowerCase(),...(input.caseId===undefined?{}:{caseId:input.caseId.toLowerCase()})});
 const digest=(value:unknown)=>createHash("sha256").update(JSON.stringify(value,Object.keys(value as object).sort())).digest("hex");
+// Replay compatibility across this upgrade. Before it, a command was hashed exactly as the client sent it (client reviewer included, ids as spelled) and the
+// client's reviewer string was stored on the row. Those rows are immutable and are never rewritten, so a replay is accepted when the stored hash is either this
+// version's hash or that preceding hash of the very same submitted body, and, for a case command, the stored reviewer is the reviewer that body named. Nothing else
+// is relaxed: the membership check, the job binding and the changed-payload conflict all run exactly as before.
+const sameCommand=(stored:{hash:string;reviewer?:string},current:string,legacy?:{hash:string;reviewer?:string})=>stored.hash===current||(legacy!==undefined&&stored.hash===legacy.hash&&stored.reviewer===legacy.reviewer);
 export type EligibilityView={revision:number;caseRevision:number;evidenceRevision:number;policyVersion:"reference-d03.v1";policyRevision:number;classification:string;eligibleNetPence:number|null;reason:string;citations:string[];status:"reviewed"|"approved"|"superseded";reviewerRef:string};
 export type RecoveryCaseView={id:string;jobId:string;caseType:string;state:RecoveryCaseState;claimedNetPence:number;landedNetPence:number;outstandingNetPence:number;writtenOffPence:number;currency:"GBP";counterparty:string;book:string;sourceType:string;sourceRefs:string[];sources:RecoverySourceView[];feeJobLiabilityPence:number;feeObligationsPostedPence:number;feeCompensationsPostedPence:number;approvedLandedNetPence:number;revision:number;reviewerRef:string;createdDate:string;eligibility:EligibilityView|null};
 
@@ -31,7 +36,7 @@ export class RecoveryCaseRepository{
    FROM app.recovery_case_current c LEFT JOIN LATERAL(SELECT * FROM app.recovery_eligibility_revision r WHERE r.tenant_id=c.tenant_id AND r.case_id=c.id ORDER BY revision DESC LIMIT 1)er ON true WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.claim_revision IS NOT NULL ORDER BY c.created_at,c.id`,[context.tenantId,jobId]);
   const out:RecoveryCaseView[]=[];for(const x of rows.rows as any[]){const sources=await resolveRecoverySources(db,context.tenantId,jobId,x.source_type,x.source_refs).catch(failure=>{if(failure instanceof RecoverySourceError)return (x.source_refs as string[]).map(ref=>({ref,kind:"Unresolved source",label:ref,recorded:false}));throw failure});out.push(({id:x.id,jobId:x.job_id,caseType:x.case_type,state:x.state,claimedNetPence:Number(x.claim_pence),landedNetPence:Number(x.landed),outstandingNetPence:Number(x.claim_pence)-Number(x.landed)-Number(x.written_off),writtenOffPence:Number(x.written_off),currency:"GBP",counterparty:x.counterparty,book:x.book,sourceType:x.source_type,sourceRefs:x.source_refs,sources,feeJobLiabilityPence:Number(x.fee_job_liability_pence),feeObligationsPostedPence:Number(x.fee_obligations_posted_pence),feeCompensationsPostedPence:Number(x.fee_compensations_posted_pence),approvedLandedNetPence:Number(x.approved_landed),revision:Number(x.revision),reviewerRef:x.reviewer_ref,createdDate:new Date(x.created_at).toISOString().slice(0,10),eligibility:x.eligibility_revision?{revision:Number(x.eligibility_revision),caseRevision:Number(x.eligibility_case_revision),evidenceRevision:Number(x.evidence_revision),policyVersion:x.policy_version,policyRevision:Number(x.policy_revision),classification:x.classification,eligibleNetPence:x.eligible_net_pence===null?null:Number(x.eligible_net_pence),reason:x.eligibility_reason,citations:x.citations,status:x.eligibility_status,reviewerRef:x.eligibility_reviewer}:null}));}return out;
  })}
- async eligibilityCommand(context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView>{const input=canonicalIds(recoveryEligibilityCommandV1.parse(raw)),hash=digest(input);const caseId=input.caseId;await withTenant(this.pool,context,async db=>{
+ async eligibilityCommand(context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView>{const sent=recoveryEligibilityCommandV1.parse(raw),input=canonicalIds(sent),hash=digest(input),legacy={hash:digest(sent)};const caseId=input.caseId;await withTenant(this.pool,context,async db=>{
   // Recheck the server-selected principal in the write transaction, including replays.
   // Hold the membership against revocation until the revision and audit commit.
   // FOR SHARE needs UPDATE on app.membership, which jobguard_runtime already holds (0000_tenancy.sql). Do not tighten that grant without replacing this lock.
@@ -42,7 +47,7 @@ export class RecoveryCaseRepository{
   if(membership.rowCount!==1)throw new RecoveryEligibilityError("ELIGIBILITY_REVIEWER_FORBIDDEN");
   const authorizedReviewer=`membership:${membership.rows[0]!.id}`;
   await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,caseId]);
-  const replay=await db.$client.query<any>("SELECT subject_hash,job_id FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId]);if(replay.rowCount){if(replay.rows[0].subject_hash!==hash||replay.rows[0].job_id!==jobId.toLowerCase())throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");return;}
+  const replay=await db.$client.query<any>("SELECT subject_hash,job_id FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId]);if(replay.rowCount){if(!sameCommand({hash:replay.rows[0].subject_hash},hash,legacy)||replay.rows[0].job_id!==jobId.toLowerCase())throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");return;}
   const current=await db.$client.query<any>(`SELECT c.case_type,c.source_refs,q.claimed_net_pence,q.revision claim_revision,(SELECT count(*) FROM app.recovery_case_event e WHERE e.tenant_id=c.tenant_id AND e.case_id=c.id) event_count FROM app.recovery_case c JOIN LATERAL(SELECT * FROM app.recovery_claim_revision q WHERE q.tenant_id=c.tenant_id AND q.case_id=c.id ORDER BY revision DESC LIMIT 1)q ON true WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.id=$3`,[context.tenantId,jobId,caseId]);
   if(!current.rowCount)throw new Error("RECOVERY_CASE_NOT_FOUND");const c=current.rows[0],caseRevision=Number(c.claim_revision)+Number(c.event_count);if(input.expectedCaseRevision!==caseRevision)throw new Error("ELIGIBILITY_STALE_REVISION");
   const latest=await db.$client.query<any>("SELECT * FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND case_id=$2 ORDER BY revision DESC LIMIT 1",[context.tenantId,caseId]);const old=latest.rows[0],revision=Number(old?.revision??0)+1;
@@ -56,7 +61,7 @@ export class RecoveryCaseRepository{
  async command(context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView>{
   if(!reviewer?.membershipId||!reviewer?.identityUserId)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
   // The caller supplies the server-selected principal; any client reviewer field is ignored and replaced below.
-  const parsed=canonicalIds(recoveryCaseCommandV1.parse(raw));let caseId="";await withTenant(this.pool,context,async db=>{
+  const sent=recoveryCaseCommandV1.parse(raw),parsed=canonicalIds(sent);let caseId="";await withTenant(this.pool,context,async db=>{
   // Recheck the principal INSIDE the write transaction, before replay, the advisory lock or any write, and hold the membership against
   // revocation until the case, claim, event and audit commit (FOR SHARE needs UPDATE on app.membership, which jobguard_runtime already holds; do not tighten that grant without replacing this lock).
   const membership=await db.$client.query<{id:string}>(`SELECT id FROM app.membership
@@ -64,14 +69,14 @@ export class RecoveryCaseRepository{
    AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())
    FOR SHARE`,[context.tenantId,reviewer.membershipId,reviewer.identityUserId]);
   if(membership.rowCount!==1)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
-  const input={...parsed,reviewerRef:`membership:${membership.rows[0]!.id}`},hash=digest(input);
+  const input={...parsed,reviewerRef:`membership:${membership.rows[0]!.id}`},hash=digest(input),legacy=sent.reviewerRef===undefined?undefined:{hash:digest(sent),reviewer:sent.reviewerRef};
   // Lock order shared with app.approve_synthetic_landing: case advisory key first, then
   // (inside the routine) job row and case row. The runtime role cannot lock job rows
   // (no UPDATE privilege), so it must never take a job-row lock before this key.
   await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,(input.action==="open"?jobId:input.caseId).toLowerCase()]);
-  const replay=await db.$client.query<any>("SELECT case_id,payload_hash,job_id FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId]);
+  const replay=await db.$client.query<any>("SELECT case_id,payload_hash,job_id,reviewer_ref FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId]);
   // A replay must target the job the command was first recorded for; the same id and body against another job is a conflict, never that job's case list.
-  if(replay.rowCount){if(replay.rows[0].payload_hash!==hash||replay.rows[0].job_id!==jobId.toLowerCase())throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");caseId=replay.rows[0].case_id;return;}
+  if(replay.rowCount){if(!sameCommand({hash:replay.rows[0].payload_hash,reviewer:replay.rows[0].reviewer_ref},hash,legacy)||replay.rows[0].job_id!==jobId.toLowerCase())throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");caseId=replay.rows[0].case_id;return;}
   const job=await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2",[context.tenantId,jobId]);if(!job.rowCount)throw new Error("RECOVERY_JOB_NOT_FOUND");
   if(input.action==="open"){
    assertRecoverySources(input);
