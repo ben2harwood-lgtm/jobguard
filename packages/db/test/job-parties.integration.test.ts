@@ -36,6 +36,19 @@ const saveParties = async (job: string, unit = "Flat 1") => {
   const parties = { version: "job-parties.v1", customerRevisionId: c.revisionId, siteRevisionId: s.revisionId };
   return { c, s, parties };
 };
+describe("individual address lines cannot contain CR/LF", () => {
+  it.each(["Second\nThird", "Second\rThird", "Second\r\nThird"])("rejects command and direct runtime SQL without persisting a site: %j", async line => {
+    const job = await createJob(), input = command("create_site", { site: { ...site, addressLines: ["First line", line] } });
+    await expect(repository.command(context, member, job, input)).rejects.toMatchObject({ code: "INVALID_PARTIES" });
+    expect((await admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, input.commandId])).rowCount).toBe(0);
+    const siteId = randomUUID();
+    await expect(withTenant(runtime, context, async db => {
+      await db.$client.query("INSERT INTO app.site(tenant_id,id) VALUES($1,$2)", [tenant, siteId]);
+      await db.$client.query("INSERT INTO app.site_revision(tenant_id,id,site_id,revision,payload,match_key) VALUES($1,$2,$3,1,$4,'[]')", [tenant, randomUUID(), siteId, JSON.stringify({ ...site, postcode: "SW1A 1AA", addressLines: ["First line", line] })]);
+    })).rejects.toMatchObject({ code: "23514", constraint: "site_revision_address_lines_no_cr_lf" });
+    expect((await admin.query("SELECT 1 FROM app.site WHERE tenant_id=$1 AND id=$2", [tenant, siteId])).rowCount).toBe(0);
+  });
+});
 beforeAll(async () => {
   dir=await mkdtemp(join(tmpdir(),"ch3a-pg16-"));const port=58000+Math.floor(Math.random()*300);
   postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});

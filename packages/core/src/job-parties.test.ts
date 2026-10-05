@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { customerV1, isIndividual, jobPartiesCommandV1, siteMatchKey, siteV1, ukPostcodeV1 } from "./job-parties.js";
 const site = { version: "site.v1", addressLines: ["14 Fictional Street"], town: "London", postcode: "sw1a1aa" };
 describe("customer.v1, site.v1 and job-parties.v1", () => {
+  it.each(["Second\nThird", "Second\rThird", "Second\r\nThird", "\nSecond", "Second\r"])("rejects CR/LF in an individual address line: %j", line => {
+    const invalidSite = { ...site, addressLines: ["First line", line] };
+    expect(siteV1.safeParse(invalidSite).success).toBe(false);
+    expect(jobPartiesCommandV1.safeParse({ version: "job-parties-command.v1", commandId: "11111111-1111-4111-8111-111111111111", action: "create_site", site: invalidSite }).success).toBe(false);
+  });
   it("normalizes UK postcodes and rejects malformed postcodes, UPRNs and types", () => {
     for (const postcode of ["sw1a1aa", "SW1A  1AA", " sw1a 1aa "]) expect(ukPostcodeV1.parse(postcode)).toBe("SW1A 1AA");
     for (const postcode of ["N1 1AA", "M1 1AE", "B33 8TH", "CR2 6XH", "DN55 1PT", "GIR 0AA", "EC1A 1BB", "W1A 0AX"]) expect(ukPostcodeV1.safeParse(postcode).success).toBe(true);

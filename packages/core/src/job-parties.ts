@@ -3,6 +3,8 @@ import { z } from "zod";
 export const customerTypes = ["person", "business", "landlord_or_agent", "insurer", "main_contractor", "housing_association", "local_authority"] as const;
 const text = z.string().trim().min(1).max(160);
 const optionalText = text.optional();
+// Check raw input before trimming: each stored string is one line in the address editor.
+const addressLine = z.string().regex(/^[^\r\n]*$/u).pipe(text);
 export const ukPostcodeV1 = z.string().trim().transform(value => value.toUpperCase().replace(/\s+/gu, ""))
   .pipe(z.string().regex(/^(GIR0AA|[A-PR-UWYZ](?:[0-9][0-9A-HJKPSTUW]?|[A-HK-Y][0-9][0-9ABEHMNPRVWXY]?)[0-9][ABD-HJLNP-UW-Z]{2})$/u))
   .transform(value => `${value.slice(0, -3)} ${value.slice(-3)}`);
@@ -12,7 +14,7 @@ export const customerV1 = z.object({ version: z.literal("customer.v1"), name: te
 });
 export type CustomerV1 = z.infer<typeof customerV1>;
 export const isIndividual = (customer: Pick<CustomerV1, "type">): boolean => customer.type === "person";
-export const siteV1 = z.object({ version: z.literal("site.v1"), addressLines: z.array(text).min(1).max(4), town: text,
+export const siteV1 = z.object({ version: z.literal("site.v1"), addressLines: z.array(addressLine).min(1).max(4), town: text,
   postcode: ukPostcodeV1, unit: optionalText, uprn: z.string().regex(/^\d{1,12}$/u).optional(),
 });
 export type SiteV1 = z.infer<typeof siteV1>;

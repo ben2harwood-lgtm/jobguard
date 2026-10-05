@@ -124,6 +124,13 @@ hashes are untouched. New quote PDFs and synthetic invoices include the exact
 party revisions. Customer/site/binding mutations are denied to runtime; only the
 narrow binding routine can advance the current pointer and job revision.
 
+Each of the one-to-four address-line strings rejects CR/LF in the versioned
+schema before trimming (`INVALID_PARTIES`) and in the named database constraint
+`site_revision_address_lines_no_cr_lf`. This preserves the editor's one-row-per-line
+round trip and unchanged-save identity. The unapplied 0051 migration is amended
+in place; no existing party history is rewritten. After rollout, forward-fix a
+constraint under review rather than dropping immutable revisions or bindings.
+
 Encoding: 0051 needs a UTF8 database. Site match keys apply NFKC `normalize()`,
 which PostgreSQL only allows when the server encoding is UTF8 (otherwise every
 site revision insert fails with "Unicode normalization can only be performed if

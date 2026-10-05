@@ -24,6 +24,8 @@ CREATE TABLE app.site_revision (
  AND length(payload->>'town') BETWEEN 1 AND 160 AND payload->>'postcode' ~ '^(GIR 0AA|[A-PR-UWYZ]([0-9][0-9A-HJKPSTUW]?|[A-HK-Y][0-9][0-9ABEHMNPRVWXY]?) [0-9][ABD-HJLNP-UW-Z]{2})$'
  AND (NOT payload ? 'uprn' OR payload->>'uprn' ~ '^[0-9]{1,12}$') AND payload ?& ARRAY['version','addressLines','town','postcode'] AND jsonb_typeof(payload->'town')='string' AND jsonb_typeof(payload->'postcode')='string' AND (NOT payload ? 'unit' OR jsonb_typeof(payload->'unit')='string') AND (NOT payload ? 'uprn' OR jsonb_typeof(payload->'uprn')='string')),
  match_key jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+ -- There are at most four lines. Reject CR/LF in each stored string even for direct runtime inserts.
+ CONSTRAINT site_revision_address_lines_no_cr_lf CHECK(concat_ws('',payload->'addressLines'->>0,payload->'addressLines'->>1,payload->'addressLines'->>2,payload->'addressLines'->>3) !~ E'[\\r\\n]'),
  PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,site_id,revision), UNIQUE(tenant_id,site_id,id),
  FOREIGN KEY(tenant_id,site_id) REFERENCES app.site(tenant_id,id)
 );

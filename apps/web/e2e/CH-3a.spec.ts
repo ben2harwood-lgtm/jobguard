@@ -234,6 +234,55 @@ async function saveAndWait(page: Page) {
 }
 const MORE_LINES = "More address lines (optional, one per line)";
 
+for (const [label, field, value] of [["Town", "town", "Fictional Borough"], ["UK postcode", "postcode", "M1 1AE"], ["UPRN (optional)", "uprn", "987654321"]]) {
+  test(`CH-3a editing ${label} after confirming reuse persists the edit as a separate site`, async ({ page, browser }) => {
+    const jobId = await reviewJob(page);
+    await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+    const before = await partiesView(page, jobId), actions = partyActions(page, jobId);
+    await page.getByLabel("Possible existing places").selectOption(before.currentIds.siteId);
+    await page.getByLabel("I confirm this is the same place").check();
+    await page.getByLabel(label!).fill(value!);
+    await expect(page.getByLabel("I confirm this is the same place")).toHaveCount(0);
+    if (field !== "postcode") await expect(page.getByLabel("Possible existing places")).toHaveValue("");
+    await saveAndWait(page);
+    const saved = await partiesView(page, jobId);
+    expect(actions).toEqual(["create_site", "bind"]);
+    expect(saved.current.site[field!]).toBe(value);
+    expect(saved.currentIds.siteId).not.toBe(before.currentIds.siteId);
+    expect(saved.current.siteRevisionId).not.toBe(before.current.siteRevisionId);
+    expect(saved.sites.find((s: { id: string }) => s.id === before.currentIds.siteId).site).toEqual(before.current.site);
+    await page.reload(); await expect(page.getByLabel(label!)).toHaveValue(value!);
+    const { context, other } = await secondWriter(page, browser, jobId);
+    await expect(other.getByLabel(label!)).toHaveValue(value!);
+    await expect(other.getByTestId("party-binding-id")).toHaveText(saved.current.bindingId);
+    await context.close();
+  });
+}
+
+test("CH-3a rejects embedded address-line CR/LF before persistence and preserves the saved site on reopen and unchanged save", async ({ page, browser }) => {
+  const jobId = await reviewJob(page);
+  await page.getByLabel(MORE_LINES).fill("Fictional Court\nFictional Village\nFictional Parish");
+  await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  const before = await partiesView(page, jobId);
+  for (const line of ["Second\nThird", "Second\rThird", "Second\r\nThird"]) {
+    const response = await page.request.post(`/api/jobs/${jobId}/parties`, { data: {
+      version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_site",
+      site: { ...before.current.site, addressLines: ["First line", line] },
+    } });
+    expect(response.status()).toBe(400); expect((await response.json()).code).toBe("INVALID_PARTIES");
+  }
+  expect(await partiesView(page, jobId)).toEqual(before);
+  await page.reload(); await expect(page.getByLabel(MORE_LINES)).toHaveValue(before.current.site.addressLines.slice(1).join("\n"));
+  const actions = partyActions(page, jobId); await saveAndWait(page);
+  const saved = await partiesView(page, jobId);
+  expect(actions).toEqual(["bind"]); expect(saved.sites).toEqual(before.sites);
+  expect(saved.current.siteRevisionId).toBe(before.current.siteRevisionId); expect(saved.currentIds.siteId).toBe(before.currentIds.siteId);
+  expect(saved.current.site.addressLines).toEqual(before.current.site.addressLines);
+  const { context, other } = await secondWriter(page, browser, jobId);
+  await expect(other.getByLabel(MORE_LINES)).toHaveValue(before.current.site.addressLines.slice(1).join("\n"));
+  await expect(other.getByTestId("party-binding-id")).toHaveText(saved.current.bindingId); await context.close();
+});
+
 test("CH-3a reopening shows the saved details, and saving them unchanged creates no new customer or site", async ({ page }) => {
   test.setTimeout(180000); const jobId = await reviewJob(page);
   await page.getByLabel("Customer type").selectOption("business"); await page.getByLabel("Customer name", { exact: true }).fill("Reopened Fictional Ltd");
