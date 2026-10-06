@@ -288,3 +288,27 @@ resume watchdog writes. If a deployment rollback is required, keep 0050 and
 roll back application code (the preceding application can still read all data).
 Removing the migration would reopen prohibited writes and requires a separate
 reviewed change. No new operational alerts or provider routes.
+
+## 0053 — SH-1 shared money and origin
+
+Adds immutable `job_commercial_track` and `extra_origin` tables with FORCE RLS,
+qualified foreign keys, narrow grants and trigger-only binding/provenance paths.
+Adds required track/origin columns to variations; a deferred reverse FK requires
+one exact origin at commit. Backfills the previous synthetic small-builder schema
+idempotently while retaining source identities/history and explicitly unknown
+raising metadata. Existing activation/import routines bind inside their current
+transaction through bounded triggers. No fee posting or external effect is added.
+
+Expand compatibility: existing capture inserts can omit the new columns on bound
+small-builder jobs, obtaining labelled legacy provenance. Existing pricing/state
+UPDATE grants are unchanged; origin/track UPDATE is denied. Fresh quote jobs bind
+at switch-live; adoption imports bind with their imported baseline. New contractor
+imports will bind through their own future authorized routine.
+
+Forward fix is preferred: append a migration preserving established bindings and
+origin rows. Do not drop these tables or rewrite origins after deployment. If the
+upgrade fails, its SQL transaction rolls back, leaving the preceding schema intact.
+Before rollout run fresh, previous-schema upgrade, twice-replayed backfill, runtime
+privilege/RLS/forgery tests and the existing Neon non-superuser bootstrap suite.
+SH-1 adds real PostgreSQL tests in `test/shared-money-origin.integration.test.ts`;
+local socket restrictions leave execution and earlier DB/browser regressions to CI.
