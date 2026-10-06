@@ -187,7 +187,9 @@ the claim takes first, then refuses (`23505 IDEMPOTENCY_CONFLICT`) an id already
 claim and a previous-schema write of one id are therefore serialised in either order: whichever commits first, the other
 sees it and conflicts. A supplier match revision is a creation's or a correction's only by its audit event, which may be
 appended later in the same transaction, so a deferred constraint trigger (`app.reserve_supplier_match_kind`) also requires, at
-commit, the claim's kind to be exactly the one that event names. Pre-deploy check, run like the one below (a role that bypasses row-level security; the suite runs this exact text against
+commit, the claim's kind to be exactly the one that event names; a revision citing any event other than `supplier_match.confirmed`
+or `supplier_match.corrected` is refused outright, and the claim-time lookup treats such a previous-schema row as owned by no
+claimable kind. Pre-deploy check, run like the one below (a role that bypasses row-level security; the suite runs this exact text against
 a database holding a known collision): it lists every such ambiguous id, which must be none.
 
 ```sql

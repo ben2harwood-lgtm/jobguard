@@ -19,7 +19,7 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
 const count = async (table: string, jobId: string) => Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE job_id=$1`, [jobId])).rows[0].n);
 const stored = async (commandId: string) => Number((await admin.query("SELECT count(*) n FROM app.watchdog_command_result WHERE command_id=$1", [commandId])).rows[0].n);
 // A real audit event for a fixture row written "by the earlier code", so its place in the audit chain is genuine.
-const legacyAudit = async (jobId: string) => (await withTenant(runtime, ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType: "fixture.legacy_command", subjectType: "job", subjectRef: jobId, payload: { references: { jobId }, hashes: { payloadHash: "a".repeat(64) }, classifications: { action: "operational" } } }])))[0]!.id;
+const legacyAudit = async (jobId: string, eventType = "fixture.legacy_command") => (await withTenant(runtime, ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType, subjectType: "job", subjectRef: jobId, payload: { references: { jobId }, hashes: { payloadHash: "a".repeat(64) }, classifications: { action: "operational" } } }])))[0]!.id;
 // Direct fixture inserts pass the same BEFORE INSERT live guard as the runtime role, so they carry the tenant context.
 async function asTenant(sql: string, params: unknown[]) {
   const client = await admin.connect();
@@ -93,8 +93,9 @@ describe("supplier match: a replay returns the command's first result", () => {
   });
   it("still replays a revision written before command results existed, as it first returned, on its own job only", async () => {
     const start = (await match.view(ctx, job)).revision, input = correction(randomUUID(), start, "5");
-    // Fixture: the revision row exactly as the earlier code wrote it (request hash over the input), with no command-result row.
-    await asTenant("INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id)SELECT $1,tenant_id,job_id,proposal_id,$2,$3,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,$4,$7 FROM app.supplier_match_revision WHERE tenant_id=$5 AND proposal_id=$6 ORDER BY revision DESC LIMIT 1", [randomUUID(), input.commandId, start + 1, hash(input), tenant, proposal.id, await legacyAudit(job)]);
+    // Fixture: the revision row exactly as the earlier code wrote it (request hash over the input, citing a "corrected" audit
+    // event, the only kind a correction revision may cite), with no command-result row.
+    await asTenant("INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id)SELECT $1,tenant_id,job_id,proposal_id,$2,$3,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,$4,$7 FROM app.supplier_match_revision WHERE tenant_id=$5 AND proposal_id=$6 ORDER BY revision DESC LIMIT 1", [randomUUID(), input.commandId, start + 1, hash(input), tenant, proposal.id, await legacyAudit(job, "supplier_match.corrected")]);
     const later = await match.correct(ctx, job, correction(randomUUID(), start + 1, "4"));
     expect(later.revision).toBe(start + 2);
     const replayed = await match.correct(ctx, job, input);

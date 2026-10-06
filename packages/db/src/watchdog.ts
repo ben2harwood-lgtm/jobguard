@@ -49,7 +49,7 @@ const LEGACY_COMMAND_OWNERS = `
   UNION ALL SELECT 'things_to_check.evaluate', job_id FROM app.discrepancy_finding_revision WHERE tenant_id=$1 AND command_id=$2
   UNION ALL SELECT 'things_to_check.review', job_id FROM app.discrepancy_review_outcome WHERE tenant_id=$1 AND command_id=$2
   UNION ALL SELECT 'things_to_check.supersede', job_id FROM app.supplier_bill_supersession WHERE tenant_id=$1 AND command_id=$2
-  UNION ALL SELECT CASE ae.event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' ELSE 'supplier_match.correct' END, r.job_id FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.command_id=$2
+  UNION ALL SELECT CASE ae.event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' WHEN 'supplier_match.corrected' THEN 'supplier_match.correct' ELSE 'supplier_match.unrecognised' END, r.job_id FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.command_id=$2
   UNION ALL SELECT 'supplier_document.confirm', job_id FROM app.supplier_fact_revision WHERE tenant_id=$1 AND command_id=$2
   UNION ALL SELECT 'inbox.dismiss', job_id FROM app.inbox_outcome_event WHERE tenant_id=$1 AND command_id=$2 AND event_kind='dismissed'
   UNION ALL SELECT 'inbox.seed', nullif(split_part(semantic_key,':',2),'')::uuid FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 AND command_type='inbox.seed'

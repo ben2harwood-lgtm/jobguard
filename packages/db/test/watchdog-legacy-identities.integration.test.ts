@@ -158,13 +158,14 @@ describe("previous-schema writers and claimed ids", () => {
     const job = await live(); await correct.prepare(job);
     const original = randomUUID(); await correct.run(job, original, "base");
     /** What the previous application would write for a correction under `commandId`: a revision bound to a "corrected" audit event. */
-    const legacyCorrection = async (commandId: string) => {
+    let copies = 0;
+    const legacyCorrection = async (commandId: string, auditEventId?: string) => {
       const client = await h.admin.connect();
       try {
         await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
         await client.query(`INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id,invalidates_unresolved_findings)
-          SELECT gen_random_uuid(),tenant_id,job_id,proposal_id,$2,revision+1000,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id,invalidates_unresolved_findings
-          FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$3`, [h.tenant, commandId, original]);
+          SELECT gen_random_uuid(),tenant_id,job_id,proposal_id,$2,revision+$5,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,coalesce($4::uuid,audit_event_id),invalidates_unresolved_findings
+          FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$3`, [h.tenant, commandId, original, auditEventId ?? null, 1000 + (++copies)]);
         await client.query("COMMIT");
       } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; } finally { client.release(); }
     };
@@ -172,5 +173,10 @@ describe("previous-schema writers and claimed ids", () => {
     await expect(legacyCorrection(createId)).rejects.toMatchObject({ code: "23505" });
     const correctId = randomUUID(); await claim(correctId, job, "supplier_match.correct");
     await expect(legacyCorrection(correctId)).resolves.toBeUndefined();
+    // A revision citing any other event (here the proposal's "proposed" event) is refused, claimed or not (Codex P2 4197809983).
+    const proposed = (await h.admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='supplier_match.proposed' AND subject_ref=$2 LIMIT 1", [h.tenant, job])).rows[0]!.id as string;
+    const claimedCorrect = randomUUID(); await claim(claimedCorrect, job, "supplier_match.correct");
+    await expect(legacyCorrection(claimedCorrect, proposed)).rejects.toMatchObject({ code: "23514" });
+    await expect(legacyCorrection(randomUUID(), proposed)).rejects.toMatchObject({ code: "23514" });
   });
 });

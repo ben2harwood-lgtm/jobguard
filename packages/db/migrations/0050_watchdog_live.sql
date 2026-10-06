@@ -221,8 +221,11 @@ CREATE FUNCTION app.reserve_supplier_match_kind() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 DECLARE kind text; claimed text;
 BEGIN
-  SELECT CASE event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' ELSE 'supplier_match.correct' END INTO kind
+  -- Only a creation's "confirmed" or a correction's "corrected" event can stand behind a revision; any other event is refused
+  -- outright, claimed or not, so no revision can be bound to an effect it did not have (Codex P2 4197809983).
+  SELECT CASE event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' WHEN 'supplier_match.corrected' THEN 'supplier_match.correct' END INTO kind
     FROM app.audit_event WHERE tenant_id=NEW.tenant_id AND id=NEW.audit_event_id;
+  IF kind IS NULL THEN RAISE EXCEPTION 'supplier match revision must cite its confirmed or corrected event' USING ERRCODE='23514'; END IF;
   SELECT command_type INTO claimed FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
   IF claimed IS NOT NULL AND claimed IS DISTINCT FROM kind THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
   RETURN NULL;
