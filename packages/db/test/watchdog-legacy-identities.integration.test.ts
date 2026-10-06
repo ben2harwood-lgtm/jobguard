@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { claimCommandIdentity, type TenantTransaction, type WatchdogCommandType } from "../src/index.js";
+import { appendAuditBatch, claimCommandIdentity, withTenant, type TenantTransaction, type WatchdogCommandType } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
 // CH-2 upgrade rule for command ids: an id that the previous schema persisted belongs to the command that persisted it, so no OTHER
@@ -159,6 +159,9 @@ describe("previous-schema writers and claimed ids", () => {
     const original = randomUUID(); await correct.run(job, original, "base");
     /** What the previous application would write for a correction under `commandId`: a revision bound to a "corrected" audit event. */
     let copies = 0;
+    const proposalOf = async (commandId: string) => (await h.admin.query("SELECT proposal_id FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows[0]!.proposal_id as string;
+    /** A fresh audit event of `eventType` about `proposalId`, as a previous-schema writer would append for its own revision. */
+    const freshEvent = async (proposalId: string, eventType = "supplier_match.corrected") => (await withTenant(h.runtime, h.ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType, subjectType: "supplier_match", subjectRef: proposalId, payload: { references: { proposalId }, hashes: { payloadHash: "a".repeat(64) }, classifications: { action: "operational" } } }])))[0]!.id;
     const legacyCorrection = async (commandId: string, auditEventId?: string) => {
       const client = await h.admin.connect();
       try {
@@ -169,10 +172,14 @@ describe("previous-schema writers and claimed ids", () => {
         await client.query("COMMIT");
       } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; } finally { client.release(); }
     };
+    const proposal = await proposalOf(original);
     const createId = randomUUID(); await claim(createId, job, "supplier_match.create");
-    await expect(legacyCorrection(createId)).rejects.toMatchObject({ code: "23505" });
+    await expect(legacyCorrection(createId, await freshEvent(proposal))).rejects.toMatchObject({ code: "23505" });
     const correctId = randomUUID(); await claim(correctId, job, "supplier_match.correct");
-    await expect(legacyCorrection(correctId)).resolves.toBeUndefined();
+    await expect(legacyCorrection(correctId, await freshEvent(proposal))).resolves.toBeUndefined();
+    // An earlier event of the same proposal already stands behind its own revision and cannot be borrowed (Codex P2 4199159015).
+    const borrowing = randomUUID(); await claim(borrowing, job, "supplier_match.correct");
+    await expect(legacyCorrection(borrowing)).rejects.toMatchObject({ code: "23505", constraint: "supplier_match_revision_audit_event_uq" });
     // A revision citing any other event (here the proposal's "proposed" event) is refused, claimed or not (Codex P2 4197809983).
     const proposed = (await h.admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='supplier_match.proposed' AND subject_ref=$2 LIMIT 1", [h.tenant, job])).rows[0]!.id as string;
     const claimedCorrect = randomUUID(); await claim(claimedCorrect, job, "supplier_match.correct");
@@ -181,7 +188,7 @@ describe("previous-schema writers and claimed ids", () => {
     // So is a valid "corrected" event that belongs to another proposal (Codex P2 4199041823).
     const elsewhere = await live(); await correct.prepare(elsewhere);
     const foreignCommand = randomUUID(); await correct.run(elsewhere, foreignCommand, "base");
-    const foreignEvent = (await h.admin.query("SELECT audit_event_id FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, foreignCommand])).rows[0]!.audit_event_id as string;
+    const foreignEvent = await freshEvent(await proposalOf(foreignCommand));
     const borrowed = randomUUID(); await claim(borrowed, job, "supplier_match.correct");
     await expect(legacyCorrection(borrowed, foreignEvent)).rejects.toMatchObject({ code: "23514" });
   });

@@ -227,6 +227,11 @@ DO $$ BEGIN
 END $$;
 ALTER TABLE app.supplier_match_revision FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.audit_event FORCE ROW LEVEL SECURITY;
+-- Each confirmed or corrected event stands behind exactly one revision, so a revision cannot borrow an earlier event of its own
+-- proposal (Codex P2 4199159015). A payload-hash binding cannot express this: a creation's revision hashes the derived correction,
+-- its event the creation request. Building the index scans every existing row regardless of row-level security and fails the
+-- upgrade on any duplicate.
+ALTER TABLE app.supplier_match_revision ADD CONSTRAINT supplier_match_revision_audit_event_uq UNIQUE(tenant_id,audit_event_id);
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='app' AND c.relname IN ('supplier_match_revision','audit_event') AND NOT (c.relrowsecurity AND c.relforcerowsecurity))
