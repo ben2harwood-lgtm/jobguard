@@ -68,5 +68,7 @@ export function recoveryCommandFailure(error: unknown) {
  };
  if(code===undefined||statuses[code]===undefined)return unknown;
  const requiresReview=code==="ELIGIBILITY_STALE_REVISION"||code==="ELIGIBILITY_REVIEW_REQUIRED";
- return {status:statuses[code]!,body:{code,message:requiresReview ? "Review the changed evidence before approving" : code}};
+ // A forbidden transition carries a plain sentence from the domain ("<event> is not allowed from <state>"): identifiers only, no amounts or people.
+ const message=requiresReview ? "Review the changed evidence before approving" : code==="RECOVERY_TRANSITION_FORBIDDEN" && error instanceof Error && error.message!==code ? error.message : code;
+ return {status:statuses[code]!,body:{code,message}};
 }

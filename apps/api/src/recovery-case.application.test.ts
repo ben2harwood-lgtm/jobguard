@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, RecoveryCaseRepository } from "@jobguard/db";
-import { RecoveryCaseApplication, recoveryReadFailure } from "./recovery-case.application.js";
+import { RecoveryCaseApplication, recoveryCommandFailure, recoveryReadFailure } from "./recovery-case.application.js";
 
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 const command=()=>({version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:randomUUID(),expectedCaseRevision:2,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"evidence_backed_withheld_payment"});
@@ -58,4 +58,8 @@ it("an eligibility command that committed cannot turn its answer-read failure in
 });
 it.each([["UNAUTHENTICATED",401],["MEMBERSHIP_FORBIDDEN",403],["JOB_NOT_FOUND",404],["DATABASE_UNAVAILABLE",503],["SOMETHING_ELSE",400]] as const)("maps a read failure %s to %i and never to an unknown command outcome",(code,status)=>{
  expect(recoveryReadFailure(Object.assign(new Error(code),{code}))).toEqual({status,body:{code}});
+});
+it("a forbidden transition answers 400 with the domain sentence, not the bare code",()=>{
+ const error=Object.assign(new Error("record_landing is not allowed from closed_recovered"),{code:"RECOVERY_TRANSITION_FORBIDDEN"});
+ expect(recoveryCommandFailure(error)).toEqual({status:400,body:{code:"RECOVERY_TRANSITION_FORBIDDEN",message:"record_landing is not allowed from closed_recovered"}});
 });
