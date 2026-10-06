@@ -178,5 +178,42 @@ describe("previous-schema writers and claimed ids", () => {
     const claimedCorrect = randomUUID(); await claim(claimedCorrect, job, "supplier_match.correct");
     await expect(legacyCorrection(claimedCorrect, proposed)).rejects.toMatchObject({ code: "23514" });
     await expect(legacyCorrection(randomUUID(), proposed)).rejects.toMatchObject({ code: "23514" });
+    // So is a valid "corrected" event that belongs to another proposal (Codex P2 4199041823).
+    const elsewhere = await live(); await correct.prepare(elsewhere);
+    const foreignCommand = randomUUID(); await correct.run(elsewhere, foreignCommand, "base");
+    const foreignEvent = (await h.admin.query("SELECT audit_event_id FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, foreignCommand])).rows[0]!.audit_event_id as string;
+    const borrowed = randomUUID(); await claim(borrowed, job, "supplier_match.correct");
+    await expect(legacyCorrection(borrowed, foreignEvent)).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("finds an existing revision that does not cite its own event, both in the pre-deploy query and in 0050's upgrade check (Codex P2 4199041831)", async () => {
+    const correct = cases.find(c => c.key === "supplier-match-repository.ts#correct")!;
+    const job = await live(); await correct.prepare(job);
+    const original = randomUUID(); await correct.run(job, original, "base");
+    const docs = await readFile(new URL("../MIGRATIONS.md", import.meta.url), "utf8");
+    const listed = docs.match(/```sql\n(-- 0050 pre-deploy supplier-match revision check[\s\S]*?)```/u)?.[1];
+    const migration = await readFile(new URL("../migrations/0050_watchdog_live.sql", import.meta.url), "utf8");
+    const upgradeCheck = migration.match(/(-- 0050 supplier-match revision check[\s\S]*?ALTER TABLE app\.audit_event FORCE ROW LEVEL SECURITY;)/u)?.[1];
+    expect(listed, "MIGRATIONS.md must contain the supplier-match revision check").toBeTruthy();
+    expect(upgradeCheck, "0050 must contain the supplier-match revision check").toBeTruthy();
+    const client = await h.admin.connect();
+    try {
+      await client.query("BEGIN");
+      // What a previous-schema writer could have left behind: a revision citing its proposal's "proposed" event (no trigger then).
+      await client.query("SET LOCAL session_replication_role = replica");
+      const planted = randomUUID();
+      await client.query(`INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id,invalidates_unresolved_findings)
+        SELECT $4,tenant_id,job_id,proposal_id,gen_random_uuid(),revision+5000,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,
+          (SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='supplier_match.proposed' AND subject_ref=$3 LIMIT 1),invalidates_unresolved_findings
+        FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2`, [h.tenant, original, job, planted]);
+      await client.query("SET LOCAL session_replication_role = origin");
+      expect((await client.query(listed!)).rows.map(row => row.id)).toEqual([planted]);
+      await client.query("SAVEPOINT upgrade");
+      await expect(client.query(upgradeCheck!)).rejects.toMatchObject({ code: "23514" });
+      await client.query("ROLLBACK TO SAVEPOINT upgrade");
+    } finally { await client.query("ROLLBACK"); client.release(); }
+    // With only well-formed revisions the same upgrade check passes and leaves FORCE in place.
+    await h.admin.query(upgradeCheck!);
+    expect((await h.admin.query("SELECT bool_and(relforcerowsecurity) f FROM pg_class WHERE relname IN ('supplier_match_revision','audit_event') AND relnamespace='app'::regnamespace")).rows[0].f).toBe(true);
   });
 });

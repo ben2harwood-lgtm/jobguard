@@ -214,6 +214,24 @@ CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.command_
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.purchase_order_placement FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('purchase_order.place','command_id');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.stage_completion FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('proof.complete','command_id');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('evidence.begin_upload','id');
+-- 0050 supplier-match revision check: every existing revision must already cite its own proposal's confirmed or corrected
+-- event (Codex P2 4199041831); the trigger below only sees new rows. Both tables FORCE row-level security, so the scan suspends
+-- FORCE for this transaction exactly like the foreign-key scans above, and restores it before anything else runs.
+ALTER TABLE app.supplier_match_revision NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.audit_event NO FORCE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF EXISTS(SELECT 1 FROM app.supplier_match_revision r WHERE NOT EXISTS(SELECT 1 FROM app.audit_event ae
+    WHERE (ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) AND ae.event_type IN('supplier_match.confirmed','supplier_match.corrected')
+      AND ae.subject_type='supplier_match' AND ae.subject_ref=r.proposal_id::text))
+  THEN RAISE EXCEPTION 'a supplier match revision does not cite its own confirmed or corrected event' USING ERRCODE='23514'; END IF;
+END $$;
+ALTER TABLE app.supplier_match_revision FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.audit_event FORCE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='app' AND c.relname IN ('supplier_match_revision','audit_event') AND NOT (c.relrowsecurity AND c.relforcerowsecurity))
+  THEN RAISE EXCEPTION 'FORCE ROW LEVEL SECURITY was not restored'; END IF;
+END $$;
 -- A supplier match revision is a creation's or a correction's, told apart only by its audit event (Codex P2 4197723875), which the
 -- writer may append later in the same transaction (the reference is deferred). The insert trigger above already holds the id's lock
 -- and admits either kind; this one runs at commit, when the event exists, and requires the claim's kind to be exactly that one.
@@ -223,9 +241,10 @@ DECLARE kind text; claimed text;
 BEGIN
   -- Only a creation's "confirmed" or a correction's "corrected" event can stand behind a revision; any other event is refused
   -- outright, claimed or not, so no revision can be bound to an effect it did not have (Codex P2 4197809983).
+  -- The event must also be this revision's own: about this proposal (Codex P2 4199041823), not another proposal's or job's.
   SELECT CASE event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' WHEN 'supplier_match.corrected' THEN 'supplier_match.correct' END INTO kind
-    FROM app.audit_event WHERE tenant_id=NEW.tenant_id AND id=NEW.audit_event_id;
-  IF kind IS NULL THEN RAISE EXCEPTION 'supplier match revision must cite its confirmed or corrected event' USING ERRCODE='23514'; END IF;
+    FROM app.audit_event WHERE tenant_id=NEW.tenant_id AND id=NEW.audit_event_id AND subject_type='supplier_match' AND subject_ref=NEW.proposal_id::text;
+  IF kind IS NULL THEN RAISE EXCEPTION 'supplier match revision must cite its own proposal''s confirmed or corrected event' USING ERRCODE='23514'; END IF;
   SELECT command_type INTO claimed FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
   IF claimed IS NOT NULL AND claimed IS DISTINCT FROM kind THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
   RETURN NULL;

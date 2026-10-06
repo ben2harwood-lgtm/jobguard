@@ -188,8 +188,17 @@ claim and a previous-schema write of one id are therefore serialised in either o
 sees it and conflicts. A supplier match revision is a creation's or a correction's only by its audit event, which may be
 appended later in the same transaction, so a deferred constraint trigger (`app.reserve_supplier_match_kind`) also requires, at
 commit, the claim's kind to be exactly the one that event names; a revision citing any event other than `supplier_match.confirmed`
-or `supplier_match.corrected` is refused outright, and the claim-time lookup treats such a previous-schema row as owned by no
-claimable kind. Pre-deploy check, run like the one below (a role that bypasses row-level security; the suite runs this exact text against
+or `supplier_match.corrected` about its own proposal is refused outright, and the claim-time lookup treats such a previous-schema
+row as owned by no claimable kind. 0050 also refuses to apply (`23514`) while any existing revision fails that rule; it scans with
+FORCE suspended on the two tables for its own transaction, as for the foreign keys. The read-only pre-deploy query lists them:
+
+```sql
+-- 0050 pre-deploy supplier-match revision check (read-only): revisions that do not cite their own proposal's confirmed or corrected event.
+SELECT r.tenant_id, r.id, r.command_id FROM app.supplier_match_revision r WHERE NOT EXISTS(SELECT 1 FROM app.audit_event ae
+  WHERE (ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) AND ae.event_type IN('supplier_match.confirmed','supplier_match.corrected')
+    AND ae.subject_type='supplier_match' AND ae.subject_ref=r.proposal_id::text);
+```
+ Pre-deploy check, run like the one below (a role that bypasses row-level security; the suite runs this exact text against
 a database holding a known collision): it lists every such ambiguous id, which must be none.
 
 ```sql
@@ -200,7 +209,7 @@ WITH owners(tenant_id, command_id, kind, job_id) AS (
   UNION ALL SELECT tenant_id, command_id, 'things_to_check.evaluate', job_id FROM app.discrepancy_finding_revision
   UNION ALL SELECT tenant_id, command_id, 'things_to_check.review', job_id FROM app.discrepancy_review_outcome
   UNION ALL SELECT tenant_id, command_id, 'things_to_check.supersede', job_id FROM app.supplier_bill_supersession
-  UNION ALL SELECT r.tenant_id, r.command_id, CASE ae.event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' ELSE 'supplier_match.correct' END, r.job_id FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id)
+  UNION ALL SELECT r.tenant_id, r.command_id, CASE ae.event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' WHEN 'supplier_match.corrected' THEN 'supplier_match.correct' ELSE 'supplier_match.unrecognised' END, r.job_id FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id)
   UNION ALL SELECT tenant_id, command_id, 'supplier_document.confirm', job_id FROM app.supplier_fact_revision
   UNION ALL SELECT tenant_id, command_id, 'inbox.dismiss', job_id FROM app.inbox_outcome_event WHERE event_kind='dismissed'
   UNION ALL SELECT tenant_id, command_id, 'inbox.seed', nullif(split_part(semantic_key,':',2),'')::uuid FROM app.command_receipt WHERE command_type='inbox.seed'
