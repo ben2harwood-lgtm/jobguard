@@ -52,7 +52,9 @@ export class RecoveryCaseApplication {
 export function recoveryReadFailure(error: unknown) {
  const code=error instanceof Error ? ("code" in error && typeof error.code === "string" ? error.code : error.message) : "DATABASE_UNAVAILABLE";
  const statuses:Record<string,number>={ UNAUTHENTICATED:401, MEMBERSHIP_FORBIDDEN:403, JOB_NOT_FOUND:404, RECOVERY_JOB_NOT_FOUND:404, DATABASE_UNAVAILABLE:503 };
- return { status: statuses[code] ?? 400, body: { code } };
+ // Anything unclassified (a dropped connection, 57P01, a driver error) is a retryable server failure, never a 4xx refusal (Codex P2 4197033524).
+ const status=statuses[code];
+ return status===undefined ? { status: 503, body: { code: "DATABASE_UNAVAILABLE" } } : { status, body: { code } };
 }
 export function recoveryCommandFailure(error: unknown) {
  const unknown = { status: 503, body: { version: "recovery-command-error.v1" as const, code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN", outcome: "unknown" as const, message: "Your last action may or may not have been saved. Retry with the same command id." } };

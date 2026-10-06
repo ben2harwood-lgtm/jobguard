@@ -56,8 +56,12 @@ it("an eligibility command that committed cannot turn its answer-read failure in
  await expect(new RecoveryCaseApplication({} as Pool).eligibility(randomUUID(), command(), randomUUID())).rejects.toMatchObject({ code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN" });
  expect(persist).toHaveBeenCalledTimes(1);
 });
-it.each([["UNAUTHENTICATED",401],["MEMBERSHIP_FORBIDDEN",403],["JOB_NOT_FOUND",404],["DATABASE_UNAVAILABLE",503],["SOMETHING_ELSE",400]] as const)("maps a read failure %s to %i and never to an unknown command outcome",(code,status)=>{
+it.each([["UNAUTHENTICATED",401],["MEMBERSHIP_FORBIDDEN",403],["JOB_NOT_FOUND",404],["DATABASE_UNAVAILABLE",503]] as const)("maps a read failure %s to %i and never to an unknown command outcome",(code,status)=>{
  expect(recoveryReadFailure(Object.assign(new Error(code),{code}))).toEqual({status,body:{code}});
+});
+it.each(["ECONNRESET","57P01","SOMETHING_ELSE"])("answers an unclassified read failure %s with 503, not a 4xx refusal",code=>{
+ expect(recoveryReadFailure(Object.assign(new Error("connection lost"),{code}))).toEqual({status:503,body:{code:"DATABASE_UNAVAILABLE"}});
+ expect(recoveryReadFailure("not an error")).toEqual({status:503,body:{code:"DATABASE_UNAVAILABLE"}});
 });
 it("a forbidden transition answers 400 with the domain sentence, not the bare code",()=>{
  const error=Object.assign(new Error("record_landing is not allowed from closed_recovered"),{code:"RECOVERY_TRANSITION_FORBIDDEN"});
