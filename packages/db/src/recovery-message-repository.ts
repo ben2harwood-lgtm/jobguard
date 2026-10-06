@@ -10,7 +10,7 @@ import {
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { CommandError, UserCommandDispatcher, type CommandMutation, type ConsequentialCommand } from "./commands.js";
 import { ActionExecutor, appendOutboundAction, reconcileOutbox, type SafeTelemetry } from "./outbox.js";
-import { FakeRecoveryMessageAdapter, RECOVERY_MESSAGE_ADAPTER, RECOVERY_MESSAGE_EFFECT_PREFIX, PracticeProcessStopped, type RecoveryMessageDeliveryMode } from "./recovery-message-adapter.js";
+import { FakeRecoveryMessageAdapter, RECOVERY_MESSAGE_ADAPTER, RECOVERY_MESSAGE_EFFECT_PREFIX, PracticeProcessStopped, RECOVERY_MESSAGE_BLOCKED_CODE, type RecoveryMessageDeliveryMode } from "./recovery-message-adapter.js";
 import { inspectRecoveryMessageCase, lockRecoveryCase, type Current, type RecoveryMessageReadinessReason } from "./recovery-message-current.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -416,6 +416,17 @@ export class RecoveryMessageRepository {
         "SELECT status,claimed_at FROM app.action_outbox WHERE tenant_id=$1 AND id=$2 FOR SHARE", [tenantId, m.outbox_action_id])).rows[0];
       if (!fact) continue;
       m.outbox_status = fact.status; m.claimed_at = fact.claimed_at;
+      // A worker that drives the shared executor directly records a changed-source refusal as `retryable`, because the executor
+      // has no terminal refusal. Nothing was sent and no retry can succeed, so it is closed here as blocked, exactly as advance()
+      // closes it, and a replacement can be previewed (Codex P2 4197743212).
+      if (fact.status === "retryable") {
+        const closed = await db.$client.query(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
+          WHERE o.tenant_id=$1 AND o.id=$2 AND o.status='retryable' AND EXISTS(
+            SELECT 1 FROM app.action_attempt t WHERE t.tenant_id=o.tenant_id AND t.action_id=o.id AND t.error_code=$3
+            AND t.attempt_number=(SELECT max(x.attempt_number) FROM app.action_attempt x WHERE x.tenant_id=o.tenant_id AND x.action_id=o.id))`,
+          [tenantId, m.outbox_action_id, RECOVERY_MESSAGE_BLOCKED_CODE]);
+        if (closed.rowCount) m.outbox_status = "cancelled";
+      }
       const history = (await db.$client.query<EventRow & { command_id: string; request_hash: string; actor_membership_id: string }>(
         "SELECT * FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision", [tenantId, m.id])).rows;
       let last = history.at(-1);

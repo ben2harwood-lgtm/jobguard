@@ -632,11 +632,16 @@ describe('the effect boundary re-checks the case, the evidence and the approver 
     expect(await sinkCount(view.id)).toBe(0);
     expect(await outboxStatus(view.approval!.outboxActionId)).toBe('retryable');
     expect((await admin.query('SELECT error_code FROM app.action_attempt WHERE action_id=$1', [view.approval!.outboxActionId])).rows).toEqual([{ error_code: 'FAKE_BLOCKED_CHANGED' }]);
-    // The message is reported as changed, and advancing it afterwards blocks rather than delivers.
+    // The next read closes the refusal as blocked (Codex P2 4197743212): it is never offered as "safe to try again", advancing it
+    // cannot deliver, and a replacement can be previewed for the changed case.
     const state = await repo.read(context, caseId);
-    expect(state.latest).toMatchObject({ status: 'retryable', changedSinceReview: true });
-    expect(await code(() => repo.command(context, caseId, advanceCommand(state.latest!), actor))).toBe('RECOVERY_MESSAGE_BLOCKED');
+    expect(state.latest).toMatchObject({ status: 'blocked' });
+    expect(state.latest!.history.at(-1)).toMatchObject({ kind: 'blocked' });
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('cancelled');
+    expect(await code(() => repo.command(context, caseId, advanceCommand(state.latest!), actor))).toMatch(/^RECOVERY_MESSAGE_/);
     expect(await sinkCount(view.id)).toBe(0);
+    // The closed action no longer counts as a live effect on the case, so it cannot block a replacement.
+    expect((await admin.query("SELECT count(*)::int n FROM app.recovery_message_approval x JOIN app.action_outbox o ON (o.tenant_id,o.id)=(x.tenant_id,x.outbox_action_id) WHERE x.case_id=$1 AND o.status<>'cancelled'", [caseId])).rows[0].n).toBe(0);
   });
 
   it('records nothing when a proof was invalidated, although the case revision did not move', async () => {
@@ -666,6 +671,9 @@ describe('the effect boundary re-checks the case, the evidence and the approver 
       await running;
     } finally { await holder.query('ROLLBACK').catch(() => undefined); holder.release(); }
     expect(await sinkCount(view.id)).toBe(0);
+    // A revoked approver cannot leave it stranded as retryable: the next read closes it as blocked.
+    expect((await repo.read(context, base.caseId)).latest).toMatchObject({ status: 'blocked' });
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('cancelled');
   });
 
   it('delivers once when nothing changed while the delivery waited for the case lock', async () => {
