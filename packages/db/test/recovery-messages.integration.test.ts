@@ -870,6 +870,14 @@ describe('an interrupted recording is finished by the next touch (P2-5)', () => 
     expect(second.latest!.history).toEqual(first.latest!.history);
     expect(first.latest).toMatchObject({ status: 'simulated_delivery', attempts: 1 });
     expect(await auditTypes(view.id)).toEqual(expect.arrayContaining(['recovery.message.started', 'recovery.message.succeeded']));
+    // The worker did the delivery, so the reconstructed facts name the executor; the approver stays only as the authorisation (AGENTS.md:123).
+    const audits = (await admin.query("SELECT event_type,actor_ref,payload FROM app.audit_event WHERE subject_type='recovery_message' AND subject_ref=$1 ORDER BY sequence", [view.id])).rows;
+    expect(audits.find(row => row.event_type === 'recovery.message.approved')!.actor_ref).toBe(`membership:${actor.membershipId}`);
+    for (const type of ['recovery.message.started', 'recovery.message.succeeded']) {
+      const row = audits.find(audit => audit.event_type === type)!;
+      expect(row.actor_ref).toBe('system:recovery-message-executor');
+      expect(row.payload.references.authorisedBy).toBe(`membership:${actor.membershipId}`);
+    }
     const unknown = await approved();
     await executorWith(practiceAdapter('response_lost')).execute(context, unknown.view.approval!.outboxActionId);
     expect(kinds((await repo.read(context, unknown.caseId)).latest!)).toEqual(['previewed', 'approved', 'started', 'outcome_unknown']);
@@ -1065,5 +1073,23 @@ describe('approval race preserves command identity (P2-8)', () => {
     expect((outcomes.find(outcome => outcome.status === 'rejected') as PromiseRejectedResult).reason.code).toBe('RECOVERY_MESSAGE_STALE_REVISION');
     expect(await count('SELECT count(*) n FROM app.recovery_message_approval WHERE tenant_id=$1 AND message_id=$2', [fixture.tenantId, view.id])).toBe(1);
     expect(kinds((await repo.read(context, caseId)).latest!)).toEqual(['previewed', 'approved']);
+  });
+});
+
+describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
+  it('a concurrent command of another family holding the same id makes the recovery command conflict, never both commit', async () => {
+    const { caseId } = await attached();
+    const command = previewCommand(await repo.read(context, caseId));
+    const holder = await admin.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'other.family',$3,repeat('a',64),'processing',$4)",
+        [command.commandId, fixture.tenantId, command.commandId, actor.membershipId]);
+      const outcome = repo.preview(context, caseId, command, actor).then(() => 'committed', (error: { code?: string }) => error.code);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // without the claim, the preview commits here while the other family is still open
+      await holder.query('COMMIT');
+      expect(await outcome).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+    } finally { holder.release(); }
+    expect(await count('SELECT count(*) n FROM app.recovery_message WHERE tenant_id=$1 AND case_id=$2', [fixture.tenantId, caseId])).toBe(0);
   });
 });

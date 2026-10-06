@@ -54,6 +54,7 @@ const requestHashOf = (value: unknown) => createHash("sha256").update(canonical(
 const uuidArg = (value: string) => z.string().uuid().parse(value).toLowerCase();
 const APPROVAL_LIFETIME_MS = 3_600_000;
 const STALE_EXECUTION_MS = 300_000;
+const RECOVERY_MESSAGE_EXECUTOR_REF = "system:recovery-message-executor";
 const noTelemetry: SafeTelemetry = { emit: () => undefined };
 
 /** Guards raise typed 23514 errors; map them, and uniqueness races, to the same typed codes the repository uses. */
@@ -112,6 +113,7 @@ export class RecoveryMessageRepository {
     await guarded(() => withTenant(this.pool, ctx, async db => {
       await this.begin(db, ctx.tenantId, caseId, input.commandId, actor);
       if (await this.isReplay(db, ctx.tenantId, input.commandId, ["previewed"], caseId, requestHash)) return;
+      await this.claim(db, ctx.tenantId, input.commandId, "preview", requestHash, actor);
       const current = await this.inspect(db, ctx.tenantId, caseId);
       if (!current.ok) return this.refuse(current.reason);
       if (current.now.caseRevision !== input.expectedCaseRevision || current.pack.id !== input.packId) fail("RECOVERY_MESSAGE_CHANGED");
@@ -201,6 +203,7 @@ export class RecoveryMessageRepository {
     await guarded(() => withTenant(this.pool, ctx, async db => {
       await this.begin(db, ctx.tenantId, caseId, input.commandId, actor);
       if (await this.isReplay(db, ctx.tenantId, input.commandId, ["revoked"], caseId, requestHash)) return;
+      await this.claim(db, ctx.tenantId, input.commandId, "revoke", requestHash, actor);
       const m = await this.messageRow(db, ctx.tenantId, caseId, messageId), status = await this.statusOf(db, ctx.tenantId, m);
       if (await this.revisionOf(db, ctx.tenantId, messageId) !== input.expectedRevision) fail("RECOVERY_MESSAGE_STALE_REVISION");
       if (status === "previewed") fail("RECOVERY_MESSAGE_NOT_APPROVED");
@@ -225,6 +228,7 @@ export class RecoveryMessageRepository {
           return { replayed: false as const, blocked: false as const, started: last.revision, outboxId: m.outbox_action_id!, row: m };
         return { replayed: true as const, blocked: replay.kind === "blocked" };
       }
+      await this.claim(db, ctx.tenantId, input.commandId, "advance", requestHash, actor);
       const m = await this.messageRow(db, ctx.tenantId, caseId, messageId), status = await this.statusOf(db, ctx.tenantId, m);
       const revision = await this.revisionOf(db, ctx.tenantId, messageId);
       if (revision !== input.expectedRevision) fail("RECOVERY_MESSAGE_STALE_REVISION");
@@ -279,6 +283,7 @@ export class RecoveryMessageRepository {
         if (m.outbox_status !== "outcome_unknown") return { replayed: true as const };
         return { replayed: false as const, started: await this.revisionOf(db, ctx.tenantId, messageId), outboxId: m.outbox_action_id!, jobId: m.job_id, contentHash: m.content_hash };
       }
+      await this.claim(db, ctx.tenantId, input.commandId, "reconcile", requestHash, actor);
       let m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
       const revision = await this.revisionOf(db, ctx.tenantId, messageId);
       if (revision !== input.expectedRevision) fail("RECOVERY_MESSAGE_STALE_REVISION");
@@ -330,6 +335,19 @@ export class RecoveryMessageRepository {
       `SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()) FOR SHARE`,
       [tenantId, actor.membershipId]);
     if (!owner.rowCount || actor.actorRef !== `membership:${actor.membershipId}`) fail("RECOVERY_MESSAGE_FORBIDDEN");
+  }
+
+  /**
+   * Claims a new command id in the shared receipt table, in the same transaction as its first effect. The family advisory
+   * lock does not serialise against other command families, but the receipt primary key does, so a concurrent command of
+   * any family with the same id can no longer also commit (AGENTS.md:131). Approval claims through the shared dispatcher.
+   */
+  private async claim(db: TenantTransaction, tenantId: string, commandId: string, action: string, requestHash: string, actor: RecoveryMessageActor) {
+    const claimed = await db.$client.query(
+      `INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
+       VALUES($1,$2,$3,$4,$5,'succeeded',$6::jsonb,$7,clock_timestamp()) ON CONFLICT DO NOTHING RETURNING command_id`,
+      [commandId, tenantId, `recovery.message.${action}`, commandId, requestHash, JSON.stringify({ recoveryMessageCommand: action }), actor.membershipId]);
+    if (!claimed.rowCount) fail("RECOVERY_MESSAGE_COMMAND_CONFLICT");
   }
 
   /** The first recorded effect of a command id, whichever table holds it. An approval is also a Decision receipt. */
@@ -392,10 +410,12 @@ export class RecoveryMessageRepository {
       let last = history.at(-1);
       if (!last) continue;
       const ref = { id: m.id, jobId: m.job_id, caseId };
+      // These facts were produced by the outbox executor or reconciler, not by a person (AGENTS.md:123). The approving
+      // membership stays on the event row and in the audit references as the authorisation, never as the actor.
       const append = async (kind: RecoveryMessageEventKind, commandId: string, requestHash: string, membershipId: string) => {
-        const actor = { membershipId, actorRef: `membership:${membershipId}` };
+        const actor = { membershipId, actorRef: RECOVERY_MESSAGE_EXECUTOR_REF };
         const revision = await this.event(db, tenantId, ref, actor, kind, commandId, requestHash, last!.revision);
-        audits.push(this.auditInput(actor, m.id, kind, { caseId, jobId: m.job_id, commandId }, m.content_hash, requestHash));
+        audits.push(this.auditInput(actor, m.id, kind, { caseId, jobId: m.job_id, commandId, authorisedBy: `membership:${membershipId}` }, m.content_hash, requestHash));
         last = { message_id: m.id, revision, kind, command_id: commandId, request_hash: requestHash, actor_membership_id: membershipId, created_at: new Date() };
       };
       // A direct worker may have recorded an attempt without the application's start history.
