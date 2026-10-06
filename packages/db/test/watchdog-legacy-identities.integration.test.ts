@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { claimCommandIdentity, type TenantTransaction } from "../src/index.js";
+import { claimCommandIdentity, type TenantTransaction, type WatchdogCommandType } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
 // CH-2 upgrade rule for command ids: an id that the previous schema persisted belongs to the command that persisted it, so no OTHER
@@ -114,7 +114,7 @@ describe("previous-schema writers and claimed ids", () => {
     db.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)VALUES($1,$2,'inbox.seed',$3,$4,'processing',$5)",
       [commandId, h.tenant, `inbox:${job}`, hash, h.member]);
   /** Opens a transaction holding a claim of `commandId`; on refusal it rolls back, releases and rethrows. */
-  async function claimOpen(commandId: string, job: string, kind: "readiness.record" | "inbox.seed") {
+  async function claimOpen(commandId: string, job: string, kind: WatchdogCommandType) {
     const client = await h.admin.connect();
     try {
       await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
@@ -122,7 +122,7 @@ describe("previous-schema writers and claimed ids", () => {
       return client;
     } catch (error) { await client.query("ROLLBACK"); client.release(); throw error; }
   }
-  const claim = async (commandId: string, job: string, kind: "readiness.record" | "inbox.seed") => { const client = await claimOpen(commandId, job, kind); await client.query("COMMIT"); client.release(); };
+  const claim = async (commandId: string, job: string, kind: WatchdogCommandType) => { const client = await claimOpen(commandId, job, kind); await client.query("COMMIT"); client.release(); };
   const settle = (work: Promise<unknown>) => work.then(() => "committed", (error: { code?: string; message?: string }) => error.code === "23505" || error.message === "IDEMPOTENCY_CONFLICT" ? "conflict" : error);
   const stillWaiting = async (state: { done: boolean }) => { await new Promise(resolve => setTimeout(resolve, 400)); return !state.done; };
 
@@ -151,5 +151,26 @@ describe("previous-schema writers and claimed ids", () => {
     expect(await stillWaiting(claimed)).toBe(true);
     await writer.query("COMMIT"); writer.release();
     expect(await claiming).toBe("conflict");
+  });
+
+  it("tells a supplier-match correction from a creation by its audit event, at commit (Codex P2 4197723875)", async () => {
+    const correct = cases.find(c => c.key === "supplier-match-repository.ts#correct")!;
+    const job = await live(); await correct.prepare(job);
+    const original = randomUUID(); await correct.run(job, original, "base");
+    /** What the previous application would write for a correction under `commandId`: a revision bound to a "corrected" audit event. */
+    const legacyCorrection = async (commandId: string) => {
+      const client = await h.admin.connect();
+      try {
+        await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+        await client.query(`INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id,invalidates_unresolved_findings)
+          SELECT gen_random_uuid(),tenant_id,job_id,proposal_id,$2,revision+1000,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id,invalidates_unresolved_findings
+          FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$3`, [h.tenant, commandId, original]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; } finally { client.release(); }
+    };
+    const createId = randomUUID(); await claim(createId, job, "supplier_match.create");
+    await expect(legacyCorrection(createId)).rejects.toMatchObject({ code: "23505" });
+    const correctId = randomUUID(); await claim(correctId, job, "supplier_match.correct");
+    await expect(legacyCorrection(correctId)).resolves.toBeUndefined();
   });
 });

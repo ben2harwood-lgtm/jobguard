@@ -214,4 +214,20 @@ CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.command_
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.purchase_order_placement FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('purchase_order.place','command_id');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.stage_completion FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('proof.complete','command_id');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('evidence.begin_upload','id');
+-- A supplier match revision is a creation's or a correction's, told apart only by its audit event (Codex P2 4197723875), which the
+-- writer may append later in the same transaction (the reference is deferred). The insert trigger above already holds the id's lock
+-- and admits either kind; this one runs at commit, when the event exists, and requires the claim's kind to be exactly that one.
+CREATE FUNCTION app.reserve_supplier_match_kind() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+DECLARE kind text; claimed text;
+BEGIN
+  SELECT CASE event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' ELSE 'supplier_match.correct' END INTO kind
+    FROM app.audit_event WHERE tenant_id=NEW.tenant_id AND id=NEW.audit_event_id;
+  SELECT command_type INTO claimed FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
+  IF claimed IS NOT NULL AND claimed IS DISTINCT FROM kind THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+  RETURN NULL;
+END $$;
+ALTER FUNCTION app.reserve_supplier_match_kind() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.reserve_supplier_match_kind() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+CREATE CONSTRAINT TRIGGER c_watchdog_command_kind_at_commit AFTER INSERT ON app.supplier_match_revision DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.reserve_supplier_match_kind();
 COMMIT;
