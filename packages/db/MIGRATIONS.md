@@ -185,8 +185,10 @@ documented application rollback, the previous application still inserts into tho
 `b_watchdog_command_id_before_insert` trigger (`app.reserve_watchdog_command_id`) that takes the same per-id transaction lock
 the claim takes first, then refuses (`23505 IDEMPOTENCY_CONFLICT`) an id already claimed for another kind or another job, and
 any row under a claimed id that does not come from the transaction that claimed it: a claimed command has its effects in its
-claiming transaction, so a later row is a second effect of a completed command (`claimCommandIdentity` notes its ids in the
-transaction-local `app.watchdog_claims`). A
+claiming transaction, so a later row is a second effect of a completed command. Whether this transaction made the claim is read
+from the database itself (the identity row's `xmin` is this transaction's id), never from anything a session can set; claims are
+made outside savepoints. A store that holds at most one row per command id may still see a replay re-run its idempotent insert
+(`ON CONFLICT DO NOTHING/UPDATE`); when the command's row is already there that insert can add nothing, so it is admitted. A
 claim and a previous-schema write of one id are therefore serialised in either order: whichever commits first, the other
 sees it and conflicts. A supplier match revision is a creation's or a correction's only by its audit event, which may be
 appended later in the same transaction, so a deferred constraint trigger (`app.reserve_supplier_match_kind`) also requires, at

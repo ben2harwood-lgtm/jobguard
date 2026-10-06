@@ -192,33 +192,43 @@ DECLARE
   cid uuid := (new_row->>TG_ARGV[1])::uuid;
   jid uuid := CASE WHEN TG_TABLE_NAME='command_receipt' THEN nullif(split_part(new_row->>'semantic_key',':',2),'')::uuid ELSE (new_row->>'job_id')::uuid END;
   claimed record;
+  present boolean;
 BEGIN
   IF cid IS NULL THEN RETURN NEW; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||NEW.tenant_id::text||':'||cid::text,0));
-  SELECT command_type,job_id INTO claimed FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=cid;
+  -- own: the identity row was inserted by this very transaction (its xmin is this transaction's id, compared modulo 2^32 as xmin
+  -- holds the 32-bit form), i.e. this transaction made the claim. Database-derived, so no session can assert it (Codex P2 4199535957).
+  SELECT command_type,job_id,(xmin::text::bigint = pg_current_xact_id()::text::bigint % 4294967296) AS own INTO claimed
+    FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=cid;
   IF FOUND AND (NOT claimed.command_type=ANY(string_to_array(TG_ARGV[0],',')) OR claimed.job_id IS DISTINCT FROM jid)
   THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
   -- A claimed command has its effects in the transaction that claimed it. A row under a claimed id from any other transaction is a
   -- second effect of a command that already completed, even of the same kind on the same job (e.g. a previous-schema retry after a
-  -- claim that completed with no row of its own), so it is refused (Codex P2 4199348149). claimCommandIdentity notes its ids here.
-  IF FOUND AND position(cid::text||',' IN coalesce(current_setting('app.watchdog_claims',true),''))=0
-  THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+  -- claim that completed with no row of its own), so it is refused (Codex P2 4199348149). Claims are made outside savepoints.
+  -- A store that holds at most one row per command id (flagged 'unique') may see a replay re-run its idempotent insert (ON CONFLICT
+  -- DO NOTHING/UPDATE): when the command's row is already there the insert can add nothing, so it is not a second effect.
+  IF FOUND AND NOT claimed.own THEN
+    IF TG_ARGV[2]='unique' THEN
+      EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I.%I WHERE tenant_id=$1 AND %I=$2)',TG_TABLE_SCHEMA,TG_TABLE_NAME,TG_ARGV[1]) INTO present USING NEW.tenant_id,cid;
+    END IF;
+    IF NOT coalesce(present,false) THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+  END IF;
   RETURN NEW;
 END $$;
 ALTER FUNCTION app.reserve_watchdog_command_id() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.reserve_watchdog_command_id() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.planned_work_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('readiness.record','command_id');
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.readiness_decision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('readiness.advance','command_id');
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.discrepancy_finding_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.evaluate','command_id');
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.discrepancy_review_outcome FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.review','command_id');
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_bill_supersession FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.supersede','command_id');
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_match_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('supplier_match.create,supplier_match.correct','command_id');
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_fact_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('supplier_document.confirm','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.planned_work_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('readiness.record','command_id','unique');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.readiness_decision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('readiness.advance','command_id','unique');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.discrepancy_finding_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.evaluate','command_id','unique');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.discrepancy_review_outcome FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.review','command_id','unique');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_bill_supersession FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.supersede','command_id','unique');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_match_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('supplier_match.create,supplier_match.correct','command_id','unique');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_fact_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('supplier_document.confirm','command_id','unique');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.inbox_outcome_event FOR EACH ROW WHEN (NEW.event_kind='dismissed') EXECUTE FUNCTION app.reserve_watchdog_command_id('inbox.dismiss','command_id');
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.command_receipt FOR EACH ROW WHEN (NEW.command_type='inbox.seed') EXECUTE FUNCTION app.reserve_watchdog_command_id('inbox.seed','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.command_receipt FOR EACH ROW WHEN (NEW.command_type='inbox.seed') EXECUTE FUNCTION app.reserve_watchdog_command_id('inbox.seed','command_id','unique');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.purchase_order_placement FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('purchase_order.place','command_id');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.stage_completion FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('proof.complete','command_id');
-CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('evidence.begin_upload','id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('evidence.begin_upload','id','unique');
 -- 0050 supplier-match revision check: every existing revision must already cite its own proposal's confirmed or corrected
 -- event (Codex P2 4199041831); the trigger below only sees new rows. Both tables FORCE row-level security, so the scan suspends
 -- FORCE for this transaction exactly like the foreign-key scans above, and restores it before anything else runs.

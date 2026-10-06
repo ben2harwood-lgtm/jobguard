@@ -138,6 +138,19 @@ describe("previous-schema writers and claimed ids", () => {
     try { await expect(legacySeed(claiming, own, job)).resolves.toBeDefined(); await claiming.query("COMMIT"); } finally { claiming.release(); }
     const laterJob = await live(), completed = randomUUID(); await claim(completed, laterJob, "inbox.seed");
     await expect(legacySeed(h.admin, completed, laterJob)).rejects.toMatchObject({ code: "23505" });
+    // Claim ownership comes from the database, not from anything a session can set (Codex P2 4199535957): neither a forged
+    // setting nor re-claiming the same id (a replay, which inserts no identity) makes this transaction the claimant.
+    for (const pretend of [
+      (client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }) => client.query("SELECT set_config('app.watchdog_claims',$1,true)", [`${completed},`]),
+      (client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }) => claimCommandIdentity({ $client: client } as unknown as TenantTransaction, { tenantId: h.tenant, commandId: completed, jobId: laterJob, kind: "inbox.seed", requestHash: hash }),
+    ]) {
+      const client = await h.admin.connect();
+      try {
+        await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+        await pretend(client);
+        await expect(legacySeed(client, completed, laterJob)).rejects.toMatchObject({ code: "23505" });
+      } finally { await client.query("ROLLBACK"); client.release(); }
+    }
     expect((await h.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completed])).rows[0].n).toBe(0);
   });
 

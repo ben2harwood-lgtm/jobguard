@@ -81,9 +81,6 @@ export async function claimCommandIdentity(database: TenantTransaction, spec: { 
   const inserted = await database.$client.query(
     "INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash)VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING command_id",
     [spec.tenantId, spec.commandId, spec.jobId, spec.kind, spec.requestHash]);
-  // Every id this transaction claimed is noted transaction-locally: the previous-schema stores admit a row under a claimed id only
-  // from the transaction that claimed it (0050 \`app.reserve_watchdog_command_id\`), never as a second effect after the command completed.
-  await database.$client.query("SELECT set_config('app.watchdog_claims', coalesce(current_setting('app.watchdog_claims', true), '') || $1 || ',', true)", [spec.commandId.toLowerCase()]);
   if (inserted.rowCount) return "new";
   const existing = (await database.$client.query<{ job_id: string; command_type: string; request_hash: string }>(
     "SELECT job_id,command_type,request_hash FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2", [spec.tenantId, spec.commandId])).rows[0];
