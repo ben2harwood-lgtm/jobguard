@@ -154,6 +154,17 @@ describe("previous-schema writers and claimed ids", () => {
     expect((await h.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completed])).rows[0].n).toBe(0);
   });
 
+  it("stamps every claim with the transaction that made it, whatever the insert supplies (Codex P2 4199817679)", async () => {
+    const job = await live(), commandId = randomUUID(), client = await h.admin.connect();
+    try {
+      await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+      const now = (await client.query("SELECT pg_current_xact_id()::text x")).rows[0].x as string;
+      const forged = (BigInt(now) + 1000n).toString();
+      await client.query("INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash,claimed_xact)VALUES($1,$2,$3,'inbox.seed',$4,$5::xid8)", [h.tenant, commandId, job, hash, forged]);
+      expect((await client.query("SELECT claimed_xact::text x FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows[0].x).toBe(now);
+    } finally { await client.query("ROLLBACK"); client.release(); }
+  });
+
   it("serialises a claim and a previous-schema write of one id, in either order", async () => {
     const job = await live();
     // The claim holds the id: the previous-schema write waits for it, then conflicts.

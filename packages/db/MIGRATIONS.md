@@ -187,7 +187,8 @@ the claim takes first, then refuses (`23505 IDEMPOTENCY_CONFLICT`) an id already
 any row under a claimed id that does not come from the transaction that claimed it: a claimed command has its effects in its
 claiming transaction, so a later row is a second effect of a completed command. Whether this transaction made the claim is read
 from the database itself (the identity row's `claimed_xact`, the full 64-bit id of the claiming transaction, which never wraps,
-equals this transaction's), never from anything a session can set; claims are made outside savepoints. A store that holds at most one row per command id may still see a replay re-run its idempotent insert
+equals this transaction's; a trigger stamps it on every claim, whatever the insert supplies), never from anything a session can
+set; claims are made outside savepoints. A store that holds at most one row per command id may still see a replay re-run its idempotent insert
 (`ON CONFLICT DO NOTHING/UPDATE`); when the command's row is already there that insert can add nothing, so it is admitted. A
 claim and a previous-schema write of one id are therefore serialised in either order: whichever commits first, the other
 sees it and conflicts. A supplier match revision is a creation's or a correction's only by its audit event, which may be

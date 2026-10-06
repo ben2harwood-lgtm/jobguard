@@ -164,6 +164,14 @@ CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.evidence_link 
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.synthetic_evidence_original FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.stage_completion FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
 CREATE TRIGGER a_watchdog_live_before_insert BEFORE INSERT ON app.watchdog_command_identity FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
+-- The claiming transaction is recorded by the database, whatever the insert supplies (Codex P2 4199817679): a session cannot pre-create
+-- a claim stamped with some other transaction's id to make a later write look like the claimant's own.
+CREATE FUNCTION app.stamp_watchdog_claim() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+BEGIN NEW.claimed_xact := pg_current_xact_id(); RETURN NEW; END $$;
+ALTER FUNCTION app.stamp_watchdog_claim() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.stamp_watchdog_claim() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+CREATE TRIGGER b_watchdog_claim_stamp_before_insert BEFORE INSERT ON app.watchdog_command_identity FOR EACH ROW EXECUTE FUNCTION app.stamp_watchdog_claim();
 -- Finalisation mutates the pending upload before registering its immutable
 -- object. Keep that phase guarded too; cleanup/rejection remains possible.
 CREATE FUNCTION app.guard_watchdog_upload_update() RETURNS trigger
