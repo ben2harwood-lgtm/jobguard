@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { jobMutationRegistry, watchdogCommandGuards } from "@jobguard/core";
-import { WatchdogError } from "@jobguard/db";
+import { EvidenceError, ProofCommandError, WatchdogError } from "@jobguard/db";
+import { ProofApplicationError, finalizeFailure } from "./proof/proof.application.js";
 import { WatchdogExceptionFilter } from "./watchdog.filter.js";
 const root = new URL("../../../", import.meta.url);
 const MUTATION_VERBS = ["POST", "PUT", "PATCH", "DELETE"] as const;
@@ -301,5 +302,18 @@ describe("CH-2 command coverage and lock order", () => {
     const host = { switchToHttp: () => ({ getResponse: () => ({ status(code: number) { status = code; return { json(value: unknown) { body = value; } }; } }) }) };
     new WatchdogExceptionFilter().catch(new WatchdogError("JOB_NOT_LIVE"), host as never);
     expect(status).toBe(409); expect(body).toEqual({ code: "JOB_NOT_LIVE" });
+  });
+});
+
+describe("proof finalisation failures", () => {
+  it("answers a command id reused with another request as a conflict (409), not an invalid proof (Codex P2 4197412772)", () => {
+    const answer = finalizeFailure(new EvidenceError("COMMAND_CONFLICT"));
+    expect(answer).toBeInstanceOf(ProofApplicationError); expect((answer as ProofApplicationError).code).toBe("CONFLICT");
+  });
+  it("keeps watchdog and proof-command refusals, and treats any other failure as an invalid proof", () => {
+    const watchdog = new WatchdogError("JOB_NOT_LIVE"), proof = new ProofCommandError("FORBIDDEN");
+    expect(finalizeFailure(watchdog)).toBe(watchdog); expect(finalizeFailure(proof)).toBe(proof);
+    for (const error of [new EvidenceError("OBJECT_INVALID", "wrong_hash"), new EvidenceError("UPLOAD_EXPIRED"), new Error("anything else")])
+      expect((finalizeFailure(error) as ProofApplicationError).code).toBe("PROOF_INVALID");
   });
 });
