@@ -191,7 +191,9 @@ commit, the claim's kind to be exactly the one that event names; a revision citi
 or `supplier_match.corrected` about its own proposal is refused outright, and the claim-time lookup treats such a previous-schema
 row as owned by no claimable kind. 0050 also refuses to apply (`23514`) while any existing revision fails that rule; it scans with
 FORCE suspended on the two tables for its own transaction, as for the foreign keys, and each event may stand behind only one
-revision (`supplier_match_revision_audit_event_uq`), so a revision cannot borrow an earlier event of its own proposal. The
+revision (`supplier_match_revision_audit_event_uq`), so a revision cannot borrow an earlier event of its own proposal. A
+correction's event must also carry the revision's own payload hash; a creation's event hashes the creation request instead,
+so it is bound by its subject and that uniqueness. The
 read-only pre-deploy query lists both kinds of offender:
 
 ```sql
@@ -199,7 +201,8 @@ read-only pre-deploy query lists both kinds of offender:
 -- event, or that share their event with another revision.
 SELECT r.tenant_id, r.id, r.command_id FROM app.supplier_match_revision r WHERE NOT EXISTS(SELECT 1 FROM app.audit_event ae
   WHERE (ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) AND ae.event_type IN('supplier_match.confirmed','supplier_match.corrected')
-    AND ae.subject_type='supplier_match' AND ae.subject_ref=r.proposal_id::text)
+    AND ae.subject_type='supplier_match' AND ae.subject_ref=r.proposal_id::text
+    AND (ae.event_type='supplier_match.confirmed' OR ae.payload->'hashes'->>'payloadHash'=rtrim(r.payload_hash)))
   OR EXISTS(SELECT 1 FROM app.supplier_match_revision o WHERE (o.tenant_id,o.audit_event_id)=(r.tenant_id,r.audit_event_id) AND o.id<>r.id);
 ```
  Pre-deploy check, run like the one below (a role that bypasses row-level security; the suite runs this exact text against

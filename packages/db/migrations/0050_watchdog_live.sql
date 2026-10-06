@@ -222,7 +222,8 @@ ALTER TABLE app.audit_event NO FORCE ROW LEVEL SECURITY;
 DO $$ BEGIN
   IF EXISTS(SELECT 1 FROM app.supplier_match_revision r WHERE NOT EXISTS(SELECT 1 FROM app.audit_event ae
     WHERE (ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) AND ae.event_type IN('supplier_match.confirmed','supplier_match.corrected')
-      AND ae.subject_type='supplier_match' AND ae.subject_ref=r.proposal_id::text))
+      AND ae.subject_type='supplier_match' AND ae.subject_ref=r.proposal_id::text
+      AND (ae.event_type='supplier_match.confirmed' OR ae.payload->'hashes'->>'payloadHash'=rtrim(r.payload_hash))))
   THEN RAISE EXCEPTION 'a supplier match revision does not cite its own confirmed or corrected event' USING ERRCODE='23514'; END IF;
 END $$;
 ALTER TABLE app.supplier_match_revision FORCE ROW LEVEL SECURITY;
@@ -247,8 +248,11 @@ BEGIN
   -- Only a creation's "confirmed" or a correction's "corrected" event can stand behind a revision; any other event is refused
   -- outright, claimed or not, so no revision can be bound to an effect it did not have (Codex P2 4197809983).
   -- The event must also be this revision's own: about this proposal (Codex P2 4199041823), not another proposal's or job's.
+  -- A correction's event attests to the correction itself: it carries the revision's own payload hash (Codex P2 4199236808). A
+  -- creation's event hashes the creation request, not the derived revision, so it is bound by subject and uniqueness alone.
   SELECT CASE event_type WHEN 'supplier_match.confirmed' THEN 'supplier_match.create' WHEN 'supplier_match.corrected' THEN 'supplier_match.correct' END INTO kind
-    FROM app.audit_event WHERE tenant_id=NEW.tenant_id AND id=NEW.audit_event_id AND subject_type='supplier_match' AND subject_ref=NEW.proposal_id::text;
+    FROM app.audit_event WHERE tenant_id=NEW.tenant_id AND id=NEW.audit_event_id AND subject_type='supplier_match' AND subject_ref=NEW.proposal_id::text
+      AND (event_type='supplier_match.confirmed' OR payload->'hashes'->>'payloadHash'=rtrim(NEW.payload_hash));
   IF kind IS NULL THEN RAISE EXCEPTION 'supplier match revision must cite its own proposal''s confirmed or corrected event' USING ERRCODE='23514'; END IF;
   SELECT command_type INTO claimed FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=NEW.command_id;
   IF claimed IS NOT NULL AND claimed IS DISTINCT FROM kind THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
