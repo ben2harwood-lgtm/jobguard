@@ -1077,6 +1077,22 @@ describe('approval race preserves command identity (P2-8)', () => {
 });
 
 describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
+  it('takes the shared receipt before the case lock, so a dispatcher-ordered command with the same id gives a typed conflict, not a deadlock', async () => {
+    const { caseId } = await attached();
+    const command = previewCommand(await repo.read(context, caseId));
+    const dispatcher = await admin.connect();
+    try {
+      // The shared dispatcher's order: claim the receipt, then the approval mutation takes the case lock.
+      await dispatcher.query('BEGIN');
+      await dispatcher.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'recovery.message.approve',$3,repeat('b',64),'processing',$4)",
+        [command.commandId, fixture.tenantId, command.commandId, actor.membershipId]);
+      const outcome = repo.preview(context, caseId, command, actor).then(() => 'committed', (error: { code?: string; message?: string }) => error.code ?? error.message);
+      await new Promise(resolve => setTimeout(resolve, 500)); // the preview is now waiting on the receipt
+      await dispatcher.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [fixture.tenantId, caseId]);
+      await dispatcher.query('COMMIT');
+      expect(await outcome).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+    } finally { dispatcher.release(); }
+  });
   it('a concurrent command of another family holding the same id makes the recovery command conflict, never both commit', async () => {
     const { caseId } = await attached();
     const command = previewCommand(await repo.read(context, caseId));
