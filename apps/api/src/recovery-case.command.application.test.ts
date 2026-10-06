@@ -44,10 +44,12 @@ it.each(["MEMBERSHIP_FORBIDDEN", "JOB_NOT_FOUND"])("lists nothing when the membe
   await expect(new RecoveryCaseApplication({} as Pool).list(jobId)).rejects.toThrow(code);
   expect(spies.list).not.toHaveBeenCalled();
 });
-it("returns the refreshed list after a command without a second membership read", async () => {
+it("returns the refreshed list after a command through the membership-checked read, without a second preflight", async () => {
   await new RecoveryCaseApplication({} as Pool).command(jobId, input());
   expect(spies.verify).toHaveBeenCalledTimes(1); // the preflight; the repository rechecks inside its own write transaction
   expect(spies.list).toHaveBeenCalledTimes(1);
+  // The answer after the write is a read of its own, so it carries the membership too (Codex P2 4196319730).
+  expect(spies.list).toHaveBeenCalledWith(expect.anything(), jobId, expect.objectContaining({ membershipId: expect.any(String), identityUserId: expect.any(String) }));
 });
 // M4-1-S-R repair 11 (Sol P2-5): the response names the case THIS command changed, as the repository returned it, so a browser never has to guess
 // which case it opened from a list that another browser may have changed in the meantime.

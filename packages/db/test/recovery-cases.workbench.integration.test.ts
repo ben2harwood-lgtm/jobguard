@@ -166,6 +166,19 @@ describe("M4-1-S HOLD regressions", () => {
    await admin.query("UPDATE app.membership SET revoked_at=now() WHERE tenant_id=$1 AND id=$2",[tenant,m.membershipId]);
    await expect(repo.listForMember(ctx,job,m)).rejects.toThrow("MEMBERSHIP_FORBIDDEN");
   });
+  it("a member read waits for an in-flight revocation and then refuses, never listing on a stale membership (Codex P2)", async () => {
+   const repo = new RecoveryCaseRepository(runtime), m = await seed();
+   await repo.command(ctx,job,openCase(),m);
+   const holder = await admin.connect();
+   try {
+    await holder.query("BEGIN");
+    await holder.query("UPDATE app.membership SET revoked_at=now() WHERE tenant_id=$1 AND id=$2",[tenant,m.membershipId]);
+    const read = repo.listForMember(ctx,job,m).then(()=>"listed",(error:Error)=>error.message);
+    await new Promise(resolve=>setTimeout(resolve,500)); // an unlocked check would already have listed here
+    await holder.query("COMMIT");
+    expect(await read).toBe("MEMBERSHIP_FORBIDDEN");
+   } finally { holder.release(); }
+  });
   it("refuses a non-owner role, an expired membership, another identity and another tenant, writing nothing", async () => {
    const repo = new RecoveryCaseRepository(runtime), before = await counts();
    for (const change of ["role='viewer'","expires_at=now()-interval '1 second'"]) await expect(repo.command(ctx,job,openCase(),await seed(change))).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");
@@ -483,7 +496,7 @@ describe("M4-1-S-R repair 11 (Sol P2-4): commands recorded before this upgrade s
 // Repair 14: real PostgreSQL commits followed by injected answer-read faults.
 it("a committed opening with a failed repository answer replays the same case exactly once", async () => {
  const repo=new RecoveryCaseRepository(runtime),body=openCase();
- const list=vi.spyOn(repo,"list").mockRejectedValueOnce(new Error("RECOVERY_STALE_REVISION"));
+ const list=vi.spyOn(repo,"listForMember").mockRejectedValueOnce(new Error("RECOVERY_STALE_REVISION"));
  try {
   await expect(repo.command(ctx,job,body,owner)).rejects.toMatchObject({code:"RECOVERY_COMMAND_OUTCOME_UNKNOWN"});
   const stored=await admin.query("SELECT case_id FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[tenant,body.commandId]);
@@ -497,7 +510,7 @@ it("a committed opening with a failed repository answer replays the same case ex
 it("a committed eligibility revision with a failed repository answer replays exactly once", async () => {
  const repo=new RecoveryCaseRepository(runtime),opened=await repo.command(ctx,job,openCase(),owner);
  const body={version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:opened.id,expectedCaseRevision:opened.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"evidence_backed_withheld_payment"};
- const list=vi.spyOn(repo,"list").mockRejectedValueOnce(new Error("ELIGIBILITY_STALE_REVISION"));
+ const list=vi.spyOn(repo,"listForMember").mockRejectedValueOnce(new Error("ELIGIBILITY_STALE_REVISION"));
  try {
   await expect(repo.eligibilityCommand(ctx,job,body,owner)).rejects.toMatchObject({code:"RECOVERY_COMMAND_OUTCOME_UNKNOWN"});
   const replay=await repo.eligibilityCommand(ctx,job,body,owner);

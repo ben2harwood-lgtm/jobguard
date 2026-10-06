@@ -17,11 +17,11 @@ export class RecoveryCaseApplication {
   // The preflight above maps mode and database failures; the read itself rechecks membership and job in its own transaction (Codex P2).
   return { version: "recovery-case-workbench.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, cases: await this.repo.listForMember(context(), jobId, { membershipId: membership.membershipId, identityUserId: membership.identityUserId }) };
  }
- // The refreshed list returned after a write that has just verified the membership inside its own transaction; it is never a way in for a read.
+ // The refreshed list returned after a write. It is a read of its own, so it rechecks the membership like any other read.
  // `affectedCaseId` is the case the command itself changed, exactly as the repository returned it. The list is read afterwards and may already hold cases
  // another browser opened in the meantime, so a client must select by this id and never infer it from the list.
  private async view(jobId: string, affectedCaseId?: string) {
-  return { version: "recovery-case-workbench.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, cases: await this.repo.list(context(), jobId), ...(affectedCaseId === undefined ? {} : { affectedCaseId }) };
+  return { version: "recovery-case-workbench.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, cases: await this.repo.listForMember(context(), jobId, { membershipId: membership.membershipId, identityUserId: membership.identityUserId }), ...(affectedCaseId === undefined ? {} : { affectedCaseId }) };
  }
  private async committedView(jobId: string, affectedCaseId: string) {
   try { return await this.view(jobId, affectedCaseId); }

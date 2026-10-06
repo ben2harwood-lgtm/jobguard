@@ -34,18 +34,19 @@ export class RecoveryEligibilityError extends Error {
 
 export class RecoveryCaseRepository{
  constructor(private readonly pool:Pool){}
- private async committedCase(context:VerifiedTenantContext,jobId:string,caseId:string):Promise<RecoveryCaseView> {
+ // The answer after a committed command is itself a read, so it is authorised exactly like one (Codex P2 4196319730).
+ private async committedCase(context:VerifiedTenantContext,jobId:string,caseId:string,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView> {
   try {
-   const affected=(await this.list(context,jobId)).find(x=>x.id===caseId);
+   const affected=(await this.listForMember(context,jobId,reviewer)).find(x=>x.id===caseId);
    if(!affected)throw new Error("Committed case is absent from the answer");
    return affected;
   } catch(cause) { throw new RecoveryCommandOutcomeUnknownError(cause); }
  }
 
  async list(context:VerifiedTenantContext,jobId:string):Promise<RecoveryCaseView[]>{return withTenant(this.pool,context,db=>this.readCases(db,context,jobId))}
- /** The member-facing read. The membership and the job are verified in the SAME transaction as the case read, so a revocation cannot land between the check and the read. */
+ /** The member-facing read. The membership row is held FOR SHARE through the case read in the SAME transaction, so a revocation cannot commit between the check and the read (Codex P2 4196319722). */
  async listForMember(context:VerifiedTenantContext,jobId:string,member:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView[]>{return withTenant(this.pool,context,async db=>{
-  const membership=await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>transaction_timestamp())`,[context.tenantId,member.membershipId,member.identityUserId]);
+  const membership=await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>transaction_timestamp()) FOR SHARE`,[context.tenantId,member.membershipId,member.identityUserId]);
   if(membership.rowCount!==1)throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
   if(!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2",[context.tenantId,jobId])).rowCount)throw new SyntheticDemoReadError("JOB_NOT_FOUND");
   return this.readCases(db,context,jobId);
@@ -80,7 +81,7 @@ export class RecoveryCaseRepository{
   else {if(!old)throw new Error("ELIGIBILITY_REVIEW_NOT_FOUND");row={scenario:old.scenario,classification:old.classification,eligibleNetPence:old.eligible_net_pence===null?null:Number(old.eligible_net_pence),reason:old.reason,citations:old.citations,status:"superseded",evidenceRevision:Number(old.evidence_revision)+(input.subject==="evidence"?1:0),policyVersion:old.policy_version,policyRevision:Number(old.policy_revision)+(input.subject==="policy"?1:0)};}
   await db.$client.query("INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash,previous_hash)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'GBP',$13,$14,$15,$16,$17,$18,$19)",[randomUUID(),context.tenantId,jobId,caseId,revision,caseRevision,row.evidenceRevision,row.policyVersion,row.policyRevision,row.scenario,row.classification,row.eligibleNetPence,row.reason,JSON.stringify(row.citations),row.status,authorizedReviewer,input.commandId,hash,old?.subject_hash??null]);
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:authorizedReviewer,eventType:`recovery.eligibility.${input.action}`,subjectType:"recovery_case",subjectRef:caseId,payload:{references:{jobId,commandId:input.commandId},hashes:{command:hash},classifications:{recovery:"financial"}}}]);
- });return this.committedCase(context,jobId,caseId)}
+ });return this.committedCase(context,jobId,caseId,reviewer)}
  async command(context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView>{
   if(!reviewer?.membershipId||!reviewer?.identityUserId)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
   // The caller supplies the server-selected principal; any client reviewer field is ignored and replaced below.
@@ -120,5 +121,5 @@ export class RecoveryCaseRepository{
    if(input.action==="amend_claim")await db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash,previous_hash) VALUES($1,$2,$3,$4,$5,'claim_amended',$6,$7,$8,$9,$10,$11)",[randomUUID(),context.tenantId,jobId,caseId,Number(x.event_count)+1,x.state,stateAfterAmendment,input.reviewerRef,input.commandId,hash,x.previous_hash]);
   }
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:input.reviewerRef,eventType:`recovery.${input.action}`,subjectType:"recovery_case",subjectRef:caseId,payload:{references:{jobId,commandId:input.commandId},hashes:{command:hash},classifications:{recovery:"financial"}}}]);
- });return this.committedCase(context,jobId,caseId)}
+ });return this.committedCase(context,jobId,caseId,reviewer)}
 }

@@ -9,7 +9,7 @@ const command=()=>({version:"recovery-eligibility-command.v1",action:"review",co
 it("passes the server-selected synthetic membership for database verification, never a reviewer literal",async()=>{
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
  const persist=vi.spyOn(RecoveryCaseRepository.prototype,"eligibilityCommand").mockResolvedValue({id:randomUUID()} as never);
- vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([]);
+ vi.spyOn(RecoveryCaseRepository.prototype,"listForMember").mockResolvedValue([]);
  const body=command(),job=randomUUID();
  await new RecoveryCaseApplication({} as Pool).eligibility(job,body,randomUUID());
  expect(persist).toHaveBeenCalledWith(expect.anything(),job,body,{membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID});
@@ -29,13 +29,13 @@ it.each(["production","pilot_no_charge"])("refuses synthetic reviewer authority 
 // M4-1-S-R repair 10 (Sol P2): the real readSyntheticDemoJob boundary guards the read, not only the writes (no mock of it here).
 it.each(["production", "pilot_no_charge"])("refuses to list cases in %s before it reads anything", async mode => {
  vi.stubEnv("JOBGUARD_ENV",mode);
- const list=vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([]);
+ const list=vi.spyOn(RecoveryCaseRepository.prototype,"listForMember").mockResolvedValue([]);
  await expect(new RecoveryCaseApplication({} as Pool).list(randomUUID())).rejects.toThrow("MEMBERSHIP_FORBIDDEN");
  expect(list).not.toHaveBeenCalled();
 });
 it("lists nothing when the membership and job lookup itself cannot be completed", async () => {
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
- const list=vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([]);
+ const list=vi.spyOn(RecoveryCaseRepository.prototype,"listForMember").mockResolvedValue([]);
  await expect(new RecoveryCaseApplication({} as Pool).list(randomUUID())).rejects.toThrow("DATABASE_UNAVAILABLE");
  expect(list).not.toHaveBeenCalled();
 });
@@ -44,7 +44,7 @@ it("returns the id of the case an eligibility command affected, as the repositor
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
  const affected=randomUUID(),later=randomUUID();
  vi.spyOn(RecoveryCaseRepository.prototype,"eligibilityCommand").mockResolvedValue({id:affected} as never);
- vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([{id:affected},{id:later}] as never);
+ vi.spyOn(RecoveryCaseRepository.prototype,"listForMember").mockResolvedValue([{id:affected},{id:later}] as never);
  const response=await new RecoveryCaseApplication({} as Pool).eligibility(randomUUID(),command(),randomUUID());
  expect(response.affectedCaseId).toBe(affected);
 });
@@ -52,7 +52,7 @@ it("returns the id of the case an eligibility command affected, as the repositor
 it("an eligibility command that committed cannot turn its answer-read failure into a refusal", async () => {
  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
  const persist = vi.spyOn(RecoveryCaseRepository.prototype, "eligibilityCommand").mockResolvedValue({ id: randomUUID() } as never);
- vi.spyOn(RecoveryCaseRepository.prototype, "list").mockRejectedValue(new Error("ELIGIBILITY_STALE_REVISION"));
+ vi.spyOn(RecoveryCaseRepository.prototype, "listForMember").mockRejectedValue(new Error("ELIGIBILITY_STALE_REVISION"));
  await expect(new RecoveryCaseApplication({} as Pool).eligibility(randomUUID(), command(), randomUUID())).rejects.toMatchObject({ code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN" });
  expect(persist).toHaveBeenCalledTimes(1);
 });
