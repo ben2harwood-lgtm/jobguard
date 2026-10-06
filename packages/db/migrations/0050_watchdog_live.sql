@@ -98,6 +98,8 @@ CREATE TABLE app.watchdog_command_identity(
   command_type text NOT NULL CHECK(command_type IN ('readiness.record','readiness.advance','things_to_check.evaluate','things_to_check.review','things_to_check.supersede','supplier_match.create','supplier_match.correct','inbox.seed','inbox.dismiss','purchase_order.revise','purchase_order.place','supplier_document.intake','supplier_document.receipt','supplier_document.confirm','evidence.begin_upload','evidence.finalize','proof.complete')),
   request_hash char(64) NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  -- The full 64-bit id of the transaction that made the claim: it never wraps, so it tells that transaction apart from every later one.
+  claimed_xact xid8 NOT NULL DEFAULT pg_current_xact_id(),
   PRIMARY KEY(tenant_id,command_id),
   UNIQUE(tenant_id,command_id,job_id,command_type),
   FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id));
@@ -196,9 +198,9 @@ DECLARE
 BEGIN
   IF cid IS NULL THEN RETURN NEW; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||NEW.tenant_id::text||':'||cid::text,0));
-  -- own: the identity row was inserted by this very transaction (its xmin is this transaction's id, compared modulo 2^32 as xmin
-  -- holds the 32-bit form), i.e. this transaction made the claim. Database-derived, so no session can assert it (Codex P2 4199535957).
-  SELECT command_type,job_id,(xmin::text::bigint = pg_current_xact_id()::text::bigint % 4294967296) AS own INTO claimed
+  -- own: this very transaction made the claim, read from the claim's full 64-bit transaction id, which is set by the database when the
+  -- claim is inserted and never wraps (Codex P2 4199535957, 4199722158); no later transaction, and no session setting, can match it.
+  SELECT command_type,job_id,(claimed_xact = pg_current_xact_id()) AS own INTO claimed
     FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=cid;
   IF FOUND AND (NOT claimed.command_type=ANY(string_to_array(TG_ARGV[0],',')) OR claimed.job_id IS DISTINCT FROM jid)
   THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
