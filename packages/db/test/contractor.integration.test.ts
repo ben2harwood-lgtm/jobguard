@@ -158,6 +158,18 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
    }
   }
  });
+ it('refuses a subject ID already naming another unit, team, client or the tenant, so scope checks cannot be confused',async()=>{
+  const {p,v}=await setup();const ownBranch=v.teams[0]!.branch_id,ownRegion=v.units.find(x=>x.kind==='region')!.id;
+  const otherBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:ownRegion,name:'Fictional other branch'})).id;
+  const foreignClient=(await command(p,{kind:'client.create',branchId:otherBranch,name:'Fictional foreign client',clientType:'insurer'})).id,contract=randomUUID();
+  await command(p,{kind:'contract.revise',clientId:foreignClient,contractId:contract,document,rules:referenceApprovalRulesV1});
+  const branchAdmin=await fixtureMember(p,'admin','branch',ownBranch);
+  // Exploit: a branch administrator reuses the other branch's client UUID as a new team in their own branch.
+  await expect(command(branchAdmin,{kind:'team.create',id:foreignClient,branchId:ownBranch,name:'Fictional shadow team'})).rejects.toMatchObject({code:'COMMAND_CONFLICT'});
+  await expect(query(branchAdmin,'contracts',contract)).rejects.toMatchObject({code:'NOT_FOUND'});
+  for(const fields of [{kind:'client.create',id:v.teams[0]!.id,branchId:ownBranch,name:'Fictional shadow client',clientType:'insurer'},{kind:'unit.create',id:foreignClient,unitKind:'branch',parentId:ownRegion,name:'Fictional shadow branch'},{kind:'team.create',id:p.tenantId,branchId:ownBranch,name:'Fictional shadow tenant'}])
+   await expect(command(p,fields)).rejects.toMatchObject({code:'COMMAND_CONFLICT'});
+ });
  it('runs the command and query conformance matrix in own/other team, branch and region',async()=>{
   const {p,v}=await setup();const ownBranch=v.teams[0]!.branch_id,ownRegion=v.units.find(x=>x.kind==='region')!.id;
   const otherTeam=(await command(p,{kind:'team.create',branchId:ownBranch,name:'Fictional other team'})).id;
