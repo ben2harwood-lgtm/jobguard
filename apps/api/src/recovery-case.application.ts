@@ -14,7 +14,8 @@ export class RecoveryCaseApplication {
  // tenant is indistinguishable from a missing one.
  async list(jobId: string) {
   await readSyntheticDemoJob(this.pool, jobId);
-  return this.view(jobId);
+  // The preflight above maps mode and database failures; the read itself rechecks membership and job in its own transaction (Codex P2).
+  return { version: "recovery-case-workbench.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, cases: await this.repo.listForMember(context(), jobId, { membershipId: membership.membershipId, identityUserId: membership.identityUserId }) };
  }
  // The refreshed list returned after a write that has just verified the membership inside its own transaction; it is never a way in for a read.
  // `affectedCaseId` is the case the command itself changed, exactly as the repository returned it. The list is read afterwards and may already hold cases

@@ -157,6 +157,15 @@ describe("M4-1-S HOLD regressions", () => {
    await expect(repo.command(ctx,job,command({action:"transition",caseId:first.id,eventType:"assemble_evidence",expectedRevision:first.revision}),m)).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");
    expect(await counts()).toEqual(before);
   });
+  it("the member-facing read rechecks the membership and job inside the read's own transaction (Codex P2)", async () => {
+   const repo = new RecoveryCaseRepository(runtime), m = await seed();
+   await repo.command(ctx,job,openCase(),m);
+   expect((await repo.listForMember(ctx,job,m)).length).toBeGreaterThan(0);
+   await expect(repo.listForMember(ctx,randomUUID(),m)).rejects.toThrow("JOB_NOT_FOUND");
+   await expect(repo.listForMember(ctx,job,{...m,identityUserId:randomUUID()})).rejects.toThrow("MEMBERSHIP_FORBIDDEN");
+   await admin.query("UPDATE app.membership SET revoked_at=now() WHERE tenant_id=$1 AND id=$2",[tenant,m.membershipId]);
+   await expect(repo.listForMember(ctx,job,m)).rejects.toThrow("MEMBERSHIP_FORBIDDEN");
+  });
   it("refuses a non-owner role, an expired membership, another identity and another tenant, writing nothing", async () => {
    const repo = new RecoveryCaseRepository(runtime), before = await counts();
    for (const change of ["role='viewer'","expires_at=now()-interval '1 second'"]) await expect(repo.command(ctx,job,openCase(),await seed(change))).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");

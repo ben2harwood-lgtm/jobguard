@@ -5,7 +5,7 @@ const spies = vi.hoisted(() => ({ verify: vi.fn(), command: vi.fn(), list: vi.fn
 vi.mock("@jobguard/db", async importOriginal => ({
   ...await importOriginal<typeof import("@jobguard/db")>(),
   readSyntheticDemoJob: spies.verify,
-  RecoveryCaseRepository: class { command = spies.command; list = spies.list; },
+  RecoveryCaseRepository: class { command = spies.command; list = spies.list; listForMember = spies.list; },
 }));
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID } from "@jobguard/db";
 const serverReviewer = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
@@ -34,6 +34,8 @@ it("refuses the command when membership verification fails", async () => {
 it("verifies the persisted membership and job access before it lists cases", async () => {
   const pool = {} as Pool;
   await expect(new RecoveryCaseApplication(pool).list(jobId)).resolves.toMatchObject({ cases: [] });
+  // The read itself rechecks the server-selected membership in its own transaction (Codex P2), not only the preflight.
+  expect(spies.list).toHaveBeenCalledWith(expect.anything(), jobId, expect.objectContaining({ membershipId: expect.any(String), identityUserId: expect.any(String) }));
   expect(spies.verify).toHaveBeenCalledWith(pool, jobId);
   expect(spies.verify.mock.invocationCallOrder[0]).toBeLessThan(spies.list.mock.invocationCallOrder[0]!);
 });

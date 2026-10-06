@@ -3,7 +3,8 @@ import type { Pool } from "pg";
 import { assertRecoverySources, classifyReferenceD03, RecoverySourceError, recoveryCaseCommandV1, recoveryEligibilityCommandV1, stateAfterClaimAmendment, transitionRecoveryCase, type RecoveryEligibilityCommand, type RecoveryCaseState } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { resolveRecoverySources, type RecoverySourceView } from "./recovery-case-sources.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { SyntheticDemoReadError } from "./demo-runtime.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 // PostgreSQL returns uuids in lower case, and the case lock key, the replay lookup and the returned-case lookup all compare that spelling. A command is
 // therefore canonicalised BEFORE it is hashed, locked, queried or looked up, so an upper-case case or command id is the same command, never a commit that returns nothing.
@@ -41,7 +42,15 @@ export class RecoveryCaseRepository{
   } catch(cause) { throw new RecoveryCommandOutcomeUnknownError(cause); }
  }
 
- async list(context:VerifiedTenantContext,jobId:string):Promise<RecoveryCaseView[]>{return withTenant(this.pool,context,async db=>{
+ async list(context:VerifiedTenantContext,jobId:string):Promise<RecoveryCaseView[]>{return withTenant(this.pool,context,db=>this.readCases(db,context,jobId))}
+ /** The member-facing read. The membership and the job are verified in the SAME transaction as the case read, so a revocation cannot land between the check and the read. */
+ async listForMember(context:VerifiedTenantContext,jobId:string,member:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView[]>{return withTenant(this.pool,context,async db=>{
+  const membership=await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>transaction_timestamp())`,[context.tenantId,member.membershipId,member.identityUserId]);
+  if(membership.rowCount!==1)throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
+  if(!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2",[context.tenantId,jobId])).rowCount)throw new SyntheticDemoReadError("JOB_NOT_FOUND");
+  return this.readCases(db,context,jobId);
+ })}
+ private async readCases(db:TenantTransaction,context:VerifiedTenantContext,jobId:string):Promise<RecoveryCaseView[]>{
   const rows=await db.$client.query<any>(`SELECT c.*,
    er.revision eligibility_revision,er.case_revision eligibility_case_revision,er.evidence_revision,er.policy_version,er.policy_revision,er.classification,er.eligible_net_pence,er.reason eligibility_reason,er.citations,er.status eligibility_status,er.reviewer_ref eligibility_reviewer,
    (SELECT COALESCE(sum(CASE j.kind WHEN 'fee_obligation' THEN j.amount_pence ELSE -j.amount_pence END),0) FROM app.recovery_fee_journal j WHERE j.tenant_id=c.tenant_id AND j.job_id=c.job_id)::bigint fee_job_liability_pence,
@@ -49,7 +58,7 @@ export class RecoveryCaseRepository{
    (SELECT COALESCE(sum(j.amount_pence),0) FROM app.recovery_fee_journal j JOIN app.recovery_fee_derivation d ON(d.tenant_id,d.id)=(j.tenant_id,j.derivation_id) JOIN app.landing_reversal rv ON(rv.tenant_id,rv.id)=(d.tenant_id,d.source_reversal_id) JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(rv.tenant_id,rv.allocation_id) WHERE j.tenant_id=c.tenant_id AND j.kind='compensation' AND a.case_id=c.id)::bigint fee_compensations_posted_pence
    FROM app.recovery_case_current c LEFT JOIN LATERAL(SELECT * FROM app.recovery_eligibility_revision r WHERE r.tenant_id=c.tenant_id AND r.case_id=c.id ORDER BY revision DESC LIMIT 1)er ON true WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.claim_revision IS NOT NULL ORDER BY c.created_at,c.id`,[context.tenantId,jobId]);
   const out:RecoveryCaseView[]=[];for(const x of rows.rows as any[]){const sources=await resolveRecoverySources(db,context.tenantId,jobId,x.source_type,x.source_refs).catch(failure=>{if(failure instanceof RecoverySourceError)return (x.source_refs as string[]).map(ref=>({ref,kind:"Unresolved source",label:ref,recorded:false}));throw failure});out.push(({id:x.id,jobId:x.job_id,caseType:x.case_type,state:x.state,claimedNetPence:Number(x.claim_pence),landedNetPence:Number(x.landed),outstandingNetPence:Number(x.claim_pence)-Number(x.landed)-Number(x.written_off),writtenOffPence:Number(x.written_off),currency:"GBP",counterparty:x.counterparty,book:x.book,sourceType:x.source_type,sourceRefs:x.source_refs,sources,feeJobLiabilityPence:Number(x.fee_job_liability_pence),feeObligationsPostedPence:Number(x.fee_obligations_posted_pence),feeCompensationsPostedPence:Number(x.fee_compensations_posted_pence),approvedLandedNetPence:Number(x.approved_landed),revision:Number(x.revision),reviewerRef:x.reviewer_ref,createdDate:new Date(x.created_at).toISOString().slice(0,10),eligibility:x.eligibility_revision?{revision:Number(x.eligibility_revision),caseRevision:Number(x.eligibility_case_revision),evidenceRevision:Number(x.evidence_revision),policyVersion:x.policy_version,policyRevision:Number(x.policy_revision),classification:x.classification,eligibleNetPence:x.eligible_net_pence===null?null:Number(x.eligible_net_pence),reason:x.eligibility_reason,citations:x.citations,status:x.eligibility_status,reviewerRef:x.eligibility_reviewer}:null}));}return out;
- })}
+ }
  async eligibilityCommand(context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryCaseView>{const sent=recoveryEligibilityCommandV1.parse(raw),input=canonicalIds(sent),hash=digest(input),legacy={hash:digest(sent)};const caseId=input.caseId;await withTenant(this.pool,context,async db=>{
   // Recheck the server-selected principal in the write transaction, including replays.
   // Hold the membership against revocation until the revision and audit commit.
