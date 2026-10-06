@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { ProofCommandError, requireActiveActor } from "./proof-repository.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 /** The three live-only proof actions the application answers, and the kind of watchdog command whose claimed identity each answer is bound to. */
 export type ProofApplicationAction = "select_generated" | "finalize" | "complete";
@@ -33,16 +33,20 @@ export class ProofApplicationRecords {
 
   /** Records the first response (first writer wins) and returns the recorded one, whichever caller wrote it. */
   async record(context: VerifiedTenantContext, spec: ProofApplicationCommandRecord & { response: unknown }): Promise<unknown> {
-    return withTenant(this.pool, context, async db => {
-      const inserted = await db.$client.query<{ response: unknown }>(
-        `INSERT INTO app.proof_application_response(tenant_id,command_id,job_id,action,command_type,request_hash,response)VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)
-         ON CONFLICT (tenant_id,command_id) DO NOTHING RETURNING response`,
-        [context.tenantId, spec.commandId, spec.jobId, spec.action, COMMAND_TYPE[spec.action], spec.requestHash, JSON.stringify(spec.response)]);
-      if (inserted.rows[0]) return inserted.rows[0].response;
-      const existing = (await db.$client.query<{ job_id: string; action: string; request_hash: string; response: unknown }>(
-        "SELECT job_id,action,request_hash,response FROM app.proof_application_response WHERE tenant_id=$1 AND command_id=$2", [context.tenantId, spec.commandId])).rows[0];
-      if (!existing || existing.job_id !== spec.jobId || existing.action !== spec.action || existing.request_hash.trim() !== spec.requestHash) throw new ProofCommandError("COMMAND_CONFLICT");
-      return existing.response;
-    });
+    return withTenant(this.pool, context, db => this.recordIn(db, context.tenantId, spec));
+  }
+
+  /** As `record`, inside the caller's transaction: the transaction that completes the command, so the command and its first answer
+   * commit together or not at all, and a retry can never find a completed command without the answer it gave. */
+  async recordIn(db: TenantTransaction, tenantId: string, spec: ProofApplicationCommandRecord & { response: unknown }): Promise<unknown> {
+    const inserted = await db.$client.query<{ response: unknown }>(
+      `INSERT INTO app.proof_application_response(tenant_id,command_id,job_id,action,command_type,request_hash,response)VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)
+       ON CONFLICT (tenant_id,command_id) DO NOTHING RETURNING response`,
+      [tenantId, spec.commandId, spec.jobId, spec.action, COMMAND_TYPE[spec.action], spec.requestHash, JSON.stringify(spec.response)]);
+    if (inserted.rows[0]) return inserted.rows[0].response;
+    const existing = (await db.$client.query<{ job_id: string; action: string; request_hash: string; response: unknown }>(
+      "SELECT job_id,action,request_hash,response FROM app.proof_application_response WHERE tenant_id=$1 AND command_id=$2", [tenantId, spec.commandId])).rows[0];
+    if (!existing || existing.job_id !== spec.jobId || existing.action !== spec.action || existing.request_hash.trim() !== spec.requestHash) throw new ProofCommandError("COMMAND_CONFLICT");
+    return existing.response;
   }
 }

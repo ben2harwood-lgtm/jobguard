@@ -63,7 +63,9 @@ export class EvidenceService {
     return {id:row.id,jobId:row.job_id,scopeItemId:row.scope_item_id,expectedSha256:row.expected_sha256.trim(),contentType:row.expected_content_type as EvidenceUpload["contentType"],maximumBytes:Number(row.maximum_bytes),retentionClass:row.retention_class as EvidenceUpload["retentionClass"],deviceCapturedAt:row.device_captured_at,expiresAt:row.expires_at,objectKey:row.object_key,serverReceivedAt:row.server_received_at,uploadUrl};
   }
 
-  async finalize(context: VerifiedTenantContext, raw: unknown) {
+  /** `completing`, when given, runs last inside the transaction that registers the object, so whatever it writes commits with the
+   * command or not at all. It does not run when an earlier finalisation is replayed. */
+  async finalize(context: VerifiedTenantContext, raw: unknown, completing?: (db: TenantTransaction) => Promise<void>) {
     const input=finalizeEvidenceSchema.parse(raw);
     const prepared=await withTenant(this.pool,context,async db=>{
       const target=(await db.$client.query<{job_id:string}>("SELECT job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[context.tenantId,input.uploadId])).rows[0]; if(!target)throw new EvidenceError("UPLOAD_NOT_FOUND"); await requireLiveJob(db,target.job_id);
@@ -93,6 +95,7 @@ export class EvidenceService {
        VALUES ($1,$2,$1,$3,$4,'original',$5,$6,$7,$8,$9,$10,'standard_evidence',$11,$12,$13) RETURNING *`,[input.uploadId,context.tenantId,row.job_id,row.scope_item_id,input.evidenceType,row.object_key,input.objectVersionId,sha256(object.bytes),object.byteLength,object.contentType,row.device_captured_at,row.server_received_at,verified]);
       // The command's identity and first result are stored with the object, atomically; a replay returns this immutable row.
       await storeCommandResult(db,{tenantId:context.tenantId,commandId:this.finalizeKey(row.job_id,input).commandId,result:{evidenceId:input.uploadId}});
+      if(completing) await completing(db);
       return inserted.rows[0];
     });
   }

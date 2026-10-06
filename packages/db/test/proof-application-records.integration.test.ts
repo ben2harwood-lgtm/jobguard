@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ProofApplicationRecords, withTenant } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
@@ -67,6 +67,33 @@ describe("proof application records", () => {
     const answers = await Promise.all([1, 2, 3, 4].map(n => records.record(h.ctx, { commandId, jobId: job, action: "finalize", requestHash: request, response: { writer: n } })));
     expect(new Set(answers.map(answer => JSON.stringify(answer))).size).toBe(1);
     expect(Number((await h.admin.query("SELECT count(*) n FROM app.proof_application_response WHERE command_id=$1", [commandId])).rows[0].n)).toBe(1);
+  });
+
+  it("an answer recorded in the completing transaction commits with its command, and a failure there rolls the command back", async () => {
+    // Codex P2 4197245501: the effect used to commit before the answer was recorded in a separate transaction, so a failure between the
+    // two left a completed command without its answer, and the retry recorded whatever the job looked like by then.
+    const job = await h.live(), actor = await member(), upload = await h.pre.upload(job), lost = async () => { throw new Error("lost before the answer was stored"); };
+    const finalizeId = randomUUID(), finalize = { commandId: finalizeId, uploadId: upload.id, objectVersionId: "v1", evidenceType: "electrical_certificate" };
+    const finalizeSpec = { commandId: finalizeId, jobId: job, action: "finalize" as const, requestHash: hashOf({ job, finalizeId }) };
+    await expect(h.repos.evidence.finalize(h.ctx, finalize, lost)).rejects.toThrow("lost before the answer was stored");
+    expect((await h.admin.query("SELECT 1 FROM app.evidence_object WHERE tenant_id=$1 AND id=$2", [h.tenant, upload.id])).rowCount).toBe(0);
+    await h.repos.evidence.finalize(h.ctx, finalize, async db => { await records.recordIn(db, h.tenant, { ...finalizeSpec, response: { as: "first answered" } }); });
+    expect((await h.admin.query("SELECT 1 FROM app.evidence_object WHERE tenant_id=$1 AND id=$2", [h.tenant, upload.id])).rowCount).toBe(1);
+    expect(await records.replay(h.ctx, { ...finalizeSpec, actorMembershipId: actor })).toEqual({ response: { as: "first answered" } });
+    const replayedFinalize = vi.fn(async () => {});
+    await h.repos.evidence.finalize(h.ctx, finalize, replayedFinalize);
+    expect(replayedFinalize).not.toHaveBeenCalled();
+
+    const completeId = randomUUID(), completeSpec = { commandId: completeId, jobId: job, action: "complete" as const, requestHash: hashOf({ job, completeId }) };
+    const completion = { version: "proof.complete.v1", commandId: completeId, actorMembershipId: actor, jobId: job, scopeItemId: h.st(job).scope, stage: "electrical-stage", evidenceId: upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null };
+    await expect(h.repos.proof.complete(h.ctx, completion, lost)).rejects.toThrow("lost before the answer was stored");
+    expect((await h.admin.query("SELECT 1 FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completeId])).rowCount).toBe(0);
+    await h.repos.proof.complete(h.ctx, completion, async db => { await records.recordIn(db, h.tenant, { ...completeSpec, response: { as: "completed" } }); });
+    expect((await h.admin.query("SELECT 1 FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completeId])).rowCount).toBe(1);
+    expect(await records.replay(h.ctx, { ...completeSpec, actorMembershipId: actor })).toEqual({ response: { as: "completed" } });
+    const replayedCompletion = vi.fn(async () => {});
+    await h.repos.proof.complete(h.ctx, completion, replayedCompletion);
+    expect(replayedCompletion).not.toHaveBeenCalled();
   });
 
   it("is append-only for the runtime role and tenant-isolated", async () => {
