@@ -183,7 +183,10 @@ transaction, behind the live guard and the per-job lock; the stores are append-o
 it. The reverse holds at the database boundary for writers that never claim: during a mixed-version rollout, or after the
 documented application rollback, the previous application still inserts into those stores. Each of them has a
 `b_watchdog_command_id_before_insert` trigger (`app.reserve_watchdog_command_id`) that takes the same per-id transaction lock
-the claim takes first, then refuses (`23505 IDEMPOTENCY_CONFLICT`) an id already claimed for another kind or another job. A
+the claim takes first, then refuses (`23505 IDEMPOTENCY_CONFLICT`) an id already claimed for another kind or another job, and
+any row under a claimed id that does not come from the transaction that claimed it: a claimed command has its effects in its
+claiming transaction, so a later row is a second effect of a completed command (`claimCommandIdentity` notes its ids in the
+transaction-local `app.watchdog_claims`). A
 claim and a previous-schema write of one id are therefore serialised in either order: whichever commits first, the other
 sees it and conflicts. A supplier match revision is a creation's or a correction's only by its audit event, which may be
 appended later in the same transaction, so a deferred constraint trigger (`app.reserve_supplier_match_kind`) also requires, at

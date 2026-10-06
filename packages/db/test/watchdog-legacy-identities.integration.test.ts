@@ -126,14 +126,19 @@ describe("previous-schema writers and claimed ids", () => {
   const settle = (work: Promise<unknown>) => work.then(() => "committed", (error: { code?: string; message?: string }) => error.code === "23505" || error.message === "IDEMPOTENCY_CONFLICT" ? "conflict" : error);
   const stillWaiting = async (state: { done: boolean }) => { await new Promise(resolve => setTimeout(resolve, 400)); return !state.done; };
 
-  it("refuses a previous-schema write of an id already claimed for another kind or another job, and admits its own", async () => {
+  it("refuses a previous-schema write of an id claimed for another kind, another job or by another transaction, and admits the claiming transaction's own", async () => {
     const job = await live(), other = await live();
     const otherKind = randomUUID(); await claim(otherKind, job, "readiness.record");
     await expect(legacySeed(h.admin, otherKind, job)).rejects.toMatchObject({ code: "23505" });
     const otherJob = randomUUID(); await claim(otherJob, other, "inbox.seed");
     await expect(legacySeed(h.admin, otherJob, job)).rejects.toMatchObject({ code: "23505" });
-    const own = randomUUID(); await claim(own, job, "inbox.seed");
-    await expect(legacySeed(h.admin, own, job)).resolves.toBeDefined();
+    // Its own kind on its own job is admitted only from the claiming transaction; afterwards it would be a second effect of a
+    // command that already completed (Codex P2 4199348149).
+    const own = randomUUID(), claiming = await claimOpen(own, job, "inbox.seed");
+    try { await expect(legacySeed(claiming, own, job)).resolves.toBeDefined(); await claiming.query("COMMIT"); } finally { claiming.release(); }
+    const laterJob = await live(), completed = randomUUID(); await claim(completed, laterJob, "inbox.seed");
+    await expect(legacySeed(h.admin, completed, laterJob)).rejects.toMatchObject({ code: "23505" });
+    expect((await h.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completed])).rows[0].n).toBe(0);
   });
 
   it("serialises a claim and a previous-schema write of one id, in either order", async () => {
@@ -165,10 +170,12 @@ describe("previous-schema writers and claimed ids", () => {
     /** A fresh audit event of `eventType` about `proposalId`, as a previous-schema writer would append for its own revision: by
      * default a correction's event attesting the copied revision's payload hash. */
     const freshEvent = async (proposalId: string, payloadHash: string, eventType = "supplier_match.corrected") => (await withTenant(h.runtime, h.ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType, subjectType: "supplier_match", subjectRef: proposalId, payload: { references: { proposalId }, hashes: { payloadHash }, classifications: { action: "operational" } } }])))[0]!.id;
-    const legacyCorrection = async (commandId: string, auditEventId?: string) => {
+    /** A correction revision under `commandId`; with `claimKind`, written by the transaction that claims the id as that kind. */
+    const legacyCorrection = async (commandId: string, auditEventId?: string, claimKind?: WatchdogCommandType) => {
       const client = await h.admin.connect();
       try {
         await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+        if (claimKind) await claimCommandIdentity({ $client: client } as unknown as TenantTransaction, { tenantId: h.tenant, commandId, jobId: job, kind: claimKind, requestHash: hash });
         await client.query(`INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id,invalidates_unresolved_findings)
           SELECT gen_random_uuid(),tenant_id,job_id,proposal_id,$2,revision+$5,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,coalesce($4::uuid,audit_event_id),invalidates_unresolved_findings
           FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$3`, [h.tenant, commandId, original, auditEventId ?? null, 1000 + (++copies)]);
@@ -176,27 +183,25 @@ describe("previous-schema writers and claimed ids", () => {
       } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; } finally { client.release(); }
     };
     const proposal = await proposalOf(original), payload = await payloadOf(original);
-    const createId = randomUUID(); await claim(createId, job, "supplier_match.create");
-    await expect(legacyCorrection(createId, await freshEvent(proposal, payload))).rejects.toMatchObject({ code: "23505" });
-    const correctId = randomUUID(); await claim(correctId, job, "supplier_match.correct");
-    await expect(legacyCorrection(correctId, await freshEvent(proposal, payload))).resolves.toBeUndefined();
+    await expect(legacyCorrection(randomUUID(), await freshEvent(proposal, payload), "supplier_match.create")).rejects.toMatchObject({ code: "23505" });
+    await expect(legacyCorrection(randomUUID(), await freshEvent(proposal, payload), "supplier_match.correct")).resolves.toBeUndefined();
+    // A write from any later transaction under a completed claim is a second effect, even of the claimed kind (Codex P2 4199348149).
+    // Here: a create claimed and completed with no revision, then a previous-schema create retry citing a fresh "confirmed" event.
+    const completed = randomUUID(); await claim(completed, job, "supplier_match.create");
+    await expect(legacyCorrection(completed, await freshEvent(proposal, payload, "supplier_match.confirmed"))).rejects.toMatchObject({ code: "23505" });
     // A fresh correction event attesting some other payload does not stand behind this revision (Codex P2 4199236808).
-    const misattested = randomUUID(); await claim(misattested, job, "supplier_match.correct");
-    await expect(legacyCorrection(misattested, await freshEvent(proposal, "b".repeat(64)))).rejects.toMatchObject({ code: "23514" });
+    await expect(legacyCorrection(randomUUID(), await freshEvent(proposal, "b".repeat(64)), "supplier_match.correct")).rejects.toMatchObject({ code: "23514" });
     // An earlier event of the same proposal already stands behind its own revision and cannot be borrowed (Codex P2 4199159015).
-    const borrowing = randomUUID(); await claim(borrowing, job, "supplier_match.correct");
-    await expect(legacyCorrection(borrowing)).rejects.toMatchObject({ code: "23505", constraint: "supplier_match_revision_audit_event_uq" });
+    await expect(legacyCorrection(randomUUID(), undefined, "supplier_match.correct")).rejects.toMatchObject({ code: "23505", constraint: "supplier_match_revision_audit_event_uq" });
     // A revision citing any other event (here the proposal's "proposed" event) is refused, claimed or not (Codex P2 4197809983).
     const proposed = (await h.admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='supplier_match.proposed' AND subject_ref=$2 LIMIT 1", [h.tenant, job])).rows[0]!.id as string;
-    const claimedCorrect = randomUUID(); await claim(claimedCorrect, job, "supplier_match.correct");
-    await expect(legacyCorrection(claimedCorrect, proposed)).rejects.toMatchObject({ code: "23514" });
+    await expect(legacyCorrection(randomUUID(), proposed, "supplier_match.correct")).rejects.toMatchObject({ code: "23514" });
     await expect(legacyCorrection(randomUUID(), proposed)).rejects.toMatchObject({ code: "23514" });
     // So is a valid "corrected" event that belongs to another proposal (Codex P2 4199041823).
     const elsewhere = await live(); await correct.prepare(elsewhere);
     const foreignCommand = randomUUID(); await correct.run(elsewhere, foreignCommand, "base");
     const foreignEvent = await freshEvent(await proposalOf(foreignCommand), payload);
-    const borrowed = randomUUID(); await claim(borrowed, job, "supplier_match.correct");
-    await expect(legacyCorrection(borrowed, foreignEvent)).rejects.toMatchObject({ code: "23514" });
+    await expect(legacyCorrection(randomUUID(), foreignEvent, "supplier_match.correct")).rejects.toMatchObject({ code: "23514" });
   });
 
   it("finds an existing revision that does not cite its own event, both in the pre-deploy query and in 0050's upgrade check (Codex P2 4199041831)", async () => {

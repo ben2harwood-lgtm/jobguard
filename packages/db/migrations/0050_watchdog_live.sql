@@ -198,6 +198,11 @@ BEGIN
   SELECT command_type,job_id INTO claimed FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=cid;
   IF FOUND AND (NOT claimed.command_type=ANY(string_to_array(TG_ARGV[0],',')) OR claimed.job_id IS DISTINCT FROM jid)
   THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+  -- A claimed command has its effects in the transaction that claimed it. A row under a claimed id from any other transaction is a
+  -- second effect of a command that already completed, even of the same kind on the same job (e.g. a previous-schema retry after a
+  -- claim that completed with no row of its own), so it is refused (Codex P2 4199348149). claimCommandIdentity notes its ids here.
+  IF FOUND AND position(cid::text||',' IN coalesce(current_setting('app.watchdog_claims',true),''))=0
+  THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
   RETURN NEW;
 END $$;
 ALTER FUNCTION app.reserve_watchdog_command_id() OWNER TO jobguard_migration;
