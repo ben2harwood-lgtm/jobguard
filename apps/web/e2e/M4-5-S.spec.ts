@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { DEMO_TENANT_ID } from "@jobguard/db";
+// The synthetic demo tenant (packages/db/src/demo-seed.ts), inlined as the other specs do: @jobguard/db is ESM-only and cannot load in a Playwright spec.
+const DEMO_TENANT_ID = "11111111-1111-4111-8111-111111111111";
 import { E2E_RUNTIME_URL } from "./global-setup";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { get, persistedRecoverySources, post, recordedProof } from "./helpers/recovery-sources";
