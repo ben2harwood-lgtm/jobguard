@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, RecoveryCaseRepository } from "@jobguard/db";
-import { RecoveryCaseApplication } from "./recovery-case.application.js";
+import { RecoveryCaseApplication, recoveryReadFailure } from "./recovery-case.application.js";
 
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 const command=()=>({version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:randomUUID(),expectedCaseRevision:2,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"evidence_backed_withheld_payment"});
@@ -55,4 +55,7 @@ it("an eligibility command that committed cannot turn its answer-read failure in
  vi.spyOn(RecoveryCaseRepository.prototype, "listForMember").mockRejectedValue(new Error("ELIGIBILITY_STALE_REVISION"));
  await expect(new RecoveryCaseApplication({} as Pool).eligibility(randomUUID(), command(), randomUUID())).rejects.toMatchObject({ code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN" });
  expect(persist).toHaveBeenCalledTimes(1);
+});
+it.each([["UNAUTHENTICATED",401],["MEMBERSHIP_FORBIDDEN",403],["JOB_NOT_FOUND",404],["DATABASE_UNAVAILABLE",503],["SOMETHING_ELSE",400]] as const)("maps a read failure %s to %i and never to an unknown command outcome",(code,status)=>{
+ expect(recoveryReadFailure(Object.assign(new Error(code),{code}))).toEqual({status,body:{code}});
 });

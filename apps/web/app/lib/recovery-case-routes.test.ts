@@ -7,10 +7,10 @@ vi.mock("./synthetic-server", () => ({ hasSyntheticSession: () => true }));
 vi.mock("./workspace-server", () => ({ workspaceApplication: () => ({ recoveryCases: spies.app }) }));
 vi.mock("@jobguard/db", async original => ({
  ...await original<typeof import("@jobguard/db")>(), readSyntheticDemoJob: vi.fn().mockResolvedValue({}),
- RecoveryCaseRepository: class { command = spies.command; eligibilityCommand = spies.eligibilityCommand; list = spies.list; },
+ RecoveryCaseRepository: class { command = spies.command; eligibilityCommand = spies.eligibilityCommand; list = spies.list; listForMember = spies.list; },
 }));
 import { RecoveryCaseApplication } from "../../../api/src/recovery-case.application";
-import { POST as commandPost } from "../api/jobs/[id]/recovery-cases/route";
+import { GET as listGet, POST as commandPost } from "../api/jobs/[id]/recovery-cases/route";
 import { POST as eligibilityPost } from "../api/jobs/[id]/recovery-cases/eligibility/route";
 import { commandOutcome } from "./recovery-case-requests";
 const jobId = randomUUID(), caseId = randomUUID();
@@ -60,4 +60,10 @@ it.each([commandPost, eligibilityPost])("malformed request JSON is an establishe
  expect(result.status).toBe(400);
  expect(spies.command).not.toHaveBeenCalled();
  expect(spies.eligibilityCommand).not.toHaveBeenCalled();
+});
+it.each([["MEMBERSHIP_FORBIDDEN", 403], ["JOB_NOT_FOUND", 404]] as const)("a read refused with %s answers %i, not a malformed-request 400 (Codex P2)", async (code, status) => {
+ spies.list.mockRejectedValue(Object.assign(new Error(code), { code }));
+ const response = await listGet(new Request(`http://jobguard.test/api/jobs/${jobId}/recovery-cases`), { params: Promise.resolve({ id: jobId }) });
+ expect(response.status).toBe(status);
+ expect(await response.json()).toEqual({ code });
 });

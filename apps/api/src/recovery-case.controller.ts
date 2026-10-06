@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpException, Param, Post, Req } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Pool } from "pg";
-import { RecoveryCaseApplication, recoveryCommandFailure } from "./recovery-case.application.js";
+import { RecoveryCaseApplication, recoveryCommandFailure, recoveryReadFailure } from "./recovery-case.application.js";
 
 @ApiTags("recovery-cases")
 @Controller("jobs/:id/recovery-cases")
@@ -10,7 +10,10 @@ export class RecoveryCaseController {
  constructor(pool: Pool) { this.app = new RecoveryCaseApplication(pool); }
  @Get()
  @ApiOperation({ summary: "Read the append-only recovery-case workbench" })
- get(@Param("id") id: string) { return this.app.list(id); }
+ async get(@Param("id") id: string) {
+  try { return await this.app.list(id); }
+  catch(error) { const failure=recoveryReadFailure(error); throw new HttpException(failure.body,failure.status); }
+ }
  @Post()
  @ApiOperation({ summary: "Open, revise or transition a synthetic recovery case" })
  async post(@Param("id") id: string, @Body() body: unknown) {
