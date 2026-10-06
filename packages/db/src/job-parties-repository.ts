@@ -8,6 +8,7 @@ export class JobPartiesError extends Error {
   constructor(readonly code: "FORBIDDEN" | "NOT_FOUND" | "INVALID_PARTIES" | "REVISION_CONFLICT" | "COMMAND_CONFLICT" | "CORRECTION_REASON_REQUIRED" | "SAME_PLACE_CONFIRMATION_REQUIRED" | "PARTY_NOT_FOUND" | "JOB_PARTIES_REQUIRED") { super(code); }
 }
 const normalizeUnit = (value: string) => value.normalize("NFKC").trim().toUpperCase().replace(/\s+/gu," ");
+const normalizePostcode = (value: string) => value.toUpperCase().replace(/\s/gu, "");
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 export class JobPartiesRepository {
   constructor(private readonly pool: Pool) {}
@@ -68,8 +69,10 @@ export class JobPartiesRepository {
           const key = siteMatchKey(input.site);
           if (input.reuseSiteId) {
             if (!input.confirmSamePlace) throw new JobPartiesError("SAME_PLACE_CONFIRMATION_REQUIRED");
-            const old = (await db.$client.query(`SELECT site_id AS id,id AS "revisionId",payload FROM app.site_revision WHERE tenant_id=$1 AND site_id=$2 ORDER BY revision DESC LIMIT 1`, [context.tenantId, input.reuseSiteId])).rows[0];
-            if (!old || normalizeUnit(old.payload.unit ?? "") !== normalizeUnit(input.site.unit ?? "")) throw new JobPartiesError("PARTY_NOT_FOUND");
+            const old = (await db.$client.query(`SELECT site_id AS id,id AS "revisionId",payload,match_key AS "matchKey" FROM app.site_revision WHERE tenant_id=$1 AND site_id=$2 ORDER BY revision DESC LIMIT 1`, [context.tenantId, input.reuseSiteId])).rows[0];
+            // Same proposal predicate the form offers: an identical match key, or the same postcode. A site UUID plus the flag is never enough.
+            const proposed = old && (JSON.stringify(old.matchKey) === key || normalizePostcode(old.payload.postcode ?? "") === normalizePostcode(input.site.postcode));
+            if (!old || !proposed || normalizeUnit(old.payload.unit ?? "") !== normalizeUnit(input.site.unit ?? "")) throw new JobPartiesError("PARTY_NOT_FOUND");
             result = { id: old.id, revisionId: old.revisionId, reused: true };
           } else {
             const id = randomUUID(), revisionId = randomUUID();

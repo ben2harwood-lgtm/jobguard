@@ -134,6 +134,8 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     await expect(repository.command(context,member,job,command("create_site",{site,reuseSiteId:a.s.id}))).rejects.toThrow("SAME_PLACE_CONFIRMATION_REQUIRED");
     const reused=await repository.command(context,member,job,command("create_site",{site,reuseSiteId:a.s.id,confirmSamePlace:true}));expect(reused.id).toBe(a.s.id);
     await expect(repository.command(context,member,job,command("create_site",{site:{...site,unit:"Flat 2"},reuseSiteId:a.s.id,confirmSamePlace:true}))).rejects.toThrow("PARTY_NOT_FOUND");
+    // An unrelated address with the same unit is not the same place, whatever the client claims.
+    await expect(repository.command(context,member,job,command("create_site",{site:{...site,postcode:"EC1A 1BB",addressLines:["1 Unrelated Road"]},reuseSiteId:a.s.id,confirmSamePlace:true}))).rejects.toThrow("PARTY_NOT_FOUND");
   });
   it("groups shared identities and appends post-live corrections without changing historic bindings or snapshots",async()=>{
     const one=await createJob(),two=await createJob(),{parties}=await saveParties(one);
