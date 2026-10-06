@@ -180,7 +180,12 @@ writes for its own internal rows (a readiness snapshot's, an inbox "created" eve
 listed. An id persisted by two kinds, or for two jobs, in the previous schema belongs to nobody: every claim of it is
 refused, so no winner is picked among commands that already had their effects. The consult runs inside the claiming
 transaction, behind the live guard and the per-job lock; the stores are append-only, so what it reads cannot change under
-it. Pre-deploy check, run like the one below (a role that bypasses row-level security; the suite runs this exact text against
+it. The reverse holds at the database boundary for writers that never claim: during a mixed-version rollout, or after the
+documented application rollback, the previous application still inserts into those stores. Each of them has a
+`b_watchdog_command_id_before_insert` trigger (`app.reserve_watchdog_command_id`) that takes the same per-id transaction lock
+the claim takes first, then refuses (`23505 IDEMPOTENCY_CONFLICT`) an id already claimed for another kind or another job. A
+claim and a previous-schema write of one id are therefore serialised in either order: whichever commits first, the other
+sees it and conflicts. Pre-deploy check, run like the one below (a role that bypasses row-level security; the suite runs this exact text against
 a database holding a known collision): it lists every such ambiguous id, which must be none.
 
 ```sql

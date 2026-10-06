@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { claimCommandIdentity, type TenantTransaction } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
 // CH-2 upgrade rule for command ids: an id that the previous schema persisted belongs to the command that persisted it, so no OTHER
@@ -101,4 +102,54 @@ describe("previous-schema command ids cannot be claimed by another kind of comma
       await expect(c.run(job, randomUUID(), "base")).resolves.toBeDefined();
     }
   }, 300000);
+});
+
+// Codex P2 4197534379: the previous application never claims, so during a mixed-version rollout or after the documented application
+// rollback it can write an id the new schema has claimed, or write one between a claim's reservation check and its insert. Every
+// previous-schema store therefore takes the claim's per-id lock and refuses an id claimed for another kind or job.
+describe("previous-schema writers and claimed ids", () => {
+  const hash = "a".repeat(64);
+  /** What the previous application writes for an inbox seed: a dispatcher receipt keyed by the job. */
+  const legacySeed = (db: { query: (sql: string, values: unknown[]) => Promise<unknown> }, commandId: string, job: string) =>
+    db.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)VALUES($1,$2,'inbox.seed',$3,$4,'processing',$5)",
+      [commandId, h.tenant, `inbox:${job}`, hash, h.member]);
+  /** Opens a transaction holding a claim of `commandId`; on refusal it rolls back, releases and rethrows. */
+  async function claimOpen(commandId: string, job: string, kind: "readiness.record" | "inbox.seed") {
+    const client = await h.admin.connect();
+    try {
+      await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+      await claimCommandIdentity({ $client: client } as unknown as TenantTransaction, { tenantId: h.tenant, commandId, jobId: job, kind, requestHash: hash });
+      return client;
+    } catch (error) { await client.query("ROLLBACK"); client.release(); throw error; }
+  }
+  const claim = async (commandId: string, job: string, kind: "readiness.record" | "inbox.seed") => { const client = await claimOpen(commandId, job, kind); await client.query("COMMIT"); client.release(); };
+  const settle = (work: Promise<unknown>) => work.then(() => "committed", (error: { code?: string; message?: string }) => error.code === "23505" || error.message === "IDEMPOTENCY_CONFLICT" ? "conflict" : error);
+  const stillWaiting = async (state: { done: boolean }) => { await new Promise(resolve => setTimeout(resolve, 400)); return !state.done; };
+
+  it("refuses a previous-schema write of an id already claimed for another kind or another job, and admits its own", async () => {
+    const job = await live(), other = await live();
+    const otherKind = randomUUID(); await claim(otherKind, job, "readiness.record");
+    await expect(legacySeed(h.admin, otherKind, job)).rejects.toMatchObject({ code: "23505" });
+    const otherJob = randomUUID(); await claim(otherJob, other, "inbox.seed");
+    await expect(legacySeed(h.admin, otherJob, job)).rejects.toMatchObject({ code: "23505" });
+    const own = randomUUID(); await claim(own, job, "inbox.seed");
+    await expect(legacySeed(h.admin, own, job)).resolves.toBeDefined();
+  });
+
+  it("serialises a claim and a previous-schema write of one id, in either order", async () => {
+    const job = await live();
+    // The claim holds the id: the previous-schema write waits for it, then conflicts.
+    const first = randomUUID(), holder = await claimOpen(first, job, "readiness.record"), legacy = { done: false };
+    const write = settle(legacySeed(h.admin, first, job)).finally(() => { legacy.done = true; });
+    expect(await stillWaiting(legacy)).toBe(true);
+    await holder.query("COMMIT"); holder.release();
+    expect(await write).toBe("conflict");
+    // The previous-schema write holds the id: the claim waits for it, then finds the id owned and conflicts.
+    const second = randomUUID(), writer = await h.admin.connect(), claimed = { done: false };
+    await writer.query("BEGIN"); await legacySeed(writer, second, job);
+    const claiming = settle(claim(second, job, "readiness.record")).finally(() => { claimed.done = true; });
+    expect(await stillWaiting(claimed)).toBe(true);
+    await writer.query("COMMIT"); writer.release();
+    expect(await claiming).toBe("conflict");
+  });
 });

@@ -180,4 +180,38 @@ REVOKE ALL ON FUNCTION app.guard_watchdog_upload_update() FROM PUBLIC,jobguard_r
 CREATE TRIGGER a_watchdog_live_before_update BEFORE UPDATE ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_upload_update();
 REVOKE UPDATE ON app.evidence_upload FROM jobguard_runtime;
 GRANT UPDATE(id,state,rejection_code,object_version_id,server_verified_at) ON app.evidence_upload TO jobguard_runtime;
+-- An id the previous schema's stores hold is reserved for the command that persisted it (claimCommandIdentity reads them before it claims).
+-- The reverse must hold at the database boundary too, for writers that never claim: during a mixed-version rollout, or after the
+-- documented application rollback, the previous application still inserts into those stores. Each store therefore takes the same
+-- per-id transaction lock the claim takes, then refuses an id already claimed for another kind of command or another job. A claim and
+-- a previous-schema write of one id are serialised in either order: whichever commits first, the other sees it and conflicts.
+CREATE FUNCTION app.reserve_watchdog_command_id() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+DECLARE
+  new_row jsonb := to_jsonb(NEW);
+  cid uuid := (new_row->>TG_ARGV[1])::uuid;
+  jid uuid := CASE WHEN TG_TABLE_NAME='command_receipt' THEN nullif(split_part(new_row->>'semantic_key',':',2),'')::uuid ELSE (new_row->>'job_id')::uuid END;
+  claimed record;
+BEGIN
+  IF cid IS NULL THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||NEW.tenant_id::text||':'||cid::text,0));
+  SELECT command_type,job_id INTO claimed FROM app.watchdog_command_identity WHERE tenant_id=NEW.tenant_id AND command_id=cid;
+  IF FOUND AND (NOT claimed.command_type=ANY(string_to_array(TG_ARGV[0],',')) OR claimed.job_id IS DISTINCT FROM jid)
+  THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+  RETURN NEW;
+END $$;
+ALTER FUNCTION app.reserve_watchdog_command_id() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.reserve_watchdog_command_id() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.planned_work_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('readiness.record','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.readiness_decision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('readiness.advance','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.discrepancy_finding_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.evaluate','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.discrepancy_review_outcome FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.review','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_bill_supersession FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('things_to_check.supersede','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_match_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('supplier_match.create,supplier_match.correct','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.supplier_fact_revision FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('supplier_document.confirm','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.inbox_outcome_event FOR EACH ROW WHEN (NEW.event_kind='dismissed') EXECUTE FUNCTION app.reserve_watchdog_command_id('inbox.dismiss','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.command_receipt FOR EACH ROW WHEN (NEW.command_type='inbox.seed') EXECUTE FUNCTION app.reserve_watchdog_command_id('inbox.seed','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.purchase_order_placement FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('purchase_order.place','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.stage_completion FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('proof.complete','command_id');
+CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('evidence.begin_upload','id');
 COMMIT;

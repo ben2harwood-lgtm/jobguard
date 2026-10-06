@@ -74,6 +74,9 @@ async function assertNotLegacyOwned(database: TenantTransaction, spec: { tenantI
  * names no conflict target on purpose: the table has a second unique key (the proof application's response record references it), and a
  * conflict target arbitrates only its own index, so a racing duplicate could surface the other index's violation instead of conflicting. */
 export async function claimCommandIdentity(database: TenantTransaction, spec: { tenantId: string; commandId: string; jobId: string; kind: WatchdogCommandType; requestHash: string }): Promise<"new" | "same"> {
+  // The per-id lock every previous-schema store also takes on insert (0050 `app.reserve_watchdog_command_id`), so a writer that never
+  // claims cannot slip a row in between the reservation check and this claim.
+  await database.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`watchdog-command-id:${spec.tenantId.toLowerCase()}:${spec.commandId.toLowerCase()}`]);
   await assertNotLegacyOwned(database, spec);
   const inserted = await database.$client.query(
     "INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash)VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING command_id",
