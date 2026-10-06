@@ -27,9 +27,9 @@ beforeAll(async()=>{
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"fixture-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
  await postgres.initialise();await postgres.start();
  const base={host:"127.0.0.1",port,database:"postgres"};admin=new Pool({...base,user:"postgres",password:"fixture-only"});
- // Upgrade from the preceding supported schema, then repeat the migration runner.
+ // Upgrade from the preceding supported schema (0042), then repeat the migration runner.
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- for(const url of MIGRATION_URLS.slice(0,-1)){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
+ for(const url of MIGRATION_URLS.filter(u=>u.pathname.split("/").at(-1)!<"0052")){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
  await migrate(admin);await migrate(admin);
  await admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'identity-fixture'; ALTER ROLE jobguard_runtime LOGIN PASSWORD 'runtime-fixture'");
  identity=new Pool({...base,user:"jobguard_identity",password:"identity-fixture",max:5});runtime=new Pool({...base,user:"jobguard_runtime",password:"runtime-fixture"});
