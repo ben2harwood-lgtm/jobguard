@@ -1,0 +1,22 @@
+Implement **TEST-STAB-4: make two slow SH-1 core tests finish well inside the default 5-second test timeout without weakening them** in this repository (`ben2harwood-lgtm/jobguard`).
+STATUS: ISSUED by the JobGuard integrator (7 Oct 2026, evening) as routine work under BUILD_PLAN §2.1 delegation ("repair a failed check without weakening it"). Not a §12.3 card; record it in your receipt as §14.3 "Discovered later". Builder: Codex GPT-6.1 Sol, high reasoning. Do not run git commands; the dispatcher commits.
+
+**Why:** since ENT-4a (#110) added a heavy test file to `packages/core`, the core suite runs more work in parallel, and two existing SH-1 tests now hit vitest's default 5-second timeout on GitHub runners:
+- `packages/core/src/extra-origin.test.ts:33` "accepts exactly the offsets from -23:59 to +23:59 and never an instant JavaScript cannot read" — failed on main's own push run 37657498901 (5,326 ms) and on PR runs (5,019–5,065 ms); about 525 ms when run alone.
+- `packages/core/src/receipt-allocation.test.ts:212` "the working size is bounded: more distinct denominators than the documented limit fail closed" — timed out at 5 s locally under load.
+Each failure forces a CI re-run on every PR.
+
+**Branch:** a fresh worktree from the latest `origin/main`; the dispatcher commits on `codex/sandbox/test-stab-4`.
+**Lane:** as your first change, append one lane `test-stab-4` to `config/agent-lane-assignments.json`, touching no other lane, keeping the file's existing format exactly (it is currently ONE line of compact JSON: `json.dumps(obj, separators=(",",":"), ensure_ascii=False)` plus one trailing newline; if it is already one-lane-per-line sorted by name when you start, insert your lane in sorted position in that format instead). Shape: `"test-stab-4":{"branches":["codex/sandbox/test-stab-4"],"allow":["config/agent-lane-assignments.json","packages/core/src/extra-origin.test.ts","packages/core/src/receipt-allocation.test.ts","docs/verdicts/TEST-STAB-4/**"]}`.
+**Migration:** none.
+
+**Build:**
+1. `extra-origin.test.ts:33`: keep the exhaustive sweep exactly as it is (both origin time fields × both signs × hours 0–99 × minutes 0–99, each parsed through the full `extraOriginV1.safeParse` of the whole object, each accepted value also checked with `Date.parse`, and the final count of 2·2·24·60 accepted values). Make it fast by removing per-iteration overhead only: for example collect every mismatch (field, offset, expected, actual, and any accepted value that `Date.parse` cannot read) into an array inside the loops and assert once at the end that the array is empty, with a message that lists the first mismatches. Every case that could fail before must still fail after. Do not reduce the ranges, do not sample, do not replace the full-object parse with a narrower regex.
+2. `receipt-allocation.test.ts:212`: first measure where its time goes. If it can be made clearly faster while proving exactly the same thing (same 1,600 distinct hundred-digit denominators that exceed the documented limit, both gross values, the explicit-shares path, and `MAX_ALLOCATION_WORKING_DIGITS` = 130,000), do that (for example by building the fixture once at describe scope if the cost is fixture generation). If the only way is fewer or smaller denominators or skipping a path, STOP for this test, leave it unchanged and record the measurement in the receipt.
+3. Do not add, lengthen or change any timeout (per-test, per-file or config). Do not change production code. Do not mark tests skip/only/concurrent-off.
+4. Prove it: add to the receipt the before/after wall time of each test (run each file alone and the whole core suite, `pnpm --filter @jobguard/core exec vitest run`), and a deliberate mutation check for test 1 (temporarily make the schema accept `+24:00` in a scratch copy or by a local patch you revert, show the new test fails with a clear message, then restore). Leave no mutation in the tree.
+
+**Checks:** `pnpm typecheck`, `LANE_BASE_REF=origin/main pnpm lint` (may refuse a self-comparison; say so), `pnpm --filter @jobguard/core test`, `pnpm build`, `node --test tools/*.test.mjs`.
+**Receipt:** `docs/verdicts/TEST-STAB-4/BUILDER_RECEIPT.md`.
+**Rules:** synthetic data only; no live providers, spending, deployment or release; never weaken, skip or delete an assertion; no new or longer timeouts.
+**Deliver:** the receipt as your final message. Do not push, merge or open PRs.

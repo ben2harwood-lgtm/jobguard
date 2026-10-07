@@ -139,6 +139,34 @@ privilege/RLS/forgery tests and the existing Neon non-superuser bootstrap suite.
 SH-1 adds real PostgreSQL tests in `test/shared-money-origin.integration.test.ts`;
 local socket restrictions leave execution and earlier DB/browser regressions to CI.
 
+### 0054 — ENT-1 contractor organisation
+
+Expand-only after the supported schema through 0053 (0042 evidence-pack repair and 0053 SH-1 merged from main); 0043–0052 remain reserved by the dispatcher. Adds 12 tenant tables with FORCE RLS, migration ownership, SELECT-only runtime grants, immutable versions/events and qualified FKs. New identity/control-plane exception: `contractor_practice_session` maps a high-entropy bearer handle to its generated tenant/principal and is readable only through a narrowly scoped function. All fixture and admin routines refuse databases other than `jobguard_synthetic_demo`; the application independently requires `JOBGUARD_ENV=synthetic_demo`.
+
+Operations-only `assign_commercial_track` has no runtime/infrastructure EXECUTE grant. It requires a generated synthetic agreement reference, expected assignment revision and a same-transaction audit event enforced by a deferred trigger. It never rewrites jobs. Pending D12/D16 approvals mean real track assignment remains disabled. Contractor admin writes use one bounded function, a tenant advisory lock, current membership/grants, expected organisation revision and the existing command receipt/audit tables; no commercial Decision, outbox or money effect occurs. The audit append is the final lock. Team moves append membership events and replace affected team grants with explicit revocation/new grant facts. A member may still belong to other teams.
+
+Forward fix is preferred: revert application usage first, retain append-only data, then apply a separately reviewed corrective migration. Do not drop populated commercial history or rewrite versions. The preceding demo is unchanged apart from its expected migration count and expanded catalog assertions. Fresh install and Neon owner-role compatibility remain covered by existing migration/bootstrap tests; ENT-1 additionally tests upgrade from the previous schema. No seed modifies existing tenants.
+
+## 0094 — SBOX-SESSION-1 practice ownership
+
+Reserved by the §12.2 ledger amendment under Ben's 5 October 2026 merge-ahead ruling. Adds a restricted `control_plane.practice_session` registry of token digests, expiry/revocation and synthetic environment; it is a reviewed identity/control-plane exception, contains no business content, and grants runtime neither schema usage nor table access. Narrow fixed-search-path routines issue/authenticate the synthetic principal against current owner membership. New generated home scenarios are owned at insertion, rather than assigning legacy fixture jobs to the first viewer.
+
+Adds nullable immutable creator-session digest and scenario to `app.job`, with a session FK and complete-pair check. Capture persists both in its creation transaction and verifies ownership before idempotent replay. Sandbox creation also binds both before writing run/audit records. FORCE RLS and existing job/runtime grants remain; runtime cannot update ownership and the trigger rejects owner-role attempts to transfer or backfill it. No legacy attribution or first-touch backfill. Legacy/unbound jobs are intentionally inaccessible through practice applications; the underlying existing non-practice fixture tests remain valid.
+
+Forward fix: preserve bindings and revoke affected sessions; repair a routine or guard in a later reviewed migration. Do not drop the ownership check, rewrite owners or roll back application code to UUID-shape authorization. A destructive schema rollback is unsuitable after owned practice jobs exist. New synthetic authentication sessions have a seven-day server expiry and session-cookie lifetime; this does not establish a production identity or retention policy. Database fresh/upgrade/catalog/privilege and adversarial regressions must run in CI; they were not executed in the restricted builder sandbox.
+
+Round-2 repair (7 October): the same unmerged 0094 also binds new practice
+merchant, SKU, alias, pack-conversion and rate rows to the authenticated session
+digest. Restrictive policies combine with the existing tenant policy; FORCE RLS,
+`jobguard_migration` ownership and runtime SELECT/INSERT-only grants are unchanged.
+Invoker triggers prohibit ownership changes and mismatched parent/requirement
+links. Existing unbound rows are not attributed or copied. Non-practice material
+repositories keep their original tenant-wide catalogue and revision behavior.
+Practice material transactions install the digest locally before business SQL;
+purchase-order pricing and evidence-pack supplier agreements use the same scope.
+The existing forward-fix/revocation strategy applies. CI must run the two-session
+regression, preceding-schema upgrade and earlier real-tenant material tests.
+
 ## 0097_recovery_case_current.sql — M4-1-S retrospective repair
 
 Expand-compatible: keeps immutable `recovery_case` creation columns for existing
