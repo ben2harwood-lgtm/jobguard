@@ -145,7 +145,9 @@ site revision insert fails with "Unicode normalization can only be performed if
 server encoding is UTF8"). Neon and the standard PostgreSQL images are UTF8; the
 embedded test clusters that write site revisions pass `--encoding=UTF8` to `initdb`
 because `embedded-postgres` starts `initdb` with no locale environment, which would
-otherwise create SQL_ASCII. The party suite also installs the complete migration
+otherwise create SQL_ASCII. Practice-session issuance now writes a generated site
+revision, so the practice-session suite (`practice-session.integration.test.ts`) passes
+`--encoding=UTF8` too. The party suite also installs the complete migration
 chain in an explicitly SQL_ASCII database; the six earlier non-UTF8 suites retain
 their original encoding flags.
 

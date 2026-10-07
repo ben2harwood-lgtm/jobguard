@@ -472,14 +472,22 @@ describe("CH-3a a null correction flag cannot bypass the post-live guard (round 
   // Everything the repository does for one binding change in one transaction, but with the routine's correction flag and reason
   // supplied exactly as given, so a null flag reaches the routine. The receipt is completed and the plain bind audit event is
   // appended, so the commit-time record check is satisfied: only the routine's own refusal can stop the change.
-  const bindWithFlag=async(job:string,customerRevision:string,siteRevision:string,flag:boolean|null,reason:string|null,eventType="job.parties.bind",directInsert=false)=>{
+  // "routine" calls bind_job_parties as the runtime login. 0095 revokes INSERT on app.job_party_binding from that login, so a direct
+  // INSERT as the runtime login ("runtime-insert") is denied before any constraint is evaluated. The table's own CHECK constraint can
+  // only be reached by its owner, so "owner-insert" runs on the admin pool and drops to jobguard_migration for the INSERT alone.
+  type BindRoute="routine"|"runtime-insert"|"owner-insert";
+  const bindWithFlag=async(job:string,customerRevision:string,siteRevision:string,flag:boolean|null,reason:string|null,eventType="job.parties.bind",route:BindRoute="routine")=>{
     const command=randomUUID(),binding=randomUUID(),expected=(await repository.view(context,member,job)).jobRevision;
-    await withTenant(runtime,context,async db=>{
+    await withTenant(route==="owner-insert"?admin:runtime,context,async db=>{
       await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[command,tenant,command,"d".repeat(64),member]);
-      expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
-      if (directInsert) await db.$client.query(`INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance,correction_reason,command_id)
+      if (route==="owner-insert") {
+        await db.$client.query("SET LOCAL ROLE jobguard_migration");
+        expect((await db.$client.query("SELECT current_user")).rows[0]).toEqual({ current_user: "jobguard_migration" });
+      } else expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
+      if (route!=="routine") await db.$client.query(`INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance,correction_reason,command_id)
         SELECT $1,$2,$3,$4,c.customer_id,c.id,c.customer_id,c.id,s.site_id,s.id,'entered',$7,$8 FROM app.customer_revision c,app.site_revision s WHERE c.tenant_id=$1 AND c.id=$5 AND s.tenant_id=$1 AND s.id=$6`, [tenant,binding,job,expected+1,customerRevision,siteRevision,reason,command]);
       else await db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,binding,expected,customerRevision,null,siteRevision,flag,reason,member,command]);
+      if (route==="owner-insert") await db.$client.query("RESET ROLE");
       await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,command,JSON.stringify({id:binding})]);
       await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType,subjectType:"job",subjectRef:job,payload:{references:{commandId:command,identityId:binding},hashes:{request:"d".repeat(64)},classifications:{action:"operational"}}}]);
     });
@@ -497,11 +505,13 @@ describe("CH-3a a null correction flag cannot bypass the post-live guard (round 
     const job = await createJob(), { c, s, parties } = await saveParties(job);
     await repository.command(context, member, job, command("bind", { expectedJobRevision: 0, parties })); await setLiveDirectly(job);
     const before = await state(job);
-    for (const directInsert of [false, true]) {
+    for (const route of ["routine", "runtime-insert", "owner-insert"] as const) {
       // On the defective migration tab/LF/CR/NBSP/BOM reach receipt completion, the matching correction audit and commit.
       // Thus rejection cannot be explained by a missing record in the deferred receipt/audit protocol.
-      await expect(bindWithFlag(job, c.revisionId, s.revisionId, true, reason!, "job.parties.correct", directInsert)).rejects.toMatchObject(directInsert
+      // The runtime login cannot insert a binding at all (42501); the constraint itself is proven through the owner role (23514).
+      await expect(bindWithFlag(job, c.revisionId, s.revisionId, true, reason!, "job.parties.correct", route)).rejects.toMatchObject(route === "owner-insert"
         ? { code: "23514", constraint: "job_party_binding_correction_reason_check" }
+        : route === "runtime-insert" ? { code: "42501" }
         : { code: "22023", message: expect.stringContaining("CORRECTION_REASON_REQUIRED") });
       expect(await state(job)).toEqual(before);
     }

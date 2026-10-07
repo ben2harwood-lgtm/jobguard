@@ -15,7 +15,7 @@ const precedingMigrations = MIGRATION_URLS.slice(0, ownershipMigrationIndex);
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string;
 beforeAll(async () => {
  dir = await mkdtemp(join(tmpdir(), "sbox-session-pg-")); const port=57000+Math.floor(Math.random()*500);
- pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
+ pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await pg.initialise(); await pg.start(); admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
  // Upgrade from the immediately preceding supported schema with an unbound legacy job.
  for (const url of precedingMigrations) await admin.query(await (await import("node:fs/promises")).readFile(url,"utf8"));
