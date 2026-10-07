@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocateEnterpriseReceipt, deriveEnterpriseReferenceStatement, deriveEnterpriseStatement, statementLines, EnterpriseDomainError } from "./index.js";
+import { allocateEnterpriseReceipt, deriveEnterpriseReferenceStatement, deriveEnterpriseStatement, statementLines, EnterpriseDomainError, feeBearing, qualifyingPrincipal } from "./index.js";
 import type { EnterpriseAgreement, EnterpriseStatementInput, EnterpriseGroup } from "./index.js";
 import { extra,group,id,hash,exact,approval,revision,at,withKind } from "./origin.test.js";
 import { exactPence, serializeExactPence, addExactPence } from "../cumulative-fee.js";
@@ -33,6 +33,39 @@ function expectDomainRefusal(action:()=>unknown,code:EnterpriseDomainError["code
  try {action();}catch(caught){error=caught;}
  expect(error).toBeInstanceOf(EnterpriseDomainError);expect(error).toHaveProperty("code",code);
 }
+describe("round3 P2-R1 lifecycle exclusions with finalized paid facts",()=>{
+ const states=["withdrawn","rejected","billing_rejected","logged","awaiting_approval","approved","exported"] as const;
+ it.each(states)("%s yields zero qualification with and without cutoff",state=>{
+  const g=paid();g.mode="production_billing";g.feeGate=true;g.members[0]!.state=state;
+  expect(feeBearing(g)).toBe(false);
+  for(const reference of [false,true])for(const cutoff of [undefined,"2026-11-01T00:00:00Z"]) {
+   const options=cutoff===undefined?{reference}:{reference,recordedCutoff:cutoff};
+   expect(qualifyingPrincipal(g,options)).toEqual(exactPence(0n));
+  }
+ });
+ for(const [path,derive] of [["statement",deriveEnterpriseStatement],["reference",deriveEnterpriseReferenceStatement]] as const) {
+  it.each(states)(`%s yields zero through ${path} derivation`,state=>{
+   const g=paid();g.mode="production_billing";g.feeGate=true;
+   const input=statement([g],0,[],{mode:"production_billing",feeGate:true});
+   // The otherwise identical ENT-F1 fixture qualifies before changing only the cached state.
+   expect(derive(input).sections[0]!.cumulativeFee.pence).toBe(1500);
+   g.members[0]!.state=state;
+   const result=derive(input).sections[0]!;
+   expect(result.qualifyingPrincipal).toEqual(exactPence(0n));
+   expect(result.cumulativeFee.pence).toBe(0);expect(result.postingDelta.pence).toBe(0);
+   expect(result.kind).toBe("zero_result");
+   expect(result.lines).toEqual([expect.objectContaining({extraId:g.canonicalId,fee:{pence:0,currency:"GBP"},
+    currentQualifyingPrincipal:exactPence(0n),priorQualifyingPrincipal:exactPence(0n),
+    qualifyingChange:exactPence(0n),contributionChange:exactPence(0n)})]);
+  });
+  it.each(states)(`%s without cutoff is refused through ${path} derivation`,state=>{
+   const g=paid();g.mode="production_billing";g.feeGate=true;g.members[0]!.state=state;
+   const input:Partial<EnterpriseStatementInput>=statement([g],0,[],{mode:"production_billing",feeGate:true});
+   delete input.recordedCutoff;
+   expectDomainRefusal(()=>derive(input),"INVALID_STATEMENT");
+  });
+ }
+});
 describe("generated ENT-F1–ENT-F12 via enterprise qualification and shared allocation",()=>{
  it("ENT-F1, F3, F4, F5 and F6: caps, credits and original receipt reversal",()=>{
   const g=paid();expect(q(statement([g]))).toEqual(exactPence(15000n));expect(f(statement([g]))).toBe(1500);expect(delta(statement([g]))).toBe(1500);

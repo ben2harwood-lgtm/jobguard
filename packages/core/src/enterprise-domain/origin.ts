@@ -64,7 +64,8 @@ export function approvalSnapshotValid(e: EnterpriseExtra, complete = true): bool
 export function qualifyingPrincipal(raw: unknown, options: { reference?: boolean; recordedCutoff?: string } = {}): ExactPence {
   const g = parseEnterpriseGroup(raw); assertParsedDuplicateGroup(g);
   const zero = exactPence(0n), e = g.members.find(m => m.id === g.canonicalId)!;
-  if ((!options.reference && (g.mode !== "production_billing" || !g.feeGate)) || !parsedSiteOriginated(g) || (options.recordedCutoff === undefined && !billedStates.includes(e.state as typeof billedStates[number])) ||
+  const billedState = billedStates.includes(e.state as typeof billedStates[number]) || (options.recordedCutoff !== undefined && e.state === "credited");
+  if ((!options.reference && (g.mode !== "production_billing" || !g.feeGate)) || !parsedSiteOriginated(g) || !billedState ||
     !e.exportLineId || e.exportedAt === null || g.unresolvedCandidateIds.length > 0 || !approvalSnapshotValid(e)) return zero;
   try {
     if (options.recordedCutoff !== undefined && (compareServerInstants(e.revision.serverRecordedAt, options.recordedCutoff) >= 0 ||
@@ -92,8 +93,8 @@ export function qualifyingPrincipal(raw: unknown, options: { reference?: boolean
         if (compareExactPence(reversed, parseExactPence(settled.net)) > 0) return refuse("INVALID_ALLOCATION");
       }
     }
-    // With a cutoff, only finalized, matched invoice/payment facts establish billing eligibility.
-    // The current cached state may already include a later full credit or payment reversal.
+    // Within the allowed billed lifecycle states, cutoff-filtered facts determine the amount.
+    // A later full credit may leave today's cached state credited; a reversal leaves it billed.
     const total = (positive: string, negative: string) => sumExactPence(facts.filter(f => f.kind === positive || f.kind === negative).map(f => {
       const p = parseExactPence(f.net); return exactPence(f.kind === "credited" ? -p.numerator : p.numerator, p.denominator);
     }));
