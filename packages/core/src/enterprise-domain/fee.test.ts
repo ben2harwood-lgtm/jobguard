@@ -28,6 +28,11 @@ const section=(input:EnterpriseStatementInput)=>deriveEnterpriseReferenceStateme
 const q=(input:EnterpriseStatementInput)=>section(input).qualifyingPrincipal;
 const f=(input:EnterpriseStatementInput)=>section(input).cumulativeFee.pence;
 const delta=(input:EnterpriseStatementInput)=>section(input).postingDelta.pence;
+function expectDomainRefusal(action:()=>unknown,code:EnterpriseDomainError["code"]) {
+ let error:unknown;
+ try {action();}catch(caught){error=caught;}
+ expect(error).toBeInstanceOf(EnterpriseDomainError);expect(error).toHaveProperty("code",code);
+}
 describe("generated ENT-F1–ENT-F12 via enterprise qualification and shared allocation",()=>{
  it("ENT-F1, F3, F4, F5 and F6: caps, credits and original receipt reversal",()=>{
   const g=paid();expect(q(statement([g]))).toEqual(exactPence(15000n));expect(f(statement([g]))).toBe(1500);expect(delta(statement([g]))).toBe(1500);
@@ -36,7 +41,7 @@ describe("generated ENT-F1–ENT-F12 via enterprise qualification and shared all
   const input=receipt(18000,[line("extra",15000,18000)]);
   const reversed=allocateEnterpriseReceipt({version:"enterprise-receipt.v1",tenantId:g.tenantId,jobId:g.jobId,compositionComplete:true,receipt:{...input,direction:"reversal",sourceRef:"generated-reversal"},bindings:[{lineId:"extra",extraId:g.canonicalId,exportLineId:id(7),revisionId:id(2),revisionHash:hash()}],groups:[g],original:{sourceRef:"generated-receipt",receipt:input,remainingGross:[{lineId:"extra",gross:exact(18000)}]}});
   expect(reversed[0]!.net).toEqual(exactPence(-15000n));
-  const reversal=structuredClone(g);reversal.members[0]!.billingFacts.push({...g.members[0]!.billingFacts[1]!,kind:"reversed",sourceRef:"generated-reversal",originalSourceRef:"generated-receipt",net:exact(15000)});
+  const reversal=structuredClone(g);reversal.members[0]!.billingFacts.push({...g.members[0]!.billingFacts[1]!,kind:"reversed",sourceRef:"generated-reversal",originalSourceRef:"generated-receipt",net:serializeExactPence(reversed[0]!.net),allocationRule:reversed[0]!.rule});
   const result=section(statement([reversal],1500,prior));expect(result.qualifyingPrincipal.numerator).toBe(0n);expect(result.postingDelta.pence).toBe(-1500);expect(result.kind).toBe("linked_compensation");expect(result.compensatesDerivationId).toBe(id(101));
   expect(f(statement([paid(15000,20000,24000)]))).toBe(1500);expect(f(statement([paid(15000,12000,14400)]))).toBe(1200);
  });
@@ -99,7 +104,7 @@ describe("allocation and fee adversarial/property cases",()=>{
   expect(()=>allocateEnterpriseReceipt({...base,receipt:{...base.receipt,direction:"reversal"}})).toThrow();
  });
  it("mode/gate/reference distinction, formula refusal, prior version, zero and typed overflow",()=>{
-  const input=statement([paid()]);expect(section(input).kind).toBe("proposal");expect(deriveEnterpriseStatement(input).sections[0]!.cumulativeFee.pence).toBe(0);expect(deriveEnterpriseReferenceStatement({...input,mode:"pilot_no_charge"}).label).toBe("Illustration — no charge");
+  const input=statement([paid()]);expect(section(input).kind).toBe("proposal");expect(deriveEnterpriseStatement(input).sections[0]!.cumulativeFee.pence).toBe(0);expect(deriveEnterpriseReferenceStatement({...input,mode:"pilot_no_charge",groups:input.groups.map(g=>({...g,mode:"pilot_no_charge"}))}).label).toBe("Illustration — no charge");
   for(const mode of ["synthetic_demo","pilot_no_charge","production_billing"] as const) for(const gate of [false,true]) {const v=statement([group(input.groups[0]!.members,{mode,feeGate:gate})],0,[],{mode,feeGate:gate});expect(deriveEnterpriseStatement(v).sections[0]!.cumulativeFee.pence).toBe(mode==="production_billing"&&gate?1500:0);}
   for(const bad of [{basis:"on_invoice_with_true_up"},{minimumCommitment:1},{onboardingFee:1},{volumeBands:[]}])expect(()=>section({...input,agreements:[{...agreement(),...bad} as EnterpriseAgreement]})).toThrow();
   expect(()=>section({...input,prior:[{...input.prior[0]!,priorPolicyVersion:"v2"}]})).toThrow();
@@ -137,8 +142,8 @@ it("approval, revision and export recorded after cutoff cannot enter an earlier 
  }
  const g=paid();g.members[0]!.billingFacts[1]!.invoiceLineId="unmatched";expect(()=>section(statement([g]))).toThrow();
 });
-it("statement lines retain exact Q change and immutable source/rule/revision references",()=>{
- const g=paid(),s=section(statement([g]));expect(s.lines[0]).toMatchObject({currentQualifyingPrincipal:exactPence(15000n),priorQualifyingPrincipal:exactPence(0n),qualifyingChange:exactPence(15000n),originExtraId:g.canonicalId,originKind:"site_user",orderRevisionId:id(5),revisionId:id(2),exportLineId:id(7),billingReferences:[{sourceRef:"fictional-invoice",invoiceLineId:"extra",allocationRule:null},{sourceRef:"generated-receipt",invoiceLineId:"extra",allocationRule:"pro_rata"}]});
+it("round2 P2-4 statement lines retain exact Q change and immutable source/rule/revision references",()=>{
+ const g=paid();g.members[0]!.billingFacts.push({...g.members[0]!.billingFacts[1]!,sourceRef:"pending-receipt",status:"pending"});const s=section(statement([g]));expect(s.lines[0]!.billingReferences).toHaveLength(2);expect(s.lines[0]).toMatchObject({currentQualifyingPrincipal:exactPence(15000n),priorQualifyingPrincipal:exactPence(0n),qualifyingChange:exactPence(15000n),originExtraId:g.canonicalId,originKind:"site_user",orderRevisionId:id(5),revisionId:id(2),exportLineId:id(7),billingReferences:[{sourceRef:"fictional-invoice",invoiceLineId:"extra",allocationRule:null,kind:"invoiced",status:"finalized"},{sourceRef:"generated-receipt",invoiceLineId:"extra",allocationRule:"pro_rata",kind:"settled",status:"finalized"}]});
 });
 it("zero exact rate, ratio bounds, invalid rationals and fractional agreement instants",()=>{
  expect(section(statement([paid()],0,[],{agreements:[agreement("v1","0")]})).kind).toBe("zero_result");
@@ -152,6 +157,7 @@ it("generated approved/invoiced/paid/credit caps keep Q exact and nonnegative",(
   const g=paid(approved,invoiced,invoiced,received);
   if(credit)g.members[0]!.billingFacts.push({...g.members[0]!.billingFacts[0]!,kind:"credited",sourceRef:"generated-cap-credit",net:exact(credit)});
   const minimum=[BigInt(approved),BigInt(invoiced)-BigInt(credit),BigInt(received)].reduce((a,b)=>a<b?a:b);
+  if(credit>invoiced){expectDomainRefusal(()=>q(statement([g])),"INVALID_ALLOCATION");continue;}
   const principal=q(statement([g]));expect(principal).toEqual(exactPence(minimum<0n?0n:minimum));expect(principal.numerator).toBeGreaterThanOrEqual(0n);
  }
 });
@@ -177,4 +183,69 @@ it("one exported/billed line cannot be attributed to two canonical extras",()=>{
  expect(()=>section(statement([x,exportCollision]))).toThrow(EnterpriseDomainError);
  const billedCollision=structuredClone(y);billedCollision.members[0]!.billingFacts.forEach(f=>{f.invoiceId=x.members[0]!.billingFacts[0]!.invoiceId;f.invoiceLineId=x.members[0]!.billingFacts[0]!.invoiceLineId;});
  expect(()=>section(statement([x,billedCollision]))).toThrow(EnterpriseDomainError);
+});
+
+function reversedReceipt(g:EnterpriseGroup, gross=18000, sourceRef="generated-reversal") {
+ const original=receipt(18000,[line("extra",15000,18000)]);
+ return {version:"enterprise-receipt.v1",tenantId:g.tenantId,jobId:g.jobId,compositionComplete:true,
+  receipt:{...original,direction:"reversal",receiptGross:exact(gross),sourceRef},
+  bindings:[{lineId:"extra",extraId:g.canonicalId,exportLineId:id(7),revisionId:id(2),revisionHash:hash()}],groups:[g],
+  original:{sourceRef:original.sourceRef,receipt:original,remainingGross:[{lineId:"extra",gross:exact(18000)}]}};
+}
+it.each(["credited","reversed"] as const)("round2 P1-1 ENT-F12 full %s preserves October bytes and links November compensation",kind=>{
+ const g=paid(),octoberInput=statement([g]);
+ const bytes=(value:unknown)=>JSON.stringify(value,(_key,v:unknown)=>typeof v==="bigint"?v.toString():v);
+ const october=deriveEnterpriseReferenceStatement(octoberInput),before=bytes(october);
+ expect(october.sections[0]!.cumulativeFee.pence).toBe(1500);
+ const e=g.members[0]!,allocation=allocateEnterpriseReceipt(reversedReceipt(g))[0]!;
+ e.billingFacts.push({...e.billingFacts[kind==="credited"?0:1]!,kind,net:kind==="credited"?exact(15000):serializeExactPence(allocation.net),
+  sourceRef:"november-full-adjustment",originalSourceRef:kind==="reversed"?allocation.originalSourceRef:null,
+  allocationRule:kind==="reversed"?allocation.rule:null,effectiveAt:"2026-10-20T00:00:00Z",recordedAt:"2026-11-02T00:00:00Z"});
+ // Actual cached projection after the full credit or full payment reversal.
+ e.state=kind==="credited"?"credited":"billed";
+ expect(bytes(deriveEnterpriseReferenceStatement(octoberInput))).toBe(before);expect(bytes(october)).toBe(before);
+ const november=section(statement([g],1500,[{extraId:g.canonicalId,qualifyingPrincipal:exact(15000)}],{period:"2026-11",recordedCutoff:"2026-12-01T00:00:00Z",inputFactsHash:hash("b")}));
+ expect(november).toMatchObject({cumulativeFee:{pence:0},postingDelta:{pence:-1500},kind:"linked_compensation",compensatesDerivationId:id(101),priorDerivationId:id(101),period:"2026-11",postingAuthorized:false});
+ expect(november.lines[0]!.fee.pence).toBe(-1500);
+});
+it("round2 P2-1 partial refund fact consumes signed SH-1 allocation directly",()=>{
+ const g=paid(),a=allocateEnterpriseReceipt(reversedReceipt(g,6000,"partial-refund"))[0]!;
+ expect(a.net).toEqual(exactPence(-5000n));
+ g.members[0]!.billingFacts.push({...g.members[0]!.billingFacts[1]!,kind:"reversed",sourceRef:a.sourceRef,originalSourceRef:a.originalSourceRef,allocationRule:a.rule,net:serializeExactPence(a.net)});
+ const s=section(statement([g],1500,[{extraId:g.canonicalId,qualifyingPrincipal:exact(15000)}]));
+ expect(s.qualifyingPrincipal).toEqual(exactPence(10000n));expect(s.postingDelta.pence).toBe(-500);expect(s.kind).toBe("linked_compensation");
+});
+it("round2 P2-1 positive reversal magnitude is refused",()=>{
+ const g=paid();g.members[0]!.billingFacts.push({...g.members[0]!.billingFacts[1]!,kind:"reversed",sourceRef:"positive-reversal",originalSourceRef:"generated-receipt",net:exact(5000)});
+ expectDomainRefusal(()=>section(statement([g])),"INVALID_ENTERPRISE_FACTS");
+});
+it.each(["explicit","separateInvoiceId"] as const)("round2 P2-2 refuses reversal steering through %s",field=>{
+ const g=paid(24000,24000,28800),original=receipt(148800,[line("order",100000,120000),line("extra",24000,28800)]);
+ const base={...reversedReceipt(g),receipt:{...original,direction:"reversal",receiptGross:exact(28800),sourceRef:"blended-refund"},
+  bindings:[{lineId:"order",extraId:null,exportLineId:null,revisionId:null,revisionHash:null},{lineId:"extra",extraId:g.canonicalId,exportLineId:id(7),revisionId:id(2),revisionHash:hash()}],
+  original:{sourceRef:original.sourceRef,receipt:original,remainingGross:original.lines.map(l=>({lineId:l.id,gross:l.outstandingGross}))}};
+ expect(allocateEnterpriseReceipt(base).map(a=>a.net)).toEqual([exactPence(-600000n,31n),exactPence(-144000n,31n)]);
+ const changed=field==="explicit"?{explicit:[{lineId:"order",gross:exact(28800)}]}:{separateInvoiceId:"generated-invoice"};
+ expectDomainRefusal(()=>allocateEnterpriseReceipt({...base,receipt:{...base.receipt,...changed}}),"INVALID_ALLOCATION");
+});
+it("round2 P3-1 refuses every mixed statement/group mode in both derivation paths",()=>{
+ for(const mode of ["synthetic_demo","pilot_no_charge","production_billing"] as const)for(const groupMode of ["synthetic_demo","pilot_no_charge","production_billing"] as const){
+  if(mode===groupMode)continue;const g=paid();g.mode=groupMode;g.feeGate=true;
+  const input=statement([g],0,[],{mode,feeGate:true});
+  for(const derive of [deriveEnterpriseStatement,deriveEnterpriseReferenceStatement])expectDomainRefusal(()=>derive(input),"INVALID_STATEMENT");
+ }
+});
+it.each(["credited","reversed"] as const)("round2 P3-2 refuses cumulative over-%s per invoice/source rather than clamping",kind=>{
+ const g=paid(),e=g.members[0]!,base=e.billingFacts[kind==="credited"?0:1]!;
+ for(const [index,amount] of [10000,5001].entries())e.billingFacts.push({...base,kind,sourceRef:`over-adjustment-${index}`,originalSourceRef:kind==="reversed"?base.sourceRef:null,net:exact(kind==="reversed"?-amount:amount)});
+ expectDomainRefusal(()=>section(statement([g])),"INVALID_ALLOCATION");
+});
+it("round2 P3-3 bounds same-sign and mixed-sign deltas by one exact penny",()=>{
+ for(const changes of [[{extraId:id(1),change:exactPence(1n,2n)}],[{extraId:id(1),change:exactPence(-1n,2n)}],[{extraId:id(1),change:exactPence(-1n)},{extraId:id(8),change:exactPence(2n)}]]){
+  for(const bad of [-100,100])expectDomainRefusal(()=>statementLines(bad,changes),"INVALID_STATEMENT");
+ }
+ expect(statementLines(2,[{extraId:id(1),change:exactPence(1n)}])[0]!.fee.pence).toBe(2);
+ expect(statementLines(0,[{extraId:id(1),change:exactPence(1n)}])[0]!.fee.pence).toBe(0);
+ expect(statementLines(-2,[{extraId:id(1),change:exactPence(-1n)}])[0]!.fee.pence).toBe(-2);
+ for(const sign of [1n,-1n])expectDomainRefusal(()=>statementLines(Number(2n*sign),[{extraId:id(1),change:exactPence(999n*sign,1000n)}]),"INVALID_STATEMENT");
 });

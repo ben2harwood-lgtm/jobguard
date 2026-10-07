@@ -81,7 +81,7 @@ export function transitionExtra(raw: unknown): EnterpriseExtra {
       const fact = input.billing;
       const projected = (state: EnterpriseExtra["state"]) => result(state, { billingBalances: { billedNetPence: fact.remainingBilledNetPence, settledNetPence: fact.remainingSettledNetPence } });
       if (fact.kind === "rejected") { from(["exported"]); return projected("billing_rejected"); }
-      if (fact.kind === "invoiced") { if (fact.remainingBilledNetPence === 0) return refuse("INVALID_TRANSITION"); return projected("billed"); }
+      if (fact.kind === "invoiced") { from(["exported", "billed"]); if (fact.remainingBilledNetPence === 0) return refuse("INVALID_TRANSITION"); return projected("billed"); }
       if (fact.kind === "credited") { from(["billed", "part_paid", "paid"]); return projected(fact.remainingBilledNetPence === 0 ? "credited" : e.state); }
       if (fact.kind === "payment_reversed") {
         from(["part_paid", "paid"]); if (fact.remainingSettledNetPence >= fact.remainingBilledNetPence) return refuse("INVALID_TRANSITION");

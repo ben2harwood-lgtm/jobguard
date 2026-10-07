@@ -6,7 +6,10 @@ import { compareServerInstants, covers, enterpriseActorV1, enterpriseExtraV1, pa
 const senior = ["supervisor", "surveyor", "commercial_manager"] as const;
 const billedStates = ["billed", "part_paid", "paid"] as const;
 export function assertDuplicateGroup(raw: unknown): void {
-  const g = parseEnterpriseGroup(raw), byId = new Map(g.members.map(e => [e.id, e]));
+  assertParsedDuplicateGroup(parseEnterpriseGroup(raw));
+}
+function assertParsedDuplicateGroup(g: EnterpriseGroup): void {
+  const byId = new Map(g.members.map(e => [e.id, e]));
   const canonical = byId.get(g.canonicalId)!;
   if (canonical.duplicateOf !== null || canonical.state === "duplicate" || g.members.filter(e => e.duplicateOf === null).length !== 1) return refuse("INVALID_DUPLICATE_GROUP");
   for (const e of g.members) {
@@ -16,7 +19,10 @@ export function assertDuplicateGroup(raw: unknown): void {
   }
 }
 export function effectiveOrigin(raw: unknown): EnterpriseExtra {
-  const g = parseEnterpriseGroup(raw); assertDuplicateGroup(g);
+  const g = parseEnterpriseGroup(raw); assertParsedDuplicateGroup(g);
+  return parsedEffectiveOrigin(g);
+}
+function parsedEffectiveOrigin(g: EnterpriseGroup): EnterpriseExtra {
   return [...g.members].sort((a, b) => compareServerInstants(a.origin.serverRecordedAt, b.origin.serverRecordedAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0]!;
 }
 export function captureSatisfied(e: EnterpriseExtra): boolean {
@@ -24,7 +30,11 @@ export function captureSatisfied(e: EnterpriseExtra): boolean {
     (!e.residentCaptured || e.residentConfirmationHash !== null);
 }
 export function siteOriginated(raw: unknown): boolean {
-  const g = parseEnterpriseGroup(raw), e = effectiveOrigin(g), kind = e.origin.origin.kind;
+  const g = parseEnterpriseGroup(raw); assertParsedDuplicateGroup(g);
+  return parsedSiteOriginated(g);
+}
+function parsedSiteOriginated(g: EnterpriseGroup): boolean {
+  const e = parsedEffectiveOrigin(g), kind = e.origin.origin.kind;
   if (g.jobTrack !== "contractor" || !["site_user", "jobguard_surfaced_confirmed"].includes(kind) || e.orderAtOrigin.coverage === "fully_instructed" || !captureSatisfied(e)) return false;
   if (kind === "site_user") return ["operative", "supervisor"].includes(e.raisingCommand.role) && e.raisingCommand.assigned;
   const p = e.prompt;
@@ -52,9 +62,9 @@ export function approvalSnapshotValid(e: EnterpriseExtra, complete = true): bool
   return true;
 }
 export function qualifyingPrincipal(raw: unknown, options: { reference?: boolean; recordedCutoff?: string } = {}): ExactPence {
-  const g = parseEnterpriseGroup(raw); assertDuplicateGroup(g);
+  const g = parseEnterpriseGroup(raw); assertParsedDuplicateGroup(g);
   const zero = exactPence(0n), e = g.members.find(m => m.id === g.canonicalId)!;
-  if ((!options.reference && (g.mode !== "production_billing" || !g.feeGate)) || !siteOriginated(g) || !billedStates.includes(e.state as typeof billedStates[number]) ||
+  if ((!options.reference && (g.mode !== "production_billing" || !g.feeGate)) || !parsedSiteOriginated(g) || (options.recordedCutoff === undefined && !billedStates.includes(e.state as typeof billedStates[number])) ||
     !e.exportLineId || e.exportedAt === null || g.unresolvedCandidateIds.length > 0 || !approvalSnapshotValid(e)) return zero;
   try {
     if (options.recordedCutoff !== undefined && (compareServerInstants(e.revision.serverRecordedAt, options.recordedCutoff) >= 0 ||
@@ -62,12 +72,30 @@ export function qualifyingPrincipal(raw: unknown, options: { reference?: boolean
     const facts = e.billingFacts.filter(f => f.status === "finalized" && (options.recordedCutoff === undefined || compareServerInstants(f.recordedAt, options.recordedCutoff) < 0));
     if (new Set(facts.map(f => JSON.stringify([f.kind, f.sourceRef, f.invoiceId, f.invoiceLineId]))).size !== facts.length) return refuse("INVALID_ENTERPRISE_FACTS");
     for (const fact of facts) {
-      if (parseExactPence(fact.net).numerator < 0n) return refuse("INVALID_ENTERPRISE_FACTS");
+      // SH-1 reversals are signed negative allocations; other facts are positive magnitudes.
+      const net = parseExactPence(fact.net);
+      if (fact.kind === "reversed" ? net.numerator > 0n : net.numerator < 0n) return refuse("INVALID_ENTERPRISE_FACTS");
       if ((fact.kind === "settled" || fact.kind === "credited") && !facts.some(f => f.kind === "invoiced" && f.invoiceId === fact.invoiceId && f.invoiceLineId === fact.invoiceLineId)) return refuse("INVALID_ALLOCATION");
       if (fact.kind === "reversed" && !facts.some(f => f.kind === "settled" && f.sourceRef === fact.originalSourceRef && f.invoiceId === fact.invoiceId && f.invoiceLineId === fact.invoiceLineId)) return refuse("INVALID_ALLOCATION");
     }
+    // Reject inconsistent facts per invoice line and original settlement, before applying the approved cap.
+    const invoiceKeys = new Set(facts.map(f => JSON.stringify([f.invoiceId, f.invoiceLineId])));
+    for (const key of invoiceKeys) {
+      const line = facts.filter(f => JSON.stringify([f.invoiceId, f.invoiceLineId]) === key);
+      const invoiced = sumExactPence(line.filter(f => f.kind === "invoiced").map(f => parseExactPence(f.net)));
+      const credited = sumExactPence(line.filter(f => f.kind === "credited").map(f => parseExactPence(f.net)));
+      if (compareExactPence(credited, invoiced) > 0) return refuse("INVALID_ALLOCATION");
+      for (const settled of line.filter(f => f.kind === "settled")) {
+        const reversed = sumExactPence(line.filter(f => f.kind === "reversed" && f.originalSourceRef === settled.sourceRef).map(f => {
+          const net = parseExactPence(f.net); return exactPence(-net.numerator, net.denominator);
+        }));
+        if (compareExactPence(reversed, parseExactPence(settled.net)) > 0) return refuse("INVALID_ALLOCATION");
+      }
+    }
+    // With a cutoff, only finalized, matched invoice/payment facts establish billing eligibility.
+    // The current cached state may already include a later full credit or payment reversal.
     const total = (positive: string, negative: string) => sumExactPence(facts.filter(f => f.kind === positive || f.kind === negative).map(f => {
-      const p = parseExactPence(f.net); return exactPence(f.kind === negative ? -p.numerator : p.numerator, p.denominator);
+      const p = parseExactPence(f.net); return exactPence(f.kind === "credited" ? -p.numerator : p.numerator, p.denominator);
     }));
     const invoiced = total("invoiced", "credited"), paid = total("settled", "reversed"), approved = exactPence(BigInt(e.revision.netPence!));
     const least = [approved, invoiced, paid].reduce((a, b) => compareExactPence(a, b) < 0 ? a : b);

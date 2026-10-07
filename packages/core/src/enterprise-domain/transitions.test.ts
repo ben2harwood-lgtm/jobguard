@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { transitionExtra, EnterpriseDomainError, enterpriseStates, enterpriseCommands, enterpriseRoles } from "./index.js";
 import { extra, actor, group, id, hash, revision, grant, approval, requirement, withKind } from "./origin.test.js";
 
+function expectRefusal(input:unknown,code:EnterpriseDomainError["code"],label:string) {
+ let error:unknown;
+ try {transitionExtra(input);}catch(caught){error=caught;}
+ expect(error,label).toBeInstanceOf(EnterpriseDomainError);expect(error,label).toHaveProperty("code",code);
+}
 // Independent normative rows from BUILD_PLAN §9.1.4; no implementation-generated expectation.
 const edges: Record<string, { from: readonly string[]; roles: readonly string[]; to: string }> = {
  LogSiteExtra:{from:["absent"],roles:["operative","supervisor"],to:"logged"},
@@ -17,7 +22,7 @@ const edges: Record<string, { from: readonly string[]; roles: readonly string[];
  MarkDuplicate:{from:["logged","awaiting_approval","approved","rejected"],roles:["supervisor","surveyor","commercial_manager"],to:"duplicate"},
  ReviseExtra:{from:["approved","rejected"],roles:["supervisor","surveyor"],to:"awaiting_approval"},
  FinaliseExportBatch:{from:["approved"],roles:["finance","commercial_manager"],to:"exported"},
- ImportBillingStatus:{from:["exported","billed","part_paid","paid"],roles:["finance","connector"],to:"billed"},
+ ImportBillingStatus:{from:["exported","billed"],roles:["finance","connector"],to:"billed"},
 };
 export function request(command: string, state: string, role: string) {
  const e=extra(); e.state=state==="absent"?"logged":state as typeof e.state;
@@ -29,23 +34,27 @@ export function request(command: string, state: string, role: string) {
  e.raisingCommand.type=command==="ConfirmPrompt"?"ConfirmPrompt":command==="RecordOfficeExtra"?"RecordOfficeExtra":["RecordClientInstruction","ImportOrderLine"].includes(command)?command as "RecordClientInstruction":"LogSiteExtra";
  const a=actor(role); if (command==="WithdrawExtra"&&role==="operative") a.membershipId=e.origin.raisingMembershipId;
  if(["SubmitExtra","PriceExtra"].includes(command)&&role==="operative") a.membershipId=e.origin.raisingMembershipId;
- if(state==="absent") {e.revision.approvals=[];e.exportLineId=null;e.exportedAt=null;e.billingFacts=[];e.origin.raisingRole=role;e.origin.raisingMembershipId=a.membershipId;e.raisingCommand.actorId=a.membershipId;e.raisingCommand.role=role as typeof e.raisingCommand.role;e.raisingCommand.grant=grant(role);if(e.prompt)e.prompt.confirmedBy=a;}
+ if(state==="absent") {e.revision.approvals=[];e.exportLineId=null;e.exportedAt=null;e.billingFacts=[];e.origin.raisingRole=role;e.origin.raisingMembershipId=a.membershipId;e.raisingCommand.actorId=a.membershipId;e.raisingCommand.role=role as typeof e.raisingCommand.role;e.raisingCommand.grant=grant(role,{membershipId:a.membershipId});if(e.prompt)e.prompt.confirmedBy=a;}
  a.grants.forEach(g=>g.membershipId=a.membershipId);
  return {version:"enterprise-transition.v1" as const,command,extra:state==="absent"?null:e,creation:e,actor:a,
  expectedRevisionId:e.revision.id,expectedHash:e.revision.hash,reason:"raised_in_error",serverRecordedAt:"2026-10-06T00:00:00Z",newRevision:revision({id:id(50),hash:hash("b"),approvals:[]}),
  canonical:extra({id:id(9),origin:{...extra().origin,variationId:id(9)},exportLineId:null,exportedAt:null,billingFacts:[]}),group:group([e]),billing:{kind:"invoiced",matched:true,remainingBilledNetPence:15000,remainingSettledNetPence:0},exportLineId:id(70)};
 }
 describe("§9.1.4 independent state × command × role table",()=>{
- it("covers every legal and illegal edge, with no owner/admin override",()=>{
+ it.each(["absent",...enterpriseStates])("covers every legal and illegal edge from %s, with no owner/admin override",state=>{
   let count=0;
-  for(const state of ["absent",...enterpriseStates]) for(const command of enterpriseCommands) for(const role of enterpriseRoles) {
+  for(const command of enterpriseCommands) for(const role of enterpriseRoles) {
    const input=request(command,state,role), before=structuredClone(input),row=edges[command]!;
    const legal=row.from.includes(state)&&row.roles.includes(role)&&!(command==="WithdrawExtra"&&role==="operative"&&state==="approved");
    if(legal) expect(transitionExtra(input).state,`${state}/${command}/${role}`).toBe(row.to);
-   else expect(()=>transitionExtra(input),`${state}/${command}/${role}`).toThrow(EnterpriseDomainError);
+   else {
+    const outerBillingState=command==="ImportBillingStatus"&&["part_paid","paid"].includes(state);
+    const code=(!row.from.includes(state)&&!outerBillingState)?"INVALID_TRANSITION":!row.roles.includes(role)||command==="WithdrawExtra"&&role==="operative"&&state==="approved"?"PERMISSION_DENIED":"INVALID_TRANSITION";
+    expectRefusal(input,code,`${state}/${command}/${role}`);
+   }
    expect(input).toEqual(before);count++;
   }
-  expect(count).toBe(13*14*10);
+  expect(count).toBe(14*10);
  });
  it("requires covering grants, assignment on site capture, matching revision and hash",()=>{
   for(const command of enterpriseCommands) {const role=edges[command]!.roles[0]!, state=edges[command]!.from[0]!;
@@ -100,12 +109,15 @@ describe("§9.1.4 independent state × command × role table",()=>{
   }
  });
 });
-it("every state × billing event × role, terminal preservation and amount projections",()=>{
- const normative:Record<string,readonly string[]>={invoiced:["exported","billed","part_paid","paid"],credited:["billed","part_paid","paid"],paid:["billed","part_paid","paid"],payment_reversed:["part_paid","paid"],rejected:["exported"]};
- for(const state of enterpriseStates)for(const event of ["invoiced","credited","paid","payment_reversed","rejected"] as const)for(const role of enterpriseRoles) {
+it.each(enterpriseStates)("billing event × role from %s, terminal preservation and amount projections",state=>{
+ const normative:Record<string,readonly string[]>={invoiced:["exported","billed"],credited:["billed","part_paid","paid"],paid:["billed","part_paid","paid"],payment_reversed:["part_paid","paid"],rejected:["exported"]};
+ for(const event of ["invoiced","credited","paid","payment_reversed","rejected"] as const)for(const role of enterpriseRoles) {
   const input=request("ImportBillingStatus",state,role);input.billing={kind:event,matched:true,remainingBilledNetPence:event==="credited"?0:15000,remainingSettledNetPence:event==="paid"?15000:0};
   const before=structuredClone(input),legal=normative[event]!.includes(state)&&["finance","connector"].includes(role);
-  if(legal)expect(transitionExtra(input).state).toBe(event==="credited"?"credited":event==="paid"?"paid":event==="rejected"?"billing_rejected":"billed");else expect(()=>transitionExtra(input)).toThrow();
+  if(legal)expect(transitionExtra(input).state).toBe(event==="credited"?"credited":event==="paid"?"paid":event==="rejected"?"billing_rejected":"billed");else {
+   const code=!["exported","billed","part_paid","paid"].includes(state)?"INVALID_TRANSITION":!["finance","connector"].includes(role)?"PERMISSION_DENIED":"INVALID_TRANSITION";
+   expectRefusal(input,code,`${state}/${event}/${role}`);
+  }
   expect(input).toEqual(before);
  }
  const partial=request("ImportBillingStatus","part_paid","finance");partial.billing={kind:"credited",matched:true,remainingBilledNetPence:10000,remainingSettledNetPence:5000};
@@ -128,4 +140,9 @@ it("covering grants belong to their actual actor, including raising and prior ap
 it("enterprise approval/export lifecycle cannot operate on a small-builder job",()=>{
  const input=request("SubmitExtra","logged","supervisor"),e=withKind("builder_logged","small_builder");e.state="logged";e.revision.approvals=[];e.exportLineId=null;e.exportedAt=null;e.billingFacts=[];
  input.extra=e;input.creation=e;input.group=group([e],{jobTrack:"small_builder"});expect(()=>transitionExtra(input)).toThrow(EnterpriseDomainError);
+});
+
+it.each(["paid","part_paid"])("round2 P2-3/P3-5 invoiced refuses %s with the exact transition code",state=>{
+ const input=request("ImportBillingStatus",state,"finance"),before=structuredClone(input);
+ expectRefusal(input,"INVALID_TRANSITION",state);expect(input).toEqual(before);
 });

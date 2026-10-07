@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { effectiveOrigin, siteOriginated, feeBearing, qualifyingPrincipal, assertDuplicateGroup, assertDuplicateRepair, coalescePrompt, originForCommand, assertOriginUnchanged } from "./index.js";
 import type { EnterpriseActor, EnterpriseExtra, EnterpriseGroup, EnterpriseRevision, EnterpriseGrant, EnterpriseApproval, EnterpriseRequirement } from "./index.js";
 export const id=(n:number)=>`10000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
@@ -25,14 +25,17 @@ export function withKind(kind:typeof kinds[number],track:"contractor"|"small_bui
  const e=extra();e.origin.origin={version:"variation-origin.v1",jobTrack:track,kind} as EnterpriseExtra["origin"]["origin"];
  e.raisingCommand.type=commands[kind];
  const role=kind==="jobguard_surfaced_confirmed"?"supervisor":kind==="office_entry"||kind==="client_instruction"?"surveyor":"operative";
- e.origin.raisingRole=role;e.raisingCommand.role=role;e.raisingCommand.grant=grant(role,{membershipId:e.origin.raisingMembershipId});if(e.prompt){e.prompt.confirmedBy.membershipId=e.origin.raisingMembershipId;e.prompt.confirmedBy.grants.forEach(g=>g.membershipId=e.origin.raisingMembershipId);}
+ e.origin.raisingRole=role;e.raisingCommand.role=role;e.raisingCommand.grant=grant(role,{membershipId:e.origin.raisingMembershipId});if(kind!=="jobguard_surfaced_confirmed")e.prompt=null;
+ if(e.prompt){e.prompt.confirmedBy.membershipId=e.origin.raisingMembershipId;e.prompt.confirmedBy.grants.forEach(g=>g.membershipId=e.origin.raisingMembershipId);}
  return e;
 }
 if (/\/origin\.test\.(?:ts|js)$/u.test(expect.getState().testPath??"")) describe("track-qualified origin and full conjunction",()=>{
- it("generated exhaustive property matrix and typed refusals for cross-track kinds",()=>{
+ // Partition the same exhaustive matrix into small generated fixtures; retain every case and assertion.
+ it.each(kinds.flatMap(kind=>["contractor","small_builder"].flatMap(track=>["new","excess","fully_instructed"].flatMap(coverage=>["note","verified","pending","rejected"].map(evidence=>({kind,track,coverage,evidence} as const))))))(
+ "generated exhaustive property matrix: $kind/$track/$coverage/$evidence",({kind,track:rawTrack,coverage:rawCoverage,evidence:rawEvidence})=>{
+  const track=rawTrack as "contractor"|"small_builder",coverage=rawCoverage as "new"|"excess"|"fully_instructed",evidence=rawEvidence as "note"|"verified"|"pending"|"rejected";
   let cases=0;
-  for(const kind of kinds) for(const track of ["contractor","small_builder"] as const) for(const coverage of ["new","excess","fully_instructed"] as const)
-  for(const evidence of ["note","verified","pending","rejected"] as const) for(const resident of ["absent","confirmed","missing"] as const)
+   for(const resident of ["absent","confirmed","missing"] as const)
   for(const approved of [false,true]) for(const billed of [false,true]) for(const paid of [false,true]) for(const mode of ["synthetic_demo","pilot_no_charge","production_billing"] as const) for(const gate of [false,true]) {
    const e=withKind(kind,track);e.orderAtOrigin.coverage=coverage;e.captureNote=evidence==="note"?"Generated":null;
    if(evidence!=="note") e.photo={status:evidence,evidenceId:id(60),hash:hash(),tenantId:id(20),jobId:id(21),scopeItemId:id(22),objectVersionId:"generated-immutable-version"};
@@ -47,8 +50,8 @@ if (/\/origin\.test\.(?:ts|js)$/u.test(expect.getState().testPath??"")) describe
     if(!site||!approved||!billed||!paid)expect(qualifyingPrincipal(g,{reference:true})).toEqual({numerator:0n,denominator:1n});
    }cases++;
   }
-  expect(cases).toBe(7*2*3*4*3*2*2*2*3*2);
- },30000);
+  expect(cases).toBe(3*2*2*2*3*2);
+ });
  it("stable effective origin by exact instant then ID; canonical and device clocks do not order entitlement",()=>{
   const a=extra(),b=extra({id:id(8),duplicateOf:a.id,state:"duplicate"});b.origin={...b.origin,variationId:b.id,serverRecordedAt:"2026-10-05T13:00:00+01:00",deviceCapturedAt:"2020-01-01T00:00:00Z"};
   for(const members of [[a,b],[b,a]]) expect(effectiveOrigin(group(members,{canonicalId:a.id})).id).toBe(a.id);
@@ -67,7 +70,7 @@ if (/\/origin\.test\.(?:ts|js)$/u.test(expect.getState().testPath??"")) describe
    (e:EnterpriseExtra)=>{e.revision.approvals[0]!.hash=hash("b");},(e:EnterpriseExtra)=>{e.revision.requirement!.photoRequired=true;},
    (e:EnterpriseExtra)=>{e.billingFacts[1]!.status="pending";},(e:EnterpriseExtra)=>{e.billingFacts[1]!.net=exact(0);},
    (e:EnterpriseExtra)=>{e.billingFacts.push({...e.billingFacts[0]!,kind:"credited",sourceRef:"credit"});},
-   (e:EnterpriseExtra)=>{e.billingFacts.push({...e.billingFacts[1]!,kind:"reversed",sourceRef:"reversal",originalSourceRef:"fictional-receipt"});},
+   (e:EnterpriseExtra)=>{e.billingFacts.push({...e.billingFacts[1]!,kind:"reversed",sourceRef:"reversal",originalSourceRef:"fictional-receipt",net:exact(-15000)});},
   ]) {const e=extra();mutate(e);expect(qualifyingPrincipal(group([e]),{reference:true}).numerator).toBe(0n);}
   const p=withKind("jobguard_surfaced_confirmed","contractor");p.prompt=null;expect(siteOriginated(group([p]))).toBe(false);
   for(const role of ["operative","finance","admin","owner","read_only","connector","client_approver"]) {const e=withKind("jobguard_surfaced_confirmed","contractor");e.prompt!.confirmedBy=actor(role);expect(siteOriginated(group([e]))).toBe(false);}
@@ -104,4 +107,10 @@ if (/\/origin\.test\.(?:ts|js)$/u.test(expect.getState().testPath??"")) it("post
  const g=group(),a=actor("finance"),authorization={version:"enterprise-reconciliation-authorization.v1",decisionId:id(81),action:"ReconcileExportedDuplicate",tenantId:g.tenantId,jobId:g.jobId,canonicalId:g.canonicalId,actorId:a.membershipId,contentHash:hash(),resolution:"approved",current:true,expired:false};
  const repair={kind:"reconcile",reason:"generated authorized repair",reconciliationId:id(80),inputFactsHash:hash(),authorization};
  for(const patch of [{resolution:"rejected"},{resolution:"dismissed"},{current:false},{expired:true},{tenantId:id(99)},{jobId:id(99)},{canonicalId:id(99)},{actorId:id(99)},{contentHash:hash("b")}])expect(()=>assertDuplicateRepair(g,a,{...repair,authorization:{...authorization,...patch}})).toThrow();
+});
+
+if (/\/origin\.test\.(?:ts|js)$/u.test(expect.getState().testPath??"")) it("round2 P3-6 qualification validates a supplied group once",async()=>{
+ const {enterpriseGroupV1}=await import("./contracts.js");
+ const calls=vi.spyOn(enterpriseGroupV1,"safeParse");
+ try {expect(qualifyingPrincipal(group(),{reference:true})).toEqual({numerator:15000n,denominator:1n});expect(calls).toHaveBeenCalledTimes(1);}finally{calls.mockRestore();}
 });

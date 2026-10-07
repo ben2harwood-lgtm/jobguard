@@ -28,7 +28,7 @@ it("new subdirectory production source is pure and directly reuses SH-1 kernels;
  const files=["contracts","transitions","origin","fee","index"];
  const allowedImports=new Set(["zod","../money.js","../cumulative-fee.js","../receipt-allocation.js","../extra-origin.js","../allocation.js","./contracts.js","./transitions.js","./origin.js","./fee.js"]);
  const config=ts.readConfigFile("tsconfig.json",ts.sys.readFile),parsed=ts.parseJsonConfigFileContent(config.config,ts.sys,ts.sys.getCurrentDirectory());
- const program=ts.createProgram(files.map(f=>`src/enterprise-domain/${f}.ts`),parsed.options),checker=program.getTypeChecker();
+ const program=ts.createProgram(files.map(f=>`src/enterprise-domain/${f}.ts`),{...parsed.options,lib:["lib.es2022.d.ts"],types:[]}),checker=program.getTypeChecker();
  for(const f of files) {const path=`src/enterprise-domain/${f}.ts`,source=ts.sys.readFile(path)!;
   expect(source).not.toMatch(/from\s+["'](?:node:|pg|postgres|@jobguard\/db|@aws-sdk|stripe|@anthropic|react|next)|\b(?:fetch|XMLHttpRequest|WebSocket)\s*\(/u);
   expect(source).not.toMatch(/(?:function|const)\s+(?:calculateCumulativeFee|allocateReceiptToLines)\b/u);
@@ -47,4 +47,10 @@ it("photo evidence identity cannot be relabelled across tenant/job/scope",()=>{
  expect(parseEnterpriseGroup(g).members[0]!.photo.evidenceId).toBe(id(60));
  for(const field of ["tenantId","jobId","scopeItemId"] as const) {const forged=structuredClone(g);forged.members[0]!.photo[field]=id(99);expect(()=>parseEnterpriseGroup(forged)).toThrow(EnterpriseDomainError);}
  for(const field of ["origin","price","approval","fee"]){expect(enterprisePromptProposalV1.safeParse({...proposal,producer:{...proposal.producer,[field]:true}}).success).toBe(false);expect(enterprisePromptProposalV1.safeParse({...proposal,sources:[{...proposal.sources[0],[field]:true}]}).success).toBe(false);}
+});
+
+it("round2 P3-7 core exposes the enterprise domain API without generic helpers",async()=>{
+ const core=await import("../index.js");
+ expect(core.transitionExtra).toBeTypeOf("function");expect(core.deriveEnterpriseStatement).toBeTypeOf("function");expect(core.enterpriseGroupV1).toBeDefined();
+ for(const name of ["refuse","covers","readEnterprise","compareServerInstants"])expect(Object.hasOwn(core,name),name).toBe(false);
 });

@@ -39,7 +39,8 @@ export function allocateEnterpriseReceipt(raw: unknown): readonly EnterpriseRece
     if (receipt.direction === "reversal") {
       const original = input.original;
       if (!original || original.sourceRef !== original.receipt.sourceRef || original.receipt.direction !== "receipt" || original.sourceRef === receipt.sourceRef ||
-        compareServerInstants(receipt.effectiveAt, original.receipt.effectiveAt) !== 0 || receipt.invoiceId !== original.receipt.invoiceId) return refuse("INVALID_ALLOCATION");
+        compareServerInstants(receipt.effectiveAt, original.receipt.effectiveAt) !== 0 || receipt.invoiceId !== original.receipt.invoiceId ||
+        receipt.explicit !== null || receipt.separateInvoiceId !== original.receipt.separateInvoiceId) return refuse("INVALID_ALLOCATION");
       const originallySettled = new Map(allocateReceiptToLines(original.receipt).map(l => [l.lineId, l]));
       const remaining = new Map(original.remainingGross.map(l => [l.lineId, parseExactPence(l.gross)]));
       if (remaining.size !== original.remainingGross.length || receipt.lines.length !== original.receipt.lines.length || remaining.size !== receipt.lines.length) return refuse("INVALID_ALLOCATION");
@@ -69,15 +70,17 @@ export function statementLines(deltaPence: number, supplied: readonly Readonly<{
       if (delta.pence !== 0) return refuse("INVALID_STATEMENT");
       return Object.freeze(changes.map(c => Object.freeze({ extraId: c.extraId, contributionChange: c.change, fee: money(0) })));
     }
+    const exactChange = sumExactPence(changes.map(c => c.change));
+    const carry = addExactPence(exactPence(BigInt(delta.pence)), exactPence(-exactChange.numerator, exactChange.denominator));
+    if (compareExactPence(carry, exactPence(-1n)) < 0 || compareExactPence(carry, exactPence(1n)) > 0) return refuse("INVALID_STATEMENT");
     const uniformPositive = changes.every(c => c.change.numerator >= 0n), uniformNegative = changes.every(c => c.change.numerator <= 0n);
     let allocated: ReadonlyMap<string, Money>;
     if ((uniformPositive && delta.pence >= 0) || (uniformNegative && delta.pence <= 0)) {
       // Reuse SH-1 reduction to obtain a bounded LCM, then use the generic penny allocator.
       let denominator = 1n;
-      const limit = 10n ** BigInt(MAX_EXACT_PENCE_DIGITS);
       for (const c of changes) {
         denominator *= exactPence(denominator, c.change.denominator).denominator;
-        if (denominator >= limit) return refuse("MONEY_LIMIT");
+        if (denominator.toString().length > MAX_EXACT_PENCE_DIGITS) return refuse("MONEY_LIMIT");
       }
       allocated = allocateMoney(delta, changes.map(c => {
         const weight = c.change.numerator * (denominator / c.change.denominator);
@@ -113,7 +116,7 @@ export type EnterpriseDerivedStatementLine = EnterpriseStatementLine & Readonly<
   originExtraId: string | null; originKind: EnterpriseExtra["origin"]["origin"]["kind"] | null; originRecordedAt: string | null;
   orderRevisionId: string | null; revisionId: string | null; exportLineId: string | null;
   approvalReferences: readonly Readonly<{ actorId: string; revisionId: string; hash: string; ruleVersion: string; serverRecordedAt: string }>[];
-  billingReferences: readonly Readonly<{ sourceRef: string; invoiceId: string; invoiceLineId: string; allocationRule: EnterpriseExtra["billingFacts"][number]["allocationRule"]; originalSourceRef: string | null; recordedAt: string; effectiveAt: string; net: EnterpriseExtra["billingFacts"][number]["net"] }>[];
+  billingReferences: readonly Readonly<{ kind: EnterpriseExtra["billingFacts"][number]["kind"]; status: EnterpriseExtra["billingFacts"][number]["status"]; sourceRef: string; invoiceId: string; invoiceLineId: string; allocationRule: EnterpriseExtra["billingFacts"][number]["allocationRule"]; originalSourceRef: string | null; recordedAt: string; effectiveAt: string; net: EnterpriseExtra["billingFacts"][number]["net"] }>[];
 }>;
 export type EnterpriseFeeSection = Readonly<{
   agreementVersionId: string; period: string; inputFactsHash: string; recordedCutoff: string; qualifyingPrincipal: ExactPence;
@@ -139,7 +142,7 @@ function derive(raw: unknown, referenceOnly: boolean): EnterpriseFeeDerivation {
     const rows = new Map<string, { extraId: string; q: ExactPence }[]>(), seen = new Set<string>();
     const exportOwners = new Set<string>(), billedOwners = new Map<string, string>();
     for (const g of input.groups) {
-      if (g.tenantId !== input.tenantId) return refuse("INVALID_STATEMENT"); assertDuplicateGroup(g);
+      if (g.tenantId !== input.tenantId || g.mode !== input.mode) return refuse("INVALID_STATEMENT"); assertDuplicateGroup(g);
       for (const e of g.members) { if (seen.has(e.id)) return refuse("INVALID_DUPLICATE_GROUP"); seen.add(e.id); }
       const canonical = g.members.find(e => e.id === g.canonicalId)!;
       if (canonical.exportLineId !== null) { if (exportOwners.has(canonical.exportLineId)) return refuse("INVALID_ALLOCATION"); exportOwners.add(canonical.exportLineId); }
@@ -189,8 +192,8 @@ function derive(raw: unknown, referenceOnly: boolean): EnterpriseFeeDerivation {
           orderRevisionId: origin?.orderAtOrigin.revisionId ?? null, revisionId: canonical?.revision.id ?? null,
           exportLineId: canonical?.exportedAt && compareServerInstants(canonical.exportedAt, input.recordedCutoff) < 0 ? canonical.exportLineId : null,
           approvalReferences: Object.freeze((canonical?.revision.approvals ?? []).filter(a => compareServerInstants(a.serverRecordedAt, input.recordedCutoff) < 0).map(a => Object.freeze({ actorId: a.actorId, revisionId: a.revisionId, hash: a.hash, ruleVersion: a.ruleVersion, serverRecordedAt: a.serverRecordedAt }))),
-          billingReferences: Object.freeze((canonical?.billingFacts ?? []).filter(f => compareServerInstants(f.recordedAt, input.recordedCutoff) < 0).map(f => Object.freeze({
-            sourceRef: f.sourceRef, invoiceId: f.invoiceId, invoiceLineId: f.invoiceLineId, allocationRule: f.allocationRule, originalSourceRef: f.originalSourceRef, recordedAt: f.recordedAt, effectiveAt: f.effectiveAt, net: Object.freeze({ ...f.net }),
+          billingReferences: Object.freeze((canonical?.billingFacts ?? []).filter(f => f.status === "finalized" && compareServerInstants(f.recordedAt, input.recordedCutoff) < 0).map(f => Object.freeze({
+            kind: f.kind, status: f.status, sourceRef: f.sourceRef, invoiceId: f.invoiceId, invoiceLineId: f.invoiceLineId, allocationRule: f.allocationRule, originalSourceRef: f.originalSourceRef, recordedAt: f.recordedAt, effectiveAt: f.effectiveAt, net: Object.freeze({ ...f.net }),
           }))),
         });
       }));
