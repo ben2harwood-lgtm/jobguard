@@ -1074,308 +1074,48 @@
         ]
       }
     },
-    "/jobs/{id}/practice-feed": {
-      "get": {
-        "operationId": "PracticeFeedController_get",
-        "parameters": [
-          {
-            "name": "cursor",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 50,
-              "default": 20
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Persisted practice-feed-view.v1; synthetic movement facts only, never an allocation"
-          },
-          "401": {
-            "description": "No practice session"
-          },
-          "403": {
-            "description": "Session, membership or synthetic environment forbidden"
-          }
-        },
-        "summary": "Read session-owned synthetic settled movement facts without connecting any provider",
-        "tags": [
-          "practice-feed"
-        ]
-      },
+    "/contractor/practice": {
       "post": {
-        "operationId": "PracticeFeedController_post",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "version",
-                      "commandId",
-                      "expectedRevision",
-                      "action"
-                    ],
-                    "properties": {
-                      "version": {
-                        "type": "string",
-                        "enum": [
-                          "practice-feed-command.v1"
-                        ]
-                      },
-                      "commandId": {
-                        "type": "string",
-                        "format": "uuid"
-                      },
-                      "expectedRevision": {
-                        "type": "integer",
-                        "minimum": 0
-                      },
-                      "action": {
-                        "type": "string",
-                        "enum": [
-                          "connect"
-                        ]
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "version",
-                      "commandId",
-                      "expectedRevision",
-                      "action"
-                    ],
-                    "properties": {
-                      "version": {
-                        "type": "string",
-                        "enum": [
-                          "practice-feed-command.v1"
-                        ]
-                      },
-                      "commandId": {
-                        "type": "string",
-                        "format": "uuid"
-                      },
-                      "expectedRevision": {
-                        "type": "integer",
-                        "minimum": 0
-                      },
-                      "action": {
-                        "type": "string",
-                        "enum": [
-                          "disconnect"
-                        ]
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "version",
-                      "commandId",
-                      "expectedRevision",
-                      "action",
-                      "movement",
-                      "step"
-                    ],
-                    "properties": {
-                      "version": {
-                        "type": "string",
-                        "enum": [
-                          "practice-feed-command.v1"
-                        ]
-                      },
-                      "commandId": {
-                        "type": "string",
-                        "format": "uuid"
-                      },
-                      "expectedRevision": {
-                        "type": "integer",
-                        "minimum": 0
-                      },
-                      "action": {
-                        "type": "string",
-                        "enum": [
-                          "advance"
-                        ]
-                      },
-                      "movement": {
-                        "type": "string",
-                        "enum": [
-                          "receipt-384",
-                          "receipt-3000",
-                          "receipt-41280",
-                          "receipt-24000",
-                          "receipt-17280",
-                          "receipt-960",
-                          "supplier-refund-540"
-                        ]
-                      },
-                      "step": {
-                        "type": "string",
-                        "enum": [
-                          "pending",
-                          "settled",
-                          "replay",
-                          "page_overlap",
-                          "alternate_representation",
-                          "unknown_duplicate"
-                        ]
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "version",
-                      "commandId",
-                      "expectedRevision",
-                      "action",
-                      "movement"
-                    ],
-                    "properties": {
-                      "version": {
-                        "type": "string",
-                        "enum": [
-                          "practice-feed-command.v1"
-                        ]
-                      },
-                      "commandId": {
-                        "type": "string",
-                        "format": "uuid"
-                      },
-                      "expectedRevision": {
-                        "type": "integer",
-                        "minimum": 0
-                      },
-                      "action": {
-                        "type": "string",
-                        "enum": [
-                          "reconcile_duplicate"
-                        ]
-                      },
-                      "movement": {
-                        "type": "string",
-                        "enum": [
-                          "receipt-384",
-                          "receipt-3000",
-                          "receipt-41280",
-                          "receipt-24000",
-                          "receipt-17280",
-                          "receipt-960",
-                          "supplier-refund-540"
-                        ]
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "version",
-                      "commandId",
-                      "expectedRevision",
-                      "action",
-                      "movement",
-                      "paymentId"
-                    ],
-                    "properties": {
-                      "version": {
-                        "type": "string",
-                        "enum": [
-                          "practice-feed-command.v1"
-                        ]
-                      },
-                      "commandId": {
-                        "type": "string",
-                        "format": "uuid"
-                      },
-                      "expectedRevision": {
-                        "type": "integer",
-                        "minimum": 0
-                      },
-                      "action": {
-                        "type": "string",
-                        "enum": [
-                          "match_receipt"
-                        ]
-                      },
-                      "movement": {
-                        "type": "string",
-                        "enum": [
-                          "receipt-384",
-                          "receipt-3000",
-                          "receipt-41280",
-                          "receipt-24000",
-                          "receipt-17280",
-                          "receipt-960"
-                        ]
-                      },
-                      "paymentId": {
-                        "type": "string",
-                        "format": "uuid"
-                      }
-                    }
-                  }
-                ]
-              }
-            }
+        "operationId": "ContractorController_start",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
           }
         },
+        "summary": "Generate an isolated synthetic contractor organisation; no sends or charges",
+        "tags": [
+          "contractor-organisation"
+        ]
+      }
+    },
+    "/contractor": {
+      "get": {
+        "operationId": "ContractorController_read",
+        "parameters": [],
         "responses": {
           "200": {
-            "description": "Persisted practice-feed-view.v1; settlement never allocates money"
-          },
-          "400": {
-            "description": "Invalid or forged command"
-          },
-          "409": {
-            "description": "Stale revision, conflicting replay, unsettled or mismatched receipt, or disconnected feed"
+            "description": ""
           }
         },
-        "summary": "Connect, advance a generated movement, reconcile a duplicate, match a builder-attested receipt, or disconnect the practice feed",
+        "summary": "Read contractor organisation or scoped immutable client contracts",
         "tags": [
-          "practice-feed"
+          "contractor-organisation"
+        ]
+      }
+    },
+    "/contractor/commands": {
+      "post": {
+        "operationId": "ContractorController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Execute an audited versioned contractor administration command",
+        "tags": [
+          "contractor-organisation"
         ]
       }
     }

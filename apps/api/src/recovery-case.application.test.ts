@@ -1,3 +1,4 @@
+import { PracticeAccess } from "./practice-access.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
@@ -8,6 +9,7 @@ afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 const command=()=>({version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:randomUUID(),expectedCaseRevision:2,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"evidence_backed_withheld_payment"});
 it("passes the server-selected synthetic membership for database verification, never a reviewer literal",async()=>{
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+ vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue({context:{tenantId:"11111111-1111-4111-8111-111111111111"},membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID} as never);
  const persist=vi.spyOn(RecoveryCaseRepository.prototype,"eligibilityCommand").mockResolvedValue(undefined as never);
  vi.spyOn(RecoveryCaseRepository.prototype,"list").mockResolvedValue([]);
  const body=command(),job=randomUUID();
