@@ -37,6 +37,9 @@ export async function closeTestPools(...pools: Array<Pool | undefined>): Promise
 export async function installLegacySyntheticPartyFixtures(admin: Pool): Promise<void> {
   await admin.query(`CREATE OR REPLACE FUNCTION app.test_fixture_job_parties() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
   DECLARE c uuid:=gen_random_uuid();cr uuid:=gen_random_uuid();s uuid:=gen_random_uuid();sr uuid:=gen_random_uuid();b uuid:=gen_random_uuid();BEGIN
+   -- The controlled adoption routine binds its supplied parties after inserting its draft.
+   -- Pre-binding that draft would collide with its current-binding insert.
+   IF NEW.provenance='imported' AND NEW.status='draft' THEN RETURN NEW; END IF;
    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=session_user AND rolsuper) THEN PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true); END IF;
    INSERT INTO app.customer(tenant_id,id) VALUES(NEW.tenant_id,c);
    INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES(NEW.tenant_id,cr,c,1,'{"version":"customer.v1","name":"Practice Customer","type":"person","email":"practice-customer@example.invalid"}');

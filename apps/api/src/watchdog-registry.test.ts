@@ -703,6 +703,7 @@ import { PracticeAccessError } from "@jobguard/db";
 import { AppModule } from "./app.module.js";
 import { PracticeErrorsFilter } from "./practice-errors.filter.js";
 import { ContractorController } from "./contractor/contractor.controller.js";
+import { JobPartiesController, JobPartiesListController } from "./job-parties.controller.js";
 import { ProofController } from "./proof/proof.controller.js";
 import { PurchaseOrderController } from "./purchase-order.controller.js";
 import { SupplierDocumentController } from "./supplier-document.controller.js";
@@ -740,6 +741,8 @@ async function withModuleDispatch(run: (dispatch: (error: unknown) => { status: 
     const internals = app as unknown as { config: ApplicationConfig; container: NestContainer };
     expect(internals.config.getGlobalFilters().map(filter => filter.constructor)).toEqual(expect.arrayContaining([PracticeErrorsFilter, WatchdogExceptionFilter]));
     expect(app.get(ContractorController)).toBeInstanceOf(ContractorController);
+    expect(app.get(JobPartiesController)).toBeInstanceOf(JobPartiesController);
+    expect(app.get(JobPartiesListController)).toBeInstanceOf(JobPartiesListController);
     const controller = app.get(ProofController);
     const handler = new RouterExceptionFilters(internals.container, internals.config, app.getHttpAdapter()).create(controller, controller.post as never, undefined);
     await run(error => {

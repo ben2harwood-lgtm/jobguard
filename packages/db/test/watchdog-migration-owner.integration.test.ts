@@ -7,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATION_URLS } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 // 0096 adds job-qualified foreign keys to tables that FORCE row-level security.
 // Deployments run migrations as the non-superuser owner role, with no tenant
@@ -61,6 +61,7 @@ beforeAll(async () => {
     await admin.query(await readFile(url, "utf8"));
     await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)", [name(url)]);
   }
+  await installLegacySyntheticPartyFixtures(admin);
   await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1),($2)", [tenantA, tenantB]);
   for (const [tenant, job, scope] of [[tenantA, jobA, scopeA], [tenantB, jobB1, scopeB1], [tenantB, jobB2, scopeB2]] as const) {
     await admin.query("INSERT INTO app.job(id,tenant_id,title,status)VALUES($1,$2,'Legacy fictional job','live')", [job, tenant]);

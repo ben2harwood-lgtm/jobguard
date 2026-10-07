@@ -10,7 +10,7 @@ import {
   MIGRATION_URLS, migrate, withTenant, requireLiveJob, JobRepository,
   PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository,
   DiscrepancyRepository, ReadinessRepository, InboxRelevanceRepository,
-  EvidenceService, ProofCommandService, MaterialRepository, type VerifiedTenantContext,
+  EvidenceService, ProofCommandService, MaterialRepository, JobPartiesRepository, type VerifiedTenantContext,
 } from "../src/index.js";
 import type { PrivateVersionedStorage } from "@jobguard/storage";
 import { watchdogCommandGuards } from "@jobguard/core";
@@ -152,6 +152,29 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     await new JobRepository(runtime).transition(context, ["job:update"], { jobId: liveId, expectedRevision: 1, to: "invoiced", reason: "issue_invoice" });
     expect(await repo.view(context, liveId)).toEqual(first);
     await expect(repo.advance(context, liveId, { commandId: randomUUID(), scenarioNow: "2026-03-30T08:00:00.000Z" })).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
+  });
+  it("round 16: live party corrections preserve the imported binding and allow watchdog inputs before and after", async () => {
+    const jobId = randomUUID(); await importWatchdogFixtureJob(admin, tenant, jobId);
+    const baseline = (await admin.query("SELECT party_binding_id,attested_by_membership_id FROM app.imported_job_baseline WHERE tenant_id=$1 AND job_id=$2", [tenant, jobId])).rows[0];
+    const parties = new JobPartiesRepository(runtime), readiness = new ReadinessRepository(runtime);
+    const before = await parties.view(context, baseline.attested_by_membership_id, jobId);
+    expect(before).toMatchObject({ status: "live", jobRevision: 1, currentIds: { bindingId: baseline.party_binding_id } });
+    expect(before.current).not.toBeNull();
+    const input = { commandId: randomUUID(), scenarioNow: "2026-03-27T09:00:00.000Z" };
+    const first = await readiness.record(context, jobId, input);
+    const correction = { version: "job-parties-command.v1", commandId: randomUUID(), action: "correct", expectedJobRevision: before.jobRevision,
+      reason: "Fictional correction confirmed for the site", parties: { version: "job-parties.v1", customerRevisionId: before.current!.customerRevisionId,
+        payingPartyRevisionId: before.current!.payingPartyRevisionId, siteRevisionId: before.current!.siteRevisionId } };
+    const corrected = await parties.command(context, baseline.attested_by_membership_id, jobId, correction);
+    expect(await parties.command(context, baseline.attested_by_membership_id, jobId, correction)).toEqual(corrected);
+    const after = await parties.view(context, baseline.attested_by_membership_id, jobId);
+    expect(after).toMatchObject({ status: "live", jobRevision: 2, currentIds: { bindingId: corrected.id } });
+    expect(after.currentIds!.bindingId).not.toBe(baseline.party_binding_id);
+    expect((await admin.query("SELECT party_binding_id FROM app.imported_job_baseline WHERE tenant_id=$1 AND job_id=$2", [tenant, jobId])).rows[0].party_binding_id).toBe(baseline.party_binding_id);
+    expect(await readiness.record(context, jobId, input)).toEqual(first);
+    const second = await readiness.record(context, jobId, { ...input, commandId: randomUUID(), resolved: true });
+    expect(second.snapshot).toMatchObject({ revision: 2, ready: true });
+    expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='job.parties.correct'", [tenant, jobId])).rows[0].n).toBe(1);
   });
   it("holds the first business lock until commit; both race orders serialize", async () => {
     for (const commandFirst of [true, false]) {
