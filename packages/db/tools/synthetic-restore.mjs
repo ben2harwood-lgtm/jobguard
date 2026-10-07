@@ -99,6 +99,8 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     assert.match(postgresVersion, /^16\./);
     await api.migrate(admin);
     const migrationNames = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name);
+    assert.deepEqual(migrationNames, api.MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)));
+    assert.equal(migrationNames.at(-1), "0095_job_parties.sql");
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [ids.tenant, ids.otherTenant]);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [ids.identity]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional restore builder')", [ids.account, ids.tenant]);

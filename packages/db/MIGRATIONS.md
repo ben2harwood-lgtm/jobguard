@@ -115,7 +115,11 @@ Existing 0041 rows keep their historical labels and lack a verified artifact/req
 
 0042 first updates the two 0041 tenant policies to use missing-safe, empty-safe tenant context, so the migration no longer fails with `unrecognized configuration parameter` under `jobguard_migration`. That alone would make the new case-qualified foreign key pass without looking at any row (the owner has no tenant context under FORCE RLS), so 0042 also lifts FORCE ROW LEVEL SECURITY on `evidence_pack` and `evidence_pack_revision` for the one `ADD CONSTRAINT … FOREIGN KEY` statement, inside the same transaction, and restores it immediately afterwards. Existing rows are therefore genuinely validated: a 0041 revision whose case differs from its pack's case makes 0042 fail with 23503 and roll back, and the data must be corrected first. Absent context still admits no rows; ownership, policies and runtime grants are unchanged and FORCE is never off outside the migration. No business rows are rewritten. Proof: `packages/db/test/evidence-pack-upgrade.integration.test.ts` (real 0041 database, applied as `jobguard_migration`).
 
-### 0051 — CH-3a job parties
+### 0095 — CH-3a job parties
+
+Renumbered from reserved 0051 under the 7 October merge-ahead ledger amendment
+(BUILD_PLAN §12.2). SQL is unchanged; the runner applies it last, after merged
+0053. There are still 45 registered migrations (0000–0042, 0053, 0095).
 
 Expand-only customer/site identities and revisions, append-only party bindings,
 a unique current pointer, tenant/job-qualified activation/import references, and
@@ -127,18 +131,18 @@ narrow binding routine can advance the current pointer and job revision.
 Each of the one-to-four address-line strings rejects CR/LF in the versioned
 schema before trimming (`INVALID_PARTIES`) and in the named database constraint
 `site_revision_address_lines_no_cr_lf`. This preserves the editor's one-row-per-line
-round trip and unchanged-save identity. The unapplied 0051 migration is amended
+round trip and unchanged-save identity. The unapplied 0095 migration is amended
 in place; no existing party history is rewritten. After rollout, forward-fix a
 constraint under review rather than dropping immutable revisions or bindings.
 
-Encoding: 0051 needs a UTF8 database. Site match keys apply NFKC `normalize()`,
+Encoding: 0095 needs a UTF8 database. Site match keys apply NFKC `normalize()`,
 which PostgreSQL only allows when the server encoding is UTF8 (otherwise every
 site revision insert fails with "Unicode normalization can only be performed if
 server encoding is UTF8"). Neon and the standard PostgreSQL images are UTF8; the
 embedded test clusters pass `--encoding=UTF8` to `initdb` because `embedded-postgres`
 starts `initdb` with no locale environment, which would otherwise create SQL_ASCII.
 
-The runner sets the backfill mode inside 0051's transaction. Only an explicit
+The runner sets the backfill mode inside 0095's transaction. Only an explicit
 `JOBGUARD_ENV=synthetic_demo` uses the generated recipe (Practice Customer,
 14 Fictional Street, London, SW1A 1AA), preserving the latest issued quote's
 customer name when present. All other modes create details-needed Decisions and

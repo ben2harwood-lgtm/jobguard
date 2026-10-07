@@ -9,7 +9,7 @@ import { AdoptInFlightJobMutation, appendAuditBatch, MIGRATION_URLS, migrate, Jo
 import { closeTestPools } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
-const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0051_job_parties.sql"))!;
+const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0095_job_parties.sql"))!;
 const context = { tenantId: tenant } as VerifiedTenantContext;
 const foreignContext = { tenantId: foreignTenant } as VerifiedTenantContext;
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, repository: JobPartiesRepository, dir: string;

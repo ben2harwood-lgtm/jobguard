@@ -3321,6 +3321,8 @@ These numbers follow the dependency order, so migration-order merging works: 004
 
 Each repair's specification is its verdict file: every finding is fixed or explicitly accepted by Ben, the verdict is re-recorded against the new head, and CI is green. Tasks that build on a merged task with a HOLD or FAIL verdict depend on its repair (`-R`), not on the original.
 
+**Ledger amendment — CH-3a, 7 October 2026 (merge-ahead ruling).** `codex/sandbox/ch-3a` moves from its reserved 0051 to **0095** (`job_parties`), because 0053 merged ahead; 0054–0093 stay reserved and 0094 is SBOX-SESSION-1's. CH-3a must merge after any PR holding a lower unmerged number that merges first, or renumber again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
