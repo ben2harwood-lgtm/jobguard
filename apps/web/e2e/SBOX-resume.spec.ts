@@ -68,12 +68,18 @@ test("reopens accepted and active work without rewriting lifecycle or scope", as
   await click(page, "Preview immutable quote");
   await click(page, "Simulate sending this quote");
   await click(page, "Continue fake worker");
-  await click(page, "Record practice acceptance");
+  await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname === `/api/jobs/${jobId}/quotes/acceptance` && response.request().method() === "POST" && response.ok()),
+    click(page, "Record practice acceptance"),
+  ]);
   await page.goto(`/jobs/${jobId}#quote`);
   await expect(page.getByTestId("job-status")).toHaveText("Customer said yes");
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-scope-lineage", scopeIds);
   expect(jobWorkspaceResponseV1.parse(await get(page, `/api/jobs/${jobId}`)).job.status).toBe("accepted");
-  await click(page, "Start this practice job");
+  await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname === `/api/jobs/${jobId}/quotes/activation` && response.request().method() === "POST" && response.ok()),
+    click(page, "Start this practice job"),
+  ]);
   await page.goto(`/jobs/${jobId}#work-proof`);
   await expect(page.getByTestId("job-status")).toHaveText("Work under way");
   await expect(page.locator("#work-proof")).toBeVisible();

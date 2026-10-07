@@ -91,7 +91,7 @@ async function createAuthorization(expiresAt = "2099-01-01T00:00:00Z") {
   return { authorizationId, content };
 }
 
-async function appendAction(options: { expiresAt?: string; rollback?: boolean } = {}) {
+async function appendAction(options: { expiresAt?: string; rollback?: boolean; adapter?: OutboundAction["adapter"] } = {}) {
   const { authorizationId, content } = await createAuthorization(options.expiresAt);
   const suffix = String(sequence++).padStart(12, "0");
   const id = `98000000-0000-4000-8000-${suffix}`;
@@ -99,7 +99,7 @@ async function appendAction(options: { expiresAt?: string; rollback?: boolean } 
     version: "outbound-action.v1",
     id,
     authorizationId,
-    adapter: "fake_capture",
+    adapter: options.adapter ?? "fake_capture",
     providerEffectKey: `effect:${suffix}`,
     actionType: "send_quote",
     recipient: "customer@example.test",
@@ -132,6 +132,62 @@ const statusOf = (id: string) => withTenant(runtime, context, async (db) =>
   (await db.$client.query<{ status: string }>("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0]?.status);
 
 describe("transactional outbox and fake worker execution", () => {
+  it("leaves a signalled quote action pending for the executor that owns its adapter", async () => {
+    const action = await appendAction({ adapter: "fake_quote_delivery" });
+    const signal = (await infrastructure.query<{ action_id: string; tenant_id: string }>(
+      "SELECT action_id,tenant_id FROM infrastructure.outbox_signal WHERE action_id=$1", [action.id],
+    )).rows[0];
+    expect(signal).toEqual({ action_id: action.id, tenant_id: TENANT });
+    const signalledContext = { tenantId: signal!.tenant_id } as VerifiedTenantContext;
+    const snapshot = () => withTenant(runtime, context, async (db) => ({
+      outbox: (await db.$client.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows,
+      attempts: (await db.$client.query("SELECT * FROM app.action_attempt WHERE action_id=$1 ORDER BY attempt_number", [action.id])).rows,
+      audit: (await db.$client.query("SELECT * FROM app.audit_event ORDER BY sequence")).rows,
+    }));
+    const before = await snapshot();
+    expect(before.outbox[0]?.status).toBe("pending");
+    expect(before.attempts).toEqual([]);
+    let captureCalls = 0;
+    const captureOnly = new ActionExecutor(runtime, new Map([["fake_capture", adapter(async () => {
+      captureCalls++;
+      return { kind: "succeeded", providerReference: "synthetic:unexpected-capture" };
+    })]]), telemetry);
+
+    await captureOnly.execute(signalledContext, signal!.action_id);
+    await captureOnly.execute(signalledContext, signal!.action_id);
+
+    expect(await snapshot()).toEqual(before);
+    expect(captureCalls).toBe(0);
+    let quoteCalls = 0;
+    const quoteAdapter: OutboundAdapter = {
+      ...adapter(async (delivered) => {
+        expect(delivered).toEqual(action);
+        quoteCalls++;
+        return { kind: "succeeded", providerReference: "synthetic:quote-delivered" };
+      }),
+      name: "fake_quote_delivery",
+    };
+    const quoteExecutor = new ActionExecutor(runtime, new Map([[quoteAdapter.name, quoteAdapter]]), telemetry);
+    await Promise.all([
+      quoteExecutor.execute(signalledContext, signal!.action_id),
+      quoteExecutor.execute(signalledContext, signal!.action_id),
+      captureOnly.execute(signalledContext, signal!.action_id),
+    ]);
+    await quoteExecutor.execute(signalledContext, signal!.action_id);
+
+    expect(quoteCalls).toBe(1);
+    expect(captureCalls).toBe(0);
+    const after = await snapshot();
+    expect(after.outbox[0]?.status).toBe("succeeded");
+    expect(after.attempts).toEqual([expect.objectContaining({
+      attempt_number: 1,
+      outcome: "succeeded",
+      provider_reference: "synthetic:quote-delivered",
+      error_code: null,
+    })]);
+    expect(after.audit).toEqual(before.audit);
+  });
+
   it("publishes no routing signal and sends nothing when the business transaction rolls back", async () => {
     const action = await appendAction({ rollback: true });
     expect((await infrastructure.query("SELECT * FROM infrastructure.outbox_signal WHERE action_id=$1", [action.id])).rows).toEqual([]);
@@ -187,6 +243,43 @@ describe("transactional outbox and fake worker execution", () => {
     expect(telemetryEvents).toContainEqual(expect.objectContaining({ name: "outbox.unknown_outcome" }));
     await operateOutbox(runtime, context, action.id, "retry", true);
     expect(await statusOf(action.id)).toBe("retryable");
+  });
+
+  it("dead-letters five retryable deliveries with a failed fifth attempt and no executing work", async () => {
+    const action = await appendAction();
+    let calls = 0;
+    const retryable = adapter(async (delivered) => {
+      expect(delivered).toEqual(action);
+      calls++;
+      return { kind: "retryable", code: "synthetic_unavailable" };
+    });
+    const executor = new ActionExecutor(runtime, new Map([[retryable.name, retryable]]), telemetry);
+
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      await executor.execute(context, action.id);
+      expect(await statusOf(action.id)).toBe(attempt === 5 ? "dead_letter" : "retryable");
+    }
+    await executor.execute(context, action.id);
+    expect(calls).toBe(5);
+    await withTenant(runtime, context, async (db) => {
+      const attempts = (await db.$client.query(
+        "SELECT attempt_number,outcome,provider_reference,error_code,finished_at FROM app.action_attempt WHERE action_id=$1 ORDER BY attempt_number",
+        [action.id],
+      )).rows;
+      expect(attempts).toEqual(Array.from({ length: 5 }, (_, index) => ({
+        attempt_number: index + 1,
+        outcome: index === 4 ? "failed" : "retryable",
+        provider_reference: null,
+        error_code: "synthetic_unavailable",
+        finished_at: expect.any(Date),
+      })));
+      expect((await db.$client.query(
+        "SELECT id FROM app.action_outbox WHERE id=$1 AND status='executing'", [action.id],
+      )).rows).toEqual([]);
+      expect((await db.$client.query(
+        "SELECT id FROM app.action_attempt WHERE action_id=$1 AND outcome='started'", [action.id],
+      )).rows).toEqual([]);
+    });
   });
 
   it("does not send expired authorization", async () => {
