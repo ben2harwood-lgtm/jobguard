@@ -5,6 +5,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { closeTestPools } from "./pool-test-utils.js";
 import { appendAuditBatch, migrate, MIGRATION_URLS, DEMO_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, CaptureRepository, SandboxRepository, MaterialRepository, listDecisionInbox, withTenant, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
 const priorEnvironment=process.env.JOBGUARD_ENV;
@@ -190,6 +191,10 @@ it("practice merchant evidence packs approve with session-scoped rates and still
  const db = await admin.connect();
  try {
   await db.query("BEGIN");
+    // This pre-CH-3a test assembles a quote directly; supply its fictional parties
+    // explicitly rather than bypassing the document guard. Capture itself remains unbound.
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+    await seedSyntheticPartyFixture(db, tenantId, jobId);
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
     await db.query("INSERT INTO app.quote_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [quoteDraftId, tenantId, jobId]);
     await db.query("INSERT INTO app.quote_revision(id,tenant_id,job_id,quote_draft_id,revision,currency,tax_policy_version,subtotal_pence,discount_pence,net_pence,tax_pence,total_pence,issuable,blockers) VALUES($1,$2,$3,$4,1,'GBP','candidate_m1_standard_v1',1880000,0,1880000,376000,2256000,true,'[]')", [quoteRevisionId, tenantId, jobId, quoteDraftId]);

@@ -624,3 +624,132 @@ describe("CH-3a SBOX-SESSION-1 registry ownership on real PostgreSQL", () => {
     } finally { if (previous === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previous; }
   });
 });
+
+describe("CH-3a round 13 generated practice entry", () => {
+  beforeAll(async () => {
+    const account = randomUUID();
+    await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
+    await admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional round 13 account')", [DEMO_TENANT_ID, account]);
+    await admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, account, DEMO_IDENTITY_USER_ID]);
+  });
+  async function session() {
+    const digest = createHash("sha256").update(randomUUID()).digest("hex");
+    await runtime.query("SELECT app.issue_practice_session($1)", [digest]);
+    return { digest, context: { tenantId: DEMO_TENANT_ID } as VerifiedTenantContext };
+  }
+  it("issues the unchanged three home scenarios with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
+    const owner = await session(), stranger = await session();
+    const jobs = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs;
+    expect(jobs.map(({ title, status, revision }) => ({ title, status, revision })).sort((a, b) => a.title.localeCompare(b.title))).toEqual([
+      { title: "Kitchen extension", status: "live", revision: 0 },
+      { title: "Loft conversion", status: "quoting", revision: 0 },
+      { title: "Practice kitchen", status: "quoting", revision: 0 },
+    ]);
+    const live = jobs.find(job => job.status === "live")!;
+    const view = await repository.view(owner.context, DEMO_MEMBERSHIP_ID, live.id, owner.digest);
+    expect(view.current).toMatchObject({ customer: { name: "Fictional scenario customer", type: "person", email: "scenario-customer@example.invalid" },
+      site: { addressLines: ["1 Scenario Street"], town: "London", postcode: "SW1A 1AA" } });
+    expect(view.current!.payingPartyRevisionId).toBe(view.current!.customerRevisionId);
+    expect((await admin.query("SELECT job_track,environment,provenance,source_id FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, live.id])).rows).toEqual([
+      { job_track: "small_builder", environment: "synthetic_demo", provenance: "legacy_synthetic_live_fixture", source_id: live.id },
+    ]);
+    expect(view.customers.map(row => row.id)).toEqual([view.currentIds!.customerId]);
+    expect(view.sites.map(row => row.id)).toEqual([view.currentIds!.siteId]);
+    expect((await admin.query("SELECT provenance,revision FROM app.job_party_binding WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, view.current!.bindingId])).rows).toEqual([{ provenance: "backfilled_synthetic_fixture", revision: 0 }]);
+    for (const job of jobs.filter(job => job.status === "quoting")) {
+      const quote = await repository.view(owner.context, DEMO_MEMBERSHIP_ID, job.id, owner.digest);
+      expect(quote.current).toBeNull(); expect(quote.customers).toEqual([]); expect(quote.sites).toEqual([]);
+    }
+    const strangerJob = (await repository.list(stranger.context, DEMO_MEMBERSHIP_ID, stranger.digest)).jobs.find(job => job.status === "quoting")!;
+    const stolen = command("bind", { expectedJobRevision: 0, parties: { version: "job-parties.v1",
+      customerRevisionId: view.current!.customerRevisionId, siteRevisionId: view.current!.siteRevisionId } });
+    await expect(repository.command(stranger.context, DEMO_MEMBERSHIP_ID, strangerJob.id, stolen, stranger.digest)).rejects.toThrow("NOT_FOUND");
+    expect((await admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [DEMO_TENANT_ID, stolen.commandId])).rowCount).toBe(0);
+    // A confirmed binding may reuse the owner's known defaults; suggestions are not authorization.
+    const quoteJob = jobs.find(job => job.status === "quoting")!;
+    await repository.command(owner.context, DEMO_MEMBERSHIP_ID, quoteJob.id, { ...stolen, commandId: randomUUID() }, owner.digest);
+    const bound = await repository.view(owner.context, DEMO_MEMBERSHIP_ID, quoteJob.id, owner.digest);
+    expect(bound.current!.customerRevisionId).toBe(view.current!.customerRevisionId);
+    expect(bound.recognition.map(row => row.jobId).sort()).toEqual([live.id, quoteJob.id].sort());
+  });
+  it("refuses missing parties despite forged scenario, session and bypass settings on direct runtime INSERT and UPDATE", async () => {
+    const owner = await session(), id = randomUUID();
+    const quote = (await repository.list(owner.context, DEMO_MEMBERSHIP_ID, owner.digest)).jobs.find(job => job.status === "quoting")!;
+    for (const insert of [true, false]) {
+      await expect(withTenant(runtime, owner.context, async db => {
+        await db.$client.query("SELECT set_config('app.practice_session_digest',$1,true),set_config('app.practice_scenario','home',true),set_config('app.skip_job_parties','true',true)", [owner.digest]);
+        if (insert) await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Forged fictional home','live',$3,'home')", [id, DEMO_TENANT_ID, owner.digest]);
+        else await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, quote.id]);
+      })).rejects.toMatchObject(insert ? { code: "22023", message: "JOB_PARTIES_REQUIRED" } : { code: "42501" });
+    }
+    // Runtime has no direct status UPDATE grant; the allowed migration-owner
+    // path must independently reject the same attempted unbound promotion.
+    await expect(withTenant(admin, owner.context, async db => {
+      await db.$client.query("SET LOCAL ROLE jobguard_migration");
+      await db.$client.query("SELECT set_config('app.skip_job_parties','true',true)");
+      await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, quote.id]);
+    })).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
+    expect((await admin.query("SELECT 1 FROM app.job WHERE id=$1", [id])).rowCount).toBe(0);
+    expect((await repository.view(owner.context, DEMO_MEMBERSHIP_ID, quote.id, owner.digest))).toMatchObject({ status: "quoting", jobRevision: 0, current: null });
+    const catalogue = (await admin.query(`SELECT r.rolname,p.prosecdef,p.proconfig,
+      has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime_execute,
+      has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure_execute,
+      EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') public_execute
+      FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid='app.issue_practice_session(text)'::regprocedure`)).rows[0];
+    expect(catalogue).toEqual({ rolname: "jobguard_migration", prosecdef: true, proconfig: ["search_path=pg_catalog"], runtime_execute: true, infrastructure_execute: false, public_execute: false });
+    const generator = (await admin.query(`SELECT r.rolname,p.prosecdef,
+      has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime_execute,
+      has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure_execute,
+      EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') public_execute,
+      pg_has_role('ch3a_login','jobguard_migration','MEMBER') can_assume_migration
+      FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid='app.seed_generated_practice_job_parties()'::regprocedure`)).rows[0];
+    expect(generator).toEqual({ rolname: "jobguard_migration", prosecdef: false, runtime_execute: false, infrastructure_execute: false, public_execute: false, can_assume_migration: false });
+    await expect(runtime.query("SET ROLE jobguard_migration")).rejects.toMatchObject({ code: "42501" });
+  });
+  it("rolls back the session and generated parties when the final home-job insert fails", async () => {
+    const digest = createHash("sha256").update(randomUUID()).digest("hex");
+    const counts = async () => (await admin.query(`SELECT
+      (SELECT count(*)::int FROM control_plane.practice_session) sessions,
+      (SELECT count(*)::int FROM app.job WHERE tenant_id=$1) jobs,
+      (SELECT count(*)::int FROM app.customer_revision WHERE tenant_id=$1) customers,
+      (SELECT count(*)::int FROM app.site_revision WHERE tenant_id=$1) sites,
+      (SELECT count(*)::int FROM app.job_party_binding WHERE tenant_id=$1) bindings,
+      (SELECT count(*)::int FROM app.job_party_current WHERE tenant_id=$1) current_bindings`, [DEMO_TENANT_ID])).rows[0];
+    const before = await counts(), db = await admin.connect();
+    try {
+      await db.query("BEGIN");
+      // Transactional fault injection exists only on this admin connection and is
+      // rolled back. Call as runtime; the issuer retains its migration-role definer.
+      await db.query(`CREATE FUNCTION app.ch3a_fail_last_home() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$ BEGIN
+        IF NEW.practice_session_digest=TG_ARGV[0] AND NEW.title='Loft conversion' THEN
+          RAISE EXCEPTION 'SYNTHETIC_HOME_FIXTURE_FAILURE' USING ERRCODE='23514';
+        END IF; RETURN NEW; END $$`);
+      await db.query(`CREATE TRIGGER ch3a_fail_last_home BEFORE INSERT ON app.job FOR EACH ROW EXECUTE FUNCTION app.ch3a_fail_last_home('${digest}')`);
+      await db.query("SET LOCAL ROLE jobguard_runtime");
+      await expect(db.query("SELECT app.issue_practice_session($1)", [digest])).rejects.toMatchObject({ code: "23514", message: "SYNTHETIC_HOME_FIXTURE_FAILURE" });
+    } finally { await db.query("ROLLBACK"); db.release(); }
+    expect(await counts()).toEqual(before);
+    expect((await admin.query("SELECT 1 FROM control_plane.practice_session WHERE token_digest=$1", [digest])).rowCount).toBe(0);
+  });
+  it("keeps duplicate, malformed and unauthorized issuance atomic with no extra jobs or parties", async () => {
+    const owner = await session();
+    const counts = async () => (await admin.query(`SELECT
+      (SELECT count(*)::int FROM control_plane.practice_session) sessions,
+      (SELECT count(*)::int FROM app.job WHERE tenant_id=$1) jobs,
+      (SELECT count(*)::int FROM app.customer WHERE tenant_id=$1) customers,
+      (SELECT count(*)::int FROM app.site WHERE tenant_id=$1) sites,
+      (SELECT count(*)::int FROM app.job_party_binding WHERE tenant_id=$1) bindings`, [DEMO_TENANT_ID])).rows[0];
+    const before = await counts();
+    await expect(runtime.query("SELECT app.issue_practice_session($1)", [owner.digest])).rejects.toMatchObject({ code: "23505" });
+    await expect(runtime.query("SELECT app.issue_practice_session($1)", ["forged"])).rejects.toMatchObject({ code: "42501" });
+    await expect(runtime.query("SELECT app.issue_practice_session($1)", [null])).rejects.toMatchObject({ code: "23502" });
+    try {
+      await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
+      await expect(runtime.query("SELECT app.issue_practice_session($1)", [createHash("sha256").update(randomUUID()).digest("hex")])).rejects.toMatchObject({ code: "42501" });
+    } finally {
+      await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
+    }
+    expect(await counts()).toEqual(before);
+  });
+});

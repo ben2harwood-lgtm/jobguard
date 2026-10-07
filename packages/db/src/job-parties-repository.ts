@@ -13,12 +13,14 @@ const normalizePostcode = (value: string) => value.toUpperCase().replace(/\s/gu,
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 // Registry identities are visible only through this session's jobs: either an
 // immutable binding or the operational creation audit event (before binding).
+// Fixed generated defaults on other scenario jobs are not human reuse suggestions.
+// They remain visible on their own job and authorized for their owning session.
 // Legacy/non-practice repository callers retain their tenant-wide semantics.
-function identityScope(kind: "customer" | "site", identity: string) {
+function identityScope(kind: "customer" | "site", identity: string, suggestions = false) {
   const binding = kind === "customer" ? `(b.customer_id=${identity} OR b.paying_party_id=${identity})` : `b.site_id=${identity}`;
   return `($3::text IS NULL OR EXISTS (
     SELECT 1 FROM app.job_party_binding b JOIN practice_owned_job own_job ON own_job.id=b.job_id
-    WHERE b.tenant_id=$1 AND ${binding}
+    WHERE b.tenant_id=$1 AND ${binding}${suggestions ? " AND (b.provenance<>'backfilled_synthetic_fixture' OR b.job_id=$2)" : ""}
   ) OR EXISTS (
     SELECT 1 FROM app.audit_event e JOIN practice_owned_job own_job ON own_job.id::text=e.subject_ref
     WHERE e.tenant_id=$1 AND e.subject_type='job' AND e.event_type='job.parties.create_${kind}'
@@ -50,8 +52,8 @@ export class JobPartiesRepository {
       const current = j.snapshot ?? null;
       // Latest registry revisions are choices/stale-edit observations only; `current` is the job's immutable saved snapshot.
       // Editors must preserve its customer/payer revision IDs until an explicit selection or explained conflict chooses a newer one.
-      const customers = (await db.$client.query(`${practiceOwnedJobsSql()} SELECT DISTINCT ON(customer_id) customer_id AS id,id AS "revisionId",revision,payload AS customer FROM app.customer_revision cr WHERE tenant_id=$1 AND $2::uuid IS NOT NULL AND ${identityScope("customer","cr.customer_id")} ORDER BY customer_id,revision DESC`, [context.tenantId, jobId, practiceDigest??null])).rows;
-      const sites = (await db.$client.query(`${practiceOwnedJobsSql()} SELECT DISTINCT ON(site_id) site_id AS id,id AS "revisionId",payload AS site,match_key::text AS "matchKey" FROM app.site_revision sr WHERE tenant_id=$1 AND $2::uuid IS NOT NULL AND ${identityScope("site","sr.site_id")} ORDER BY site_id,revision DESC`, [context.tenantId, jobId, practiceDigest??null])).rows;
+      const customers = (await db.$client.query(`${practiceOwnedJobsSql()} SELECT DISTINCT ON(customer_id) customer_id AS id,id AS "revisionId",revision,payload AS customer FROM app.customer_revision cr WHERE tenant_id=$1 AND $2::uuid IS NOT NULL AND ${identityScope("customer","cr.customer_id",true)} ORDER BY customer_id,revision DESC`, [context.tenantId, jobId, practiceDigest??null])).rows;
+      const sites = (await db.$client.query(`${practiceOwnedJobsSql()} SELECT DISTINCT ON(site_id) site_id AS id,id AS "revisionId",payload AS site,match_key::text AS "matchKey" FROM app.site_revision sr WHERE tenant_id=$1 AND $2::uuid IS NOT NULL AND ${identityScope("site","sr.site_id",true)} ORDER BY site_id,revision DESC`, [context.tenantId, jobId, practiceDigest??null])).rows;
       const recognition = (await db.$client.query(`${practiceOwnedJobsSql()} SELECT r.job_id AS "jobId",r.status,r.started_at::text AS "startedAt",r.ended_at::text AS "endedAt" FROM app.job_party_recognition r JOIN app.job_party_recognition own ON(own.tenant_id,own.customer_id,own.site_id)=(r.tenant_id,r.customer_id,r.site_id) WHERE own.tenant_id=$1 AND own.job_id=$2 AND ($3::text IS NULL OR r.job_id IN (SELECT id FROM practice_owned_job)) ORDER BY r.job_id`, [context.tenantId, jobId, practiceDigest??null])).rows;
       return jobPartiesWorkspaceV1.parse({ version: "job-parties-workspace.v1", environment: "synthetic_demo", jobId, jobRevision: j.revision, status: j.status, current, currentIds: j.ids ?? null, customers, sites, recognition, realExternalActions: 0 });
     });

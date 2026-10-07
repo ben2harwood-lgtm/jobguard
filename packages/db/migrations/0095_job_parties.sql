@@ -196,6 +196,43 @@ ALTER FUNCTION app.require_job_parties() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.bind_job_parties(uuid,uuid,uuid,integer,uuid,uuid,uuid,boolean,text,uuid,uuid),app.require_job_parties() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.bind_job_parties(uuid,uuid,uuid,integer,uuid,uuid,uuid,boolean,text,uuid,uuid) TO jobguard_runtime;
 
+-- 0094's issuer runs as jobguard_migration and creates fixed home scenarios.
+-- Use that server role identity in an INVOKER trigger: a client cannot set it
+-- with a row field or GUC, and runtime cannot assume the migration role. Do not
+-- make this SECURITY DEFINER: that would erase the invoking-role distinction.
+-- Pre-bind only the generated live example, using the existing deferred job FK.
+-- The original INSERT still runs every guard and SH-1's live-entry track hook.
+CREATE FUNCTION app.seed_generated_practice_job_parties() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+DECLARE c uuid; cr uuid; s uuid; sr uuid; b uuid;
+BEGIN
+ IF current_user<>'jobguard_migration'
+ OR NEW.tenant_id<>'11111111-1111-4111-8111-111111111111'::uuid
+ OR NEW.practice_scenario IS DISTINCT FROM 'home' OR NEW.practice_session_digest IS NULL OR NEW.status<>'live'
+ THEN RETURN NEW; END IF;
+ IF NOT EXISTS(SELECT 1 FROM control_plane.practice_session p WHERE p.token_digest=NEW.practice_session_digest
+   AND p.environment='synthetic_demo' AND p.revoked_at IS NULL AND p.expires_at>clock_timestamp()) THEN RETURN NEW; END IF;
+ -- Retain any binding already supplied by an earlier explicit fixture hook.
+ IF EXISTS(SELECT 1 FROM app.job_party_current WHERE tenant_id=NEW.tenant_id AND job_id=NEW.id) THEN RETURN NEW; END IF;
+ c:=gen_random_uuid(); cr:=gen_random_uuid(); s:=gen_random_uuid(); sr:=gen_random_uuid(); b:=gen_random_uuid();
+ INSERT INTO app.customer(tenant_id,id) VALUES(NEW.tenant_id,c);
+ INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload)
+  VALUES(NEW.tenant_id,cr,c,1,'{"version":"customer.v1","name":"Fictional scenario customer","type":"person","email":"scenario-customer@example.invalid"}');
+ INSERT INTO app.site(tenant_id,id) VALUES(NEW.tenant_id,s);
+ INSERT INTO app.site_revision(tenant_id,id,site_id,revision,payload,match_key)
+  VALUES(NEW.tenant_id,sr,s,1,'{"version":"site.v1","addressLines":["1 Scenario Street"],"town":"London","postcode":"SW1A 1AA"}','[]');
+ INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance)
+  VALUES(NEW.tenant_id,b,NEW.id,NEW.revision,c,cr,c,cr,s,sr,'backfilled_synthetic_fixture');
+ INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES(NEW.tenant_id,NEW.id,b);
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.seed_generated_practice_job_parties() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.seed_generated_practice_job_parties() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+-- PostgreSQL orders triggers of the same timing/event alphabetically: generated
+-- parties precede job_parties_live_guard, which remains mandatory and unchanged.
+CREATE TRIGGER job_parties_generated_practice BEFORE INSERT ON app.job FOR EACH ROW
+ EXECUTE FUNCTION app.seed_generated_practice_job_parties();
+
 -- Explicit generated recipe for pre-CH-3a demo jobs. Never inferred from job titles or real data.
 DO $$ DECLARE t record; j record; c uuid; cr uuid; s uuid; sr uuid; b uuid; quote_name text; BEGIN
  FOR t IN SELECT id FROM control_plane.tenant LOOP

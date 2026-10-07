@@ -25,8 +25,8 @@ export async function authenticatePracticeSession(pool: Pool, token: string | un
 }
 
 /**
- * 0095's controlled adoption routine predates session ownership and cannot be
- * changed by this integration. An adopted job inherits its source's owner via
+ * 0095's controlled adoption routine creates an unowned imported job; 0094
+ * prohibits assigning ownership later. An adopted job inherits its source's owner via
  * the immutable adoption audit event written in that same command transaction.
  * No first-touch claim or mutation of job ownership is permitted. UNION handles
  * repeated imports without duplicating identities or following cycles forever.

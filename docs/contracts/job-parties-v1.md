@@ -152,3 +152,31 @@ first access. The list and recognition use the same ownership relation. This is
 an additive audit reference, with no names, labels, contacts or cookie tokens.
 Existing imports without that reference remain unowned, like SBOX's unowned
 legacy fixtures. No migration, schema, privilege or approval policy is changed.
+
+
+Round 13 practice issuance: 0095 adds a narrow invoker trigger before the live
+party guard. 0094's unchanged issuer runs as `jobguard_migration`, creates only
+fixed synthetic home scenarios, and installs the fixed tenant context. The
+trigger requires that server role identity, the fixed tenant/home/live fields,
+and a persisted valid synthetic session. Runtime cannot assume that role; a row
+field or GUC cannot forge `current_user`. The trigger supplies generated parties
+for the live Kitchen extension before the original INSERT. Its deferred job FK
+completes when that job is inserted. The live guard and SH-1's AFTER INSERT track
+hook still run. No merged routine/migration, ownership rule or grant is changed.
+Quoting/capture examples still need user details before preview or live.
+
+A generated fixture binding on another job does not by itself populate a practice
+workspace's reuse suggestions. Its own job shows the saved default parties, and
+explicit human bindings or creation commands make identities normal suggestions.
+The identity authorization predicate still accepts all bindings owned by the
+session, including those defaults, and rejects other sessions. List labels and
+recognition continue to derive from current bindings. Non-practice registry reads
+retain their existing tenant-wide behavior.
+
+The round-11 recursive adoption ownership relation remains required: imports
+have no directly stored digest, and the immutable same-command source audit
+reference grants their source session access. Removing it would hide successful
+imports from that session. Unowned legacy jobs and other sessions remain refused.
+SBOX's direct quote/evidence-pack test supplies explicit generated party fixtures
+and tenant context before constructing its old quote snapshot; no assertion or
+runtime guard is relaxed.

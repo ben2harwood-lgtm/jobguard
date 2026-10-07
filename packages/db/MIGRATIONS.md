@@ -263,3 +263,25 @@ Practice material transactions install the digest locally before business SQL;
 purchase-order pricing and evidence-pack supplier agreements use the same scope.
 The existing forward-fix/revocation strategy applies. CI must run the two-session
 regression, preceding-schema upgrade and earlier real-tenant material tests.
+
+
+### 0095 round 13 — practice-session compatibility
+
+0094 remains byte-identical, including its issuer. The unapplied 0095 adds an
+invoker-only BEFORE INSERT trigger ordered before the existing live party guard.
+Only the trusted migration-role creation path, with the fixed synthetic tenant,
+home/live recipe and a valid persisted session, supplies generated customer,
+payer and site parties before the live job insert. The existing deferred job FK
+allows that ordering. Client row fields/GUCs cannot forge the invoking role;
+runtime cannot assume it. The original live guard and SH-1's live INSERT track
+hook still execute. Quoting/capture jobs remain unbound until user details exist.
+Earlier explicit test fixture bindings are retained. No guard exemption, new
+caller argument, session-ownership transfer, privileged helper EXECUTE grant or
+merged routine/migration change. Round 10's ASCII-only validator patterns and
+round 12 reason checks are unchanged.
+
+Run the entire practice-session, sandbox and job-parties integration suites,
+plus fresh/upgrade/catalog/restore and both browser projects in CI. The builder
+sandbox cannot start PostgreSQL or bind localhost. Use a reviewed forward-fix
+migration if 0095 has been applied elsewhere; never edit merged 0000–0094 or
+rewrite existing bindings, ownership, issued documents or audit history.
