@@ -366,6 +366,21 @@ describe("round 10 browser setup and migration portability source checks", () =>
   });
 });
 
+describe("round 11 migration merge-ahead regressions", () => {
+  it("registry ordering does not require CH-2 to be the last migration", async () => {
+    const source = await readFile(new URL("apps/api/src/watchdog-registry.test.ts", root), "utf8");
+    expect(source).not.toMatch(/expect\(names\.at\(-1\)\)\.toBe\(watchdogMigration/u);
+    expect(source).not.toMatch(/expect\(sharedIndex\)\.toBeLessThan\(names\.length - 1\)/u);
+  });
+  it("owner setup applies only the registered prefix before CH-2", async () => {
+    const source = await readFile(new URL("packages/db/test/watchdog-migration-owner.integration.test.ts", root), "utf8");
+    expect(source).toContain("const previous = MIGRATION_URLS.slice(0, MIGRATION_URLS.indexOf(target))");
+    expect(source).not.toMatch(/expect\(\[\.\.\.previous, target\]\)\.toEqual\(MIGRATION_URLS\)/u);
+    expect(source).not.toMatch(/expect\(previous\.length \+ 1\)\.toBe\(MIGRATION_URLS\.length\)/u);
+    expect(source).not.toMatch(/expect\(name\(MIGRATION_URLS\.at\(-1\)!\)\)\.toBe\(TARGET\)/u);
+  });
+});
+
 describe("proof finalisation failures", () => {
   it("answers a command id reused with another request as a conflict (409), not an invalid proof (Codex P2 4197412772)", () => {
     const answer = finalizeFailure(new EvidenceError("COMMAND_CONFLICT"));
@@ -422,17 +437,16 @@ describe("watchdog identity conflicts at the Nest boundary", () => {
   });
 });
 
-it("registers every migration once, with CH-2 last and after the merged SH-1 schema", async () => {
+it("registers every migration once, with CH-2 after the merged SH-1 schema", async () => {
   const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!);
   const files = (await readdir(new URL("packages/db/migrations/", root))).filter(name => name.endsWith(".sql")).sort();
   expect(names).toEqual(files);
   expect(files).toHaveLength(MIGRATION_URLS.length);
   expect(new Set(names).size).toBe(MIGRATION_URLS.length);
   expect(names.filter(name => name.endsWith("_watchdog_live.sql"))).toHaveLength(1);
-  expect(names.at(-1)).toBe(watchdogMigration.pathname.split("/").at(-1));
   const sharedIndex = names.findIndex(name => name.endsWith("_shared_money_origin.sql"));
   expect(sharedIndex).toBeGreaterThan(-1);
-  expect(sharedIndex).toBeLessThan(names.length - 1);
+  expect(sharedIndex).toBeLessThan(names.indexOf(watchdogMigration.pathname.split("/").at(-1)!));
   expect(names).toEqual([...names].sort());
 });
 

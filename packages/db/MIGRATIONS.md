@@ -344,7 +344,7 @@ application of the same DDL. No production schema-migration receipt should be re
 
 **Known pre-0096 proof replay limit:** a completion receipt issued by the preceding proof application hashes
 `decisionId: current.decisionId`; the current application sends `deriveDecision: true`, included in its request hash.
-Replaying that old completion through the current proof application therefore returns HTTP 409 (`CONFLICT`)
+Replaying that old completion through the current proof application therefore returns HTTP 409 (`IDEMPOTENCY_CONFLICT`)
 instead of its original answer. It fails closed and creates no second completion. Direct repository replay with the
 original request/hash remains supported; there is no authenticated replay-by-original-hash application path in
 this repair. Preserve the original receipt and reconcile the already-recorded completion; do not retry with a new
