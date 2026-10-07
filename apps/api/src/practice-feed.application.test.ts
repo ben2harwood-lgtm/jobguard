@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assessAttestedReceipt, generatedPracticeFeedEvents, practiceMovementCatalogueV1, projectPracticeFeedMovements, type PracticeFeedStep } from "@jobguard/core";
@@ -10,6 +10,8 @@ import { practiceFeedHttpError, practiceFeedHttpQuery, practiceFeedSession } fro
 
 const jobId = randomUUID();
 const sessionId = randomUUID();
+// What SBOX's authenticatePracticeSession derives from the cookie, and the only form of the session the repository may receive.
+const digest = createHash("sha256").update(sessionId).digest("hex");
 const response = {
   version: "practice-feed-view.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, jobId,
   accountId: null, feedState: "not_connected" as const, consent: null, revision: 0, catalogue: practiceMovementCatalogueV1.map((entry) => ({ ...entry })),
@@ -18,7 +20,7 @@ const response = {
 const command = () => ({ version: "practice-feed-command.v1", commandId: randomUUID(), expectedRevision: 0, action: "connect" });
 function fixture() {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  vi.spyOn(PracticeAccess.prototype, "job").mockResolvedValue({ context: { tenantId: DEMO_TENANT_ID }, membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID } as never);
+  vi.spyOn(PracticeAccess.prototype, "job").mockResolvedValue({ context: { tenantId: DEMO_TENANT_ID }, digest, membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID } as never);
   const repository = { view: vi.fn().mockResolvedValue(response), command: vi.fn().mockResolvedValue(response) };
   return { repository, application: new PracticeFeedApplication({} as Pool, repository) };
 }
@@ -35,13 +37,24 @@ describe("practice feed API boundary (the repository is a unit-test double)", ()
     expect(repository.command).not.toHaveBeenCalled();
   });
 
-  it("passes a server-selected principal, the opaque session and the job to the persistence authority, for both transports", async () => {
+  it("passes a server-selected principal, SBOX's session digest and the job to the persistence authority, for both transports", async () => {
     const { repository, application } = fixture();
     expect(await application.view(sessionId, jobId)).toEqual(response);
-    expect(repository.view).toHaveBeenCalledWith({ tenantId: DEMO_TENANT_ID }, { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID }, sessionId, jobId, { version: "practice-feed-query.v1", limit: 20 });
+    expect(repository.view).toHaveBeenCalledWith({ tenantId: DEMO_TENANT_ID }, { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID }, digest, jobId, { version: "practice-feed-query.v1", limit: 20 });
     const input = command();
     expect(await application.command(sessionId, jobId, input)).toEqual(response);
-    expect(repository.command).toHaveBeenCalledWith({ tenantId: DEMO_TENANT_ID }, { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID }, sessionId, jobId, input);
+    expect(repository.command).toHaveBeenCalledWith({ tenantId: DEMO_TENANT_ID }, { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID }, digest, jobId, input);
+  });
+
+  it("never hands the raw 7-day bearer token to the repository, only its digest", async () => {
+    const { repository, application } = fixture();
+    await application.view(sessionId, jobId);
+    await application.command(sessionId, jobId, command());
+    const arguments_ = [...repository.view.mock.calls, ...repository.command.mock.calls];
+    expect(arguments_).toHaveLength(2);
+    expect(JSON.stringify(arguments_)).not.toContain(sessionId);
+    expect(JSON.stringify(arguments_)).toContain(digest);
+    expect(digest).toMatch(/^[0-9a-f]{64}$/u);
   });
 
   it("requires persisted session authentication even for a UUID-shaped cookie", async () => {
@@ -88,7 +101,7 @@ describe("practice feed API boundary (the repository is a unit-test double)", ()
     }
     expect(repository.view).not.toHaveBeenCalled();
     await application.view(sessionId, jobId, { version: "practice-feed-query.v1", cursor: "1", limit: "1" });
-    expect(repository.view).toHaveBeenCalledWith(expect.anything(), expect.anything(), sessionId, jobId, { version: "practice-feed-query.v1", cursor: "1", limit: 1 });
+    expect(repository.view).toHaveBeenCalledWith(expect.anything(), expect.anything(), digest, jobId, { version: "practice-feed-query.v1", cursor: "1", limit: 1 });
   });
 
   it("preserves repository authorization and conflict failures without pretending they are successful states", async () => {

@@ -24,6 +24,8 @@ export class PracticeFeedRepositoryError extends Error {
 const fail = (code: PracticeFeedErrorCode): never => { throw new PracticeFeedRepositoryError(code); };
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = z.string().uuid();
+/** SBOX's sha256 digest of the practice session token (`authenticatePracticeSession(...).digest`). The raw bearer token never reaches this class. */
+const sessionDigestV1 = z.string().regex(/^[0-9a-f]{64}$/u);
 const canonical = (value: unknown): string => {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -34,7 +36,7 @@ const canonical = (value: unknown): string => {
 /** The server-selected principal. It is re-verified against the live membership row in every transaction. */
 export type PracticeFeedActor = Readonly<{ membershipId: string; identityUserId: string }>;
 
-type AccountRow = { id: string; session_id: string };
+type AccountRow = { id: string; session_digest: string };
 type CommandRow = { id: string; revision: number; action: string; movement_key: string | null; payload_hash: string };
 type EventRow = Record<string, unknown>;
 type Snapshot = {
@@ -54,20 +56,21 @@ type Snapshot = {
 export class PracticeFeedRepository {
   constructor(private readonly pool: Pool, private readonly environment: string = process.env.JOBGUARD_ENV ?? "unconfigured") {}
 
-  private guard(sessionId: string, jobId: string) {
+  private guard(sessionDigest: string, jobId: string) {
     if (this.environment !== "synthetic_demo") fail("PRACTICE_FEED_FORBIDDEN");
-    if (!uuid.safeParse(sessionId).success) fail("PRACTICE_FEED_FORBIDDEN");
+    if (!sessionDigestV1.safeParse(sessionDigest).success) fail("PRACTICE_FEED_FORBIDDEN");
     if (!uuid.safeParse(jobId).success) fail("PRACTICE_FEED_NOT_FOUND");
   }
 
   /**
    * Live membership (locked for writes) and SBOX creation-time ownership, before any snapshot or feed registration.
    * The feed owner row only records that existing binding; it cannot assign a creator. Unbound jobs fail closed.
-   * Writes take the command and job locks first, so
+   * Only SBOX's session digest is ever used below: the raw bearer token is not an argument of this class, so it cannot reach the
+   * transaction setting, either session column or the audit references. Writes take the command and job locks first, so
    * no business lock follows the audit append.
    */
-  private async authorize(db: TenantTransaction, context: VerifiedTenantContext, actor: PracticeFeedActor, sessionId: string, jobId: string, writeCommandId: string | null) {
-    await db.$client.query("SELECT set_config('app.practice_feed_session',$1,true),set_config('app.practice_feed_environment','synthetic_demo',true)", [sessionId]);
+  private async authorize(db: TenantTransaction, context: VerifiedTenantContext, actor: PracticeFeedActor, sessionDigest: string, jobId: string, writeCommandId: string | null) {
+    await db.$client.query("SELECT set_config('app.practice_feed_session_digest',$1,true),set_config('app.practice_feed_environment','synthetic_demo',true)", [sessionDigest]);
     // FOR SHARE needs UPDATE on app.membership, which jobguard_runtime already holds (0000_tenancy.sql). It keeps the
     // membership from being revoked between this check and the commit.
     const member = await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role='owner'
@@ -79,33 +82,32 @@ export class PracticeFeedRepository {
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [context.tenantId, `practice-command:${writeCommandId}`]);
       await lockJob();
     }
-    const digest = sha256(sessionId);
-    if (!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3", [context.tenantId, jobId, digest])).rowCount) fail("PRACTICE_FEED_NOT_FOUND");
-    const principal = (await db.$client.query<{ tenant_id: string; membership_id: string; identity_user_id: string }>("SELECT * FROM app.authenticate_practice_session($1)", [digest])).rows[0];
+    if (!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3", [context.tenantId, jobId, sessionDigest])).rowCount) fail("PRACTICE_FEED_NOT_FOUND");
+    const principal = (await db.$client.query<{ tenant_id: string; membership_id: string; identity_user_id: string }>("SELECT * FROM app.authenticate_practice_session($1)", [sessionDigest])).rows[0];
     if (!principal || principal.tenant_id !== context.tenantId || principal.membership_id !== actor.membershipId || principal.identity_user_id !== actor.identityUserId) fail("PRACTICE_FEED_FORBIDDEN");
-    const owner = async () => (await db.$client.query<{ session_id: string }>("SELECT session_id FROM app.practice_feed_job_owner WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, jobId])).rows[0];
+    const owner = async () => (await db.$client.query<{ session_digest: string }>("SELECT session_digest FROM app.practice_feed_job_owner WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, jobId])).rows[0];
     let current = await owner();
     if (!current) {
       if (!writeCommandId) await lockJob();
       current = await owner(); // another request from the creator may have registered it while waiting
       if (!current) {
         const ownerId = randomUUID();
-        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')",
-          [ownerId, context.tenantId, jobId, sessionId, actor.membershipId]);
+        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')",
+          [ownerId, context.tenantId, jobId, sessionDigest, actor.membershipId]);
         await appendAuditBatch(db, [{
           id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor.membershipId}`, eventType: "practice_feed.claimed", subjectType: "job", subjectRef: jobId,
-          payload: { references: { ownerId, sessionId }, hashes: { claim: sha256(`claim|${jobId}|${sessionId}`) }, classifications: { practiceFeed: "financial" } },
+          payload: { references: { ownerId, sessionDigest }, hashes: { claim: sha256(`claim|${jobId}|${sessionDigest}`) }, classifications: { practiceFeed: "financial" } },
         }]);
         return;
       }
     }
-    if (current.session_id !== sessionId) fail("PRACTICE_FEED_NOT_FOUND");
+    if (current.session_digest !== sessionDigest) fail("PRACTICE_FEED_NOT_FOUND");
   }
 
   /** One SQL statement, so commands, events, matches and receipts are read from the same snapshot. */
-  private async snapshot(db: TenantTransaction, context: VerifiedTenantContext, sessionId: string, jobId: string): Promise<Snapshot> {
+  private async snapshot(db: TenantTransaction, context: VerifiedTenantContext, sessionDigest: string, jobId: string): Promise<Snapshot> {
     const row = (await db.$client.query<Snapshot>(`SELECT
-      (SELECT jsonb_build_object('id',a.id,'session_id',a.session_id) FROM app.practice_feed_account a WHERE a.tenant_id=$1 AND a.job_id=$2) account,
+      (SELECT jsonb_build_object('id',a.id,'session_digest',a.session_digest) FROM app.practice_feed_account a WHERE a.tenant_id=$1 AND a.job_id=$2) account,
       coalesce((SELECT jsonb_agg(jsonb_build_object('id',c.id,'revision',c.revision,'action',c.action,'movement_key',c.movement_key,'payload_hash',c.payload_hash) ORDER BY c.revision)
         FROM app.practice_feed_command c WHERE c.tenant_id=$1 AND c.job_id=$2),'[]'::jsonb) commands,
       coalesce((SELECT jsonb_agg(to_jsonb(e) ORDER BY e.created_at,e.event_id) FROM app.practice_feed_event e WHERE e.tenant_id=$1 AND e.job_id=$2),'[]'::jsonb) events,
@@ -116,7 +118,7 @@ export class PracticeFeedRepository {
           'reference',p.reference,'reversed',r.id IS NOT NULL) ORDER BY p.created_at,p.id)
         FROM app.customer_payment p LEFT JOIN app.customer_payment_reversal r ON r.tenant_id=p.tenant_id AND r.payment_id=p.id
         WHERE p.tenant_id=$1 AND p.job_id=$2 AND p.builder_attested),'[]'::jsonb) payments`, [context.tenantId, jobId])).rows[0]!;
-    if (row.account && row.account.session_id !== sessionId) fail("PRACTICE_FEED_NOT_FOUND");
+    if (row.account && row.account.session_digest !== sessionDigest) fail("PRACTICE_FEED_NOT_FOUND");
     return row;
   }
 
@@ -151,30 +153,30 @@ export class PracticeFeedRepository {
     };
   }
 
-  private async readIn(db: TenantTransaction, context: VerifiedTenantContext, sessionId: string, jobId: string, query: PracticeFeedQuery): Promise<PracticeFeedView> {
-    return this.project(await this.snapshot(db, context, sessionId, jobId), jobId, query);
+  private async readIn(db: TenantTransaction, context: VerifiedTenantContext, sessionDigest: string, jobId: string, query: PracticeFeedQuery): Promise<PracticeFeedView> {
+    return this.project(await this.snapshot(db, context, sessionDigest, jobId), jobId, query);
   }
 
-  async view(context: VerifiedTenantContext, actor: PracticeFeedActor, sessionId: string, jobId: string, rawQuery: unknown = { version: "practice-feed-query.v1" }): Promise<PracticeFeedView> {
-    this.guard(sessionId, jobId);
+  async view(context: VerifiedTenantContext, actor: PracticeFeedActor, sessionDigest: string, jobId: string, rawQuery: unknown = { version: "practice-feed-query.v1" }): Promise<PracticeFeedView> {
+    this.guard(sessionDigest, jobId);
     const query = practiceFeedQueryV1.safeParse(rawQuery);
     if (!query.success) fail("INVALID_QUERY");
     return withTenant(this.pool, context, async (db) => {
-      await this.authorize(db, context, actor, sessionId, jobId, null);
-      return this.readIn(db, context, sessionId, jobId, query.data!);
+      await this.authorize(db, context, actor, sessionDigest, jobId, null);
+      return this.readIn(db, context, sessionDigest, jobId, query.data!);
     });
   }
 
-  async command(context: VerifiedTenantContext, actor: PracticeFeedActor, sessionId: string, jobId: string, raw: unknown): Promise<PracticeFeedView> {
-    this.guard(sessionId, jobId);
+  async command(context: VerifiedTenantContext, actor: PracticeFeedActor, sessionDigest: string, jobId: string, raw: unknown): Promise<PracticeFeedView> {
+    this.guard(sessionDigest, jobId);
     const parsed = practiceFeedCommandV1.safeParse(raw);
     if (!parsed.success) fail("INVALID_COMMAND");
     const input = parsed.data!, payloadHash = sha256(canonical({ jobId, ...input }));
     try {
       return await withTenant(this.pool, context, async (db) => {
         // authorize() takes the command and job locks before anything is appended to the audit chain; the database guard re-takes the same job lock.
-        await this.authorize(db, context, actor, sessionId, jobId, input.commandId);
-        const before = await this.snapshot(db, context, sessionId, jobId);
+        await this.authorize(db, context, actor, sessionDigest, jobId, input.commandId);
+        const before = await this.snapshot(db, context, sessionDigest, jobId);
         const replay = (await db.$client.query<{ payload_hash: string }>("SELECT payload_hash FROM app.practice_feed_command WHERE tenant_id=$1 AND id=$2", [context.tenantId, input.commandId])).rows[0];
         if (replay) {
           if (replay.payload_hash.trim() !== payloadHash) fail("IDEMPOTENCY_PAYLOAD_CONFLICT");
@@ -187,8 +189,8 @@ export class PracticeFeedRepository {
         let accountId = before.account?.id;
         if (input.action === "connect") {
           accountId = randomUUID();
-          await db.$client.query(`INSERT INTO app.practice_feed_account(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')`,
-            [accountId, context.tenantId, jobId, sessionId, actor.membershipId]);
+          await db.$client.query(`INSERT INTO app.practice_feed_account(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')`,
+            [accountId, context.tenantId, jobId, sessionDigest, actor.membershipId]);
         }
         await db.$client.query(`INSERT INTO app.practice_feed_command(id,tenant_id,job_id,account_id,revision,action,movement_key,step,payment_id,actor_membership_id,payload_hash,environment)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'synthetic_demo')`,
@@ -204,11 +206,11 @@ export class PracticeFeedRepository {
           id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor.membershipId}`, eventType: `practice_feed.${input.action}`,
           subjectType: "job", subjectRef: jobId,
           payload: {
-            references: { commandId: input.commandId, accountId: accountId!, sessionId, ...("movement" in input ? { movement: input.movement } : {}), ...(input.action === "match_receipt" ? { paymentId: input.paymentId } : {}) },
+            references: { commandId: input.commandId, accountId: accountId!, sessionDigest, ...("movement" in input ? { movement: input.movement } : {}), ...(input.action === "match_receipt" ? { paymentId: input.paymentId } : {}) },
             hashes: { command: payloadHash }, classifications: { practiceFeed: "financial" },
           },
         }]);
-        return this.readIn(db, context, sessionId, jobId, practiceFeedQueryV1.parse({ version: "practice-feed-query.v1" }));
+        return this.readIn(db, context, sessionDigest, jobId, practiceFeedQueryV1.parse({ version: "practice-feed-query.v1" }));
       });
     } catch (error) { throw translate(error); }
   }

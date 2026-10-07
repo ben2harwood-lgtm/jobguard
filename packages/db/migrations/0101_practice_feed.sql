@@ -5,17 +5,19 @@ BEGIN;
 
 -- SBOX-SESSION-1 (0094) binds jobs to their creator at insertion. A feed owner row records that binding only:
 -- another session, an unissued/expired session or an old unbound job cannot register or connect this feed.
+-- The jg_session cookie is a 7-day bearer token, so the raw token is never stored, set in a transaction or audited here:
+-- every session column, setting and audit reference below carries only SBOX's sha256 digest of it (control_plane.practice_session).
 CREATE TABLE app.practice_feed_job_owner (
- id uuid NOT NULL, tenant_id uuid NOT NULL, job_id uuid NOT NULL, session_id uuid NOT NULL, actor_membership_id uuid NOT NULL,
+ id uuid NOT NULL, tenant_id uuid NOT NULL, job_id uuid NOT NULL, session_digest char(64) NOT NULL CHECK(session_digest ~ '^[0-9a-f]{64}$'), actor_membership_id uuid NOT NULL,
  environment text NOT NULL CHECK(environment='synthetic_demo'),
  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
- PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id), UNIQUE(tenant_id,job_id,session_id),
+ PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id), UNIQUE(tenant_id,job_id,session_digest),
  FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id),
  FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES app.membership(tenant_id,id)
 );
 
 CREATE TABLE app.practice_feed_account (
- id uuid NOT NULL, tenant_id uuid NOT NULL, job_id uuid NOT NULL, session_id uuid NOT NULL, actor_membership_id uuid NOT NULL,
+ id uuid NOT NULL, tenant_id uuid NOT NULL, job_id uuid NOT NULL, session_digest char(64) NOT NULL CHECK(session_digest ~ '^[0-9a-f]{64}$'), actor_membership_id uuid NOT NULL,
  environment text NOT NULL CHECK(environment='synthetic_demo'),
  provider text NOT NULL DEFAULT 'none' CHECK(provider='none'),
  consent_version text NOT NULL DEFAULT 'practice-feed-consent.v1' CHECK(consent_version='practice-feed-consent.v1'),
@@ -23,7 +25,7 @@ CREATE TABLE app.practice_feed_account (
  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
  PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id), UNIQUE(tenant_id,job_id,id),
  FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id),
- FOREIGN KEY(tenant_id,job_id,session_id) REFERENCES app.practice_feed_job_owner(tenant_id,job_id,session_id),
+ FOREIGN KEY(tenant_id,job_id,session_digest) REFERENCES app.practice_feed_job_owner(tenant_id,job_id,session_digest),
  FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES app.membership(tenant_id,id)
 );
 
@@ -113,30 +115,30 @@ END $$;
 CREATE FUNCTION app.guard_practice_feed() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 DECLARE
  v_tenant uuid := nullif(current_setting('app.tenant_id',true),'')::uuid;
- v_session uuid := nullif(current_setting('app.practice_feed_session',true),'')::uuid;
+ v_digest text := nullif(current_setting('app.practice_feed_session_digest',true),'');
  v_actor uuid;
  a app.practice_feed_account;
  c app.practice_feed_command;
  pay app.customer_payment;
  last_revision integer;
 BEGIN
- IF v_tenant IS NULL OR v_session IS NULL OR NEW.tenant_id IS DISTINCT FROM v_tenant
+ IF v_tenant IS NULL OR v_digest IS NULL OR v_digest !~ '^[0-9a-f]{64}$' OR NEW.tenant_id IS DISTINCT FROM v_tenant
     OR current_setting('app.practice_feed_environment',true) IS DISTINCT FROM 'synthetic_demo'
  THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
 
- -- Before any feed effect, require a live server-issued session and its immutable creator/job binding.
+ -- Before any feed effect, require a live server-issued session and its immutable creator/job binding. The setting already holds
+ -- SBOX's digest (never the bearer token), so it is compared with the job's creator digest directly.
  IF NOT EXISTS(
   SELECT 1 FROM app.job j
-  JOIN app.authenticate_practice_session(encode(sha256(convert_to(v_session::text,'UTF8')),'hex')) p ON p.tenant_id=j.tenant_id
-  WHERE j.tenant_id=NEW.tenant_id AND j.id=NEW.job_id
-   AND j.practice_session_digest=encode(sha256(convert_to(v_session::text,'UTF8')),'hex')
+  JOIN app.authenticate_practice_session(v_digest) p ON p.tenant_id=j.tenant_id
+  WHERE j.tenant_id=NEW.tenant_id AND j.id=NEW.job_id AND j.practice_session_digest=v_digest
  ) THEN RAISE EXCEPTION 'PRACTICE_FEED_NOT_FOUND' USING ERRCODE='42501'; END IF;
 
  IF TG_TABLE_NAME='practice_feed_job_owner' THEN
   v_actor := NEW.actor_membership_id;
   PERFORM 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=v_actor FOR SHARE;
   PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext(NEW.job_id::text));
-  IF NEW.session_id IS DISTINCT FROM v_session
+  IF NEW.session_digest IS DISTINCT FROM v_digest
      OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=v_actor AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()))
   THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN NEW;
@@ -144,8 +146,8 @@ BEGIN
 
  IF TG_TABLE_NAME='practice_feed_account' THEN
   v_actor := NEW.actor_membership_id;
-  IF NEW.session_id IS DISTINCT FROM v_session
-     OR NOT EXISTS(SELECT 1 FROM app.practice_feed_job_owner o WHERE o.tenant_id=NEW.tenant_id AND o.job_id=NEW.job_id AND o.session_id=NEW.session_id)
+  IF NEW.session_digest IS DISTINCT FROM v_digest
+     OR NOT EXISTS(SELECT 1 FROM app.practice_feed_job_owner o WHERE o.tenant_id=NEW.tenant_id AND o.job_id=NEW.job_id AND o.session_digest=NEW.session_digest)
      OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=v_actor AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()))
   THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN NEW;
@@ -157,7 +159,7 @@ BEGIN
  END IF;
 
  SELECT * INTO a FROM app.practice_feed_account WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND id=NEW.account_id;
- IF NOT FOUND OR a.session_id IS DISTINCT FROM v_session
+ IF NOT FOUND OR a.session_digest IS DISTINCT FROM v_digest
     OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=a.actor_membership_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()))
  THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
 

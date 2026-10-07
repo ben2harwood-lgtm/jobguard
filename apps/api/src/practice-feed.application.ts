@@ -24,21 +24,23 @@ export class PracticeFeedApplication {
     if (!identifier.safeParse(sessionId).success) throw new PracticeFeedApplicationError("UNAUTHENTICATED");
     const job = identifier.safeParse(jobId);
     if (!job.success) throw new PracticeFeedApplicationError("NOT_FOUND");
+    // SBOX authenticates the opaque cookie and resolves the creator-owned job. Only its digest continues to the repository:
+    // the 7-day bearer token is never passed on, stored, set in a transaction or audited by the feed.
     const auth = await new PracticeAccess(this.pool, sessionId).job(job.data);
-    return { sessionId: sessionId!, jobId: job.data, auth };
+    return { jobId: job.data, auth };
   }
 
   async view(sessionId: string | undefined, jobId: unknown, rawQuery: unknown = { version: "practice-feed-query.v1" }): Promise<PracticeFeedResponse> {
     const scope = await this.authorize(sessionId, jobId);
     const parsed = practiceFeedQueryV1.safeParse(rawQuery);
     if (!parsed.success) throw new PracticeFeedApplicationError("INVALID_QUERY");
-    return practiceFeedResponseV1.parse(await this.repository.view(scope.auth.context, { membershipId: scope.auth.membershipId, identityUserId: scope.auth.identityUserId }, scope.sessionId, scope.jobId, parsed.data));
+    return practiceFeedResponseV1.parse(await this.repository.view(scope.auth.context, { membershipId: scope.auth.membershipId, identityUserId: scope.auth.identityUserId }, scope.auth.digest, scope.jobId, parsed.data));
   }
 
   async command(sessionId: string | undefined, jobId: unknown, raw: unknown): Promise<PracticeFeedResponse> {
     const scope = await this.authorize(sessionId, jobId);
     const parsed = practiceFeedCommandV1.safeParse(raw);
     if (!parsed.success) throw new PracticeFeedApplicationError("INVALID_COMMAND");
-    return practiceFeedResponseV1.parse(await this.repository.command(scope.auth.context, { membershipId: scope.auth.membershipId, identityUserId: scope.auth.identityUserId }, scope.sessionId, scope.jobId, parsed.data));
+    return practiceFeedResponseV1.parse(await this.repository.command(scope.auth.context, { membershipId: scope.auth.membershipId, identityUserId: scope.auth.identityUserId }, scope.auth.digest, scope.jobId, parsed.data));
   }
 }

@@ -8,7 +8,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { practiceMovementCatalogueV1, type PracticeFeedView } from "@jobguard/core";
 import {
-  CaptureRepository, issuePracticeSession, authenticatePracticeSession, appendAuditBatch, migrate, MIGRATION_URLS, PracticeFeedRepository, PracticeInvoiceRepository, verifiedTenantContextFromMembership, withTenant,
+  CaptureRepository, SandboxRepository, issuePracticeSession, authenticatePracticeSession, appendAuditBatch, migrate, MIGRATION_URLS, PracticeFeedRepository, PracticeInvoiceRepository, verifiedTenantContextFromMembership, withTenant,
   type VerifiedTenantContext,
 } from "../src/index.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
@@ -24,13 +24,15 @@ const previousJob = randomUUID(), otherTenant = randomUUID();
 const command = (expectedRevision: number, extra: Record<string, unknown>) => ({ version: "practice-feed-command.v1", commandId: randomUUID(), expectedRevision, ...extra });
 const advance = (expectedRevision: number, movement: string, step: string) => command(expectedRevision, { action: "advance", movement, step });
 const repo = (environment = "synthetic_demo") => new PracticeFeedRepository(runtime, environment);
-const cmd = (r: PracticeFeedRepository, f: { sessionId: string; jobId: string }, raw: unknown) => r.command(context, actor, f.sessionId, f.jobId, raw);
-const view = (f: { sessionId: string; jobId: string }, query?: unknown) => repo().view(context, actor, f.sessionId, f.jobId, query);
+// SBOX's own derivation (practice-session.ts digestToken): the repository and the feed tables only ever see this, never the bearer token.
+const digestOf = (token: string) => createHash("sha256").update(token).digest("hex");
+const cmd = (r: PracticeFeedRepository, f: { sessionId: string; jobId: string }, raw: unknown) => r.command(context, actor, digestOf(f.sessionId), f.jobId, raw);
+const view = (f: { sessionId: string; jobId: string }, query?: unknown) => repo().view(context, actor, digestOf(f.sessionId), f.jobId, query);
 const count = async (sql: string, args: unknown[]) => Number((await admin.query(sql, args)).rows[0].n);
 
 type Db = Parameters<Parameters<typeof withTenant>[2]>[0];
 async function settings(db: Db, sessionId: string, environment = "synthetic_demo") {
-  await db.$client.query("SELECT set_config('app.practice_feed_session',$1,true),set_config('app.practice_feed_environment',$2,true)", [sessionId, environment]);
+  await db.$client.query("SELECT set_config('app.practice_feed_session_digest',$1,true),set_config('app.practice_feed_environment',$2,true)", [digestOf(sessionId), environment]);
 }
 async function fixture(existingSessionId?: string) {
   const sessionId = existingSessionId ?? await issuePracticeSession(runtime);
@@ -94,7 +96,10 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     expect((await admin.query("SELECT title FROM app.job WHERE id=$1", [previousJob])).rows[0].title).toBe("Previous schema job");
     const names = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map((row) => row.migration_name);
     expect(names).toHaveLength(MIGRATION_URLS.length);
-    expect(names).toEqual(MIGRATION_URLS.map(url => fileURLToPath(url).split("/").at(-1))); expect(names.at(-1)).toBe("0101_practice_feed.sql"); expect(names.at(-2)).toBe("0094_practice_session_ownership.sql");
+    expect(names).toEqual(MIGRATION_URLS.map(url => fileURLToPath(url).split("/").at(-1))); expect(names.at(-1)).toBe("0101_practice_feed.sql");
+    // Other migrations (0095-0100) may merge between SBOX-SESSION-1 and this one: 0094 only has to be applied first.
+    expect(names).toContain("0094_practice_session_ownership.sql");
+    expect(names.indexOf("0094_practice_session_ownership.sql")).toBeLessThan(names.indexOf("0101_practice_feed.sql"));
     expect(names.filter((name) => /^004[3-5]/u.test(name))).toEqual([]);
     expect(await count("SELECT count(*) n FROM app.practice_feed_account", [])).toBeGreaterThanOrEqual(0);
   });
@@ -114,7 +119,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     await expect(view({ ...f, sessionId: stranger })).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
     await expect(withTenant(runtime, context, async db => {
       await settings(db, stranger);
-      await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, f.jobId, stranger, DEMO_MEMBERSHIP_ID]);
+      await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, f.jobId, digestOf(stranger), DEMO_MEMBERSHIP_ID]);
     })).rejects.toThrow("PRACTICE_FEED_NOT_FOUND");
     await expect(cmd(repo(), { ...f, sessionId: stranger }, command(0, { action: "connect" }))).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
     for (const table of ["practice_feed_job_owner", "practice_feed_account", "practice_feed_command", "practice_feed_event", "practice_feed_receipt_match"])
@@ -134,7 +139,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     await expect(cmd(repo(), f, command(0, { action: "connect" }))).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
     await expect(withTenant(runtime, context, async db => {
       await settings(db, sessionId);
-      await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, previousJob, sessionId, DEMO_MEMBERSHIP_ID]);
+      await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, previousJob, digestOf(sessionId), DEMO_MEMBERSHIP_ID]);
     })).rejects.toThrow("PRACTICE_FEED_NOT_FOUND");
     expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [previousJob])).toBe(0);
   });
@@ -284,8 +289,6 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     expect(results[0]!.accountId).toBe(results[1]!.accountId);
     const race = await Promise.allSettled(["pending", "settled"].map((step) => cmd(repo(), f, advance(1, "receipt-384", step))));
     expect(race.filter((row) => row.status === "fulfilled")).toHaveLength(1);
-      expect(race[0]!.status).toBe("fulfilled");
-      expect(race[1]).toMatchObject({ status: "rejected", reason: { code: "PRACTICE_FEED_NOT_FOUND" } });
     expect(race.find((row) => row.status === "rejected")).toMatchObject({ reason: { code: "PRACTICE_FEED_STALE_REVISION" } });
     expect(await count("SELECT count(*) n FROM app.practice_feed_command WHERE job_id=$1", [f.jobId])).toBe(2);
     expect(await count("SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1 AND event_type IN('practice_feed.connect','practice_feed.advance')", [f.jobId])).toBe(2);
@@ -295,10 +298,10 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
   it("refuses a foreign session, a non-member tenant/job, forged fields and a revoked or expired membership", async () => {
     const f = await connected(), otherJob = randomUUID();
     await admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Foreign')", [otherJob, otherTenant]);
-    await expect(repo().view(context, actor, randomUUID(), f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
+    await expect(repo().view(context, actor, digestOf(randomUUID()), f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
     await expect(cmd(repo(), { sessionId: randomUUID(), jobId: f.jobId }, command(1, { action: "disconnect" }))).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
     await expect(view({ sessionId: f.sessionId, jobId: otherJob })).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
-    await expect(repo().view(context, { ...actor, identityUserId: randomUUID() }, f.sessionId, f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
+    await expect(repo().view(context, { ...actor, identityUserId: randomUUID() }, digestOf(f.sessionId), f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
     for (const key of ["tenantId", "accountId", "eventId", "grossPence", "amountPence", "state", "environment", "movementId"]) {
       await expect(cmd(repo(), f, { ...advance(1, "receipt-384", "settled"), [key]: "forged" })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
     }
@@ -315,7 +318,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
   it("refuses production, pilot and unconfigured deployment environments; a no-charge practice job in the synthetic environment is allowed", async () => {
     const f = await connected();
     for (const environment of ["production", "production_billing", "pilot_no_charge", "provider_sandbox", "unconfigured"]) {
-      await expect(repo(environment).view(context, actor, f.sessionId, f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
+      await expect(repo(environment).view(context, actor, digestOf(f.sessionId), f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
       await expect(cmd(repo(environment), f, advance(1, "receipt-384", "settled"))).rejects.toMatchObject({ code: "PRACTICE_FEED_FORBIDDEN" });
     }
     expect(await count("SELECT count(*) n FROM app.practice_feed_event WHERE job_id=$1", [f.jobId])).toBe(0);
@@ -423,7 +426,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
       await view(f); // registers the job's existing creation-time binding
       await expect(withTenant(runtime, context, async (db) => {
         await settings(db, f.sessionId);
-        await db.$client.query("INSERT INTO app.practice_feed_account(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, f.jobId, f.sessionId, DEMO_MEMBERSHIP_ID]);
+        await db.$client.query("INSERT INTO app.practice_feed_account(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, f.jobId, digestOf(f.sessionId), DEMO_MEMBERSHIP_ID]);
       })).rejects.toThrow("PRACTICE_FEED_CONNECTION_REQUIRED");
       expect((await view(f)).feedState).toBe("not_connected");
       const c = await connected();
@@ -438,17 +441,15 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
   });
 
   describe("session ownership of a job is persisted before any connection", () => {
-    const sandboxRun = async (jobId: string, sessionId: string) => admin.query(
-      "INSERT INTO app.sandbox_run(id,tenant_id,job_id,session_id,scenario,environment,status) VALUES($1,$2,$3,$4,'core-1000','synthetic_demo','active')", [randomUUID(), DEMO_TENANT_ID, jobId, sessionId]);
     it("only the creation-time owner can register the feed: another session is refused before connection", async () => {
       const f = await fixture(), intruder = await issuePracticeSession(runtime);
       const inv = await invoice(f.jobId); await receipt(f, inv, 38_400);
       const first = await view(f);
       expect(first.feedState).toBe("not_connected"); expect(first.receipts).toHaveLength(1);
-      const owners = (await admin.query("SELECT session_id,actor_membership_id,environment FROM app.practice_feed_job_owner WHERE job_id=$1", [f.jobId])).rows;
-      expect(owners).toEqual([{ session_id: f.sessionId, actor_membership_id: DEMO_MEMBERSHIP_ID, environment: "synthetic_demo" }]);
+      const owners = (await admin.query("SELECT session_digest,actor_membership_id,environment FROM app.practice_feed_job_owner WHERE job_id=$1", [f.jobId])).rows;
+      expect(owners).toEqual([{ session_digest: digestOf(f.sessionId), actor_membership_id: DEMO_MEMBERSHIP_ID, environment: "synthetic_demo" }]);
       expect(await count("SELECT count(*) n FROM app.audit_event WHERE subject_ref=$1 AND event_type='practice_feed.claimed'", [f.jobId])).toBe(1);
-      await expect(repo().view(context, actor, intruder, f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
+      await expect(repo().view(context, actor, digestOf(intruder), f.jobId)).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
       await expect(cmd(repo(), { sessionId: intruder, jobId: f.jobId }, command(0, { action: "connect" }))).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
       expect(await count("SELECT count(*) n FROM app.practice_feed_account WHERE job_id=$1", [f.jobId])).toBe(0);
       // The owner is unaffected, and touching the job again is idempotent (one owner row, one claim audit).
@@ -460,46 +461,98 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     });
     it("creator and stranger racing before feed registration give only the creator success and one typed refusal", async () => {
       const f = await fixture(), rival = await issuePracticeSession(runtime);
-      const race = await Promise.allSettled([repo().view(context, actor, f.sessionId, f.jobId), repo().view(context, actor, rival, f.jobId)]);
+      const race = await Promise.allSettled([repo().view(context, actor, digestOf(f.sessionId), f.jobId), repo().view(context, actor, digestOf(rival), f.jobId)]);
       expect(race.filter((row) => row.status === "fulfilled")).toHaveLength(1);
       expect(race[0]!.status).toBe("fulfilled");
       expect(race[1]).toMatchObject({ status: "rejected", reason: { code: "PRACTICE_FEED_NOT_FOUND" } });
       expect(race.find((row) => row.status === "rejected")).toMatchObject({ reason: { code: "PRACTICE_FEED_NOT_FOUND" } });
       expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [f.jobId])).toBe(1);
     });
-    it("a job that belongs to a sandbox run can only be claimed by that run's session", async () => {
-      const owner = await issuePracticeSession(runtime), f = await fixture(owner), stranger = await issuePracticeSession(runtime);
-      await sandboxRun(f.jobId, owner);
-      await expect(view({ sessionId: stranger, jobId: f.jobId })).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
-      expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [f.jobId])).toBe(0);
-      expect((await view({ sessionId: owner, jobId: f.jobId })).feedState).toBe("not_connected");
-      // Raw SQL claim by another session is refused by the database as well.
-      const ownerG = await issuePracticeSession(runtime), g = await fixture(ownerG), strangerG = await issuePracticeSession(runtime);
-      await sandboxRun(g.jobId, ownerG);
+    it("a job created by the practice sandbox belongs to its creating session: only that session can register its feed, through the repository or raw SQL", async () => {
+      const sandbox = new SandboxRepository(runtime);
+      const owner = await issuePracticeSession(runtime), stranger = await issuePracticeSession(runtime);
+      const run = await sandbox.create(owner, randomUUID());
+      // SBOX binds the run's job to its creator by digest and records only a derived id (never the bearer token) on the run.
+      expect((await admin.query("SELECT practice_session_digest FROM app.job WHERE id=$1", [run.jobId])).rows[0].practice_session_digest).toBe(digestOf(owner));
+      expect((await admin.query("SELECT session_id::text FROM app.sandbox_run WHERE id=$1", [run.id])).rows[0].session_id).not.toBe(owner);
+      await expect(view({ sessionId: stranger, jobId: run.jobId })).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
+      await expect(cmd(repo(), { sessionId: stranger, jobId: run.jobId }, command(0, { action: "connect" }))).rejects.toMatchObject({ code: "PRACTICE_FEED_NOT_FOUND" });
+      expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [run.jobId])).toBe(0);
+      expect((await view({ sessionId: owner, jobId: run.jobId })).feedState).toBe("not_connected");
+      expect((await admin.query("SELECT session_digest FROM app.practice_feed_job_owner WHERE job_id=$1", [run.jobId])).rows).toEqual([{ session_digest: digestOf(owner) }]);
+      // Raw SQL claim by another session is refused by the database as well, on a second sandbox-created job nobody has touched yet.
+      const ownerG = await issuePracticeSession(runtime), strangerG = await issuePracticeSession(runtime), runG = await sandbox.create(ownerG, randomUUID());
       await expect(withTenant(runtime, context, async (db) => {
         await settings(db, strangerG);
-        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, g.jobId, strangerG, DEMO_MEMBERSHIP_ID]);
+        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, runG.jobId, digestOf(strangerG), DEMO_MEMBERSHIP_ID]);
       })).rejects.toThrow("PRACTICE_FEED_NOT_FOUND");
+      expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [runG.jobId])).toBe(0);
+      expect((await cmd(repo(), { sessionId: ownerG, jobId: runG.jobId }, command(0, { action: "connect" }))).feedState).toBe("connected");
+    });
+    it("stores only SBOX's session digest: the raw bearer token is in no feed table column, no audit row and no statement sent to the database", async () => {
+      const f = await fixture(), digest = digestOf(f.sessionId);
+      expect((await authenticatePracticeSession(runtime, f.sessionId)).digest, "the test derives the digest exactly as SBOX does").toBe(digest);
+      // Record every statement and parameter the repository sends, which includes the transaction setting.
+      const sent: unknown[][] = [];
+      const recording = new Proxy(runtime, {
+        get(target, key) {
+          if (key === "connect") return async () => {
+            const client = await target.connect();
+            return new Proxy(client, {
+              get(connection, property) {
+                if (property === "query") return (sql: string, values?: unknown[]) => { sent.push([sql, ...(values ?? [])]); return (connection as unknown as { query: (text: string, params?: unknown[]) => Promise<unknown> }).query(sql, values); };
+                const value = Reflect.get(connection, property);
+                return typeof value === "function" ? value.bind(connection) : value;
+              },
+            });
+          };
+          const value = Reflect.get(target, key);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      const recorded = new PracticeFeedRepository(recording, "synthetic_demo");
+      await recorded.view(context, actor, digest, f.jobId); // claim: owner row and claim audit
+      let state = await recorded.command(context, actor, digest, f.jobId, command(0, { action: "connect" }));
+      state = await recorded.command(context, actor, digest, f.jobId, advance(state.revision, "receipt-384", "settled")); // a command with an event
+      expect(state).toMatchObject({ feedState: "connected", revision: 2, eventCount: 1 });
+      // Positive control: what is stored, set and audited is the digest.
+      for (const table of ["practice_feed_job_owner", "practice_feed_account"])
+        expect((await admin.query(`SELECT session_digest FROM app.${table} WHERE job_id=$1`, [f.jobId])).rows, table).toEqual([{ session_digest: digest }]);
+      const audited = (await admin.query("SELECT event_type,payload->'references'->>'sessionDigest' d FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'practice_feed.%' ORDER BY sequence", [f.jobId])).rows;
+      expect(audited).toEqual([{ event_type: "practice_feed.claimed", d: digest }, { event_type: "practice_feed.connect", d: digest }, { event_type: "practice_feed.advance", d: digest }]);
+      expect(JSON.stringify(sent)).toContain(digest);
+      // The search: the raw token as text in every column of every feed table, in every audit row, and in everything sent to the database.
+      for (const table of ["practice_feed_job_owner", "practice_feed_account", "practice_feed_command", "practice_feed_event", "practice_feed_receipt_match", "audit_event"])
+        expect(await count(`SELECT count(*) n FROM app.${table} t WHERE position($1 in to_jsonb(t)::text) > 0`, [f.sessionId]), `${table} contains the raw token`).toBe(0);
+      expect(JSON.stringify(sent), "no statement or parameter carries the raw token").not.toContain(f.sessionId);
+      // The columns themselves can only hold a digest-shaped value, even with the guard trigger out of the way (CHECK constraints still apply).
+      const g = await fixture(), client = await admin.connect();
+      try {
+        await client.query("SET session_replication_role=replica");
+        await expect(client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')",
+          [randomUUID(), DEMO_TENANT_ID, g.jobId, g.sessionId, DEMO_MEMBERSHIP_ID])).rejects.toMatchObject({ code: "23514" });
+      } finally { await client.query("SET session_replication_role=origin"); client.release(); }
+      expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [g.jobId])).toBe(0);
     });
     it("runtime SQL cannot add a second owner, bind an account to another session, claim another tenant's or a non-synthetic way, or skip the audit", async () => {
       const f = await fixture(); await view(f);
       const other = randomUUID();
       const claim = (jobId: string, session: string, extra: { tenantId?: string; environment?: string; actor?: string } = {}) => withTenant(runtime, context, async (db) => {
         await settings(db, session, extra.environment ?? "synthetic_demo");
-        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')",
-          [randomUUID(), extra.tenantId ?? DEMO_TENANT_ID, jobId, session, extra.actor ?? DEMO_MEMBERSHIP_ID]);
+        await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')",
+          [randomUUID(), extra.tenantId ?? DEMO_TENANT_ID, jobId, digestOf(session), extra.actor ?? DEMO_MEMBERSHIP_ID]);
       });
       await expect(claim(f.jobId, other)).rejects.toThrow(/duplicate key|PRACTICE_FEED_NOT_FOUND/u);
       await expect(claim(f.jobId, f.sessionId)).rejects.toThrow(/duplicate key/u);
       const g = await fixture();
       await expect(claim(g.jobId, g.sessionId, { environment: "pilot_no_charge" })).rejects.toThrow("PRACTICE_FEED_FORBIDDEN");
-      await expect(claim(g.jobId, g.sessionId, { tenantId: otherTenant })).rejects.toThrow(/row-level security|PRACTICE_FEED_NOT_FOUND/u);
+      await expect(claim(g.jobId, g.sessionId, { tenantId: otherTenant })).rejects.toThrow(/row-level security|PRACTICE_FEED_FORBIDDEN/u);
       await expect(claim(g.jobId, g.sessionId)).rejects.toThrow("PRACTICE_FEED_AUDIT_REQUIRED"); // no claim audit event in this transaction
       expect(await count("SELECT count(*) n FROM app.practice_feed_job_owner WHERE job_id=$1", [g.jobId])).toBe(0);
       // An account cannot be bound to a session that does not own the job, even with that session's own setting.
       await expect(withTenant(runtime, context, async (db) => {
         await settings(db, other);
-        await db.$client.query("INSERT INTO app.practice_feed_account(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, f.jobId, other, DEMO_MEMBERSHIP_ID]);
+        await db.$client.query("INSERT INTO app.practice_feed_account(id,tenant_id,job_id,session_digest,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')", [randomUUID(), DEMO_TENANT_ID, f.jobId, digestOf(other), DEMO_MEMBERSHIP_ID]);
       })).rejects.toThrow("PRACTICE_FEED_NOT_FOUND");
       expect(await count("SELECT count(*) n FROM app.practice_feed_account WHERE job_id=$1", [f.jobId])).toBe(0);
     });
@@ -522,7 +575,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
         [randomUUID(), DEMO_TENANT_ID, f.jobId, accountId, commandId, event.kind, key, `${event.kind}-${key}`, d.identity, d.representation, pence, d.state, hashOf(f, accountId, { kind: event.kind, key, identity: d.identity, representation: d.representation, pence, state: d.state })]);
       }
       await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${DEMO_MEMBERSHIP_ID}`, eventType: "practice_feed.advance", subjectType: "job", subjectRef: f.jobId,
-        payload: { references: { commandId, accountId, sessionId: f.sessionId }, hashes: { command: payloadHash }, classifications: { practiceFeed: "financial" } } }]);
+        payload: { references: { commandId, accountId, sessionDigest: digestOf(f.sessionId) }, hashes: { command: payloadHash }, classifications: { practiceFeed: "financial" } } }]);
     });
     it("rolls back an audited advance with no events, or with only part of a page overlap, or with the wrong event for its step", async () => {
       const f = await connected(), accountId = f.state.accountId!;
