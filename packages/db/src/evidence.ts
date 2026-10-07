@@ -63,13 +63,13 @@ export class EvidenceService {
     return {id:row.id,jobId:row.job_id,scopeItemId:row.scope_item_id,expectedSha256:row.expected_sha256.trim(),contentType:row.expected_content_type as EvidenceUpload["contentType"],maximumBytes:Number(row.maximum_bytes),retentionClass:row.retention_class as EvidenceUpload["retentionClass"],deviceCapturedAt:row.device_captured_at,expiresAt:row.expires_at,objectKey:row.object_key,serverReceivedAt:row.server_received_at,uploadUrl};
   }
 
-  /** `completing`, when given, runs last inside the transaction that registers the object, so whatever it writes commits with the
-   * command or not at all. It does not run when an earlier finalisation is replayed. */
+  /** `completing`, when given, runs last inside the transaction that completes a fresh command identity, including a new command
+   * for an existing object, so whatever it writes commits with the command or not at all. It does not run on a true replay. */
   async finalize(context: VerifiedTenantContext, raw: unknown, completing?: (db: TenantTransaction) => Promise<void>) {
     const input=finalizeEvidenceSchema.parse(raw);
     const prepared=await withTenant(this.pool,context,async db=>{
       const target=(await db.$client.query<{job_id:string}>("SELECT job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[context.tenantId,input.uploadId])).rows[0]; if(!target)throw new EvidenceError("UPLOAD_NOT_FOUND"); await requireLiveJob(db,target.job_id);
-      const earlier=await this.replayFinalize(db,context.tenantId,target.job_id,input,false);
+      const earlier=await this.replayFinalize(db,context.tenantId,target.job_id,input,false,completing);
       if(earlier) return {existing:earlier};
       const found=await db.$client.query<UploadRow>(`SELECT * FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[context.tenantId,input.uploadId]);
       const row=found.rows[0]; if(!row) throw new EvidenceError("UPLOAD_NOT_FOUND");
@@ -87,7 +87,7 @@ export class EvidenceService {
     if(rejection){await this.reject(context,input.uploadId,rejection);throw new EvidenceError("OBJECT_INVALID",rejection);}
     return withTenant(this.pool,context,async db=>{
       const target=(await db.$client.query<{job_id:string}>("SELECT job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[context.tenantId,input.uploadId])).rows[0]; if(!target)throw new EvidenceError("UPLOAD_NOT_FOUND"); await requireLiveJob(db,target.job_id);
-      const earlier=await this.replayFinalize(db,context.tenantId,target.job_id,input,true); if(earlier)return earlier;
+      const earlier=await this.replayFinalize(db,context.tenantId,target.job_id,input,true,completing); if(earlier)return earlier;
       const locked=await db.$client.query<UploadRow>(`SELECT * FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[context.tenantId,input.uploadId]); const row=locked.rows[0];
       if(!row || row.state==="rejected" || row.object_version_id!==input.objectVersionId) throw new EvidenceError("OBJECT_INVALID");
       const verified=new Date(); await db.$client.query(`UPDATE app.evidence_upload SET state='verified',server_verified_at=$3,rejection_code=NULL WHERE tenant_id=$1 AND id=$2`,[context.tenantId,input.uploadId,verified]);
@@ -105,9 +105,10 @@ export class EvidenceService {
 
   /** The stored finalisation for this command id, or the object already registered for the upload. Either is validated against
    * the request: a different version or type, another upload or another job is a conflict, never a silent replay. The identity is
-   * claimed only in the transaction that completes the command: the registering one (`completing`), or here when the object
-   * already exists (a successful no-op, whose identity and first result are recorded too). The first transaction merely reads. */
-  private async replayFinalize(db:TenantTransaction,tenantId:string,jobId:string,input:z.infer<typeof finalizeEvidenceSchema>,completing:boolean):Promise<Record<string,unknown>|undefined>{
+   * claimed only in the transaction that completes the command: the registering one (`claimForInsert`), or here when the object
+   * already exists (a successful no-op, whose identity, first result and completion callback are atomic too).
+   * Preparation defers the claim unless it completes an existing-object command. */
+  private async replayFinalize(db:TenantTransaction,tenantId:string,jobId:string,input:z.infer<typeof finalizeEvidenceSchema>,claimForInsert:boolean,completing?:(db:TenantTransaction)=>Promise<void>):Promise<Record<string,unknown>|undefined>{
     await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`${tenantId}:${jobId}:watchdog-command`]);
     const key=this.finalizeKey(jobId,input),spec={tenantId,commandId:key.commandId,jobId,kind:"evidence.finalize" as const,requestHash:key.requestHash};
     const objectById=async(id:string)=>(await db.$client.query<Record<string,unknown>>("SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[tenantId,id])).rows[0];
@@ -116,10 +117,13 @@ export class EvidenceService {
       const stored=await findStoredResult(db,tenantId,key.commandId);if(stored.found)return objectById((stored.result as {evidenceId:string}).evidenceId);}
     const existing=(await db.$client.query<Record<string,unknown>>("SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND upload_id=$2",[tenantId,input.uploadId])).rows[0];
     if(existing){if(existing.object_version_id!==input.objectVersionId||existing.evidence_type!==input.evidenceType)throw new EvidenceError("COMMAND_CONFLICT");
-      try{if(await claimCommandIdentity(db,spec)==="new")await storeCommandResult(db,{tenantId,commandId:key.commandId,result:{evidenceId:existing.id}});}
+      try{if(await claimCommandIdentity(db,spec)==="new"){
+        await storeCommandResult(db,{tenantId,commandId:key.commandId,result:{evidenceId:existing.id}});
+        if(completing)await completing(db);
+      }}
       catch(error){if(error instanceof Error&&error.message==="IDEMPOTENCY_CONFLICT")throw new EvidenceError("COMMAND_CONFLICT");throw error}
       return existing;}
-    if(completing){try{await claimCommandIdentity(db,spec)}catch(error){if(error instanceof Error&&error.message==="IDEMPOTENCY_CONFLICT")throw new EvidenceError("COMMAND_CONFLICT");throw error}}
+    if(claimForInsert){try{await claimCommandIdentity(db,spec)}catch(error){if(error instanceof Error&&error.message==="IDEMPOTENCY_CONFLICT")throw new EvidenceError("COMMAND_CONFLICT");throw error}}
     return undefined;
   }
 

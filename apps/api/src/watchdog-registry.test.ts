@@ -124,6 +124,32 @@ function resolveRef(node: ts.Expression, tables: ReturnType<typeof importedRefs>
   return null;
 }
 type Resolved = { kind: "controller" | "verb" | "other"; verb?: string | undefined; argument?: ts.Expression | undefined };
+/** RequestMapping defaults to GET. Resolve only literal options and an enum member
+ * imported from Nest; an unreadable method could hide a mutation and must fail CI. */
+function requestMapping(file: string, argument: ts.Expression | undefined, tables: ReturnType<typeof importedRefs>): Resolved {
+  const where = `${file} @RequestMapping`;
+  if (!argument) return { kind: "other" };
+  if (!ts.isObjectLiteralExpression(argument)) throw new Error(`${where}: cannot read non-literal mapping options`);
+  // Also validates path keys, spreads and computed keys, even for a read-only method.
+  literalPaths(argument, where);
+  let method: ts.Expression | undefined;
+  for (const property of argument.properties) {
+    if (ts.isSpreadAssignment(property)) throw new Error(`${where}: cannot read spread options`);
+    const name = property.name;
+    if (ts.isComputedPropertyName(name)) throw new Error(`${where}: cannot read a computed method key`);
+    const key = ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name) ? name.text : name.getText();
+    if (key !== "method") continue;
+    if (method || !ts.isPropertyAssignment(property)) throw new Error(`${where}: cannot read duplicate or shorthand method options`);
+    method = property.initializer;
+  }
+  if (!method) return { kind: "other" };
+  if (!ts.isPropertyAccessExpression(method)) throw new Error(`${where}: cannot read the mapping method; use RequestMethod.<verb>`);
+  const ref = resolveRef(method.expression, tables), verb = method.name.text;
+  if (ref?.module !== "@nestjs/common" || ref.name !== "RequestMethod" || !["GET", "HEAD", "OPTIONS", ...MUTATION_VERBS, "ALL", "SEARCH", "QUERY"].includes(verb))
+    throw new Error(`${where}: cannot resolve the mapping method to Nest's RequestMethod`);
+  if ([...MUTATION_VERBS, "ALL"].some(mutation => mutation === verb)) return { kind: "verb", verb, argument };
+  return { kind: "other" };
+}
 /** Resolve a class or method decorator by its import. Only @nestjs packages are trusted; anything else (a local or
  * imported wrapper, a computed decorator) could hide a route, so it fails closed instead of being skipped. */
 function resolveDecorator(file: string, decorator: ts.Decorator, tables: ReturnType<typeof importedRefs>): Resolved {
@@ -133,6 +159,7 @@ function resolveDecorator(file: string, decorator: ts.Decorator, tables: ReturnT
   if (!ref || ref.module === null || !ref.module.startsWith("@nestjs/")) throw new Error(`${file}: cannot tell whether @${callee.getText()} declares a route; use the @nestjs/common decorators directly`);
   if (ref.module !== "@nestjs/common") return { kind: "other" };
   if (ref.name === "Controller") return { kind: "controller", argument: call?.arguments[0] };
+  if (ref.name === "RequestMapping") return requestMapping(file, call?.arguments[0], tables);
   if (NEST_VERBS[ref.name]) return { kind: "verb", verb: NEST_VERBS[ref.name]!, argument: call?.arguments[0] };
   return { kind: "other" };
 }
@@ -144,6 +171,17 @@ function nestKeys(file: string, text: string): string[] {
   const visit = (node: ts.Node) => {
     if (ts.isClassDeclaration(node)) {
       const controller = decoratorsOf(node).map(decorator => resolveDecorator(file, decorator, tables)).find(resolved => resolved.kind === "controller");
+      const bases = node.heritageClauses?.filter(clause => clause.token === ts.SyntaxKind.ExtendsKeyword).flatMap(clause => clause.types) ?? [];
+      // An undecorated subclass can inherit Controller metadata as well as methods.
+      // This scanner is per file, so imported/mixin bases cannot safely be resolved.
+      // Fail closed on inheritance, allowing only the unshadowed intrinsic Error
+      // used by domain errors (which cannot carry Nest controller metadata).
+      for (const base of bases) {
+        const intrinsicError = ts.isIdentifier(base.expression) && base.expression.text === "Error"
+          && !tables.imports.has("Error") && !tables.consts.has("Error")
+          && !tree.statements.some(statement => ts.isClassDeclaration(statement) && statement.name?.text === "Error");
+        if (controller || !intrinsicError) throw new Error(`${file}: controller inheritance cannot be classified; declare controller routes directly`);
+      }
       if (controller) {
         const prefixes = literalPaths(controller.argument, `${file} @Controller`);
         for (const member of node.members) {
@@ -247,6 +285,32 @@ describe("CH-2 command coverage and lock order", () => {
     expect(() => nestKeys("x.ts", 'import { Controller } from "@nestjs/common"; import { Route } from "./wrappers"; @Route("jobs/:id") class J { @Patch("a") p() {} }')).toThrow(/cannot tell whether/u);
     // A decorator imported from a Nest package we do not know cannot be an HTTP verb unless it is one we resolve.
     expect(keys('import { Controller } from "@nestjs/common"; import { Cron } from "@nestjs/schedule"; @Controller("jobs/:id/c") class K { @Cron("* * * * *") tick() {} }')).toEqual([]);
+  });
+  it("round 13: refuses controllers that can expose unclassified inherited mutations", () => {
+    const source = 'import { Controller, Post } from "@nestjs/common"; class Base { @Post("site-note") write() {} } @Controller("jobs/:id") class Child extends Base {}';
+    expect(() => assertClassified(nestKeys("inherited.ts", source), {})).toThrow(/controller inheritance/u);
+    expect(() => nestKeys("external-base.ts", 'import { Controller } from "@nestjs/common"; import { Base } from "./base"; @Controller("jobs/:id") class Child extends Base {}')).toThrow(/controller inheritance/u);
+    // Metadata on a decorated base may itself be inherited by an undecorated child.
+    expect(() => nestKeys("inherited-controller.ts", 'import { Controller, Post } from "@nestjs/common"; @Controller("jobs/:id") class Base { @Post() write() {} } class Child extends Base {}')).toThrow(/controller inheritance/u);
+  });
+  it("round 13: discovers RequestMapping mutations and rejects an unclassified one", () => {
+    const NEST = 'import { Controller, RequestMapping, RequestMethod } from "@nestjs/common"; ';
+    const keys = (body: string) => nestKeys("mapping.ts", NEST + `@Controller("jobs/:id") class A { ${body} }`).sort();
+    expect(() => assertClassified(keys('@RequestMapping({ path: "site-note", method: RequestMethod.POST }) write() {}'), {})).toThrow("nest:/jobs/:id/site-note");
+    expect(keys('@RequestMapping({ path: ["a", "b"], method: RequestMethod.PATCH }) write() {}')).toEqual(["nest:PATCH /jobs/:id/a", "nest:PATCH /jobs/:id/b"]);
+    expect(keys('@RequestMapping({ method: RequestMethod.PUT }) write() {}')).toEqual(["nest:PUT /jobs/:id"]);
+    expect(keys('@RequestMapping({ path: "x", method: RequestMethod.DELETE }) write() {}')).toEqual(["nest:DELETE /jobs/:id/x"]);
+    expect(keys('@RequestMapping({ method: RequestMethod.ALL }) write() {}')).toEqual(["nest:ALL /jobs/:id"]);
+    expect(keys('@RequestMapping() read() {} @RequestMapping({ path: "read", method: RequestMethod.GET }) other() {}')).toEqual([]);
+    expect(nestKeys("aliased.ts", 'import * as Nest from "@nestjs/common"; const MapRoute = Nest.RequestMapping; @Nest.Controller("jobs/:id") class A { @MapRoute({ "path": "x", "method": Nest.RequestMethod.POST }) write() {} }')).toEqual(["nest:/jobs/:id/x"]);
+  });
+  it.each([
+    "options", '{ ...options }', '{ method }', '{ method: selected }', '{ method: RequestMethod[verb] }',
+    '{ ["method"]: RequestMethod.POST }', '{ method: RequestMethod.GET, method: RequestMethod.POST }',
+    '{ path: "x", method: RequestMethod.POST, ...options }', '{ method: Fake.POST }',
+  ])("round 13: indeterminate RequestMapping arguments fail closed: %s", argument => {
+    const source = 'import { Controller, RequestMapping, RequestMethod } from "@nestjs/common"; ' + `@Controller("jobs/:id") class A { @RequestMapping(${argument}) write() {} }`;
+    expect(() => nestKeys("indeterminate.ts", source)).toThrow(/RequestMapping.*cannot/u);
   });
   it("classifies standalone job mutations and dispatcher command literals too", async () => {
     const files = new Map([...await readTree(new URL("apps/api/src/", root), name => name.endsWith(".ts") && !name.endsWith(".test.ts")), ...await readTree(new URL("packages/db/src/", root), name => name.endsWith(".ts") && !name.endsWith(".test.ts"))]);

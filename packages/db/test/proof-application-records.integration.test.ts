@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ProofApplicationRecords, withTenant } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
@@ -10,6 +10,7 @@ const h = createWatchdogHarness("proof-records", 62500);
 let records: ProofApplicationRecords;
 beforeAll(async () => { await h.boot(); records = new ProofApplicationRecords(h.observed.pool); }, 120000);
 afterAll(() => h.stop());
+afterEach(() => vi.restoreAllMocks());
 
 const hashOf = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 async function member(options: { revoked?: boolean } = {}) {
@@ -103,5 +104,72 @@ describe("proof application records", () => {
       await expect(withTenant(h.runtime, h.ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
     const stranger = { tenantId: randomUUID() } as typeof h.ctx;
     expect((await withTenant(h.runtime, stranger, db => db.$client.query("SELECT 1 FROM app.proof_application_response"))).rowCount).toBe(0);
+  });
+
+  it.each(["existing", "concurrent"] as const)("round 13: %s object, fresh finalization ID rolls back on a response-write failure and retries retain the first bytes", async path => {
+    const job = await h.live(), actor = await member(), upload = await h.pre.upload(job);
+    const command = { commandId: randomUUID(), uploadId: upload.id, objectVersionId: "v1", evidenceType: "electrical_certificate" };
+    const earlier = { ...command, commandId: randomUUID() };
+    if (path === "existing") await h.repos.evidence.finalize(h.ctx, earlier);
+    else {
+      const read = h.storage.readExactVersion.bind(h.storage);
+      // Storage is read outside the preparation transaction. Commit a real second
+      // finalizer on another connection before the original resumes completion.
+      vi.spyOn(h.storage, "readExactVersion").mockImplementationOnce(async (key, version) => {
+        await h.repos.evidence.finalize(h.ctx, earlier);
+        return read(key, version);
+      });
+    }
+    const spec = { commandId: command.commandId, jobId: job, action: "finalize" as const, requestHash: hashOf(command) };
+    await expect(h.repos.evidence.finalize(h.ctx, command, async db => {
+      // The response INSERT itself fails in PostgreSQL, after the identity/result
+      // writes, rather than throwing from a mock transaction wrapper.
+      await db.$client.query(`INSERT INTO app.proof_application_response(tenant_id,command_id,job_id,action,command_type,request_hash,response)
+        VALUES($1,$2,$3,'finalize','evidence.finalize',$4,$5::jsonb)`, [h.tenant, command.commandId, job, spec.requestHash, "invalid synthetic JSON"]);
+    })).rejects.toMatchObject({ code: "22P02" });
+    for (const table of ["watchdog_command_identity", "watchdog_command_result", "proof_application_response"])
+      expect((await h.admin.query(`SELECT 1 FROM app.${table} WHERE tenant_id=$1 AND command_id=$2`, [h.tenant, command.commandId])).rowCount).toBe(0);
+    expect((await h.admin.query("SELECT 1 FROM app.evidence_object WHERE tenant_id=$1 AND upload_id=$2", [h.tenant, upload.id])).rowCount).toBe(1);
+    expect((await h.admin.query("SELECT 1 FROM app.watchdog_command_result WHERE tenant_id=$1 AND command_id=$2", [h.tenant, earlier.commandId])).rowCount).toBe(1);
+
+    const first = { version: "practice-proof-view.v1", upload: { state: "verified", evidenceId: upload.id }, decisionId: null };
+    let answered: unknown;
+    await h.repos.evidence.finalize(h.ctx, command, async db => { answered = await records.recordIn(db, h.tenant, { ...spec, response: first }); });
+    const saved = await records.replay(h.ctx, { ...spec, actorMembershipId: actor });
+    // recordIn returns the database's first answer; JSONB may reorder keys from
+    // the input literal, so compare replay bytes with that actual returned answer.
+    expect(answered).toEqual(first);
+    const firstBytes = JSON.stringify(answered);
+    expect(JSON.stringify(saved?.response)).toBe(firstBytes);
+    // Change the authoritative proof projection after success; the saved answer
+    // stays unchanged and a true replay must not run a new completion callback.
+    await h.repos.proof.invalidate(h.ctx, { version: "proof.invalidate.v1", commandId: randomUUID(), actorMembershipId: actor, evidenceId: upload.id, reasonCode: "verification_invalid" });
+    const replayed = vi.fn(async () => { throw new Error("a true replay cannot build a new response"); });
+    await h.repos.evidence.finalize(h.ctx, command, replayed);
+    expect(replayed).not.toHaveBeenCalled();
+    expect(JSON.stringify((await records.replay(h.ctx, { ...spec, actorMembershipId: actor }))?.response)).toBe(firstBytes);
+  });
+
+  it("round 13: concurrent finalization records its fresh command response before completion commits", async () => {
+    const job = await h.live(), actor = await member(), upload = await h.pre.upload(job);
+    const command = { commandId: randomUUID(), uploadId: upload.id, objectVersionId: "v1", evidenceType: "electrical_certificate" };
+    const read = h.storage.readExactVersion.bind(h.storage);
+    vi.spyOn(h.storage, "readExactVersion").mockImplementationOnce(async (key, version) => {
+      await h.repos.evidence.finalize(h.ctx, { ...command, commandId: randomUUID() });
+      return read(key, version);
+    });
+    const spec = { commandId: command.commandId, jobId: job, action: "finalize" as const, requestHash: hashOf(command) };
+    const response = { version: "practice-proof-view.v1", evidenceId: upload.id };
+    let answered: unknown;
+    const completing = vi.fn(async (db: Parameters<ProofApplicationRecords["recordIn"]>[0]) => {
+      expect((await db.$client.query("SELECT 1 FROM app.watchdog_command_result WHERE tenant_id=$1 AND command_id=$2", [h.tenant, command.commandId])).rowCount).toBe(1);
+      // Other connections must not see this fresh identity until its response is recorded.
+      expect((await h.admin.query("SELECT 1 FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2", [h.tenant, command.commandId])).rowCount).toBe(0);
+      answered = await records.recordIn(db, h.tenant, { ...spec, response });
+    });
+    await h.repos.evidence.finalize(h.ctx, command, completing);
+    expect(completing).toHaveBeenCalledOnce();
+    expect(answered).toEqual(response);
+    expect(JSON.stringify((await records.replay(h.ctx, { ...spec, actorMembershipId: actor }))?.response)).toBe(JSON.stringify(answered));
   });
 });
