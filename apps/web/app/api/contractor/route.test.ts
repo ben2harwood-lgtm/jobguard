@@ -41,3 +41,15 @@ describe("contractor POST same-origin gate", () => {
     expect(application.command).toHaveBeenCalledTimes(2);
   });
 });
+
+
+describe("contractor malformed JSON boundary", () => {
+  it.each(["", "?action=start"])("rejects malformed JSON on %s with typed 422 before a service call", async action => {
+    const response = await POST(new Request(`https://app.example.com/api/contractor${action}`, {
+      method: "POST", headers: { "content-type": "application/json", origin: "https://app.example.com" }, body: "{broken",
+    }));
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ version: "contractor-error.v1", code: "INVALID_COMMAND", recoverable: false });
+    expect(application.start).not.toHaveBeenCalled();expect(application.command).not.toHaveBeenCalled();
+  });
+});

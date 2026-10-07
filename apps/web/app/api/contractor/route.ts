@@ -15,7 +15,7 @@ export async function GET(request:Request) {
 export async function POST(request:Request) {
  if(!isTrustedBrowserOrigin(request)) return NextResponse.json({code:"FORBIDDEN"},{status:403});
  try {
-  const application=createContractorApplication({pool:syntheticPool()}); const p=await principal();const body:unknown=await request.json();
+  const body:unknown=await request.json().catch(()=>undefined);if(body===undefined)return NextResponse.json({version:"contractor-error.v1",code:"INVALID_COMMAND",recoverable:false},{status:422});const application=createContractorApplication({pool:syntheticPool()}); const p=await principal();
   return NextResponse.json(new URL(request.url).searchParams.get('action')==='start'?await application.start(p,body):await application.command(p,body));
  }catch(error){return failure(error);}
 }

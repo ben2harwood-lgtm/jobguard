@@ -146,9 +146,9 @@ for(const fault of ['STALE_REVISION','lost mutation response'] as const){
  });
 }
 
-test('a delayed initial unauthenticated read cannot overwrite successful practice creation',async({page})=>{
- // Fault ordering only: capture the real pre-session 401, then deliver that same response
- // after the real practice-start POST commits. No successful response is fabricated.
+test('a delayed initial unauthenticated read gates Start and successful practice creation stays usable',async({page})=>{
+ // Fault ordering only: hold the real pre-session 401. Start must stay unavailable
+ // until that read is delivered. No successful response is fabricated.
  let release!:()=>void,ready!:()=>void,firstRead=true;
  const held=new Promise<void>(resolve=>{release=resolve;}),captured=new Promise<void>(resolve=>{ready=resolve;});
  await page.route('**/api/contractor',async route=>{
@@ -157,16 +157,57 @@ test('a delayed initial unauthenticated read cannot overwrite successful practic
   }else await route.continue();
  });
  await page.goto('/admin/contractor');await captured;
- await B(page,'Start generated contractor practice').click();await expect(page.getByTestId('contractor-revision')).toHaveText('0');
- const persisted=await view(page),main=page.getByRole('main');await expect(main.getByRole('status')).toHaveText('Generated organisation saved');
+ await expect(B(page,'Start generated contractor practice')).toHaveCount(0);
  const initialResponse=page.waitForResponse(response=>response.url().endsWith('/api/contractor')&&response.request().method()==='GET'&&response.status()===401);
  release();await (await initialResponse).finished();
+ await B(page,'Start generated contractor practice').click();await expect(page.getByTestId('contractor-revision')).toHaveText('0');
+ const persisted=await view(page),main=page.getByRole('main');await expect(main.getByRole('status')).toHaveText('Generated organisation saved');
  // Let the delivered JSON and React update settle without adding a timer or timeout.
  await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
  await expect(main.getByRole('status')).toHaveText('Generated organisation saved');await expect(main.getByRole('alert')).toHaveCount(0);
  await expect(B(page,'Add team')).toBeEnabled();await B(page,'Add team').click();await expect(page.getByTestId('contractor-revision')).toHaveText('1');
  await B(page,'Reload persisted organisation').click();await expect(main.getByRole('status')).toHaveText('Persisted organisation loaded');await expect(B(page,'Add team')).toBeEnabled();
  await page.reload();await expect(page.getByTestId('contractor-revision')).toHaveText('1');await expect(page.getByTestId('contractor-tenant')).toHaveText(persisted.tenantId);
+ await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toHaveCount(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});
+
+
+test('FAULT TEST — first-load transport abort recovers the same tenant without replacing the session',async({page})=>{
+ let sessionPosts=0,abortRead=false;
+ page.on('request',request=>{if(new URL(request.url()).pathname==='/api/session'&&request.method()==='POST')sessionPosts++;});
+ await page.route('**/api/contractor',async route=>{
+  if(abortRead&&route.request().method()==='GET'){abortRead=false;await route.abort('failed');}else await route.continue();
+ });
+ await page.goto('/admin/contractor');await B(page,'Start generated contractor practice').click();await expect(page.getByTestId('contractor-revision')).toHaveText('0');
+ await page.getByLabel('Team name',{exact:true}).fill('Fictional first-load recovery team');await B(page,'Add team').click();await expect(page.getByTestId('contractor-revision')).toHaveText('1');
+ const persisted=await view(page);expect(sessionPosts).toBe(1);const sessionsBeforeFault=sessionPosts;
+ abortRead=true;await page.reload();const main=page.getByRole('main');
+ await expect(main.getByRole('status')).toHaveText('The persisted organisation could not be loaded.');await expect(main.getByRole('alert')).toBeFocused();
+ await expect(page.getByTestId('contractor-tenant')).toHaveCount(0);await expect(B(page,'Start generated contractor practice')).toHaveCount(0);
+ const reload=B(page,'Reload persisted organisation');await expect(reload).toBeEnabled();await reload.focus();await expect(reload).toBeFocused();
+ expect(await reload.evaluate(el=>getComputedStyle(el).outlineStyle)).not.toBe('none');const box=await reload.boundingBox();expect(box!.width).toBeGreaterThanOrEqual(44);expect(box!.height).toBeGreaterThanOrEqual(44);
+ await reload.click();await expect(page.getByTestId('contractor-tenant')).toHaveText(persisted.tenantId);await expect(page.getByTestId('contractor-revision')).toHaveText('1');
+ expect(await view(page)).toEqual(persisted);expect(sessionPosts-sessionsBeforeFault).toBe(0);
+ await page.reload();await expect(page.getByTestId('contractor-tenant')).toHaveText(persisted.tenantId);await expect(page.getByTestId('contractor-revision')).toHaveText('1');expect(sessionPosts).toBe(1);
+ await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toHaveCount(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});
+
+test('FAULT TEST — committed start with transport-aborted response reconciles the same tenant with one session POST',async({page})=>{
+ // Fresh Playwright context. route.fetch executes the real start; only its delivery is aborted.
+ let sessionPosts=0,committedTenant='',startPosts=0;
+ page.on('request',request=>{if(new URL(request.url()).pathname==='/api/session'&&request.method()==='POST')sessionPosts++;});
+ await page.route('**/api/contractor?action=start',async route=>{
+  startPosts++;const response=await route.fetch();
+  if(response.ok()){committedTenant=(await response.json()).tenantId;await route.abort('failed');}else await route.fulfill({response});
+ });
+ await page.goto('/admin/contractor');await B(page,'Start generated contractor practice').click();const main=page.getByRole('main');
+ await expect(main.getByRole('status')).toContainText('Practice start was not confirmed');await expect(main.getByRole('alert')).toBeFocused();
+ expect(committedTenant).not.toBe('');expect(sessionPosts).toBe(1);expect(startPosts).toBe(2);await expect(B(page,'Start generated contractor practice')).toHaveCount(0);
+ await B(page,'Reload persisted organisation').click();await expect(page.getByTestId('contractor-tenant')).toHaveText(committedTenant);await expect(page.getByTestId('contractor-revision')).toHaveText('0');
+ await expect(main.getByRole('status')).toHaveText('Persisted organisation loaded');const persisted=await view(page);expect(persisted.tenantId).toBe(committedTenant);
+ await page.reload();await expect(page.getByTestId('contractor-tenant')).toHaveText(committedTenant);expect(await view(page)).toEqual(persisted);expect(sessionPosts).toBe(1);expect(startPosts).toBe(2);
  await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toHaveCount(1);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });
