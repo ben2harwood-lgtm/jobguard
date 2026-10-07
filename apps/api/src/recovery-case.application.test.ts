@@ -1,5 +1,5 @@
 import { PracticeAccess } from "./practice-access.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, PracticeAccessError, RecoveryCaseRepository } from "@jobguard/db";
@@ -132,4 +132,88 @@ it("a practice refusal during a committed reply remains an unknown outcome",asyn
  let error:unknown;try{await new RecoveryCaseApplication(testPool(),session).eligibility(randomUUID(),command())}catch(cause){error=cause}
  expect(recoveryCommandFailure(error)).toMatchObject({status:503,body:{code:"RECOVERY_COMMAND_OUTCOME_UNKNOWN",outcome:"unknown"}});
  expect(persist).toHaveBeenCalledTimes(1);
+});
+
+// Repair 20: the application hands the authorised session's digest to the repository. The real-PostgreSQL proof of what that
+// scope does lives in packages/db (../src only); here the pool is a recording fake, so the wiring is proven without a database.
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+type Statement = { sql: string; values?: unknown[] | undefined };
+function recordingPool() {
+ const log: Statement[] = [];
+ const client = { query: vi.fn(async (sql: string, values?: unknown[]) => { log.push({ sql, values }); return { rows: [], rowCount: 0 }; }), release: vi.fn() };
+ const connect = vi.fn(async () => client);
+ return { pool: { connect, query: vi.fn(async (sql: string, values?: unknown[]) => { log.push({ sql, values }); return { rows: [] }; }) } as unknown as Pool, log, connect };
+}
+// The digest each transaction installed straight after BEGIN, or undefined when a transaction ran without one.
+function transactionDigests(log: Statement[]) {
+ const digests: (string | undefined)[] = [];
+ log.forEach((statement, index) => {
+  if (statement.sql !== "BEGIN") return;
+  const next = log[index + 1];
+  digests.push(next?.sql.includes("app.practice_material_digest") ? String(next.values?.[0]) : undefined);
+ });
+ return digests;
+}
+// Authorisation is stubbed to derive the principal's digest from the session token it was asked about.
+function authorizeBySession() {
+ return vi.spyOn(PracticeAccess.prototype, "job").mockImplementation(async function (this: unknown) {
+  return { digest: sha256(String((this as { sessionId?: string }).sessionId)), context: { tenantId: randomUUID() }, membershipId: randomUUID(), identityUserId: randomUUID() } as never;
+ });
+}
+// Each stubbed repository method opens one transaction on the pool it was built with, exactly as withTenant does.
+function openOneTransaction(affected: string) {
+ const open = async (repository: unknown) => { const client = await (repository as { pool: Pool }).pool.connect(); await client.query("BEGIN"); await client.query("COMMIT"); client.release(); };
+ vi.spyOn(RecoveryCaseRepository.prototype, "command").mockImplementation(async function (this: unknown) { await open(this); return { id: affected } as never; });
+ vi.spyOn(RecoveryCaseRepository.prototype, "eligibilityCommand").mockImplementation(async function (this: unknown) { await open(this); return { id: affected } as never; });
+ vi.spyOn(RecoveryCaseRepository.prototype, "listForMember").mockImplementation(async function (this: unknown) { await open(this); return [{ id: affected }] as never; });
+}
+const openBody = () => ({ version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "merchant_overcharge", claimedNetPence: 32000, counterparty: "Fictional merchant", book: "supplier_cost", sourceType: "supplier_documents", sourceRefs: [randomUUID()], expectedRevision: 0 });
+
+it("repair 20: list, command and eligibility run every transaction, reply reads included, under the authorised session's digest", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ authorizeBySession();
+ openOneTransaction(randomUUID());
+ const owner = randomUUID(), other = randomUUID();
+ for (const [name, run, transactions] of [
+  ["list", (app: RecoveryCaseApplication) => app.list(randomUUID()), 1],
+  ["command and its reply read", (app: RecoveryCaseApplication) => app.command(randomUUID(), openBody()), 2],
+  ["command with a deferred body reader", (app: RecoveryCaseApplication) => app.command(randomUUID(), async () => openBody()), 2],
+  ["eligibility and its reply read", (app: RecoveryCaseApplication) => app.eligibility(randomUUID(), command()), 2],
+ ] as const) {
+  const { pool, log } = recordingPool();
+  await run(new RecoveryCaseApplication(pool, owner));
+  expect(transactionDigests(log), name).toEqual(Array(transactions).fill(sha256(owner)));
+ }
+ // The explicit eligibility session override supplies the digest, not the constructor's session.
+ const { pool, log } = recordingPool();
+ await new RecoveryCaseApplication(pool, other).eligibility(randomUUID(), command(), owner);
+ expect(transactionDigests(log)).toEqual([sha256(owner), sha256(owner)]);
+});
+it("repair 20: a refused target answers the same 404 and never opens a repository transaction or reads the body", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ vi.spyOn(PracticeAccess.prototype, "job").mockRejectedValue(new PracticeAccessError("NOT_FOUND"));
+ openOneTransaction(randomUUID());
+ const { pool, connect } = recordingPool(), readBody = vi.fn(async () => openBody());
+ const app = new RecoveryCaseApplication(pool, randomUUID());
+ // Another session's job and a job that does not exist both fail identically at authorisation.
+ for (const target of [randomUUID(), randomUUID()]) {
+  for (const run of [() => app.list(target), () => app.command(target, readBody), () => app.eligibility(target, readBody)]) {
+   const error = await run().catch(cause => cause), json = vi.fn(), status = vi.fn(() => ({ json }));
+   expect(error).toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
+   new PracticeErrorsFilter().catch(error, { switchToHttp: () => ({ getResponse: () => ({ status }) }) } as never);
+   expect(status).toHaveBeenCalledWith(404);
+   expect(json).toHaveBeenCalledWith({ code: "NOT_FOUND" });
+  }
+ }
+ expect(connect).not.toHaveBeenCalled();
+ expect(readBody).not.toHaveBeenCalled();
+});
+it("repair 20: an authorised body that cannot be parsed is a 400 refusal before any repository transaction", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ authorizeBySession();
+ openOneTransaction(randomUUID());
+ const { pool, connect } = recordingPool();
+ const error = await new RecoveryCaseApplication(pool, randomUUID()).command(randomUUID(), async () => { throw new SyntaxError("Synthetic malformed JSON"); }).catch(cause => cause);
+ expect(recoveryCommandFailure(error)).toEqual({ status: 400, body: { code: "INVALID_COMMAND" } });
+ expect(connect).not.toHaveBeenCalled();
 });

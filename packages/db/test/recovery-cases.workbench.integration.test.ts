@@ -541,12 +541,11 @@ it("an opening commits, its answer is lost, a revoked retry writes nothing, and 
  } finally {read.mockRestore()}
 });
 
-// Repair 19: use the real demo-tenant restrictive material RLS and the application boundary.
-it("practice recovery cases open, list and review with their own session's supplier rate while strangers get 404", async () => {
+// Repair 19/20: real demo-tenant restrictive material RLS, proven on ../src only. The API application's
+// wiring (it hands the authorised session digest to this repository) is proven in apps/api unit tests.
+it("practice recovery cases open, list and review with their own session's supplier rate while strangers are refused", async () => {
  const { DEMO_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID,
   issuePracticeSession, authenticatePracticeSession, authorizePracticeJob, practiceMaterialPool, MaterialRepository } = await import("../src/index.js");
- const { RecoveryCaseApplication } = await import("../../../apps/api/src/recovery-case.application.js");
- const { PracticeErrorsFilter } = await import("../../../apps/api/src/practice-errors.filter.js");
  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
  try {
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -572,34 +571,25 @@ it("practice recovery cases open, list and review with their own session's suppl
   // A control proves this fixture actually exercises the restrictive policy.
   const reviewer={membershipId:auth.membershipId,identityUserId:auth.identityUserId};
   await expect(new RecoveryCaseRepository(runtime).command(auth.context,jobId,open(),reviewer)).rejects.toMatchObject({code:"RECOVERY_SOURCE_NOT_RECOGNISED"});
-  const app=new RecoveryCaseApplication(runtime,creator), opened=await app.command(jobId,open());
+  // The repository on the session's own material scope (what the API application builds from the authorised digest) resolves the rate.
+  const scoped=new RecoveryCaseRepository(practiceMaterialPool(runtime,auth.digest));
+  const saved=await scoped.command(auth.context,jobId,open(),reviewer);
   const sources=[{ref:rate.id,kind:"Supplier agreement",label:"Supplier agreement Synthetic repair 19 agreement",recorded:true}];
-  const saved=opened.cases.find(c=>c.id===opened.affectedCaseId)!;
   expect(saved).toMatchObject({jobId,sourceRefs:[rate.id],sources});
-  expect((await app.list(jobId)).cases.find(c=>c.id===saved.id)?.sources).toEqual(sources);
-  const reviewed=await new RecoveryCaseApplication(runtime,stranger).eligibility(jobId,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:saved.id,
-   expectedCaseRevision:saved.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"unknown_basis"},creator);
-  expect(reviewed.affectedCaseId).toBe(saved.id);
-  expect(reviewed.cases.find(c=>c.id===saved.id)).toMatchObject({sources,eligibility:{status:"reviewed",classification:"pending_review"}});
+  expect((await scoped.listForMember(auth.context,jobId,reviewer)).find(c=>c.id===saved.id)?.sources).toEqual(sources);
+  const reviewed=await scoped.eligibilityCommand(auth.context,jobId,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:saved.id,
+   expectedCaseRevision:saved.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"unknown_basis"},reviewer);
+  expect(reviewed).toMatchObject({id:saved.id,sources,eligibility:{status:"reviewed",classification:"pending_review"}});
   // Even bypassing job preflight cannot make a stranger's material digest resolve this rate.
   await expect(new RecoveryCaseRepository(practiceMaterialPool(runtime,strangerAuth.digest)).command(auth.context,jobId,open(),reviewer)).rejects.toMatchObject({code:"RECOVERY_SOURCE_NOT_RECOGNISED"});
-  const strangerApp=new RecoveryCaseApplication(runtime,stranger);
-  const {RecoveryCaseRepository:ApplicationRepository}=await import("@jobguard/db");
-  const repoCalls=[vi.spyOn(ApplicationRepository.prototype,"command"),vi.spyOn(ApplicationRepository.prototype,"eligibilityCommand"),vi.spyOn(ApplicationRepository.prototype,"listForMember")];
-  try {
-   for(const target of [jobId,nonexistentJobId]){
-    const readBody=vi.fn().mockRejectedValue(new SyntaxError("Synthetic malformed JSON"));
-    for(const operation of [()=>strangerApp.list(target),()=>strangerApp.command(target,readBody),()=>strangerApp.eligibility(target,readBody)]){
-     let error:unknown;try{await operation()}catch(cause){error=cause}
-     expect(error).toMatchObject({code:"NOT_FOUND",message:"NOT_FOUND"});
-     const json=vi.fn(),status=vi.fn(()=>({json}));
-     new PracticeErrorsFilter().catch(error as never,{switchToHttp:()=>({getResponse:()=>({status})})} as never);
-     expect(status).toHaveBeenCalledWith(404);
-     expect(json).toHaveBeenCalledWith({code:"NOT_FOUND"});
-    }
-    expect(readBody).not.toHaveBeenCalled();
-   }
-   for(const call of repoCalls)expect(call).not.toHaveBeenCalled();
-  } finally {for(const call of repoCalls)call.mockRestore()}
+  // A stranger's job authorisation answers the same NOT_FOUND for another session's job and for a job that does not exist.
+  const refusals:unknown[]=[];
+  for(const target of [jobId,nonexistentJobId]){
+   let error:unknown;try{await authorizePracticeJob(runtime,stranger,target)}catch(cause){error=cause}
+   expect(error).toMatchObject({code:"NOT_FOUND",message:"NOT_FOUND"});
+   refusals.push({name:(error as Error).name,code:(error as {code:string}).code,message:(error as Error).message});
+  }
+  expect(refusals[0]).toEqual(refusals[1]);
+  await expect(authorizePracticeJob(runtime,creator,jobId)).resolves.toMatchObject({digest:auth.digest});
  } finally {vi.unstubAllEnvs()}
 });
