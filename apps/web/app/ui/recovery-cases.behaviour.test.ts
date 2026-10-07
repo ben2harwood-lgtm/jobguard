@@ -1,4 +1,5 @@
 import * as React from "react";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { RecoveryCases } from "./recovery-cases";
 
@@ -969,4 +970,32 @@ describe("repair 17: a refusal is not a durable result for a delayed original", 
   expect(w.screen().alert()).toBe(""); expect(w.screen().testId("case-claimed-net")).toBe("£900.00");
   for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled,name).toBe(false);
  });
+});
+
+// Repair 18: valid server messages must remain strings even when they name Object.prototype properties.
+it.each(["constructor", "toString", "__proto__"])("renders the refusal message %s verbatim in an actual React alert", async message => {
+ const w=start(); await w.settle(); reads()[0]!.json(answerBody([])); await w.settle();
+ w.click("Open £320 withheld payment"); await w.settle();
+ writes()[0]!.json({code:"RECOVERY_SOURCE_NOT_RECOGNISED",message},400); await w.settle();
+ expect(w.screen().alert()).toBe(message);
+ const alert=[...walk(w.inst.tree)].find(el=>el.props.role==="alert")!;
+ expect(renderToString(alert as React.ReactElement)).toContain(`>${message}</p>`);
+ for(const name of OPEN_BUTTONS)expect(w.screen().button(name).props.disabled,name).toBe(false);
+});
+it.each(["RECOVERY_STALE_REVISION", "ELIGIBILITY_STALE_REVISION"])("a held %s retry offers a working page reload without settling the unknown command", async code => {
+ const reload=vi.fn(); vi.stubGlobal("window",{location:{reload}});
+ const w=start(); await w.settle(); reads()[0]!.json(answerBody([caseView()])); await w.settle();
+ w.click(code==="RECOVERY_STALE_REVISION"?"Evidence assembled":"Review evidence-backed claim"); await w.settle();
+ const original=writes()[0]!; original.reject(); await w.settle();
+ w.click("Try again"); await w.settle(); expect(writes()[1]!.body).toEqual(original.body);
+ writes()[1]!.json({code},409); await w.settle();
+ expect(w.screen().alert()).toContain("may or may not have been saved");
+ expect(w.screen().alert()).toContain("Reload page to read the current case");
+ for(const name of OPEN_BUTTONS)expect(w.screen().button(name).props.disabled,name).toBe(true);
+ w.click("Reload page"); await w.settle(); expect(reload).toHaveBeenCalledTimes(1);
+ expect(writes()).toHaveLength(2); expect(reads()).toHaveLength(1);
+ // Until navigation occurs, the identical original is still the only send permitted.
+ w.click("Try again"); await w.settle(); expect(writes()[2]!.body).toEqual(original.body);
+ writes()[2]!.json(answerBody([caseView()],CASE_A)); await w.settle();
+ expect(w.screen().hasButton("Reload page")).toBe(false); expect(w.screen().alert()).toBe("");
 });

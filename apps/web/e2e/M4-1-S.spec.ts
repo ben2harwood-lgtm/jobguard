@@ -54,12 +54,11 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  // The authoritative read before reload: every case with its id, revision, amounts and source identities.
  const persisted=await(await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();expect(persisted.cases).toHaveLength(4);
  await page.reload();await V(page,"case-state","Prevented before payment");
- // C1/C7: a SECOND browser context (own cookies, own storage) signs in and reads the same persisted cases and source identities.
+ // C1/C7: a SECOND browser context reuses the authorized practice session and reads the same persisted cases and source identities.
  // It cannot "open the job from Jobs": the Jobs list (readSyntheticDemo) deliberately excludes capture-created jobs, so the job page is
- // reached by its URL (fresh sign-in, second context, identical persisted data). Ben accepted this substitute (card jobguard-open-from-jobs-substitute-2026-10-03,
+ // reached by its URL (authorized second context, identical persisted data). Ben accepted this substitute (card jobguard-open-from-jobs-substitute-2026-10-03,
  // "Accept the substitute"); see BUILDER_RECEIPT_repair6.md.
- const second=await browser.newContext(),secondPage=await second.newPage();
- await secondPage.goto("/");await secondPage.getByRole("button",{name:"Start the demo"}).click();const skip=secondPage.getByRole("button",{name:"Skip tour"});await skip.waitFor({state:"visible"});await skip.click();
+ const second=await browser.newContext({storageState:await page.context().storageState()}),secondPage=await second.newPage();
  await secondPage.goto(`/jobs/${jobId}#recovery-cases`);await V(secondPage,"case-state","Prevented before payment");
  expect(await(await secondPage.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()).toEqual(persisted);
  await secondPage.getByRole("button",{name:"merchant overcharge · £320.00",exact:true}).click();
@@ -130,8 +129,7 @@ test("amends a claim to what was received, closes it as recovered and reverses i
  await page.reload();await V(page,"case-claimed-net","£320.00");
  await page.getByRole("button",{name:"withheld customer payment · £1,500.00",exact:true}).click();
  await V(page,"case-landed-net","£1,000.00");await V(page,"case-outstanding-net","£500.00");await V(page,"case-state","Partly received");
- const second=await browser.newContext(),secondPage=await second.newPage();
- await secondPage.goto("/");await secondPage.getByRole("button",{name:"Start the demo"}).click();const skip=secondPage.getByRole("button",{name:"Skip tour"});await skip.waitFor({state:"visible"});await skip.click();
+ const second=await browser.newContext({storageState:await page.context().storageState()}),secondPage=await second.newPage();
  await secondPage.goto(`/jobs/${jobId}#recovery-cases`);
  expect(await(await secondPage.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()).toEqual(persisted);
  await secondPage.getByRole("button",{name:"withheld customer payment · £1,500.00",exact:true}).click();
@@ -149,9 +147,8 @@ const confirmedJob=async(page:Page)=>{
  await page.getByRole("button",{name:"Confirm scope",exact:true}).click();
  return(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!
 };
-const signedInSecondPage=async(browser:import("@playwright/test").Browser,jobId:string)=>{
- const context=await browser.newContext(),secondPage=await context.newPage();
- await secondPage.goto("/");await secondPage.getByRole("button",{name:"Start the demo"}).click();const skip=secondPage.getByRole("button",{name:"Skip tour"});await skip.waitFor({state:"visible"});await skip.click();
+const signedInSecondPage=async(browser:import("@playwright/test").Browser,jobId:string,page:Page)=>{
+ const context=await browser.newContext({storageState:await page.context().storageState()}),secondPage=await context.newPage();
  await secondPage.goto(`/jobs/${jobId}#recovery-cases`);
  return{context,secondPage}
 };
@@ -205,7 +202,7 @@ test("a written-off case that is reversed and re-landed ends closed, and a fully
 // Sol P2-5: two browsers open cases at the same moment; each one selects exactly the case its own command opened.
 test("two browsers opening cases at the same time each select the case they opened",async({page,browser})=>{
  const jobId=await confirmedJob(page);
- const{context,secondPage}=await signedInSecondPage(browser,jobId);
+ const{context,secondPage}=await signedInSecondPage(browser,jobId,page);
  // Both workbenches have finished their first read (an empty register), so neither has seen the other's cases.
  await expect(page.getByText("No recovery cases yet.",{exact:true})).toBeVisible();await expect(secondPage.getByText("No recovery cases yet.",{exact:true})).toBeVisible();
  const open=(target:Page,name:string)=>button(target,name).click();
@@ -330,7 +327,7 @@ test("approved £2,500 plus overlapping manual £1,000 remains received in full 
  const persisted = await (await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();
  expect(persisted.cases[0]).toMatchObject({id:c.id,state:"landed",approvedLandedNetPence:250000,landedNetPence:250000,outstandingNetPence:0});
  await page.reload(); await V(page,"case-state","Received in full");
- const second = await signedInSecondPage(browser,jobId);
+ const second = await signedInSecondPage(browser,jobId,page);
  try {await V(second.secondPage,"case-state","Received in full");expect(await (await second.secondPage.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()).toEqual(persisted)} finally {await second.context.close()}
  await button(page,"Close as recovered").click(); await V(page,"case-state","Closed — recovered");
  await expect(page.getByText("Practice sandbox — synthetic data; nothing is sent or charged",{exact:true})).toHaveCount(1);
@@ -410,7 +407,7 @@ test("repair 17: a below-settled retry keeps a delayed £900 amendment held acro
   const persisted=await (await page.request.get(path)).json();
   expect(persisted.cases).toHaveLength(1); expect(persisted.cases[0]).toMatchObject({id:c.id,claimedNetPence:90000,revision:c.revision+2,landedNetPence:0});
   await page.reload(); await V(page,"case-claimed-net","£900.00");
-  const second=await signedInSecondPage(browser,jobId);
+  const second=await signedInSecondPage(browser,jobId,page);
   try {await V(second.secondPage,"case-claimed-net","£900.00");expect(await (await second.secondPage.request.get(path)).json()).toEqual(persisted)} finally {await second.context.close()}
   await expect(page.getByText("Practice sandbox — synthetic data; nothing is sent or charged",{exact:true})).toHaveCount(1);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);

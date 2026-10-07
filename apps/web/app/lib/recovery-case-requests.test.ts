@@ -131,3 +131,12 @@ it.each([-1, 1_000_000_000_001, 2 ** 53])("repair 15: invalid principal %s is un
  expect(commandOutcome({status:200,body})).toEqual({kind:"unknown",message:unreadableAnswer});
  expect(readList(body)).toBeUndefined();
 });
+
+it.each([["NOT_FOUND",404],["SYNTHETIC_MODE_REQUIRED",403]] as const)("SBOX refusal %s/%i refuses a first attempt but cannot settle an unknown retry",(code,status)=>{
+ expect(commandOutcome({status,body:{code}})).toEqual({kind:"refused",message:code});
+ const retry=commandOutcome({status,body:{code}},true);
+ expect(retry.kind).toBe("unknown");
+ if(retry.kind!=="unknown")throw new Error("Expected a held refusal");
+ expect(retry.message).toContain("may or may not have been saved");
+ expect(commandOutcome({status:status===404?403:404,body:{code}})).toEqual({kind:"unknown",message:unreadableAnswer});
+});

@@ -27,7 +27,7 @@ export type CommandOutcome =
   /** A validated first refusal, permanent retry refusal or recorded conflict settles this attempt. */
   | Readonly<{ kind: "refused"; message: string }>
   /** The answer was lost or cannot be used: the command may or may not have been saved, so the attempt is NOT over. */
-  | Readonly<{ kind: "unknown"; message: string }>;
+  | Readonly<{ kind: "unknown"; message: string; reload?: true }>;
 
 /** A refusal's text, from whatever body came back; a body that is missing or not an object still gets a plain sentence, never a JavaScript error message. */
 export const refusalText = (body: unknown): string => {
@@ -57,12 +57,14 @@ export function commandOutcome(answer: CommandAnswer, earlierOutcomeUnknown = fa
   const rule = recoveryCommandRefusalRulesV1[refusal.data.body.code];
   // Pre-replay and reversible post-replay refusals cannot settle a delayed original.
   // Keep its exact request held until replay confirms a durable outcome.
-  if (earlierOutcomeUnknown && !rule.settlesUnknown) return { kind: "unknown", message: `${refusalText(refusal.data.body)}. Your earlier action may or may not have been saved. ${resend}` };
+  if (earlierOutcomeUnknown && !rule.settlesUnknown) {
+    const stale = refusal.data.body.code === "RECOVERY_STALE_REVISION" || refusal.data.body.code === "ELIGIBILITY_STALE_REVISION";
+    return { kind: "unknown", message: `${refusalText(refusal.data.body)}. Your earlier action may or may not have been saved. ${resend}${stale ? " Reload page to read the current case and review its history before deciding what to do next." : ""}`, ...(stale ? {reload:true as const} : {}) };
+  }
   // An identical retry preserves its body and path. A payload conflict therefore
-  // means this id is already recorded under a different server-derived membership
-  // hash. The membership is fixed in this synthetic bridge. Once SBOX-SESSION-1
-  // introduces per-session memberships, retain the attempt or show "already
-  // recorded" with reconciliation; this conflict does not prove nothing was saved.
+  // means this id is already recorded under a different payload hash. SBOX checks
+  // immutable session/job ownership before repository replay; a stranger never
+  // reaches this classification. A conflict does not prove nothing was saved.
   return { kind: "refused", message: refusalText(refusal.data.body) };
 }
 

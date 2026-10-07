@@ -13,6 +13,8 @@ export { recoveryCaseCommandV1, recoveryEligibilityCommandV1 };
 // become false without invalidating the command's bound revision.
 export const recoveryCommandRefusalRulesV1 = {
  INVALID_COMMAND: { status: 400, stage: "before_replay", settlesUnknown: false },
+ NOT_FOUND: { status: 404, stage: "before_replay", settlesUnknown: false },
+ SYNTHETIC_MODE_REQUIRED: { status: 403, stage: "before_replay", settlesUnknown: false },
  UNAUTHENTICATED: { status: 401, stage: "before_replay", settlesUnknown: false },
  MEMBERSHIP_FORBIDDEN: { status: 403, stage: "before_replay", settlesUnknown: false },
  RECOVERY_REVIEWER_FORBIDDEN: { status: 403, stage: "before_replay", settlesUnknown: false },

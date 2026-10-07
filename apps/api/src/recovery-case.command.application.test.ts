@@ -7,6 +7,10 @@ vi.mock("@jobguard/db", async importOriginal => ({
   readSyntheticDemoJob: spies.verify,
   RecoveryCaseRepository: class { command = spies.command; list = spies.list; listForMember = spies.list; },
 }));
+vi.mock("./practice-access.js", () => ({ PracticeAccess: class {
+ constructor(private readonly pool: Pool) {}
+ async job(id: string) { await spies.verify(this.pool,id); return {context:{tenantId:randomUUID()},membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID}; }
+} }));
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID } from "@jobguard/db";
 const serverReviewer = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 import { RecoveryCaseApplication } from "./recovery-case.application.js";
