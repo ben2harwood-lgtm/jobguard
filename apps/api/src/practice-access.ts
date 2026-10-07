@@ -17,10 +17,14 @@ export class PracticeAccess {
   if(input.data.jobId)return this.job(input.data.jobId);
   if(action!=="list")throw new PracticeAccessError("NOT_FOUND"); return auth;
  }
- async subject(jobId: string, kind: "upload" | "evidence", id: string) {
+ async subject(jobId: string, kind: "upload" | "evidence" | "evidence_or_upload", id: string) {
   const auth=await this.job(jobId);
   const table=kind==="upload"?"app.evidence_upload":"app.evidence_object";
-  const found=await withTenant(this.pool,auth.context,async db=>(await db.$client.query(`SELECT id FROM ${table} WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[auth.context.tenantId,jobId,id])).rows[0]);
+  // Pending uploads owned by this job reach proof validation; unrelated IDs stay hidden.
+  const sql=kind==="evidence_or_upload"
+   ? "SELECT id FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$3 UNION ALL SELECT id FROM app.evidence_upload WHERE tenant_id=$1 AND job_id=$2 AND id=$3"
+   : `SELECT id FROM ${table} WHERE tenant_id=$1 AND job_id=$2 AND id=$3`;
+  const found=await withTenant(this.pool,auth.context,async db=>(await db.$client.query(sql,[auth.context.tenantId,jobId,id])).rows[0]);
   if(!found)throw new PracticeAccessError("NOT_FOUND");
  }
 

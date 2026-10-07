@@ -9,7 +9,7 @@ test("creation binds ownership before another session's first read or write", as
     captureId, fixtureId: "sbox-session-isolation", source: { kind: "text", text: "JOB: Fictional isolation job\nITEM: Paint fictional room | £100.00" },
   } });
   expect(capture.status(), await capture.text()).toBe(201);
-  const { jobId } = await capture.json(); // No workspace mount or follow-up request by creator.
+  const { jobId, proposal } = await capture.json(); // No workspace mount or follow-up request by creator.
   const stranger = await browser.newContext({ baseURL: "http://127.0.0.1:3000", viewport: page.viewportSize() });
   const missing = await browser.newContext({ baseURL: "http://127.0.0.1:3000" });
   try {
@@ -34,8 +34,28 @@ test("creation binds ownership before another session's first read or write", as
     const inventedDelivery=await missing.request.get(`/api/jobs/${jobId}/quotes/delivery`);
     expect(inventedDelivery.status(),await inventedDelivery.text()).toBe(401);
     expect(await inventedDelivery.json()).toEqual({code:"UNAUTHENTICATED"});
+    // Bind resolvable supplier sources to this session/job without confirming its scope.
+    const post = async (path: string, data: unknown) => {
+      const response = await page.request.post(path, { data });
+      expect(response.ok(), await response.text()).toBe(true);
+      return response.json();
+    };
+    const rate = await post("/api/material-rates", { version: "material-rate-command.v1", merchantName: "Fictional isolation merchant", sku: "ISOLATION-PACK", description: "Fictional material", pricePence: 2000, priceUnit: "each", taxBasis: "net", effectiveFrom: "2026-09-01", sourceLabel: "Synthetic agreement", expectedVersion: 0 });
+    await post(`/api/jobs/${jobId}/materials`, { version: "material-requirement-command.v1", scopeItemId: proposal.lines[0].scopeItemId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0 });
+    const materialRead = await page.request.get(`/api/jobs/${jobId}/materials`);
+    expect(materialRead.ok(), await materialRead.text()).toBe(true);
+    const requirement = (await materialRead.json()).materials.at(-1);
+    await post(`/api/jobs/${jobId}/purchase-orders/revisions`, { version: "purchase-order-draft.v1", requirementId: requirement.id, quantity: "40", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
+    const documentsPath = `/api/jobs/${jobId}/supplier-documents`;
+    for (const [expectedRevision, fixtureId] of ["materials-320-invoice", "materials-B-delivery"].entries()) {
+      await post(`${documentsPath}/intake`, { version: "supplier-document-intake.v1", fixtureId, channel: "picker", expectedRevision });
+    }
+    const documentRead = await page.request.get(documentsPath);
+    expect(documentRead.ok(), await documentRead.text()).toBe(true);
+    const documents = (await documentRead.json()).state.documents;
+    expect(documents).toHaveLength(2);
     // Persist a real synthetic case/artifact, then exercise every pack transport.
-    const opened=await page.request.post(`/api/jobs/${jobId}/recovery-cases`,{data:{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"merchant_overcharge",claimedNetPence:1000,counterparty:"Fictional merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:[captureId],reviewerRef:"synthetic fixture",expectedRevision:0}});
+    const opened=await page.request.post(`/api/jobs/${jobId}/recovery-cases`,{data:{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"merchant_overcharge",claimedNetPence:1000,counterparty:"Fictional merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:[rate.id,...documents.map((document: { id: string }) => document.id)],reviewerRef:"practice-owner",expectedRevision:0}});
     expect(opened.ok(),await opened.text()).toBe(true);
     const caseId=(await opened.json()).cases[0].id;
     const packPath=`/api/recovery-cases/${caseId}/evidence-packs`;

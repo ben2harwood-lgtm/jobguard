@@ -52,6 +52,7 @@ export function practiceMaterialPool(pool: Pool, digest: string): Pool {
      get(connection,property) {
       if(property==="query")return async(sql:string,values?:unknown[])=>{
        const result=await connection.query(sql,values);
+       // Only withTenant's exact BEGIN installs the digest; other callers run unscoped and fail closed.
        if(sql==="BEGIN")await connection.query("SELECT set_config('app.practice_material_digest', $1, true)",[digest]);
        return result;
       };

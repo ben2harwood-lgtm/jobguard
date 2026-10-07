@@ -5,11 +5,11 @@ import type { Pool } from "pg";
 import { EvidencePackApplication } from "./evidence-pack.application.js";
 import { evidencePackApprovalCommandV1, evidencePackCommandV1, evidencePackInspectionQueryV1 } from "./evidence-pack.contracts.js";
 
-const repository = vi.hoisted(() => ({ list: vi.fn(), generate: vi.fn(), approveAttachment: vi.fn(), inspect: vi.fn(), download: vi.fn(), membership: vi.fn() }));
+const repository = vi.hoisted(() => ({ list: vi.fn(), generate: vi.fn(), approveAttachment: vi.fn(), inspect: vi.fn(), download: vi.fn(), membership: vi.fn(), binding: vi.fn(), scopedPool: {} }));
 vi.mock("@jobguard/db", async original => ({
   ...(await original<typeof import("@jobguard/db")>()),
-  EvidencePackRepository: class { list = repository.list; generate = repository.generate; approveAttachment = repository.approveAttachment; inspect = repository.inspect; download = repository.download; },
-  practiceMaterialPool: vi.fn((pool: unknown) => pool),
+  EvidencePackRepository: class { constructor(pool: unknown) { repository.binding(pool); } list = repository.list; generate = repository.generate; approveAttachment = repository.approveAttachment; inspect = repository.inspect; download = repository.download; },
+  practiceMaterialPool: vi.fn(() => repository.scopedPool),
   withTenant: (_pool: unknown, _context: unknown, run: (db: unknown) => unknown) => run({ $client: { query: repository.membership } }),
 }));
 const sessionId = "18000000-0000-4000-8000-000000000001";
@@ -75,6 +75,19 @@ describe("evidence pack API repair boundaries", () => {
     expect(await app.inspect(sessionId, caseId, packId, { scenario: "tampered" })).toMatchObject({ environment: "synthetic_demo", scenario: "tampered", findings: ["Content hash mismatch"], complete: false });
     expect(repository.inspect).toHaveBeenCalledWith(expect.anything(), caseId, packId, "tampered");
   });
+  it.each(["list", "generate", "approveAttachment", "inspect", "download"] as const)(
+    "%s binds every repository call to the authorized material scope", async method => {
+      const pool = {} as Pool, app = new EvidencePackApplication(pool);
+      if (method === "list") await app.list(sessionId, caseId);
+      if (method === "generate") await app.generate(sessionId, caseId, { version: "evidence-pack-command.v1", commandId });
+      if (method === "approveAttachment") await app.approveAttachment(sessionId, caseId, packId, { version: "evidence-pack-attachment-approval.v1", commandId, expectedManifestHash: hash, expectedContentHash: hash });
+      if (method === "inspect") await app.inspect(sessionId, caseId, packId);
+      if (method === "download") await app.download(sessionId, caseId, packId);
+      const calls = method === "generate" || method === "approveAttachment" ? 2 : 1;
+      expect(practiceMaterialPool).toHaveBeenCalledTimes(calls);
+      for (const call of vi.mocked(practiceMaterialPool).mock.calls) expect(call).toEqual([pool, hash]);
+      expect(repository.binding.mock.calls).toEqual(Array.from({ length: calls }, () => [repository.scopedPool]));
+    });
   it("denies revoked or missing membership for reads and approvals", async () => {
     repository.membership.mockResolvedValue({ rows: [] });
     const app = new EvidencePackApplication({} as Pool);
