@@ -3482,8 +3482,6 @@ Any money from merchants or suppliers, lenders, lead platforms or builders' cust
 
 ### 14.3 Discovered later
 
-- **Shared command-ID ownership follow-up (M4-5-S round 5, Opus ruling):** evidence-pack generation and attachment approval must claim `app.command_receipt` and reject IDs already used by any recovery/shared command family, including sequential and concurrent reuse. Use receipt-before-case locking. The recovery-to-pack exclusion is already covered in M4-5-S; the reverse evidence-pack paths are outside this lane and remain a separate task.
-
 Agents append adjacent findings here rather than implementing them inline, with date, related task, evidence, risk, proposed scope, gate, and whether an invariant or decision record changes.
 
 | Date | Finding | Related | Proposed handling |
@@ -3499,6 +3497,7 @@ Agents append adjacent findings here rather than implementing them inline, with 
 | 2026-09-30 | `app.job` constraint `job_baseline_shape` (0020) and the lifecycle routine (0003) require a quote or imported baseline plus cap when a job goes live; contractor work-order jobs and v3 small-builder activations have neither | CH-1, ENT-2 | ENT-2 adds a `work_order` provenance and a controlled route into `live`; CH-1 relaxes the cap requirement for v3 |
 | 2026-09-30 | Flaky mobile browser tests: `e2e/M2-5-S.spec.ts` and `e2e/M2-1B-S.spec.ts` (mobile-360) each timed out on a 45-second poll in CI run 36748730218 on a docs-only commit, after identical code passed twice; recent PR histories show repeated CI failures before success | §2.4 C6; every task | Standalone repair `TEST-STAB-2026-09-30` before parallel dispatch: find the shared race (projection timing, seed readiness or server start under load) and fix it without lengthening timeouts, adding retries or skipping tests; CI must pass three consecutive runs |
 | 2026-09-30 | M0-6 is an in-memory auth scaffold (no persisted sessions or identity email) and the AI gateway is fixture-only (no Claude route or Deepgram adapter) | §11 M0-6L, M0-12a/b | Carried as live prerequisites before any real user signs in |
+| 2026-10-07 | Shared command-ID ownership (M4-5-S round 5, Opus ruling): evidence-pack generation and attachment approval must claim `app.command_receipt` and reject IDs already used by any recovery/shared command family, including sequential and concurrent reuse. The recovery-to-pack exclusion is already covered in M4-5-S; the reverse evidence-pack paths are outside this lane | M4-5-S; evidence packs (M4-3-S) | Separate task outside the M4-5-S lane; use receipt-before-case locking |
 
 ---
 

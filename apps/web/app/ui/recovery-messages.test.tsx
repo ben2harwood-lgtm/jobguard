@@ -67,5 +67,12 @@ describe('supplier recovery source picker (Sol 5)', () => {
     expect(html).toContain(`value="${id(20)}"`);
     expect(html).toContain('DN-FICTIONAL-42');
     expect(html).not.toContain('10 each delivered, 8 accepted');
+    expect(html).toContain('>DN-FICTIONAL-42</option>');
+  });
+  it.each([['empty', ''], ['blank', '   '], ['missing', null]])('labels a delivery whose number is %s with a short plain label, not a bare separator and id (P3-1)', (_name, documentNumber) => {
+    hooks.values = [0, [], undefined, '', false, '1000.00', [{ id: id(21), document_type: 'delivery', status: 'ready', document_number: documentNumber }], id(21)];
+    const html = renderToStaticMarkup(createElement(RecoveryCases, { jobId: id(2) }));
+    expect(html).toContain(`<option value="${id(21)}" selected="">Document ${id(21).slice(0, 8)}</option>`);
+    expect(html).not.toContain(' · ');
   });
 });

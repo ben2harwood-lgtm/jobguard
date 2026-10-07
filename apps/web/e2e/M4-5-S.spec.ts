@@ -184,9 +184,10 @@ test("uses supplier wording and recipient, shows an unknown outcome as unknown, 
   await post(page, `/api/jobs/${source.jobId}/purchase-orders/revisions`, { version: "purchase-order-draft.v1", requirementId: requirement.id, quantity: "40", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
   const documentsPath = `/api/jobs/${source.jobId}/supplier-documents`;
   await page.goto(`/jobs/${source.jobId}#supplier-documents`);
+  const documentPicker = page.locator("#supplier-documents select").first();
   for (const fixtureId of ["materials-B-delivery", "materials-320-invoice"]) {
-    await expect(page.getByLabel("Generated document", { exact: true })).toBeEnabled();
-    await page.getByLabel("Generated document", { exact: true }).selectOption(fixtureId);
+    await expect(documentPicker).toBeEnabled();
+    await documentPicker.selectOption(fixtureId);
     const imported = page.waitForResponse(response => response.url().endsWith("/supplier-documents/intake") && response.request().method() === "POST");
     await click(page, "Import generated document");
     expect((await imported).ok()).toBe(true);
@@ -393,6 +394,7 @@ test("a new practice session cannot see or act on another session's recovery mes
       }
     }
     const other = await stranger.newPage(); await other.goto(`/jobs/${source.jobId}#recovery-cases`);
+    await expect(other.getByRole("heading", { name: "You cannot open this job", exact: true })).toBeVisible();
     await expect(other.getByTestId("pursuit-body")).toHaveCount(0);
     expect(await state(page, caseId)).toEqual(saved);
   } finally { await stranger.close(); await missing.close(); }
