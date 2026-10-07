@@ -1,0 +1,48 @@
+# ENT-1 builder receipt — round 4 (7 October 2026)
+
+Builder: Codex. Branch `codex/sandbox/ent-1`, existing PR #100. This repair is an uncommitted working-tree diff on **4199eefdb045c49dab2509788169e8ff51fe8bb7**. No git add, commit, checkout, push, merge or PR creation was performed. The dispatcher supplies the next commit. **Not independently verified or technically accepted:** the supplied GPT-6.1 Sol REPAIR verdict applies to 4199eef, not this repaired diff.
+
+Read AGENTS.md rev 3.0, BUILD_PLAN.md §2.4 C1–C8 and the ENT-1 card, and the existing environment/authentication and contractor command boundaries. Changes stay inside the existing `ent-1` lane: the component, its unit harness/regressions, the ENT-1 browser spec and this receipt. No shared registration file was changed; no overlap needs another editing owner this round.
+
+## Finding → fix → test
+
+| Finding | Fix | Tests and evidence |
+| --- | --- | --- |
+| P2-1: ambiguous Role locator also finds Approval rules draft | Intersect `getByLabel('Role')` with `getByRole('combobox')`. Keep every existing assertion, including both invalid-command HTTP 422 checks, no-effect comparison and persistence checks. | The supplied exact-head CI run [37615573732](https://github.com/ben2harwood-lgtm/jobguard/actions/runs/37615573732) reports this existing regression failing at both viewports. A local source/fixture diagnostic finds two matching label texts on exact 4199eef and one after repair; this is **not browser execution**. Both browser projects collect the unchanged regression assertions. |
+| P2-2: failed mutation leaves stale or uncertain state editable | Every caught mutation failure conservatively sets stale, retains the error and advances the existing error-focus counter. Existing buttons and command-handler guard refuse revision-dependent actions until an authoritative validated reload succeeds. An unsuccessful reload keeps the lock. No automatic mutation retry is added. | Tests written before implementation reproduce STALE_REVISION, lost response, timeout and unreadable JSON: all four fail on 4199eef because actions remain enabled. All pass after repair, including focused error, blocked direct handler invocation, failed reload and successful reload/retry. Two new browser fault cases check all nine mutation actions, focused error, old displayed revision, real server revision, unsuccessful reload, successful reload, another command and persistence. The stale case uses a real competing command/409. The lost-response case executes the real POST with `route.fetch()` then aborts its delivery after commit. |
+| P2-3: older initial read overwrites successful practice Start | Each read captures a generation. Start invalidates reads from the previous session before its first await. Obsolete successful and failed read completions cannot update the view, error, stale flag or status. | A deferred initial UNAUTHENTICATED handler test, written before implementation, fails on 4199eef with the start prompt replacing the success status. After repair it preserves success, keeps actions enabled and verifies subsequent reload/command recovery. A new browser case holds the real pre-session 401 and forwards that exact unsuccessful response after real creation, then checks enabled editing, a successful command, reload, tenant identity and persisted revision. No JobGuard success response is fabricated. |
+
+All three new browser journeys run under both existing projects: **mobile-360 (360×800)** and **desktop (1280×800)**. They preserve the synthetic banner and overflow checks. No timeout was added or increased; the existing ENT-1 180-second allowance is unchanged. The hook harness now retains ref initial values and tracks effect dependencies so that the delayed real-handler ordering test does not rerun the mount effect during every focus check. Earlier assertions remain intact.
+
+## Tests first and commands actually run
+
+Dependencies were already installed; no install/download command was run. Node **24.17.0** (repository `.nvmrc`: 24.15.0); cached pinned **pnpm 10.28.1**, invoked using the existing `/private/tmp/jg-ent-1-bin/pnpm` launcher with that directory prepended to PATH. Logs are `/private/tmp/jg-ent-1-round4-*.log`.
+
+The newly written handler and browser tests were in place while the implementation still matched 4199eef. The red handler run happened before changing the component or Role locator. Browser tests could not be executed here. The selector diagnostic separately reads exact-head source with `git show`; it is supporting deterministic source/fixture evidence, not a substitute for the already failing CI regression. Preliminary diagnostics omitted nested label text (textarea JSON, then select options) and incorrectly passed; inspection of installed Playwright 1.55.1's `getElementLabels`/`elementText` showed why an exact label would also fail. The final locator intersects with combobox instead. The corrected diagnostic includes the actual reference-rule and role-option text and was rerun red against 4199eef and green against the final repair.
+
+| Command | Exit | Actual result |
+| --- | ---: | --- |
+| `pnpm --version` using cached launcher | 0 | 10.28.1. |
+| `pnpm --filter @jobguard/web exec vitest run app/admin/contractor` before implementation | 1 | **5 failed, 3 passed**: four stale/uncertain mutation cases remained editable; delayed initial read replaced successful Start status. `/private/tmp/jg-ent-1-round4-red-web.log`. |
+| `SELECTOR_BASELINE=1 node --test /private/tmp/jg-ent-1-round4-selector-red.mjs` | 1 | Exact-head source/fixture diagnostic: two matching labels, expected one. |
+| `node --test /private/tmp/jg-ent-1-round4-selector-red.mjs` after repair | 0 | One matching element after combobox intersection. Preliminary incomplete diagnostics also returned 0; corrected as explained above. |
+| `pnpm --filter @jobguard/web exec vitest run app/admin/contractor` after repair | 0 | 8 passed. |
+| `pnpm --filter @jobguard/web test` | 0 | 88 passed across 11 files. |
+| `pnpm typecheck` (initial and final selector) | 0 each | 7 successful tasks each; 6 cache replays, changed web package executed. |
+| `LANE_BASE_REF=origin/main pnpm lint` (initial and final selector) | 0 each | Real local branch/base lane comparison passed; 7 successful lint tasks, 6 cache replays. No self-comparison refusal. Final run includes the receipt. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` (initial and receipt-inclusive final) | 0 each | Existing ent-1 lane passed, including working-tree changes and the new receipt. |
+| `pnpm build` | 0 | 7 successful tasks; 5 cache replays, API and production Next web compiled, pages/types/traces completed. Existing Next workspace-root and Turbo cache IO warnings were non-fatal. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Socket-free OpenAPI check matches committed specification; no API/schema edits. |
+| `node --test tools/*.test.mjs` | 0 | 42 passed, no skips. |
+| `pnpm --filter @jobguard/web exec playwright test --list --project=mobile-360 --project=desktop ENT-1.spec.ts` (initial and final selector) | 0 each | 16 cases collected, including six new viewport cases. **Collection only**, no browser journeys executed. |
+| `git diff --check` | 0 | Clean. |
+| `git diff 4199eef -- packages/db/migrations/0054_contractor_organisation.sql` and comparison with `ca20244` | 0 each | Empty differences: migration 0054 unchanged from both earlier heads. |
+
+## Preserved boundaries and outstanding evidence
+
+- All earlier work remains: SQL/parser/count repairs, Origin checks, subject-ID collision protection, acknowledged-save refresh recovery, writer revision, role/scope validation, manual Reload recovery and Account touch target. Migration **0054** and its registration remain unchanged; no schema, backfill, grants, provider actions, money changes, commercial approvals or new operational alerts. Code rollback/forward fix requires no data migration.
+- The integrator ruling stands: SQL `client_approver` **extra.approve stays denied**. Its existing PostgreSQL denial regression remains unchanged. ENT-5 owns the future scoped, pending-client-step approval execution.
+- This round affects authoritative UI revision handling and request ordering (C5/C7), retaining server composition, tenant authorization, synthetic boundaries and earlier tests. All caught command failures require explicit reload, including definite rejections; this is a conservative reversible UI choice. Unsaved draft fields remain editable while commands are locked.
+- **Not run:** browser execution, PostgreSQL/migration suites and root `pnpm test` (includes unavailable PostgreSQL). This sandbox cannot bind localhost or start PostgreSQL. The dispatcher must run mandatory full CI and `pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop ENT-1.spec.ts` after committing/pushing. No current-diff browser/DB pass, screenshot or trace is claimed. The supplied old-head CI results are historical evidence only.
+- **Not run:** fresh install (downloads forbidden; dependencies supplied), live providers, real data, spending, real sends, production/pilot behavior, decision approvals, deploy/release, CI secrets/dependency-review jobs. No AI/model/prompt/parser behavior changed this round, so AI evaluation is inapplicable. Founder-reserved capabilities remain disabled; no decision approval or release gate is inferred.
+- Exact-new-commit CI, an independent recorded verdict and separate technical acceptance remain outstanding. No self-acceptance is claimed. Intended conventional commit subject/body is at `/private/tmp/jg-msg-ent-1.txt` for the dispatcher.

@@ -1,0 +1,8 @@
+.main {max-width:850px;margin:24px auto;padding:16px;overflow-wrap:anywhere}
+.main section {margin:24px 0;padding:16px;border:1px solid #cbd5e1;border-radius:12px}
+.main label {display:block;margin:12px 0}
+.main input,.main select,.main textarea {display:block;min-height:44px;max-width:100%;width:100%;padding:10px;border:1px solid #64748b;border-radius:6px}
+.main button,.main a {min-height:44px;min-width:44px;display:inline-flex;align-items:center;padding:10px;margin:4px;border:1px solid #64748b;border-radius:6px}
+.main button:focus-visible,.main a:focus-visible,.main input:focus-visible,.main select:focus-visible,.main textarea:focus-visible {outline:3px solid #166534;outline-offset:3px}
+.main pre {white-space:pre-wrap;max-width:100%}
+.main button:disabled {opacity:.5}
