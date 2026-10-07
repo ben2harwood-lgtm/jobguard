@@ -23,8 +23,8 @@ in one tenant. Tenant-qualified revision FKs prevent foreign identity links.
 One current pointer per tenant/job references one immutable binding. Binding
 increments the existing job revision under its row lock; concurrent expected
 revisions conflict. After live/invoiced/paid, the correction action needs a reason:
-the routine requires the correction flag to be exactly true and the reason non-blank, so a
-null or false flag is refused for those jobs, with the whole transaction rolled back.
+the routine requires the correction flag to be exactly true and the reason non-null
+with JavaScript trim/UTF-16 length semantics (1–500), so a null or false flag is refused for those jobs, with the whole transaction rolled back.
 Old bindings, activation/import references, quote artifacts and issued invoice
 bytes/hashes remain immutable. Revising a customer never silently changes a job.
 
@@ -75,9 +75,19 @@ once, and a save is checked against the same baseline.
 The panel fills its draft from the saved parties when it first loads and again after every
 successful save, so reopening a job shows the saved customer, paying party and site, and
 saving them unchanged creates no new customer or site: an unchanged customer keeps its
-revision, a changed one is revised (same customer, next revision), and a site is created
+exact bound revision (a separate unchanged payer does too), a changed one is revised
+(same customer, next revision), and a site is created
 only when the user changed it or chose another place (an unchanged site keeps its saved
-identity and revision). A site's address is edited as the first line plus a further-lines
+identity and revision). Registry suggestions retain the latest revisions for explicit
+choices and
+stale-edit protection. Opening or successfully saving hydrates from `current`, never
+those suggestions. A saved payer revision absent from the latest registry remains a
+labelled option. Editing an older saved customer over a newer registry revision is
+refused before writing; the explained conflict reloads the latest registry draft and
+states that saving again uses that revision. The same explanation accompanies a
+customer/payer change detected while the panel is open. No conflict retry is automatic.
+
+A site's address is edited as the first line plus a further-lines
 box (one line per row, up to four lines in all); every saved line is shown and carried
 through an edit of any other field, and a fifth line is refused in words before anything
 is written.

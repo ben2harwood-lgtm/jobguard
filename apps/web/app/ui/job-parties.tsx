@@ -6,7 +6,7 @@ import { MAX_ADDRESS_LINES, addressLinesFromDraft, moreAddressLines, sameSite } 
 import styles from "./job-parties.module.css";
 const labels = ["A person (homeowner)", "A business", "Landlord or letting agent", "Insurer", "Main contractor", "Housing association", "Council"];
 type View = z.infer<typeof jobPartiesWorkspaceV1>;
-const CHANGED_MESSAGE = "This job changed. Reload the details before saving again. The latest saved details are now shown; check them and save again if you still want to change them.";
+const CHANGED_MESSAGE = "This job changed. Reload the details before saving again. The latest saved details are now shown. If a shared customer or payer changed in the registry, its latest registry details are shown in the draft; saving again uses that revision. Check them before saving again.";
 const WENT_LIVE_MESSAGE = "This job went live after you opened these details. The latest details are now shown; a change now needs a reason for the correction.";
 const REASON_MESSAGE = "A change to a live job needs a reason for the correction. Add the reason and save again.";
 class PartiesConflict extends Error {}
@@ -16,7 +16,7 @@ const isLive = (status: string) => ["live", "invoiced", "paid"].includes(status)
 function partiesChanged(observed: View, latest: View, refs: DraftRefs): boolean {
   if ((observed.currentIds?.bindingId ?? null) !== (latest.currentIds?.bindingId ?? null)) return true;
   const revisionOf = (view: View, id: string) => view.customers.find(c => c.id === id)?.revisionId ?? null;
-  const referenced = [refs.customerId, observed.customers.find(c => c.revisionId === refs.payer)?.id ?? ""].filter(Boolean);
+  const referenced = [refs.customerId, observed.customers.find(c => c.revisionId === refs.payer)?.id ?? (observed.current?.payingPartyRevisionId === refs.payer ? observed.currentIds?.payingPartyId : "") ?? ""].filter(Boolean);
   if (referenced.some(id => revisionOf(observed, id) !== revisionOf(latest, id))) return true;
   return !!refs.reuse && observed.sites.find(x => x.id === refs.reuse)?.revisionId !== latest.sites.find(x => x.id === refs.reuse)?.revisionId;
 }
@@ -27,6 +27,7 @@ function conflictSince(observed: View, latest: View, refs: DraftRefs): string | 
 }
 export function JobParties({ jobId }: { jobId: string }) {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [customerRevisionId, setCustomerRevisionId] = useState("");
   const [customerId, setCustomerId] = useState(""), [name, setName] = useState("Practice Customer"), [type, setType] = useState<(typeof customerTypes)[number]>("person");
   const [email, setEmail] = useState("practice-customer@example.invalid"), [payer, setPayer] = useState("");
   const [phone,setPhone]=useState(""),[companyNumber,setCompanyNumber]=useState("");
@@ -50,7 +51,7 @@ export function JobParties({ jobId }: { jobId: string }) {
       void fetchView().then(latest => {
         setView(latest);
         // Another writer changed what the draft depends on: reload the draft now rather than keep stale text beside a refreshed view.
-        if (baseline.current && partiesChanged(baseline.current, latest, draftRefs.current)) { baseline.current = latest; resetDraft(latest); setError(CHANGED_MESSAGE); }
+        if (baseline.current && partiesChanged(baseline.current, latest, draftRefs.current)) { baseline.current = latest; resetDraft(latest, true); setError(CHANGED_MESSAGE); }
       }).catch(e => setError(e.message));
     };
     void load().catch(e => setError(e.message)); window.addEventListener("job-lifecycle-changed", refresh); return () => window.removeEventListener("job-lifecycle-changed", refresh);
@@ -70,13 +71,16 @@ export function JobParties({ jobId }: { jobId: string }) {
     }
     return jobPartiesCommandResultV1.parse(result) as { id: string; revisionId: string };
   }
-  /** Put the draft back on what is saved now, so a retry can never write the stale text over another writer's. */
-  function resetDraft(snapshot: View) {
+  /** Hydrate the bound snapshot; only an explained registry conflict prepares newer party revisions for a deliberate retry. */
+  function resetDraft(snapshot: View, registryConflict = false) {
     setReuse(""); setConfirm(false); setReason("");
     const saved = snapshot.current, ids = snapshot.currentIds; if (!saved || !ids) return;
-    const customer = snapshot.customers.find(c => c.id === ids.customerId)?.customer ?? saved.customer;
+    const registry = snapshot.customers.find(c => c.id === ids.customerId);
+    const customer = registryConflict ? registry?.customer ?? saved.customer : saved.customer;
+    setCustomerRevisionId(registryConflict ? registry?.revisionId ?? saved.customerRevisionId : saved.customerRevisionId);
     setCustomerId(ids.customerId); setName(customer.name); setType(customer.type); setEmail(customer.email ?? ""); setPhone(customer.phone ?? ""); setCompanyNumber(customer.companyNumber ?? "");
-    setPayer(ids.payingPartyId === ids.customerId ? "" : snapshot.customers.find(c => c.id === ids.payingPartyId)?.revisionId ?? "");
+    setPayer(saved.payingPartyRevisionId === saved.customerRevisionId ? "" : registryConflict
+      ? snapshot.customers.find(c => c.id === ids.payingPartyId)?.revisionId ?? saved.payingPartyRevisionId : saved.payingPartyRevisionId);
     setAddress(saved.site.addressLines[0] ?? ""); setMore(moreAddressLines(saved.site.addressLines)); setTown(saved.site.town); setPostcode(saved.site.postcode); setUnit(saved.site.unit ?? ""); setUprn(saved.site.uprn ?? "");
   }
   /** Choosing a customer, payer or site copies the values being shown into the draft, so the baseline now records those revisions. */
@@ -90,12 +94,17 @@ export function JobParties({ jobId }: { jobId: string }) {
       // writers racing on one revision get one success and one typed conflict.
       const latest = await fetchView();
       const conflict = conflictSince(observed, latest, draftRefs.current);
-      if (conflict) { setView(latest); baseline.current = latest; resetDraft(latest); setError(conflict); return; }
+      if (conflict) { setView(latest); baseline.current = latest; resetDraft(latest, conflict === CHANGED_MESSAGE); setError(conflict); return; }
       setView(latest);
       if (site.addressLines.length > MAX_ADDRESS_LINES) { setError("A site address can have at most four lines. Remove the extra lines and save again."); return; }
       const selected = latest.customers.find(c => c.id === customerId);
       const customer = { version: "customer.v1" as const, name, type, ...(email ? { email } : {}), ...(phone ? { phone } : {}), ...(companyNumber ? { companyNumber } : {}) };
-      const customerResult = selected ? selected.customer.name === name && selected.customer.type === type && (selected.customer.email ?? "") === email && (selected.customer.phone ?? "") === phone && (selected.customer.companyNumber ?? "") === companyNumber
+      const matchesDraft = (value: View["customers"][number]["customer"]) => value.name === name && value.type === type && (value.email ?? "") === email && (value.phone ?? "") === phone && (value.companyNumber ?? "") === companyNumber;
+      // The registry lists the newest revisions for explicit selection and stale-edit checks. It is never the source of an
+      // unchanged saved party. Editing an older snapshot needs an explained conflict before it can revise the registry.
+      const savedCustomer = latest.current && latest.currentIds?.customerId === customerId && latest.current.customerRevisionId === customerRevisionId && matchesDraft(latest.current.customer);
+      if (selected && !savedCustomer && selected.revisionId !== customerRevisionId) throw new PartiesConflict(CHANGED_MESSAGE);
+      const customerResult = savedCustomer ? { revisionId: customerRevisionId } : selected ? matchesDraft(selected.customer)
         ? { revisionId: selected.revisionId } : await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "revise_customer", customerId: selected.id, expectedRevision: selected.revision, customer })
         : await command({ version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_customer", customer });
       // The saved site keeps its identity unless the user chose another place or changed it; only then is a site created (or reused with confirmation).
@@ -106,7 +115,7 @@ export function JobParties({ jobId }: { jobId: string }) {
         parties: { version: "job-parties.v1", customerRevisionId: customerResult.revisionId, siteRevisionId: siteResult.revisionId, payingPartyRevisionId: payer || null }, ...(reason ? { reason } : {}) });
       const saved = await fetchView(); setView(saved); baseline.current = saved; resetDraft(saved); window.dispatchEvent(new CustomEvent("job-parties-saved", { detail: jobId }));
     } catch (e) {
-      if (e instanceof PartiesConflict) { try { const latest = await fetchView(); setView(latest); baseline.current = latest; resetDraft(latest); } catch { /* the message below still tells the user to reload */ } }
+      if (e instanceof PartiesConflict) { try { const latest = await fetchView(); setView(latest); baseline.current = latest; resetDraft(latest, true); } catch { /* the message below still tells the user to reload */ } }
       setError(e instanceof Error ? e.message : "Details could not be saved.");
     } finally { setBusy(false); }
   }
@@ -125,14 +134,15 @@ export function JobParties({ jobId }: { jobId: string }) {
     {error && <p ref={errorRef} tabIndex={-1} role="alert">{error}</p>}
     {!view ? <button onClick={() => void load().catch(e => setError(e.message))}>Try loading details again</button> : <form onSubmit={e => { e.preventDefault(); void save(); }} aria-label="Customer and site details">
       <p>Unsaved draft — use Save customer and site to record it.</p>
+      {view.current && customerRevisionId === view.current.customerRevisionId && view.customers.some(c => c.id === customerId && c.revisionId !== customerRevisionId) && <p>This job keeps its saved customer revision. Choose the customer again to use the latest registry details.</p>}
       <fieldset disabled={busy} style={{ minWidth: 0, border: 0, padding: 0 }}>
-        <label>Choose a customer<select aria-label="Choose a customer" value={customerId} onChange={e => { setCustomerId(e.target.value); const c = view.customers.find(x => x.id === e.target.value); if (c) { rebase(b => ({ ...b, customers: [...b.customers.filter(x => x.id !== c.id), c] })); setName(c.customer.name); setType(c.customer.type); setEmail(c.customer.email ?? ""); setPhone(c.customer.phone ?? "");setCompanyNumber(c.customer.companyNumber ?? ""); } }}><option value="">Create a customer</option>{view.customers.map(c => <option key={c.id} value={c.id}>{c.customer.name}</option>)}</select></label>
+        <label>Choose a customer<select aria-label="Choose a customer" value={customerId} onChange={e => { setCustomerId(e.target.value); setCustomerRevisionId(""); const c = view.customers.find(x => x.id === e.target.value); if (c) { setCustomerRevisionId(c.revisionId); rebase(b => ({ ...b, customers: [...b.customers.filter(x => x.id !== c.id), c] })); setName(c.customer.name); setType(c.customer.type); setEmail(c.customer.email ?? ""); setPhone(c.customer.phone ?? "");setCompanyNumber(c.customer.companyNumber ?? ""); } }}><option value="">Create a customer</option>{view.customers.map(c => <option key={c.id} value={c.id}>{c.customer.name}</option>)}</select></label>
         <label>Customer name<input aria-label="Customer name" value={name} onChange={e => setName(e.target.value)} required maxLength={160}/></label>
         <label>Customer type<select aria-label="Customer type" value={type} onChange={e => setType(e.target.value as typeof type)}>{customerTypes.map((t, i) => <option key={t} value={t}>{labels[i]}</option>)}</select></label>
         <label>Customer email (fictional, optional)<input aria-label="Customer email (fictional, optional)" value={email} onChange={e => setEmail(e.target.value)} type="email"/></label>
         <label>Customer phone (fictional, optional)<input aria-label="Customer phone (fictional, optional)" value={phone} onChange={e=>setPhone(e.target.value)} maxLength={40}/></label>
         <label>Company number (optional)<input aria-label="Company number (optional)" value={companyNumber} onChange={e=>setCompanyNumber(e.target.value.toUpperCase())} maxLength={8}/></label>
-        <label>Who pays?<select aria-label="Who pays?" value={payer} onChange={e => { const c = view.customers.find(x => x.revisionId === e.target.value); if (c) rebase(b => ({ ...b, customers: [...b.customers.filter(x => x.id !== c.id), c] })); setPayer(e.target.value); }}><option value="">Same as customer</option>{view.customers.map(c => <option key={c.id} value={c.revisionId}>{c.customer.name}</option>)}</select></label>
+        <label>Who pays?<select aria-label="Who pays?" value={payer} onChange={e => { const c = view.customers.find(x => x.revisionId === e.target.value); if (c) rebase(b => ({ ...b, customers: [...b.customers.filter(x => x.id !== c.id), c] })); setPayer(e.target.value); }}><option value="">Same as customer</option>{view.current && view.current.payingPartyRevisionId !== view.current.customerRevisionId && !view.customers.some(c => c.revisionId === view.current!.payingPartyRevisionId) && <option value={view.current.payingPartyRevisionId}>{view.current.payingParty.name} (saved revision)</option>}{view.customers.map(c => <option key={c.id} value={c.revisionId}>{c.customer.name}</option>)}</select></label>
         <label>Premises address<input aria-label="Premises address" value={address} onChange={e => { setAddress(e.target.value); setReuse(""); setConfirm(false); }} required/></label>
         <label>More address lines (optional, one per line)<textarea aria-label="More address lines (optional, one per line)" value={more} onChange={e => { setMore(e.target.value); setReuse(""); setConfirm(false); }} rows={3}/></label>
         <label>Town<input aria-label="Town" value={town} onChange={e => { setTown(e.target.value); setReuse(""); setConfirm(false); }} required/></label>

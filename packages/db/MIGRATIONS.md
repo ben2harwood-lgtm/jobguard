@@ -190,6 +190,14 @@ Post-live correction: for a `live`, `invoiced` or `paid` job `bind_job_parties`
 refuses unless the correction flag `IS TRUE` and the reason is non-blank
 (`CORRECTION_REASON_REQUIRED`, SQLSTATE 22023). The test is null-safe: a null flag
 with a reason cannot skip the refusal and be stored as a plain binding with no reason.
+Round 12 amends only the two reason checks in unapplied 0095: the routine explicitly
+rejects null, and both routine and binding constraint use
+`valid_party_revision_text(to_jsonb(reason),1,500)` for the versioned schema's
+JavaScript trim set and UTF-16 length. Tab, LF, CR, NBSP and BOM alone are refused.
+The existing ASCII-only regex patterns and SQL_ASCII installation path are unchanged.
+Fresh/upgrade and runtime-role rollback cases remain CI requirements. If already
+applied outside this unmerged task, use a reviewed forward-fix migration; do not
+rewrite recorded party history or weaken the constraint.
 
 Quote send: `IssueQuoteMutation` takes the job lock (`require_current_job_parties`,
 `FOR SHARE`, which `bind_job_parties`' `FOR UPDATE` waits on) and compares the

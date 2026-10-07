@@ -81,3 +81,72 @@ describe("site reuse confirmation in the Customer and site panel", () => {
     expect(find(tree, "I confirm this is the same place")!.props.checked).toBe(false);
   });
 });
+
+describe("shared registry revisions never silently replace a job's saved parties", () => {
+  const sharedViews = (party: "customer" | "payer") => {
+    const first = view();
+    if (party === "payer") {
+      first.current!.payingPartyRevisionId = id(8); first.current!.payingParty = { ...customer, name: "Fictional saved payer" };
+      first.currentIds!.payingPartyId = id(7);
+      first.customers.push({ id: id(7), revisionId: id(8), revision: 1, customer: first.current!.payingParty });
+    }
+    const identity = party === "customer" ? id(3) : id(7);
+    const second = structuredClone(first); second.jobId = id(20); second.current!.bindingId = id(21); second.currentIds!.bindingId = id(21);
+    const row = second.customers.find(c => c.id === identity)!;
+    row.revisionId = id(9); row.revision = 2; row.customer = { ...row.customer, name: "Revised on the other fictional job" };
+    if (party === "customer") { second.current!.customerRevisionId = id(9); second.current!.customer = row.customer; }
+    else { second.current!.payingPartyRevisionId = id(9); second.current!.payingParty = row.customer; }
+    first.customers = structuredClone(second.customers);
+    return { first, second };
+  };
+  async function panel(snapshot: ReturnType<typeof view>) {
+    hooks.reset(); vi.stubGlobal("React", React);
+    vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() });
+    const sent: { action: string; parties: Record<string, string | null> }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url, options) => {
+      if (!options?.method) return { ok: true, json: async () => structuredClone(snapshot) };
+      const input = JSON.parse(options.body); sent.push(input);
+      return { ok: true, json: async () => ({ version: "job-parties-command-result.v1", environment: "synthetic_demo", commandId: input.commandId, id: id(30), revisionId: id(9), realExternalActions: 0 }) };
+    }));
+    const render = () => { hooks.render(); const tree = JobParties({ jobId: snapshot.jobId }); hooks.effects(); return tree; };
+    render(); await new Promise<void>(resolve => setImmediate(resolve));
+    return { render, sent };
+  }
+  it.each(["customer", "payer"] as const)("reopens the bound %s snapshot and saves its exact revision after a second job revises the registry", async party => {
+    const { first, second } = sharedViews(party);
+    expect(second.current![party === "customer" ? "customerRevisionId" : "payingPartyRevisionId"]).toBe(id(9));
+    const { render, sent } = await panel(first); const tree = render();
+    expect(find(tree, "Customer name")!.props.value).toBe(first.current!.customer.name);
+    expect(find(tree, "Who pays?")!.props.value).toBe(party === "payer" ? id(8) : "");
+    await (find(tree, "Customer and site details")!.props.onSubmit as (e: unknown) => void)({ preventDefault() {} });
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(sent.map(input => input.action)).toEqual(["bind"]);
+    expect(sent[0]!.parties).toEqual({ version: "job-parties.v1", customerRevisionId: id(4), siteRevisionId: id(6), payingPartyRevisionId: party === "payer" ? id(8) : null });
+  });
+  it.each(["customer", "payer"] as const)("uses the newer %s revision only after choosing it explicitly", async party => {
+    const { first } = sharedViews(party); const { render, sent } = await panel(first); let tree = render();
+    const select = find(tree, party === "customer" ? "Choose a customer" : "Who pays?")!;
+    (select.props.onChange as (e: unknown) => void)({ target: { value: party === "customer" ? id(3) : id(9) } }); tree = render();
+    (find(tree, "Customer and site details")!.props.onSubmit as (e: unknown) => void)({ preventDefault() {} });
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(sent.map(input => input.action)).toEqual(["bind"]);
+    expect(sent[0]!.parties[party === "customer" ? "customerRevisionId" : "payingPartyRevisionId"]).toBe(id(9));
+  });
+  it.each(["customer", "payer"] as const)("keeps stale-edit protection when the shared %s changes again while the panel is open", async party => {
+    const { first } = sharedViews(party); const { render, sent } = await panel(first); let tree = render();
+    const row = first.customers.find(c => c.id === (party === "customer" ? id(3) : id(7)))!;
+    row.revisionId = id(10); row.revision = 3; row.customer = { ...row.customer, name: "Changed again elsewhere" };
+    (find(tree, "Customer and site details")!.props.onSubmit as (e: unknown) => void)({ preventDefault() {} });
+    await new Promise<void>(resolve => setImmediate(resolve)); tree = render();
+    expect(sent).toEqual([]); expect(JSON.stringify(tree)).toContain("This job changed");
+    expect(find(tree, party === "customer" ? "Customer name" : "Who pays?")!.props.value).toBe(party === "customer" ? "Changed again elsewhere" : id(10));
+  });
+  it("refuses editing an older bound customer over a newer registry revision before any write", async () => {
+    const { first } = sharedViews("customer"); const { render, sent } = await panel(first); let tree = render();
+    (find(tree, "Customer name")!.props.onChange as (e: unknown) => void)({ target: { value: "Edit of the saved old snapshot" } }); tree = render();
+    (find(tree, "Customer and site details")!.props.onSubmit as (e: unknown) => void)({ preventDefault() {} });
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(sent).toEqual([]);
+    expect(JSON.stringify(render())).toContain("registry");
+  });
+});

@@ -246,6 +246,31 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     await expect(admin.query(`INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4)`,[foreignTenant,randomUUID(),c.id,JSON.stringify(customer)])).rejects.toMatchObject({code:"23503"});
     await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)`,[foreignTenant,randomUUID()]))).rejects.toMatchObject({code:"42501"});
   });
+  it.each(["customer", "payer"])("keeps a job's exact bound %s revision when another job revises and binds the shared registry identity", async party => {
+    const first = await createJob(), second = await createJob(), { c, parties } = await saveParties(first);
+    const pay = await repository.command(context, member, first, command("create_customer", { customer: { ...customer, name: "Fictional payer" } }));
+    const initial = { ...parties, payingPartyRevisionId: pay.revisionId };
+    for (const job of [first, second]) await repository.command(context, member, job, command("bind", { expectedJobRevision: 0, parties: initial }));
+    const before = await repository.view(context, member, first);
+    const shared = party === "customer" ? c : pay;
+    const updated = await repository.command(context, member, second, command("revise_customer", { customerId: shared.id, expectedRevision: 1, customer: { ...customer, name: "Revised on the other fictional job" } }));
+    await repository.command(context, member, second, command("bind", { expectedJobRevision: 1, parties: { ...initial, [party === "customer" ? "customerRevisionId" : "payingPartyRevisionId"]: updated.revisionId } }));
+    const reopened = await repository.view(context, member, first);
+    expect(reopened.current).toEqual(before.current);
+    expect(reopened.customers.find(row => row.id === shared.id)?.revisionId).toBe(updated.revisionId);
+    // Registry suggestions stay current, but a job's saved snapshot is the source for unchanged saves.
+    await repository.command(context, member, first, command("bind", { expectedJobRevision: reopened.jobRevision, parties: {
+      version: "job-parties.v1", customerRevisionId: reopened.current!.customerRevisionId,
+      payingPartyRevisionId: reopened.current!.payingPartyRevisionId, siteRevisionId: reopened.current!.siteRevisionId,
+    } }));
+    const saved = await repository.view(context, member, first);
+    expect(saved.current!.customerRevisionId).toBe(before.current!.customerRevisionId);
+    expect(saved.current!.payingPartyRevisionId).toBe(before.current!.payingPartyRevisionId);
+    expect(saved.current!.customer).toEqual(before.current!.customer); expect(saved.current!.payingParty).toEqual(before.current!.payingParty);
+    expect(saved.customers).toEqual(reopened.customers); expect(saved.sites).toEqual(reopened.sites);
+    expect((await repository.view(context, member, second)).current![party === "customer" ? "customerRevisionId" : "payingPartyRevisionId"]).toBe(updated.revisionId);
+  });
+
   it("keeps customer revisions immutable, replayable and guarded by their expected revision",async()=>{
     const job=await createJob(),{c,parties}=await saveParties(job);
     await repository.command(context,member,job,command("bind",{expectedJobRevision:0,parties}));
@@ -447,22 +472,49 @@ describe("CH-3a a null correction flag cannot bypass the post-live guard (round 
   // Everything the repository does for one binding change in one transaction, but with the routine's correction flag and reason
   // supplied exactly as given, so a null flag reaches the routine. The receipt is completed and the plain bind audit event is
   // appended, so the commit-time record check is satisfied: only the routine's own refusal can stop the change.
-  const bindWithFlag=async(job:string,customerRevision:string,siteRevision:string,flag:boolean|null,reason:string|null,eventType="job.parties.bind")=>{
+  const bindWithFlag=async(job:string,customerRevision:string,siteRevision:string,flag:boolean|null,reason:string|null,eventType="job.parties.bind",directInsert=false)=>{
     const command=randomUUID(),binding=randomUUID(),expected=(await repository.view(context,member,job)).jobRevision;
     await withTenant(runtime,context,async db=>{
       await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.parties',$3,$4,'processing',$5)`,[command,tenant,command,"d".repeat(64),member]);
-      await db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,binding,expected,customerRevision,null,siteRevision,flag,reason,member,command]);
+      expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
+      if (directInsert) await db.$client.query(`INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance,correction_reason,command_id)
+        SELECT $1,$2,$3,$4,c.customer_id,c.id,c.customer_id,c.id,s.site_id,s.id,'entered',$7,$8 FROM app.customer_revision c,app.site_revision s WHERE c.tenant_id=$1 AND c.id=$5 AND s.tenant_id=$1 AND s.id=$6`, [tenant,binding,job,expected+1,customerRevision,siteRevision,reason,command]);
+      else await db.$client.query(`SELECT app.bind_job_parties($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[tenant,job,binding,expected,customerRevision,null,siteRevision,flag,reason,member,command]);
       await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[tenant,command,JSON.stringify({id:binding})]);
       await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${member}`,eventType,subjectType:"job",subjectRef:job,payload:{references:{commandId:command,identityId:binding},hashes:{request:"d".repeat(64)},classifications:{action:"operational"}}}]);
     });
     return{command,binding};
   };
   const state=async(job:string)=>({
+    auditHead:(await admin.query(`SELECT * FROM audit_control.audit_head WHERE tenant_id=$1`,[tenant])).rows,
     bindings:(await admin.query(`SELECT count(*)::int n FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].n,
     revision:(await admin.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenant,job])).rows[0].revision,
     current:(await admin.query(`SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2`,[tenant,job])).rows[0].binding_id as string,
     receipts:(await admin.query(`SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type='job.parties'`,[tenant])).rows[0].n,
     audits:(await admin.query(`SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type LIKE 'job.parties.%'`,[tenant,job])).rows[0].n,
+  });
+  it.each([["tab", "\t"], ["line feed", "\n"], ["carriage return", "\r"], ["NBSP", "\u00a0"], ["BOM", "\ufeff"], ["empty", ""], ["spaces", "   "], ["overlong UTF-16", "😀".repeat(251)]])("refuses %s correction reasons in both routine and constraint with full receipt/audit rollback", async (_label, reason) => {
+    const job = await createJob(), { c, s, parties } = await saveParties(job);
+    await repository.command(context, member, job, command("bind", { expectedJobRevision: 0, parties })); await setLiveDirectly(job);
+    const before = await state(job);
+    for (const directInsert of [false, true]) {
+      // On the defective migration tab/LF/CR/NBSP/BOM reach receipt completion, the matching correction audit and commit.
+      // Thus rejection cannot be explained by a missing record in the deferred receipt/audit protocol.
+      await expect(bindWithFlag(job, c.revisionId, s.revisionId, true, reason!, "job.parties.correct", directInsert)).rejects.toMatchObject(directInsert
+        ? { code: "23514", constraint: "job_party_binding_correction_reason_check" }
+        : { code: "22023", message: expect.stringContaining("CORRECTION_REASON_REQUIRED") });
+      expect(await state(job)).toEqual(before);
+    }
+  });
+  it("explicitly refuses a null post-live reason and accepts a trimmed nonblank boundary reason", async () => {
+    const job = await createJob(), { c, s, parties } = await saveParties(job);
+    await repository.command(context, member, job, command("bind", { expectedJobRevision: 0, parties })); await setLiveDirectly(job);
+    const before = await state(job);
+    await expect(bindWithFlag(job, c.revisionId, s.revisionId, true, null, "job.parties.correct")).rejects.toMatchObject({ code: "22023", message: expect.stringContaining("CORRECTION_REASON_REQUIRED") });
+    expect(await state(job)).toEqual(before);
+    const reason = `\t\u00a0${"x".repeat(500)}\r\ufeff`;
+    const done = await bindWithFlag(job, c.revisionId, s.revisionId, true, reason, "job.parties.correct");
+    expect((await admin.query(`SELECT correction_reason FROM app.job_party_binding WHERE tenant_id=$1 AND id=$2`, [tenant, done.binding])).rows[0].correction_reason).toBe(reason);
   });
   it("refuses a live job's binding change unless the correction flag is true, and rolls everything back",async()=>{
     const job=await createJob(),{parties}=await saveParties(job);

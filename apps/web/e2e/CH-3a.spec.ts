@@ -431,3 +431,58 @@ test("CH-3a refuses a fifth address line in words before anything is written", a
   const box = await page.getByLabel(MORE_LINES).boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
+
+for (const party of ["customer", "payer"] as const) {
+  test(`CH-3a reopening and unchanged save keep the bound ${party} revision after a second job revises it`, async ({ page, browser }) => {
+    const first = await reviewJob(page);
+    await B(page, "Save customer and site").click(); await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+    let before = await partiesView(page, first);
+    if (party === "payer") {
+      const response = await page.request.post(`/api/jobs/${first}/parties`, { data: { version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "create_customer", customer: { version: "customer.v1", name: "Fictional separate payer", type: "business" } } });
+      expect(response.ok(), await response.text()).toBe(true); const pay = await response.json();
+      const bound = await page.request.post(`/api/jobs/${first}/parties`, { data: { version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "bind", expectedJobRevision: before.jobRevision,
+        parties: { version: "job-parties.v1", customerRevisionId: before.current.customerRevisionId, siteRevisionId: before.current.siteRevisionId, payingPartyRevisionId: pay.revisionId } } });
+      expect(bound.ok(), await bound.text()).toBe(true); before = await partiesView(page, first);
+    }
+    // A second real job in the same practice session shares and then revises this party.
+    await page.goto("/"); await B(page, "＋ Start a new job").click();
+    await B(page, "Make my draft").click(); await B(page, "Check and edit my draft").click();
+    await expect(page.getByRole("heading", { name: "Check the work items" })).toBeVisible();
+    const second = new URL(page.url()).pathname.split("/").pop()!; const secondView = await partiesView(page, second);
+    expect(second).not.toBe(first);
+    const shared = party === "customer" ? before.currentIds.customerId : before.currentIds.payingPartyId;
+    const initial = await page.request.post(`/api/jobs/${second}/parties`, { data: { version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "bind", expectedJobRevision: secondView.jobRevision,
+      parties: { version: "job-parties.v1", customerRevisionId: before.current.customerRevisionId, siteRevisionId: before.current.siteRevisionId, payingPartyRevisionId: before.current.payingPartyRevisionId } } });
+    expect(initial.ok(), await initial.text()).toBe(true);
+    const revised = await page.request.post(`/api/jobs/${second}/parties`, { data: { version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "revise_customer", customerId: shared, expectedRevision: 1,
+      customer: { ...(party === "customer" ? before.current.customer : before.current.payingParty), name: "Revised on the other fictional job" } } });
+    expect(revised.ok(), await revised.text()).toBe(true); const revision = (await revised.json()).revisionId;
+    const next = await partiesView(page, second);
+    const rebound = await page.request.post(`/api/jobs/${second}/parties`, { data: { version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "bind", expectedJobRevision: next.jobRevision,
+      parties: { version: "job-parties.v1", customerRevisionId: party === "customer" ? revision : before.current.customerRevisionId,
+        payingPartyRevisionId: party === "payer" ? revision : before.current.payingPartyRevisionId, siteRevisionId: before.current.siteRevisionId } } });
+    expect(rebound.ok(), await rebound.text()).toBe(true);
+    await page.goto(`/jobs/${first}`);
+    await expect(page.getByLabel("Customer name", { exact: true })).toHaveValue(before.current.customer.name);
+    await expect(page.getByLabel("Who pays?")).toHaveValue(party === "payer" ? before.current.payingPartyRevisionId : "");
+    if (party === "payer") await expect(page.getByLabel("Who pays?").locator("option:checked")).toHaveText("Fictional separate payer (saved revision)");
+    const actions = partyActions(page, first); await saveAndWait(page);
+    const saved = await partiesView(page, first);
+    expect(actions).toEqual(["bind"]); expect(saved.customers).toEqual((await partiesView(page, second)).customers);
+    expect(saved.current.customerRevisionId).toBe(before.current.customerRevisionId);
+    expect(saved.current.payingPartyRevisionId).toBe(before.current.payingPartyRevisionId);
+    expect(saved.current.siteRevisionId).toBe(before.current.siteRevisionId);
+    await page.reload(); await expect(page.getByLabel("Customer name", { exact: true })).toHaveValue(before.current.customer.name);
+    const { context, other } = await secondWriter(page, browser, first);
+    try {
+      await expect(other.getByLabel("Customer name", { exact: true })).toHaveValue(before.current.customer.name);
+      await expect(other.getByLabel("Who pays?")).toHaveValue(party === "payer" ? before.current.payingPartyRevisionId : "");
+      await expect(other.getByTestId("party-binding-id")).toHaveText(saved.current.bindingId);
+      // The newer revision is available only as an explicit selection; choose it and persist it.
+      await other.getByLabel(party === "customer" ? "Choose a customer" : "Who pays?").selectOption(party === "customer" ? shared : revision);
+      await saveAndWait(other);
+      expect((await partiesView(other, first)).current[party === "customer" ? "customerRevisionId" : "payingPartyRevisionId"]).toBe(revision);
+      expect((await partiesView(other, first)).realExternalActions).toBe(0);
+    } finally { await context.close(); }
+  });
+}

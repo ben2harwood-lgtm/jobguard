@@ -78,7 +78,7 @@ CREATE TABLE app.job_party_binding (
  customer_id uuid NOT NULL, customer_revision_id uuid NOT NULL, paying_party_id uuid NOT NULL, paying_party_revision_id uuid NOT NULL,
  site_id uuid NOT NULL, site_revision_id uuid NOT NULL,
  provenance text NOT NULL CHECK(provenance IN('entered','backfilled_from_quote_snapshot','backfilled_synthetic_fixture','work_order_import')),
- correction_reason text CHECK(correction_reason IS NULL OR length(trim(correction_reason)) BETWEEN 1 AND 500), created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+ correction_reason text CHECK(correction_reason IS NULL OR app.valid_party_revision_text(to_jsonb(correction_reason),1,500)), created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
  command_id uuid, -- the exact job.parties receipt that authorized this change; one receipt, one binding effect
  PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id,revision), UNIQUE(tenant_id,job_id,id), UNIQUE(tenant_id,command_id),
  FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id) DEFERRABLE INITIALLY DEFERRED,
@@ -118,7 +118,7 @@ BEGIN
  SELECT * INTO j FROM app.job WHERE tenant_id=p_tenant AND id=p_job FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
  IF j.revision<>p_expected THEN RAISE EXCEPTION 'REVISION_CONFLICT' USING ERRCODE='40001'; END IF;
- IF j.status IN('live','invoiced','paid') AND (p_correct IS DISTINCT FROM TRUE OR length(trim(coalesce(p_reason,'')))=0) THEN RAISE EXCEPTION 'CORRECTION_REASON_REQUIRED' USING ERRCODE='22023'; END IF;
+ IF j.status IN('live','invoiced','paid') AND (p_correct IS DISTINCT FROM TRUE OR p_reason IS NULL OR NOT app.valid_party_revision_text(to_jsonb(p_reason),1,500)) THEN RAISE EXCEPTION 'CORRECTION_REASON_REQUIRED' USING ERRCODE='22023'; END IF;
  SELECT * INTO c FROM app.customer_revision WHERE tenant_id=p_tenant AND id=p_customer;
  SELECT * INTO p FROM app.customer_revision WHERE tenant_id=p_tenant AND id=coalesce(p_payer,p_customer);
  SELECT * INTO s FROM app.site_revision WHERE tenant_id=p_tenant AND id=p_site;
