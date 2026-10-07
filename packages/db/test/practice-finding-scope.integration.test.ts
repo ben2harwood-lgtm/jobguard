@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,14 +6,14 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { migrate, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { migrate, withTenant} from "../src/index.js";
 import { listConfirmedPracticeScopes, listPracticeFindingScopes } from "../src/practice-scope.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 const tenant=randomUUID(),otherTenant=randomUUID(),job=randomUUID();
 const retired="00000000-0000-4000-8000-000000000001",reserved="00000000-0000-4000-8000-000000000002",confirmed="f0000000-0000-4000-8000-000000000001";
-const context={tenantId:tenant} as VerifiedTenantContext;
+const context=testTenantContext(tenant);
 beforeAll(async()=>{
  directory=await mkdtemp(join(tmpdir(),"jobguard-finding-scope-"));const port=59300+Math.floor(Math.random()*200);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
@@ -34,6 +35,6 @@ it("keeps draft findings separate from operational proof, then uses confirmed wo
  expect(await withTenant(runtime,context,db=>listConfirmedPracticeScopes(db,tenant,job,1))).toEqual([{id:confirmed}]);
 });
 it("does not bypass tenant isolation or borrow another job's finding subject",async()=>{
- expect(await withTenant(runtime,{tenantId:otherTenant} as VerifiedTenantContext,db=>listPracticeFindingScopes(db,tenant,job,2))).toEqual([]);
+ expect(await withTenant(runtime,testTenantContext(otherTenant),db=>listPracticeFindingScopes(db,tenant,job,2))).toEqual([]);
  expect(await withTenant(runtime,context,db=>listPracticeFindingScopes(db,tenant,randomUUID(),2))).toEqual([]);
 });

@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadEvidencePackSources } from "../src/evidence-pack-sources.js";
 import { migrate } from "../src/migrate.js";
-import { withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
+import { withTenant} from "../src/tenant-context.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
@@ -26,7 +27,7 @@ beforeAll(async () => {
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "evidence_sources_login", password: "synthetic" });
 }, 60_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
-const load = (caseId: string, tenantId = fixture.tenantId) => withTenant(runtime, { tenantId } as VerifiedTenantContext, db => loadEvidencePackSources(db, tenantId, caseId));
+const load = (caseId: string, tenantId = fixture.tenantId) => withTenant(runtime, testTenantContext(tenantId), db => loadEvidencePackSources(db, tenantId, caseId));
 
 describe("evidence pack immutable sources", () => {
   it("maps stored exact versions, approval records and proof bytes without unrelated supplier rows", async () => {

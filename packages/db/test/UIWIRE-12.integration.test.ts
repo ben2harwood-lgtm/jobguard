@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -6,10 +7,10 @@ import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, type VerifiedTenantContext, withTenant } from "../src/index.js";
+import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, withTenant } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 const T="11000000-0000-4000-8000-000000000001", A="21000000-0000-4000-8000-000000000002", U="31000000-0000-4000-8000-000000000003", M="41000000-0000-4000-8000-000000000004";
-const context={tenantId:T} as VerifiedTenantContext;
+const context=testTenantContext(T);
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,repo:PracticeInvoiceRepository;
 type Fixture={jobId:string;invoiceId:string;quoteId:string;draftId:string;revisionId:string};
 type ReceiptInput=Parameters<PracticeInvoiceRepository["recordReceipt"]>[1];
@@ -117,7 +118,7 @@ describe("UIWIRE-12 customer receipts",()=>{
   await expect(repo.reverseReceipt(context,{...reversal(f,p.paymentId),invoiceId:other.id})).rejects.toThrow("PAYMENT_NOT_FOUND");
   expect((await repo.receiptView(context,f.jobId,f.invoiceId)).receipts[0]!.reversal).toBeNull();
   await expect(repo.recordReceipt(context,{...command(f),jobId:randomUUID()})).rejects.toThrow("INVOICE_NOT_FOUND");
-  await expect(repo.receiptView({tenantId:randomUUID()} as VerifiedTenantContext,f.jobId,f.invoiceId)).rejects.toThrow("INVOICE_NOT_FOUND");
+  await expect(repo.receiptView(testTenantContext(randomUUID()),f.jobId,f.invoiceId)).rejects.toThrow("INVOICE_NOT_FOUND");
  });
  it("rechecks membership before replay, rather than trusting an old successful command",async()=>{
   const f=await freshInvoice(),c=command(f);await repo.recordReceipt(context,c);

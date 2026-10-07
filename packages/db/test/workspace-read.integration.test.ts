@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,8 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import {
   DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID,
   DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_MEMBERSHIP_ID,
-  migrate, readSyntheticDemo, readSyntheticDemoJob, withTenant, type VerifiedTenantContext,
-} from "../src/index.js";
+  migrate, readSyntheticDemo, readSyntheticDemoJob, withTenant} from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
 const capturedJob = randomUUID(), ordinaryJob = randomUUID(), foreignJob = randomUUID();
@@ -78,6 +78,6 @@ describe("authoritative saved workspace lookup", () => {
     await readSyntheticDemoJob(runtime, ordinaryJob); await readSyntheticDemoJob(runtime, ordinaryJob);
     expect((await admin.query("SELECT revision,updated_at FROM app.job WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, ordinaryJob])).rows).toEqual(before.rows);
     expect((await runtime.query("SELECT id FROM app.scope_identity")).rows).toEqual([]);
-    await expect(withTenant(runtime, { tenantId: DEMO_TENANT_ID } as VerifiedTenantContext, db => db.$client.query("UPDATE app.job SET title='Forbidden' WHERE id=$1", [ordinaryJob]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, testTenantContext(DEMO_TENANT_ID), db => db.$client.query("UPDATE app.job SET title='Forbidden' WHERE id=$1", [ordinaryJob]))).rejects.toMatchObject({ code: "42501" });
   });
 });

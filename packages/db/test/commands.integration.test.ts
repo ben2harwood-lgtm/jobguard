@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,12 +6,12 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CommandError, UserCommandDispatcher, executeAuthorizedCommercialAction, migrate, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { CommandError, UserCommandDispatcher, executeAuthorizedCommercialAction, migrate, withTenant} from "../src/index.js";
 
 const TENANT="81000000-0000-4000-8000-000000000001", ACCOUNT="82000000-0000-4000-8000-000000000001";
 const USER="83000000-0000-4000-8000-000000000001", MEMBER="84000000-0000-4000-8000-000000000001";
 const JOB="85000000-0000-4000-8000-000000000001", QUOTE="86000000-0000-4000-8000-000000000001";
-const HASH="a".repeat(64), context=({tenantId:TENANT}) as VerifiedTenantContext;
+const HASH="a".repeat(64), context=testTenantContext(TENANT);
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-commands-"));const port=57000+Math.floor(Math.random()*500);postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"test-only"});admin.on("error",()=>undefined);await migrate(admin);await admin.query(`
  INSERT INTO control_plane.tenant(id) VALUES('${TENANT}'); INSERT INTO identity.identity_user(id) VALUES('${USER}');

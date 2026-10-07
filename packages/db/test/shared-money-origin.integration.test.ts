@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,12 +7,12 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
-import { withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
+import { withTenant} from "../src/tenant-context.js";
 import { closeTestPools } from "./pool-test-utils.js";
 import { SwitchJobLiveMutation } from "../src/activation-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 const T=randomUUID(), OTHER=randomUUID(), M=randomUUID(), OTHER_M=randomUUID(), J=randomUUID(), V=randomUUID(), S=randomUUID(), R=randomUUID(), H="a".repeat(64);
-const ctx=(tenantId:string=T)=>({tenantId}) as VerifiedTenantContext;
+const ctx=(tenantId:string=T)=>testTenantContext(tenantId);
 let pg:EmbeddedPostgres, admin:Pool, runtime:Pool, dir:string, port:number;
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0053_shared_money_origin.sql"))!;
 async function seedIdentity(tenant:string,member:string) {
