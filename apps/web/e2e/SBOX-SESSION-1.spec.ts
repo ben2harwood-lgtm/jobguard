@@ -54,6 +54,8 @@ test("creation binds ownership before another session's first read or write", as
       }
       for (const question of proposal.questions) await page.getByLabel(`Answer ${question.question.value}`, { exact: true }).fill("Fictional builder confirms this practice scope");
       await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
+      await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
+      await page.getByRole("button", { name: "Price the work", exact: true }).click();
       await startWatchdogJob(page);
       // Bind resolvable supplier sources to the live session-owned job.
       const post = async (path: string, data: unknown) => {
