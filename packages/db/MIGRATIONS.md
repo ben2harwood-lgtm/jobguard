@@ -147,7 +147,11 @@ embedded test clusters that write site revisions pass `--encoding=UTF8` to `init
 because `embedded-postgres` starts `initdb` with no locale environment, which would
 otherwise create SQL_ASCII. Practice-session issuance now writes a generated site
 revision, so the practice-session suite (`practice-session.integration.test.ts`) passes
-`--encoding=UTF8` too. The party suite also installs the complete migration
+`--encoding=UTF8` too. The CH-2 watchdog suites also write site revisions through
+the shared fictional-site fixture, so the watchdog command harness
+(`watchdog-command-harness.ts`, used by the command-replay, proof and lock-order
+suites) and the `watchdog`, `watchdog-migration-owner`, `things-replay` and
+`match-inbox-replay` integration suites pass `--encoding=UTF8` too. The party suite also installs the complete migration
 chain in an explicitly SQL_ASCII database; the six earlier non-UTF8 suites retain
 their original encoding flags.
 

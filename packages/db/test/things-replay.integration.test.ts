@@ -33,7 +33,7 @@ const stored = async (commandId: string) => Number((await admin.query("SELECT co
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "jg-things-replay-"));
   const port = 60900 + Math.floor(Math.random() * 90);
-  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
+  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await pg.initialise(); await pg.start();
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic" });
   await migrate(admin);

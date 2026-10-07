@@ -30,7 +30,7 @@ async function asTenant(sql: string, params: unknown[]) {
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "jg-match-inbox-replay-"));
   const port = 60400 + Math.floor(Math.random() * 99);
-  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
+  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await pg.initialise(); await pg.start();
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic" });
   await migrate(admin);

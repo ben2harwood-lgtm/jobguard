@@ -188,7 +188,7 @@ const caseKeys = cases.map(c => c.key);
 async function boot() {
   dir = await mkdtemp(join(tmpdir(), `jg-${label}-`));
   const port = portBase + Math.floor(Math.random() * 400);
-  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
+  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await pg.initialise(); await pg.start();
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic", max: 4 });
   await migrate(admin);
