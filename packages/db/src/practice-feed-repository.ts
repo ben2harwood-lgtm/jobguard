@@ -61,9 +61,9 @@ export class PracticeFeedRepository {
   }
 
   /**
-   * Live membership (locked for writes), a real job in this tenant, and persisted session ownership of that job. The first session to
-   * touch a job owns it: the claim is written (and audited) before any connection exists, and every other session is refused after it.
-   * A job that belongs to a sandbox run can only be owned by that run's session. Writes take the command and job locks first, so
+   * Live membership (locked for writes) and SBOX creation-time ownership, before any snapshot or feed registration.
+   * The feed owner row only records that existing binding; it cannot assign a creator. Unbound jobs fail closed.
+   * Writes take the command and job locks first, so
    * no business lock follows the audit append.
    */
   private async authorize(db: TenantTransaction, context: VerifiedTenantContext, actor: PracticeFeedActor, sessionId: string, jobId: string, writeCommandId: string | null) {
@@ -79,14 +79,15 @@ export class PracticeFeedRepository {
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [context.tenantId, `practice-command:${writeCommandId}`]);
       await lockJob();
     }
-    if (!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2", [context.tenantId, jobId])).rowCount) fail("PRACTICE_FEED_NOT_FOUND");
-    const runs = await db.$client.query<{ session_id: string }>("SELECT session_id FROM app.sandbox_run WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, jobId]);
-    if (runs.rows.some((row) => row.session_id !== sessionId)) fail("PRACTICE_FEED_FORBIDDEN");
+    const digest = sha256(sessionId);
+    if (!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3", [context.tenantId, jobId, digest])).rowCount) fail("PRACTICE_FEED_NOT_FOUND");
+    const principal = (await db.$client.query<{ tenant_id: string; membership_id: string; identity_user_id: string }>("SELECT * FROM app.authenticate_practice_session($1)", [digest])).rows[0];
+    if (!principal || principal.tenant_id !== context.tenantId || principal.membership_id !== actor.membershipId || principal.identity_user_id !== actor.identityUserId) fail("PRACTICE_FEED_FORBIDDEN");
     const owner = async () => (await db.$client.query<{ session_id: string }>("SELECT session_id FROM app.practice_feed_job_owner WHERE tenant_id=$1 AND job_id=$2", [context.tenantId, jobId])).rows[0];
     let current = await owner();
     if (!current) {
       if (!writeCommandId) await lockJob();
-      current = await owner(); // a rival may have claimed it while this transaction waited for the job lock
+      current = await owner(); // another request from the creator may have registered it while waiting
       if (!current) {
         const ownerId = randomUUID();
         await db.$client.query("INSERT INTO app.practice_feed_job_owner(id,tenant_id,job_id,session_id,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,'synthetic_demo')",
@@ -98,7 +99,7 @@ export class PracticeFeedRepository {
         return;
       }
     }
-    if (current.session_id !== sessionId) fail("PRACTICE_FEED_FORBIDDEN");
+    if (current.session_id !== sessionId) fail("PRACTICE_FEED_NOT_FOUND");
   }
 
   /** One SQL statement, so commands, events, matches and receipts are read from the same snapshot. */
@@ -115,7 +116,7 @@ export class PracticeFeedRepository {
           'reference',p.reference,'reversed',r.id IS NOT NULL) ORDER BY p.created_at,p.id)
         FROM app.customer_payment p LEFT JOIN app.customer_payment_reversal r ON r.tenant_id=p.tenant_id AND r.payment_id=p.id
         WHERE p.tenant_id=$1 AND p.job_id=$2 AND p.builder_attested),'[]'::jsonb) payments`, [context.tenantId, jobId])).rows[0]!;
-    if (row.account && row.account.session_id !== sessionId) fail("PRACTICE_FEED_FORBIDDEN");
+    if (row.account && row.account.session_id !== sessionId) fail("PRACTICE_FEED_NOT_FOUND");
     return row;
   }
 

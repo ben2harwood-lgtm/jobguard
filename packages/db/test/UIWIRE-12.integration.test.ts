@@ -51,14 +51,15 @@ beforeAll(async()=>{
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
  await migrate(admin);
- expect(MIGRATION_URLS).toHaveLength(46);
- expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0094_practice_session_ownership.sql'`)).rowCount).toBe(46);
+ const migrationNames=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!);
+ expect(migrationNames).toEqual([...migrationNames].sort());
+ expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN $1 AND $2`,[migrationNames[0],migrationNames.at(-1)])).rowCount).toBe(MIGRATION_URLS.length);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 
 describe("UIWIRE-12 customer receipts",()=>{
  it("upgrades without changing old command hashes and replays old receipts and reversals",async()=>{
-  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(46);
+  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(MIGRATION_URLS.length);
   expect((await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows).toEqual(legacyHashes);
   expect(await repo.recordReceipt(context,legacyInput)).toEqual(legacyPayment);
   expect(await repo.reverseReceipt(context,{...reversal(legacy,legacyPayment.paymentId),commandId:legacyReverseCommand})).toEqual({reversalId:legacyReversal});

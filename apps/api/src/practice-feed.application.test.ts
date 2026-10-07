@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assessAttestedReceipt, generatedPracticeFeedEvents, practiceMovementCatalogueV1, projectPracticeFeedMovements, type PracticeFeedStep } from "@jobguard/core";
-import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "@jobguard/db";
+import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, PracticeAccessError } from "@jobguard/db";
+import { PracticeAccess } from "./practice-access.js";
 import { PracticeFeedApplication } from "./practice-feed.application.js";
 import { practiceFeedCommandV1, practiceFeedReceiptAssessmentV1, practiceFeedResponseV1 } from "./practice-feed.contracts.js";
 import { practiceFeedHttpError, practiceFeedHttpQuery, practiceFeedSession } from "./practice-feed.http.js";
@@ -17,12 +18,23 @@ const response = {
 const command = () => ({ version: "practice-feed-command.v1", commandId: randomUUID(), expectedRevision: 0, action: "connect" });
 function fixture() {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  vi.spyOn(PracticeAccess.prototype, "job").mockResolvedValue({ context: { tenantId: DEMO_TENANT_ID }, membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID } as never);
   const repository = { view: vi.fn().mockResolvedValue(response), command: vi.fn().mockResolvedValue(response) };
   return { repository, application: new PracticeFeedApplication({} as Pool, repository) };
 }
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("practice feed API boundary (the repository is a unit-test double)", () => {
+  it("refuses a stranger before snapshot or connect even when no feed owner exists", async () => {
+    const { repository, application } = fixture();
+    const access = vi.spyOn(PracticeAccess.prototype, "job").mockRejectedValue(new PracticeAccessError("NOT_FOUND"));
+    await expect(application.view(randomUUID(), jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(application.command(randomUUID(), jobId, command())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(access).toHaveBeenCalledTimes(2);
+    expect(repository.view).not.toHaveBeenCalled();
+    expect(repository.command).not.toHaveBeenCalled();
+  });
+
   it("passes a server-selected principal, the opaque session and the job to the persistence authority, for both transports", async () => {
     const { repository, application } = fixture();
     expect(await application.view(sessionId, jobId)).toEqual(response);
@@ -30,6 +42,15 @@ describe("practice feed API boundary (the repository is a unit-test double)", ()
     const input = command();
     expect(await application.command(sessionId, jobId, input)).toEqual(response);
     expect(repository.command).toHaveBeenCalledWith({ tenantId: DEMO_TENANT_ID }, { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID }, sessionId, jobId, input);
+  });
+
+  it("requires persisted session authentication even for a UUID-shaped cookie", async () => {
+    const { repository, application } = fixture();
+    vi.spyOn(PracticeAccess.prototype, "job").mockRejectedValue(new PracticeAccessError("UNAUTHENTICATED"));
+    await expect(application.view(sessionId, jobId)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    await expect(application.command(sessionId, jobId, command())).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    expect(repository.view).not.toHaveBeenCalled();
+    expect(repository.command).not.toHaveBeenCalled();
   });
 
   it.each([undefined, "not-a-session", "", "123"])("refuses an absent or malformed session %s before accessing facts", async (session) => {

@@ -3,9 +3,8 @@ BEGIN;
 -- Everything here is simulated money. Nothing in this migration touches allocation, landing, fee or ledger tables,
 -- and a settled movement is a fact only. The runtime role keeps SELECT/INSERT on append-only tables and no routine grant.
 
--- The first practice session to touch a job (a read or a connect) owns it for this feed; every later session is refused. A job that
--- belongs to a sandbox run can only be owned by that run's session. Ownership is a persisted, audited fact, written before any
--- connection exists, and an account can only be created for the owning session (foreign key plus guard).
+-- SBOX-SESSION-1 (0094) binds jobs to their creator at insertion. A feed owner row records that binding only:
+-- another session, an unissued/expired session or an old unbound job cannot register or connect this feed.
 CREATE TABLE app.practice_feed_job_owner (
  id uuid NOT NULL, tenant_id uuid NOT NULL, job_id uuid NOT NULL, session_id uuid NOT NULL, actor_membership_id uuid NOT NULL,
  environment text NOT NULL CHECK(environment='synthetic_demo'),
@@ -125,13 +124,20 @@ BEGIN
     OR current_setting('app.practice_feed_environment',true) IS DISTINCT FROM 'synthetic_demo'
  THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
 
+ -- Before any feed effect, require a live server-issued session and its immutable creator/job binding.
+ IF NOT EXISTS(
+  SELECT 1 FROM app.job j
+  JOIN app.authenticate_practice_session(encode(sha256(convert_to(v_session::text,'UTF8')),'hex')) p ON p.tenant_id=j.tenant_id
+  WHERE j.tenant_id=NEW.tenant_id AND j.id=NEW.job_id
+   AND j.practice_session_digest=encode(sha256(convert_to(v_session::text,'UTF8')),'hex')
+ ) THEN RAISE EXCEPTION 'PRACTICE_FEED_NOT_FOUND' USING ERRCODE='42501'; END IF;
+
  IF TG_TABLE_NAME='practice_feed_job_owner' THEN
   v_actor := NEW.actor_membership_id;
   PERFORM 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=v_actor FOR SHARE;
   PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext(NEW.job_id::text));
   IF NEW.session_id IS DISTINCT FROM v_session
      OR NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=NEW.tenant_id AND m.id=v_actor AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()))
-     OR EXISTS(SELECT 1 FROM app.sandbox_run r WHERE r.tenant_id=NEW.tenant_id AND r.job_id=NEW.job_id AND r.session_id<>NEW.session_id)
   THEN RAISE EXCEPTION 'PRACTICE_FEED_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN NEW;
  END IF;

@@ -62,11 +62,11 @@ function contextOptions(testInfo: TestInfo) {
   const { viewport, baseURL } = testInfo.project.use;
   return { baseURL: baseURL ?? "http://127.0.0.1:3000", ...(viewport ? { viewport } : {}) };
 }
-// C1: a SECOND browser context that carries only the practice-session cookie reads the saved facts; a context without it is refused.
+// C1: a SECOND browser context reuses A's storageState to read saved facts; a context without a session is refused.
 async function secondContextReads(browser: Browser, context: BrowserContext, testInfo: TestInfo, jobId: string, check: (json: any, view: Page) => Promise<void>) {
   const cookie = (await context.cookies()).filter((item) => item.name === "jg_session"); expect(cookie).toHaveLength(1);
   const options = contextOptions(testInfo);
-  const stranger = await browser.newContext(options), second = await browser.newContext({ ...options, storageState: { cookies: cookie, origins: [] } });
+  const stranger = await browser.newContext(options), second = await browser.newContext({ ...options, storageState: await context.storageState() });
   try {
     expect((await stranger.request.get(feedPath(jobId))).status()).toBe(401);
     const json = await (await second.request.get(feedPath(jobId))).json();
@@ -81,6 +81,37 @@ async function reopenFromJobs(page: Page, jobId: string) {
   await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}`); await expect(page.locator("#captured-job-workspace")).toHaveAttribute("data-job-id", jobId); await ready(page);
 }
+
+test("a NEW stranger session cannot snapshot or connect a captured job before its creator touches the feed", async ({ page, context, browser }, testInfo) => {
+  // Capture creates the binding, but reviewing proposals does not read/register the feed.
+  const captureResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST");
+  await openReview(page);
+  const captured = await captureResponse; expect(captured.status()).toBe(201);
+  const { jobId } = await captured.json(); expect(jobId).toBeTruthy();
+  const stranger = await browser.newContext(contextOptions(testInfo));
+  try {
+    expect((await stranger.request.post("/api/session")).status()).toBe(200);
+    const aCookie = (await context.cookies()).find(cookie => cookie.name === "jg_session")!;
+    const bCookie = (await stranger.cookies()).find(cookie => cookie.name === "jg_session")!;
+    expect(bCookie.value).not.toBe(aCookie.value);
+    const missing = await stranger.request.get(feedPath(crypto.randomUUID()));
+    const snapshot = await stranger.request.get(feedPath(jobId));
+    expect(snapshot.status()).toBe(404); expect(await snapshot.json()).toEqual(await missing.json());
+    expect(await snapshot.json()).toEqual({ version: "practice-feed-error.v1", code: "NOT_FOUND" });
+    const connect = await stranger.request.post(feedPath(jobId), { data: body(0, { action: "connect" }) });
+    expect(connect.status()).toBe(404); expect(await connect.json()).toEqual({ version: "practice-feed-error.v1", code: "NOT_FOUND" });
+    const untouched = await saved(page, jobId);
+    expect(untouched).toMatchObject({ revision: 0, accountId: null, feedState: "not_connected", eventCount: 0, movements: [], receipts: [] });
+    const ownerConnect = await page.request.post(feedPath(jobId), { data: body(0, { action: "connect" }) });
+    expect(ownerConnect.status()).toBe(200);
+    const state = await ownerConnect.json(); expect(state).toMatchObject({ revision: 1, feedState: "connected", eventCount: 0 });
+    expect((await stranger.request.get(feedPath(jobId))).status()).toBe(404);
+    expect(await saved(page, jobId)).toEqual(state);
+    const second = await browser.newContext({ ...contextOptions(testInfo), storageState: await context.storageState() });
+    try { const persisted = await second.request.get(feedPath(jobId)); expect(persisted.status()).toBe(200); expect(await persisted.json()).toEqual(state); }
+    finally { await second.close(); }
+  } finally { await stranger.close(); }
+});
 
 test("£384: pending cannot qualify, settled stays unallocated, only a matched receipt qualifies, disconnect keeps history", async ({ page, context, browser }, testInfo) => {
   const { jobId } = await issueInvoice(page);
@@ -252,13 +283,14 @@ test("holds an unknown duplicate for review, then shows every fixed generated mo
 
 test("refuses forged, unauthorised and conflicting requests, and persists nothing from them", async ({ page, context, browser }, testInfo) => {
   const jobId = await createJob(page); await ready(page);
-  // Ownership is persisted by the owner's first touch, so another practice session is refused BEFORE anything is connected:
+  // Creation-time ownership refuses another server-issued practice session BEFORE anything is connected:
   // it can neither read the job's receipts nor connect the feed first.
-  const early = await browser.newContext({ ...contextOptions(testInfo), storageState: { cookies: [{ name: "jg_session", value: crypto.randomUUID(), domain: "127.0.0.1", path: "/", expires: -1, httpOnly: false, secure: false, sameSite: "Lax" }], origins: [] } });
+  const early = await browser.newContext(contextOptions(testInfo));
+  expect((await early.request.post("/api/session")).status()).toBe(200);
   try {
-    const read = await early.request.get(feedPath(jobId)); expect(read.status()).toBe(403); expect(await read.json()).toEqual({ version: "practice-feed-error.v1", code: "PRACTICE_FEED_FORBIDDEN" });
+    const read = await early.request.get(feedPath(jobId)); expect(read.status()).toBe(404); expect(await read.json()).toEqual({ version: "practice-feed-error.v1", code: "NOT_FOUND" });
     const connect = await early.request.post(feedPath(jobId), { data: body(0, { action: "connect" }) });
-    expect(connect.status()).toBe(403); expect(await connect.json()).toEqual({ version: "practice-feed-error.v1", code: "PRACTICE_FEED_FORBIDDEN" });
+    expect(connect.status()).toBe(404); expect(await connect.json()).toEqual({ version: "practice-feed-error.v1", code: "NOT_FOUND" });
   } finally { await early.close(); }
   await V(page, "practice-feed-state", "Not connected");
   await button(page, "Connect practice feed").click(); await revision(page, 1);
@@ -296,14 +328,17 @@ test("refuses forged, unauthorised and conflicting requests, and persists nothin
 
   // A stranger without the practice session, and another practice session, are refused; neither can read or change the saved feed.
   const stranger = await browser.newContext(contextOptions(testInfo));
-  const otherSession = await browser.newContext({ ...contextOptions(testInfo), storageState: { cookies: [{ name: "jg_session", value: crypto.randomUUID(), domain: "127.0.0.1", path: "/", expires: -1, httpOnly: false, secure: false, sameSite: "Lax" }], origins: [] } });
+  const otherSession = await browser.newContext(contextOptions(testInfo));
+  expect((await otherSession.request.post("/api/session")).status()).toBe(200);
+  const unissued = await browser.newContext(contextOptions(testInfo));
+  await unissued.addCookies([{ name: "jg_session", value: crypto.randomUUID(), domain: "127.0.0.1", path: "/", httpOnly: true, secure: false, sameSite: "Lax" }]);
   try {
-    for (const outsider of [stranger, otherSession]) {
-      const expectedStatus = outsider === stranger ? 401 : 403;
+    for (const outsider of [stranger, otherSession, unissued]) {
+      const expectedStatus = outsider === otherSession ? 404 : 401;
       expect((await outsider.request.get(feedPath(jobId))).status()).toBe(expectedStatus);
       expect((await outsider.request.post(feedPath(jobId), { data: body(after.revision, { action: "disconnect" }) })).status()).toBe(expectedStatus);
     }
-  } finally { await stranger.close(); await otherSession.close(); }
+  } finally { await stranger.close(); await otherSession.close(); await unissued.close(); }
   expect((await saved(page, jobId)).feedState).toBe("connected");
   await secondContextReads(browser, context, testInfo, jobId, async (json) => { expect(json).toMatchObject({ revision: 3, eventCount: 2, feedState: "connected" }); });
 });

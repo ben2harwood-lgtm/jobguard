@@ -17,7 +17,7 @@ function failure(error: unknown) {
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const query = practiceFeedHttpQuery(new URL(request.url).searchParams);
-    return NextResponse.json(await workspaceApplication().practiceFeed.view(session(request), (await params).id, query));
+    return NextResponse.json(await (await workspaceApplication()).practiceFeed.view(session(request), (await params).id, query));
   } catch (error) { return failure(error); }
 }
 export async function POST(request: Request, { params }: RouteContext) {
@@ -26,6 +26,6 @@ export async function POST(request: Request, { params }: RouteContext) {
     let body: unknown;
     try { body = await request.json(); }
     catch { throw Object.assign(new Error("INVALID_COMMAND"), { code: "INVALID_COMMAND" }); }
-    return NextResponse.json(await workspaceApplication().practiceFeed.command(currentSession, (await params).id, body));
+    return NextResponse.json(await (await workspaceApplication()).practiceFeed.command(currentSession, (await params).id, body));
   } catch (error) { return failure(error); }
 }

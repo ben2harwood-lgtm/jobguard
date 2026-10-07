@@ -33,7 +33,7 @@ describe("PracticeFeedController", () => {
     expect(view).not.toHaveBeenCalled();
   });
   it.each([
-    ["UNAUTHENTICATED", 401], ["SYNTHETIC_ONLY", 403], ["INVALID_COMMAND", 400], ["PRACTICE_FEED_STALE_REVISION", 409], ["PRACTICE_FEED_MOVEMENT_NOT_SETTLED", 409], ["PRACTICE_FEED_FORBIDDEN", 403],
+    ["UNAUTHENTICATED", 401], ["NOT_FOUND", 404], ["SYNTHETIC_MODE_REQUIRED", 403], ["SYNTHETIC_ONLY", 403], ["INVALID_COMMAND", 400], ["PRACTICE_FEED_STALE_REVISION", 409], ["PRACTICE_FEED_MOVEMENT_NOT_SETTLED", 409], ["PRACTICE_FEED_FORBIDDEN", 403],
   ] as const)("maps %s to HTTP %i without leaking internals", async (code, status) => {
     vi.spyOn(PracticeFeedApplication.prototype, "command").mockRejectedValue(code === "UNAUTHENTICATED" || code === "SYNTHETIC_ONLY" || code === "INVALID_COMMAND"
       ? new PracticeFeedApplicationError(code) : Object.assign(new Error("secret detail"), { code }));

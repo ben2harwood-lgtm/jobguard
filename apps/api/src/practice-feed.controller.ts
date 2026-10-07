@@ -41,7 +41,8 @@ export class PracticeFeedController {
   @ApiQuery({ name: "cursor", required: false, type: String })
   @ApiResponse({ status: 200, description: "Persisted practice-feed-view.v1; synthetic movement facts only, never an allocation" })
   @ApiResponse({ status: 401, description: "No practice session" })
-  @ApiResponse({ status: 403, description: "Session, membership or synthetic environment forbidden" })
+  @ApiResponse({ status: 403, description: "Synthetic environment or client-selected tenant forbidden" })
+  @ApiResponse({ status: 404, description: "Job missing, unbound or owned by another practice session" })
   get(@Req() request: FeedRequest, @Param("id") jobId: string, @Query() query: Record<string, unknown>) {
     return this.invoke(request, (session) => this.application.view(session, jobId, { version: "practice-feed-query.v1", ...query }));
   }
@@ -56,6 +57,8 @@ export class PracticeFeedController {
     variant("match_receipt", { movement: { type: "string", enum: movementKeys.slice(0, 6) }, paymentId: { type: "string", format: "uuid" } }),
   ] } })
   @ApiResponse({ status: 200, description: "Persisted practice-feed-view.v1; settlement never allocates money" })
+  @ApiResponse({ status: 401, description: "No authenticated practice session" })
+  @ApiResponse({ status: 404, description: "Job missing, unbound or owned by another practice session" })
   @ApiResponse({ status: 400, description: "Invalid or forged command" })
   @ApiResponse({ status: 409, description: "Stale revision, conflicting replay, unsettled or mismatched receipt, or disconnected feed" })
   post(@Req() request: FeedRequest, @Param("id") jobId: string, @Body() body: unknown) {

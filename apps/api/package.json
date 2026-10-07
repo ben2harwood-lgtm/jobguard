@@ -63,8 +63,8 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src && pnpm openapi:check",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "openapi:generate": "tsx src/generate-openapi.ts",
-    "openapi:check": "tsx src/generate-openapi.ts --check",
+    "openapi:generate": "node --import tsx src/generate-openapi.ts",
+    "openapi:check": "node --import tsx src/generate-openapi.ts --check",
     "start:worker": "tsx src/worker.ts"
   },
   "dependencies": {
