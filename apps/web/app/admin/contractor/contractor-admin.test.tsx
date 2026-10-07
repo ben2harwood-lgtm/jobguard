@@ -7,8 +7,8 @@ const hooks=vi.hoisted(()=>({cells:[] as unknown[],cursor:0,effects:[] as Array<
 // Error focus, CSS geometry and persistence are additionally asserted in both browser projects.
 vi.mock('react',async importOriginal=>({...await importOriginal<typeof import('react')>(),
  useState:(initial:unknown)=>{const i=hooks.cursor++;if(!(i in hooks.cells))hooks.cells[i]=initial;return [hooks.cells[i],(value:unknown)=>{hooks.cells[i]=typeof value==='function'?value(hooks.cells[i]):value;}];},
- useRef:()=>{const i=hooks.cursor++;if(!(i in hooks.cells))hooks.cells[i]={current:{focus:hooks.focus}};return hooks.cells[i];},
- useEffect:(effect:()=>void)=>{hooks.effects.push(effect);},
+ useRef:(initial:unknown)=>{const i=hooks.cursor++;if(!(i in hooks.cells))hooks.cells[i]={current:initial===null?{focus:hooks.focus}:initial};return hooks.cells[i];},
+ useEffect:(effect:()=>void,deps:unknown[])=>{const i=hooks.cursor++,previous=hooks.cells[i] as unknown[]|undefined;if(!previous||deps.some((dep,index)=>!Object.is(dep,previous[index])))hooks.effects.push(effect);hooks.cells[i]=deps;},
 }));
 vi.mock('next/link',()=>({default:'a'}));
 import { ContractorAdmin } from './contractor-admin';
@@ -20,9 +20,51 @@ function label(node:Node):string {const children=node.props.children;return type
 function render(){hooks.cursor=0;hooks.effects=[];return nodes(ContractorAdmin());}
 function button(tree:Node[],name:string){const node=tree.find(x=>x.type==='button'&&label(x)===name);expect(node).toBeDefined();return node!;}
 async function click(tree:Node[],name:string){button(tree,name).props.onClick!();await new Promise(resolve=>setImmediate(resolve));}
+function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return {promise,resolve};}
+function focusEffects(){hooks.effects.forEach(effect=>effect());}
 beforeEach(()=>{hooks.cells=[];hooks.focus.mockClear();vi.stubGlobal('React',React);});
 afterEach(()=>vi.unstubAllGlobals());
 describe('contractor reload and role/scope regressions',()=>{
+ it.each(['STALE_REVISION','lost response','timeout','unreadable body'])('locks mutations after %s until authoritative reload succeeds',async(fault)=>{
+  let failMutation=false,failReload=false;
+  const fetchMock=vi.fn(async(_url:unknown,options?:{method?:string})=>{
+   if(failMutation&&options?.method==='POST'){
+    if(fault==='STALE_REVISION')return {ok:false,json:async()=>({code:'STALE_REVISION'})};
+    if(fault==='unreadable body')return {ok:true,json:async()=>{throw new SyntaxError('Unreadable mutation response');}};
+    throw new Error(fault);
+   }
+   if(failReload&&!options?.method)throw new Error('refresh unavailable');
+   return {ok:true,json:async()=>view};
+  });
+  vi.stubGlobal('fetch',fetchMock);
+  await click(render(),'Start generated contractor practice');
+  failMutation=true;await click(render(),'Add team');let tree=render();focusEffects();
+  const alert=tree.find(x=>x.props.role==='alert')!;
+  expect(alert).toBeDefined();expect(label(alert)).toContain(fault==='unreadable body'?'Unreadable mutation response':fault);
+  expect(hooks.focus).toHaveBeenCalled();
+  for(const name of ['Add unit','Add team','Add fictional member','Add fictional client'])expect(button(tree,name).props.disabled).toBe(true);
+  expect(button(tree,'Reload persisted organisation').props.disabled).toBe(false);
+  const calls=fetchMock.mock.calls.length;await click(tree,'Add team');expect(fetchMock.mock.calls).toHaveLength(calls);
+  failReload=true;await click(render(),'Reload persisted organisation');tree=render();focusEffects();
+  expect(tree.find(x=>x.props.role==='alert')).toBeDefined();expect(button(tree,'Add team').props.disabled).toBe(true);
+  failMutation=false;failReload=false;await click(tree,'Reload persisted organisation');tree=render();
+  expect(tree.find(x=>x.props.role==='alert')).toBeUndefined();expect(button(tree,'Add team').props.disabled).toBe(false);
+  await click(tree,'Add team');expect(label(render().find(x=>x.props.role==='status')!)).toBe('Saved to the organisation');
+ });
+ it('ignores an initial unauthenticated read completed after practice creation and recovers normally',async()=>{
+  const initial=deferred<{ok:boolean;json:()=>Promise<unknown>}>();let firstRead=true;
+  vi.stubGlobal('fetch',vi.fn(async(_url:unknown,options?:{method?:string})=>{
+   if(!options?.method&&firstRead){firstRead=false;return initial.promise;}
+   return {ok:true,json:async()=>view};
+  }));
+  let tree=render();focusEffects();await click(tree,'Start generated contractor practice');tree=render();
+  expect(label(tree.find(x=>x.props.role==='status')!)).toBe('Generated organisation saved');
+  initial.resolve({ok:false,json:async()=>({code:'UNAUTHENTICATED'})});await new Promise(resolve=>setImmediate(resolve));tree=render();
+  expect(label(tree.find(x=>x.props.role==='status')!)).toBe('Generated organisation saved');
+  expect(tree.find(x=>x.props.role==='alert')).toBeUndefined();expect(button(tree,'Add team').props.disabled).toBe(false);
+  await click(tree,'Reload persisted organisation');tree=render();expect(button(tree,'Add team').props.disabled).toBe(false);
+  await click(tree,'Add team');expect(label(render().find(x=>x.props.role==='status')!)).toBe('Saved to the organisation');
+ });
  it('locks a previously loaded view and focuses an error after every failed manual reload, until recovery',async()=>{
   let fail=false;
   vi.stubGlobal('fetch',vi.fn(async()=>{if(fail)throw new Error('transport failure');return {ok:true,json:async()=>view};}));
