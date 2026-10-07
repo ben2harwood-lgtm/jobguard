@@ -298,6 +298,10 @@ runtime SELECT/INSERT only. Watches append explicit start/stop commands and
 revision-scoped feed evaluations; no default watch, provider route, scheduling,
 Decision, outbox or financial effect. No data backfill. The prior application
 remains compatible. Audit FKs are deferred; audit head is the final command lock.
+The counterparty guard fails closed on the customer's LATEST revision: the binding's
+pinned revision must still be the latest and the latest must be a business with a
+valid company number, else `NOT_REGISTERED_COMPANY` (23514). 0103 is unmerged, so
+this is part of the same migration, not a new one.
 
 Fresh install and upgrade from 0095 are covered by the PostgreSQL tests; they
 require CI in the restricted builder sandbox. After application, use a reviewed

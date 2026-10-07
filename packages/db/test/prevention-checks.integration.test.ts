@@ -9,7 +9,7 @@ import { customerTypes } from "@jobguard/core";
 import { migrate, MIGRATION_URLS, JobPartiesRepository, PreventionCheckRepository, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type VerifiedTenantContext } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
-let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, context: VerifiedTenantContext;
+let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, port: number, context: VerifiedTenantContext;
 const tenant = randomUUID(), other = randomUUID(), member = randomUUID(), user = randomUUID(), account = randomUUID();
 const previousMode = process.env.JOBGUARD_ENV;
 const scenarioNow = "2026-10-07T13:00:00.000Z";
@@ -20,11 +20,11 @@ async function job(type = "person", number: string | undefined = undefined) {
   const c = await parties.command(context,member,id,{version:"job-parties-command.v1",commandId:randomUUID(),action:"create_customer",customer:{version:"customer.v1",name:"Fictional customer",type,...(number ? {companyNumber:number} : {})}});
   const s = await parties.command(context,member,id,{version:"job-parties-command.v1",commandId:randomUUID(),action:"create_site",site:{version:"site.v1",addressLines:["1 Fictional Register Lane"],town:"London",postcode:"SW1A 1AA"}});
   const b = await parties.command(context,member,id,{version:"job-parties-command.v1",commandId:randomUUID(),action:"bind",expectedJobRevision:0,parties:{version:"job-parties.v1",customerRevisionId:c.revisionId,siteRevisionId:s.revisionId}});
-  return { id, binding:b.id };
+  return { id, binding:b.id, customerId:c.id, siteRevisionId:s.revisionId };
 }
 beforeAll(async () => {
   process.env.JOBGUARD_ENV="synthetic_demo";
-  dir=await mkdtemp(join(tmpdir(),"mon7a-pg16-"));const port=59700+Math.floor(Math.random()*100);
+  dir=await mkdtemp(join(tmpdir(),"mon7a-pg16-"));port=59700+Math.floor(Math.random()*100);
   pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
   await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)",[tenant,other]);
@@ -105,6 +105,48 @@ describe("MON-7a real PostgreSQL guarantees", () => {
       SELECT c.tenant_id,$3,$4,b.id,b.customer_revision_id,c.command_id,c.kind,c.watch_revision,c.source_id,c.source_name,c.retrieved_at,c.result,c.audit_event_id
       FROM app.counterparty_check c JOIN app.job_party_binding b ON b.tenant_id=c.tenant_id AND b.id=$5 WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.kind='company' LIMIT 1`,[tenant,company.id,randomUUID(),j.id,j.binding]))).rejects.toMatchObject({code:"23514"});
   });
+  it("fails closed when the customer's latest revision is not eligible: new checks refuse and an existing watch yields nothing", async () => {
+    const j=await job("business","ZZ000001");
+    await prevention.command(context,member,j.id,command(j.binding,"company"));
+    await prevention.command(context,member,j.id,command(j.binding,"start_watch","mixed",{expectedWatchRevision:0}));
+    const live=await prevention.command(context,member,j.id,command(j.binding,"evaluate_watch","fresh",{expectedWatchRevision:1}));
+    expect(live.view.company?.status).toBe("clear");expect(live.view.watch).toMatchObject({enabled:true,revision:1});expect(live.view.watch.results).toHaveLength(2);
+    const rows=async()=>(await admin.query("SELECT count(*)::int n FROM app.counterparty_check WHERE tenant_id=$1 AND job_id=$2",[tenant,j.id])).rows[0].n as number;
+    const before=await rows();
+    // The builder re-records the same customer as a person (revision 2). The job binding still pins revision 1, a business.
+    await parties.command(context,member,j.id,{version:"job-parties-command.v1",commandId:randomUUID(),action:"revise_customer",customerId:j.customerId,expectedRevision:1,customer:{version:"customer.v1",name:"Fictional customer",type:"person"}});
+    for(const action of ["company","start_watch","evaluate_watch","stop_watch"]){
+      await expect(prevention.command(context,member,j.id,command(j.binding,action,"fresh",action==="company"?{}:{expectedWatchRevision:1}))).rejects.toMatchObject({code:"NOT_REGISTERED_COMPANY"});
+    }
+    const view=await prevention.view(context,member,j.id);
+    expect(view.companyEligibility).toBe("not run — not a registered company");expect(view.company).toBeNull();
+    expect(view.watch).toEqual({enabled:false,revision:0,results:[]});
+    expect(await rows()).toBe(before);
+    // Property facts concern the site, not the customer, so they still run.
+    expect((await prevention.command(context,member,j.id,command(j.binding,"property","fresh"))).view.property).toHaveLength(5);
+    // The database refuses a direct runtime write that is bound to the stale, formerly eligible revision.
+    await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id)
+      SELECT tenant_id,$3,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id FROM app.counterparty_check WHERE tenant_id=$1 AND job_id=$2 AND kind='company' LIMIT 1`,[tenant,j.id,randomUUID()])))
+      .rejects.toMatchObject({code:"23514",message:expect.stringContaining("NOT_REGISTERED_COMPANY")});
+    // A later revision that would itself be eligible still refuses until the job is re-bound to it.
+    const business=await parties.command(context,member,j.id,{version:"job-parties-command.v1",commandId:randomUUID(),action:"revise_customer",customerId:j.customerId,expectedRevision:2,customer:{version:"customer.v1",name:"Fictional customer",type:"business",companyNumber:"ZZ000002"}});
+    await expect(prevention.command(context,member,j.id,command(j.binding,"company","fresh"))).rejects.toMatchObject({code:"NOT_REGISTERED_COMPANY"});
+    expect((await prevention.view(context,member,j.id)).companyEligibility).toBe("not run — not a registered company");
+    // Re-binding to the latest eligible revision restores checks, on a fresh binding with no inherited watch.
+    const rebound=await parties.command(context,member,j.id,{version:"job-parties-command.v1",commandId:randomUUID(),action:"correct",expectedJobRevision:1,parties:{version:"job-parties.v1",customerRevisionId:business.revisionId,siteRevisionId:j.siteRevisionId},reason:"Customer re-recorded as a company"});
+    await expect(prevention.command(context,member,j.id,command(j.binding,"company","fresh"))).rejects.toMatchObject({code:"REVISION_CONFLICT"});
+    const restored=await prevention.command(context,member,j.id,command(rebound.id,"company","fresh"));
+    expect(restored.view.companyEligibility).toBe("eligible");expect(restored.view.company?.status).toBe("clear");expect(restored.view.watch).toEqual({enabled:false,revision:0,results:[]});
+  });
+  it("caps a sub-millisecond scenario time so TypeScript and the database evaluate the same instant", async () => {
+    const j=await job();
+    // Exactly 180 minutes after the fixture observation, plus 0.4 ms: the flood record is still current once capped at milliseconds.
+    const result=await prevention.command(context,member,j.id,command(j.binding,"property","fresh",{scenarioNow:"2026-10-07T15:00:00.0004Z"}));
+    const flood=result.view.property.find(fact=>fact.kind==="flood");
+    expect(flood).toMatchObject({status:"clear",reason:"current",evaluatedAt:"2026-10-07T15:00:00.000Z"});
+    const over=await prevention.command(context,member,j.id,command(j.binding,"property","fresh",{scenarioNow:"2026-10-07T15:00:00.0014Z"}));
+    expect(over.view.property.find(fact=>fact.kind==="flood")).toMatchObject({status:"unknown",reason:"stale"});
+  });
   it("leaves fee derivations, journals, recovery cases, illustrations, value inputs and outbound state byte-identical", async () => {
     const j=await job("business","ZZ000001");
     await admin.query(`INSERT INTO app.fee_illustration_source(tenant_id,job_id,command_id,source_version,accepted_net_pence,eligible_net_pence,gross_landed_pence,base_obligation_pence,base_settled_pence,prior_posting_pence,source_ids) VALUES($1,$2,$3,'recovery-18800.v1',1880000,282000,338400,7900,7900,20300,$4)`,[tenant,j.id,randomUUID(),[randomUUID(),randomUUID()]]);
@@ -142,7 +184,8 @@ describe("MON-7a real PostgreSQL guarantees", () => {
   });
   it("upgrades the previous supported schema without altering an existing quoting job", async () => {
     await admin.query("CREATE DATABASE prevention_upgrade");
-    const upgrade=new Pool({...admin.options,database:"prevention_upgrade"});
+    // Explicit connection details: pg-pool keeps the password non-enumerable, so spreading admin.options would drop it (28P01).
+    const upgrade=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"prevention_upgrade"});
     try {
       await upgrade.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz DEFAULT clock_timestamp())");
       for(const url of MIGRATION_URLS.filter(url=>!url.pathname.endsWith("0103_prevention_checks.sql"))){await upgrade.query(await readFile(url,"utf8"));await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}

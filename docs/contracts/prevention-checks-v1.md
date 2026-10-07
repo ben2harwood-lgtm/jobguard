@@ -25,6 +25,27 @@ Every other type, including `person`, or a business without a valid number shows
 stores no counterparty row. This is an interim synthetic rule; D12 v3 owns
 production eligibility.
 
+"The current customer revision" means the customer's LATEST revision (round 2,
+integrator decision, fail closed). CH-3a customers are shared across jobs and
+revised separately, and a job binding pins one revision. A company check or watch
+is eligible only while the binding's pinned revision IS the customer's latest
+revision AND that latest revision is a `business` with a valid company number.
+If the builder later re-records the customer (for example as a `person`, or as a
+business under a new number), every company/watch command on the old binding is
+refused with `NOT_REGISTERED_COMPANY` and the panel shows `not run — not a
+registered company`, never `clear`. The same applies to a later revision that
+would itself be eligible: the builder re-binds the job to it (a CH-3a correction),
+which creates a new binding. The rule is enforced twice: by the repository and by
+the 0103 `require_prevention_subject` trigger, which re-reads the latest revision
+at insert time.
+
+An existing watch needs no stored "stop": it is derived inactive. The view reads
+the company card and feed results only while the customer is eligible, so a stale
+or ineligible customer shows no company card, an inactive watch and no feed
+results. Earlier facts stay immutable in the tables. A pinned revision can never
+become the latest again (revisions only increase), so a watch derived inactive on a
+binding stays inactive; a re-bound job starts with a fresh binding and no watch.
+
 ## Results and reference staleness
 
 Strict Zod `prevention-result.v1` contains kind, exact source ID/name, retrieval
@@ -64,7 +85,9 @@ command supports other explicit scenario times, following readiness's convention
 
 `GET /api/jobs/:id/prevention-checks` returns strict `prevention-view.v1`.
 `POST /api/jobs/:id/prevention-checks/:action` accepts `prevention-command.v1`:
-`commandId`, `action`, `expectedBindingId`, `scenarioNow`, `fixture`, plus
+`commandId`, `action`, `expectedBindingId`, `scenarioNow` (capped at millisecond
+precision, so the application and PostgreSQL evaluate the same instant),
+`fixture`, plus
 `expectedWatchRevision` for the three watch actions. The path and body action
 must agree. Actions are `property`, `company`, `start_watch`, `stop_watch` and
 `evaluate_watch`. Next is a thin adapter; Nest exposes the same application.

@@ -68,7 +68,7 @@ CREATE INDEX counterparty_check_job ON app.counterparty_check(tenant_id,job_id,b
 
 -- Invoker only: RLS-visible binding, not a privileged bypass. No individual checks.
 CREATE FUNCTION app.require_prevention_subject() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
-DECLARE b app.job_party_binding; c jsonb;
+DECLARE b app.job_party_binding; c jsonb; latest uuid;
 BEGIN
  IF NEW.tenant_id IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  SELECT * INTO b FROM app.job_party_binding WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND id=NEW.binding_id;
@@ -77,8 +77,10 @@ BEGIN
   IF b.site_revision_id<>NEW.site_revision_id THEN RAISE EXCEPTION 'PREVENTION_SITE_MISMATCH' USING ERRCODE='23503'; END IF;
  ELSE
   IF b.customer_revision_id<>NEW.customer_revision_id THEN RAISE EXCEPTION 'PREVENTION_CUSTOMER_MISMATCH' USING ERRCODE='23503'; END IF;
-  SELECT payload INTO c FROM app.customer_revision WHERE tenant_id=NEW.tenant_id AND id=NEW.customer_revision_id;
-  IF NOT coalesce(c->>'type'='business' AND c->>'companyNumber' ~ '^(\d{8}|[A-Z]{2}\d{6})$',false) THEN RAISE EXCEPTION 'NOT_REGISTERED_COMPANY' USING ERRCODE='23514'; END IF;
+  -- Q7 fails closed: "the current customer revision" is the customer's LATEST revision. The revision pinned on the
+  -- binding must still be that latest revision, and the latest must be a business with a valid company number.
+  SELECT id,payload INTO latest,c FROM app.customer_revision WHERE tenant_id=NEW.tenant_id AND customer_id=b.customer_id ORDER BY revision DESC LIMIT 1;
+  IF latest IS DISTINCT FROM NEW.customer_revision_id OR NOT coalesce(c->>'type'='business' AND c->>'companyNumber' ~ '^(\d{8}|[A-Z]{2}\d{6})$',false) THEN RAISE EXCEPTION 'NOT_REGISTERED_COMPANY' USING ERRCODE='23514'; END IF;
  END IF;
  RETURN NEW;
 END $$;

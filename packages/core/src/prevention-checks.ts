@@ -40,6 +40,15 @@ export function preventionFactStale(sourceId: string, observedAt: string | null,
 export function preventionCompanyEligible(customer: { type: string; companyNumber?: string | undefined }): boolean {
   return customer.type === "business" && /^(?:\d{8}|[A-Z]{2}\d{6})$/u.test(customer.companyNumber ?? "");
 }
+/**
+ * Q7 "current customer revision" means the customer's LATEST revision (fail closed, MON-7a round 2).
+ * A job binding pins one customer revision. A company check or watch is eligible only while that pinned
+ * revision is still the customer's latest one AND that latest revision passes the eligibility rule.
+ * An unreadable latest revision (null) or a later revision that is not eligible refuses.
+ */
+export function preventionCompanyEligibleAtLatest(pinnedRevisionId: string, latest: { revisionId: string; customer: { type: string; companyNumber?: string | undefined } } | null): boolean {
+  return latest !== null && latest.revisionId === pinnedRevisionId && preventionCompanyEligible(latest.customer);
+}
 const factV1 = z.enum(["constraint", "no_record", "company_active", "company_attention", "feed_event", "no_event"]).nullable();
 const readingV1 = z.object({ kind: z.enum(preventionKinds), source: z.object({ id: z.string().min(1).max(100), name: z.string().min(1).max(100) }).strict(),
   retrievedAt: z.string().datetime(), observedAt: z.string().datetime().nullable(), fact: factV1, evaluatedAt: z.string().datetime(),
@@ -67,7 +76,8 @@ export function evaluatePreventionFact(raw: Reading): PreventionResultV1 {
   return preventionResultV1.parse({ ...input, ...state(input, policy), version: "prevention-result.v1", environment: "synthetic_demo",
     policyVersion: policy.version, referenceOnly: true, maximumAgeMinutes: policy.maximumAgeMinutes[input.source.id] });
 }
-const base = { version: z.literal("prevention-command.v1"), commandId: z.string().uuid(), expectedBindingId: z.string().uuid(), scenarioNow: z.string().datetime(), fixture: z.enum(["mixed", "fresh", "stale", "missing"]) };
+/** scenarioNow is capped at millisecond precision: Date.parse truncates and PostgreSQL works in microseconds, so both must see the same instant. */
+const base = { version: z.literal("prevention-command.v1"), commandId: z.string().uuid(), expectedBindingId: z.string().uuid(), scenarioNow: z.string().datetime().transform(value => new Date(Date.parse(value)).toISOString()), fixture: z.enum(["mixed", "fresh", "stale", "missing"]) };
 export const preventionCommandV1 = z.discriminatedUnion("action", [
   z.object({ ...base, action: z.literal("property") }).strict(),
   z.object({ ...base, action: z.literal("company") }).strict(),

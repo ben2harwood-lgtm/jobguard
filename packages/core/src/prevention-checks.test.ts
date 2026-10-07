@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluatePreventionFact, preventionResultV1, preventionCommandV1,
-  preventionCompanyEligible, preventionFactStale, PREVENTION_SOURCES, PREVENTION_STALENESS_REFERENCE,
+  preventionCompanyEligible, preventionCompanyEligibleAtLatest, preventionFactStale, PREVENTION_SOURCES, PREVENTION_STALENESS_REFERENCE,
 } from "./prevention-checks.js";
 
 const evaluatedAt = "2026-10-07T13:00:00.000Z";
@@ -36,6 +36,33 @@ describe("MON-7a cited synthetic prevention facts", () => {
     }
     for (const companyNumber of [undefined, "", "123", "zz000001"]) expect(preventionCompanyEligible({ type: "business", companyNumber })).toBe(false);
     expect(preventionCompanyEligible({ type: "business", companyNumber: "ZZ000001" })).toBe(true);
+  });
+  it("fails closed unless the pinned customer revision is the latest one and the latest is eligible", () => {
+    const business = { type: "business", companyNumber: "ZZ000001" }, person = { type: "person", companyNumber: "ZZ000001" };
+    expect(preventionCompanyEligibleAtLatest("rev-1", { revisionId: "rev-1", customer: business })).toBe(true);
+    // The builder re-recorded the same customer as a person after the check: the pinned revision is stale and the latest is ineligible.
+    expect(preventionCompanyEligibleAtLatest("rev-1", { revisionId: "rev-2", customer: person })).toBe(false);
+    // A later revision that would itself be eligible still refuses until the job is re-bound to it.
+    expect(preventionCompanyEligibleAtLatest("rev-1", { revisionId: "rev-2", customer: business })).toBe(false);
+    // The pinned revision is the latest but is not eligible, or no latest revision can be read.
+    expect(preventionCompanyEligibleAtLatest("rev-1", { revisionId: "rev-1", customer: person })).toBe(false);
+    expect(preventionCompanyEligibleAtLatest("rev-1", { revisionId: "rev-1", customer: { type: "business" } })).toBe(false);
+    expect(preventionCompanyEligibleAtLatest("rev-1", null)).toBe(false);
+  });
+  it("caps scenarioNow at millisecond precision so TypeScript and PostgreSQL evaluate the same instant", () => {
+    const command = { version: "prevention-command.v1", commandId: "11111111-1111-4111-8111-111111111111", action: "property", expectedBindingId: "22222222-2222-4222-8222-222222222222", fixture: "fresh" };
+    const parse = (scenarioNow: string) => { const parsed = preventionCommandV1.safeParse({ ...command, scenarioNow }); expect(parsed.success).toBe(true); return parsed.success ? parsed.data.scenarioNow : ""; };
+    expect(parse("2026-10-07T15:00:00.0004Z")).toBe("2026-10-07T15:00:00.000Z");
+    expect(parse("2026-10-07T15:00:00.000999Z")).toBe("2026-10-07T15:00:00.000Z");
+    expect(parse("2026-10-07T15:00:00Z")).toBe("2026-10-07T15:00:00.000Z");
+    expect(parse("2026-10-07T15:00:00.123Z")).toBe("2026-10-07T15:00:00.123Z");
+    expect(parse(parse("2026-10-07T15:00:00.1239Z"))).toBe("2026-10-07T15:00:00.123Z");
+    // The sub-millisecond command and its capped twin evaluate identically at the flood boundary (observed exactly 180 minutes earlier).
+    const flood = PREVENTION_SOURCES.flood, observedAt = "2026-10-07T12:00:00.000Z";
+    const at = (evaluatedAt: string) => evaluatePreventionFact({ kind: "flood", source: flood, retrievedAt: observedAt, observedAt, fact: "no_record", evaluatedAt });
+    expect(at(parse("2026-10-07T15:00:00.0004Z"))).toEqual(at("2026-10-07T15:00:00.000Z"));
+    expect(at(parse("2026-10-07T15:00:00.0004Z")).status).toBe("clear");
+    expect(at(parse("2026-10-07T15:00:00.0014Z")).status).toBe("unknown");
   });
   it("strict commands reject client eligibility and tenant claims", () => {
     const command = { version: "prevention-command.v1", commandId: "11111111-1111-4111-8111-111111111111", action: "property", expectedBindingId: "22222222-2222-4222-8222-222222222222", scenarioNow: evaluatedAt, fixture: "mixed" };

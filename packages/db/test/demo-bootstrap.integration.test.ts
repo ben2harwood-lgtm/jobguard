@@ -57,7 +57,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     admin = new Pool({ connectionString: ownerUrl });
   }, 60_000);
   afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); await rm(directory, { recursive: true, force: true }); });
-  it("creates roles, applies 0000..0042, 0053, 0054, 0094 and 0095, reports actual migrations, seeds once, and keeps pooled RLS local", async () => {
+  it("creates roles, applies 0000..0042, 0053, 0054, 0094, 0095 and 0103, reports actual migrations, seeds once, and keeps pooled RLS local", async () => {
     process.env.JOBGUARD_ENV = "synthetic_demo";
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 48, tenantId: DEMO_TENANT_ID });
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 48 });

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { jobPartiesSnapshotV1, preventionCommandV1, preventionCommandResultV1, preventionViewV1, preventionResultV1,
-  preventionCompanyEligible, PreventionCheckError, PREVENTION_COMPANY_ELIGIBILITY_REFERENCE,
+  preventionCompanyEligibleAtLatest, PreventionCheckError, PREVENTION_COMPANY_ELIGIBILITY_REFERENCE,
   type PreventionKind, type PreventionResultV1, type JobPartiesSnapshotV1 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
@@ -33,15 +33,25 @@ export class PreventionCheckRepository {
       WHERE tenant_id=$1 AND job_id=$2 AND binding_id=$3 AND kind IN('watch_start','watch_stop') ORDER BY watch_revision DESC LIMIT 1`, [tenant,job,binding])).rows[0];
     return { enabled: row?.kind === "watch_start", revision: row?.watch_revision ?? 0 };
   }
+  /** Q7 fail-closed: eligibility follows the customer's LATEST revision, not only the revision pinned on the binding. */
+  private async companyEligible(db: TenantTransaction, tenant: string, job: string, current: JobPartiesSnapshotV1) {
+    const row = (await db.$client.query<{ id: string; payload: { type?: unknown; companyNumber?: unknown } }>(`SELECT r.id,r.payload FROM app.job_party_binding b
+      JOIN app.customer_revision r ON(r.tenant_id,r.customer_id)=(b.tenant_id,b.customer_id)
+      WHERE b.tenant_id=$1 AND b.job_id=$2 AND b.id=$3 ORDER BY r.revision DESC LIMIT 1`, [tenant,job,current.bindingId])).rows[0];
+    return preventionCompanyEligibleAtLatest(current.customerRevisionId, row ? { revisionId: row.id,
+      customer: { type: String(row.payload.type), ...(typeof row.payload.companyNumber === "string" ? { companyNumber: row.payload.companyNumber } : {}) } } : null);
+  }
   private async viewIn(db: TenantTransaction, tenant: string, job: string) {
     const retrievedAt = (await db.$client.query<{ retrieved_at: Date }>("SELECT clock_timestamp() retrieved_at")).rows[0]!.retrieved_at.toISOString();
     const saved = await this.parties(db,tenant,job), current = saved?.snapshot ?? null;
     let property: PreventionResultV1[] = [], company: PreventionResultV1 | null = null;
     let watch = { enabled: false, revision: 0, results: [] as PreventionResultV1[] };
+    // A stale or ineligible customer revision shows no company card and an inactive watch: nothing is read, so nothing can look clear.
+    const eligible = current ? await this.companyEligible(db,tenant,job,current) : false;
     if (current) {
       property = (await db.$client.query<{ result: unknown }>(`SELECT DISTINCT ON(kind) result FROM app.property_constraint_fact
         WHERE tenant_id=$1 AND job_id=$2 AND binding_id=$3 ORDER BY kind,created_at DESC,id DESC`, [tenant,job,current.bindingId])).rows.map(row=>preventionResultV1.parse(row.result));
-      if (preventionCompanyEligible(current.customer)) {
+      if (eligible) {
         const result = (await db.$client.query<{ result: unknown }>(`SELECT result FROM app.counterparty_check WHERE tenant_id=$1 AND job_id=$2 AND binding_id=$3 AND kind='company' ORDER BY created_at DESC,id DESC LIMIT 1`, [tenant,job,current.bindingId])).rows[0];
         company = result ? preventionResultV1.parse(result.result) : null;
         watch = { ...await this.watch(db,tenant,job,current.bindingId), results: [] };
@@ -51,7 +61,7 @@ export class PreventionCheckRepository {
     }
     return preventionViewV1.parse({ version:"prevention-view.v1",environment:"synthetic_demo",jobId:job,retrievedAt,parties:current,customerType:current?.customer.type??null,
       payingParty:current&&saved?{name:current.payingParty.name,revisionId:current.payingPartyRevisionId,source:"Builder's saved paying-party record",retrievedAt,recordedAt:saved.savedAt}:null,
-      companyEligibility:current&&preventionCompanyEligible(current.customer)?"eligible":"not run — not a registered company",
+      companyEligibility:eligible?"eligible":"not run — not a registered company",
       eligibilityPolicyVersion:PREVENTION_COMPANY_ELIGIBILITY_REFERENCE,property,company,watch,realExternalActions:0 });
   }
   async view(context: VerifiedTenantContext, actor: string, job: string, practiceDigest?: string) {
@@ -69,7 +79,7 @@ export class PreventionCheckRepository {
       // One receipt claim, then aggregate serialization/current-party share guard;
       // domain writes finish before the audit head. No new privileged helper.
       const claim = await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-        VALUES($1,$2,'prevention.check',$1::text,$3,'processing',$4) ON CONFLICT DO NOTHING RETURNING command_id`, [input.commandId,tenant,requestHash,actor]);
+        VALUES($1,$2,'prevention.check',$5,$3,'processing',$4) ON CONFLICT DO NOTHING RETURNING command_id`, [input.commandId,tenant,requestHash,actor,input.commandId]);
       if (!claim.rowCount) {
         const prior = (await db.$client.query(`SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`, [tenant,input.commandId])).rows[0];
         if (!prior || prior.request_hash !== requestHash || prior.status !== "succeeded") throw new PreventionCheckError("COMMAND_CONFLICT");
@@ -90,7 +100,7 @@ export class PreventionCheckRepository {
         throw error;
       }
       if (current.bindingId !== input.expectedBindingId) throw new PreventionCheckError("REVISION_CONFLICT");
-      if (input.action !== "property" && !preventionCompanyEligible(current.customer)) throw new PreventionCheckError("NOT_REGISTERED_COMPANY");
+      if (input.action !== "property" && !(await this.companyEligible(db,tenant,job,current))) throw new PreventionCheckError("NOT_REGISTERED_COMPANY");
       const auditId = randomUUID();
       let results: PreventionResultV1[] = [], watchRevision = 0;
       if (input.action === "property") results = preventionRegisterFixtures(propertyKinds,input.fixture,input.scenarioNow);
