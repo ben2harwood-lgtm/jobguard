@@ -115,3 +115,40 @@ it.each(methods)("$name refuses missing, invented and stranger sessions on the a
   if(scenario!=="stranger")expect(connect).not.toHaveBeenCalled();
  }
 });
+
+// Exercise the actual Next route and practiceFailure without binding a listener.
+// Framework/database adapters are doubles; PostgreSQL/browser proof remains CI.
+it("Next quote delivery GET maps missing, invented and stranger practice sessions to 401/404",async()=>{
+ const {readFileSync}=await import("node:fs");
+ const {runInNewContext}=await import("node:vm");
+ const {transpileModule,ModuleKind}=await import("typescript");
+ const {PracticeAccessError}=await import("@jobguard/db");
+ let token:string|undefined;
+ const deliveryView=vi.fn();
+ const json=(body:unknown,options?:ResponseInit)=>Response.json(body,options);
+ const adapters:Record<string,unknown>={
+  "server-only":{},"next/headers":{cookies:async()=>({get:()=>token?{value:token}:undefined})},
+  "next/server":{NextResponse:{json}},"@jobguard/db":{PracticeAccessError},"@jobguard/api/workspace":{},"pg":{},
+ };
+ function load(path:string):Record<string,any>{
+  const exports:Record<string,any>={};
+  const js=transpileModule(readFileSync(new URL(path,import.meta.url),"utf8"),{compilerOptions:{module:ModuleKind.CommonJS}}).outputText;
+  runInNewContext(js,{exports,require:(id:string)=>{if(!(id in adapters))throw new Error(`Unexpected route import: ${id}`);return adapters[id]},Response});
+  return exports;
+ }
+ adapters["../../../../../lib/synthetic-server"]=load("../../web/app/lib/synthetic-server.ts");
+ adapters["../../../../../lib/workspace-server"]={workspaceApplication:async()=>({quote:{deliveryView}})};
+ const route=load("../../web/app/api/jobs/[id]/quotes/delivery/route.ts");
+ for(const scenario of ["missing","invented","stranger"]){
+  token=scenario==="missing"?undefined:"18000000-0000-4000-8000-000000000001";
+  deliveryView.mockReset().mockRejectedValue(new PracticeAccessError(scenario==="stranger"?"NOT_FOUND":"UNAUTHENTICATED"));
+  const response=await route.GET(new Request("http://synthetic.invalid"),{params:Promise.resolve({id:job})});
+  expect(response.status).toBe(scenario==="stranger"?404:401);
+  expect(await response.json()).toEqual({code:scenario==="stranger"?"NOT_FOUND":"UNAUTHENTICATED"});
+  if(scenario==="missing")expect(deliveryView).not.toHaveBeenCalled();
+  else{expect(deliveryView).toHaveBeenCalledWith(job);expect(response.headers.get("cache-control")).toBe("no-store");}
+ }
+ token="18000000-0000-4000-8000-000000000001";
+ deliveryView.mockReset().mockResolvedValue({jobId:job,deliveries:[]});
+ expect(await (await route.GET(new Request("http://synthetic.invalid"),{params:Promise.resolve({id:job})})).json()).toEqual({jobId:job,deliveries:[]});
+});

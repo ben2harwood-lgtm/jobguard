@@ -1,6 +1,6 @@
 import { PracticeAccess } from "./practice-access.js";
 import type { Pool } from "pg";
-import { EvidencePackRepository } from "@jobguard/db";
+import { EvidencePackRepository, practiceMaterialPool } from "@jobguard/db";
 import {
   evidencePackApprovalCommandV1, evidencePackCommandV1, evidencePackIdV1, evidencePackInspectionQueryV1} from "./evidence-pack.contracts.js";
 
@@ -10,7 +10,7 @@ export class EvidencePackApplication {
 
   private async authorize(sessionId: string | undefined, caseId: string) {
     const auth = await new PracticeAccess(this.pool, sessionId).case(caseId);
-    return {ctx:auth.context, actorRef:`membership:${auth.membershipId}`};
+    return {ctx:auth.context, actorRef:`membership:${auth.membershipId}`,digest:auth.digest};
   }
 
   async list(sessionId: string | undefined, caseId: string) {
@@ -22,9 +22,9 @@ export class EvidencePackApplication {
   }
 
   async generate(sessionId: string | undefined, caseId: string, raw: unknown) {
-    const { ctx, actorRef } = await this.authorize(sessionId, caseId);
+    const { ctx, actorRef, digest } = await this.authorize(sessionId, caseId);
     const { version: _version, ...command } = evidencePackCommandV1.parse(raw);
-    await this.repo.generate(ctx, evidencePackIdV1.parse(caseId), command, actorRef);
+    await new EvidencePackRepository(practiceMaterialPool(this.pool,digest)).generate(ctx, evidencePackIdV1.parse(caseId), command, actorRef);
     return this.list(sessionId, caseId);
   }
 

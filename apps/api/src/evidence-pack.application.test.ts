@@ -1,5 +1,5 @@
 import { PracticeAccess } from "./practice-access.js";
-import { PracticeAccessError } from "@jobguard/db";
+import { PracticeAccessError, practiceMaterialPool } from "@jobguard/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { EvidencePackApplication } from "./evidence-pack.application.js";
@@ -9,6 +9,7 @@ const repository = vi.hoisted(() => ({ list: vi.fn(), generate: vi.fn(), approve
 vi.mock("@jobguard/db", async original => ({
   ...(await original<typeof import("@jobguard/db")>()),
   EvidencePackRepository: class { list = repository.list; generate = repository.generate; approveAttachment = repository.approveAttachment; inspect = repository.inspect; download = repository.download; },
+  practiceMaterialPool: vi.fn((pool: unknown) => pool),
   withTenant: (_pool: unknown, _context: unknown, run: (db: unknown) => unknown) => run({ $client: { query: repository.membership } }),
 }));
 const sessionId = "18000000-0000-4000-8000-000000000001";
@@ -25,7 +26,7 @@ describe("evidence pack API repair boundaries", () => {
       if(!this.sessionId||this.sessionId==="forged")throw new PracticeAccessError("UNAUTHENTICATED");
       if(this.sessionId!==sessionId||id!==caseId)throw new PracticeAccessError("NOT_FOUND");
       const member=(await repository.membership()).rows[0];if(!member)throw new Error("FORBIDDEN");
-      return {context:{tenantId:"11111111-1111-4111-8111-111111111111"},membershipId:member.id} as never;
+      return {context:{tenantId:"11111111-1111-4111-8111-111111111111"},membershipId:member.id,digest:hash} as never;
     }); });
   afterEach(() => {vi.unstubAllEnvs();vi.restoreAllMocks();});
   it.each(["production_billing", "pilot_no_charge"])("refuses the synthetic pack seam in %s", async mode => {
@@ -59,6 +60,7 @@ describe("evidence pack API repair boundaries", () => {
   it("derives a stable recorded actor from verified membership and returns environment identity", async () => {
     const app = new EvidencePackApplication({} as Pool);
     const response = await app.generate(sessionId, caseId, { version: "evidence-pack-command.v1", commandId });
+    expect(practiceMaterialPool).toHaveBeenCalledWith(expect.anything(),hash);
     expect(repository.generate).toHaveBeenCalledWith(expect.anything(), caseId, { commandId, format: "TEXT" }, `membership:${membershipId}`);
     await expect(app.generate("18000000-0000-4000-8000-000000000099", caseId, { version: "evidence-pack-command.v1", commandId })).rejects.toThrow("NOT_FOUND");
     expect(repository.generate).toHaveBeenCalledTimes(1);

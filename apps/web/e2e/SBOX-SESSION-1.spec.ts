@@ -14,7 +14,7 @@ test("creation binds ownership before another session's first read or write", as
   const missing = await browser.newContext({ baseURL: "http://127.0.0.1:3000" });
   try {
     expect((await stranger.request.post("/api/session")).ok()).toBe(true);
-    for (const path of ["", "/proposal", "/quotes", "/recovery-cases", "/readiness", "/supplier-documents", "/value"]) {
+    for (const path of ["", "/proposal", "/quotes", "/quotes/delivery", "/recovery-cases", "/readiness", "/supplier-documents", "/value"]) {
       const read = await stranger.request.get(`/api/jobs/${jobId}${path}`);
       expect(read.status(), await read.text()).toBe(404);
       expect(await read.json()).toMatchObject({ code: "NOT_FOUND" });
@@ -26,8 +26,14 @@ test("creation binds ownership before another session's first read or write", as
     for (const method of ["get", "post"] as const) {
       expect((await missing.request[method](`/api/jobs/${jobId}/recovery-cases`, { data: {} })).status()).toBe(401);
     }
+    const missingDelivery=await missing.request.get(`/api/jobs/${jobId}/quotes/delivery`);
+    expect(missingDelivery.status(),await missingDelivery.text()).toBe(401);
+    expect(await missingDelivery.json()).toEqual({code:"UNAUTHENTICATED"});
     await missing.addCookies([{ name: "jg_session", value: randomUUID(), domain: "127.0.0.1", path: "/" }]);
     expect((await missing.request.get(`/api/jobs/${jobId}/proposal`)).status()).toBe(401);
+    const inventedDelivery=await missing.request.get(`/api/jobs/${jobId}/quotes/delivery`);
+    expect(inventedDelivery.status(),await inventedDelivery.text()).toBe(401);
+    expect(await inventedDelivery.json()).toEqual({code:"UNAUTHENTICATED"});
     // Persist a real synthetic case/artifact, then exercise every pack transport.
     const opened=await page.request.post(`/api/jobs/${jobId}/recovery-cases`,{data:{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"merchant_overcharge",claimedNetPence:1000,counterparty:"Fictional merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:[captureId],reviewerRef:"synthetic fixture",expectedRevision:0}});
     expect(opened.ok(),await opened.text()).toBe(true);

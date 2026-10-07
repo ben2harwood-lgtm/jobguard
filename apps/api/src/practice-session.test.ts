@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
 import { CaptureApplication } from "./capture/capture.application.js";
 import { CommercialIntegrityApplication } from "./commercial-integrity.application.js";
@@ -120,4 +122,31 @@ it.each(methods)("$name cannot initialize practice authority in production or pi
   await expect(Promise.resolve().then(()=>entry.invoke(app,session))).rejects.toThrow(/SYNTHETIC_MODE_REQUIRED|ELIGIBILITY_REVIEWER_FORBIDDEN|D11_PRODUCTION_PATH_REFUSED_PROPOSED/);
   expect(query).not.toHaveBeenCalled();expect(connect).not.toHaveBeenCalled();
  }
+});
+
+
+it("material calls install only the authenticated digest inside each repository transaction", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const token="18000000-0000-4000-8000-000000000001";
+ const digest=createHash("sha256").update(token).digest("hex");
+ const query=vi.fn(async (sql:string) => ({rows:
+  sql.includes("authenticate_practice_session") ? [{tenant_id:body.tenantId,membership_id:"d1500000-0000-4000-8000-000000000003",identity_user_id:"d1500000-0000-4000-8000-000000000001"}] :
+  sql.includes("practice_session_digest=$3") ? [{id:job}] :
+  sql.includes("max(revision)") ? [{revision:0}] : []
+ }));
+ const release=vi.fn();
+ const pool={query,connect:vi.fn(async()=>({query,release}))} as unknown as Pool;
+ const app=new MaterialApplication(pool,token);
+ await app.addRate({version:"material-rate-command.v1",merchantName:"M",sku:"S",description:"Fictional",pricePence:2000,priceUnit:"each",taxBasis:"net",effectiveFrom:"2026-10-01",sourceLabel:"fixture",expectedVersion:0});
+ await app.addRequirement(job,{version:"material-requirement-command.v1",scopeItemId:job,skuId:job,quantity:"1",unit:"each",expectedRevision:0});
+ await app.view(job);
+ const calls=query.mock.calls as unknown as [string,unknown[]?][];
+ const scoped=calls.filter(([sql])=>sql.includes("app.practice_material_digest"));
+ expect(scoped).toHaveLength(3);
+ for(const call of scoped){
+  expect(call).toEqual(["SELECT set_config('app.practice_material_digest', $1, true)",[digest]]);
+  expect(calls[calls.indexOf(call)-1]).toEqual(["BEGIN",undefined]);
+ }
+ expect(calls.flatMap(([,values])=>values??[])).not.toContain(token);
+ expect(release).toHaveBeenCalledTimes(5); // Two ownership checks plus three material operations.
 });

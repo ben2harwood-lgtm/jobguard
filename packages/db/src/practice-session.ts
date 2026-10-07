@@ -33,3 +33,35 @@ export async function authorizePracticeJob(pool: Pool, token: string | undefined
  const found=await withTenant(pool,auth.context,async db=>(await db.$client.query(sql,[auth.context.tenantId,id,auth.digest])).rows[0]);
  if(!found)throw new PracticeAccessError("NOT_FOUND"); return auth;
 }
+
+/**
+ * Adapter for repositories that use withTenant's promise-based connect/query
+ * contract. Install the authenticated digest immediately after BEGIN, before
+ * any business SQL. Transaction-local state rolls back/commits with that work;
+ * the original pool and non-practice repositories are unchanged.
+ * This is an application trust boundary, not protection from stolen DB credentials.
+ */
+export function practiceMaterialPool(pool: Pool, digest: string): Pool {
+ syntheticOnly();
+ if(!/^[0-9a-f]{64}$/u.test(digest))throw new PracticeAccessError("UNAUTHENTICATED");
+ return new Proxy(pool, {
+  get(target,key) {
+   if(key==="connect")return async()=>{
+    const client=await target.connect();
+    return new Proxy(client,{
+     get(connection,property) {
+      if(property==="query")return async(sql:string,values?:unknown[])=>{
+       const result=await connection.query(sql,values);
+       if(sql==="BEGIN")await connection.query("SELECT set_config('app.practice_material_digest', $1, true)",[digest]);
+       return result;
+      };
+      const value=Reflect.get(connection,property);
+      return typeof value==="function"?value.bind(connection):value;
+     },
+    });
+   };
+   const value=Reflect.get(target,key);
+   return typeof value==="function"?value.bind(target):value;
+  },
+ });
+}

@@ -60,4 +60,55 @@ END $$;
 ALTER FUNCTION app.issue_practice_session(text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.issue_practice_session(text) FROM PUBLIC,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.issue_practice_session(text) TO jobguard_runtime;
+-- Practice catalogue ownership is assigned from the authenticated transaction
+-- digest, never a bearer token. Unbound legacy/real-tenant rows stay unbound.
+DO $$ DECLARE n text; BEGIN
+ FOREACH n IN ARRAY ARRAY['merchant','merchant_sku','merchant_sku_alias','material_pack_conversion','material_rate_revision'] LOOP
+  EXECUTE format('ALTER TABLE app.%I ADD COLUMN practice_session_digest char(64) REFERENCES control_plane.practice_session(token_digest)',n);
+  EXECUTE format('ALTER TABLE app.%I ALTER COLUMN practice_session_digest SET DEFAULT nullif(current_setting(''app.practice_material_digest'',true),'''')',n);
+  EXECUTE format('ALTER TABLE app.%I ADD CONSTRAINT practice_material_synthetic CHECK(practice_session_digest IS NULL OR tenant_id=''11111111-1111-4111-8111-111111111111''::uuid)',n);
+  -- Restrictive ANDs this filter with the existing tenant policy. FORCE RLS,
+  -- owner and SELECT/INSERT-only runtime grants remain exactly as before.
+  EXECUTE format('CREATE POLICY practice_material_isolation ON app.%I AS RESTRICTIVE FOR ALL TO jobguard_runtime,jobguard_migration USING(tenant_id<>''11111111-1111-4111-8111-111111111111''::uuid OR practice_session_digest IS NOT DISTINCT FROM nullif(current_setting(''app.practice_material_digest'',true),'''')) WITH CHECK(tenant_id<>''11111111-1111-4111-8111-111111111111''::uuid OR practice_session_digest IS NOT DISTINCT FROM nullif(current_setting(''app.practice_material_digest'',true),''''))',n);
+ END LOOP;
+END $$;
+CREATE FUNCTION app.guard_practice_material_owner() RETURNS trigger LANGUAGE plpgsql
+ SET search_path=pg_catalog AS $$ DECLARE parent_digest text; BEGIN
+ IF TG_OP='UPDATE' AND NEW.practice_session_digest IS DISTINCT FROM OLD.practice_session_digest THEN
+  RAISE EXCEPTION 'PRACTICE_OWNER_IMMUTABLE' USING ERRCODE='42501';
+ END IF;
+ IF TG_TABLE_NAME='merchant_sku' THEN
+  SELECT m.practice_session_digest INTO parent_digest FROM app.merchant m WHERE (m.tenant_id,m.id)=(NEW.tenant_id,NEW.merchant_id);
+ ELSIF TG_TABLE_NAME IN ('merchant_sku_alias','material_rate_revision') THEN
+  SELECT s.practice_session_digest INTO parent_digest FROM app.merchant_sku s WHERE (s.tenant_id,s.merchant_id,s.id)=(NEW.tenant_id,NEW.merchant_id,NEW.sku_id);
+ ELSIF TG_TABLE_NAME='material_pack_conversion' THEN
+  SELECT s.practice_session_digest INTO parent_digest FROM app.merchant_sku s WHERE (s.tenant_id,s.id)=(NEW.tenant_id,NEW.sku_id);
+ ELSE RETURN NEW;
+ END IF;
+ IF NEW.tenant_id='11111111-1111-4111-8111-111111111111'::uuid AND (NOT FOUND OR parent_digest IS DISTINCT FROM NEW.practice_session_digest) THEN
+  RAISE EXCEPTION 'PRACTICE_MATERIAL_NOT_FOUND' USING ERRCODE='42501';
+ END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.guard_practice_material_owner() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.guard_practice_material_owner() FROM PUBLIC;
+DO $$ DECLARE n text; BEGIN
+ FOREACH n IN ARRAY ARRAY['merchant','merchant_sku','merchant_sku_alias','material_pack_conversion','material_rate_revision'] LOOP
+  EXECUTE format('CREATE TRIGGER practice_material_owner BEFORE INSERT OR UPDATE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.guard_practice_material_owner()',n);
+ END LOOP;
+END $$;
+CREATE FUNCTION app.guard_practice_material_requirement() RETURNS trigger LANGUAGE plpgsql
+ SET search_path=pg_catalog AS $$ BEGIN
+ IF NEW.tenant_id='11111111-1111-4111-8111-111111111111'::uuid AND NOT EXISTS(
+  SELECT 1 FROM app.job j JOIN app.merchant_sku s ON s.tenant_id=j.tenant_id
+  WHERE (j.tenant_id,j.id)=(NEW.tenant_id,NEW.job_id) AND s.id=NEW.sku_id
+   AND j.practice_session_digest IS NOT DISTINCT FROM s.practice_session_digest
+   AND j.practice_session_digest IS NOT DISTINCT FROM nullif(current_setting('app.practice_material_digest',true),'')
+ ) THEN RAISE EXCEPTION 'PRACTICE_MATERIAL_NOT_FOUND' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.guard_practice_material_requirement() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.guard_practice_material_requirement() FROM PUBLIC;
+CREATE TRIGGER practice_material_requirement BEFORE INSERT OR UPDATE ON app.material_requirement
+ FOR EACH ROW EXECUTE FUNCTION app.guard_practice_material_requirement();
 COMMIT;

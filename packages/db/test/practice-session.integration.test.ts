@@ -6,7 +6,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { closeTestPools } from "./pool-test-utils.js";
-import { appendAuditBatch, migrate, MIGRATION_URLS, DEMO_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, CaptureRepository, SandboxRepository, listDecisionInbox, withTenant, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
+import { appendAuditBatch, migrate, MIGRATION_URLS, DEMO_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, CaptureRepository, SandboxRepository, MaterialRepository, listDecisionInbox, withTenant, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
 const priorEnvironment=process.env.JOBGUARD_ENV;
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string;
 beforeAll(async () => {
@@ -20,6 +20,7 @@ beforeAll(async () => {
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
  await admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Unbound legacy')",[legacyJob,DEMO_TENANT_ID]);
+ await admin.query("INSERT INTO app.merchant(id,tenant_id,name) VALUES($1,$2,'Legacy fictional merchant')",[legacyMerchant,DEMO_TENANT_ID]);
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,-1))await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);
  await migrate(admin);
@@ -28,7 +29,7 @@ beforeAll(async () => {
  process.env.JOBGUARD_ENV="synthetic_demo";
 },60000);
 afterAll(async()=>{if(priorEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=priorEnvironment;await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
-const legacyJob=randomUUID();
+const legacyJob=randomUUID(),legacyMerchant=randomUUID();
 async function captured(){
  const creator=await issuePracticeSession(runtime), stranger=await issuePracticeSession(runtime);
  const auth=await authenticatePracticeSession(runtime,creator),captureId=randomUUID();
@@ -97,7 +98,7 @@ it("the unscoped decision inbox selects only creation-owned jobs in SQL",async()
  for(const x of [a,b]){
   const decision=randomUUID();
   await admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'finding',$3,'check')",[decision,DEMO_TENANT_ID,x.jobId]);
-  await admin.query("INSERT INTO app.job_finding(id,tenant_id,job_id,decision_id,fingerprint,kind,classification,title,detail,subject_ref,action_type,snapshot_revision) VALUES($1,$2,$3,$4,$5,'unresolved_question','mandatory','Fictional question','Fictional only',$3,'check',0)",[randomUUID(),DEMO_TENANT_ID,x.jobId,decision,randomUUID().replaceAll('-','').repeat(2)]);
+  await admin.query("INSERT INTO app.job_finding(id,tenant_id,job_id,decision_id,fingerprint,kind,classification,title,detail,subject_ref,action_type,snapshot_revision) VALUES($1,$2,$3,$4,$5,'unresolved_question','mandatory','Fictional question','Fictional only',$6,'check',0)",[randomUUID(),DEMO_TENANT_ID,x.jobId,decision,randomUUID().replaceAll('-','').repeat(2),x.jobId]);
  }
  for(const x of [a,b]){
   const rows=await withTenant(runtime,x.auth.context,db=>listDecisionInbox(db,undefined,x.auth.digest));
@@ -113,4 +114,61 @@ it("sandbox runs bind at creation and store no bearer token in run/audit referen
  expect((await authorizePracticeJob(runtime,creator,run.jobId)).membershipId).toBe(DEMO_MEMBERSHIP_ID);
  const stored=(await admin.query("SELECT session_id::text FROM app.sandbox_run WHERE id=$1",[run.id])).rows[0];expect(stored.session_id).not.toBe(creator);
  expect((await admin.query("SELECT actor_ref FROM app.audit_event WHERE subject_ref=$1",[run.id])).rows.every((row:any)=>!row.actor_ref.includes(creator))).toBe(true);
+});
+
+it("two practice material catalogues never share versions, descriptions, rates or requirements",async()=>{
+ expect((await admin.query("SELECT practice_session_digest FROM app.merchant WHERE id=$1",[legacyMerchant])).rows[0].practice_session_digest).toBeNull();
+ const a=await captured(),b=await captured();
+ const {practiceMaterialPool}=await import("../src/practice-session.js");
+ const repoA=new MaterialRepository(practiceMaterialPool(runtime,a.auth.digest));
+ const repoB=new MaterialRepository(practiceMaterialPool(runtime,b.auth.digest));
+ const scopeA=randomUUID(),scopeB=randomUUID();
+ for(const [x,scope] of [[a,scopeA],[b,scopeB]] as const)await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,x.jobId]);
+ const rate={merchantName:"M",sku:"S",description:"A's fictional description",pricePence:2000,priceUnit:"box" as const,packEachQuantity:"10",taxBasis:"net" as const,effectiveFrom:"2026-10-01",sourceLabel:"A fixture",expectedVersion:0};
+ const firstA=await repoA.addRate(a.auth.context,rate);
+ // B repeats the same name/SKU and expected version, with its own description.
+ const firstB=await repoB.addRate(b.auth.context,{...rate,description:"B's fictional description",pricePence:3000,sourceLabel:"B fixture"});
+ expect(firstA.version).toBe(1);expect(firstB.version).toBe(1);
+ expect(firstB.merchantId).not.toBe(firstA.merchantId);expect(firstB.skuId).not.toBe(firstA.skuId);
+ await repoA.addRequirement(a.auth.context,{jobId:a.jobId,scopeItemId:scopeA,skuId:firstA.skuId,quantity:"2",unit:"each",expectedRevision:0});
+ await repoB.addRequirement(b.auth.context,{jobId:b.jobId,scopeItemId:scopeB,skuId:firstB.skuId,quantity:"2",unit:"each",expectedRevision:0});
+ const before=await repoB.view(b.auth.context,b.jobId,"2026-10-07");
+ expect(before).toMatchObject([{description:"B's fictional description",rateVersion:1,status:"applicable",eachPence:300,netPence:600,sourceLabel:"B fixture"}]);
+ // Neither the guessed version nor the other session's SKU permits shared editing.
+ await expect(repoB.addRate(b.auth.context,{...rate,expectedVersion:2})).rejects.toThrow("STALE_MATERIAL_RATE_REVISION");
+ await expect(repoB.addRequirement(b.auth.context,{jobId:b.jobId,scopeItemId:scopeB,skuId:firstA.skuId,quantity:"2",unit:"each",expectedRevision:1})).rejects.toMatchObject({code:"42501"});
+ await repoA.addRate(a.auth.context,{...rate,expectedVersion:1,pricePence:9000,packEachQuantity:"5",effectiveFrom:"2026-10-02"});
+ expect(await repoB.view(b.auth.context,b.jobId,"2026-10-07")).toEqual(before);
+ expect(await repoA.view(a.auth.context,b.jobId,"2026-10-07")).toEqual([]);
+ const secondB=await repoB.addRate(b.auth.context,{...rate,description:"Ignored edit",expectedVersion:1,pricePence:4000,effectiveFrom:"2026-10-08",sourceLabel:"B future"});
+ expect(secondB.version).toBe(2);expect(secondB.skuId).toBe(firstB.skuId);
+ expect(await repoB.view(b.auth.context,b.jobId,"2026-10-07")).toEqual(before);
+ for(const [table,id,digest] of [["merchant",firstA.merchantId,a.auth.digest],["merchant_sku",firstA.skuId,a.auth.digest],["material_rate_revision",firstA.id,a.auth.digest],["merchant",firstB.merchantId,b.auth.digest],["merchant_sku",firstB.skuId,b.auth.digest],["material_rate_revision",firstB.id,b.auth.digest]]){
+  expect((await admin.query(`SELECT practice_session_digest FROM app.${table} WHERE id=$1`,[id])).rows[0].practice_session_digest).toBe(digest);
+  await expect(admin.query(`UPDATE app.${table} SET practice_session_digest=$1 WHERE id=$2`,[digest===a.auth.digest?b.auth.digest:a.auth.digest,id])).rejects.toMatchObject({code:"42501"});
+  await expect(withTenant(runtime,b.auth.context,db=>db.$client.query(`UPDATE app.${table} SET practice_session_digest=$1 WHERE id=$2`,[b.auth.digest,id]))).rejects.toMatchObject({code:"42501"});
+ }
+ // The pooled unscoped connection must not retain the preceding session digest.
+ expect(await new MaterialRepository(runtime).view(b.auth.context,b.jobId,"2026-10-07")).toEqual([]);
+ const catalogs=await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname,has_table_privilege('jobguard_runtime',c.oid,'SELECT') can_read,has_table_privilege('jobguard_runtime',c.oid,'INSERT') can_insert,has_table_privilege('jobguard_runtime',c.oid,'UPDATE,DELETE,TRUNCATE') can_mutate FROM pg_class c JOIN pg_roles r ON r.oid=c.relowner WHERE c.oid IN('app.merchant'::regclass,'app.merchant_sku'::regclass,'app.material_rate_revision'::regclass,'app.material_pack_conversion'::regclass,'app.merchant_sku_alias'::regclass,'app.material_requirement'::regclass)");
+ expect(catalogs.rows).toHaveLength(6);
+ for(const row of catalogs.rows)expect(row).toMatchObject({relrowsecurity:true,relforcerowsecurity:true,rolname:"jobguard_migration",can_read:true,can_insert:true,can_mutate:false});
+});
+
+
+it("the non-practice material path retains tenant-wide revisions and descriptions",async()=>{
+ const tenant=randomUUID(),jobId=randomUUID(),scopeItemId=randomUUID();
+ await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[tenant]);
+ await admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional real-tenant path')",[jobId,tenant]);
+ await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeItemId,tenant,jobId]);
+ const context={tenantId:tenant} as import("../src/tenant-context.js").VerifiedTenantContext;
+ const repo=new MaterialRepository(runtime);
+ const input={merchantName:"M",sku:"S",description:"Original tenant description",pricePence:2000,priceUnit:"each" as const,taxBasis:"net" as const,effectiveFrom:"2026-10-01",sourceLabel:"synthetic fixture",expectedVersion:0};
+ const first=await repo.addRate(context,input);
+ await repo.addRequirement(context,{jobId,scopeItemId,skuId:first.skuId,quantity:"2",unit:"each",expectedRevision:0});
+ await expect(repo.addRate(context,input)).rejects.toThrow("STALE_MATERIAL_RATE_REVISION");
+ const next=await repo.addRate(context,{...input,description:"Later description",pricePence:3000,effectiveFrom:"2026-10-08",expectedVersion:1});
+ expect(next).toMatchObject({version:2,merchantId:first.merchantId,skuId:first.skuId});
+ expect(await repo.view(context,jobId,"2026-10-07")).toMatchObject([{description:input.description,rateVersion:1,status:"applicable",netPence:4000}]);
+ expect((await admin.query("SELECT practice_session_digest FROM app.material_rate_revision WHERE id=$1",[next.id])).rows[0].practice_session_digest).toBeNull();
 });
