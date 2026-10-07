@@ -95,11 +95,14 @@ export function assertClaimCoversSettled(input: Readonly<{ claimedPence: number;
  * `writtenOffPence` is the cumulative amount already written off by earlier events. The returned
  * `writtenOffPence` is the amount written off by THIS event only (never a running total), so event
  * amounts can be summed. Landing is bounded by claimed - writtenOff - landed, so a later landing
- * after a write-off and a reversal can never re-claim written-off value.
+ * after a write-off and a reversal can never re-claim written-off value. For manual receipt/reversal
+ * events, landedPence is the manual ledger and approvedLandedPence is its overlapping approved
+ * stream: the returned landedPence is still manual, while state uses their post-event maximum.
+ * Other events take effective landedPence as before.
  */
 export function transitionRecoveryCase(input: Readonly<{
   state: RecoveryCaseState; event: RecoveryEventType; claimedPence: number; landedPence: number;
-  writtenOffPence?: number; amountPence?: number;
+  writtenOffPence?: number; amountPence?: number; approvedLandedPence?: number;
 }>): { state: RecoveryCaseState; landedPence: number; writtenOffPence: number } {
   if (!recoveryEventAllowedFrom(input.state, input.event)) throw new RecoveryTransitionError(input.state, input.event);
   const claimed: number = money(input.claimedPence).pence;
@@ -111,6 +114,14 @@ export function transitionRecoveryCase(input: Readonly<{
   // "Closed — recovered" means the whole CURRENT claim was received (BUILD_PLAN section 5.5); anything less closes by write-off or as no recovery.
   if (input.event === "close_recovered" && landed !== claimed) throw new RecoveryTransitionError(input.state, input.event);
   let writtenOffPence = 0;
+  // Manual event amounts remain bounded by the manual ledger. State reflects the same-money
+  // projection AFTER that event: the greater of manual and approved, with write-off preserved.
+  const receiptState = (manual: number): RecoveryCaseState => {
+    const effective = Math.max(manual, money(input.approvedLandedPence ?? 0).pence);
+    if (effective + priorWrittenOff > claimed) throw new RecoveryTransitionError(input.state, input.event);
+    return effective === claimed ? "landed" : effective + priorWrittenOff === claimed ? "closed_no_recovery"
+      : effective > 0 ? "partially_landed" : "evidence_assembled";
+  };
   if (input.event === "record_landing") {
     const amount = money(input.amountPence ?? Number.NaN).pence;
     if (amount <= 0 || landed + priorWrittenOff + amount > claimed) throw new RecoveryTransitionError(input.state, input.event);
@@ -118,14 +129,14 @@ export function transitionRecoveryCase(input: Readonly<{
     // A receipt that uses up everything not already written off leaves nothing outstanding. With nothing written off that is "landed" (received in full);
     // with an earlier write-off (kept through a reversal) the written-off disposition is preserved, so the case is never stranded in partially_landed
     // with no principal left to receive, write off or close.
-    const state: RecoveryCaseState = landed === claimed ? "landed" : landed + priorWrittenOff === claimed ? "closed_no_recovery" : "partially_landed";
+    const state = receiptState(landed);
     return { state, landedPence: landed, writtenOffPence };
   }
   if (input.event === "reverse_landing") {
     const amount = money(input.amountPence ?? Number.NaN).pence;
     if (amount <= 0 || amount > landed) throw new RecoveryTransitionError(input.state, input.event);
     landed -= amount;
-    return { state: landed ? "partially_landed" : "evidence_assembled", landedPence: landed, writtenOffPence };
+    return { state: receiptState(landed), landedPence: landed, writtenOffPence };
   }
   const state: RecoveryCaseState = input.event === "assemble_evidence" ? "evidence_assembled"
     : input.event === "start_pursuit" || input.event === "resume_pursuit" ? "pursuing"

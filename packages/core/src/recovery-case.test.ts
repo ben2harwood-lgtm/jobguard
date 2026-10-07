@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventAllowedFrom, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
+import { type RecoveryCaseState, assertClaimAmendable, assertClaimCoversSettled, assertRecoverySources, describeRecoverySource, recoveryCaseStateFullV1, recoveryEventAllowedFrom, recoveryEventTypeV1, stateAfterClaimAmendment, transitionRecoveryCase } from "./recovery-case.js";
 
 describe("complete recovery state machine",()=>{
  const expected = {
@@ -269,5 +269,26 @@ describe("M4-1-S-R repair 12, Sol P2-3 control: a control is enabled only for an
    if (recoveryEventAllowedFrom(state, event)) continue;
    expect(() => transitionRecoveryCase({ claimedPence: 100000, state, landedPence: 0, event, amountPence: 100 }), `${state} ${event}`).toThrowError(/is not allowed/);
   }
+ });
+});
+
+// Repair 15: manual bounds remain independent of the overlapping approved stream.
+describe("repair 15: effective post-event principal determines manual receipt state", () => {
+ const run = (state: RecoveryCaseState, event: "record_landing" | "reverse_landing", manual: number, approved: number, amount: number, writtenOffPence = 0) =>
+  transitionRecoveryCase({state,event,claimedPence:250000,landedPence:manual,approvedLandedPence:approved,amountPence:amount,writtenOffPence} as Parameters<typeof transitionRecoveryCase>[0]);
+ it("approved £2,500 plus overlapping manual £1,000 records received in full", () => {
+  expect(run("evidence_assembled","record_landing",0,250000,100000)).toEqual({state:"landed",landedPence:100000,writtenOffPence:0});
+ });
+ it("reversing the manual £1,000 from a recovered closure keeps approved £2,500 received", () => {
+  expect(run("closed_recovered","reverse_landing",100000,250000,100000)).toEqual({state:"landed",landedPence:0,writtenOffPence:0});
+ });
+ it("approved plus write-off exhausting the claim keeps the written-off disposition on receipt and reversal", () => {
+  expect(run("evidence_assembled","record_landing",0,100000,50000,150000).state).toBe("closed_no_recovery");
+  expect(run("closed_no_recovery","reverse_landing",50000,100000,50000,150000).state).toBe("closed_no_recovery");
+ });
+ it("still bounds reversals by manual principal and receipts by manual principal plus write-off", () => {
+  expect(()=>run("closed_recovered","reverse_landing",100000,250000,100001)).toThrow();
+  expect(()=>run("evidence_assembled","record_landing",0,250000,250001)).toThrow();
+  expect(()=>run("evidence_assembled","record_landing",0,100000,100001,150000)).toThrow();
  });
 });

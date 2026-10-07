@@ -38,17 +38,25 @@ export const refusalText = (body: unknown): string => {
 /**
  * Decide what an answer means.
  *
- * A 4xx is the one explicit refusal: the request was read and declined, so nothing ran. Anything else that is not a valid success is UNKNOWN, including a 5xx (a command can
+ * A first-attempt 4xx is an explicit refusal. On retry it may precede the original-command lookup and leave that earlier outcome UNKNOWN. Anything else that is not a valid success is UNKNOWN, including a 5xx (a command can
  * commit and then fail while its answer is being built, or a gateway can answer for a server that did the work) and a 2xx that does not match the command contract.
  */
-export function commandOutcome(answer: CommandAnswer): CommandOutcome {
+export function commandOutcome(answer: CommandAnswer, earlierOutcomeUnknown = false): CommandOutcome {
   if (answer === undefined) return { kind: "unknown", message: lostAnswer };
   const { status, body } = answer;
   if (status >= 200 && status < 300) {
     const parsed = recoveryCaseCommandResponseV1.safeParse(body);
     return parsed.success ? { kind: "saved", response: parsed.data } : { kind: "unknown", message: unreadableAnswer };
   }
-  if (status >= 400 && status < 500) return { kind: "refused", message: refusalText(body) };
+  if (status >= 400 && status < 500) {
+    // Membership/session/job checks can refuse a retry BEFORE the durable command is looked up.
+    // Such a refusal says nothing about the earlier request. Only a payload conflict explicitly
+    // establishes, through that lookup, that this exact command body was not the recorded work.
+    const payloadConflict = status === 409 && typeof body === "object" && body !== null
+      && "code" in body && body.code === "IDEMPOTENCY_PAYLOAD_CONFLICT";
+    if (earlierOutcomeUnknown && !payloadConflict) return { kind: "unknown", message: `${refusalText(body)}. Your earlier action may or may not have been saved. ${resend}` };
+    return { kind: "refused", message: refusalText(body) };
+  }
   return { kind: "unknown", message: unreadableAnswer };
 }
 

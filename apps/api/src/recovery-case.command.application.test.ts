@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 const spies = vi.hoisted(() => ({ verify: vi.fn(), command: vi.fn(), list: vi.fn() }));
 vi.mock("@jobguard/db", async importOriginal => ({
   ...await importOriginal<typeof import("@jobguard/db")>(),
@@ -104,4 +104,24 @@ it("a command that committed cannot turn its answer-read failure into a refusal"
  spies.list.mockRejectedValue(new Error("RECOVERY_STALE_REVISION"));
  await expect(new RecoveryCaseApplication({} as Pool).command(jobId, input())).rejects.toMatchObject({ code: "RECOVERY_COMMAND_OUTCOME_UNKNOWN" });
  expect(spies.command).toHaveBeenCalledTimes(1);
+});
+
+// Repair 15: every response money field shares the same safe integer magnitude boundary.
+describe("repair 15 response money boundaries", () => {
+ const view = {id:affectedId,jobId,caseType:"withheld_customer_payment",state:"identified",claimedNetPence:250000,landedNetPence:0,outstandingNetPence:250000,writtenOffPence:0,currency:"GBP",counterparty:"Fictional",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[],sources:[],feeJobLiabilityPence:0,feeObligationsPostedPence:0,feeCompensationsPostedPence:0,approvedLandedNetPence:0,revision:1,reviewerRef:"membership:fictional",createdDate:"2026-10-07",eligibility:{revision:1,caseRevision:1,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,classification:"eligible_for_review",eligibleNetPence:0,reason:"Synthetic",citations:[],status:"reviewed",reviewerRef:"membership:fictional"}};
+ const envelope = (row: unknown) => ({version:"recovery-case-workbench.v1",environment:"synthetic_demo",realExternalActions:0,affectedCaseId:affectedId,cases:[row]});
+ const principals = ["claimedNetPence","landedNetPence","outstandingNetPence","writtenOffPence","approvedLandedNetPence","feeObligationsPostedPence","feeCompensationsPostedPence","eligibleNetPence"];
+ const row = (field:string,value:number|null) => field === "eligibleNetPence" ? {...view,eligibility:{...view.eligibility,eligibleNetPence:value}} : {...view,[field]:value};
+ it.each(principals)("%s rejects negative, excessive and unsafe pence in list and command answers", field => {
+  for(const value of [-1,1_000_000_000_001,2 ** 53,0.5]) {
+   expect(recoveryCaseListResponseV1.safeParse(envelope(row(field,value))).success,`${field}: ${value}`).toBe(false);
+   expect(recoveryCaseCommandResponseV1.safeParse(envelope(row(field,value))).success,`${field}: ${value}`).toBe(false);
+  }
+  for(const value of [0,1_000_000_000_000]) expect(recoveryCaseCommandResponseV1.safeParse(envelope(row(field,value))).success).toBe(true);
+ });
+ it("job net ledger liability is signed and bounded; eligibility may remain unknown", () => {
+  for(const value of [-1,-1_000_000_000_000,0,1_000_000_000_000]) expect(recoveryCaseCommandResponseV1.safeParse(envelope(row("feeJobLiabilityPence",value))).success).toBe(true);
+  for(const value of [-1_000_000_000_001,1_000_000_000_001,2 ** 53]) expect(recoveryCaseCommandResponseV1.safeParse(envelope(row("feeJobLiabilityPence",value))).success).toBe(false);
+  expect(recoveryCaseCommandResponseV1.safeParse(envelope(row("eligibleNetPence",null))).success).toBe(true);
+ });
 });

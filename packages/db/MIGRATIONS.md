@@ -115,7 +115,31 @@ Existing 0041 rows keep their historical labels and lack a verified artifact/req
 
 0042 first updates the two 0041 tenant policies to use missing-safe, empty-safe tenant context, so the migration no longer fails with `unrecognized configuration parameter` under `jobguard_migration`. That alone would make the new case-qualified foreign key pass without looking at any row (the owner has no tenant context under FORCE RLS), so 0042 also lifts FORCE ROW LEVEL SECURITY on `evidence_pack` and `evidence_pack_revision` for the one `ADD CONSTRAINT … FOREIGN KEY` statement, inside the same transaction, and restores it immediately afterwards. Existing rows are therefore genuinely validated: a 0041 revision whose case differs from its pack's case makes 0042 fail with 23503 and roll back, and the data must be corrected first. Absent context still admits no rows; ownership, policies and runtime grants are unchanged and FORCE is never off outside the migration. No business rows are rewritten. Proof: `packages/db/test/evidence-pack-upgrade.integration.test.ts` (real 0041 database, applied as `jobguard_migration`).
 
-## 0043_recovery_case_current.sql — M4-1-S retrospective repair
+## 0053 — SH-1 shared money and origin
+
+Adds immutable `job_commercial_track` and `extra_origin` tables with FORCE RLS,
+qualified foreign keys, narrow grants and trigger-only binding/provenance paths.
+Adds required track/origin columns to variations; a deferred reverse FK requires
+one exact origin at commit. Backfills the previous synthetic small-builder schema
+idempotently while retaining source identities/history and explicitly unknown
+raising metadata. Existing activation/import routines bind inside their current
+transaction through bounded triggers. No fee posting or external effect is added.
+
+Expand compatibility: existing capture inserts can omit the new columns on bound
+small-builder jobs, obtaining labelled legacy provenance. Existing pricing/state
+UPDATE grants are unchanged; origin/track UPDATE is denied. Fresh quote jobs bind
+at switch-live; adoption imports bind with their imported baseline. New contractor
+imports will bind through their own future authorized routine.
+
+Forward fix is preferred: append a migration preserving established bindings and
+origin rows. Do not drop these tables or rewrite origins after deployment. If the
+upgrade fails, its SQL transaction rolls back, leaving the preceding schema intact.
+Before rollout run fresh, previous-schema upgrade, twice-replayed backfill, runtime
+privilege/RLS/forgery tests and the existing Neon non-superuser bootstrap suite.
+SH-1 adds real PostgreSQL tests in `test/shared-money-origin.integration.test.ts`;
+local socket restrictions leave execution and earlier DB/browser regressions to CI.
+
+## 0097_recovery_case_current.sql — M4-1-S retrospective repair
 
 Expand-compatible: keeps immutable `recovery_case` creation columns for existing
 writers and foreign keys, and documents them as legacy snapshots. The
@@ -155,26 +179,12 @@ repeat migration, legacy landing behavior, amended claim/revision in the landing
 routine, prevention, runtime read isolation and forbidden updates. Forward-fix
 only; do not delete immutable history or restore the stale landing routine.
 
-## 0053 — SH-1 shared money and origin
-
-Adds immutable `job_commercial_track` and `extra_origin` tables with FORCE RLS,
-qualified foreign keys, narrow grants and trigger-only binding/provenance paths.
-Adds required track/origin columns to variations; a deferred reverse FK requires
-one exact origin at commit. Backfills the previous synthetic small-builder schema
-idempotently while retaining source identities/history and explicitly unknown
-raising metadata. Existing activation/import routines bind inside their current
-transaction through bounded triggers. No fee posting or external effect is added.
-
-Expand compatibility: existing capture inserts can omit the new columns on bound
-small-builder jobs, obtaining labelled legacy provenance. Existing pricing/state
-UPDATE grants are unchanged; origin/track UPDATE is denied. Fresh quote jobs bind
-at switch-live; adoption imports bind with their imported baseline. New contractor
-imports will bind through their own future authorized routine.
-
-Forward fix is preferred: append a migration preserving established bindings and
-origin rows. Do not drop these tables or rewrite origins after deployment. If the
-upgrade fails, its SQL transaction rolls back, leaving the preceding schema intact.
-Before rollout run fresh, previous-schema upgrade, twice-replayed backfill, runtime
-privilege/RLS/forgery tests and the existing Neon non-superuser bootstrap suite.
-SH-1 adds real PostgreSQL tests in `test/shared-money-origin.integration.test.ts`;
-local socket restrictions leave execution and earlier DB/browser regressions to CI.
+Renumbered from reserved 0043 to 0097 under Ben's 5 October merge-ahead ruling
+(recorded 7 October): 0053 is already merged. Registered last after 0053; SQL bytes
+are unchanged. Fresh installs still apply 45 files; the upgrade regression installs
+all registered migrations preceding 0097, seeds earlier history, then applies 0097.
+No data backfill or new grant is added by renumbering. This changes an unmerged
+reservation; no deployed database is altered here. An environment already tracking
+0043 needs a separately reviewed forward fix before reusing it with 0097; historical
+receipts retain their original migration names. Merge after
+any lower-numbered PR that lands first, or renumber again. Forward-fix only as above.

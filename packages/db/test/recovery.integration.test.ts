@@ -90,6 +90,30 @@ describe("structural recovery fee guard",()=>{
    expect(await allocationsAndDerivations(c.id)).toEqual({ allocations: 1, derivations: 1, journal: 1 });
   });
 
+
+  it("repair 15: overlapping manual receipt and its reversal keep approved full principal and replay-safe received state", async () => {
+   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(true);
+   let c = await open(repo,250000,w);
+   c = await step(repo,c,{eventType:"assemble_evidence"},w);
+   const approval = (await readyToLand(c,250000,w))(250000);
+   await land(approval,w);
+   expect(await viewOf(repo,c.id,w)).toMatchObject({state:"evidence_assembled",approvedLandedNetPence:250000,landedNetPence:250000,outstandingNetPence:0});
+   const record = {version:"recovery-case-command.v1",action:"transition",commandId:randomUUID(),caseId:c.id,eventType:"record_landing",amountPence:100000,expectedRevision:c.revision};
+   c = await repo.command(w.ctx,w.job,record,w.reviewer);
+   expect(c).toMatchObject({state:"landed",landedNetPence:250000,approvedLandedNetPence:250000,outstandingNetPence:0});
+   expect((await repo.command(w.ctx,w.job,record,w.reviewer)).revision).toBe(c.revision);
+   c = await step(repo,c,{eventType:"close_recovered"},w);
+   await expect(step(repo,c,{eventType:"reverse_landing",amountPence:100001},w)).rejects.toThrow(/is not allowed/);
+   const reverse = {...record,commandId:randomUUID(),eventType:"reverse_landing",expectedRevision:c.revision};
+   c = await repo.command(w.ctx,w.job,reverse,w.reviewer);
+   expect(c).toMatchObject({state:"landed",landedNetPence:250000,approvedLandedNetPence:250000,outstandingNetPence:0});
+   expect((await repo.command(w.ctx,w.job,reverse,w.reviewer)).revision).toBe(c.revision);
+   expect((await admin.query("SELECT manual_landed,approved_landed,landed,state FROM app.recovery_case_current WHERE id=$1",[c.id])).rows).toEqual([{manual_landed:"0",approved_landed:"250000",landed:"250000",state:"landed"}]);
+   expect((await admin.query("SELECT event_type,to_state FROM app.recovery_case_event WHERE case_id=$1 AND event_type IN('record_landing','reverse_landing') ORDER BY sequence",[c.id])).rows).toEqual([{event_type:"record_landing",to_state:"landed"},{event_type:"reverse_landing",to_state:"landed"}]);
+   await expect(step(repo,c,{eventType:"reverse_landing",amountPence:1},w)).rejects.toThrow(/is not allowed/);
+   expect(await step(repo,c,{eventType:"close_recovered"},w)).toMatchObject({state:"closed_recovered",outstandingNetPence:0});
+  });
+
   it("reconciles approved landings and their reversals with the case accounting exactly once, without double counting manual records (Sol P2)", async () => {
    const repo = new RecoveryCaseRepository(runtime), w = await createWorld(true);
    let c = await open(repo, 250000, w);

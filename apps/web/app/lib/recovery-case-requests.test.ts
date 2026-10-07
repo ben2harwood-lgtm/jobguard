@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commandOutcome, customerSourceRefs, lostAnswer, merchantSourceRefs, parseCustomerInvoices, parseSupplierSources, refusalText, saveFailure, unreadableAnswer } from "./recovery-case-requests";
+import { commandOutcome, customerSourceRefs, lostAnswer, merchantSourceRefs, parseCustomerInvoices, parseSupplierSources, readList, refusalText, saveFailure, unreadableAnswer } from "./recovery-case-requests";
 
 const CASE_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", CASE_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const view = (id: string) => ({
@@ -73,4 +73,10 @@ describe("recorded-source lookups (M4-1-S-R repair 13, Sol P3-3): every row is c
     expect(customerSourceRefs([{ id: CASE_A }, { id: CASE_B }])).toEqual([CASE_B]);
     expect(customerSourceRefs([])).toEqual(["Generated customer invoice INV-18800"]);
   });
+});
+
+it.each([-1, 1_000_000_000_001, 2 ** 53])("repair 15: invalid principal %s is unknown on a command and fails a list", value => {
+ const body = {...good,cases:[{...view(CASE_B),approvedLandedNetPence:value}]};
+ expect(commandOutcome({status:200,body})).toEqual({kind:"unknown",message:unreadableAnswer});
+ expect(readList(body)).toBeUndefined();
 });

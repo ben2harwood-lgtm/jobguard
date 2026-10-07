@@ -288,3 +288,51 @@ test("a lost save answer cannot be turned into a duplicate case: the only retry 
  expect(commandIds).toHaveLength(3);expect(commandIds[2]).not.toBe(commandIds[0]);
  expect(await persistedCases()).toHaveLength(2)
 });
+
+// Repair 15: real PostgreSQL fixture and real command routes; no fulfilled success APIs.
+// The approval is synthetic reference-v1 test data, never a production Decision or provider fact.
+test("approved £2,500 plus overlapping manual £1,000 remains received in full after recording and reversing the manual record", async ({page,browser}) => {
+ const {Pool} = await import("pg");
+ const {randomUUID} = await import("node:crypto");
+ const jobId = await confirmedJob(page);
+ await button(page,"Open £2,500 withheld payment").click(); await V(page,"case-claimed-net","£2,500.00");
+ await button(page,"Evidence assembled").click(); await V(page,"case-state","Evidence assembled");
+ const before = await (await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();
+ const c = before.cases[0] as {id:string;revision:number};
+ const admin = new Pool({host:"127.0.0.1",port:55432,user:"postgres",password:"sbox-e2e-owner",database:"jobguard_synthetic_demo",max:1});
+ try {
+  const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1",[jobId])).rows[0].tenant_id;
+  const activation=randomUUID(),upload=randomUUID(),evidence=randomUUID(),receipt=randomUUID(),eligibility=randomUUID(),landing=randomUUID();
+  const db=await admin.connect();
+  try {
+   await db.query("BEGIN");
+   await db.query("SET LOCAL session_replication_role=replica");
+   await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES($1,$2,$3,$4,1,repeat('a',64),'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$5,now())",[activation,tenantId,jobId,randomUUID(),randomUUID()]);
+   await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",[randomUUID(),tenantId,jobId,activation,randomUUID()]);
+   await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES($1,$2,$3,$4,repeat('b',64),'application/pdf',1,'standard_evidence','verified','synthetic-v1',now(),now()+interval '1 hour')",[upload,tenantId,jobId,`synthetic/${upload}`]);
+   // Restore normal constraints before recording verified evidence, settled synthetic cash and exact approvals.
+   await db.query("SET LOCAL session_replication_role=origin");
+   await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'synthetic-v1',repeat('b',64),1,'application/pdf','standard_evidence',now(),now())",[evidence,tenantId,upload,jobId,`synthetic/${upload}`]);
+   await db.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1::uuid,$2,$3,$1::text,$1::text,'settled',250000,'GBP',true,now())",[receipt,tenantId,jobId]);
+   for(const [id,kind] of [[eligibility,"eligibility"],[landing,"landing"]]) await db.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id)VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',now()+interval '1 hour',$7)",[id,tenantId,jobId,c.id,kind,c.revision,randomUUID()]);
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
+   await db.query("SELECT app.approve_synthetic_landing($1::jsonb)",[{version:"recovery.landing.approve.v1",policyVersion:"reference_fee_policy_v1",jobId,caseId:c.id,expectedCaseRevision:c.revision,receiptId:receipt,evidenceId:evidence,eligibilityApprovalId:eligibility,landingApprovalId:landing,allocationId:randomUUID(),derivationId:randomUUID(),journalId:randomUUID(),grossPence:250000,eligibleNetPence:250000,currency:"GBP",netTaxBasis:"known_net",causationConfirmed:true}]);
+   await db.query("COMMIT");
+  } catch(error) {await db.query("ROLLBACK");throw error} finally {db.release()}
+ } finally {await admin.end()}
+ await page.reload(); await V(page,"case-landed-net","£2,500.00"); await V(page,"case-state","Evidence assembled");
+ await page.getByLabel("Received (£)",{exact:true}).fill("1000.00"); await button(page,"Record a landed recovery").click();
+ await V(page,"case-state","Received in full"); await V(page,"case-landed-net","£2,500.00"); await V(page,"case-outstanding-net","£0.00");
+ await button(page,"Close as recovered").click(); await V(page,"case-state","Closed — recovered");
+ await page.getByLabel("Reversed (£)",{exact:true}).fill("1000.00"); await button(page,"Reverse a landed recovery").click();
+ await V(page,"case-state","Received in full"); await V(page,"case-landed-net","£2,500.00"); await V(page,"case-outstanding-net","£0.00");
+ await expect(button(page,"Close as recovered")).toBeEnabled();
+ const persisted = await (await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();
+ expect(persisted.cases[0]).toMatchObject({id:c.id,state:"landed",approvedLandedNetPence:250000,landedNetPence:250000,outstandingNetPence:0});
+ await page.reload(); await V(page,"case-state","Received in full");
+ const second = await signedInSecondPage(browser,jobId);
+ try {await V(second.secondPage,"case-state","Received in full");expect(await (await second.secondPage.request.get(`/api/jobs/${jobId}/recovery-cases`)).json()).toEqual(persisted)} finally {await second.context.close()}
+ await button(page,"Close as recovered").click(); await V(page,"case-state","Closed — recovered");
+ await expect(page.getByText("Practice sandbox — synthetic data; nothing is sent or charged",{exact:true})).toHaveCount(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});

@@ -850,3 +850,45 @@ describe("M4-1-S-R repair 14: the two-step stale approval belongs to one ticket"
   expect(w.screen().alert()).toBe("ELIGIBILITY_STALE_REVISION");
  });
 });
+
+// Repair 15: membership checks precede replay, so a refused retry cannot decide an earlier lost answer.
+describe("repair 15: an authorisation refusal leaves the original unknown attempt held", () => {
+  it.each([401, 403, 404])("lost committed opening, retry refused with %i, then authorised replay uses the original id", async status => {
+    const w = start();
+    await w.settle(); reads()[0]!.json(answerBody([])); await w.settle();
+    w.click("Open £320 withheld payment"); await w.settle();
+    const original = writes()[0]!;
+    const committed = answerBody([caseView()], CASE_A);
+    original.reject(); await w.settle();
+    w.click("Try again"); await w.settle();
+    expect(writes()[1]!.body).toEqual(original.body);
+    writes()[1]!.json({ code: "RECOVERY_REVIEWER_FORBIDDEN" }, status); await w.settle();
+    expect(w.screen().alert()).toContain("may or may not have been saved");
+    expect(w.screen().alert()).toContain("RECOVERY_REVIEWER_FORBIDDEN");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
+    w.forceClick("Open £320 withheld payment"); await w.settle();
+    expect(writes()).toHaveLength(2);
+    w.click("Try again"); await w.settle();
+    expect(writes()[2]!.body).toEqual(original.body);
+    writes()[2]!.json(committed); await w.settle();
+    expect(reads()).toHaveLength(1);
+    expect(w.screen().testId("case-claimed-net")).toBe("£320.00");
+    expect(w.screen().alert()).toBe("");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+  });
+  it.each([-1, 1_000_000_000_001, 2 ** 53])("invalid principal %s fails loading and leaves a command answer unknown", async amount => {
+    const w = start(); await w.settle();
+    reads()[0]!.json(answerBody([caseView({ approvedLandedNetPence: amount })])); await w.settle();
+    expect(w.screen().alert()).toContain("could not be loaded");
+    expect(w.screen().testId("case-claimed-net")).toBe("");
+    w.click("Try again"); await w.settle(); reads()[1]!.json(answerBody([])); await w.settle();
+    w.click("Open £320 withheld payment"); await w.settle();
+    const first = writes()[0]!;
+    first.json(answerBody([caseView({ approvedLandedNetPence: amount })], CASE_A)); await w.settle();
+    expect(w.screen().alert()).toContain("may or may not have been saved");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
+    w.click("Try again"); await w.settle(); expect(writes()[1]!.body).toEqual(first.body);
+    writes()[1]!.json(answerBody([caseView()], CASE_A)); await w.settle();
+    expect(w.screen().testId("case-claimed-net")).toBe("£320.00");
+  });
+});

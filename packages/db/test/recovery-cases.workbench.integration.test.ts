@@ -3,7 +3,7 @@ const member=()=>({membershipId:randomUUID(),identityUserId:randomUUID()}),owner
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx={tenantId:tenant}as VerifiedTenantContext;const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jg-recovery-cases-"));const port=60000+Math.floor(Math.random()*200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic"});// Install the preceding schema, seed its immutable history, then upgrade in place.
 await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-for(const url of MIGRATION_URLS.filter(url=>!url.pathname.includes("0043_"))){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[url.pathname.split("/").at(-1)]);}
+for(const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("0097_recovery_case_current.sql")))){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[url.pathname.split("/").at(-1)]);}
 await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1),($2)",[tenant,other]);await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'Synthetic account')",[tenant,tenant]);for(const m of [owner,owner2,owner3]){await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[m.identityUserId]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$2,$3,'owner')",[m.membershipId,tenant,m.identityUserId]);}await admin.query("INSERT INTO app.job(id,tenant_id,title)VALUES($1,$3,'Recovery fixture'),($2,$3,'Wrong job')",[job,wrongJob,tenant]);const upgradeCase=randomUUID();
 await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)VALUES($1,$2,$3,250000,'GBP','identified',0,true)",[upgradeCase,tenant,job]);
 await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash)VALUES($1,$2,$3,$4,1,32000,'GBP','upgrade-reviewer',$5)",[randomUUID(),tenant,job,upgradeCase,"a".repeat(64)]);
@@ -518,4 +518,25 @@ it("a committed eligibility revision with a failed repository answer replays exa
   expect(replay.eligibility?.revision).toBe(1);
   expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND command_id=$2",[tenant,body.commandId])).rows[0].n).toBe(1);
  } finally { list.mockRestore(); }
+});
+
+// Repair 15: durable replay survives loss, revocation before lookup, and restored access.
+it("an opening commits, its answer is lost, a revoked retry writes nothing, and authorised replay returns the original case", async () => {
+ const repo = new RecoveryCaseRepository(runtime), m = member(), input = openCase();
+ await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[m.identityUserId]);
+ await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$2,$3,'owner')",[m.membershipId,tenant,m.identityUserId]);
+ const read = vi.spyOn(repo,"listForMember").mockRejectedValueOnce(new Error("Simulated lost committed answer"));
+ try {
+  await expect(repo.command(ctx,job,input,m)).rejects.toMatchObject({code:"RECOVERY_COMMAND_OUTCOME_UNKNOWN"});
+  const recorded = (await admin.query("SELECT case_id FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[tenant,input.commandId])).rows;
+  expect(recorded).toHaveLength(1);
+  const footprint = async () => (await admin.query("SELECT (SELECT count(*) FROM app.recovery_case_event WHERE case_id=$1)::int events,(SELECT count(*) FROM app.recovery_claim_revision WHERE case_id=$1)::int claims,(SELECT count(*) FROM app.audit_event WHERE subject_ref=$1::text)::int audit",[recorded[0].case_id])).rows[0];
+  const before = await footprint();
+  await admin.query("UPDATE app.membership SET revoked_at=now() WHERE id=$1",[m.membershipId]);
+  await expect(repo.command(ctx,job,input,m)).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");
+  expect(await footprint()).toEqual(before);
+  await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE id=$1",[m.membershipId]);
+  expect(await repo.command(ctx,job,input,m)).toMatchObject({id:recorded[0].case_id,revision:2,claimedNetPence:250000});
+  expect(await footprint()).toEqual(before);
+ } finally {read.mockRestore()}
 });
