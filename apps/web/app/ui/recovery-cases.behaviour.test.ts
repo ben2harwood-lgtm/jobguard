@@ -317,21 +317,30 @@ describe("M4-1-S-R repair 12, Sol P3-5: a malformed answer shows the failure sta
     expect(w.screen().alert()).toBe("");
   });
 
-  it("a refusal with no readable body is announced in plain words, not as a JavaScript error", async () => {
+  it("repair 16: a 4xx with no readable body announces uncertainty, hides the register, and replays the held request", async () => {
     const w = await readyWithCase();
     w.click("Evidence assembled");
     await w.settle();
-    // Repair 13: a 4xx answer is the server examining the request and declining it. (A 5xx with no body is NOT a refusal: whether the command ran is unknown, see Sol P2-2 below.)
     writes()[0]!.json(null, 400);
     await w.settle();
-    expect(w.screen().alert()).toBe("Recovery case could not be saved");
-    // The register read before the refusal is still the current one.
-    expect(w.screen().testId("case-claimed-net")).toBe("£320.00");
-    w.click("Evidence assembled");
+    expect(w.screen().alert()).toContain("may or may not have been saved");
+    expect(w.screen().alert()).not.toContain("SyntaxError");
+    expect(w.screen().testId("case-claimed-net")).toBe("");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
+    w.click("Try again");
     await w.settle();
+    expect(writes()[1]!.body).toEqual(writes()[0]!.body);
+    expect(writes()[1]!.url).toBe(writes()[0]!.url);
     writes()[1]!.raw(404);
     await w.settle();
-    expect(w.screen().alert()).toBe("Recovery case could not be saved");
+    expect(w.screen().alert()).toContain("may or may not have been saved");
+    expect(w.screen().alert()).not.toContain("SyntaxError");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
+    w.click("Try again"); await w.settle();
+    expect(writes()[2]!.body).toEqual(writes()[0]!.body);
+    writes()[2]!.json(answerBody([caseView({ state: "evidence_assembled", revision: 2 })], CASE_A)); await w.settle();
+    expect(w.screen().testId("case-state")).toBe("Evidence assembled");
+    expect(w.screen().alert()).toBe("");
   });
 
   it("still words a known refusal plainly and keeps the register on screen", async () => {
@@ -520,6 +529,9 @@ describe("M4-1-S-R repair 13, Sol P2-2: an unknown save outcome never permits a 
     ["the connection is lost (no answer at all)", call => call.reject()],
     ["a 200 whose body is not JSON", call => call.raw(200)],
     ["a 502 from a gateway, with a page instead of JSON", call => call.raw(502)],
+    ["an empty 408 after the POST committed (repair 16)", call => call.raw(408)],
+    ["an unreadable 404 intermediary page (repair 16)", call => call.raw(404)],
+    ["an unrecognised 400 code (repair 16)", call => call.json({ code: "Receipt is not allowed" }, 400)],
     ["a 500 with no body", call => call.json(null, 500)],
     ["a 500 whose body is the framework's own", call => call.json({ statusCode: 500, message: "Internal server error" }, 500)],
     ["a 200 that is not the response contract", call => call.json({ ok: true })],
@@ -552,6 +564,7 @@ describe("M4-1-S-R repair 13, Sol P2-2: an unknown save outcome never permits a 
     await w.settle();
     expect(writes()).toHaveLength(2);
     expect(writes()[1]!.body).toEqual(first.body);
+    expect(writes()[1]!.url).toBe(first.url);
     expect(commandIdOf(writes()[1]!)).toBe(commandIdOf(first));
     server.answer(writes()[1]!);
     await w.settle();
@@ -621,9 +634,9 @@ describe("M4-1-S-R repair 13, Sol P2-2: an unknown save outcome never permits a 
 
   const refusals: Array<[string, (call: Call) => void]> = [
     ["a 409 stale revision", call => call.json({ code: "RECOVERY_STALE_REVISION" }, 409)],
-    ["a 400 naming the problem", call => call.json({ code: "Receipt is not allowed" }, 400)],
+    ["a 400 naming the forbidden transition", call => call.json({ code: "RECOVERY_TRANSITION_FORBIDDEN", message: "record_landing is not allowed from identified" }, 400)],
     ["a 403", call => call.json({ code: "RECOVERY_REVIEWER_FORBIDDEN" }, 403)],
-    ["a 404 page", call => call.raw(404)],
+    ["a 404 naming the missing case", call => call.json({ code: "RECOVERY_CASE_NOT_FOUND" }, 404)],
   ];
   it.each(refusals)("%s is an explicit refusal: nothing was saved, so the user may start a new opening, with a new command id", async (_name, refuse) => {
     const w = await ready();
@@ -660,6 +673,30 @@ describe("M4-1-S-R repair 13, Sol P2-2: an unknown save outcome never permits a 
     await w.settle();
     expect(w.screen().text()).toContain("No recovery cases yet");
     for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+  });
+
+  it.each([
+    ["RECOVERY_STALE_REVISION", 409], ["RECOVERY_CASE_NOT_FOUND", 404], ["RECOVERY_JOB_NOT_FOUND", 404],
+    ["RECOVERY_TRANSITION_FORBIDDEN", 400], ["RECOVERY_SOURCE_NOT_RECOGNISED", 400], ["RECOVERY_CLAIM_BELOW_SETTLED", 400],
+  ] as const)("repair 16: a retry refused after replay with %s/%i releases the hold and can reload", async (code, status) => {
+    const w = await ready();
+    w.click("Open £320 withheld payment"); await w.settle();
+    const first = writes()[0]!;
+    first.reject(); await w.settle();
+    w.click("Try again"); await w.settle();
+    expect(writes()[1]!.body).toEqual(first.body);
+    expect(writes()[1]!.url).toBe(first.url);
+    writes()[1]!.json({ code }, status); await w.settle();
+    expect(w.screen().alert()).not.toBe("");
+    expect(w.screen().alert()).not.toContain(MAY);
+    w.click("Try again"); await w.settle();
+    expect(writes()).toHaveLength(2);
+    expect(reads()).toHaveLength(2);
+    reads()[1]!.json(answerBody([])); await w.settle();
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
+    w.click("Open £320 withheld payment"); await w.settle();
+    expect(writes()).toHaveLength(3);
+    expect(commandIdOf(writes()[2]!)).not.toBe(commandIdOf(first));
   });
 
   it("moving to another job abandons the held request: job B starts clean and nothing is ever re-sent for job A", async () => {
@@ -853,7 +890,7 @@ describe("M4-1-S-R repair 14: the two-step stale approval belongs to one ticket"
 
 // Repair 15: membership checks precede replay, so a refused retry cannot decide an earlier lost answer.
 describe("repair 15: an authorisation refusal leaves the original unknown attempt held", () => {
-  it.each([401, 403, 404])("lost committed opening, retry refused with %i, then authorised replay uses the original id", async status => {
+  it.each([["UNAUTHENTICATED", 401], ["RECOVERY_REVIEWER_FORBIDDEN", 403], ["MEMBERSHIP_FORBIDDEN", 403], ["JOB_NOT_FOUND", 404]] as const)("lost committed opening, retry refused with %s/%i, then authorised replay uses the original id", async (code, status) => {
     const w = start();
     await w.settle(); reads()[0]!.json(answerBody([])); await w.settle();
     w.click("Open £320 withheld payment"); await w.settle();
@@ -862,9 +899,9 @@ describe("repair 15: an authorisation refusal leaves the original unknown attemp
     original.reject(); await w.settle();
     w.click("Try again"); await w.settle();
     expect(writes()[1]!.body).toEqual(original.body);
-    writes()[1]!.json({ code: "RECOVERY_REVIEWER_FORBIDDEN" }, status); await w.settle();
+    writes()[1]!.json({ code }, status); await w.settle();
     expect(w.screen().alert()).toContain("may or may not have been saved");
-    expect(w.screen().alert()).toContain("RECOVERY_REVIEWER_FORBIDDEN");
+    expect(w.screen().alert()).toContain(code);
     for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(true);
     w.forceClick("Open £320 withheld payment"); await w.settle();
     expect(writes()).toHaveLength(2);

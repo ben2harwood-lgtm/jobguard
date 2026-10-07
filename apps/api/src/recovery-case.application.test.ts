@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, RecoveryCaseRepository } from "@jobguard/db";
 import { RecoveryCaseApplication, recoveryCommandFailure, recoveryReadFailure } from "./recovery-case.application.js";
+import { recoveryCaseCommandV1 } from "./recovery-case.contracts.js";
 
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 const command=()=>({version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:randomUUID(),expectedCaseRevision:2,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"evidence_backed_withheld_payment"});
@@ -66,4 +67,26 @@ it.each(["ECONNRESET","57P01","SOMETHING_ELSE"])("answers an unclassified read f
 it("a forbidden transition answers 400 with the domain sentence, not the bare code",()=>{
  const error=Object.assign(new Error("record_landing is not allowed from closed_recovered"),{code:"RECOVERY_TRANSITION_FORBIDDEN"});
  expect(recoveryCommandFailure(error)).toEqual({status:400,body:{code:"RECOVERY_TRANSITION_FORBIDDEN",message:"record_landing is not allowed from closed_recovered"}});
+});
+
+// Repair 16: pin the server's recognised code/status pairs alongside the browser classifier's adversarial tests.
+it.each([
+ ["UNAUTHENTICATED",401], ["MEMBERSHIP_FORBIDDEN",403], ["RECOVERY_REVIEWER_FORBIDDEN",403], ["ELIGIBILITY_REVIEWER_FORBIDDEN",403],
+ ["JOB_NOT_FOUND",404], ["RECOVERY_JOB_NOT_FOUND",404], ["RECOVERY_CASE_NOT_FOUND",404], ["ELIGIBILITY_REVIEW_NOT_FOUND",404],
+ ["RECOVERY_STALE_REVISION",409], ["ELIGIBILITY_STALE_REVISION",409], ["ELIGIBILITY_REVIEW_REQUIRED",409], ["IDEMPOTENCY_PAYLOAD_CONFLICT",409],
+ ["RECOVERY_SOURCE_NOT_RECOGNISED",400], ["RECOVERY_TRANSITION_FORBIDDEN",400], ["RECOVERY_CLAIM_BELOW_SETTLED",400],
+ ["RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE",400], ["ELIGIBILITY_NOT_APPROVABLE",400],
+] as const)("repair 16: command failure %s has the expected application status %i", (code,status) => {
+ const failure=recoveryCommandFailure(Object.assign(new Error(code),{code}));
+ expect(failure.status).toBe(status);
+ expect(failure.body.code).toBe(code);
+ expect(failure.body.message).toEqual(expect.any(String));
+});
+it("repair 16: invalid command parsing is an application 400, while unclassified failures stay unknown", () => {
+ const invalid=recoveryCaseCommandV1.safeParse({});
+ expect(invalid.success).toBe(false);
+ if(!invalid.success)expect(recoveryCommandFailure(invalid.error)).toEqual({status:400,body:{code:"INVALID_COMMAND"}});
+ for(const code of ["REQUEST_TIMEOUT","ECONNRESET","57P01"]){
+  expect(recoveryCommandFailure(new Error(code))).toMatchObject({status:503,body:{code:"RECOVERY_COMMAND_OUTCOME_UNKNOWN",outcome:"unknown"}});
+ }
 });

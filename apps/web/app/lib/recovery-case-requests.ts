@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { recoveryCaseCommandResponseV1, recoveryCaseListResponseV1, type RecoveryCaseCommandResponse, type RecoveryCaseResponse } from "@jobguard/api/recovery-case-contracts";
+import { recoveryCaseCommandResponseV1, recoveryCaseListResponseV1, recoveryCommandRefusalRulesV1, recoveryCommandRefusalV1, type RecoveryCaseCommandResponse, type RecoveryCaseResponse } from "@jobguard/api/recovery-case-contracts";
 
 /**
  * How the recovery workbench reads what the network gives it (M4-1-S-R repair 13).
@@ -24,7 +24,7 @@ export type CommandAnswer = Readonly<{ status: number; body: unknown }> | undefi
 export type CommandOutcome =
   /** The server saved it and said so in the shape the contract promises. */
   | Readonly<{ kind: "saved"; response: RecoveryCaseCommandResponse }>
-  /** The server examined the request and declined it: nothing was saved, so the attempt is over. */
+  /** A validated application refusal or recorded payload conflict settles this attempt. */
   | Readonly<{ kind: "refused"; message: string }>
   /** The answer was lost or cannot be used: the command may or may not have been saved, so the attempt is NOT over. */
   | Readonly<{ kind: "unknown"; message: string }>;
@@ -38,7 +38,9 @@ export const refusalText = (body: unknown): string => {
 /**
  * Decide what an answer means.
  *
- * A first-attempt 4xx is an explicit refusal. On retry it may precede the original-command lookup and leave that earlier outcome UNKNOWN. Anything else that is not a valid success is UNKNOWN, including a 5xx (a command can
+ * Only a known application error with its expected status is a refusal. On retry,
+ * a pre-replay refusal leaves the earlier outcome UNKNOWN; a post-replay refusal
+ * establishes that no command was recorded. Anything else that is not a valid success is UNKNOWN, including a 5xx (a command can
  * commit and then fail while its answer is being built, or a gateway can answer for a server that did the work) and a 2xx that does not match the command contract.
  */
 export function commandOutcome(answer: CommandAnswer, earlierOutcomeUnknown = false): CommandOutcome {
@@ -48,16 +50,18 @@ export function commandOutcome(answer: CommandAnswer, earlierOutcomeUnknown = fa
     const parsed = recoveryCaseCommandResponseV1.safeParse(body);
     return parsed.success ? { kind: "saved", response: parsed.data } : { kind: "unknown", message: unreadableAnswer };
   }
-  if (status >= 400 && status < 500) {
-    // Membership/session/job checks can refuse a retry BEFORE the durable command is looked up.
-    // Such a refusal says nothing about the earlier request. Only a payload conflict explicitly
-    // establishes, through that lookup, that this exact command body was not the recorded work.
-    const payloadConflict = status === 409 && typeof body === "object" && body !== null
-      && "code" in body && body.code === "IDEMPOTENCY_PAYLOAD_CONFLICT";
-    if (earlierOutcomeUnknown && !payloadConflict) return { kind: "unknown", message: `${refusalText(body)}. Your earlier action may or may not have been saved. ${resend}` };
-    return { kind: "refused", message: refusalText(body) };
-  }
-  return { kind: "unknown", message: unreadableAnswer };
+  const refusal = recoveryCommandRefusalV1.safeParse(answer);
+  if (!refusal.success) return { kind: "unknown", message: unreadableAnswer };
+  const rule = recoveryCommandRefusalRulesV1[refusal.data.body.code];
+  // Session, membership, preflight and parsing checks precede replay, so their
+  // refusals cannot establish what happened to an earlier unknown attempt.
+  if (earlierOutcomeUnknown && rule.stage === "before_replay") return { kind: "unknown", message: `${refusalText(refusal.data.body)}. Your earlier action may or may not have been saved. ${resend}` };
+  // An identical retry preserves its body and path. A payload conflict therefore
+  // means this id is already recorded under a different server-derived membership
+  // hash. The membership is fixed in this synthetic bridge. Once SBOX-SESSION-1
+  // introduces per-session memberships, retain the attempt or show "already
+  // recorded" with reconciliation; this conflict does not prove nothing was saved.
+  return { kind: "refused", message: refusalText(refusal.data.body) };
 }
 
 /** A plain read of the register: the versioned list contract, or nothing. */

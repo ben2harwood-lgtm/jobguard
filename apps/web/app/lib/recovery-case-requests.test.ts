@@ -28,10 +28,6 @@ describe("commandOutcome (M4-1-S-R repair 13, Sol P2-2 and P3-4): only a confirm
     expect(commandOutcome({ status: 200, body })).toEqual({ kind: "unknown", message: unreadableAnswer });
     expect(commandOutcome({ status: 201, body })).toEqual({ kind: "unknown", message: unreadableAnswer });
   });
-  it.each([400, 401, 403, 404, 409, 422])("a %i is an explicit REFUSAL, in the server's own words when it gave any", status => {
-    expect(commandOutcome({ status, body: { code: "RECOVERY_STALE_REVISION" } })).toEqual({ kind: "refused", message: "RECOVERY_STALE_REVISION" });
-    expect(commandOutcome({ status, body: undefined })).toEqual({ kind: "refused", message: saveFailure });
-  });
   it.each([500, 502, 503, 504, 0, 302])("a %i is UNKNOWN, whatever its body says (a command can commit and then fail, or a gateway can answer for a server that did the work)", status => {
     expect(commandOutcome({ status, body: { code: "SOMETHING", message: "Internal server error" } })).toEqual({ kind: "unknown", message: unreadableAnswer });
     expect(commandOutcome({ status, body: undefined })).toEqual({ kind: "unknown", message: unreadableAnswer });
@@ -42,6 +38,48 @@ describe("commandOutcome (M4-1-S-R repair 13, Sol P2-2 and P3-4): only a confirm
     expect(refusalText({ message: "", code: "" })).toBe(saveFailure);
     expect(refusalText(null)).toBe(saveFailure);
     expect(refusalText("text")).toBe(saveFailure);
+  });
+});
+
+describe("repair 16: only a validated recovery error with its expected status settles a refusal", () => {
+  const beforeReplay = [
+    ["INVALID_COMMAND", 400], ["UNAUTHENTICATED", 401], ["MEMBERSHIP_FORBIDDEN", 403],
+    ["RECOVERY_REVIEWER_FORBIDDEN", 403], ["ELIGIBILITY_REVIEWER_FORBIDDEN", 403], ["JOB_NOT_FOUND", 404],
+  ] as const;
+  const afterReplay = [
+    ["RECOVERY_JOB_NOT_FOUND", 404], ["RECOVERY_CASE_NOT_FOUND", 404], ["ELIGIBILITY_REVIEW_NOT_FOUND", 404],
+    ["RECOVERY_STALE_REVISION", 409], ["ELIGIBILITY_STALE_REVISION", 409], ["ELIGIBILITY_REVIEW_REQUIRED", 409],
+    ["RECOVERY_SOURCE_NOT_RECOGNISED", 400], ["RECOVERY_TRANSITION_FORBIDDEN", 400],
+    ["RECOVERY_CLAIM_BELOW_SETTLED", 400], ["RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE", 400], ["ELIGIBILITY_NOT_APPROVABLE", 400],
+  ] as const;
+  it.each(beforeReplay)("%s/%i settles the first attempt, but a retry cannot establish the earlier outcome", (code, status) => {
+    expect(commandOutcome({ status, body: { code } })).toEqual({ kind: "refused", message: code });
+    expect(commandOutcome({ status, body: { code, message: "Access refused" } })).toEqual({ kind: "refused", message: "Access refused" });
+    const retry = commandOutcome({ status, body: { code } }, true);
+    expect(retry.kind).toBe("unknown");
+    if (retry.kind === "unknown") {
+      expect(retry.message).toContain(code);
+      expect(retry.message).toContain("may or may not have been saved");
+    }
+  });
+  it.each(afterReplay)("%s/%i proves no command was recorded, for a first attempt and a retry", (code, status) => {
+    for (const retry of [false, true]) {
+      expect(commandOutcome({ status, body: { code } }, retry)).toEqual({ kind: "refused", message: code });
+      expect(commandOutcome({ status, body: { code, message: "Command refused" } }, retry)).toEqual({ kind: "refused", message: "Command refused" });
+    }
+  });
+  it("the known payload conflict settles both attempts for the current fixed synthetic membership", () => {
+    for (const retry of [false, true]) expect(commandOutcome({ status: 409, body: { code: "IDEMPOTENCY_PAYLOAD_CONFLICT" } }, retry)).toEqual({ kind: "refused", message: "IDEMPOTENCY_PAYLOAD_CONFLICT" });
+  });
+  it.each([...beforeReplay, ...afterReplay, ["IDEMPOTENCY_PAYLOAD_CONFLICT", 409] as const])("%s cannot settle under a different status than %i", (code, status) => {
+    for (const otherStatus of [400, 401, 403, 404, 408, 409, 422, 429, 500, 503].filter(value => value !== status)) {
+      for (const retry of [false, true]) expect(commandOutcome({ status: otherStatus, body: { code } }, retry), `${code}/${otherStatus}, retry=${retry}`).toEqual({ kind: "unknown", message: unreadableAnswer });
+    }
+  });
+  it.each([400, 401, 403, 404, 408, 409, 422, 429, 499, 500, 502, 503, 504])("an unclassified or unreadable %i remains unknown on the first attempt and retry", status => {
+    for (const body of [undefined, null, {}, [], "gateway page", { message: "Timed out" }, { code: "REQUEST_TIMEOUT" }, { code: 409 }, { code: "RECOVERY_STALE_REVISION", message: 42 }]) {
+      for (const retry of [false, true]) expect(commandOutcome({ status, body }, retry)).toEqual({ kind: "unknown", message: unreadableAnswer });
+    }
   });
 });
 

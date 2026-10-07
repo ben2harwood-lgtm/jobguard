@@ -1,7 +1,7 @@
 import { ZodError } from "zod";
 import type { Pool } from "pg";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, RecoveryCaseRepository, RecoveryCommandOutcomeUnknownError, readSyntheticDemoJob, verifiedTenantContextFromMembership } from "@jobguard/db";
-import { recoveryCaseCommandV1, recoveryEligibilityCommandV1 } from "./recovery-case.contracts.js";
+import { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryCommandRefusalRulesV1 } from "./recovery-case.contracts.js";
 
 // Existing synthetic principal bridge: no client-selected identity or tenant.
 const membership = { identityUserId: DEMO_IDENTITY_USER_ID, membershipId: DEMO_MEMBERSHIP_ID, tenantId: DEMO_TENANT_ID };
@@ -61,16 +61,10 @@ export function recoveryCommandFailure(error: unknown) {
  if(error instanceof RecoveryCommandOutcomeUnknownError)return unknown;
  if(error instanceof ZodError)return { status: 400, body: { code: "INVALID_COMMAND" } };
  const code=error instanceof Error ? ("code" in error && typeof error.code === "string" ? error.code : error.message) : undefined;
- const statuses:Record<string,number>={
-  UNAUTHENTICATED:401, MEMBERSHIP_FORBIDDEN:403, RECOVERY_REVIEWER_FORBIDDEN:403, ELIGIBILITY_REVIEWER_FORBIDDEN:403,
-  JOB_NOT_FOUND:404, RECOVERY_JOB_NOT_FOUND:404, RECOVERY_CASE_NOT_FOUND:404, ELIGIBILITY_REVIEW_NOT_FOUND:404,
-  RECOVERY_STALE_REVISION:409, ELIGIBILITY_STALE_REVISION:409, ELIGIBILITY_REVIEW_REQUIRED:409, IDEMPOTENCY_PAYLOAD_CONFLICT:409,
-  RECOVERY_SOURCE_NOT_RECOGNISED:400, RECOVERY_TRANSITION_FORBIDDEN:400, RECOVERY_CLAIM_BELOW_SETTLED:400,
-  RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE:400, ELIGIBILITY_NOT_APPROVABLE:400,
- };
- if(code===undefined||statuses[code]===undefined)return unknown;
+ if(code===undefined||!Object.hasOwn(recoveryCommandRefusalRulesV1,code))return unknown;
+ const refusal=recoveryCommandRefusalRulesV1[code as keyof typeof recoveryCommandRefusalRulesV1];
  const requiresReview=code==="ELIGIBILITY_STALE_REVISION"||code==="ELIGIBILITY_REVIEW_REQUIRED";
  // A forbidden transition carries a plain sentence from the domain ("<event> is not allowed from <state>"): identifiers only, no amounts or people.
  const message=requiresReview ? "Review the changed evidence before approving" : code==="RECOVERY_TRANSITION_FORBIDDEN" && error instanceof Error && error.message!==code ? error.message : code;
- return {status:statuses[code]!,body:{code,message}};
+ return {status:refusal.status,body:{code,message}};
 }

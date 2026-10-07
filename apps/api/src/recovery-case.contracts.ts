@@ -1,6 +1,39 @@
 import { z } from "zod";
 import { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryCaseStateFullV1, recoveryCaseTypeV1, money } from "@jobguard/core";
 export { recoveryCaseCommandV1, recoveryEligibilityCommandV1 };
+
+// V1 application error contract shared by the server and workbench. The stage is
+// where a refusal is raised, not part of the wire body. Only after-replay refusals
+// establish that an earlier unknown command was not recorded under the same lock.
+export const recoveryCommandRefusalRulesV1 = {
+ INVALID_COMMAND: { status: 400, stage: "before_replay" },
+ UNAUTHENTICATED: { status: 401, stage: "before_replay" },
+ MEMBERSHIP_FORBIDDEN: { status: 403, stage: "before_replay" },
+ RECOVERY_REVIEWER_FORBIDDEN: { status: 403, stage: "before_replay" },
+ ELIGIBILITY_REVIEWER_FORBIDDEN: { status: 403, stage: "before_replay" },
+ JOB_NOT_FOUND: { status: 404, stage: "before_replay" },
+ RECOVERY_JOB_NOT_FOUND: { status: 404, stage: "after_replay" },
+ RECOVERY_CASE_NOT_FOUND: { status: 404, stage: "after_replay" },
+ ELIGIBILITY_REVIEW_NOT_FOUND: { status: 404, stage: "after_replay" },
+ RECOVERY_STALE_REVISION: { status: 409, stage: "after_replay" },
+ ELIGIBILITY_STALE_REVISION: { status: 409, stage: "after_replay" },
+ ELIGIBILITY_REVIEW_REQUIRED: { status: 409, stage: "after_replay" },
+ RECOVERY_SOURCE_NOT_RECOGNISED: { status: 400, stage: "after_replay" },
+ RECOVERY_TRANSITION_FORBIDDEN: { status: 400, stage: "after_replay" },
+ RECOVERY_CLAIM_BELOW_SETTLED: { status: 400, stage: "after_replay" },
+ RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE: { status: 400, stage: "after_replay" },
+ ELIGIBILITY_NOT_APPROVABLE: { status: 400, stage: "after_replay" },
+ IDEMPOTENCY_PAYLOAD_CONFLICT: { status: 409, stage: "recorded_conflict" },
+} as const;
+type RecoveryCommandRefusalCode = keyof typeof recoveryCommandRefusalRulesV1;
+const refusalCodes = Object.keys(recoveryCommandRefusalRulesV1) as [RecoveryCommandRefusalCode, ...RecoveryCommandRefusalCode[]];
+// Existing v1 wire bodies contain a code and optional plain message. Validate the
+// HTTP status together with that body; a gateway 408/404 page is never a refusal.
+export const recoveryCommandRefusalV1 = z.object({
+ status: z.number().int(),
+ body: z.object({ code: z.enum(refusalCodes), message: z.string().optional() }),
+}).refine(answer => answer.status === recoveryCommandRefusalRulesV1[answer.body.code].status, { message: "Unexpected recovery error status", path: ["status"] });
+
 // Use core's public money validator for safe integer pence and its shared magnitude limit.
 // Principal and posting magnitudes cannot be negative; net job ledger liability is signed.
 const signedPence = z.number().refine(value => { try { money(value); return true; } catch { return false; } }, "Invalid bounded integer pence");
