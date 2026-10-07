@@ -4,11 +4,12 @@ import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, PracticeAccessError, RecoveryCaseRepository } from "@jobguard/db";
 import { RecoveryCaseApplication, recoveryCommandFailure, recoveryReadFailure } from "./recovery-case.application.js";
+import { PracticeErrorsFilter } from "./practice-errors.filter.js";
 import { recoveryCaseCommandV1 } from "./recovery-case.contracts.js";
 
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();});
 const session = randomUUID();
-const principal = {context:{tenantId:randomUUID()},membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
+const principal = {digest:"a".repeat(64),context:{tenantId:randomUUID()},membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
 const testPool = () => ({query:vi.fn().mockRejectedValue(new Error("DATABASE_UNAVAILABLE"))}) as unknown as Pool;
 const authorize = () => vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue(principal as never);
 const command=()=>({version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:randomUUID(),expectedCaseRevision:2,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"evidence_backed_withheld_payment"});
@@ -37,7 +38,12 @@ it.each(["production","pilot_no_charge"])("refuses synthetic reviewer authority 
 it.each(["production", "pilot_no_charge"])("refuses to list cases in %s before it reads anything", async mode => {
  vi.stubEnv("JOBGUARD_ENV",mode);
  const list=vi.spyOn(RecoveryCaseRepository.prototype,"listForMember").mockResolvedValue([]);
- await expect(new RecoveryCaseApplication(testPool(), session).list(randomUUID())).rejects.toThrow("MEMBERSHIP_FORBIDDEN");
+ const refusal=new RecoveryCaseApplication(testPool(), session).list(randomUUID());
+ await expect(refusal).rejects.toMatchObject({message:"SYNTHETIC_MODE_REQUIRED",code:"SYNTHETIC_MODE_REQUIRED"});
+ const error=await refusal.catch(cause=>cause),json=vi.fn(),status=vi.fn(()=>({json}));
+ new PracticeErrorsFilter().catch(error,{switchToHttp:()=>({getResponse:()=>({status})})} as never);
+ expect(status).toHaveBeenCalledWith(403);
+ expect(json).toHaveBeenCalledWith({code:"SYNTHETIC_MODE_REQUIRED"});
  expect(list).not.toHaveBeenCalled();
 });
 it("lists nothing when the membership and job lookup itself cannot be completed", async () => {
@@ -107,7 +113,7 @@ it.each(["constructor", "toString", "__proto__"])("repair 17: inherited read sta
 
 it.each(["command","eligibility"] as const)("%s uses the verified session's principal for writes and membership-checked reply reads",async method=>{
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
- const owner={context:{tenantId:randomUUID()},membershipId:randomUUID(),identityUserId:randomUUID()},affected=randomUUID();
+ const owner={digest:"b".repeat(64),context:{tenantId:randomUUID()},membershipId:randomUUID(),identityUserId:randomUUID()},affected=randomUUID();
  const access=vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue(owner as never);
  const persist=vi.spyOn(RecoveryCaseRepository.prototype,method==="command"?"command":"eligibilityCommand").mockResolvedValue({id:affected} as never);
  const list=vi.spyOn(RecoveryCaseRepository.prototype,"listForMember").mockResolvedValue([{id:affected}] as never);

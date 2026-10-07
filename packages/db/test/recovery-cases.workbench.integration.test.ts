@@ -540,3 +540,66 @@ it("an opening commits, its answer is lost, a revoked retry writes nothing, and 
   expect(await footprint()).toEqual(before);
  } finally {read.mockRestore()}
 });
+
+// Repair 19: use the real demo-tenant restrictive material RLS and the application boundary.
+it("practice recovery cases open, list and review with their own session's supplier rate while strangers get 404", async () => {
+ const { DEMO_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID,
+  issuePracticeSession, authenticatePracticeSession, authorizePracticeJob, practiceMaterialPool, MaterialRepository } = await import("../src/index.js");
+ const { RecoveryCaseApplication } = await import("../../../apps/api/src/recovery-case.application.js");
+ const { PracticeErrorsFilter } = await import("../../../apps/api/src/practice-errors.filter.js");
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ try {
+  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
+  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional repair 19 builder')", [DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
+  const creator=await issuePracticeSession(runtime), stranger=await issuePracticeSession(runtime);
+  const auth=await authenticatePracticeSession(runtime,creator), strangerAuth=await authenticatePracticeSession(runtime,stranger);
+  const ownedJob=async(digest:string)=>(await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",[DEMO_TENANT_ID,digest])).rows[0].id as string;
+  const jobId=await ownedJob(auth.digest), strangerJobId=await ownedJob(strangerAuth.digest), nonexistentJobId=randomUUID(), scopeId=randomUUID();
+  await expect(authorizePracticeJob(runtime,stranger,strangerJobId)).resolves.toMatchObject({digest:strangerAuth.digest});
+  expect((await admin.query("SELECT id FROM app.job WHERE id=$1",[nonexistentJobId])).rows).toEqual([]);
+  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeId,DEMO_TENANT_ID,jobId]);
+  const materials=new MaterialRepository(practiceMaterialPool(runtime,auth.digest));
+  const rate=await materials.addRate(auth.context,{
+   merchantName:"Fictional repair 19 merchant",sku:"REPAIR19-SESSION",description:"Synthetic repair material",pricePence:2000,
+   priceUnit:"each",taxBasis:"net",effectiveFrom:"2026-09-01",sourceLabel:"Synthetic repair 19 agreement",expectedVersion:0,
+  });
+  await materials.addRequirement(auth.context,{jobId,scopeItemId:scopeId,skuId:rate.skuId,quantity:"40",unit:"each",expectedRevision:0});
+  expect((await admin.query("SELECT practice_session_digest FROM app.material_rate_revision WHERE id=$1",[rate.id])).rows[0].practice_session_digest).toBe(auth.digest);
+  const open=()=>({version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"merchant_overcharge",claimedNetPence:32000,
+   counterparty:"Fictional merchant",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:[rate.id],expectedRevision:0});
+  // A control proves this fixture actually exercises the restrictive policy.
+  const reviewer={membershipId:auth.membershipId,identityUserId:auth.identityUserId};
+  await expect(new RecoveryCaseRepository(runtime).command(auth.context,jobId,open(),reviewer)).rejects.toMatchObject({code:"RECOVERY_SOURCE_NOT_RECOGNISED"});
+  const app=new RecoveryCaseApplication(runtime,creator), opened=await app.command(jobId,open());
+  const sources=[{ref:rate.id,kind:"Supplier agreement",label:"Supplier agreement Synthetic repair 19 agreement",recorded:true}];
+  const saved=opened.cases.find(c=>c.id===opened.affectedCaseId)!;
+  expect(saved).toMatchObject({jobId,sourceRefs:[rate.id],sources});
+  expect((await app.list(jobId)).cases.find(c=>c.id===saved.id)?.sources).toEqual(sources);
+  const reviewed=await new RecoveryCaseApplication(runtime,stranger).eligibility(jobId,{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:saved.id,
+   expectedCaseRevision:saved.revision,evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1,scenario:"unknown_basis"},creator);
+  expect(reviewed.affectedCaseId).toBe(saved.id);
+  expect(reviewed.cases.find(c=>c.id===saved.id)).toMatchObject({sources,eligibility:{status:"reviewed",classification:"pending_review"}});
+  // Even bypassing job preflight cannot make a stranger's material digest resolve this rate.
+  await expect(new RecoveryCaseRepository(practiceMaterialPool(runtime,strangerAuth.digest)).command(auth.context,jobId,open(),reviewer)).rejects.toMatchObject({code:"RECOVERY_SOURCE_NOT_RECOGNISED"});
+  const strangerApp=new RecoveryCaseApplication(runtime,stranger);
+  const {RecoveryCaseRepository:ApplicationRepository}=await import("@jobguard/db");
+  const repoCalls=[vi.spyOn(ApplicationRepository.prototype,"command"),vi.spyOn(ApplicationRepository.prototype,"eligibilityCommand"),vi.spyOn(ApplicationRepository.prototype,"listForMember")];
+  try {
+   for(const target of [jobId,nonexistentJobId]){
+    const readBody=vi.fn().mockRejectedValue(new SyntaxError("Synthetic malformed JSON"));
+    for(const operation of [()=>strangerApp.list(target),()=>strangerApp.command(target,readBody),()=>strangerApp.eligibility(target,readBody)]){
+     let error:unknown;try{await operation()}catch(cause){error=cause}
+     expect(error).toMatchObject({code:"NOT_FOUND",message:"NOT_FOUND"});
+     const json=vi.fn(),status=vi.fn(()=>({json}));
+     new PracticeErrorsFilter().catch(error as never,{switchToHttp:()=>({getResponse:()=>({status})})} as never);
+     expect(status).toHaveBeenCalledWith(404);
+     expect(json).toHaveBeenCalledWith({code:"NOT_FOUND"});
+    }
+    expect(readBody).not.toHaveBeenCalled();
+   }
+   for(const call of repoCalls)expect(call).not.toHaveBeenCalled();
+  } finally {for(const call of repoCalls)call.mockRestore()}
+ } finally {vi.unstubAllEnvs()}
+});

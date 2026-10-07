@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { HttpException } from "@nestjs/common";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
@@ -50,16 +50,27 @@ it.each([
   const {RecoveryCaseRepository}=await import("@jobguard/db");
   const {PracticeErrorsFilter}=await import("./practice-errors.filter.js");
   const repository=[vi.spyOn(RecoveryCaseRepository.prototype,"command"),vi.spyOn(RecoveryCaseRepository.prototype,"eligibilityCommand"),vi.spyOn(RecoveryCaseRepository.prototype,"listForMember")];
+  const {recoveryCaseCommandV1,recoveryEligibilityCommandV1}=await import("./recovery-case.contracts.js");
+  const parsers=[vi.spyOn(recoveryCaseCommandV1,"parse"),vi.spyOn(recoveryEligibilityCommandV1,"parse")];
   for(const scenario of ["missing","stranger","nonexistent"]){
-   const query=vi.fn(async(sql:string)=>({rows:scenario!=="missing"&&sql.includes("authenticate_practice_session")?[{tenant_id:randomUUID(),membership_id:randomUUID(),identity_user_id:randomUUID()}]:[]}));
+   const tenantId=randomUUID(),ownerToken=randomUUID(),strangerToken=randomUUID();
+   const token=scenario==="missing"?undefined:strangerToken;
+   const hash=(token:string)=>createHash("sha256").update(token).digest("hex");
+   const existingJob=randomUUID(),strangerJob=randomUUID(),nonexistentJob=randomUUID();
+   const jobs=[{id:existingJob,digest:hash(ownerToken)},{id:strangerJob,digest:hash(strangerToken)}];
+   const target=scenario==="nonexistent"?nonexistentJob:existingJob;
+   const principal={tenant_id:tenantId,membership_id:randomUUID(),identity_user_id:randomUUID()};
+   const query=vi.fn(async(sql:string,values?:unknown[])=>({rows:
+    sql.includes("authenticate_practice_session") && values?.[0]===hash(strangerToken) ? [principal] :
+    sql.includes("FROM app.job") ? jobs.filter(j=>values?.[0]===tenantId&&values?.[1]===j.id&&values?.[2]===j.digest).map(j=>({id:j.id})) : []}));
    const connect=vi.fn(async()=>({query,release:vi.fn()}));
    const controller=new RecoveryCaseController({query,connect} as unknown as Pool);
-   const cookie=scenario==="missing"?undefined:`jg_session=${randomUUID()}`;
+   const cookie=token?`jg_session=${token}`:undefined;
    let error:unknown;
    try {
-    if(name==="list")await controller.get(randomUUID(),cookie);
-    else if(name.startsWith("eligibility"))await controller.eligibility(randomUUID(),body,{headers:{...(cookie?{cookie}:{})}});
-    else await controller.post(randomUUID(),body,cookie);
+    if(name==="list")await controller.get(target,cookie);
+    else if(name.startsWith("eligibility"))await controller.eligibility(target,body,{headers:{...(cookie?{cookie}:{})}});
+    else await controller.post(target,body,cookie);
    }catch(cause){error=cause}
    expect(error).toBeTruthy();
    const json=vi.fn(),status=vi.fn(()=>({json}));
@@ -67,7 +78,15 @@ it.each([
    expect(status).toHaveBeenCalledWith(scenario==="missing"?401:404);
    expect(json).toHaveBeenCalledWith({code:scenario==="missing"?"UNAUTHENTICATED":"NOT_FOUND"});
    for(const call of repository)expect(call).not.toHaveBeenCalled();
+   for(const parse of parsers)expect(parse).not.toHaveBeenCalled();
    if(scenario==="missing"){expect(query).not.toHaveBeenCalled();expect(connect).not.toHaveBeenCalled()}
+   if(scenario!=="missing")expect(query).toHaveBeenCalledWith(expect.stringContaining("FROM app.job"),[tenantId,target,hash(strangerToken)]);
+   if(scenario==="stranger"){
+    const {PracticeAccess}=await import("./practice-access.js");
+    await expect(new PracticeAccess({query,connect} as unknown as Pool,token).job(strangerJob)).resolves.toMatchObject({digest:hash(strangerToken)});
+    expect(jobs.some(j=>j.id===target)).toBe(true);
+   }
+   if(scenario==="nonexistent")expect(jobs.some(j=>j.id===target)).toBe(false);
   }
  }finally{vi.unstubAllEnvs()}
 });

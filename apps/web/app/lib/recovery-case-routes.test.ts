@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const spies = vi.hoisted(() => ({ token: "11111111-1111-4111-8111-111111111111" as string | undefined, command: vi.fn(), eligibilityCommand: vi.fn(), list: vi.fn(), app: undefined as unknown }));
@@ -33,7 +33,7 @@ const caseView = {
 afterEach(() => {vi.restoreAllMocks();vi.unstubAllEnvs()});
 const opening = () => ({ version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "withheld_customer_payment", claimedNetPence: 32000, counterparty: "Fictional Customer", book: "builder_customer", sourceType: "customer_invoice", sourceRefs: ["Generated customer invoice INV-18800"], expectedRevision: 0 });
 const review = () => ({ version: "recovery-eligibility-command.v1", action: "review", commandId: randomUUID(), caseId, expectedCaseRevision: 1, evidenceRevision: 1, policyVersion: "reference-d03.v1", policyRevision: 1, scenario: "evidence_backed_withheld_payment" });
-beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); spies.token=randomUUID(); vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue({context:{tenantId:randomUUID()},membershipId:randomUUID(),identityUserId:randomUUID()} as never); spies.app = new RecoveryCaseApplication({} as Pool, spies.token); });
+beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); spies.token=randomUUID(); vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue({digest:"a".repeat(64),context:{tenantId:randomUUID()},membershipId:randomUUID(),identityUserId:randomUUID()} as never); spies.app = new RecoveryCaseApplication({} as Pool, spies.token); });
 it.each([
  ["opening", commandPost, opening, spies.command],
  ["eligibility", eligibilityPost, review, spies.eligibilityCommand],
@@ -85,15 +85,33 @@ it.each([
 ] as const)("%s: actual Next route/application deny missing sessions with 401 and strangers/nonexistent jobs with identical 404s",async(_name,route,body)=>{
  vi.restoreAllMocks();
  for(const scenario of ["missing","stranger","nonexistent"]){
-  spies.token=scenario==="missing"?undefined:randomUUID();
-  const query=vi.fn(async(sql:string)=>({rows:scenario!=="missing"&&sql.includes("authenticate_practice_session")?[{tenant_id:randomUUID(),membership_id:randomUUID(),identity_user_id:randomUUID()}]:[]}));
+  const tenantId=randomUUID(),ownerToken=randomUUID(),strangerToken=randomUUID();
+  const token=scenario==="missing"?undefined:strangerToken;
+  const hash=(token:string)=>createHash("sha256").update(token).digest("hex");
+  const existingJob=randomUUID(),strangerJob=randomUUID(),nonexistentJob=randomUUID();
+  const jobs=[{id:existingJob,digest:hash(ownerToken)},{id:strangerJob,digest:hash(strangerToken)}];
+  const target=scenario==="nonexistent"?nonexistentJob:existingJob;
+  const principal={tenant_id:tenantId,membership_id:randomUUID(),identity_user_id:randomUUID()};
+  const query=vi.fn(async(sql:string,values?:unknown[])=>({rows:
+   sql.includes("authenticate_practice_session") && values?.[0]===hash(strangerToken) ? [principal] :
+   sql.includes("FROM app.job") ? jobs.filter(j=>values?.[0]===tenantId&&values?.[1]===j.id&&values?.[2]===j.digest).map(j=>({id:j.id})) : []}));
+  spies.token=token;
   const connect=vi.fn(async()=>({query,release:vi.fn()}));
   spies.app=new RecoveryCaseApplication({query,connect} as unknown as Pool,spies.token);
-  const response=await route(new Request("https://sandbox.invalid/api",body?{method:"POST",body:JSON.stringify(body)}:undefined),{params:Promise.resolve({id:randomUUID()})});
+  const request=new Request("https://sandbox.invalid/api",body?{method:"POST",body:JSON.stringify(body)}:undefined);
+  const readBody=vi.spyOn(request,"json");
+  const response=await route(request,{params:Promise.resolve({id:target})});
   expect(response.status).toBe(scenario==="missing"?401:404);
   expect(await response.json()).toEqual({code:scenario==="missing"?"UNAUTHENTICATED":"NOT_FOUND"});
   if(scenario!=="missing")expect(response.headers.get("cache-control")).toBe("no-store");
   expect(spies.command).not.toHaveBeenCalled();expect(spies.eligibilityCommand).not.toHaveBeenCalled();expect(spies.list).not.toHaveBeenCalled();
+  expect(readBody).not.toHaveBeenCalled();
   if(scenario==="missing"){expect(query).not.toHaveBeenCalled();expect(connect).not.toHaveBeenCalled()}
+  if(scenario!=="missing")expect(query).toHaveBeenCalledWith(expect.stringContaining("FROM app.job"),[tenantId,target,hash(strangerToken)]);
+  if(scenario==="stranger"){
+   await expect(new PracticeAccess({query,connect} as unknown as Pool,token).job(strangerJob)).resolves.toMatchObject({digest:hash(strangerToken)});
+   expect(jobs.some(j=>j.id===target)).toBe(true);
+  }
+  if(scenario==="nonexistent")expect(jobs.some(j=>j.id===target)).toBe(false);
  }
 });

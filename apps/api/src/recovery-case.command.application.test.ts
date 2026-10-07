@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const spies = vi.hoisted(() => ({ verify: vi.fn(), command: vi.fn(), list: vi.fn() }));
 vi.mock("@jobguard/db", async importOriginal => ({
   ...await importOriginal<typeof import("@jobguard/db")>(),
@@ -9,7 +9,7 @@ vi.mock("@jobguard/db", async importOriginal => ({
 }));
 vi.mock("./practice-access.js", () => ({ PracticeAccess: class {
  constructor(private readonly pool: Pool) {}
- async job(id: string) { await spies.verify(this.pool,id); return {context:{tenantId:randomUUID()},membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID}; }
+ async job(id: string) { await spies.verify(this.pool,id); return {digest:"a".repeat(64),context:{tenantId:randomUUID()},membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID}; }
 } }));
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID } from "@jobguard/db";
 const serverReviewer = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
@@ -18,7 +18,8 @@ import { recoveryCaseCommandResponseV1, recoveryCaseListResponseV1 } from "./rec
 const jobId = randomUUID();
 const input = () => ({ version:"recovery-case-command.v1", action:"open", commandId:randomUUID(), caseType:"merchant_overcharge", claimedNetPence:32000, counterparty:"Merchant", book:"supplier_cost", sourceType:"supplier_documents", sourceRefs:["INV-320"], expectedRevision:0 });
 const affectedId = randomUUID();
-beforeEach(() => { vi.resetAllMocks(); spies.list.mockResolvedValue([]); spies.verify.mockResolvedValue({job:{id:jobId}}); spies.command.mockResolvedValue({id:affectedId}); });
+afterEach(() => vi.unstubAllEnvs());
+beforeEach(() => { vi.stubEnv("JOBGUARD_ENV","synthetic_demo"); vi.resetAllMocks(); spies.list.mockResolvedValue([]); spies.verify.mockResolvedValue({job:{id:jobId}}); spies.command.mockResolvedValue({id:affectedId}); });
 it("derives the reviewer from verified sandbox membership with no client reviewer", async () => {
   const pool = {} as Pool;
   await new RecoveryCaseApplication(pool).command(jobId,input());
