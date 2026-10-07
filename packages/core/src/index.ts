@@ -40,3 +40,4 @@ export * from "./receipt-allocation.js";
 export * from "./extra-origin.js";
 export * from "./enterprise-domain/index.js";
 export * from "./shadow-domain/index.js";
+export * from "./contractor.js";
