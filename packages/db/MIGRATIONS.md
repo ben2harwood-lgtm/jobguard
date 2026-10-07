@@ -135,12 +135,19 @@ round trip and unchanged-save identity. The unapplied 0095 migration is amended
 in place; no existing party history is rewritten. After rollout, forward-fix a
 constraint under review rather than dropping immutable revisions or bindings.
 
-Encoding: 0095 needs a UTF8 database. Site match keys apply NFKC `normalize()`,
+Encoding: site revision writes and synthetic party backfill need a UTF8 database.
+0095 can be installed on an empty SQL_ASCII database: the text validator uses
+ASCII dollar-quoted regex escapes, interpreted at execution rather than Unicode
+SQL literals converted at CREATE FUNCTION time. In UTF8 these preserve the
+JavaScript trim set and UTF-16 length rule. Site match keys apply NFKC `normalize()`,
 which PostgreSQL only allows when the server encoding is UTF8 (otherwise every
 site revision insert fails with "Unicode normalization can only be performed if
 server encoding is UTF8"). Neon and the standard PostgreSQL images are UTF8; the
-embedded test clusters pass `--encoding=UTF8` to `initdb` because `embedded-postgres`
-starts `initdb` with no locale environment, which would otherwise create SQL_ASCII.
+embedded test clusters that write site revisions pass `--encoding=UTF8` to `initdb`
+because `embedded-postgres` starts `initdb` with no locale environment, which would
+otherwise create SQL_ASCII. The party suite also installs the complete migration
+chain in an explicitly SQL_ASCII database; the six earlier non-UTF8 suites retain
+their original encoding flags.
 
 The runner sets the backfill mode inside 0095's transaction. Only an explicit
 `JOBGUARD_ENV=synthetic_demo` uses the generated recipe (Practice Customer,

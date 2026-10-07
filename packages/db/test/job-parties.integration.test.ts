@@ -51,6 +51,24 @@ describe("individual address lines cannot contain CR/LF", () => {
   });
 });
 describe("stored party revision schemas at the runtime INSERT boundary", () => {
+  it("keeps JavaScript trimming and UTF-16 length boundaries in UTF8", async () => {
+    expect((await admin.query("SHOW server_encoding")).rows).toEqual([{ server_encoding: "UTF8" }]);
+    const trimCharacters = [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0, 0x1680,
+      ...Array.from({ length: 11 }, (_, index) => 0x2000 + index), 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff];
+    const values = ["", "x", "x".repeat(160), "x".repeat(161),
+      ...trimCharacters.flatMap(point => {
+        const space = String.fromCodePoint(point);
+        return [space.repeat(3), `${space}${"x".repeat(160)}${space}`, `${space}${"x".repeat(161)}${space}`, `x${space}x`];
+      }),
+      ...[0x85, 0x180e, 0x200b, 0xffff, 0x10000, 0x1f600, 0x10ffff].flatMap(point => {
+        const character = String.fromCodePoint(point);
+        return [character, character.repeat(80), character.repeat(81), `\u00a0${character.repeat(80)}\ufeff`];
+      })];
+    const result = await admin.query<{ valid: boolean }>(
+      "SELECT app.valid_party_revision_text(value,1,160) AS valid FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY AS input(value,ordinal) ORDER BY ordinal",
+      [JSON.stringify(values)]);
+    expect(result.rows.map(row => row.valid)).toEqual(values.map(value => value.trim().length >= 1 && value.trim().length <= 160));
+  });
   const invalidSites: Array<[string, Record<string, unknown>]> = [
     ["null line", { addressLines: [null] }], ["number line", { addressLines: [7] }],
     ["empty line", { addressLines: [""] }], ["blank line", { addressLines: [" \t "] }],
@@ -249,6 +267,24 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
       expect((await fresh.query(`SELECT count(*)::int n FROM app.customer`)).rows[0].n).toBe(0);
       expect((await fresh.query(`SELECT action_type FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2`,[t,j])).rows[0].action_type).toBe("job.parties.details_needed");
     }finally{await fresh.end();}
+  });
+  it("applies the full migration chain to a SQL_ASCII database without UTF8 encoding", async () => {
+    // Reuse this suite's cluster; template0 permits a different database encoding.
+    // Do not change the encoding flags of the six earlier regression suites.
+    await admin.query("CREATE DATABASE ch3a_sql_ascii TEMPLATE template0 ENCODING 'SQL_ASCII' LC_COLLATE 'C' LC_CTYPE 'C'");
+    const ascii = new Pool({ ...admin.options, password: "synthetic", database: "ch3a_sql_ascii", max: 1 });
+    try {
+      expect((await ascii.query("SHOW server_encoding")).rows).toEqual([{ server_encoding: "SQL_ASCII" }]);
+      await migrate(ascii);
+      const expected = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1));
+      expect((await ascii.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name)).toEqual(expected);
+      expect((await ascii.query("SELECT to_regprocedure('app.valid_party_revision_text(jsonb,integer,integer)') IS NOT NULL AS installed")).rows).toEqual([{ installed: true }]);
+      await migrate(ascii);
+      expect((await ascii.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name)).toEqual(expected);
+    } finally {
+      await ascii.end();
+      await admin.query("DROP DATABASE ch3a_sql_ascii");
+    }
   });
 });
 

@@ -2,11 +2,15 @@ BEGIN;
 
 -- Pure validator, with no data access or elevation. Match Zod's JS trim set and
 -- UTF-16 length, including two code units per supplementary Unicode character.
+-- ASCII-only dollar-quoted patterns defer Unicode escapes to the regex engine,
+-- so CREATE FUNCTION also works in SQL_ASCII databases. In UTF8 the ranges and
+-- trim characters are exactly those used by the prior Unicode SQL literals.
 CREATE FUNCTION app.valid_party_revision_text(value jsonb,minimum integer,maximum integer) RETURNS boolean
 LANGUAGE sql IMMUTABLE STRICT SECURITY INVOKER SET search_path=pg_catalog AS $$
  SELECT coalesce(jsonb_typeof(value)='string' AND
-  length(trimmed)+length(regexp_replace(trimmed,U&'[^\+010000-\+10FFFF]','','g')) BETWEEN minimum AND maximum,false)
- FROM (SELECT btrim(value#>>'{}',U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF') AS trimmed) text_value;
+  length(trimmed)+length(regexp_replace(trimmed,$supplementary$[^\U00010000-\U0010FFFF]$supplementary$,'','g')) BETWEEN minimum AND maximum,false)
+ FROM (SELECT regexp_replace(value#>>'{}',
+  $trim$\A[\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+|[\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+\Z$trim$,'','g') AS trimmed) text_value;
 $$;
 ALTER FUNCTION app.valid_party_revision_text(jsonb,integer,integer) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.valid_party_revision_text(jsonb,integer,integer) FROM PUBLIC;
