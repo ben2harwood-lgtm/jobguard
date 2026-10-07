@@ -287,3 +287,21 @@ plus fresh/upgrade/catalog/restore and both browser projects in CI. The builder
 sandbox cannot start PostgreSQL or bind localhost. Use a reviewed forward-fix
 migration if 0095 has been applied elsewhere; never edit merged 0000–0094 or
 rewrite existing bindings, ownership, issued documents or audit history.
+
+
+### 0103 — MON-7a synthetic prevention facts
+
+Additive `property_constraint_fact` and `counterparty_check`, tenant/job/binding-qualified
+FKs and invoker subject guards, strict cited result validation, reference-only
+staleness, indexes, immutable triggers, ENABLE/FORCE RLS, migration ownership and
+runtime SELECT/INSERT only. Watches append explicit start/stop commands and
+revision-scoped feed evaluations; no default watch, provider route, scheduling,
+Decision, outbox or financial effect. No data backfill. The prior application
+remains compatible. Audit FKs are deferred; audit head is the final command lock.
+
+Fresh install and upgrade from 0095 are covered by the PostgreSQL tests; they
+require CI in the restricted builder sandbox. After application, use a reviewed
+forward-fix migration and retain historical facts/audit; disable affected commands
+while fixing a validator or projection rather than rewriting history. No schema
+rollback with data deletion is proposed. See `docs/contracts/prevention-checks-v1.md`.
+B4 is parked as MON-7b; MON-7 is not fully accepted while it is parked.
