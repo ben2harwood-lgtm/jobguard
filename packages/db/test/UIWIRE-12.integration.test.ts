@@ -52,7 +52,7 @@ beforeAll(async()=>{
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
  await migrate(admin);
  expect(MIGRATION_URLS).toHaveLength(45);
- expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0053_shared_money_origin.sql'`)).rowCount).toBe(45);
+ expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0098_persisted_identity.sql'`)).rowCount).toBe(45);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 

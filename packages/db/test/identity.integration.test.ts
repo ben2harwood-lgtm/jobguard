@@ -27,10 +27,17 @@ beforeAll(async()=>{
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"fixture-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
  await postgres.initialise();await postgres.start();
  const base={host:"127.0.0.1",port,database:"postgres"};admin=new Pool({...base,user:"postgres",password:"fixture-only"});
- // Upgrade from the preceding supported schema (0042), then repeat the migration runner.
+ // Upgrade from exactly the state before identity (including merged 0053), then repeat the runner.
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- for(const url of MIGRATION_URLS.filter(u=>u.pathname.split("/").at(-1)!<"0052")){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
+ const identityIndex=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0098_persisted_identity.sql"));
+ expect(identityIndex).toBe(MIGRATION_URLS.length-1);
+ expect(identityIndex).toBe(44);
+ for(const url of MIGRATION_URLS.slice(0,identityIndex)){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
+ expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name)).toEqual(MIGRATION_URLS.slice(0,identityIndex).map(url=>url.pathname.split("/").at(-1)));
+ expect((await admin.query("SELECT to_regclass('identity.challenge') AS challenge")).rows[0].challenge).toBeNull();
  await migrate(admin);await migrate(admin);
+ expect((await admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration")).rows[0].n).toBe(45);
+ expect((await admin.query("SELECT to_regclass('identity.challenge') AS challenge")).rows[0].challenge).toBe("identity.challenge");
  await admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'identity-fixture'; ALTER ROLE jobguard_runtime LOGIN PASSWORD 'runtime-fixture'");
  identity=new Pool({...base,user:"jobguard_identity",password:"identity-fixture",max:5});runtime=new Pool({...base,user:"jobguard_runtime",password:"runtime-fixture"});
 },60000);

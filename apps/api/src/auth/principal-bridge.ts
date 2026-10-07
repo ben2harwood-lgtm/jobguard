@@ -28,5 +28,5 @@ export async function resolveVerifiedTenantContext(
   }
   const membership = await provider.findMembership(principal, selected);
   if (!membership) throw new AuthError("TENANT_FORBIDDEN");
-  return verifiedTenantContextFromMembership(asAuthenticatedMembership(membership));
+  return Object.freeze(verifiedTenantContextFromMembership(asAuthenticatedMembership(membership)));
 }

@@ -95,6 +95,19 @@ describe("principal to tenant bridge", () => {
     await expect(resolveVerifiedTenantContext(provider, request, ORIGIN)).rejects.toMatchObject({ code: "TENANT_FORBIDDEN" });
   });
 
+  it("freezes every minted context and throws on mutation in strict mode", async () => {
+    const { provider, session, membership } = await signup();
+    const context = await resolveVerifiedTenantContext(provider, {
+      sessionToken: session.sessionToken, csrfToken: session.csrfToken,
+      origin: ORIGIN, requestedTenantId: membership.tenantId,
+    }, ORIGIN);
+    expect(Object.isFrozen(context)).toBe(true);
+    // ESM is strict; this mutable view exercises runtime protection rather than TypeScript's readonly check.
+    const mutable: { tenantId: string } = context;
+    expect(() => { mutable.tenantId = "20000000-0000-4000-8000-000000000002"; }).toThrow(TypeError);
+    expect(context.tenantId).toBe(membership.tenantId);
+  });
+
   it("keeps the db context constructor call confined to the principal bridge", async () => {
     const authDirectory = new URL(".", import.meta.url);
     const files = (await readdir(authDirectory)).filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"));

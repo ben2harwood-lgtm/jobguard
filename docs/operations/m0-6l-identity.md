@@ -30,12 +30,17 @@ constants, which must be the unaliased imports from `@jobguard/db` (inside packa
 declaration, parameter, destructured or renamed look-alike, and the fixture module must define each as a literal UUID. The
 constructor and the context type may be imported, re-exported and destructured only under their own names; local aliases
 and derivations of the type are tracked as cast targets and may not be exported. Typed context values and their inferred local
-aliases cannot be spread into replacement contexts; typed object initializers, returns and `satisfies` expressions are checked
-as well. Named synthetic membership objects cannot be mutated through wrapped property accesses, nested destructuring,
+aliases (including assignments after declaration) cannot be reconstructed with spread, `Object.create`/`assign`/`fromEntries`,
+`structuredClone` or `JSON.parse`/`stringify`; even a copy without a visible tenant replacement is refused. Typed object
+initializers, returns and `satisfies` expressions are checked as well. Property writes (including computed keys and
+destructuring targets) and reflective/descriptor writes on contexts are refused. Original-value forwarding stays allowed.
+The auth principal bridge freezes every context it mints; strict-mode mutation throws. Freezing does not prevent a caller
+from substituting a reconstructed object, so the static boundary and independent review remain required. Named synthetic membership objects cannot be mutated through wrapped property accesses, nested destructuring,
 deletion or iteration targets before construction. Root-tool collection excludes `.test`/`.spec` files in all supported source
 extensions and generated output. The scan is syntactic: it cannot follow a
-context laundered through `any`/`never` or a member name computed at run time, which stay with the TypeScript compiler, the
-approved list and review. A new caller anywhere else, or a synthetic one fed anything but the DEMO constants, fails the test. `x-tenant-id` and
+context laundered through `any`/`never`, arbitrary signature-derived types or a dynamically selected reconstruction helper.
+These require review; TypeScript branding alone does not prove runtime provenance. A new caller anywhere else, or a synthetic
+one fed anything but the DEMO constants, fails the test. `x-tenant-id` and
 `requested_tenant_id` disagreeing or selecting a non-member tenant fail with
 `TENANT_FORBIDDEN`. The existing synthetic services retain their merged fixed demo context
 helpers; they cannot be used in pilot/production through either deployed composition seam.

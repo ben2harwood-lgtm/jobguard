@@ -115,7 +115,31 @@ Existing 0041 rows keep their historical labels and lack a verified artifact/req
 
 0042 first updates the two 0041 tenant policies to use missing-safe, empty-safe tenant context, so the migration no longer fails with `unrecognized configuration parameter` under `jobguard_migration`. That alone would make the new case-qualified foreign key pass without looking at any row (the owner has no tenant context under FORCE RLS), so 0042 also lifts FORCE ROW LEVEL SECURITY on `evidence_pack` and `evidence_pack_revision` for the one `ADD CONSTRAINT … FOREIGN KEY` statement, inside the same transaction, and restores it immediately afterwards. Existing rows are therefore genuinely validated: a 0041 revision whose case differs from its pack's case makes 0042 fail with 23503 and roll back, and the data must be corrected first. Absent context still admits no rows; ownership, policies and runtime grants are unchanged and FORCE is never off outside the migration. No business rows are rewritten. Proof: `packages/db/test/evidence-pack-upgrade.integration.test.ts` (real 0041 database, applied as `jobguard_migration`).
 
-### 0052 — persisted entered-code identity (M0-6L)
+## 0053 — SH-1 shared money and origin
+
+Adds immutable `job_commercial_track` and `extra_origin` tables with FORCE RLS,
+qualified foreign keys, narrow grants and trigger-only binding/provenance paths.
+Adds required track/origin columns to variations; a deferred reverse FK requires
+one exact origin at commit. Backfills the previous synthetic small-builder schema
+idempotently while retaining source identities/history and explicitly unknown
+raising metadata. Existing activation/import routines bind inside their current
+transaction through bounded triggers. No fee posting or external effect is added.
+
+Expand compatibility: existing capture inserts can omit the new columns on bound
+small-builder jobs, obtaining labelled legacy provenance. Existing pricing/state
+UPDATE grants are unchanged; origin/track UPDATE is denied. Fresh quote jobs bind
+at switch-live; adoption imports bind with their imported baseline. New contractor
+imports will bind through their own future authorized routine.
+
+Forward fix is preferred: append a migration preserving established bindings and
+origin rows. Do not drop these tables or rewrite origins after deployment. If the
+upgrade fails, its SQL transaction rolls back, leaving the preceding schema intact.
+Before rollout run fresh, previous-schema upgrade, twice-replayed backfill, runtime
+privilege/RLS/forgery tests and the existing Neon non-superuser bootstrap suite.
+SH-1 adds real PostgreSQL tests in `test/shared-money-origin.integration.test.ts`;
+local socket restrictions leave execution and earlier DB/browser regressions to CI.
+
+### 0098 — persisted entered-code identity (M0-6L)
 
 Expands the existing restricted `identity` control plane with keyed challenge/session
 hashes, rate windows, immutable invitation grants, a membership discovery index and
@@ -142,37 +166,14 @@ are part of the authentication trust boundary; possession of them is not protect
 business RLS. SQL privileges and migration-owner-only routines require independent review.
 
 Existing users need no backfill: legacy synthetic users stay in their existing demo path.
-Do not auto-link email addresses to pre-existing identities. Migrations 0043–0051 are
-reserved outside this lane; the runner appends 0052 after the currently supported 0042.
+Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
+0098 replaces this PR’s reservation of 0052: 0053 is already merged, 0054–0093 stay reserved,
+and 0094–0097 belong to other tasks. The runner appends 0098 last, after 0053.
 Fresh-install coverage remains in the tenancy/Neon suites; `identity.integration.test.ts`
-executes upgrade from 0042, repeat migration, races, privilege/catalog checks and rollback.
+executes upgrade from the state immediately before 0098 (including merged 0053), repeat migration, races, privilege/catalog checks and rollback.
 These are PostgreSQL tests, not claimed executed in the restricted builder sandbox.
 
 Forward fix: disable identity endpoints/credential, preserve existing tables and add a
 reviewed corrective migration. Rollback of application code is expand compatible: the
 preceding demo ignores these tables. Never drop enrolled identities or tenants to roll
 back; restore rehearsal and real-data retention remain separate release gates.
-
-## 0053 — SH-1 shared money and origin
-
-Adds immutable `job_commercial_track` and `extra_origin` tables with FORCE RLS,
-qualified foreign keys, narrow grants and trigger-only binding/provenance paths.
-Adds required track/origin columns to variations; a deferred reverse FK requires
-one exact origin at commit. Backfills the previous synthetic small-builder schema
-idempotently while retaining source identities/history and explicitly unknown
-raising metadata. Existing activation/import routines bind inside their current
-transaction through bounded triggers. No fee posting or external effect is added.
-
-Expand compatibility: existing capture inserts can omit the new columns on bound
-small-builder jobs, obtaining labelled legacy provenance. Existing pricing/state
-UPDATE grants are unchanged; origin/track UPDATE is denied. Fresh quote jobs bind
-at switch-live; adoption imports bind with their imported baseline. New contractor
-imports will bind through their own future authorized routine.
-
-Forward fix is preferred: append a migration preserving established bindings and
-origin rows. Do not drop these tables or rewrite origins after deployment. If the
-upgrade fails, its SQL transaction rolls back, leaving the preceding schema intact.
-Before rollout run fresh, previous-schema upgrade, twice-replayed backfill, runtime
-privilege/RLS/forgery tests and the existing Neon non-superuser bootstrap suite.
-SH-1 adds real PostgreSQL tests in `test/shared-money-origin.integration.test.ts`;
-local socket restrictions leave execution and earlier DB/browser regressions to CI.
