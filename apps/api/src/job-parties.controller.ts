@@ -2,15 +2,15 @@ import { Body, Controller, Get, Param, Post, Query, Req, HttpException } from "@
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Pool } from "pg";
 import { JobPartiesApplication, JobPartiesError } from "./job-parties.application.js";
-import { SYNTHETIC_SESSION } from "./workspace/workspace-session.js";
+import { practiceCookie } from "./practice-access.js";
 @ApiTags("job-parties")
 @Controller("jobs/:id/parties")
 export class JobPartiesController {
   private readonly application: JobPartiesApplication;
   constructor(pool: Pool) { this.application = new JobPartiesApplication(pool); }
   private principal(request: { headers: { cookie?: string } }, requestedTenantId?: string) {
-    const session = request.headers.cookie?.split(";").map(x => x.trim()).find(x => x.startsWith("jg_session="))?.slice(11);
-    return session && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(session) ? { sessionId: SYNTHETIC_SESSION, ...(requestedTenantId ? { requestedTenantId } : {}) } : null;
+    const sessionId = practiceCookie(request.headers.cookie);
+    return sessionId ? { sessionId, ...(requestedTenantId ? { requestedTenantId } : {}) } : null;
   }
   private async execute<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
@@ -43,8 +43,8 @@ export class JobPartiesListController {
   constructor(pool: Pool) { this.application = new JobPartiesApplication(pool); }
   @Get("jobs") @ApiOperation({summary:"Read job-parties-list.v1 including captured jobs and saved customer/site labels"})
   async list(@Req() request: { headers: { cookie?: string } }) {
-    const session=request.headers.cookie?.split(";").map(x=>x.trim()).find(x=>x.startsWith("jg_session="))?.slice(11);
-    if(!session||!/^([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u.test(session))throw new HttpException({code:"UNAUTHENTICATED"},401);
-    try{return await this.application.list({sessionId:SYNTHETIC_SESSION});}catch(error){if(error instanceof JobPartiesError)throw new HttpException({code:error.code},403);throw error;}
+    const sessionId = practiceCookie(request.headers.cookie);
+    try { return await this.application.list(sessionId ? { sessionId } : null); }
+    catch(error) { if(error instanceof JobPartiesError)throw new HttpException({code:error.code},403);throw error; }
   }
 }

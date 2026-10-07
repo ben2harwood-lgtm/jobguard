@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { jobPartiesCommandV1, jobPartiesCommandResultV1, jobPartiesWorkspaceV1, jobPartiesListV1, siteMatchKey } from "@jobguard/core";
+import { practiceOwnedJobsSql } from "./practice-session.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -10,6 +11,20 @@ export class JobPartiesError extends Error {
 const normalizeUnit = (value: string) => value.normalize("NFKC").trim().toUpperCase().replace(/\s+/gu," ");
 const normalizePostcode = (value: string) => value.toUpperCase().replace(/\s/gu, "");
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+// Registry identities are visible only through this session's jobs: either an
+// immutable binding or the operational creation audit event (before binding).
+// Legacy/non-practice repository callers retain their tenant-wide semantics.
+function identityScope(kind: "customer" | "site", identity: string) {
+  const binding = kind === "customer" ? `(b.customer_id=${identity} OR b.paying_party_id=${identity})` : `b.site_id=${identity}`;
+  return `($3::text IS NULL OR EXISTS (
+    SELECT 1 FROM app.job_party_binding b JOIN practice_owned_job own_job ON own_job.id=b.job_id
+    WHERE b.tenant_id=$1 AND ${binding}
+  ) OR EXISTS (
+    SELECT 1 FROM app.audit_event e JOIN practice_owned_job own_job ON own_job.id::text=e.subject_ref
+    WHERE e.tenant_id=$1 AND e.subject_type='job' AND e.event_type='job.parties.create_${kind}'
+      AND e.payload->'references'->>'identityId'=${identity}::text
+  ))`;
+}
 export class JobPartiesRepository {
   constructor(private readonly pool: Pool) {}
   private async authorize(db: TenantTransaction, tenantId: string, actor: string) {
@@ -17,36 +32,51 @@ export class JobPartiesRepository {
       AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`, [tenantId, actor]);
     if (!member.rowCount) throw new JobPartiesError("FORBIDDEN");
   }
-  async list(context: VerifiedTenantContext, actor: string) {
+  async list(context: VerifiedTenantContext, actor: string, practiceDigest?: string) {
     return withTenant(this.pool,context,async db=>{
       await this.authorize(db,context.tenantId,actor);
-      const jobs=(await db.$client.query(`SELECT j.id,j.title,j.status,j.revision,coalesce(s.snapshot->'customer'->>'name','Details needed') AS "customerLabel",
+      const jobs=(await db.$client.query(`${practiceOwnedJobsSql("$2")} SELECT j.id,j.title,j.status,j.revision,coalesce(s.snapshot->'customer'->>'name','Details needed') AS "customerLabel",
       CASE WHEN s.snapshot IS NULL THEN 'Details needed' ELSE concat_ws(', ',s.snapshot->'site'->>'unit',s.snapshot->'site'->'addressLines'->>0,s.snapshot->'site'->>'postcode') END AS "siteLabel"
       FROM app.job j LEFT JOIN app.job_party_current x ON(x.tenant_id,x.job_id)=(j.tenant_id,j.id) LEFT JOIN app.job_party_snapshot s ON(s.tenant_id,s.binding_id)=(x.tenant_id,x.binding_id)
-      WHERE j.tenant_id=$1 AND NOT EXISTS(SELECT 1 FROM app.sandbox_run r WHERE(r.tenant_id,r.job_id)=(j.tenant_id,j.id)) ORDER BY j.created_at,j.id`,[context.tenantId])).rows;
+      WHERE j.tenant_id=$1 AND ($2::text IS NULL OR j.id IN (SELECT id FROM practice_owned_job)) AND NOT EXISTS(SELECT 1 FROM app.sandbox_run r WHERE(r.tenant_id,r.job_id)=(j.tenant_id,j.id)) ORDER BY j.created_at,j.id`,[context.tenantId,practiceDigest??null])).rows;
       return jobPartiesListV1.parse({version:"job-parties-list.v1",environment:"synthetic_demo",jobs});
     });
   }
-  async view(context: VerifiedTenantContext, actor: string, jobId: string) {
+  async view(context: VerifiedTenantContext, actor: string, jobId: string, practiceDigest?: string) {
     return withTenant(this.pool, context, async db => {
       await this.authorize(db, context.tenantId, actor);
-      const j = (await db.$client.query<{ revision: number; status: string; snapshot: unknown; ids: unknown }>(`SELECT j.revision,j.status,s.snapshot,CASE WHEN b.id IS NULL THEN NULL ELSE jsonb_build_object('bindingId',b.id,'customerId',b.customer_id,'payingPartyId',b.paying_party_id,'siteId',b.site_id) END AS ids FROM app.job j LEFT JOIN app.job_party_current x ON(x.tenant_id,x.job_id)=(j.tenant_id,j.id) LEFT JOIN app.job_party_snapshot s ON(s.tenant_id,s.binding_id)=(x.tenant_id,x.binding_id) LEFT JOIN app.job_party_binding b ON(b.tenant_id,b.id)=(x.tenant_id,x.binding_id) WHERE j.tenant_id=$1 AND j.id=$2`, [context.tenantId, jobId])).rows[0];
+      const j = (await db.$client.query<{ revision: number; status: string; snapshot: unknown; ids: unknown }>(`${practiceOwnedJobsSql()} SELECT j.revision,j.status,s.snapshot,CASE WHEN b.id IS NULL THEN NULL ELSE jsonb_build_object('bindingId',b.id,'customerId',b.customer_id,'payingPartyId',b.paying_party_id,'siteId',b.site_id) END AS ids FROM app.job j LEFT JOIN app.job_party_current x ON(x.tenant_id,x.job_id)=(j.tenant_id,j.id) LEFT JOIN app.job_party_snapshot s ON(s.tenant_id,s.binding_id)=(x.tenant_id,x.binding_id) LEFT JOIN app.job_party_binding b ON(b.tenant_id,b.id)=(x.tenant_id,x.binding_id) WHERE j.tenant_id=$1 AND j.id=$2 AND ($3::text IS NULL OR j.id IN (SELECT id FROM practice_owned_job))`, [context.tenantId, jobId, practiceDigest??null])).rows[0];
       if (!j) throw new JobPartiesError("NOT_FOUND");
       const current = j.snapshot ?? null;
-      const customers = (await db.$client.query(`SELECT DISTINCT ON(customer_id) customer_id AS id,id AS "revisionId",revision,payload AS customer FROM app.customer_revision WHERE tenant_id=$1 ORDER BY customer_id,revision DESC`, [context.tenantId])).rows;
-      const sites = (await db.$client.query(`SELECT DISTINCT ON(site_id) site_id AS id,id AS "revisionId",payload AS site,match_key::text AS "matchKey" FROM app.site_revision WHERE tenant_id=$1 ORDER BY site_id,revision DESC`, [context.tenantId])).rows;
-      const recognition = (await db.$client.query(`SELECT r.job_id AS "jobId",r.status,r.started_at::text AS "startedAt",r.ended_at::text AS "endedAt" FROM app.job_party_recognition r JOIN app.job_party_recognition own ON(own.tenant_id,own.customer_id,own.site_id)=(r.tenant_id,r.customer_id,r.site_id) WHERE own.tenant_id=$1 AND own.job_id=$2 ORDER BY r.job_id`, [context.tenantId, jobId])).rows;
+      const customers = (await db.$client.query(`${practiceOwnedJobsSql()} SELECT DISTINCT ON(customer_id) customer_id AS id,id AS "revisionId",revision,payload AS customer FROM app.customer_revision cr WHERE tenant_id=$1 AND $2::uuid IS NOT NULL AND ${identityScope("customer","cr.customer_id")} ORDER BY customer_id,revision DESC`, [context.tenantId, jobId, practiceDigest??null])).rows;
+      const sites = (await db.$client.query(`${practiceOwnedJobsSql()} SELECT DISTINCT ON(site_id) site_id AS id,id AS "revisionId",payload AS site,match_key::text AS "matchKey" FROM app.site_revision sr WHERE tenant_id=$1 AND $2::uuid IS NOT NULL AND ${identityScope("site","sr.site_id")} ORDER BY site_id,revision DESC`, [context.tenantId, jobId, practiceDigest??null])).rows;
+      const recognition = (await db.$client.query(`${practiceOwnedJobsSql()} SELECT r.job_id AS "jobId",r.status,r.started_at::text AS "startedAt",r.ended_at::text AS "endedAt" FROM app.job_party_recognition r JOIN app.job_party_recognition own ON(own.tenant_id,own.customer_id,own.site_id)=(r.tenant_id,r.customer_id,r.site_id) WHERE own.tenant_id=$1 AND own.job_id=$2 AND ($3::text IS NULL OR r.job_id IN (SELECT id FROM practice_owned_job)) ORDER BY r.job_id`, [context.tenantId, jobId, practiceDigest??null])).rows;
       return jobPartiesWorkspaceV1.parse({ version: "job-parties-workspace.v1", environment: "synthetic_demo", jobId, jobRevision: j.revision, status: j.status, current, currentIds: j.ids ?? null, customers, sites, recognition, realExternalActions: 0 });
     });
   }
-  async command(context: VerifiedTenantContext, actor: string, jobId: string, raw: unknown) {
+  async command(context: VerifiedTenantContext, actor: string, jobId: string, raw: unknown, practiceDigest?: string) {
     const parsed = jobPartiesCommandV1.safeParse(raw);
     if (!parsed.success) throw new JobPartiesError("INVALID_PARTIES");
     const input = parsed.data, requestHash = digest({ jobId, input });
     try {
       return await withTenant(this.pool, context, async db => {
         await this.authorize(db, context.tenantId, actor);
-        if (!(await db.$client.query(`SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2`, [context.tenantId, jobId])).rowCount) throw new JobPartiesError("NOT_FOUND");
+        if (!(await db.$client.query(`${practiceOwnedJobsSql()} SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND ($3::text IS NULL OR id IN (SELECT id FROM practice_owned_job))`, [context.tenantId, jobId, practiceDigest??null])).rowCount) throw new JobPartiesError("NOT_FOUND");
+        // Reject hidden registry references before receipt claims or revision checks,
+        // including a forged reference presented on a job the caller does own.
+        if (practiceDigest) {
+          const references: Array<["customer" | "site", "id" | "customer_id" | "site_id", string]> = [];
+          if (input.action === "revise_customer") references.push(["customer", "customer_id", input.customerId]);
+          if (input.action === "create_site" && input.reuseSiteId) references.push(["site", "site_id", input.reuseSiteId]);
+          if (input.action === "bind" || input.action === "correct") {
+            references.push(["customer", "id", input.parties.customerRevisionId], ["site", "id", input.parties.siteRevisionId]);
+            if (input.parties.payingPartyRevisionId) references.push(["customer", "id", input.parties.payingPartyRevisionId]);
+          }
+          for (const [kind, column, id] of references) {
+            const found = await db.$client.query(`${practiceOwnedJobsSql()} SELECT 1 FROM app.${kind}_revision r WHERE tenant_id=$1 AND r.${column}=$2 AND ${identityScope(kind, `r.${kind}_id`)}`, [context.tenantId, id, practiceDigest]);
+            if (!found.rowCount) throw new JobPartiesError("NOT_FOUND");
+          }
+        }
         const claim = await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
           VALUES($1,$2,'job.parties',$5,$3,'processing',$4) ON CONFLICT DO NOTHING RETURNING command_id`, [input.commandId, context.tenantId, requestHash, actor, input.commandId]);
         if (!claim.rowCount) {

@@ -114,3 +114,31 @@ setup can bridge missing context; runtime context and RLS attacks are unchanged.
 The CH-3a integration suite never installs that fixture trigger and exercises
 missing parties, upgrade/backfill, constraints, grants, replay and races directly.
 No existing assertion is removed or weakened.
+
+
+Round 11 session integration: Next and Nest pass the actual `jg_session` cookie
+through `PracticeAccess`; cookie shape alone is never authority. List authenticates
+the persisted session; view, command and adopt authorize job ownership before
+validation, reads or replay. Missing, invalid, revoked/expired or invented sessions
+return `UNAUTHENTICATED` (401); another session's job and an unknown job return the
+same `NOT_FOUND` (404) without labels. The existing foreign-tenant request remains
+`FORBIDDEN` (403) after authentication. Adapters preserve SBOX's `practiceFailure`
+and global `PracticeErrorsFilter` mapping.
+
+The practice list, identity suggestions and recognition projection are limited to
+the caller's jobs. Unbound customer/site identities are scoped by their immutable
+creation audit event; bindings permit reuse within that session. Forged identity
+references on an otherwise owned job fail `NOT_FOUND` before revision/idempotency
+checks or writes. Direct non-practice repository callers retain the tenant-wide
+registry; this is the authenticated application trust boundary, not protection
+against stolen database credentials.
+
+Migration 0095 is unchanged. Its adoption routine creates an imported job without
+a digest, while 0094 prohibits a later ownership assignment. The adoption's existing
+append-only audit event now carries `references.sourceJobId` in the same command
+transaction. Practice authorization inherits the source job's session ownership
+through that event, including repeated imports; it never claims legacy jobs on
+first access. The list and recognition use the same ownership relation. This is
+an additive audit reference, with no names, labels, contacts or cookie tokens.
+Existing imports without that reference remain unowned, like SBOX's unowned
+legacy fixtures. No migration, schema, privilege or approval policy is changed.

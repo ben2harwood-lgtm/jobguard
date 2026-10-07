@@ -2,6 +2,74 @@ import { createHash } from "node:crypto";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { openCapture } from "./helpers/capture-journey";
 const B=(page:Page,name:string)=>page.getByRole("button",{name,exact:true});
+test("CH-3a a new practice session cannot read, change, import or list another session's parties; reused storageState retains access", async ({ page, browser }) => {
+  const jobId = await reviewJob(page);
+  const customer = `Fictional private customer ${crypto.randomUUID()}`;
+  const site = `Fictional private site ${crypto.randomUUID()}`;
+  await page.getByLabel("Customer name", { exact: true }).fill(customer);
+  await page.getByLabel("Premises address").fill(site);
+  await B(page, "Save customer and site").click();
+  await expect(page.getByTestId("party-customer")).toHaveText(customer);
+  const saved = await partiesView(page, jobId);
+  const ownImport = await page.request.post(`/api/jobs/${jobId}/parties/import`, { data: {
+    version: "job-parties-import.v1", commandId: crypto.randomUUID(), expectedBindingId: saved.current.bindingId,
+  } });
+  expect(ownImport.ok(), await ownImport.text()).toBe(true);
+  const importedId = (await ownImport.json()).jobId as string;
+  const before = await partiesView(page, jobId);
+  const options = { baseURL: "http://127.0.0.1:3000", viewport: page.viewportSize()! };
+  const stranger = await browser.newContext(options);
+  const missing = await browser.newContext(options);
+  const returning = await browser.newContext({ ...options, storageState: await page.context().storageState() });
+  try {
+    expect((await stranger.request.post("/api/session")).ok()).toBe(true);
+    const mutation = { version: "job-parties-command.v1", commandId: crypto.randomUUID(), action: "revise_customer", customerId: before.currentIds.customerId,
+      expectedRevision: 1, customer: { version: "customer.v1", name: "Fictional intruder change", type: "person" } };
+    const adoption = { version: "job-parties-import.v1", commandId: crypto.randomUUID(), expectedBindingId: before.current.bindingId };
+    for (const target of [jobId, importedId, crypto.randomUUID()]) {
+      for (const response of [await stranger.request.get(`/api/jobs/${target}/parties`),
+        await stranger.request.post(`/api/jobs/${target}/parties`, { data: mutation }),
+        await stranger.request.post(`/api/jobs/${target}/parties/import`, { data: adoption })]) {
+        expect(response.status(), await response.text()).toBe(404);
+        expect(await response.json()).toEqual({ code: "NOT_FOUND" });
+      }
+    }
+    for (const invented of [false, true]) {
+      if (invented) await missing.addCookies([{ name: "jg_session", value: crypto.randomUUID(), domain: "127.0.0.1", path: "/" }]);
+      for (const response of [await missing.request.get(`/api/jobs/${jobId}/parties`),
+        await missing.request.post(`/api/jobs/${jobId}/parties`, { data: mutation }),
+        await missing.request.post(`/api/jobs/${jobId}/parties/import`, { data: adoption }),
+        await missing.request.get("/api/jobs?tenantId=11111111-1111-4111-8111-111111111111")]) {
+        expect(response.status(), await response.text()).toBe(401);
+        expect(await response.json()).toEqual({ code: "UNAUTHENTICATED" });
+      }
+    }
+    const list = await stranger.request.get("/api/jobs?tenantId=11111111-1111-4111-8111-111111111111");
+    expect(list.ok(), await list.text()).toBe(true);
+    const text = await list.text(); expect(text).not.toContain(jobId); expect(text).not.toContain(importedId); expect(text).not.toContain(customer); expect(text).not.toContain(site);
+    // Suggestions in a caller's own workspace also cannot disclose another session's labels or identities.
+    const ownJob = (await list.json()).jobs[0].id;
+    const ownParties = await stranger.request.get(`/api/jobs/${ownJob}/parties`);
+    expect(ownParties.ok(), await ownParties.text()).toBe(true);
+    expect(await ownParties.text()).not.toContain(customer); expect(await ownParties.text()).not.toContain(site);
+    const stolen = await stranger.request.post(`/api/jobs/${ownJob}/parties`, { data: mutation });
+    expect(stolen.status(), await stolen.text()).toBe(404);
+    const other = await stranger.newPage(); await other.goto("/");
+    await expect(other.getByLabel("Search jobs")).toBeVisible();
+    await other.getByLabel("Search jobs").fill(customer); await expect(other.locator(".job-card")).toHaveCount(0);
+    const reused = await returning.request.get(`/api/jobs/${jobId}/parties`);
+    expect(reused.ok(), await reused.text()).toBe(true); expect(await reused.json()).toEqual(before);
+    const reusedImport = await returning.request.get(`/api/jobs/${importedId}/parties`);
+    expect(reusedImport.ok(), await reusedImport.text()).toBe(true);
+    expect((await reusedImport.json()).current.customerRevisionId).toBe(before.current.customerRevisionId);
+    const reopened = await returning.newPage(); await reopened.goto(`/jobs/${jobId}`);
+    await expect(reopened.getByTestId("party-binding-id")).toHaveText(before.current.bindingId);
+    await expect(reopened.getByTestId("party-customer")).toHaveText(customer); await expect(reopened.getByTestId("party-site")).toContainText(site);
+    await reopened.getByLabel("Customer phone (fictional, optional)").fill("07000000001"); await saveAndWait(reopened);
+    const after = await partiesView(page, jobId); expect(after.current.customer.phone).toBe("07000000001"); expect(after.current.customer.name).toBe(customer);
+    expect(after.current.site).toEqual(before.current.site);
+  } finally { await stranger.close(); await missing.close(); await returning.close(); }
+});
 async function quotingJob(page:Page){
   await openCapture(page);await B(page,"Make my draft").click();await B(page,"Check and edit my draft").click();
   for(const name of ["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await B(page,`Accept ${name}`).click();

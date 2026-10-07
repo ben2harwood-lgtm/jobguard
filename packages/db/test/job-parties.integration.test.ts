@@ -1,11 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { AdoptInFlightJobMutation, appendAuditBatch, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { AdoptInFlightJobMutation, appendAuditBatch, authenticatePracticeSession, authorizePracticeJob, issuePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
@@ -482,5 +482,93 @@ describe("CH-3a a null correction flag cannot bypass the post-live guard (round 
     // The permitted route still works: a true flag with a reason is a correction and keeps that reason.
     const done=await bindWithFlag(job,next.c.revisionId,next.s.revisionId,true,"Correct the fictional site","job.parties.correct");
     expect((await admin.query(`SELECT correction_reason FROM app.job_party_binding WHERE tenant_id=$1 AND id=$2`,[tenant,done.binding])).rows[0].correction_reason).toBe("Correct the fictional site");
+  });
+});
+
+
+describe("CH-3a SBOX-SESSION-1 registry ownership on real PostgreSQL", () => {
+  it("isolates labels, unbound suggestions, recognition and forged registry references; an adopted job inherits only its source session", async () => {
+    const previous = process.env.JOBGUARD_ENV;
+    process.env.JOBGUARD_ENV = "synthetic_demo";
+    try {
+      const account = randomUUID();
+      await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+      await admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
+      await admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional session account')", [DEMO_TENANT_ID, account]);
+      await admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, account, DEMO_IDENTITY_USER_ID]);
+      const ownerToken = await issuePracticeSession(runtime), strangerToken = await issuePracticeSession(runtime);
+      const owner = await authenticatePracticeSession(runtime, ownerToken), stranger = await authenticatePracticeSession(runtime, strangerToken);
+      const ownedJob = (await repository.list(owner.context, owner.membershipId, owner.digest)).jobs.find(value => value.status === "quoting")!.id;
+      const strangerJob = (await repository.list(stranger.context, stranger.membershipId, stranger.digest)).jobs.find(value => value.status === "quoting")!.id;
+      const c = await repository.command(owner.context, owner.membershipId, ownedJob, command("create_customer", { customer }), owner.digest);
+      const pay = await repository.command(owner.context, owner.membershipId, ownedJob, command("create_customer", { customer: { ...customer, name: "Fictional separate payer" } }), owner.digest);
+      const place = await repository.command(owner.context, owner.membershipId, ownedJob, command("create_site", { site }), owner.digest);
+      // The creator can use newly created, not-yet-bound identities. Another session cannot see or use them.
+      const unbound = await repository.view(owner.context, owner.membershipId, ownedJob, owner.digest);
+      expect(unbound.customers.map(value => value.id)).toEqual(expect.arrayContaining([c.id, pay.id]));
+      expect(unbound.sites.map(value => value.id)).toContain(place.id);
+      const emptyStranger = await repository.view(stranger.context, stranger.membershipId, strangerJob, stranger.digest);
+      expect(emptyStranger.customers).toEqual([]); expect(emptyStranger.sites).toEqual([]);
+      const ownCustomer = await repository.command(stranger.context, stranger.membershipId, strangerJob, command("create_customer", {
+        customer: { ...customer, name: "Fictional stranger customer" },
+      }), stranger.digest);
+      const ownSite = await repository.command(stranger.context, stranger.membershipId, strangerJob, command("create_site", {
+        site: { ...site, addressLines: ["22 Fictional Elsewhere"] },
+      }), stranger.digest);
+      const strangerBefore = await repository.view(stranger.context, stranger.membershipId, strangerJob, stranger.digest);
+      expect(strangerBefore.customers.map(value => value.id)).toEqual([ownCustomer.id]);
+      expect(strangerBefore.sites.map(value => value.id)).toEqual([ownSite.id]);
+      const parties = { version: "job-parties.v1", customerRevisionId: c.revisionId, payingPartyRevisionId: pay.revisionId, siteRevisionId: place.revisionId };
+      for (const data of [
+        command("revise_customer", { customerId: c.id, expectedRevision: 1, customer: { ...customer, name: "Fictional stolen edit" } }),
+        command("create_site", { site, reuseSiteId: place.id, confirmSamePlace: true }),
+        command("bind", { expectedJobRevision: 0, parties }),
+        command("bind", { expectedJobRevision: 0, parties: { version: "job-parties.v1", customerRevisionId: ownCustomer.revisionId, siteRevisionId: place.revisionId } }),
+        command("bind", { expectedJobRevision: 0, parties: { version: "job-parties.v1", customerRevisionId: ownCustomer.revisionId, siteRevisionId: ownSite.revisionId, payingPartyRevisionId: pay.revisionId } }),
+      ]) {
+        await expect(repository.command(stranger.context, stranger.membershipId, strangerJob, data, stranger.digest)).rejects.toThrow("NOT_FOUND");
+        expect((await admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [DEMO_TENANT_ID, data.commandId])).rowCount).toBe(0);
+      }
+      const bind = command("bind", { expectedJobRevision: 0, parties });
+      const saved = await repository.command(owner.context, owner.membershipId, ownedJob, bind, owner.digest);
+      expect(await repository.command(owner.context, owner.membershipId, ownedJob, bind, owner.digest)).toEqual(saved);
+      await expect(repository.view(stranger.context, stranger.membershipId, ownedJob, stranger.digest)).rejects.toThrow("NOT_FOUND");
+      await expect(repository.command(stranger.context, stranger.membershipId, ownedJob, bind, stranger.digest)).rejects.toThrow("NOT_FOUND");
+      const strangersList = await repository.list(stranger.context, stranger.membershipId, stranger.digest);
+      expect(strangersList.jobs.map(value => value.id)).not.toContain(ownedJob);
+      expect(JSON.stringify(strangersList)).not.toContain(customer.name);
+      expect(JSON.stringify(strangersList)).not.toContain(site.addressLines[0]);
+      expect(await repository.view(stranger.context, stranger.membershipId, strangerJob, stranger.digest)).toEqual(strangerBefore);
+      expect((await repository.view(owner.context, owner.membershipId, ownedJob, owner.digest)).current?.customer.name).toBe(customer.name);
+
+      // Exercise the unchanged controlled routine/dispatcher and immutable source audit reference.
+      const imported = randomUUID(), baseline = randomUUID();
+      const baselineHash = createHash("sha256").update("Fictional inherited ownership").digest("hex");
+      const mutation = new AdoptInFlightJobMutation(DEMO_TENANT_ID, "synthetic_candidate", {
+        version: "adopt-job.v1", jobId: imported, baselineId: baseline, title: "Fictional owned import", lifecyclePoint: "live",
+        provenance: "imported", lineageStrength: "builder_attested_weaker", baselineHash, baselineDescription: "Fictional baseline",
+        acceptedNetValuePence: 100000, recoveryCapPence: 1500, acceptedValueSource: "builder_attestation", attestedByMembershipId: DEMO_MEMBERSHIP_ID,
+        attestedAt: new Date(0), importTermsVersion: "synthetic_import_terms_candidate.v1", feePolicyVersion: "reference_fee_policy_v1", mode: "synthetic_candidate", parties,
+      });
+      await new UserCommandDispatcher(runtime).dispatch(owner.context, {
+        version: "command.v1", commandId: randomUUID(), commandType: "job.adopt_in_flight", semanticKey: `import:${imported}`,
+        actorMembershipId: owner.membershipId, subjectType: "job", subjectRef: imported,
+        action: { actionType: "job.adopt_in_flight", recipient: null, contentHash: baselineHash, aggregateRevision: 0, amountPence: 100000,
+          currency: "GBP", policyVersion: "synthetic_import_terms_candidate.v1", expiresAt: new Date(Date.now() + 300000) },
+      }, { mutate: mutation.mutate.bind(mutation), auditEvents: (result, cmd) => mutation.auditEvents(result, cmd).map(event => ({
+        ...event, payload: { ...event.payload, references: { ...event.payload.references, sourceJobId: ownedJob } },
+      })) });
+      expect((await authorizePracticeJob(runtime, ownerToken, imported)).digest).toBe(owner.digest);
+      await expect(authorizePracticeJob(runtime, strangerToken, imported)).rejects.toThrow("NOT_FOUND");
+      await expect(authorizePracticeJob(runtime, undefined, imported)).rejects.toThrow("UNAUTHENTICATED");
+      const importedView = await repository.view(owner.context, owner.membershipId, imported, owner.digest);
+      expect(importedView.current?.customerRevisionId).toBe(c.revisionId);
+      expect(importedView.recognition.map(value => value.jobId).sort()).toEqual([ownedJob, imported].sort());
+      expect((await repository.list(owner.context, owner.membershipId, owner.digest)).jobs.map(value => value.id)).toEqual(expect.arrayContaining([ownedJob, imported]));
+      expect((await repository.list(stranger.context, stranger.membershipId, stranger.digest)).jobs.map(value => value.id)).not.toContain(imported);
+      await expect(repository.view(stranger.context, stranger.membershipId, imported, stranger.digest)).rejects.toThrow("NOT_FOUND");
+      const legacy = await createJob();
+      await expect(authorizePracticeJob(runtime, ownerToken, legacy)).rejects.toThrow("NOT_FOUND");
+    } finally { if (previous === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previous; }
   });
 });
