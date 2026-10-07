@@ -1118,6 +1118,49 @@
           "contractor-organisation"
         ]
       }
+    },
+    "/recovery-cases/{id}/messages": {
+      "get": {
+        "operationId": "RecoveryMessageController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the saved practice messages, delivery state and practice sink for a recovery case",
+        "tags": [
+          "recovery-messages"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryMessageController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview the exact factual practice message bound to the attachment-approved evidence pack; exact replays return current case/message state",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/messages/{messageId}/commands": {
+      "post": {
+        "operationId": "RecoveryMessageController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve, revoke, advance or reconcile a practice message by an exact versioned command; exact replays return current case/message state",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
     }
   },
   "info": {

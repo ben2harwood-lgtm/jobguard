@@ -357,3 +357,43 @@ test("an interrupted claim becomes uncertain after its lease and can be checked 
   expect((await state(page, caseId)).latest.attempts).toBe(2);
   await persistence(page, browser, source.jobId, caseId, "Simulated delivery — nothing sent", "1");
 });
+
+
+test("a new practice session cannot see or act on another session's recovery messages", async ({ page, browser }) => {
+  const { source, caseId } = await customerCaseWithPack(page);
+  await click(page, "Preview factual message");
+  const saved = await state(page, caseId), message = saved.latest;
+  const missingMessage = await command(page, caseId, randomUUID(), { action: "advance", expectedRevision: message.revision, outcome: "success" });
+  expect(missingMessage.status(), await missingMessage.text()).toBe(404);
+  expect(await missingMessage.json()).toEqual({ code: "NOT_FOUND" });
+  const stranger = await browser.newContext({ baseURL: "http://127.0.0.1:3000", viewport: page.viewportSize() });
+  const missing = await browser.newContext({ baseURL: "http://127.0.0.1:3000" });
+  try {
+    expect((await stranger.request.post("/api/session")).ok()).toBe(true);
+    const paths = [messagesPath(caseId), messagesPath(randomUUID())];
+    for (const context of [stranger, missing]) {
+      const expected = context === stranger ? { status: 404, code: "NOT_FOUND" } : { status: 401, code: "UNAUTHENTICATED" };
+      for (const path of paths) {
+        const response = await context.request.get(path);
+        expect(response.status(), await response.text()).toBe(expected.status);
+        expect(await response.json()).toEqual({ code: expected.code });
+      }
+      const commands = [
+        { path: messagesPath(caseId), data: { version: "recovery-message-preview.v1", commandId: randomUUID(), expectedCaseRevision: saved.readiness.caseRevision, packId: message.message.packId } },
+        ...["approve", "advance", "reconcile", "revoke"].map(action => ({ path: `${messagesPath(caseId)}/${message.id}/commands`, data: {
+          version: "recovery-message-command.v1", commandId: randomUUID(), messageId: message.id, expectedRevision: message.revision, action,
+          ...(action === "approve" ? { recipient: message.message.recipient, body: message.message.body, amountPence: message.message.amountPence, packId: message.message.packId, contentHash: message.message.contentHash } : {}),
+          ...(action === "advance" ? { outcome: "success" } : {}),
+        } })),
+      ];
+      for (const { path, data } of commands) {
+        const response = await context.request.post(path, { data });
+        expect(response.status(), await response.text()).toBe(expected.status);
+        expect(await response.json()).toEqual({ code: expected.code });
+      }
+    }
+    const other = await stranger.newPage(); await other.goto(`/jobs/${source.jobId}#recovery-cases`);
+    await expect(other.getByTestId("pursuit-body")).toHaveCount(0);
+    expect(await state(page, caseId)).toEqual(saved);
+  } finally { await stranger.close(); await missing.close(); }
+});

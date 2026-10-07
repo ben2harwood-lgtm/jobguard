@@ -228,7 +228,7 @@ export class RecoveryMessageRepository {
         const last = (await db.$client.query<{ revision: number; kind: string }>("SELECT revision,kind FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision DESC LIMIT 1", [ctx.tenantId, messageId])).rows[0]!;
         if (last.kind === "started" && (m.outbox_status === "pending" || m.outbox_status === "retryable"))
           return { replayed: false as const, blocked: false as const, started: last.revision, outboxId: m.outbox_action_id!, row: m };
-        return { replayed: true as const, blocked: replay.kind === "blocked" };
+        return { replayed: true as const };
       }
       if (!claimed) fail("RECOVERY_MESSAGE_COMMAND_CONFLICT"); // another family holds this id
       const m = await this.messageRow(db, ctx.tenantId, caseId, messageId), status = await this.statusOf(db, ctx.tenantId, m);
@@ -256,7 +256,7 @@ export class RecoveryMessageRepository {
       await this.audit(db, actor, messageId, "started", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
       return { replayed: false as const, blocked: false as const, started, outboxId: m.outbox_action_id!, row: m };
     }));
-    if (claimed.replayed) return claimed.blocked ? fail("RECOVERY_MESSAGE_BLOCKED") : undefined;
+    if (claimed.replayed) return;
     if (claimed.blocked) return fail("RECOVERY_MESSAGE_BLOCKED");
     // Deliberate post-commit boundary: only the closed deterministic fake exists, with no transport or credential.
     const adapter = new FakeRecoveryMessageAdapter(this.pool, ctx, input.outcome satisfies RecoveryMessageDeliveryMode);

@@ -40,6 +40,11 @@ describe("saved recovery message controls and sources", () => {
     expect(html).toContain("Check outcome");
     expect(html).not.toContain("Advance practice delivery");
   });
+  it("displays exhausted failure without offering another advance", () => {
+    const html = render("failed");
+    expect(html).toContain("Delivery failed repeatedly — nothing sent");
+    expect(html).not.toContain("Advance practice delivery");
+  });
   it("keeps every source anchor and its saved content even if the current pack no longer contains it (P3-10)", () => {
     const html = render("blocked");
     hooks.values = [[], false, false, "", "intact", null, false];
@@ -56,10 +61,11 @@ describe("saved recovery message controls and sources", () => {
 
 describe('supplier recovery source picker (Sol 5)', () => {
   it('offers the recorded fictional partial delivery as an explicit selection', () => {
-    hooks.values = [0, [], undefined, '', false, '1000.00', [{ id: id(20), document_type: 'delivery', status: 'ready' }], id(20)];
+    hooks.values = [0, [], undefined, '', false, '1000.00', [{ id: id(20), document_type: 'delivery', status: 'ready', document_number: 'DN-FICTIONAL-42' }], id(20)];
     const html = renderToStaticMarkup(createElement(RecoveryCases, { jobId: id(2) }));
     expect(html).toContain('Fictional delivery source');
     expect(html).toContain(`value="${id(20)}"`);
-    expect(html).toContain('materials-B partial delivery — 10 each delivered, 8 accepted');
+    expect(html).toContain('DN-FICTIONAL-42');
+    expect(html).not.toContain('10 each delivered, 8 accepted');
   });
 });

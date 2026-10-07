@@ -226,7 +226,7 @@ BEGIN
    -- A start is a claim intent backed by a live approval on a queued action, or an attempt the history has not recorded yet.
    WHEN 'started' THEN attempts>starts OR (f.outbox_status IN ('pending','retryable') AND f.revoked_at IS NULL AND f.expires_at>clock_timestamp())
    WHEN 'succeeded' THEN latest='succeeded' AND f.outbox_status='succeeded' AND sunk
-   WHEN 'failed' THEN latest='dead_letter' AND f.outbox_status='dead_letter'
+   WHEN 'failed' THEN latest='failed' AND f.outbox_status='dead_letter'
    WHEN 'outcome_unknown' THEN CASE prev WHEN 'started' THEN latest='outcome_unknown' AND f.outbox_status='outcome_unknown' ELSE f.outbox_status='outcome_unknown' END
    WHEN 'retryable' THEN CASE prev WHEN 'started' THEN latest='retryable' AND f.outbox_status='retryable' ELSE f.outbox_status='retryable' END
    WHEN 'reconcile_started' THEN f.outbox_status='outcome_unknown'

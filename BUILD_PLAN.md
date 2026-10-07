@@ -3482,6 +3482,8 @@ Any money from merchants or suppliers, lenders, lead platforms or builders' cust
 
 ### 14.3 Discovered later
 
+- **Shared command-ID ownership follow-up (M4-5-S round 5, Opus ruling):** evidence-pack generation and attachment approval must claim `app.command_receipt` and reject IDs already used by any recovery/shared command family, including sequential and concurrent reuse. Use receipt-before-case locking. The recovery-to-pack exclusion is already covered in M4-5-S; the reverse evidence-pack paths are outside this lane and remain a separate task.
+
 Agents append adjacent findings here rather than implementing them inline, with date, related task, evidence, risk, proposed scope, gate, and whether an invariant or decision record changes.
 
 | Date | Finding | Related | Proposed handling |

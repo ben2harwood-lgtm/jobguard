@@ -1139,6 +1139,26 @@ describe('current-state replay contract (Ben, 7 October)', () => {
     expect(await attemptCount(done.latest!.approval!.outboxActionId)).toBe(2);
   });
 
+  it('replays a pre-start blocked advance as current state even after a replacement preview', async () => {
+    const { caseId, view } = await approved();
+    await amend(caseId, 32400);
+    const advance = advanceCommand(view);
+    expect(await code(() => repo.command(context, caseId, advance, actor))).toBe('RECOVERY_MESSAGE_BLOCKED');
+    const blocked = await repo.read(context, caseId);
+    expect(blocked.latest!.status).toBe('blocked');
+    const before = await writeCounts();
+    expect(await repo.command(context, caseId, advance, actor)).toEqual(blocked);
+    expect(await writeCounts()).toEqual(before);
+    const pack = await packs.generate(context, caseId, { commandId: randomUUID() }, actor.actorRef);
+    await packs.approveAttachment(context, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
+    const replacement = await repo.preview(context, caseId, previewCommand(await repo.read(context, caseId)), actor);
+    expect(replacement.latest!.id).not.toBe(view.id);
+    expect(await repo.command(context, caseId, advance, actor)).toEqual(replacement);
+    expect(await code(() => repo.command(context, caseId, { ...advance, outcome: 'definite_failure' }, actor))).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+    expect(await attemptCount(view.approval!.outboxActionId)).toBe(0);
+    expect(await sinkCount(view.id)).toBe(0);
+  });
+
   it('replays revoke (cancel) after a replacement is approved and returns the replacement plus cancelled history', async () => {
     const { caseId, view } = await approved();
     const cancel = simple('revoke', view);
@@ -1239,5 +1259,32 @@ describe('recovery refuses real evidence-pack command IDs (Sol 4, recovery half)
       await holder.query('ROLLBACK').catch(() => undefined); holder.release();
       await Promise.allSettled([packOutcome, messageOutcome].filter(Boolean));
     }
+  });
+});
+
+describe('exhausted plain delivery failures in real PostgreSQL (Opus P1-2)', () => {
+  it('records failed after five retryable adapter failures and keeps the message panel readable', async () => {
+    const { caseId, view } = await approved();
+    let current = view;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const result = await repo.command(context, caseId, advanceCommand(current, 'definite_failure'), actor);
+      current = result.latest!;
+      expect(current.status).toBe(attempt === 5 ? 'failed' : 'retryable');
+      expect(current.attempts).toBe(attempt);
+      expect(current.history.at(-1)!.kind).toBe(attempt === 5 ? 'failed' : 'retryable');
+    }
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('dead_letter');
+    expect((await admin.query('SELECT outcome FROM app.action_attempt WHERE action_id=$1 ORDER BY attempt_number', [view.approval!.outboxActionId])).rows.map(row => row.outcome))
+      .toEqual(['retryable', 'retryable', 'retryable', 'retryable', 'failed']);
+    const panel = await repo.read(context, caseId);
+    expect(panel.latest!.status).toBe('failed');
+    expect(panel.latest!.history.at(-1)!.kind).toBe('failed');
+    expect(panel.sinkCount).toBe(0);
+    const before = await writeCounts();
+    expect(await code(() => repo.command(context, caseId, advanceCommand(current), actor))).toBe('RECOVERY_MESSAGE_NOT_ADVANCEABLE');
+    expect(await repo.read(context, caseId)).toEqual(panel);
+    expect(await writeCounts()).toEqual(before);
+    expect(await attemptCount(view.approval!.outboxActionId)).toBe(5);
+    expect(await sinkCount(view.id)).toBe(0);
   });
 });

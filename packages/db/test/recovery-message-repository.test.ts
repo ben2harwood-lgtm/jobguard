@@ -123,3 +123,19 @@ describe('real evidence-pack command ownership boundary (Sol 4)', () => {
       .rejects.toMatchObject({ code: 'RECOVERY_MESSAGE_COMMAND_CONFLICT' });
   });
 });
+
+describe('blocked replay current-state ruling (Opus P3-1)', () => {
+  it('returns current state for a pre-start block without execution or writes', async () => {
+    const state = { latest: { status: 'blocked' }, sinkCount: 0 };
+    const query = vi.fn(async () => ({ rows: [{ revision: 3, kind: 'blocked' }] }));
+    const pool = { connect: async () => ({ query, release() {} }) } as unknown as Pool;
+    const repo = new RecoveryMessageRepository(pool);
+    const service = repo as unknown as { [key: string]: (...args: any[]) => Promise<any> };
+    service.begin = async () => false;
+    service.isReplay = async () => ({ kind: 'blocked' });
+    service.messageRow = async () => ({ outbox_status: 'cancelled' });
+    service.read = async () => state;
+    expect(await repo.command(ctx, id(1), { version: 'recovery-message-command.v1', commandId: id(50), messageId: id(6), expectedRevision: 2, action: 'advance', outcome: 'success' }, actor)).toEqual(state);
+    expect(query.mock.calls.every(([sql]) => /^(BEGIN|COMMIT|SELECT)/u.test(sql))).toBe(true);
+  });
+});
