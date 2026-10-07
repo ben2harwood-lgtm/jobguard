@@ -34,7 +34,11 @@ export async function readSyntheticDemo(pool: Pool) {
          FROM app.job j LEFT JOIN app.job_party_current pc ON(pc.tenant_id,pc.job_id)=(j.tenant_id,j.id)
          LEFT JOIN app.job_party_snapshot s ON(s.tenant_id,s.binding_id)=(pc.tenant_id,pc.binding_id)
          WHERE j.tenant_id=$1
-           AND NOT EXISTS (SELECT 1 FROM app.job_record_proposal cp WHERE(cp.tenant_id,cp.job_id)=(j.tenant_id,j.id))
+           AND j.practice_session_digest IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM app.job_record_proposal cp
+              WHERE cp.tenant_id=j.tenant_id AND cp.job_id=j.id
+           )
            AND NOT EXISTS (
              SELECT 1 FROM app.sandbox_run sr
               WHERE sr.tenant_id=j.tenant_id AND sr.job_id=j.id

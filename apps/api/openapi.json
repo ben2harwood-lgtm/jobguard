@@ -269,21 +269,6 @@
         ]
       }
     },
-    "/jobs/{id}/quotes/preview": {
-      "post": {
-        "operationId": "QuoteController_preview",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Preview a quote with its immutable customer, paying party and site revisions",
-        "tags": [
-          "quotes"
-        ]
-      }
-    },
     "/jobs/{id}/variations": {
       "get": {
         "operationId": "VariationController_get",
@@ -1089,88 +1074,48 @@
         ]
       }
     },
-    "/jobs/{id}/parties": {
-      "get": {
-        "operationId": "JobPartiesController_view",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Persisted customer, paying party, site and recognition projection"
-          }
-        },
-        "summary": "Read job-parties-workspace.v1 with tenant-scoped identity suggestions",
-        "tags": [
-          "job-parties"
-        ]
-      },
+    "/contractor/practice": {
       "post": {
-        "operationId": "JobPartiesController_command",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid"
-            }
-          }
-        ],
+        "operationId": "ContractorController_start",
+        "parameters": [],
         "responses": {
-          "409": {
-            "description": "Typed revision, identity or idempotency conflict"
+          "201": {
+            "description": ""
           }
         },
-        "summary": "Execute job-parties-command.v1 (operational; no commercial approval)",
+        "summary": "Generate an isolated synthetic contractor organisation; no sends or charges",
         "tags": [
-          "job-parties"
+          "contractor-organisation"
         ]
       }
     },
-    "/jobs/{id}/parties/import": {
-      "post": {
-        "operationId": "JobPartiesController_adopt",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "409": {
-            "description": "JOB_PARTIES_REQUIRED or stale source binding"
-          }
-        },
-        "summary": "Adopt the supplied fictional job using the exact saved party binding",
-        "tags": [
-          "job-parties"
-        ]
-      }
-    },
-    "/job-parties/jobs": {
+    "/contractor": {
       "get": {
-        "operationId": "JobPartiesListController_list",
+        "operationId": "ContractorController_read",
         "parameters": [],
         "responses": {
           "200": {
             "description": ""
           }
         },
-        "summary": "Read job-parties-list.v1 including captured jobs and saved customer/site labels",
+        "summary": "Read contractor organisation or scoped immutable client contracts",
         "tags": [
-          "job-parties"
+          "contractor-organisation"
+        ]
+      }
+    },
+    "/contractor/commands": {
+      "post": {
+        "operationId": "ContractorController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Execute an audited versioned contractor administration command",
+        "tags": [
+          "contractor-organisation"
         ]
       }
     }

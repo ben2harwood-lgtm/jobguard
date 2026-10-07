@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 export function evidencePackFailure(error: unknown): { status: number; code: string } {
   if (error instanceof ZodError || error instanceof SyntaxError || (error instanceof Error && error.name === "ZodError")) return { status: 400, code: "INVALID_COMMAND" };
   const message = error instanceof Error ? error.message : "";
+  if (message === "NOT_FOUND") return { status: 404, code: message };
   if (message === "UNAUTHENTICATED") return { status: 401, code: message };
   if (message === "FORBIDDEN") return { status: 403, code: message };
   if (message === "SYNTHETIC_MODE_REQUIRED") return { status: 400, code: message };
