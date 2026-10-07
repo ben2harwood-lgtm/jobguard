@@ -30,7 +30,7 @@ describe("SV-1 shadow domain", () => {
             actual: string;
             sourceRefs: string[];
         }[] = [];
-        const row = (label: string, expected: string, actual: string, sourceRefs: string[] = ["fixture://evidence/6"]) => rows.push({ label, expected, actual, sourceRefs });
+        const row = (label: string, expected: string, actual: string, sourceRefs: string[]) => rows.push({ label, expected, actual, sourceRefs });
         for (const [label, kind, state] of [["A", "log_extra", "approved"], ["B", "final_review", null], ["D", "baseline", null], ["P", "log_extra", "draft"]] as const) {
             const r = matchBuilderCapture(match, [capture(kind, state)]);
             row(label, label === "D" ? "already_in_original_scope" : "builder_captured", r.outcome, r.references.map(r => r.sourceRef));
@@ -38,48 +38,61 @@ describe("SV-1 shadow domain", () => {
         // Draft, rejected and withdrawn all appear in this explicit deterministic gate.
         for (const state of ["draft", "rejected", "withdrawn"])
             expect(matchBuilderCapture(match, [capture("log_extra", state)]).outcome).toBe("builder_captured");
-        row("C", "revealed", revealed().state);
+        const c = revealed();
+        row("C", "revealed", c.state, c.evidence.map(e => e.evidenceId));
         expect(qualifiesAttribution(attribution())).toBe(true);
         expect(fee(96000).F.pence).toBe(8000);
-        row("E", "dismissed", act("dismiss", { reason: "not_completed", referenceId: null }).state);
-        row("F", "fee_free", qualifiesAttribution(attribution(false)) ? "qualifies" : "fee_free");
-        row("G", "4000", String(fee(48000).F.pence));
-        row("H", "-2000", String(fee(96000, 0, false, 24000).delta.pence));
+        const e = act("dismiss", { reason: "not_completed", referenceId: null });
+        row("E", "dismissed", e.state, e.evidence.map(e => e.evidenceId));
+        const f = attribution(false);
+        row("F", "fee_free", qualifiesAttribution(f) ? "qualifies" : "fee_free", attributionPredicates.map(p => f.facts[p].sourceRef));
+        const g = fee(48000);
+        row("G", "4000", String(g.F.pence), [...g.sourceRefs]);
+        const h = fee(96000, 0, false, 24000);
+        row("H", "-2000", String(h.delta.pence), [...h.sourceRefs]);
         const early = transitionShadowSignal(make(), { version: "shadow-event.v1", ...binding, signalId: id(4), expectedRevision: 0, type: "disclose", phase: "pre_lock", lockId: null, at, sourceRef: "fixture://D13", route: "must_surface_override" }, refs);
-        row("I", "surfaced_early", early.state);
-        const other = make(id(17), evidence(18, id(17))), coalesced = coalesceShadowSignals(make(), other, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://J" });
-        const third = make(id(21), evidence(22, id(21))), all = coalesceShadowSignals(coalesced.primary, third, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://J/photo" });
-        row("J", "duplicate_signal", all.duplicate.outcome!);
+        row("I", "surfaced_early", early.state, early.ineligibility.map(e => e.sourceRef));
+        const other = make(id(17), evidence(18, id(17))), coalesced = coalesceShadowSignals(make(), other, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://J", expectedPrimaryRevision: 0, expectedDuplicateRevision: 0 });
+        const third = make(id(21), evidence(22, id(21))), all = coalesceShadowSignals(coalesced.primary, third, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://J/photo", expectedPrimaryRevision: coalesced.primary.revision, expectedDuplicateRevision: 0 });
+        row("J", "duplicate_signal", all.duplicate.outcome!, all.primary.evidence.map(e => e.evidenceId));
         expect(all.primary.evidence).toHaveLength(3);
         expect(new Set([all.primary.workId, coalesced.duplicate.workId, all.duplicate.workId]).size).toBe(1);
-        row("K", "dismissed", act("dismiss", { reason: "already_included", referenceId: id(10) }).state);
+        const k = act("dismiss", { reason: "already_included", referenceId: id(10) });
+        row("K", "dismissed", k.state, [k.dismissal!.referenceId!]);
         expect(act("dismiss", { reason: "already_included", referenceId: id(19) }).state).toBe("attribution_disputed");
         const late = evidence();
-        row("L", "evidence_after_lock", make(id(4), shadowEvidenceV1.parse({ ...late, lockTiming: "after_lock" })).ineligibility[0]!.reason);
-        row("M", "4651", String(fee(2400000, 4032000).F.pence));
-        row("N", "8000", String(fee(96000, 4032000, true).F.pence));
-        row("O", "unmatched", matchBuilderCapture(match, []).outcome);
+        const l = make(id(4), shadowEvidenceV1.parse({ ...late, lockTiming: "after_lock" }));
+        row("L", "evidence_after_lock", l.ineligibility[0]!.reason, l.ineligibility.map(e => e.sourceRef));
+        const m = fee(2400000, 4032000);
+        row("M", "4651", String(m.F.pence), [...m.sourceRefs]);
+        const n = fee(96000, 4032000, true);
+        row("N", "8000", String(n.F.pence), [...n.sourceRefs]);
+        const o = make();
+        row("O", "unmatched", matchBuilderCapture(match, []).outcome, o.evidence.map(e => e.evidenceId));
         expect(classifyShadowSource({ version: "shadow-source.v1", kind: "diary", state: null, recordedPhase: "pre_lock", aiStructured: false })).toBe("evidence");
         // Q has no pure equivalent: actual role denial and response indistinguishability belong to SV-2.
         row("Q", "SV-2 required; not evaluated", "SV-2 required; not evaluated", []);
         let rIneligible = false;
+        const rSources: string[] = [];
         for (const route of ["support_conversation", "export", "data_subject_access"]) {
             const r = transitionShadowSignal(make(), { version: "shadow-event.v1", ...binding, signalId: id(4), expectedRevision: 0, type: "disclose", phase: "pre_lock", lockId: null, at, sourceRef: `fixture://R/${route}`, route }, refs);
             expect(r.disclosedBeforeLock).toBe(true);
+            rSources.push(...r.ineligibility.map(e => e.sourceRef));
             rIneligible = !qualifiesAttribution(createAttributionFacts({ ...attribution(), exclusions: r.ineligibility }));
             expect(rIneligible).toBe(true);
         }
-        row("R", "permanently_ineligible", rIneligible ? "permanently_ineligible" : "qualifies");
+        row("R", "permanently_ineligible", rIneligible ? "permanently_ineligible" : "qualifies", rSources);
         rows.sort((a, b) => a.label < b.label ? -1 : 1);
         expect(rows.map(r => r.label).join("")).toBe("ABCDEFGHIJKLMNOPQR");
         const omitted = rows.filter(r => ["A", "B", "D", "P"].includes(r.label) && r.actual !== r.expected).length, unsupported = rows.filter(r => r.label !== "Q" && r.actual !== r.expected).length;
         expect(omitted).toBe(0);
         expect(unsupported).toBe(0);
-        const expectedSources = new Set(["fixture://evidence/6", ...[["log_extra", "approved"], ["final_review", null], ["baseline", null], ["log_extra", "draft"]].map(([kind, state]) => `fixture://capture/${kind}/${state}`)]);
+        const expectedSources = new Set([id(6), id(18), id(22), id(10), "fixture://receipt", "fixture://refund", "fixture://receipt-proof", "fixture://origin", "fixture://D13", ...attributionPredicates.map(p => `fixture://${p}`), ...["support_conversation", "export", "data_subject_access"].map(r => `fixture://R/${r}`), ...[["log_extra", "approved"], ["final_review", null], ["baseline", null], ["log_extra", "draft"]].map(([kind, state]) => `fixture://capture/${kind}/${state}`)]);
         validateShadowEvidence([evidence()], [evidence()]);
         for (const r of rows) {
             if(r.label === "Q")continue;
             expect(r.actual, r.label).toBe(r.expected);
+            expect(r.sourceRefs.length, r.label).toBeGreaterThan(0);
             if (r.label !== "Q")
                 expect(r.sourceRefs.every(ref => expectedSources.has(ref)), r.label).toBe(true);
         }

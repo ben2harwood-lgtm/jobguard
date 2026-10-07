@@ -5,11 +5,31 @@ import { money } from "../money.js";
 import { createEligibilityFacts, evaluateRecoveryEligibility, shadowEligibilityV1, type ShadowEligibilityFacts } from "./eligibility.js";
 import { freezeShadow, parseShadow, shadowAmount, ShadowDomainError, shadowId, shadowRef, uniqueShadowIds } from "./types.js";
 const allocationEvent = z.object({ receipt: receiptAllocationV1, qualifyingLines: z.array(shadowEligibilityV1).readonly(), reversesSourceRef: shadowRef.nullable() }).strict().readonly();
-const principalEntry = z.object({ facts: shadowEligibilityV1, sourceRef: shadowRef, direction: z.enum(["recovery", "reversal"]), compensatesSourceRef: shadowRef.nullable() }).strict().readonly();
+const principalEntry = z.object({ facts: shadowEligibilityV1.refine(f => f.category !== "missed_variation_final_account", "Catch principal requires receipt-to-line allocation"), sourceRef: shadowRef, direction: z.enum(["recovery", "reversal"]), compensatesSourceRef: shadowRef.nullable() }).strict().readonly();
 export const shadowSuccessFeeV1 = z.object({ version: z.literal("shadow-success-fee.v1"), environment: z.literal("synthetic_reference"), tenantId: shadowId, jobId: shadowId, policyVersion: z.literal("reference_fee_policy_v3"), derivationId: shadowId, allocationEvents: z.array(allocationEvent).readonly(), principalEntries: z.array(principalEntry).readonly(), priorNetPostedPence: shadowAmount, priorPolicyVersion: z.literal("reference_fee_policy_v3"), compensatesDerivationId: shadowId.nullable() }).strict().readonly().brand<"ShadowSuccessFeeInput">();
 export type ShadowSuccessFeeInput = z.infer<typeof shadowSuccessFeeV1>;
 export const createSuccessFeeInput = (raw: unknown): ShadowSuccessFeeInput => parseShadow(shadowSuccessFeeV1, raw);
 const negate = (p: ExactPence) => exactPence(-p.numerator, p.denominator);
+/**
+ * SH-1 keeps its instant comparator private. Its explicit zero-share cutoff check accepts exactly
+ * earlier <= later, including offsets and arbitrary fractional precision. This internal probe
+ * contributes no money or source to the derivation and copies none of SH-1's timestamp logic.
+ */
+function assertReceiptOrder(earlier: string, later: string): void {
+    try {
+        const zero = { numerator: "0", denominator: "1" };
+        allocateReceiptToLines({
+            version: "receipt-allocation.v1", sourceRef: "shadow-internal-instant-order",
+            receiptGross: zero, effectiveAt: later, direction: "receipt",
+            invoiceId: "instant-order", separateInvoiceId: null,
+            explicit: [{ lineId: "instant-order", gross: zero }],
+            lines: [{ id: "instant-order", invoiceId: "instant-order", existedAt: earlier,
+                outstandingGross: { numerator: "1", denominator: "1" }, netPence: 1, grossPence: 1 }],
+        });
+    } catch {
+        throw new ShadowDomainError("SOURCE_BINDING_MISMATCH");
+    }
+}
 /**
  * Reference proposals only. The complete invoice snapshots and verified source facts are caller responsibilities.
  * A persisted allocator must quarantine omitted lines; this pure adapter cannot discover an incomplete snapshot.
@@ -24,6 +44,10 @@ export function deriveShadowSuccessFee(input: ShadowSuccessFeeInput) {
             fail();
         return { facts, result: evaluateRecoveryEligibility(facts) };
     };
+    const identity = (q: ShadowEligibilityFacts) => JSON.stringify([q.category, q.caseId, q.workId, q.lineId]);
+    const principalIdentities = new Set(f.principalEntries.map(e => identity(e.facts)));
+    if (f.allocationEvents.some(e => e.qualifyingLines.some(q => principalIdentities.has(identity(q)))))
+        fail();
     type Original = {
         event: typeof f.allocationEvents[number];
         remaining: Map<string, ExactPence>;
@@ -34,6 +58,8 @@ export function deriveShadowSuccessFee(input: ShadowSuccessFeeInput) {
         remaining: ExactPence;
     }>();
     const allocations: ReceiptLineAllocation[] = [], terms: ExactPence[] = [], sources: string[] = [];
+    const allocatedNet = new Map<string, ExactPence>();
+    let lastReceiptAt: string | undefined;
     for (const event of f.allocationEvents) {
         const r = event.receipt;
         uniqueShadowIds(event.qualifyingLines.map(q => q.lineId));
@@ -44,9 +70,12 @@ export function deriveShadowSuccessFee(input: ShadowSuccessFeeInput) {
         if (r.direction === "receipt") {
             if (event.reversesSourceRef !== null)
                 fail();
+            if (lastReceiptAt !== undefined)
+                assertReceiptOrder(lastReceiptAt, r.effectiveAt);
+            lastReceiptAt = r.effectiveAt;
             for (const line of r.lines) {
-                const key = `${line.invoiceId}:${line.id}`, known = current.get(key);
-                if (known && (known.line.netPence !== line.netPence || known.line.grossPence !== line.grossPence || known.line.existedAt !== line.existedAt || compareExactPence(known.remaining, parseExactPence(line.outstandingGross)) !== 0))
+                const known = current.get(line.id);
+                if (known && (known.line.invoiceId !== line.invoiceId || known.line.netPence !== line.netPence || known.line.grossPence !== line.grossPence || known.line.existedAt !== line.existedAt || compareExactPence(known.remaining, parseExactPence(line.outstandingGross)) !== 0))
                     fail();
             }
         }
@@ -69,6 +98,11 @@ export function deriveShadowSuccessFee(input: ShadowSuccessFeeInput) {
         allocations.push(...allocated);
         sources.push(r.sourceRef);
         for (const a of allocated) {
+            const line = r.lines.find(l => l.id === a.lineId)!;
+            const cumulative = addExactPence(allocatedNet.get(a.lineId) ?? exactPence(0n), a.net);
+            if (compareExactPence(cumulative, exactPence(0n)) < 0 || compareExactPence(cumulative, exactPence(BigInt(line.netPence))) > 0)
+                fail();
+            allocatedNet.set(a.lineId, cumulative);
             const q = byLine.get(a.lineId);
             if (q?.result.eligible) {
                 terms.push(a.net);
@@ -78,7 +112,7 @@ export function deriveShadowSuccessFee(input: ShadowSuccessFeeInput) {
         if (r.direction === "receipt") {
             for (const line of r.lines) {
                 const a = allocated.find(a => a.lineId === line.id);
-                current.set(`${line.invoiceId}:${line.id}`, { line, remaining: addExactPence(exactPence(BigInt(line.outstandingGross.numerator), BigInt(line.outstandingGross.denominator)), a ? negate(a.gross) : exactPence(0n)) });
+                current.set(line.id, { line, remaining: addExactPence(exactPence(BigInt(line.outstandingGross.numerator), BigInt(line.outstandingGross.denominator)), a ? negate(a.gross) : exactPence(0n)) });
             }
             originals.set(r.sourceRef, { event, remaining: new Map(allocated.map(a => [a.lineId, a.gross])), allocations: allocated });
         }

@@ -75,13 +75,52 @@ describe("SV-1 shadow domain", () => {
         expect(s.state).toBe("revealed");
         expect(s.ineligibility.map(r => r.reason)).toEqual(expect.arrayContaining(["evidence_after_lock", "pre_adoption_evidence"]));
     });
+    it.each(["recovery_case_created", "revealed", "confirmed_extra", "attribution_disputed", "dismissed", ...["builder_captured", "already_in_original_scope", "already_on_final_account"].map(outcome => `reconciled:${outcome}`)])("round2 P-E refuses rewriting a duplicate at %s", name => {
+        const [stateName, outcome] = name.split(":");
+        const a = shadowSignalV1.parse({ ...state("confirmed_extra"), lockId: id(5) });
+        const b = shadowSignalV1.parse({ ...state(stateName!), signalId: id(8), lockId: id(5), outcome: outcome ?? null });
+        const before = JSON.stringify([a, b]);
+        expect(() => coalesceShadowSignals(a, b, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://merge", expectedPrimaryRevision: a.revision, expectedDuplicateRevision: b.revision })).toThrow("INVALID_TRANSITION");
+        expect(JSON.stringify([a, b])).toBe(before);
+    });
+    it("round2 coalescing requires expected revisions for both signals", () => {
+        const a = make(), p = proposal(8), b = createShadowSignal(p, { version: "shadow-phase.v1", phase: "pre_lock", lockId: null }, p.evidence);
+        expect(() => coalesceShadowSignals(a, b, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://merge" })).toThrow();
+    });
+    it("round2 coalescing rejects stale revisions on either signal", () => {
+        const a = make(), p = proposal(8), b = createShadowSignal(p, { version: "shadow-phase.v1", phase: "pre_lock", lockId: null }, p.evidence);
+        for (const revisions of [{ expectedPrimaryRevision: 1, expectedDuplicateRevision: 0 }, { expectedPrimaryRevision: 0, expectedDuplicateRevision: 1 }])
+            expect(() => coalesceShadowSignals(a, b, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://merge", ...revisions })).toThrow("STALE_REVISION");
+    });
+    it("round2 coalescing table permits only pre-reveal states and carries disclosure", () => {
+        for (const primaryState of signalStates)
+            for (const duplicateState of signalStates) {
+                // Keep lock bindings equal to test states independently of the existing lock guard.
+                const a = shadowSignalV1.parse({ ...state(primaryState), lockId: null });
+                const b = shadowSignalV1.parse({ ...state(duplicateState), lockId: null, signalId: id(8) });
+                const facts = { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://table", expectedPrimaryRevision: a.revision, expectedDuplicateRevision: b.revision };
+                const allowed = [primaryState, duplicateState].every(s => ["candidate", "held_for_final_check", "surfaced_early"].includes(s));
+                if (!allowed) {
+                    expect(() => coalesceShadowSignals(a, b, facts)).toThrow("INVALID_TRANSITION");
+                    continue;
+                }
+                const result = coalesceShadowSignals(a, b, facts);
+                const disclosed = primaryState === "surfaced_early" || duplicateState === "surfaced_early";
+                expect(result.primary.disclosedBeforeLock).toBe(disclosed);
+                expect(result.primary.state).toBe(disclosed ? "surfaced_early" : primaryState);
+                expect(result.duplicate.outcome).toBe("duplicate_signal");
+                expect(result.primary.revision).toBe(a.revision + 1);
+                expect(result.duplicate.revision).toBe(b.revision + 1);
+                if (disclosed) expect(result.primary.ineligibility.some(e => e.reason === "disclosed_before_lock")).toBe(true);
+            }
+    });
     it("J coalesces duplicate evidence under one work identity without creating uniqueness", () => {
         const a = make(), p = proposal(8), b = createShadowSignal(p, { version: "shadow-phase.v1", phase: "pre_lock", lockId: null }, p.evidence);
-        const result = coalesceShadowSignals(a, b, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://same-work" });
+        const result = coalesceShadowSignals(a, b, { version: "shadow-coalescing.v1", ...binding, sameWork: true, sourceRef: "fixture://same-work", expectedPrimaryRevision: a.revision, expectedDuplicateRevision: b.revision });
         expect(result.primary.evidence).toHaveLength(2);
         expect(result.duplicate.coalescedIntoSignalId).toBe(a.signalId);
         expect(result.duplicate.workId).toBe(a.workId);
         expect(Object.isFrozen(result.primary.evidence)).toBe(true);
-        expect(() => coalesceShadowSignals(a, b, { version: "shadow-coalescing.v1", ...binding, workId: id(9), sameWork: true, sourceRef: "fixture://wrong" })).toThrow();
+        expect(() => coalesceShadowSignals(a, b, { version: "shadow-coalescing.v1", ...binding, workId: id(9), sameWork: true, sourceRef: "fixture://wrong", expectedPrimaryRevision: a.revision, expectedDuplicateRevision: b.revision })).toThrow();
     });
 });

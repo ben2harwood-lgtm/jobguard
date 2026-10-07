@@ -18,6 +18,10 @@ describe("SV-1 shadow domain", () => {
             expect(() => createAttributionFacts({ ...r, facts })).toThrow();
         expect(() => createAttributionFacts({ ...r, policyVersion: "v1" })).toThrow();
     });
+    it("round2 P-F dismissed or confirmed review without dispute history refuses", () => {
+        for (const resolution of ["dismissed", "confirmed_extra"])
+            expect(() => createAttributionFacts({ ...raw(), disputeReview: { version: "shadow-dispute-review.v1", ...binding, resolution, sourceRef: "fixture://orphan-review" } })).toThrow();
+    });
     it("immutable exclusions survive later signal decisions", () => {
         for (const reason of ["evidence_after_lock", "pre_adoption_evidence", "disclosed_before_lock", "surfaced_early", "attribution_disputed"]) {
             const r = { ...raw(), exclusions: [{ version: "shadow-ineligibility.v1", reason, sourceRef: "fixture://immutable", at: "2026-10-01T00:00:00Z" }] };
@@ -36,6 +40,6 @@ describe("SV-1 shadow domain", () => {
         expect(qualifiesAttribution(createAttributionFacts({ ...raw(), exclusions: [exclusion], disputeReview: { ...review, resolution: "dismissed" } }))).toBe(false);
         expect(() => createAttributionFacts({ ...raw(), exclusions: [exclusion], disputeReview: { ...review, lineId: id(99) } })).toThrow();
         for (const reason of ["evidence_after_lock", "pre_adoption_evidence", "disclosed_before_lock", "surfaced_early"])
-            expect(qualifiesAttribution(createAttributionFacts({ ...raw(), exclusions: [{ ...exclusion, reason }], disputeReview: review }))).toBe(false);
+            expect(qualifiesAttribution(createAttributionFacts({ ...raw(), exclusions: [exclusion, { ...exclusion, reason }], disputeReview: review }))).toBe(false);
     });
 });

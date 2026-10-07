@@ -123,9 +123,15 @@ export function coalesceShadowSignals(primaryRaw: unknown, duplicateRaw: unknown
     duplicate: ShadowSignal;
 }> {
     const a = parseShadow(shadowSignalV1, primaryRaw), b = parseShadow(shadowSignalV1, duplicateRaw);
-    const f = parseShadow(z.object({ version: z.literal("shadow-coalescing.v1"), ...shadowBinding, sameWork: z.literal(true), sourceRef: shadowRef }).strict(), factsRaw);
+    const f = parseShadow(z.object({ version: z.literal("shadow-coalescing.v1"), ...shadowBinding, sameWork: z.literal(true), sourceRef: shadowRef, expectedPrimaryRevision: z.number().int().nonnegative(), expectedDuplicateRevision: z.number().int().nonnegative() }).strict(), factsRaw);
     if (!sameShadowBinding(a, b) || !sameShadowBinding(a, f) || a.signalId === b.signalId || a.lockId !== b.lockId || a.coalescedIntoSignalId !== null || b.coalescedIntoSignalId !== null)
         throw new ShadowDomainError("SOURCE_BINDING_MISMATCH");
+    if (a.revision !== f.expectedPrimaryRevision || b.revision !== f.expectedDuplicateRevision)
+        throw new ShadowDomainError("STALE_REVISION");
+    // Once revealed/reconciled, dispositions and recovery history cannot be rewritten as duplicates.
+    const mergeable = (s: ShadowSignal) => ["candidate", "held_for_final_check", "surfaced_early"].includes(s.state);
+    if (!mergeable(a) || !mergeable(b))
+        throw new ShadowDomainError("INVALID_TRANSITION");
     const byIdentity = new Map<string, ShadowEvidence>();
     for (const e of [...a.evidence, ...b.evidence]) {
         const key = `${e.signalId}:${e.evidenceId}:${e.objectVersionId}`;
