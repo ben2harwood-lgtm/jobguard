@@ -169,7 +169,7 @@ regression, preceding-schema upgrade and earlier real-tenant material tests.
 
 ### 0100 — SV-2 shadow persistence and isolation
 
-Expand-only after 0054. Adds eight restricted shadow tables and one append-only
+Expand-only after 0094. Adds eight restricted shadow tables and one append-only
 variation-withdrawal fact, qualified evidence/version/hash/receive-time identity,
 small-builder catch-source enforcement, bounded reveal/disclosure/emergency read
 routines, and a private audit implementation using the existing serialized chain.
