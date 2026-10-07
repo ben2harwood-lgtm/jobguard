@@ -56,11 +56,14 @@ test("watchdog panels require the persisted live state and retain authoritative 
   const changedKind = await page.request.post(`/api/jobs/${jobId}/readiness/advance`, { data: { version: "readiness-clock.v1", commandId: readinessId, scenarioNow: readiness.scenarioNow } });
   expect(changedKind.status()).toBe(409); expect(await changedKind.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" });
   const otherPage = await page.context().newPage();
-  // This context is already signed in: reopen the seeded live job directly.
-  await otherPage.goto(`/jobs/${seededJobs[0].id}`);
+  const ownedJobs = await jsonResult(otherPage.request.get("/api/jobs?tenantId=11111111-1111-4111-8111-111111111111"), "Read this session's home jobs");
+  const ownedLive = ownedJobs.jobs.find((job: { title: string }) => job.title === seededJobs[0].title);
+  expect(ownedLive).toBeDefined();
+  // This context is already signed in: reopen its session-owned live job directly.
+  await otherPage.goto(`/jobs/${ownedLive.id}`);
   await expect(otherPage.getByTestId("job-status")).toHaveText(seededJobs[0].label);
   const otherJobId = (await otherPage.getByTestId("job-id").textContent())!;
-  expect(otherJobId).toBe(seededJobs[0].id);
+  expect(otherJobId).toBe(ownedLive.id);
   expect((await jsonResult(otherPage.request.get(`/api/jobs/${otherJobId}`), "Read second live job")).job.status).toBe("live");
   expect(otherJobId).not.toBe(jobId);
   const changedJob = await page.request.post(`/api/jobs/${otherJobId}/readiness/plan`, { data: readiness });
@@ -106,8 +109,8 @@ test("watchdog panels require the persisted live state and retain authoritative 
 // The Jobs list shows the demo's seeded jobs only: a captured job has its own "Continue this job" flow and
 // is reopened by deep link above. These two seeded jobs are reached through their actual Jobs links.
 const seededJobs = [
-  { title: "Kitchen extension", id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", label: "Work under way", status: "live" },
-  { title: "Loft conversion", id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", label: "Quote being prepared", status: "quoting" },
+  { title: "Kitchen extension", label: "Work under way", status: "live" },
+  { title: "Loft conversion", label: "Quote being prepared", status: "quoting" },
 ] as const;
 async function signIn(page: Page) {
   await page.goto("/");
@@ -115,9 +118,14 @@ async function signIn(page: Page) {
   const skip = page.getByRole("button", { name: "Skip tour", exact: true });
   await skip.waitFor({ state: "visible" }); await skip.click();
 }
-for (const seeded of seededJobs) {
-  test(`${seeded.title} reopens through its Jobs link and the persisted ${seeded.status} state decides the watchdog`, async ({ page, browser }) => {
+for (const recipe of seededJobs) {
+  test(`${recipe.title} reopens through its Jobs link and the persisted ${recipe.status} state decides the watchdog`, async ({ page, browser }) => {
     await signIn(page);
+    const home = await jsonResult(page.request.get("/api/jobs?tenantId=11111111-1111-4111-8111-111111111111"), "Read session-owned Jobs links");
+    const owned = home.jobs.find((job: { title: string }) => job.title === recipe.title);
+    expect(owned).toBeDefined();
+    const seeded = { ...recipe, id: owned.id as string };
+    expect(seeded.id).toMatch(/^[a-f0-9-]{36}$/u);
     const link = page.getByRole("article").filter({ hasText: seeded.title }).locator(`a[href="/jobs/${seeded.id}"]`);
     await expect(link).toBeVisible(); await link.click();
     await page.waitForURL(`**/jobs/${seeded.id}`);

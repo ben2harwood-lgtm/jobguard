@@ -5,7 +5,7 @@ import { claimCommandIdentity, MIGRATION_URLS, type TenantTransaction } from "@j
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { PurchaseOrderApplication } from "./purchase-order.application.js";
@@ -453,9 +453,25 @@ it("registers every migration once, with CH-2 after the merged SH-1 schema", asy
 
 // Actual applications/repositories and exception dispatch; only PostgreSQL transport and
 // synthetic session/bootstrap are doubled. No socket, provider, or database guarantee is implied.
-const routeApplication = vi.hoisted(() => ({ current: undefined as unknown }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "synthetic-test-session" }) }) }));
-vi.mock("../../web/app/lib/synthetic-server", () => ({ hasSyntheticSession: () => true }));
+const routeApplication = vi.hoisted(() => ({ current: undefined as unknown, session: "18000000-0000-4000-8000-000000000001" as string | undefined }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => routeApplication.session ? { value: routeApplication.session } : undefined }) }));
+vi.mock("../../web/app/lib/synthetic-server", async () => {
+  // Load the real helpers; replace only framework/bootstrap dependencies. No socket.
+  const { readFileSync } = await import("node:fs");
+  const { runInNewContext } = await import("node:vm");
+  const { transpileModule, ModuleKind } = await import("typescript");
+  const db = await import("@jobguard/db");
+  const exports: Record<string, unknown> = {};
+  const adapters: Record<string, unknown> = {
+    "server-only": {}, "next/headers": {}, "next/server": { NextResponse: { json: Response.json } },
+    "@jobguard/db": db, "@jobguard/api/workspace": {}, "pg": {},
+  };
+  const source = readFileSync(new URL("../../web/app/lib/synthetic-server.ts", import.meta.url), "utf8");
+  runInNewContext(transpileModule(source, { compilerOptions: { module: ModuleKind.CommonJS } }).outputText,
+    { exports, require: (id: string) => { if (!(id in adapters)) throw new Error(`Unexpected import: ${id}`); return adapters[id]; }, Response });
+  return exports;
+});
+afterEach(() => { vi.unstubAllEnvs(); routeApplication.session = "18000000-0000-4000-8000-000000000001"; });
 vi.mock("../../web/app/lib/workspace-server", () => ({ workspaceApplication: () => routeApplication.current }));
 
 function dispatchConflict(error: unknown) {
@@ -478,7 +494,9 @@ const otherJob = "44444444-4444-4444-8444-444444444444";
 const scopeId = "55555555-5555-4555-8555-555555555555";
 const sha = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 function replayPool(select: (sql: string) => object[] | undefined) {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   const statements: string[] = [];
+  const ownershipStatements: string[] = [];
   const client = { release: vi.fn(), query: async (sql: string) => {
     statements.push(sql);
     const rows = select(sql);
@@ -488,7 +506,32 @@ function replayPool(select: (sql: string) => object[] | undefined) {
     if (sql.startsWith("INSERT INTO app.watchdog_command_identity")) return { rows: [{ command_id: replayCommand }], rowCount: 1 };
     throw new Error(`Unexpected replay query: ${sql}`);
   } };
-  return { pool: { connect: async () => client } as unknown as Pool, statements, client };
+  const pool = {
+    query: async (sql: string) => {
+      expect(sql).toContain("authenticate_practice_session");
+      ownershipStatements.push(sql);
+      return { rows: [{ tenant_id: "11111111-1111-4111-8111-111111111111", membership_id: "d1500000-0000-4000-8000-000000000003", identity_user_id: "d1500000-0000-4000-8000-000000000001" }] };
+    },
+    connect: async () => {
+      const transaction: string[] = [];
+      let ownership = false;
+      return { release: vi.fn(), query: async (sql: string) => {
+        transaction.push(sql);
+        if (sql.includes("practice_session_digest=$3") || sql.startsWith("SELECT id FROM app.evidence")) {
+          ownership = true;
+          return { rows: [{ id: scopeId }], rowCount: 1 };
+        }
+        if (ownership || /^(?:BEGIN|SELECT set_config)/u.test(sql)) {
+          if (sql === "COMMIT" || sql === "ROLLBACK") ownershipStatements.push(...transaction);
+          return { rows: [], rowCount: 0 };
+        }
+        // Preserve the original command-only trace and all its rollback/write assertions.
+        if (statements.length === 0 || statements.at(-1) === "COMMIT" || statements.at(-1) === "ROLLBACK") statements.push(...transaction.slice(0, -1));
+        return client.query(sql);
+      } };
+    },
+  } as unknown as Pool;
+  return { pool, statements, client, ownershipStatements };
 }
 function expectRefused(statements: string[]) {
   expect(statements).toContain("ROLLBACK");
@@ -507,7 +550,7 @@ describe("round 9 saved proof response and legacy readiness adapter conflicts", 
       if (sql.startsWith("SELECT job_id,action,request_hash,response")) return [{ job_id: replayJob, action: command.action, request_hash: requestHash, response: saved }];
       return undefined;
     });
-    expect(await new ProofApplication(pool).command(replayJob, command)).toEqual(saved);
+    expect(await new ProofApplication(pool, routeApplication.session).command(replayJob, command)).toEqual(saved);
     expect(statements).toContain("COMMIT");
     expect(statements.some(sql => /^(?:INSERT|UPDATE|DELETE)/u.test(sql))).toBe(false);
   });
@@ -522,7 +565,7 @@ describe("round 9 saved proof response and legacy readiness adapter conflicts", 
       if (sql.startsWith("SELECT job_id,action,request_hash,response")) return [{ job_id: replayJob, action: command.action, request_hash: requestHash, response: savedResponse }];
       return undefined;
     });
-    const app = new ProofApplication(pool), job = change === "job" ? otherJob : replayJob;
+    const app = new ProofApplication(pool, routeApplication.session), job = change === "job" ? otherJob : replayJob;
     const request = change === "payload" ? { ...command, scopeItemId: otherJob }
       : change === "action" ? { version: command.version, action: "finalize", commandId: replayCommand, uploadId: scopeId, objectVersionId: "synthetic-version" } : command;
     const error = await app.command(job, request).catch(e => e);
@@ -546,7 +589,7 @@ describe("round 9 saved proof response and legacy readiness adapter conflicts", 
       if (action === "advance" && sql.startsWith("SELECT payload_hash,job_id,snapshot_id FROM app.readiness_decision")) return [{ snapshot_id: scopeId, payload_hash: sha({ jobId: replayJob, ...original }), job_id: replayJob }];
       return undefined;
     });
-    const app = new ReadinessApplication(pool), request = { ...original, scenarioNow: "2026-04-09T10:00:00.000Z" };
+    const app = new ReadinessApplication(pool, routeApplication.session), request = { ...original, scenarioNow: "2026-04-09T10:00:00.000Z" };
     const error = await app[action](replayJob, request).catch(e => e);
     if (adapter === "Nest") {
       expect(dispatchConflict(error)).toEqual({ status: 409, body: { code: "IDEMPOTENCY_CONFLICT" } });
@@ -573,7 +616,7 @@ describe("round 9 saved proof response and legacy readiness adapter conflicts", 
       actorMembershipId: scopeId, subjectType: "purchase_order", subjectRef: scopeId,
       action: { actionType: "purchase_order.simulate", recipient: "merchant@synthetic.invalid", contentHash: "a".repeat(64), aggregateRevision: 1,
         amountPence: 100, currency: "GBP", policyVersion: "synthetic-po.v1", expiresAt: "2099-01-01T00:00:00.000Z" } };
-    const error = await new PurchaseOrderApplication(pool).place(replayJob, { version: "purchase-order-placement.v1", command }).catch(e => e);
+    const error = await new PurchaseOrderApplication(pool, routeApplication.session).place(replayJob, { version: "purchase-order-placement.v1", command }).catch(e => e);
     expect(dispatchConflict(error)).toEqual({ status: 409, body: { code: "IDEMPOTENCY_CONFLICT" } });
     expect(error).toBeInstanceOf(WatchdogError);
     expect(statements).toContain("ROLLBACK");
@@ -585,3 +628,131 @@ describe("round 9 saved proof response and legacy readiness adapter conflicts", 
     expect(source).not.toMatch(/new Error\("(?:IDEMPOTENCY_CONFLICT|COMMAND_CONFLICT)"\)/u);
   });
 });
+
+// Real AppModule registration and Nest's route exception dispatch, without a listener.
+import { Test } from "@nestjs/testing";
+import { RouterExceptionFilters } from "@nestjs/core/router/router-exception-filters.js";
+import type { ApplicationConfig } from "@nestjs/core/application-config.js";
+import type { NestContainer } from "@nestjs/core/injector/container.js";
+import { Pool as PoolProvider } from "pg";
+import { PracticeAccessError } from "@jobguard/db";
+import { AppModule } from "./app.module.js";
+import { PracticeErrorsFilter } from "./practice-errors.filter.js";
+import { ContractorController } from "./contractor/contractor.controller.js";
+import { ProofController } from "./proof/proof.controller.js";
+import { PurchaseOrderController } from "./purchase-order.controller.js";
+import { SupplierDocumentController } from "./supplier-document.controller.js";
+import { SupplierMatchController } from "./supplier-match.controller.js";
+import { ThingsToCheckController } from "./things-to-check.controller.js";
+import { ReadinessController } from "./readiness.controller.js";
+import { InboxRelevanceController } from "./inbox-relevance.controller.js";
+
+const watchdogEndpoints = [
+  { path: "proof", service: "proof", method: "get", verb: "GET", run: (pool: Pool, cookie?: string) => new ProofController(pool).get(replayJob, cookie) },
+  { path: "proof", service: "proof", method: "command", run: (pool: Pool, cookie?: string) => new ProofController(pool).post(replayJob, {}, cookie) },
+  { path: "purchase-orders/revisions", service: "purchaseOrders", method: "revise", run: (pool: Pool, cookie?: string) => new PurchaseOrderController(pool).revise(replayJob, {}, cookie) },
+  { path: "purchase-orders/placement", service: "purchaseOrders", method: "place", run: (pool: Pool, cookie?: string) => new PurchaseOrderController(pool).place(replayJob, {}, cookie) },
+  { path: "supplier-documents/intake", service: "supplierDocuments", method: "intake", run: (pool: Pool, cookie?: string) => new SupplierDocumentController(pool).intake(replayJob, {}, cookie) },
+  { path: "supplier-documents/receipts", service: "supplierDocuments", method: "receipt", run: (pool: Pool, cookie?: string) => new SupplierDocumentController(pool).receipt(replayJob, {}, cookie) },
+  { path: "supplier-documents/facts/confirm", service: "supplierDocuments", method: "confirm", run: (pool: Pool, cookie?: string) => new SupplierDocumentController(pool).confirm(replayJob, {}, cookie) },
+  { path: "supplier-matches", service: "supplierMatches", method: "view", verb: "GET", run: (pool: Pool, cookie?: string) => new SupplierMatchController(pool).view(replayJob, cookie) },
+  { path: "supplier-matches", service: "supplierMatches", method: "create", run: (pool: Pool, cookie?: string) => new SupplierMatchController(pool).create(replayJob, {}, cookie) },
+  { path: "supplier-matches/corrections", service: "supplierMatches", method: "correct", run: (pool: Pool, cookie?: string) => new SupplierMatchController(pool).correct(replayJob, {}, cookie) },
+  { path: "things-to-check/[action]", action: "evaluate", service: "thingsToCheck", method: "evaluate", run: (pool: Pool, cookie?: string) => new ThingsToCheckController(pool).evaluate(replayJob, {}, cookie) },
+  { path: "things-to-check/[action]", action: "review", service: "thingsToCheck", method: "review", run: (pool: Pool, cookie?: string) => new ThingsToCheckController(pool).review(replayJob, {}, cookie) },
+  { path: "things-to-check/[action]", action: "supersede-bill", service: "thingsToCheck", method: "supersede", run: (pool: Pool, cookie?: string) => new ThingsToCheckController(pool).supersede(replayJob, {}, cookie) },
+  { path: "readiness/[action]", action: "plan", service: "readiness", method: "record", run: (pool: Pool, cookie?: string) => new ReadinessController(pool).plan(replayJob, {}, cookie) },
+  { path: "readiness/[action]", action: "advance", service: "readiness", method: "advance", run: (pool: Pool, cookie?: string) => new ReadinessController(pool).advance(replayJob, {}, cookie) },
+  { path: "relevance-inbox/[action]", action: "seed", service: "inboxRelevance", method: "seed", run: (pool: Pool, cookie?: string) => new InboxRelevanceController(pool).seed(replayJob, {}, cookie) },
+  { path: "relevance-inbox/[action]", action: "budget", service: "inboxRelevance", method: "budget", run: (pool: Pool, cookie?: string) => new InboxRelevanceController(pool).budget(replayJob, {}, cookie) },
+  { path: "relevance-inbox/decisions/[decisionId]", service: "inboxRelevance", method: "dismiss", run: (pool: Pool, cookie?: string) => new InboxRelevanceController(pool).dismiss(replayJob, scopeId, {}, cookie) },
+];
+
+async function withModuleDispatch(run: (dispatch: (error: unknown) => { status: number; body: unknown }) => Promise<void>) {
+  const module = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PoolProvider).useValue({}).compile();
+  const app = module.createNestApplication();
+  try {
+    await app.init();
+    const internals = app as unknown as { config: ApplicationConfig; container: NestContainer };
+    expect(internals.config.getGlobalFilters().map(filter => filter.constructor)).toEqual(expect.arrayContaining([PracticeErrorsFilter, WatchdogExceptionFilter]));
+    expect(app.get(ContractorController)).toBeInstanceOf(ContractorController);
+    const controller = app.get(ProofController);
+    const handler = new RouterExceptionFilters(internals.container, internals.config, app.getHttpAdapter()).create(controller, controller.post as never, undefined);
+    await run(error => {
+      if (!(error instanceof Error)) throw new Error("Expected a typed application error");
+      const response = { status: 0, body: undefined as unknown };
+      const host = { switchToHttp: () => ({ getResponse: () => ({ status(code: number) { response.status = code; return { json(body: unknown) { response.body = body; } }; } }) }) };
+      handler.next(error, host as never);
+      return response;
+    });
+  } finally { await app.close(); }
+}
+
+it("round 12: real AppModule keeps practice and watchdog global filters scoped to their own error types", async () => {
+  expect(Reflect.getMetadata(FILTER_CATCH_EXCEPTIONS, PracticeErrorsFilter)).toEqual([PracticeAccessError]);
+  expect(Reflect.getMetadata(FILTER_CATCH_EXCEPTIONS, WatchdogExceptionFilter)).toEqual([WatchdogError]);
+  await withModuleDispatch(async dispatch => {
+    for (const [code, status] of [["UNAUTHENTICATED", 401], ["NOT_FOUND", 404], ["SYNTHETIC_MODE_REQUIRED", 403]] as const)
+      expect(dispatch(new PracticeAccessError(code))).toEqual({ status, body: { code } });
+    for (const [code, status] of [["JOB_NOT_LIVE", 409], ["IDEMPOTENCY_CONFLICT", 409], ["JOB_NOT_FOUND", 404]] as const)
+      expect(dispatch(new WatchdogError(code))).toEqual({ status, body: { code } });
+  });
+});
+
+it.each(watchdogEndpoints)("round 12: $path $method maps stranger and missing sessions to 404/401 in Nest and Next", async endpoint => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  await withModuleDispatch(async dispatch => {
+    for (const scenario of ["stranger", "missing"] as const) {
+      routeApplication.session = scenario === "missing" ? undefined : "18000000-0000-4000-8000-000000000001";
+      const query = vi.fn(async (sql: string) => ({ rows: sql.includes("authenticate_practice_session") ? [{ tenant_id: "11111111-1111-4111-8111-111111111111", membership_id: scopeId, identity_user_id: otherJob }] : [] }));
+      const connect = vi.fn(async () => ({ query, release: vi.fn() }));
+      const pool = { query, connect } as unknown as Pool;
+      const cookie = routeApplication.session ? `jg_session=${routeApplication.session}` : undefined;
+      const error = await endpoint.run(pool, cookie).catch(error => error);
+      expect(error).toBeInstanceOf(PracticeAccessError);
+      const expected = { status: scenario === "stranger" ? 404 : 401, body: { code: scenario === "stranger" ? "NOT_FOUND" : "UNAUTHENTICATED" } };
+      expect(dispatch(error)).toEqual(expected);
+      // Next invokes the same ownership-checked application, not a canned denial.
+      const application = endpoint.service === "proof" ? new ProofApplication(pool, routeApplication.session)
+        : endpoint.service === "purchaseOrders" ? new PurchaseOrderApplication(pool, routeApplication.session)
+        : endpoint.service === "supplierDocuments" ? new SupplierDocumentApplication(pool, routeApplication.session)
+        : endpoint.service === "supplierMatches" ? new SupplierMatchApplication(pool, routeApplication.session)
+        : endpoint.service === "thingsToCheck" ? new ThingsToCheckApplication(pool, routeApplication.session)
+        : endpoint.service === "readiness" ? new ReadinessApplication(pool, routeApplication.session)
+        : new InboxRelevanceApplication(pool, routeApplication.session);
+      routeApplication.current = { [endpoint.service]: application };
+      const route = await import(fileURLToPath(new URL(`apps/web/app/api/jobs/[id]/${endpoint.path}/route.ts`, root)));
+      const response = await route[endpoint.verb ?? "POST"](new Request("https://synthetic.invalid", { method: endpoint.verb ?? "POST", ...(endpoint.verb ? {} : { body: "{}" }) }), { params: Promise.resolve({ id: replayJob, action: endpoint.action, decisionId: scopeId }) });
+      expect({ status: response.status, body: await response.json() }).toEqual(expected);
+      if (scenario === "missing") { expect(query).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled(); }
+      for (const [sql] of query.mock.calls) expect(sql).toMatch(/authenticate_practice_session|^(BEGIN|COMMIT|ROLLBACK)$|set_config|practice_session_digest/);
+    }
+  });
+});
+
+import { SupplierDocumentApplication } from "./supplier-document.application.js";
+import { SupplierMatchApplication } from "./supplier-match.application.js";
+import { ThingsToCheckApplication } from "./things-to-check.application.js";
+import { InboxRelevanceApplication } from "./inbox-relevance.application.js";
+
+it.each(watchdogEndpoints.filter(endpoint => !endpoint.verb))(
+  "round 12: $path $method preserves typed idempotency/live refusals through both transports", async endpoint => {
+    await withModuleDispatch(async dispatch => {
+      for (const code of ["IDEMPOTENCY_CONFLICT", "JOB_NOT_LIVE", "JOB_NOT_FOUND"] as const) {
+        // Derive the idempotency refusal from the real claim routine, as in round 10.
+        const error = code === "IDEMPOTENCY_CONFLICT" ? await claimCommandIdentity({ $client: { query: async (sql: string) => ({ rows: sql.startsWith("SELECT job_id,command_type,request_hash") ? [{ job_id: replayJob, command_type: "readiness.record", request_hash: "b".repeat(64) }] : [] }) } } as unknown as TenantTransaction,
+          { tenantId: "11111111-1111-4111-8111-111111111111", commandId: replayCommand, jobId: replayJob, kind: "readiness.record", requestHash: "a".repeat(64) }).catch(error => error)
+          : new WatchdogError(code);
+        expect(error).toBeInstanceOf(WatchdogError);
+        const expected = { status: code === "JOB_NOT_FOUND" ? 404 : 409, body: { code } };
+        expect(dispatch(error)).toEqual(expected);
+        const refusal = vi.fn().mockRejectedValue(error);
+        routeApplication.current = { [endpoint.service]: { [endpoint.method]: refusal } };
+        const route = await import(fileURLToPath(new URL(`apps/web/app/api/jobs/[id]/${endpoint.path}/route.ts`, root)));
+        const response = await route.POST(new Request("https://synthetic.invalid", { method: "POST", body: "{}" }), { params: Promise.resolve({ id: replayJob, action: endpoint.action, decisionId: scopeId }) });
+        expect(refusal).toHaveBeenCalledOnce();
+        expect({ status: response.status, body: await response.json() }).toEqual(expected);
+      }
+    });
+  },
+);

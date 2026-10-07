@@ -19,6 +19,7 @@ it.each(["owned pending upload", "foreign upload", "unknown evidence"])(
     const query = vi.fn(async (sql: string, values?: unknown[]) => {
       if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: tenantId, membership_id: jobId, identity_user_id: scopeId }] };
       if (sql.includes("practice_session_digest=$3")) return { rows: [{ id: jobId }] };
+      if (sql.startsWith("SELECT 1 FROM app.membership")) return { rows: [{}] };
       if (sql.includes("SELECT id FROM app.evidence")) {
         expect(values).toEqual([tenantId, jobId, pendingId]);
         return { rows: scenario === "owned pending upload" && sql.includes("app.evidence_upload") ? [{ id: pendingId }] : [] };
