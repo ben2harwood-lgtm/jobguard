@@ -1,4 +1,7 @@
 import ts from "typescript";
+import { ExceptionsHandler } from "@nestjs/core/exceptions/exceptions-handler.js";
+import { FILTER_CATCH_EXCEPTIONS } from "@nestjs/common/constants.js";
+import { claimCommandIdentity, MIGRATION_URLS, type TenantTransaction } from "@jobguard/db";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -294,7 +297,7 @@ describe("CH-2 command coverage and lock order", () => {
       const responses=spec.paths[path]?.post?.responses;
       expect(responses,path).toBeDefined();
       expect(responses["201"],path).toBeDefined();
-      expect(responses["409"].content["application/json"].schema.properties.code.enum).toEqual(["JOB_NOT_LIVE"]);
+      expect(responses["409"].content["application/json"].schema.properties.code.enum).toEqual(["JOB_NOT_LIVE", "IDEMPOTENCY_CONFLICT"]);
     }
   });
   it("maps the typed guard failure in the standalone API", () => {
@@ -316,4 +319,51 @@ describe("proof finalisation failures", () => {
     for (const error of [new EvidenceError("OBJECT_INVALID", "wrong_hash"), new EvidenceError("UPLOAD_EXPIRED"), new Error("anything else")])
       expect((finalizeFailure(error) as ProofApplicationError).code).toBe("PROOF_INVALID");
   });
+});
+
+// Boundary regression: exercise the real claim function and Nest exception dispatch without a socket.
+// The query double selects a committed conflicting identity; PostgreSQL races have separate integration coverage.
+describe("watchdog identity conflicts at the Nest boundary", () => {
+  const spec = { tenantId: "11111111-1111-4111-8111-111111111111", commandId: "22222222-2222-4222-8222-222222222222", jobId: "33333333-3333-4333-8333-333333333333", kind: "readiness.record" as const, requestHash: "a".repeat(64) };
+  it.each([
+    ["payload", { request_hash: "b".repeat(64) }],
+    ["kind", { command_type: "inbox.seed" }],
+    ["job", { job_id: "44444444-4444-4444-8444-444444444444" }],
+  ])("returns stable HTTP 409 for changed %s", async (_label, changed) => {
+    const database = { $client: { query: async (sql: string) => {
+      if (sql.startsWith("SELECT job_id,command_type,request_hash")) return { rows: [{ job_id: spec.jobId, command_type: spec.kind, request_hash: spec.requestHash, ...changed }] };
+      return { rows: [], rowCount: 0 };
+    } } } as unknown as TenantTransaction;
+    const error = await claimCommandIdentity(database, spec).catch(e => e as Error);
+    if (!(error instanceof Error)) throw new Error(`Expected a conflict, got ${error}`);
+    const response = { status: 0, body: undefined as unknown };
+    const host = { getArgByIndex: () => response, switchToHttp: () => ({ getResponse: () => ({ status(code: number) { response.status = code; return { json(body: unknown) { response.body = body; } }; } }) }) };
+    const handler = new ExceptionsHandler({ isHeadersSent: () => false, reply: (_r: unknown, body: unknown, status: number) => { response.status = status; response.body = body; } } as never);
+    const filter = new WatchdogExceptionFilter();
+    handler.setCustomFilters([{ func: filter.catch.bind(filter), exceptionMetatypes: Reflect.getMetadata(FILTER_CATCH_EXCEPTIONS, WatchdogExceptionFilter) }]);
+    handler.next(error, host as never);
+    expect(response).toEqual({ status: 409, body: { code: "IDEMPOTENCY_CONFLICT" } });
+    expect(error).toBeInstanceOf(WatchdogError);
+  });
+  it("refuses a legacy owner conflict with the same typed error", async () => {
+    const db = { $client: { query: async (sql: string) => ({ rows: sql.includes("UNION ALL") ? [{ kind: "inbox.seed", job_id: spec.jobId }] : [] }) } } as unknown as TenantTransaction;
+    const error = await claimCommandIdentity(db, spec).catch(e => e);
+    expect(error).toBeInstanceOf(WatchdogError);
+    expect(error).toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+  });
+  it("keeps the previous-writer id reservation non-blocking after audit", async () => {
+    const migration = await readFile(new URL("packages/db/migrations/0096_watchdog_live.sql", root), "utf8");
+    const body = migration.split("CREATE FUNCTION app.reserve_watchdog_command_id()")[1]!.split("END $$;")[0]!;
+    expect(body).toMatch(/IF NOT pg_try_advisory_xact_lock\([\s\S]+?RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'/u);
+    expect(body).not.toMatch(/PERFORM pg_advisory_xact_lock/u);
+  });
+});
+
+it("registers CH-2 last, after the merged SH-1 schema, with unchanged migration count", () => {
+  const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!);
+  expect(names).toHaveLength(45);
+  expect(new Set(names).size).toBe(45);
+  expect(names.at(-1)).toBe("0096_watchdog_live.sql");
+  expect(names.at(-2)).toBe("0053_shared_money_origin.sql");
+  expect(names).toEqual([...names].sort());
 });

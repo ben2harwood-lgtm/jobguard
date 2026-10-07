@@ -193,8 +193,9 @@ GRANT UPDATE(id,state,rejection_code,object_version_id,server_verified_at) ON ap
 -- An id the previous schema's stores hold is reserved for the command that persisted it (claimCommandIdentity reads them before it claims).
 -- The reverse must hold at the database boundary too, for writers that never claim: during a mixed-version rollout, or after the
 -- documented application rollback, the previous application still inserts into those stores. Each store therefore takes the same
--- per-id transaction lock the claim takes, then refuses an id already claimed for another kind of command or another job. A claim and
--- a previous-schema write of one id are serialised in either order: whichever commits first, the other sees it and conflicts.
+-- per-id transaction lock the claim takes, but never waits: previous writers already hold audit, while current writers claim first.
+-- Contention returns 23505 IDEMPOTENCY_CONFLICT immediately, avoiding that reversed-order deadlock. A claim may safely wait for a
+-- previous write, then recheck ownership under READ COMMITTED. Non-contending previous writes retain the existing ownership checks.
 CREATE FUNCTION app.reserve_watchdog_command_id() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 DECLARE
@@ -205,7 +206,8 @@ DECLARE
   present boolean;
 BEGIN
   IF cid IS NULL THEN RETURN NEW; END IF;
-  PERFORM pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||NEW.tenant_id::text||':'||cid::text,0));
+  IF NOT pg_try_advisory_xact_lock(hashtextextended('watchdog-command-id:'||NEW.tenant_id::text||':'||cid::text,0))
+  THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
   -- own: this very transaction made the claim, read from the claim's full 64-bit transaction id, which is set by the database when the
   -- claim is inserted and never wraps (Codex P2 4199535957, 4199722158); no later transaction, and no session setting, can match it.
   SELECT command_type,job_id,(claimed_xact = pg_current_xact_id()) AS own INTO claimed
@@ -239,7 +241,7 @@ CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.command_
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.purchase_order_placement FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('purchase_order.place','command_id');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.stage_completion FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('proof.complete','command_id');
 CREATE TRIGGER b_watchdog_command_id_before_insert BEFORE INSERT ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.reserve_watchdog_command_id('evidence.begin_upload','id','unique');
--- 0050 supplier-match revision check: every existing revision must already cite its own proposal's confirmed or corrected
+-- 0096 supplier-match revision check: every existing revision must already cite its own proposal's confirmed or corrected
 -- event (Codex P2 4199041831); the trigger below only sees new rows. Both tables FORCE row-level security, so the scan suspends
 -- FORCE for this transaction exactly like the foreign-key scans above, and restores it before anything else runs.
 ALTER TABLE app.supplier_match_revision NO FORCE ROW LEVEL SECURITY;

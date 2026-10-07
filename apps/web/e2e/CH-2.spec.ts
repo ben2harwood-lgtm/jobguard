@@ -53,6 +53,15 @@ test("watchdog panels require the persisted live state and retain authoritative 
   expect(replay).toEqual(recorded);
   const changed = await page.request.post(`/api/jobs/${jobId}/readiness/plan`, { data: { ...readiness, resolved: true } });
   expect(changed.status()).toBe(409); expect((await changed.json()).code).toBe("IDEMPOTENCY_CONFLICT");
+  const changedKind = await page.request.post(`/api/jobs/${jobId}/readiness/advance`, { data: { version: "readiness-clock.v1", commandId: readinessId, scenarioNow: readiness.scenarioNow } });
+  expect(changedKind.status()).toBe(409); expect(await changedKind.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" });
+  const otherPage = await page.context().newPage();
+  await openLiveWatchdogJob(otherPage);
+  const otherJobId = (await otherPage.locator(".quote-editor").getAttribute("data-job-id"))!;
+  expect(otherJobId).not.toBe(jobId);
+  const changedJob = await page.request.post(`/api/jobs/${otherJobId}/readiness/plan`, { data: readiness });
+  expect(changedJob.status()).toBe(409); expect(await changedJob.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" });
+  await otherPage.close();
   // Keyboard focus and touch target of an enabled primary action.
   const preview = page.getByRole("button", { name: "Preview proposed order", exact: true });
   await preview.focus(); await page.keyboard.press("Tab"); await page.keyboard.press("Shift+Tab"); await expect(preview).toBeFocused();

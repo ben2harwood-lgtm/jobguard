@@ -5,6 +5,6 @@ import { WatchdogError } from "@jobguard/db";
 export class WatchdogExceptionFilter implements ExceptionFilter {
   catch(error: WatchdogError, host: ArgumentsHost) {
     host.switchToHttp().getResponse<{ status(code: number): { json(body: unknown): void } }>()
-      .status(error.code === "JOB_NOT_LIVE" ? 409 : 404).json({ code: error.code });
+      .status(error.code === "JOB_NOT_FOUND" ? 404 : 409).json({ code: error.code });
   }
 }

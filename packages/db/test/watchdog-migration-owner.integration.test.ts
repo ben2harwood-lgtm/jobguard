@@ -9,14 +9,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATION_URLS } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
-// 0050 adds job-qualified foreign keys to tables that FORCE row-level security.
+// 0096 adds job-qualified foreign keys to tables that FORCE row-level security.
 // Deployments run migrations as the non-superuser owner role, with no tenant
-// context. This suite applies 0050 exactly that way against a preceding-schema
+// context. This suite applies 0096 exactly that way against a preceding-schema
 // database that contains a legacy cross-job link in another tenant, and checks
 // that (a) the link is found, (b) nothing is half-applied, (c) FORCE RLS is intact
 // afterwards, and (d) the same migration applies once the legacy row is repaired.
 const name = (url: URL) => basename(fileURLToPath(url));
-const TARGET = "0050_watchdog_live.sql";
+const TARGET = "0096_watchdog_live.sql";
 const previous = MIGRATION_URLS.filter(url => name(url) < TARGET);
 const target = MIGRATION_URLS.find(url => name(url) === TARGET)!;
 const forcedTables = ["job", "scope_identity", "material_requirement", "purchase_order_draft", "evidence_upload", "evidence_object", "evidence_link", "stage_completion", "synthetic_evidence_original"];
@@ -42,13 +42,15 @@ async function applyAsMigrationOwner() {
 // The pre-deploy mislink check is documented in MIGRATIONS.md; the suite runs that exact text.
 async function documentedMislinkCheck() {
   const docs = await readFile(new URL("../MIGRATIONS.md", import.meta.url), "utf8");
-  const sql = docs.match(/```sql\n(-- 0050 pre-deploy check[\s\S]*?)```/u)?.[1];
-  expect(sql, "MIGRATIONS.md must contain the 0050 pre-deploy check").toBeTruthy();
+  const sql = docs.match(/```sql\n(-- 0096 pre-deploy check[\s\S]*?)```/u)?.[1];
+  expect(sql, "MIGRATIONS.md must contain the 0096 pre-deploy check").toBeTruthy();
   return (await admin.query<{ constraint_name: string; violations: string }>(sql!)).rows.filter(row => Number(row.violations) > 0).map(row => [row.constraint_name, Number(row.violations)]);
 }
 const posture = async () => (await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname", [forcedTables])).rows;
 
 beforeAll(async () => {
+  expect(name(previous.at(-1)!)).toBe("0053_shared_money_origin.sql");
+  expect(name(MIGRATION_URLS.at(-1)!)).toBe(TARGET);
   directory = await mkdtemp(join(tmpdir(), "jg-ch2-owner-"));
   const port = 60500 + Math.floor(Math.random() * 400);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
@@ -64,12 +66,12 @@ beforeAll(async () => {
     await admin.query("INSERT INTO app.job(id,tenant_id,title,status)VALUES($1,$2,'Legacy fictional job','live')", [job, tenant]);
     await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state)VALUES($1,$2,$3,'confirmed')", [scope, tenant, job]);
   }
-  // Legal before 0050: tenant-qualified only, so job B1's upload may point at job B2's scope.
+  // Legal before 0096: tenant-qualified only, so job B1's upload may point at job B2's scope.
   await admin.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [mislinkedUpload, tenantB, jobB1, scopeB2, `legacy/${mislinkedUpload}`]);
 }, 60000);
 afterAll(async () => { await closeTestPools(admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
-describe("CH-2 migration 0050 as the non-superuser migration owner", () => {
+describe("CH-2 migration 0096 as the non-superuser migration owner", () => {
   it("is applied by a role that is neither superuser nor BYPASSRLS", async () => {
     expect((await admin.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_migration'")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
     expect((await posture()).every(row => row.relrowsecurity && row.relforcerowsecurity && row.rolname === "jobguard_migration")).toBe(true);

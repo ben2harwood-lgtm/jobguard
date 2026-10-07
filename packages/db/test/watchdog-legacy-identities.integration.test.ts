@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendAuditBatch, claimCommandIdentity, withTenant, type TenantTransaction, type WatchdogCommandType } from "../src/index.js";
@@ -6,7 +6,7 @@ import { createWatchdogHarness } from "./watchdog-command-harness.js";
 
 // CH-2 upgrade rule for command ids: an id that the previous schema persisted belongs to the command that persisted it, so no OTHER
 // kind of watchdog command may claim it, before or after that command's own first replay. The previous schema is reproduced exactly:
-// run the real command, then remove the two bookkeeping tables migration 0050 added (identity, stored result), leaving only the
+// run the real command, then remove the two bookkeeping tables migration 0096 added (identity, stored result), leaving only the
 // stores that existed before it. Where an id persisted is found by looking at every uuid column in the app schema, not by trusting
 // a list in the code under test. The commands are the registry's 17.
 const h = createWatchdogHarness("legacy-ids", 63000);
@@ -32,7 +32,7 @@ const previousSchema = async (id: string) => {
 const identityRows = async (id: string) => Number((await h.admin.query("SELECT count(*) n FROM app.watchdog_command_identity WHERE command_id=$1", [id])).rows[0].n);
 
 // The commands whose id the previous schema persisted. The other four (order revision, document intake, goods receipt, finalisation)
-// had no command id before migration 0050, so there is nothing to protect.
+// had no command id before migration 0096, so there is nothing to protect.
 const PERSISTED_BEFORE = [
   "discrepancy-repository.ts#evaluate", "discrepancy-repository.ts#review", "discrepancy-repository.ts#supersede", "evidence.ts#beginUpload",
   "inbox-relevance-repository.ts#dismiss", "inbox-relevance-repository.ts#seed", "proof-repository.ts#complete", "purchase-order-repository.ts#place",
@@ -85,8 +85,8 @@ describe("previous-schema command ids cannot be claimed by another kind of comma
     expect((await persistedIn(shared)).sort()).toEqual(["discrepancy_review_outcome.command_id", "supplier_bill_supersession.command_id"]);
     // The documented pre-deploy check (MIGRATIONS.md) names exactly this id.
     const docs = await readFile(new URL("../MIGRATIONS.md", import.meta.url), "utf8");
-    const check = docs.match(/```sql\n(-- 0050 pre-deploy collision check[\s\S]*?)```/u)?.[1];
-    expect(check, "MIGRATIONS.md must contain the 0050 pre-deploy collision check").toBeTruthy();
+    const check = docs.match(/```sql\n(-- 0096 pre-deploy collision check[\s\S]*?)```/u)?.[1];
+    expect(check, "MIGRATIONS.md must contain the 0096 pre-deploy collision check").toBeTruthy();
     expect((await h.admin.query<{ command_id: string; kinds: string; jobs: string }>(check!)).rows.map(row => [row.command_id, Number(row.kinds), Number(row.jobs)])).toEqual([[shared, 2, 2]]);
     await expect(review.run(jobA, shared, "base")).rejects.toThrow(CONFLICT);
     await expect(supersede.run(jobB, shared, "base")).rejects.toThrow(CONFLICT);
@@ -167,10 +167,10 @@ describe("previous-schema writers and claimed ids", () => {
 
   it("serialises a claim and a previous-schema write of one id, in either order", async () => {
     const job = await live();
-    // The claim holds the id: the previous-schema write waits for it, then conflicts.
+    // The claim holds the id: the previous-schema write must conflict immediately, without waiting for commit.
     const first = randomUUID(), holder = await claimOpen(first, job, "readiness.record"), legacy = { done: false };
     const write = settle(legacySeed(h.admin, first, job)).finally(() => { legacy.done = true; });
-    expect(await stillWaiting(legacy)).toBe(true);
+    expect(await stillWaiting(legacy)).toBe(false);
     await holder.query("COMMIT"); holder.release();
     expect(await write).toBe("conflict");
     // The previous-schema write holds the id: the claim waits for it, then finds the id owned and conflicts.
@@ -180,6 +180,50 @@ describe("previous-schema writers and claimed ids", () => {
     expect(await stillWaiting(claimed)).toBe(true);
     await writer.query("COMMIT"); writer.release();
     expect(await claiming).toBe("conflict");
+  });
+
+  // Replay the preceding ReadinessRepository.record statement order, as the real runtime role:
+  // count, receipt lookup, audit append, planned-work insert. Pause at its actual contention points.
+  it.each(["claim-first", "legacy-first"] as const)("audit-first previous writer vs real current writer: %s never deadlocks", async schedule => {
+    const job = await live(), currentJob = schedule === "legacy-first" ? await live() : job;
+    const commandId = randomUUID(), input = { commandId, scenarioNow: h.DAY };
+    let reached!: () => void, resume!: () => void;
+    const paused = new Promise<void>(resolve => { reached = resolve; });
+    const gate = new Promise<void>(resolve => { resume = resolve; });
+    let oldPid = 0;
+    const old = withTenant(h.runtime, h.ctx, async db => {
+      oldPid = Number((await db.$client.query("SELECT pg_backend_pid() pid")).rows[0].pid);
+      const revision = Number((await db.$client.query("SELECT count(*) n FROM app.planned_work_revision WHERE tenant_id=$1 AND job_id=$2 AND task_key='paint-walls'", [h.tenant, job])).rows[0].n) + 1;
+      expect((await db.$client.query("SELECT payload_hash FROM app.planned_work_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows).toHaveLength(0);
+      const payloadHash = createHash("sha256").update(JSON.stringify({ ...input, revision })).digest("hex");
+      const audit = (await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType: "readiness.plan_confirmed", subjectType: "job", subjectRef: job, payload: { references: { commandId }, hashes: { payloadHash }, classifications: { action: "operational" } } }]))[0]!;
+      const insert = () => db.$client.query("INSERT INTO app.planned_work_revision(id,tenant_id,job_id,command_id,task_key,revision,plan_date,predecessor_complete,required_units,landed_units,access_ready,crew_ready,actor_ref,subject_ref,payload_hash,audit_event_id)VALUES($1,$2,$3,$4,'paint-walls',$5,$6::timestamptz::date,false,10,8,true,false,'member:synthetic-builder',$3,$7,$8)", [randomUUID(), h.tenant, job, commandId, revision, h.DAY, payloadHash, audit.id]);
+      if (schedule === "legacy-first") await insert();
+      reached(); await gate;
+      if (schedule === "claim-first") await insert();
+    }).then(() => ({ outcome: "committed" }), error => ({ outcome: "error", code: error.code, message: error.message }));
+    await Promise.race([paused, old.then(outcome => { throw new Error(`Previous writer failed before pause: ${JSON.stringify(outcome)}`); })]);
+    const state = { done: false };
+    const current = h.repos.readiness.record(h.ctx, currentJob, input).then(() => ({ outcome: "committed" }), error => ({ outcome: "error", code: error.code, message: error.message })).finally(() => { state.done = true; });
+    try {
+      expect(await stillWaiting(state)).toBe(true);
+      // Prove the intended interleaving with real PostgreSQL wait information, not just a sleeping promise.
+      const blocked = (await h.admin.query<{ query: string }>("SELECT query FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))", [oldPid])).rows;
+      expect(blocked).toHaveLength(1);
+      expect(blocked[0]!.query).toMatch(schedule === "claim-first" ? /lock_audit_head/u : /pg_advisory_xact_lock/u);
+    } finally { resume(); await Promise.all([old, current]); }
+    const outcomes = await Promise.all([old, current]);
+    expect(outcomes.map(outcome => outcome.outcome).sort()).toEqual(["committed", "error"]);
+    expect(outcomes).not.toContainEqual(expect.objectContaining({ code: "40P01" }));
+    if (schedule === "claim-first") {
+      expect(outcomes[0]).toEqual({ outcome: "error", code: "23505", message: "IDEMPOTENCY_CONFLICT" });
+      expect(outcomes[1]).toEqual({ outcome: "committed" });
+    } else {
+      expect(outcomes[0]).toEqual({ outcome: "committed" });
+      expect(outcomes[1]).toEqual({ outcome: "error", code: "IDEMPOTENCY_CONFLICT", message: "IDEMPOTENCY_CONFLICT" });
+    }
+    expect((await h.admin.query("SELECT count(*)::int n FROM app.planned_work_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows[0].n).toBe(1);
+    expect(await identityRows(commandId)).toBe(schedule === "claim-first" ? 1 : 0);
   });
 
   it("tells a supplier-match correction from a creation by its audit event, at commit (Codex P2 4197723875)", async () => {
@@ -228,16 +272,16 @@ describe("previous-schema writers and claimed ids", () => {
     await expect(legacyCorrection(randomUUID(), foreignEvent, "supplier_match.correct")).rejects.toMatchObject({ code: "23514" });
   });
 
-  it("finds an existing revision that does not cite its own event, both in the pre-deploy query and in 0050's upgrade check (Codex P2 4199041831)", async () => {
+  it("finds an existing revision that does not cite its own event, both in the pre-deploy query and in 0096's upgrade check (Codex P2 4199041831)", async () => {
     const correct = cases.find(c => c.key === "supplier-match-repository.ts#correct")!;
     const job = await live(); await correct.prepare(job);
     const original = randomUUID(); await correct.run(job, original, "base");
     const docs = await readFile(new URL("../MIGRATIONS.md", import.meta.url), "utf8");
-    const listed = docs.match(/```sql\n(-- 0050 pre-deploy supplier-match revision check[\s\S]*?)```/u)?.[1];
-    const migration = await readFile(new URL("../migrations/0050_watchdog_live.sql", import.meta.url), "utf8");
-    const upgradeCheck = migration.match(/(-- 0050 supplier-match revision check[\s\S]*?ALTER TABLE app\.audit_event FORCE ROW LEVEL SECURITY;)/u)?.[1];
+    const listed = docs.match(/```sql\n(-- 0096 pre-deploy supplier-match revision check[\s\S]*?)```/u)?.[1];
+    const migration = await readFile(new URL("../migrations/0096_watchdog_live.sql", import.meta.url), "utf8");
+    const upgradeCheck = migration.match(/(-- 0096 supplier-match revision check[\s\S]*?ALTER TABLE app\.audit_event FORCE ROW LEVEL SECURITY;)/u)?.[1];
     expect(listed, "MIGRATIONS.md must contain the supplier-match revision check").toBeTruthy();
-    expect(upgradeCheck, "0050 must contain the supplier-match revision check").toBeTruthy();
+    expect(upgradeCheck, "0096 must contain the supplier-match revision check").toBeTruthy();
     const client = await h.admin.connect();
     try {
       await client.query("BEGIN");

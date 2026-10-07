@@ -115,7 +115,31 @@ Existing 0041 rows keep their historical labels and lack a verified artifact/req
 
 0042 first updates the two 0041 tenant policies to use missing-safe, empty-safe tenant context, so the migration no longer fails with `unrecognized configuration parameter` under `jobguard_migration`. That alone would make the new case-qualified foreign key pass without looking at any row (the owner has no tenant context under FORCE RLS), so 0042 also lifts FORCE ROW LEVEL SECURITY on `evidence_pack` and `evidence_pack_revision` for the one `ADD CONSTRAINT … FOREIGN KEY` statement, inside the same transaction, and restores it immediately afterwards. Existing rows are therefore genuinely validated: a 0041 revision whose case differs from its pack's case makes 0042 fail with 23503 and roll back, and the data must be corrected first. Absent context still admits no rows; ownership, policies and runtime grants are unchanged and FORCE is never off outside the migration. No business rows are rewritten. Proof: `packages/db/test/evidence-pack-upgrade.integration.test.ts` (real 0041 database, applied as `jobguard_migration`).
 
-### 0050 — CH-2 live-only watchdog inputs
+## 0053 — SH-1 shared money and origin
+
+Adds immutable `job_commercial_track` and `extra_origin` tables with FORCE RLS,
+qualified foreign keys, narrow grants and trigger-only binding/provenance paths.
+Adds required track/origin columns to variations; a deferred reverse FK requires
+one exact origin at commit. Backfills the previous synthetic small-builder schema
+idempotently while retaining source identities/history and explicitly unknown
+raising metadata. Existing activation/import routines bind inside their current
+transaction through bounded triggers. No fee posting or external effect is added.
+
+Expand compatibility: existing capture inserts can omit the new columns on bound
+small-builder jobs, obtaining labelled legacy provenance. Existing pricing/state
+UPDATE grants are unchanged; origin/track UPDATE is denied. Fresh quote jobs bind
+at switch-live; adoption imports bind with their imported baseline. New contractor
+imports will bind through their own future authorized routine.
+
+Forward fix is preferred: append a migration preserving established bindings and
+origin rows. Do not drop these tables or rewrite origins after deployment. If the
+upgrade fails, its SQL transaction rolls back, leaving the preceding schema intact.
+Before rollout run fresh, previous-schema upgrade, twice-replayed backfill, runtime
+privilege/RLS/forgery tests and the existing Neon non-superuser bootstrap suite.
+SH-1 adds real PostgreSQL tests in `test/shared-money-origin.integration.test.ts`;
+local socket restrictions leave execution and earlier DB/browser regressions to CI.
+
+### 0096 — CH-2 live-only watchdog inputs
 
 Adds `app.require_watchdog_live(uuid)` (migration owned, fixed search path,
 runtime-only EXECUTE) and BEFORE INSERT guards on watchdog input tables. The
@@ -130,7 +154,7 @@ evidence tables retain the exact generated bank-evidence class written by the
 existing migration-owned recovery routine; a runtime insert cannot forge this
 exception. Reads remain available.
 
-Command identity and stored results: 0050 also adds two append-only tables. `app.watchdog_command_identity`
+Command identity and stored results: 0096 also adds two append-only tables. `app.watchdog_command_identity`
 is one tenant-wide namespace for every `watchdog_live_only` command, keyed by `(tenant_id, command_id)`, with
 the job, the command kind and a request hash covering the job id, the kind and the input. The kinds are
 `readiness.record|advance`, `things_to_check.evaluate|review|supersede`, `supplier_match.create|correct`,
@@ -167,7 +191,7 @@ evaluation is validated against the original, immutable sources of its match rev
 commands get a stored result.
 
 An id the previous schema persisted is reserved for the command that persisted it. The identity table starts
-empty, so every claim also consults the stores that held command ids before 0050 (`LEGACY_COMMAND_OWNERS` in
+empty, so every claim also consults the stores that held command ids before 0096 (`LEGACY_COMMAND_OWNERS` in
 `packages/db/src/watchdog.ts`): an id found there can be claimed only by its own kind on its own job (its
 replay); any other kind, or the same kind on another job, is refused with `IDEMPOTENCY_CONFLICT`, before the
 original command has replayed, and the refused claim leaves nothing behind. The stores are the planned work
@@ -175,27 +199,36 @@ revision (`readiness.record`), readiness decision (`advance`), discrepancy findi
 supersession (`evaluate`, `review`, `supersede`), supplier match revision (a creation's revision carries the audit event `supplier_match.confirmed`, a correction's `supplier_match.corrected`), supplier fact revision (`confirm`), the dismissed inbox events (`inbox.dismiss`), the `inbox.seed`
 command receipt, the purchase order placement (`place`), the stage completion (`proof.complete`) and the evidence
 upload, whose id is the begin-upload command id (`evidence.begin_upload`). Order revisions, document intake, goods
-receipts and finalisation had no command id before 0050, so there is nothing to reserve for them. Random ids a command
+receipts and finalisation had no command id before 0096, so there is nothing to reserve for them. Random ids a command
 writes for its own internal rows (a readiness snapshot's, an inbox "created" event's) are not command ids and are not
 listed. An id persisted by two kinds, or for two jobs, in the previous schema belongs to nobody: every claim of it is
 refused, so no winner is picked among commands that already had their effects. The consult runs inside the claiming
 transaction, behind the live guard and the per-job lock; the stores are append-only, so what it reads cannot change under
 it. The reverse holds at the database boundary for writers that never claim: during a mixed-version rollout, or after the
 documented application rollback, the previous application still inserts into those stores. Each of them has a
-`b_watchdog_command_id_before_insert` trigger (`app.reserve_watchdog_command_id`) that takes the same per-id transaction lock
-the claim takes first, then refuses (`23505 IDEMPOTENCY_CONFLICT`) an id already claimed for another kind or another job, and
+`b_watchdog_command_id_before_insert` trigger (`app.reserve_watchdog_command_id`) that tries the same per-id transaction lock
+the claim takes first, using `pg_try_advisory_xact_lock`. If held by another transaction, it immediately raises
+`23505 IDEMPOTENCY_CONFLICT`; it never waits after a previous writer has appended audit. Once acquired, it refuses (`23505 IDEMPOTENCY_CONFLICT`) an id already claimed for another kind or another job, and
 any row under a claimed id that does not come from the transaction that claimed it: a claimed command has its effects in its
 claiming transaction, so a later row is a second effect of a completed command. Whether this transaction made the claim is read
 from the database itself (the identity row's `claimed_xact`, the full 64-bit id of the claiming transaction, which never wraps,
 equals this transaction's; a trigger stamps it on every claim, whatever the insert supplies), never from anything a session can
 set; claims are made outside savepoints. A store that holds at most one row per command id may still see a replay re-run its idempotent insert
 (`ON CONFLICT DO NOTHING/UPDATE`); when the command's row is already there that insert can add nothing, so it is admitted. A
-claim and a previous-schema write of one id are therefore serialised in either order: whichever commits first, the other
-sees it and conflicts. A supplier match revision is a creation's or a correction's only by its audit event, which may be
+claim can safely wait for a previous-schema write, then recheck its committed ownership. A previous-schema write
+racing a claim conflicts immediately; it must roll back before retrying. This avoids the audit-first versus claim-first
+lock cycle while retaining database enforcement (Ben: "keep triggers", Command Center, 7 October 2026).
+
+**Isolation assumption:** supported previous and current application transactions use PostgreSQL READ COMMITTED
+(plain `BEGIN` in `withTenant`). The trigger ownership lookup needs a fresh statement snapshot after acquiring the
+id lock. Hand-written REPEATABLE READ or SERIALIZABLE transactions are outside this guarantee: a stale snapshot
+can miss a claim committed by another transaction. Do not use those isolation levels for watchdog writes.
+
+A supplier match revision is a creation's or a correction's only by its audit event, which may be
 appended later in the same transaction, so a deferred constraint trigger (`app.reserve_supplier_match_kind`) also requires, at
 commit, the claim's kind to be exactly the one that event names; a revision citing any event other than `supplier_match.confirmed`
 or `supplier_match.corrected` about its own proposal is refused outright, and the claim-time lookup treats such a previous-schema
-row as owned by no claimable kind. 0050 also refuses to apply (`23514`) while any existing revision fails that rule; it scans with
+row as owned by no claimable kind. 0096 also refuses to apply (`23514`) while any existing revision fails that rule; it scans with
 FORCE suspended on the two tables for its own transaction, as for the foreign keys, and each event may stand behind only one
 revision (`supplier_match_revision_audit_event_uq`), so a revision cannot borrow an earlier event of its own proposal. A
 correction's event must also carry the revision's own payload hash; a creation's event hashes the creation request instead,
@@ -203,7 +236,7 @@ so it is bound by its subject and that uniqueness. The
 read-only pre-deploy query lists both kinds of offender:
 
 ```sql
--- 0050 pre-deploy supplier-match revision check (read-only): revisions that do not cite their own proposal's confirmed or corrected
+-- 0096 pre-deploy supplier-match revision check (read-only): revisions that do not cite their own proposal's confirmed or corrected
 -- event, or that share their event with another revision.
 SELECT r.tenant_id, r.id, r.command_id FROM app.supplier_match_revision r WHERE NOT EXISTS(SELECT 1 FROM app.audit_event ae
   WHERE (ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) AND ae.event_type IN('supplier_match.confirmed','supplier_match.corrected')
@@ -215,7 +248,7 @@ SELECT r.tenant_id, r.id, r.command_id FROM app.supplier_match_revision r WHERE 
 a database holding a known collision): it lists every such ambiguous id, which must be none.
 
 ```sql
--- 0050 pre-deploy collision check (read-only): command ids the previous schema persisted for more than one watchdog command kind or job.
+-- 0096 pre-deploy collision check (read-only): command ids the previous schema persisted for more than one watchdog command kind or job.
 WITH owners(tenant_id, command_id, kind, job_id) AS (
   SELECT tenant_id, command_id, 'readiness.record', job_id FROM app.planned_work_revision
   UNION ALL SELECT tenant_id, command_id, 'readiness.advance', job_id FROM app.readiness_decision
@@ -263,16 +296,16 @@ cost is a brief exclusive lock on those tables, so apply it in a quiet window.
 A legacy mislink makes the whole migration fail and roll back (SQLSTATE 23503);
 repair the named row with a forward-fix update, never by weakening a constraint.
 
-Pre-deploy check: run this read-only query before applying 0050 to any database
+Pre-deploy check: run this read-only query before applying 0096 to any database
 that holds real rows, so the deploy does not stop on a legacy mislink. Run it as
 a role that bypasses row-level security (a superuser or BYPASSRLS owner): FORCE
 RLS hides every row from an ordinary role that has no tenant. Every `violations`
-value must be 0; a non-zero row names the constraint that 0050 would refuse. The
+value must be 0; a non-zero row names the constraint that 0096 would refuse. The
 owner-role test suite runs this exact text against a database with a known
 mislink (it reports one) and again after the forward-fix (it reports none).
 
 ```sql
--- 0050 pre-deploy check (read-only): rows the new job-qualified foreign keys would refuse.
+-- 0096 pre-deploy check (read-only): rows the new job-qualified foreign keys would refuse.
 SELECT 'purchase_order_requirement_job_fk' AS constraint_name, count(*) AS violations FROM app.purchase_order_draft c
   WHERE NOT EXISTS (SELECT 1 FROM app.material_requirement p WHERE (p.tenant_id,p.job_id,p.id)=(c.tenant_id,c.job_id,c.requirement_id))
 UNION ALL SELECT 'evidence_upload_job_fk', count(*) FROM app.evidence_upload c
@@ -303,43 +336,30 @@ existing row); the BEFORE UPDATE guard refuses any real change of `id` or of the
 job, scope, key, hash, type or size columns, and the suite proves it. Removing the
 grant would first need that upsert rewritten, which is outside CH-2.
 
-Expand-compatible upgrade from 0041; no backfill. The CH-2 PostgreSQL suite
-constructs previous-schema uploads, applies 0050, verifies preservation and
+Expand-compatible upgrade from the immediately preceding registered schema (through 0053); no backfill.
+0096 is registered last, after 0053. The file count remains 45. Unmerged synthetic CH-2 installs previously
+labelled 0050 must be rebuilt from synthetic fixtures; renaming is not a deployed-database upgrade or a second
+application of the same DDL. No production schema-migration receipt should be relabelled by this repair.
+
+**Known pre-0096 proof replay limit:** a completion receipt issued by the preceding proof application hashes
+`decisionId: current.decisionId`; the current application sends `deriveDecision: true`, included in its request hash.
+Replaying that old completion through the current proof application therefore returns HTTP 409 (`CONFLICT`)
+instead of its original answer. It fails closed and creates no second completion. Direct repository replay with the
+original request/hash remains supported; there is no authenticated replay-by-original-hash application path in
+this repair. Preserve the original receipt and reconcile the already-recorded completion; do not retry with a new
+command id to recreate its effect. This limit concerns receipts historically described as pre-0050 before renumbering. The CH-2 PostgreSQL suite
+constructs previous-schema uploads, applies 0096, verifies preservation and
 idempotent migration, all non-live failures, actual runtime grants and race
 orders. A second suite (`watchdog-migration-owner.integration.test.ts`) applies
-0050 as `jobguard_migration` to a previous-schema database holding a legacy
+0096 as `jobguard_migration` to a previous-schema database holding a legacy
 cross-job link in another tenant: the link is found, nothing is half-applied,
 FORCE RLS is intact, and after a forward-fix the same migration applies with
-every constraint validated. Existing fresh-schema PostgreSQL suites apply 0050
+every constraint validated. Existing fresh-schema PostgreSQL suites apply 0096
 too, including the owner-role synthetic bootstrap.
 
 Forward-fix: retain the guards and repair affected fixtures/commands through
 normal lifecycle commands; never directly set status or disable a guard to
-resume watchdog writes. If a deployment rollback is required, keep 0050 and
+resume watchdog writes. If a deployment rollback is required, keep 0096 and
 roll back application code (the preceding application can still read all data).
 Removing the migration would reopen prohibited writes and requires a separate
 reviewed change. No new operational alerts or provider routes.
-
-## 0053 — SH-1 shared money and origin
-
-Adds immutable `job_commercial_track` and `extra_origin` tables with FORCE RLS,
-qualified foreign keys, narrow grants and trigger-only binding/provenance paths.
-Adds required track/origin columns to variations; a deferred reverse FK requires
-one exact origin at commit. Backfills the previous synthetic small-builder schema
-idempotently while retaining source identities/history and explicitly unknown
-raising metadata. Existing activation/import routines bind inside their current
-transaction through bounded triggers. No fee posting or external effect is added.
-
-Expand compatibility: existing capture inserts can omit the new columns on bound
-small-builder jobs, obtaining labelled legacy provenance. Existing pricing/state
-UPDATE grants are unchanged; origin/track UPDATE is denied. Fresh quote jobs bind
-at switch-live; adoption imports bind with their imported baseline. New contractor
-imports will bind through their own future authorized routine.
-
-Forward fix is preferred: append a migration preserving established bindings and
-origin rows. Do not drop these tables or rewrite origins after deployment. If the
-upgrade fails, its SQL transaction rolls back, leaving the preceding schema intact.
-Before rollout run fresh, previous-schema upgrade, twice-replayed backfill, runtime
-privilege/RLS/forgery tests and the existing Neon non-superuser bootstrap suite.
-SH-1 adds real PostgreSQL tests in `test/shared-money-origin.integration.test.ts`;
-local socket restrictions leave execution and earlier DB/browser regressions to CI.

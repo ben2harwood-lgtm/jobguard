@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { TenantTransaction } from "./tenant-context.js";
 
 export class WatchdogError extends Error {
-  constructor(readonly code: "JOB_NOT_LIVE" | "JOB_NOT_FOUND") {
+  constructor(readonly code: "JOB_NOT_LIVE" | "JOB_NOT_FOUND" | "IDEMPOTENCY_CONFLICT") {
     super(code);
     this.name = "WatchdogError";
   }
@@ -39,7 +39,7 @@ export function commandIdFor(kind: WatchdogCommandType, jobId: string, request: 
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${(8 + (parseInt(hex[16]!, 16) & 3)).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
-/** Where the previous schema (before migration 0050) persisted the id of each kind of watchdog command, as (kind, job) pairs. Every row is
+/** Where the previous schema (before migration 0096) persisted the id of each kind of watchdog command, as (kind, job) pairs. Every row is
  * immutable, so reading it inside the claiming transaction is race-free for rows that already exist. Stores that exist for other commands
  * (invoices, receipts of money, the like) are not watchdog commands and are not listed; neither are random ids a command writes for its
  * own internal rows (a readiness snapshot's, an inbox "created" event's). */
@@ -64,7 +64,7 @@ const LEGACY_COMMAND_OWNERS = `
 async function assertNotLegacyOwned(database: TenantTransaction, spec: { tenantId: string; commandId: string; jobId: string; kind: WatchdogCommandType }): Promise<void> {
   const owners = (await database.$client.query<{ kind: string; job_id: string | null }>(LEGACY_COMMAND_OWNERS, [spec.tenantId, spec.commandId])).rows;
   const kinds = new Set(owners.map(owner => owner.kind)), jobs = new Set(owners.flatMap(owner => owner.job_id ? [owner.job_id] : []));
-  if ((kinds.size && (kinds.size > 1 || !kinds.has(spec.kind))) || (jobs.size && (jobs.size > 1 || !jobs.has(spec.jobId)))) throw new Error("IDEMPOTENCY_CONFLICT");
+  if ((kinds.size && (kinds.size > 1 || !kinds.has(spec.kind))) || (jobs.size && (jobs.size > 1 || !jobs.has(spec.jobId)))) throw new WatchdogError("IDEMPOTENCY_CONFLICT");
 }
 
 /** The tenant-wide identity claim every watchdog command makes first, in the transaction that completes it and before any audit
@@ -74,7 +74,7 @@ async function assertNotLegacyOwned(database: TenantTransaction, spec: { tenantI
  * names no conflict target on purpose: the table has a second unique key (the proof application's response record references it), and a
  * conflict target arbitrates only its own index, so a racing duplicate could surface the other index's violation instead of conflicting. */
 export async function claimCommandIdentity(database: TenantTransaction, spec: { tenantId: string; commandId: string; jobId: string; kind: WatchdogCommandType; requestHash: string }): Promise<"new" | "same"> {
-  // The per-id lock every previous-schema store also takes on insert (0050 `app.reserve_watchdog_command_id`), so a writer that never
+  // The per-id lock every previous-schema store also takes on insert (0096 `app.reserve_watchdog_command_id`), so a writer that never
   // claims cannot slip a row in between the reservation check and this claim.
   await database.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`watchdog-command-id:${spec.tenantId.toLowerCase()}:${spec.commandId.toLowerCase()}`]);
   await assertNotLegacyOwned(database, spec);
@@ -84,7 +84,7 @@ export async function claimCommandIdentity(database: TenantTransaction, spec: { 
   if (inserted.rowCount) return "new";
   const existing = (await database.$client.query<{ job_id: string; command_type: string; request_hash: string }>(
     "SELECT job_id,command_type,request_hash FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2", [spec.tenantId, spec.commandId])).rows[0];
-  if (!existing || existing.job_id !== spec.jobId || existing.command_type !== spec.kind || existing.request_hash !== spec.requestHash) throw new Error("IDEMPOTENCY_CONFLICT");
+  if (!existing || existing.job_id !== spec.jobId || existing.command_type !== spec.kind || existing.request_hash !== spec.requestHash) throw new WatchdogError("IDEMPOTENCY_CONFLICT");
   return "same";
 }
 
