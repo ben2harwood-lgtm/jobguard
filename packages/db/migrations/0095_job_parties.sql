@@ -1,5 +1,17 @@
 BEGIN;
 
+-- Pure validator, with no data access or elevation. Match Zod's JS trim set and
+-- UTF-16 length, including two code units per supplementary Unicode character.
+CREATE FUNCTION app.valid_party_revision_text(value jsonb,minimum integer,maximum integer) RETURNS boolean
+LANGUAGE sql IMMUTABLE STRICT SECURITY INVOKER SET search_path=pg_catalog AS $$
+ SELECT coalesce(jsonb_typeof(value)='string' AND
+  length(trimmed)+length(regexp_replace(trimmed,U&'[^\+010000-\+10FFFF]','','g')) BETWEEN minimum AND maximum,false)
+ FROM (SELECT btrim(value#>>'{}',U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF') AS trimmed) text_value;
+$$;
+ALTER FUNCTION app.valid_party_revision_text(jsonb,integer,integer) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.valid_party_revision_text(jsonb,integer,integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.valid_party_revision_text(jsonb,integer,integer) TO jobguard_runtime;
+
 CREATE TABLE app.customer (
  tenant_id uuid NOT NULL REFERENCES control_plane.tenant(id), id uuid NOT NULL,
  retention_class text NOT NULL DEFAULT 'job_party_contact_d07_pending' CHECK(retention_class='job_party_contact_d07_pending'),
@@ -7,9 +19,15 @@ CREATE TABLE app.customer (
 );
 CREATE TABLE app.customer_revision (
  tenant_id uuid NOT NULL, id uuid NOT NULL, customer_id uuid NOT NULL, revision integer NOT NULL CHECK(revision>0),
- payload jsonb NOT NULL CHECK(payload->>'version'='customer.v1' AND length(payload->>'name') BETWEEN 1 AND 160
+ payload jsonb NOT NULL CHECK(jsonb_typeof(payload)='object' AND jsonb_typeof(payload->'version')='string'
+ AND payload->>'version'='customer.v1' AND app.valid_party_revision_text(payload->'name',1,160)
  AND payload->>'type' IN('person','business','landlord_or_agent','insurer','main_contractor','housing_association','local_authority')
- AND NOT payload ? 'isIndividual' AND payload ?& ARRAY['version','name','type'] AND jsonb_typeof(payload->'name')='string' AND jsonb_typeof(payload->'type')='string' AND (NOT payload ? 'email' OR jsonb_typeof(payload->'email')='string') AND (NOT payload ? 'phone' OR jsonb_typeof(payload->'phone')='string')), created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+ AND NOT payload ? 'isIndividual' AND payload ?& ARRAY['version','name','type'] AND jsonb_typeof(payload->'name')='string' AND jsonb_typeof(payload->'type')='string'
+ AND (NOT payload ? 'email' OR (jsonb_typeof(payload->'email')='string'
+  AND app.valid_party_revision_text(payload->'email',1,320)
+  AND regexp_replace(payload->>'email','^\s+|\s+$','','g') ~* $email$^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$$email$))
+ AND (NOT payload ? 'phone' OR app.valid_party_revision_text(payload->'phone',3,40))
+ AND (NOT payload ? 'companyNumber' OR (jsonb_typeof(payload->'companyNumber')='string' AND regexp_replace(payload->>'companyNumber','^\s+|\s+$','','g') ~ '^(?:[0-9]{8}|[A-Z]{2}[0-9]{6})$'))), created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
  PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,customer_id,revision), UNIQUE(tenant_id,customer_id,id),
  FOREIGN KEY(tenant_id,customer_id) REFERENCES app.customer(tenant_id,id)
 );
@@ -20,9 +38,11 @@ CREATE TABLE app.site (
 );
 CREATE TABLE app.site_revision (
  tenant_id uuid NOT NULL, id uuid NOT NULL, site_id uuid NOT NULL, revision integer NOT NULL CHECK(revision>0),
- payload jsonb NOT NULL CHECK(payload->>'version'='site.v1' AND jsonb_array_length(payload->'addressLines') BETWEEN 1 AND 4
- AND length(payload->>'town') BETWEEN 1 AND 160 AND payload->>'postcode' ~ '^(GIR 0AA|[A-PR-UWYZ]([0-9][0-9A-HJKPSTUW]?|[A-HK-Y][0-9][0-9ABEHMNPRVWXY]?) [0-9][ABD-HJLNP-UW-Z]{2})$'
- AND (NOT payload ? 'uprn' OR payload->>'uprn' ~ '^[0-9]{1,12}$') AND payload ?& ARRAY['version','addressLines','town','postcode'] AND jsonb_typeof(payload->'town')='string' AND jsonb_typeof(payload->'postcode')='string' AND (NOT payload ? 'unit' OR jsonb_typeof(payload->'unit')='string') AND (NOT payload ? 'uprn' OR jsonb_typeof(payload->'uprn')='string')),
+ payload jsonb NOT NULL CHECK(jsonb_typeof(payload)='object' AND jsonb_typeof(payload->'version')='string'
+ AND payload->>'version'='site.v1' AND CASE WHEN jsonb_typeof(payload->'addressLines')='array' THEN jsonb_array_length(payload->'addressLines') ELSE 0 END BETWEEN 1 AND 4
+ AND app.valid_party_revision_text(payload->'town',1,160) AND payload->>'postcode' ~ '^(GIR 0AA|[A-PR-UWYZ]([0-9][0-9A-HJKPSTUW]?|[A-HK-Y][0-9][0-9ABEHMNPRVWXY]?) [0-9][ABD-HJLNP-UW-Z]{2})$'
+ AND (NOT payload ? 'uprn' OR payload->>'uprn' ~ '^[0-9]{1,12}$') AND payload ?& ARRAY['version','addressLines','town','postcode'] AND jsonb_typeof(payload->'town')='string' AND jsonb_typeof(payload->'postcode')='string'
+ AND (NOT payload ? 'unit' OR app.valid_party_revision_text(payload->'unit',1,160)) AND (NOT payload ? 'uprn' OR jsonb_typeof(payload->'uprn')='string')),
  match_key jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
  -- There are at most four lines. Reject CR/LF in each stored string even for direct runtime inserts.
  CONSTRAINT site_revision_address_lines_no_cr_lf CHECK(concat_ws('',payload->'addressLines'->>0,payload->'addressLines'->>1,payload->'addressLines'->>2,payload->'addressLines'->>3) !~ E'[\\r\\n]'),
@@ -30,7 +50,16 @@ CREATE TABLE app.site_revision (
  FOREIGN KEY(tenant_id,site_id) REFERENCES app.site(tenant_id,id)
 );
 CREATE FUNCTION app.compute_site_match_key() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
-DECLARE address jsonb; unit_name text:=trim(regexp_replace(upper(normalize(coalesce(NEW.payload->>'unit',''),NFKC)),'\s+',' ','g')); BEGIN
+DECLARE address jsonb; line jsonb; unit_name text:=trim(regexp_replace(upper(normalize(coalesce(NEW.payload->>'unit',''),NFKC)),'\s+',' ','g')); BEGIN
+ -- Validate before jsonb_array_elements_text can coerce numbers or JSON nulls.
+ IF jsonb_typeof(NEW.payload->'addressLines') IS DISTINCT FROM 'array' THEN
+  RAISE EXCEPTION 'addressLines must be an array' USING ERRCODE='23514',CONSTRAINT='site_revision_payload_check';
+ END IF;
+ FOR line IN SELECT value FROM jsonb_array_elements(NEW.payload->'addressLines') LOOP
+  IF NOT app.valid_party_revision_text(line,1,160) THEN
+   RAISE EXCEPTION 'address lines must be nonblank strings of at most 160 characters' USING ERRCODE='23514',CONSTRAINT='site_revision_payload_check';
+  END IF;
+ END LOOP;
  SELECT jsonb_agg(trim(regexp_replace(upper(normalize(value,NFKC)),'\s+',' ','g')) ORDER BY ordinal) INTO address FROM jsonb_array_elements_text(NEW.payload->'addressLines') WITH ORDINALITY AS lines(value,ordinal);
  IF NEW.payload ? 'uprn' THEN NEW.match_key:=jsonb_build_array('uprn',regexp_replace(NEW.payload->>'uprn','^0+(?=[0-9])',''),unit_name);
  ELSE NEW.match_key:=jsonb_build_array('address',NEW.payload->>'postcode',address,trim(regexp_replace(upper(normalize(NEW.payload->>'town',NFKC)),'\s+',' ','g')),unit_name); END IF;

@@ -2,11 +2,44 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { Pool, type PoolClient } from "pg";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
 import { DEMO_TENANT_ID, demoCheckpoints } from "../src/demo-seed.js";
 import { closeTestPools } from "./pool-test-utils.js";
+
+describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
+  it("binds the synthetic small-builder track in the fixture transaction before going live", async () => {
+    const queries: Array<{ sql: string; values: unknown[] }> = [];
+    const client = { release() {}, async query(sql: string, values: unknown[] = []) {
+      queries.push({ sql, values });
+      if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
+      if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
+      if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
+      if (sql.includes("count(*)::int count")) return { rowCount: 1, rows: [{ count: 45 }] };
+      return { rowCount: sql.startsWith("SELECT") ? 0 : 1, rows: [] };
+    } } as unknown as PoolClient;
+    const connect = vi.spyOn(Pool.prototype, "connect").mockImplementation(async () => client);
+    const end = vi.spyOn(Pool.prototype, "end").mockResolvedValue(undefined);
+    const previousMode = process.env.JOBGUARD_ENV;
+    process.env.JOBGUARD_ENV = "synthetic_demo";
+    try {
+      await bootstrapSyntheticDemo({ ownerUrl: `postgresql://synthetic_owner:fixture@localhost/${SYNTHETIC_DATABASE_NAME}`, runtimeUrl: `postgresql://jobguard_runtime:fixture@localhost/${SYNTHETIC_DATABASE_NAME}` });
+      const binding = queries.findIndex(({ sql }) => sql.includes("INSERT INTO app.job_commercial_track"));
+      const live = queries.findIndex(({ sql }) => sql.includes("UPDATE app.job SET status='live'"));
+      expect(binding, "missing SH-1 binding before UPDATE-to-live").toBeGreaterThan(queries.findIndex(({ sql }) => sql === "BEGIN"));
+      expect(binding).toBeLessThan(live);
+      expect(queries[binding]?.sql).toContain("'small_builder'");
+      expect(queries[binding]?.sql).toContain("'synthetic_demo'");
+      expect(queries.slice(0, binding).filter(({ sql }) => sql.startsWith("SET LOCAL ROLE")).at(-1)?.sql).toBe("SET LOCAL ROLE jobguard_migration");
+      expect(queries.slice(binding, live).some(({ sql }) => ["COMMIT", "ROLLBACK"].includes(sql))).toBe(false);
+    } finally {
+      connect.mockRestore(); end.mockRestore();
+      if (previousMode === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousMode;
+    }
+  });
+});
 
 describe("synthetic Vercel/Neon bootstrap", () => {
   let postgres: EmbeddedPostgres; let directory: string; let admin: Pool; let runtime: Pool;
@@ -45,12 +78,28 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       { title: "Loft conversion", status: "quoting", revision: 0 },
       { title: "Practice kitchen", status: "quoting", revision: 0 },
     ]);
+    expect((await client.query("SELECT job_id,job_track,environment,provenance,source_id FROM app.job_commercial_track ORDER BY job_id")).rows).toEqual([
+      { job_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", job_track: "small_builder", environment: "synthetic_demo", provenance: "legacy_synthetic_live_fixture", source_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+    ]);
     await expect(client.query("UPDATE app.job SET title='forbidden'")).rejects.toMatchObject({ code: "42501" }); await client.query("ROLLBACK");
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await expect(client.query("INSERT INTO app.job(id,tenant_id,title) VALUES(gen_random_uuid(),'22222222-2222-4222-8222-222222222222','foreign')")).rejects.toMatchObject({ code: "42501" });
     await client.query("ROLLBACK"); client.release();
     expect((await runtime.query("SELECT current_setting('app.tenant_id',true) tenant,count(*)::int count FROM app.job GROUP BY 1")).rows).toEqual([]);
   }, 60_000);
+  it("creates and commits the subsequent builder origin using the actual runtime role", async () => {
+    const client = await runtime.connect(), scope = randomUUID(), variation = randomUUID();
+    try {
+      await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      expect((await client.query("SELECT current_user")).rows).toEqual([{ current_user: "jobguard_runtime" }]);
+      await client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','reserved')", [scope, DEMO_TENANT_ID]);
+      await client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$3,'text','Fictional extra','Fictional extra')", [variation, DEMO_TENANT_ID, scope]);
+      await client.query("COMMIT");
+      await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      expect((await client.query("SELECT job_track,kind,provenance,raising_role FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [DEMO_TENANT_ID, variation])).rows).toEqual([{ job_track: "small_builder", kind: "builder_logged", provenance: "legacy_synthetic_capture", raising_role: "legacy_unrecorded" }]);
+      await expect(client.query("UPDATE app.job_commercial_track SET job_track='contractor' WHERE tenant_id=$1", [DEMO_TENANT_ID])).rejects.toMatchObject({ code: "42501" });
+    } finally { await client.query("ROLLBACK"); client.release(); }
+  });
   it("refuses an environment or database not explicitly synthetic", async () => {
     process.env.JOBGUARD_ENV = "production";
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toMatchObject({ code: "DEMO_BOOTSTRAP_TARGET_FORBIDDEN" });

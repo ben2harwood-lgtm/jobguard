@@ -13,7 +13,7 @@ uses UPRN when present, retaining the unit; the database recomputes this key on
 INSERT. Exact and near matches propose reuse, which requires a human confirmation.
 Different or unresolved units cannot be reused through a claimed match.
 Each address-line string must contain no CR or LF, checked before trimming;
-invalid command inputs return `INVALID_PARTIES`. Migration 0051 enforces the same
+invalid command inputs return `INVALID_PARTIES`. Migration 0095 enforces the same
 restriction for direct SQL writes. Editing any site field clears the editor's
 reuse selection and confirmation, including when a postcode edit hides suggestions.
 

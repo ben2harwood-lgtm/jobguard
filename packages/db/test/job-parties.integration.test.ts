@@ -50,6 +50,61 @@ describe("individual address lines cannot contain CR/LF", () => {
     expect((await admin.query("SELECT 1 FROM app.site WHERE tenant_id=$1 AND id=$2", [tenant, siteId])).rowCount).toBe(0);
   });
 });
+describe("stored party revision schemas at the runtime INSERT boundary", () => {
+  const invalidSites: Array<[string, Record<string, unknown>]> = [
+    ["null line", { addressLines: [null] }], ["number line", { addressLines: [7] }],
+    ["empty line", { addressLines: [""] }], ["blank line", { addressLines: [" \t "] }],
+    ["overlong first line", { addressLines: ["x".repeat(161)] }],
+    ["overlong fourth line", { addressLines: ["One", "Two", "Three", "x".repeat(161)] }],
+    ["overlong UTF-16 line", { addressLines: ["😀".repeat(81)] }], ["Unicode blank line", { addressLines: ["\u00a0\ufeff"] }],
+    ["non-array lines", { addressLines: "One" }], ["no lines", { addressLines: [] }],
+    ["too many lines", { addressLines: ["One", "Two", "Three", "Four", "Five"] }],
+    ["number town", { town: 7 }], ["blank town", { town: " \t " }], ["overlong town", { town: "x".repeat(161) }],
+    ["null unit", { unit: null }], ["number unit", { unit: 7 }], ["blank unit", { unit: " " }], ["overlong unit", { unit: "x".repeat(161) }],
+    ["number UPRN", { uprn: 123 }], ["null UPRN", { uprn: null }], ["overlong UPRN", { uprn: "1".repeat(13) }],
+    ["null version", { version: null }], ["missing version", { version: undefined }],
+  ];
+  it.each(invalidSites)("refuses %s and rolls back the site identity and revision", async (_label, fields) => {
+    const id = randomUUID(), revision = randomUUID();
+    await expect(withTenant(runtime, context, async db => {
+      expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
+      await db.$client.query("INSERT INTO app.site(tenant_id,id) VALUES($1,$2)", [tenant, id]);
+      await db.$client.query("INSERT INTO app.site_revision(tenant_id,id,site_id,revision,payload,match_key) VALUES($1,$2,$3,1,$4,'[]')", [tenant, revision, id, JSON.stringify({ ...site, postcode: "SW1A 1AA", ...fields })]);
+    })).rejects.toMatchObject({ code: "23514" });
+    expect((await admin.query("SELECT 1 FROM app.site WHERE tenant_id=$1 AND id=$2", [tenant, id])).rowCount).toBe(0);
+    expect((await admin.query("SELECT 1 FROM app.site_revision WHERE tenant_id=$1 AND id=$2", [tenant, revision])).rowCount).toBe(0);
+  });
+  const invalidCustomers: Array<[string, Record<string, unknown>]> = [
+    ["empty phone", { phone: "" }], ["blank phone", { phone: " \t " }], ["short phone", { phone: "12" }],
+    ["overlong phone", { phone: "1".repeat(41) }], ["null phone", { phone: null }], ["number phone", { phone: 7 }],
+    ["blank name", { name: " \t " }], ["number name", { name: 7 }], ["overlong name", { name: "x".repeat(161) }],
+    ["Unicode blank name", { name: "\u00a0\ufeff" }], ["overlong UTF-16 name", { name: "😀".repeat(81) }],
+    ["empty email", { email: "" }], ["invalid email", { email: "not-an-email" }], ["overlong email", { email: `${"x".repeat(310)}@example.invalid` }],
+    ["number email", { email: 7 }], ["null email", { email: null }],
+    ["invalid company number", { companyNumber: "invalid" }], ["number company number", { companyNumber: 12345678 }], ["null company number", { companyNumber: null }],
+    ["null version", { version: null }], ["missing version", { version: undefined }], ["invalid type", { type: "other" }],
+  ];
+  it.each(invalidCustomers)("refuses %s and rolls back the customer identity and revision", async (_label, fields) => {
+    const id = randomUUID(), revision = randomUUID();
+    await expect(withTenant(runtime, context, async db => {
+      expect((await db.$client.query("SELECT current_user,pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0]).toEqual({ current_user: "ch3a_login", runtime_role: true });
+      await db.$client.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [tenant, id]);
+      await db.$client.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4)", [tenant, revision, id, JSON.stringify({ ...customer, ...fields })]);
+    })).rejects.toMatchObject({ code: "23514" });
+    expect((await admin.query("SELECT 1 FROM app.customer WHERE tenant_id=$1 AND id=$2", [tenant, id])).rowCount).toBe(0);
+    expect((await admin.query("SELECT 1 FROM app.customer_revision WHERE tenant_id=$1 AND id=$2", [tenant, revision])).rowCount).toBe(0);
+  });
+  it("keeps valid maximum-length revisions readable in every parties workspace", async () => {
+    const job = await createJob();
+    const c = await repository.command(context, member, job, command("create_customer", { customer: { ...customer, name: "x".repeat(160), phone: "1".repeat(40), email: `${"x".repeat(304)}@example.invalid`, companyNumber: "AB123456" } }));
+    const s = await repository.command(context, member, job, command("create_site", { site: { ...site, addressLines: Array(4).fill("x".repeat(160)), town: "x".repeat(160), unit: "x".repeat(160), uprn: "1".repeat(12) } }));
+    const view = await repository.view(context, member, job);
+    expect(view.customers.find(row => row.revisionId === c.revisionId)?.customer.phone).toHaveLength(40);
+    expect(view.sites.find(row => row.revisionId === s.revisionId)?.site.addressLines).toEqual(Array(4).fill("x".repeat(160)));
+    const unicode = await repository.command(context, member, job, command("create_site", { site: { ...site, addressLines: ["😀".repeat(80)] } }));
+    expect((await repository.view(context, member, job)).sites.find(row => row.revisionId === unicode.revisionId)?.site.addressLines).toEqual(["😀".repeat(80)]);
+  });
+});
 beforeAll(async () => {
   dir=await mkdtemp(join(tmpdir(),"ch3a-pg16-"));const port=58000+Math.floor(Math.random()*300);
   postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
@@ -97,6 +152,8 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
     const tables=["customer","customer_revision","site","site_revision","job_party_binding","job_party_current"];
     const catalog=await admin.query(`SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1)`,[tables]);
     expect(catalog.rowCount).toBe(6);for(const row of catalog.rows)expect(row).toMatchObject({relrowsecurity:true,relforcerowsecurity:true,owner:"jobguard_migration"});
+    expect((await admin.query("SELECT prosecdef,provolatile,pg_get_userbyid(proowner) AS owner,has_function_privilege('jobguard_runtime',oid,'EXECUTE') AS runtime_allowed FROM pg_proc WHERE oid='app.valid_party_revision_text(jsonb,integer,integer)'::regprocedure")).rows).toEqual([{ prosecdef: false, provolatile: "i", owner: "jobguard_migration", runtime_allowed: true }]);
+    expect((await admin.query("SELECT EXISTS(SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid='app.valid_party_revision_text(jsonb,integer,integer)'::regprocedure AND a.grantee=0 AND a.privilege_type='EXECUTE') AS public_allowed")).rows).toEqual([{ public_allowed: false }]);
     for(const table of tables){
       for(const verb of ["UPDATE","DELETE","TRUNCATE"]){const sql=verb==="UPDATE"?`UPDATE app.${table} SET tenant_id=tenant_id`:verb==="DELETE"?`DELETE FROM app.${table}`:`TRUNCATE app.${table}`;await expect(withTenant(runtime,context,db=>db.$client.query(sql))).rejects.toMatchObject({code:"42501"});}
     }
