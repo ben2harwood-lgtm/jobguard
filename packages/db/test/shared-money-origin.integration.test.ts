@@ -7,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
-import { withTenant} from "../src/tenant-context.js";
+import { withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
 import { closeTestPools } from "./pool-test-utils.js";
 import { SwitchJobLiveMutation } from "../src/activation-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
@@ -89,7 +89,8 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
  it("fails reads/writes closed for missing, malformed and other-tenant contexts",async()=>{
   expect((await runtime.query("SELECT * FROM app.extra_origin")).rows).toEqual([]);
   expect((await withTenant(runtime,ctx(OTHER),db=>db.$client.query("SELECT * FROM app.extra_origin WHERE variation_id=$1",[V]))).rows).toEqual([]);
-  await expect(withTenant(runtime,ctx("malformed"),async()=>undefined)).rejects.toMatchObject({code:"INVALID_TENANT_CONTEXT"});
+  // Deliberately unstamped so the malformed context reaches withTenant's refusal path.
+  await expect(withTenant(runtime,{tenantId:"malformed"} as VerifiedTenantContext,async()=>undefined)).rejects.toMatchObject({code:"INVALID_TENANT_CONTEXT"});
   await expect(insertVariation(runtime as unknown as PoolClient,randomUUID(),J)).rejects.toMatchObject({code:"42501"});
   expect((await runtime.query("SELECT * FROM app.job_commercial_track")).rows).toEqual([]);
  });
