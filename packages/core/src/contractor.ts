@@ -70,7 +70,22 @@ export const contractorCommandV1 = z.discriminatedUnion("kind", [
   z.object({ ...base, kind: z.literal("team.move"), membershipId: uuid, fromTeamId: uuid.nullable(), toTeamId: uuid }).strict(),
   z.object({ ...base, kind: z.literal("client.create"), branchId: uuid, name: z.string().min(1).max(100), clientType: z.enum(["housing_association", "local_authority", "insurer", "landlord_or_agent", "person", "main_contractor"]) }).strict(),
   z.object({ ...base, kind: z.literal("contract.revise"), clientId: uuid, contractId: uuid, document: clientContractDocumentV1, rules: approvalRulesV1 }).strict(),
-]);
+]).superRefine((command, context) => {
+  if (command.kind !== "member.invite" && command.kind !== "grant.create") return;
+  const clientRole = command.role === "client_approver";
+  if (clientRole ? command.scope.kind !== "client" : command.scope.kind === "client") {
+    context.addIssue({ code: "custom", path: ["scope", "kind"], message: "Only client approvers use client scope" });
+  }
+  if (command.role === "finance" && command.scope.kind !== "tenant") {
+    context.addIssue({ code: "custom", path: ["scope", "kind"], message: "Finance requires tenant scope" });
+  }
+  if (!clientRole && command.contractId !== null) {
+    context.addIssue({ code: "custom", path: ["contractId"], message: "Only client approvers may be restricted to a contract" });
+  }
+  if (command.kind === "member.invite" && (clientRole ? command.clientId !== command.scope.id : command.clientId !== null)) {
+    context.addIssue({ code: "custom", path: ["clientId"], message: "Client invitations must bind the client scope; internal members have no client binding" });
+  }
+});
 export type ContractorCommand = z.infer<typeof contractorCommandV1>;
 export const contractorQueryV1 = z.object({ version: z.literal("contractor-query.v1"), tenantId: uuid, resource: z.enum(["organisation", "contracts"]), id: uuid.optional() }).strict();
 export class ContractorError extends Error {

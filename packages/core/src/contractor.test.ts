@@ -47,3 +47,22 @@ describe('versioned immutable contract documents',()=>{
   expect(clientContractDocumentV1.safeParse({...document,tenderedAdjustment:{numerator:'-35',denominator:'0'}}).success).toBe(false);
  });
 });
+
+describe('contractor invitation and grant role/scope input boundary',()=>{
+ for(const kind of ['member.invite','grant.create'] as const) for(const role of contractorRoles) for(const scopeKind of ['tenant','region','branch','team','client'] as const) {
+  it(`${kind}: ${role} in ${scopeKind} validates the SQL role/scope contract`,()=>{
+   const command={version:'contractor-command.v1',environment:'synthetic_demo',commandId:id(1),id:id(2),expectedRevision:0,kind,role,scope:{kind:scopeKind,id:id(4)},contractId:null,
+    ...(kind==='member.invite'?{email:'member@fictional.invalid',clientId:role==='client_approver'?id(4):null}:{membershipId:id(3)})};
+   const allowed=role==='client_approver'?scopeKind==='client':scopeKind!=='client'&&(role!=='finance'||scopeKind==='tenant');
+   expect(contractorCommandV1.safeParse(command).success).toBe(allowed);
+   // A contract restriction is only meaningful for a client approver.
+   expect(contractorCommandV1.safeParse({...command,contractId:id(6)}).success).toBe(allowed&&role==='client_approver');
+  });
+ }
+ it('requires invitations to bind the client to the client scope, with no internal client binding',()=>{
+  const invite={version:'contractor-command.v1',environment:'synthetic_demo',commandId:id(1),id:id(2),expectedRevision:0,kind:'member.invite',email:'member@fictional.invalid',role:'client_approver',scope:{kind:'client',id:id(4)},contractId:null};
+  for(const clientId of [null,id(5)])expect(contractorCommandV1.safeParse({...invite,clientId}).success).toBe(false);
+  expect(contractorCommandV1.safeParse({...invite,clientId:id(4)}).success).toBe(true);
+  expect(contractorCommandV1.safeParse({...invite,role:'operative',scope:{kind:'team',id:id(4)},clientId:id(4)}).success).toBe(false);
+ });
+});

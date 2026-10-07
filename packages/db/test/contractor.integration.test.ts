@@ -158,6 +158,39 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
    }
   }
  });
+ it('lets a commercial manager read then command using only its own projection while restricted readers reveal no administrative revision',async()=>{
+  const {p,v}=await setup(),branch=v.teams[0]!.branch_id;
+  const client=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional writer client',clientType:'insurer'})).id,contractId=randomUUID(),membershipId=randomUUID();
+  await command(p,{kind:'member.invite',id:membershipId,role:'commercial_manager',email:'manager@fictional.invalid',scope:{kind:'branch',id:branch},clientId:null,contractId:null});
+  // Authentication fixture lookup uses the real runtime role, never the migration connection.
+  const identity=(await withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[membershipId]))).rows[0].identity_user_id;
+  const manager={...p,membershipId,identityUserId:identity} as AuthenticatedMembership;
+  let projection=await query(manager,'contracts');expect(projection.revision).toBe(2);expect(projection.members).toEqual([]);expect(projection.grants).toEqual([]);
+  await expect(query(manager)).rejects.toMatchObject({code:'NOT_FOUND'});
+  const revise=await repo.command(manager,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:projection.revision,kind:'contract.revise',clientId:client,contractId,document,rules:referenceApprovalRulesV1});
+  projection=await query(manager,'contracts');expect(projection.revision).toBe(revise.revision);expect(projection.contracts[0]!.contract_id).toBe(contractId);
+  const invitedId=randomUUID();
+  await repo.command(manager,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:invitedId,expectedRevision:projection.revision,kind:'member.invite',role:'client_approver',scope:{kind:'client',id:client},email:'approver@fictional.invalid',clientId:client,contractId});
+  const clientIdentity=(await withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[invitedId]))).rows[0].identity_user_id;
+  const restricted={...p,membershipId:invitedId,identityUserId:clientIdentity} as AuthenticatedMembership;
+  const before=await query(restricted,'contracts');expect(before.revision).toBe(0);expect(before.members).toEqual([]);expect(before.grants).toEqual([]);
+  await command(p,{kind:'team.create',branchId:branch,name:'Fictional unrelated administration'});
+  expect(await query(restricted,'contracts')).toEqual(before);
+  projection=await query(manager,'contracts');
+  await expect(repo.command(manager,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:projection.revision,kind:'contract.revise',clientId:client,contractId,document,rules:referenceApprovalRulesV1})).resolves.toMatchObject({revision:projection.revision+1});
+ });
+ it('rejects invalid finance role scopes as input errors and PostgreSQL constraints without partial effects',async()=>{
+  const {p,v}=await setup(),team=v.teams[0]!.id;
+  const member=await fixtureMember(p,'operative','team',team);
+  const before=await query(p);
+  for(const kind of ['member.invite','grant.create']){
+   const raw={version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:before.revision,kind,role:'finance',scope:{kind:'team',id:team},contractId:null,...(kind==='member.invite'?{email:'finance@fictional.invalid',clientId:null}:{membershipId:member.membershipId})};
+   await expect(repo.command(p,raw)).rejects.toMatchObject({code:'INVALID_COMMAND'});
+   // Bypass TypeScript to pin the database's existing independent constraint. Migration 0054 stays unchanged.
+   await expect(withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT app.contractor_admin_command($1,$2::jsonb,$3)',[p.membershipId,JSON.stringify(raw),createHash('sha256').update(JSON.stringify(raw)).digest('hex')]))).rejects.toMatchObject({code:'23514'});
+   expect(await query(p)).toEqual(before);
+  }
+ });
  it('refuses a subject ID already naming another unit, team, client or the tenant, so scope checks cannot be confused',async()=>{
   const {p,v}=await setup();const ownBranch=v.teams[0]!.branch_id,ownRegion=v.units.find(x=>x.kind==='region')!.id;
   const otherBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:ownRegion,name:'Fictional other branch'})).id;
@@ -248,6 +281,20 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   for(const permission of ['job.read','statement.read','dashboard.read','resident.read','data.export','data.import'])expect((await withTenant(runtime,verifiedTenantContextFromMembership(approver),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[approver.membershipId,permission,a]))).rows[0].allowed).toBe(false);
   await expect(command(p,{kind:'grant.create',membershipId:approver.membershipId,role:'admin',scope:{kind:'tenant',id:p.tenantId},contractId:null})).rejects.toMatchObject({code:'FORBIDDEN'});
   await expect(command(p,{kind:'grant.create',membershipId:approver.membershipId,role:'client_approver',scope:{kind:'client',id:b},contractId:null})).rejects.toMatchObject({code:'FORBIDDEN'});
+ });
+ it('keeps client extra.approve denied in SQL until ENT-5 adds scoped pending-step execution',async()=>{
+  const {p,v}=await setup(),branch=v.teams[0]!.branch_id;
+  const a=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional A',clientType:'insurer'})).id,b=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional B',clientType:'insurer'})).id;
+  const ca=randomUUID(),ca2=randomUUID(),cb=randomUUID();
+  for(const [clientId,contractId]of [[a,ca],[a,ca2],[b,cb]])await command(p,{kind:'contract.revise',clientId,contractId,document,rules:referenceApprovalRulesV1});
+  for(const contractId of [null,ca]){
+   const approver=await fixtureMember(p,'client_approver','client',a,a,contractId);
+   for(const [client,targetContract]of [[a,ca],[a,ca2],[b,cb]]){
+    const allowed=await withTenant(runtime,verifiedTenantContextFromMembership(approver),db=>db.$client.query("SELECT app.contractor_allowed($1,'extra.approve',$2,$3) approved, app.contractor_allowed($1,'contract.read',$2,$3) readable",[approver.membershipId,client,targetContract]));
+    expect(allowed.rows[0].approved).toBe(false);
+    expect(allowed.rows[0].readable).toBe(client===a&&(contractId===null||contractId===targetContract));
+   }
+  }
  });
  it('serializes racing commands, replays identical payload, conflicts on changes and rolls back missing audit',async()=>{
   const {p,v}=await setup();const raw={version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:0,kind:'client.create',branchId:v.teams[0]!.branch_id,name:'Fictional race',clientType:'insurer'};

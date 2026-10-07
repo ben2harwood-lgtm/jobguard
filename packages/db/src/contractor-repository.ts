@@ -85,8 +85,14 @@ export class ContractorRepository {
    const clients=(await db.$client.query<ContractorView['clients'][number]>("SELECT id,name,branch_id FROM app.client_organisation WHERE app.contractor_allowed($1,'contract.read',id) ORDER BY name",[m])).rows;
    const contracts=(await db.$client.query<ContractorView['contracts'][number]>(`SELECT v.id,v.contract_id,v.client_id,v.revision,v.document,v.rule_version_id,r.document rules FROM app.client_contract_version v JOIN app.approval_rule_version r ON(r.tenant_id,r.id)=(v.tenant_id,v.rule_version_id) WHERE app.contractor_allowed($1,'contract.read',v.client_id,v.contract_id) AND ($2::uuid IS NULL OR v.contract_id=$2) ORDER BY v.contract_id,v.revision`,[m,query.resource==='contracts'?query.id??null:null])).rows;
    if(query.id&&(query.resource==='contracts'?!contracts.length:![...units,...teams,...clients].some(x=>x.id===query.id))) throw new ContractorError("NOT_FOUND");
-   // Restricted readers cannot infer unrelated administrative activity from revision/counts.
-   const revision=admin?Number((await db.$client.query("SELECT count(*) n FROM app.command_receipt WHERE command_type LIKE 'contractor.%'")).rows[0].n):0;
+   // Every ENT-1 writer needs the tenant command revision, even without organisation.read.
+   // Check persisted, active scoped permissions; restricted readers still cannot infer administrative activity.
+   const writer=admin||(await db.$client.query<{allowed:boolean}>(`SELECT EXISTS(
+    SELECT 1 FROM app.role_grant g WHERE g.membership_id=$1 AND (
+     app.contractor_allowed($1,'organisation.manage',g.scope_id) OR
+     app.contractor_allowed($1,'contract.manage',g.scope_id) OR
+     app.contractor_allowed($1,'client.invite',g.scope_id))) allowed`,[m])).rows[0]!.allowed;
+   const revision=writer?Number((await db.$client.query("SELECT count(*) n FROM app.command_receipt WHERE command_type LIKE 'contractor.%'")).rows[0].n):0;
    return contractorWorkspaceV1.parse({version:"contractor-workspace.v1",environment:"synthetic_demo",tenantId:principal.tenantId,membershipId:m,revision,realExternalActions:0,units,teams,members,grants,teamMemberships,clients,contracts});
   });
  }

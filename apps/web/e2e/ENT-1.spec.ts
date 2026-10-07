@@ -30,7 +30,7 @@ test('admin organisation and immutable contracts persist across refresh, deep li
  await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toHaveCount(1);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
  const reload=B(page,'Reload persisted organisation');await reload.focus();await expect(reload).toBeFocused();expect(await reload.evaluate(el=>getComputedStyle(el).outlineStyle)).not.toBe('none');const box=await reload.boundingBox();expect(box!.width).toBeGreaterThanOrEqual(44);expect(box!.height).toBeGreaterThanOrEqual(44);
- await page.getByRole('link',{name:'Back to Jobs',exact:true}).click();await page.getByRole('button',{name:'Skip tour',exact:true}).click();await page.getByRole('button',{name:'Account',exact:true}).click();await page.getByRole('link',{name:'Contractor organisation practice',exact:true}).click();await expect(page.getByTestId('contractor-tenant')).toHaveText(first.tenantId);
+ await page.getByRole('link',{name:'Back to Jobs',exact:true}).click();await page.getByRole('button',{name:'Skip tour',exact:true}).click();await page.getByRole('button',{name:'Account',exact:true}).click();const accountLink=page.getByRole('link',{name:'Contractor organisation practice',exact:true});await page.keyboard.press('Tab');await accountLink.focus();await expect(accountLink).toBeFocused();expect(await accountLink.evaluate(el=>getComputedStyle(el).outlineStyle)).not.toBe('none');const accountBox=await accountLink.boundingBox();expect(accountBox!.width).toBeGreaterThanOrEqual(44);expect(accountBox!.height).toBeGreaterThanOrEqual(44);await accountLink.click();await expect(page.getByTestId('contractor-tenant')).toHaveText(first.tenantId);
  await page.screenshot({path:`test-results/ENT-1-${test.info().project.name}.png`,fullPage:true});await context.close();
 });
 test('generated contractor tenants are separate and malformed policies return typed errors',async({page,browser})=>{
@@ -65,6 +65,46 @@ test('an acknowledged change whose refresh fails is shown as stale, never as sav
  await expect(B(page,'Add team')).toBeEnabled();
  await B(page,'Add team').click();await expect(page.getByTestId('contractor-revision')).toHaveText('2');await expect(main.getByRole('status')).toHaveText('Saved to the organisation');
  await page.reload();await expect(page.getByTestId('contractor-revision')).toHaveText('2');
+ await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toHaveCount(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});
+
+test('failed manual reload makes all revision-dependent actions stale until a successful reload',async({page})=>{
+ // Transport fault only: persisted data and every successful response come from the real application/DB.
+ let dropReload=false;
+ await page.route('**/api/contractor',async route=>{if(dropReload&&route.request().method()==='GET'){await route.abort('failed');}else await route.continue();});
+ await page.goto('/admin/contractor');await B(page,'Start generated contractor practice').click();await expect(page.getByTestId('contractor-revision')).toHaveText('0');
+ await B(page,'Add fictional member').click();await expect(page.getByTestId('contractor-revision')).toHaveText('1');
+ await B(page,'Add fictional client').click();await expect(page.getByTestId('contractor-revision')).toHaveText('2');
+ const persisted=await view(page),member=persisted.members.find((m:any)=>m.membership_id!==persisted.membershipId);
+ await page.getByLabel('Member').selectOption(member.membership_id);await page.getByLabel('New team').selectOption(persisted.teams[0].id);
+ const main=page.getByRole('main'),reload=B(page,'Reload persisted organisation');
+ for(let attempt=0;attempt<2;attempt++){
+  dropReload=true;await reload.click();
+  await expect(main.getByRole('alert')).toContainText('could not be refreshed');await expect(main.getByRole('alert')).toBeFocused();await expect(main.getByRole('status')).toContainText('out-of-date');
+  await expect(page.getByTestId('contractor-revision')).toHaveText('2');
+  for(const name of ['Add unit','Add team','Add fictional member','Add scoped grant','Revoke membership','Move member','Add fictional client','Save contract version','Revoke operative grant'])await expect(B(page,name)).toBeDisabled();
+  await expect(reload).toBeEnabled();
+  dropReload=false;await reload.click();await expect(main.getByRole('alert')).toHaveCount(0);await expect(main.getByRole('status')).toHaveText('Persisted organisation loaded');
+  for(const name of ['Add unit','Add team','Add fictional member','Add scoped grant','Revoke membership','Move member','Add fictional client','Save contract version','Revoke operative grant'])await expect(B(page,name)).toBeEnabled();
+ }
+ await B(page,'Add team').click();await expect(page.getByTestId('contractor-revision')).toHaveText('3');await page.reload();await expect(page.getByTestId('contractor-revision')).toHaveText('3');
+ await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toHaveCount(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});
+test('role selectors only offer valid scopes and invalid API inputs return typed 422 without effects',async({page})=>{
+ await page.goto('/admin/contractor');await B(page,'Start generated contractor practice').click();await expect(page.getByTestId('contractor-revision')).toHaveText('0');const persisted=await view(page);
+ for(const [role,scopes]of [['finance',['tenant']],['client_approver',['client']],['operative',['tenant','region','branch','team']]] as const){
+  await page.getByLabel('Role').selectOption(role);
+  expect(await page.getByLabel('Scope type').locator('option').allTextContents()).toEqual(scopes);
+  expect(scopes).toContain(await page.getByLabel('Scope type').inputValue());
+ }
+ const member=persisted.membershipId;
+ for(const kind of ['member.invite','grant.create']){
+  const result=await post(page,{kind,role:'finance',scope:{kind:'team',id:persisted.teams[0].id},contractId:null,...(kind==='member.invite'?{email:'finance@fictional.invalid',clientId:null}:{membershipId:member})},persisted.revision);
+  expect(result.status()).toBe(422);expect((await result.json()).code).toBe('INVALID_COMMAND');
+ }
+ expect(await view(page)).toEqual(persisted);await page.reload();await expect(page.getByTestId('contractor-revision')).toHaveText('0');
  await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toHaveCount(1);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });
