@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { buildRecoveryMessage, sha256 } from "@jobguard/core";
 import { RecoveryMessages } from "./recovery-messages";
+import { RecoveryCases } from "./recovery-cases";
 import { EvidencePacks } from "./evidence-packs";
 
 const hooks = vi.hoisted(() => ({ values: [] as unknown[] }));
@@ -49,5 +50,16 @@ describe("saved recovery message controls and sources", () => {
     expect(html).toContain("saved proof bytes");
     expect(html).toContain(source.contentHash);
     expect(html).toContain(id(3));
+  });
+});
+
+
+describe('supplier recovery source picker (Sol 5)', () => {
+  it('offers the recorded fictional partial delivery as an explicit selection', () => {
+    hooks.values = [0, [], undefined, '', false, '1000.00', [{ id: id(20), document_type: 'delivery', status: 'ready' }], id(20)];
+    const html = renderToStaticMarkup(createElement(RecoveryCases, { jobId: id(2) }));
+    expect(html).toContain('Fictional delivery source');
+    expect(html).toContain(`value="${id(20)}"`);
+    expect(html).toContain('materials-B partial delivery — 10 each delivered, 8 accepted');
   });
 });

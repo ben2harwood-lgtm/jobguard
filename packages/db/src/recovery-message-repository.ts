@@ -163,6 +163,8 @@ export class RecoveryMessageRepository {
     };
     const mutation: CommandMutation<{ messageId: string; outboxActionId: string; authorizationId: string }> = {
       mutate: async (db, authorised) => {
+        // The dispatcher already owns the receipt; take pack command identity before the case, matching begin().
+        await this.refuseEvidencePackCommand(db, ctx.tenantId, input.commandId);
         await this.lockCase(db, ctx.tenantId, caseId);
         const row = await this.messageRow(db, ctx.tenantId, caseId, messageId), revision = await this.revisionOf(db, ctx.tenantId, messageId);
         if (revision !== input.expectedRevision) fail("RECOVERY_MESSAGE_STALE_REVISION");
@@ -264,7 +266,7 @@ export class RecoveryMessageRepository {
       await this.lockCase(db, ctx.tenantId, caseId);
       // A declined execution or a changed-source refusal has no effect. Persist the block before recording its history.
       await db.$client.query(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
-        WHERE o.tenant_id=$1 AND o.id=$2 AND (o.status='pending' OR (o.status='retryable' AND EXISTS(
+        WHERE o.tenant_id=$1 AND o.id=$2 AND (o.status='pending' OR (o.status IN ('retryable','dead_letter') AND EXISTS(
           SELECT 1 FROM app.action_attempt t WHERE t.tenant_id=o.tenant_id AND t.action_id=o.id AND t.error_code='FAKE_BLOCKED_CHANGED'
           AND t.attempt_number=(SELECT max(x.attempt_number) FROM app.action_attempt x WHERE x.tenant_id=o.tenant_id AND x.action_id=o.id))))`, [ctx.tenantId, claimed.outboxId]);
       await this.finishHistory(db, ctx.tenantId, caseId);
@@ -325,9 +327,8 @@ export class RecoveryMessageRepository {
     return lockRecoveryCase(db, tenantId, caseId);
   }
 
-  /** Lock order is fixed: command identity, then case, then rows; the audit append is always last. */
   /**
-   * Lock order is fixed and matches the shared dispatcher: command identity, owner, shared receipt, then case; rows after;
+   * Lock order matches the shared dispatcher: command identity, owner, shared receipt, pack command identity, then case; rows after;
    * the audit append is always last. Returns whether this transaction newly claimed the command id (true when no claim was asked).
    */
   private async begin(db: TenantTransaction, tenantId: string, caseId: string, commandId: string, actor: RecoveryMessageActor, lockCase = true,
@@ -342,14 +343,28 @@ export class RecoveryMessageRepository {
     // The receipt is claimed BEFORE the case lock, in the same order as UserCommandDispatcher (receipt, then the approval's case lock),
     // so a racing approval with the same id meets a typed conflict instead of a deadlock (Codex P2 4196435988).
     const claimed = claim ? await this.claim(db, tenantId, commandId, claim.action, claim.requestHash, actor) : true;
+    await this.refuseEvidencePackCommand(db, tenantId, commandId);
     if (lockCase) await this.lockCase(db, tenantId, caseId);
     return claimed;
   }
 
   /**
+   * Evidence-pack commands currently register in their own tables. Hold their real command lock while checking both
+   * tables, in the same transaction as the recovery receipt/effect. Approval repeats this check inside its dispatcher
+   * transaction. Receipt comes first to avoid inversion with another recovery approval; case and audit come later.
+   * Reverse refusal belongs to EvidencePackRepository's lane: it must also inspect/register shared receipts.
+   */
+  private async refuseEvidencePackCommand(db: TenantTransaction, tenantId: string, commandId: string) {
+    await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [tenantId, `pack-command:${commandId}`]);
+    const used = await db.$client.query(`SELECT 1 FROM app.evidence_pack_revision WHERE tenant_id=$1 AND command_id=$2
+      UNION ALL SELECT 1 FROM app.evidence_pack_attachment_approval WHERE tenant_id=$1 AND command_id=$2 LIMIT 1`, [tenantId, commandId]);
+    if (used.rowCount) fail("RECOVERY_MESSAGE_COMMAND_CONFLICT");
+  }
+
+  /**
    * Claims a new command id in the shared receipt table, in the same transaction as its first effect. The family advisory
-   * lock does not serialise against other command families, but the receipt primary key does, so a concurrent command of
-   * any family with the same id can no longer also commit (AGENTS.md:131). Approval claims through the shared dispatcher.
+   * lock does not serialise against other command families, but the receipt primary key fences families that use shared
+   * registration. Legacy pack tables additionally use refuseEvidencePackCommand(). Approval claims through the dispatcher.
    */
   private async claim(db: TenantTransaction, tenantId: string, commandId: string, action: string, requestHash: string, actor: RecoveryMessageActor): Promise<boolean> {
     const claimed = await db.$client.query(
@@ -416,12 +431,11 @@ export class RecoveryMessageRepository {
         "SELECT status,claimed_at FROM app.action_outbox WHERE tenant_id=$1 AND id=$2 FOR SHARE", [tenantId, m.outbox_action_id])).rows[0];
       if (!fact) continue;
       m.outbox_status = fact.status; m.claimed_at = fact.claimed_at;
-      // A worker that drives the shared executor directly records a changed-source refusal as `retryable`, because the executor
-      // has no terminal refusal. Nothing was sent and no retry can succeed, so it is closed here as blocked, exactly as advance()
-      // closes it, and a replacement can be previewed (Codex P2 4197743212).
-      if (fact.status === "retryable") {
+      // Direct execution may leave a definite changed-source refusal retryable or exhausted (dead_letter). Neither can
+      // succeed on retry. Close only a latest changed-source refusal as blocked and release replacement preview (Sol 3).
+      if (fact.status === "retryable" || fact.status === "dead_letter") {
         const closed = await db.$client.query(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
-          WHERE o.tenant_id=$1 AND o.id=$2 AND o.status='retryable' AND EXISTS(
+          WHERE o.tenant_id=$1 AND o.id=$2 AND o.status IN ('retryable','dead_letter') AND EXISTS(
             SELECT 1 FROM app.action_attempt t WHERE t.tenant_id=o.tenant_id AND t.action_id=o.id AND t.error_code=$3
             AND t.attempt_number=(SELECT max(x.attempt_number) FROM app.action_attempt x WHERE x.tenant_id=o.tenant_id AND x.action_id=o.id))`,
           [tenantId, m.outbox_action_id, RECOVERY_MESSAGE_BLOCKED_CODE]);

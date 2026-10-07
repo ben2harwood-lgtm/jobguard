@@ -1096,7 +1096,7 @@
             "description": ""
           }
         },
-        "summary": "Preview the exact factual practice message bound to the attachment-approved evidence pack",
+        "summary": "Preview the exact factual practice message bound to the attachment-approved evidence pack; exact replays return current case/message state",
         "tags": [
           "recovery-messages"
         ]
@@ -1111,7 +1111,7 @@
             "description": ""
           }
         },
-        "summary": "Approve, revoke, advance or reconcile a practice message by an exact versioned command",
+        "summary": "Approve, revoke, advance or reconcile a practice message by an exact versioned command; exact replays return current case/message state",
         "tags": [
           "recovery-messages"
         ]

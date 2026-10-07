@@ -20,3 +20,6 @@
 .history{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #ccd8cf}
 .sink{margin-top:1rem;padding:.8rem;border:1px dashed #7d9a87;border-radius:.6rem;background:#fff}
 @media (prefers-color-scheme:dark){.panel{background:#18241d;color:#e8f1ea;border-color:#47604f}.panel a{color:#9fd8b8}.preview,.sink,.panel input,.panel select,.panel textarea{background:#101a14;color:#e8f1ea}.status{background:#25382c}.error{background:#3a1d17;color:#ffd9cf}.changed{background:#3a2e12}}
+.deliveryPicker{display:block;margin-block:.8rem .35rem;font-weight:650}
+.deliverySelect{display:block;min-height:44px;width:100%;max-width:100%;min-width:0;padding:.65rem;border:1px solid #a8b7ae;border-radius:.5rem;background:#fff;color:inherit}
+.deliverySelect:focus-visible{outline:3px solid #bf7500;outline-offset:3px}

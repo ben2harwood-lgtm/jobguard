@@ -10,13 +10,13 @@ import { EvidencePackRepository, MIGRATION_URLS, RecoveryMessageRepository, migr
 import { closeTestPools } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
 
-// Upgrade path for 0045 on a database that is really at 0042 and already holds recovery cases and evidence packs,
+// Upgrade path for 0099 on a database that is at the previous supported schema (through 0053) and already holds recovery cases and evidence packs,
 // applied by the non-superuser migration role the Neon/Vercel bootstrap uses (FORCE RLS applies to that owner).
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 let fixture: Awaited<ReturnType<typeof seedEvidencePackFixture>>;
 let context: VerifiedTenantContext, packId: string, manifestHash: string, contentHash: string;
 const nameOf = (url: URL) => fileURLToPath(url).split('/').at(-1)!;
-const migration0045 = MIGRATION_URLS.find(url => nameOf(url).startsWith('0045_'))!;
+const migration0099 = MIGRATION_URLS.find(url => nameOf(url).startsWith('0099_'))!;
 const history = async () => (await admin.query(`SELECT
   (SELECT md5(coalesce(string_agg(id::text||manifest_hash||content_hash||coalesce(artifact_text,''),',' ORDER BY id),'')) FROM app.evidence_pack_revision) AS packs,
   (SELECT md5(coalesce(string_agg(id::text||manifest_hash||content_hash,',' ORDER BY id),'')) FROM app.evidence_pack_attachment_approval) AS approvals,
@@ -31,10 +31,10 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
   admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'postgres' });
-  // A real 0042 database: apply every migration the runner would, stop before 0045.
+  // A real previous-release database (through 0053): apply every migration the runner would, stop before 0099.
   await admin.query('CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())');
   for (const url of MIGRATION_URLS) {
-    if (nameOf(url).startsWith('0045_')) break;
+    if (nameOf(url).startsWith('0099_')) break;
     await admin.query(await readFile(fileURLToPath(url), 'utf8'));
     await admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)', [nameOf(url)]);
   }
@@ -50,16 +50,16 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
-describe('0045 upgrade from a populated 0042 database', () => {
+describe('0099 upgrade from a populated previous supported schema (through 0053)', () => {
   it('is absent before the upgrade and applies under the migration role without touching existing records', async () => {
     expect((await admin.query("SELECT to_regclass('app.recovery_message') IS NOT NULL AS present")).rows[0].present).toBe(false);
     const before = await history();
     const client = await admin.connect();
     try {
       await client.query('SET ROLE jobguard_migration');
-      await client.query(await readFile(fileURLToPath(migration0045), 'utf8'));
+      await client.query(await readFile(fileURLToPath(migration0099), 'utf8'));
     } finally { await client.query('RESET ROLE').catch(() => undefined); client.release(); }
-    await admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)', [nameOf(migration0045)]);
+    await admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)', [nameOf(migration0099)]);
     // Everything the previous release wrote is byte-for-byte unchanged: packs, approvals, cases, decisions and audit chain.
     expect(await history()).toEqual(before);
     const tables = (await admin.query(`SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,(SELECT count(*)::int FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped) columns

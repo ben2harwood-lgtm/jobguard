@@ -1117,3 +1117,127 @@ describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
     expect(await count('SELECT count(*) n FROM app.recovery_message WHERE tenant_id=$1 AND case_id=$2', [fixture.tenantId, caseId])).toBe(0);
   });
 });
+
+// Ben's Command Center decision, 7 October 2026: exact replays return CURRENT case/message state.
+describe('current-state replay contract (Ben, 7 October)', () => {
+  it('replays preview, approval and an earlier failed advance after delivery, without another effect', async () => {
+    const { caseId } = await attached();
+    const preview = previewCommand(await repo.read(context, caseId));
+    const first = await repo.preview(context, caseId, preview, actor);
+    const approval = approveCommand(first.latest!);
+    const queued = await repo.command(context, caseId, approval, actor);
+    expect(await repo.preview(context, caseId, preview, actor)).toEqual(queued);
+    const advance = advanceCommand(queued.latest!, 'definite_failure');
+    const retry = await repo.command(context, caseId, advance, actor);
+    const done = await repo.command(context, caseId, advanceCommand(retry.latest!), actor);
+    expect(done.latest!.status).toBe('simulated_delivery');
+    expect(await repo.preview(context, caseId, preview, actor)).toEqual(done);
+    for (const command of [approval, advance]) expect(await repo.command(context, caseId, command, actor)).toEqual(done);
+    expect(await code(() => repo.preview(context, caseId, { ...preview, expectedCaseRevision: preview.expectedCaseRevision + 1 }, actor))).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+    for (const command of [approval, advance]) expect(await code(() => repo.command(context, caseId, { ...command, expectedRevision: command.expectedRevision + 1 }, actor))).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+    expect(await sinkCount(first.latest!.id)).toBe(1);
+    expect(await attemptCount(done.latest!.approval!.outboxActionId)).toBe(2);
+  });
+
+  it('replays revoke (cancel) after a replacement is approved and returns the replacement plus cancelled history', async () => {
+    const { caseId, view } = await approved();
+    const cancel = simple('revoke', view);
+    const revoked = await repo.command(context, caseId, cancel, actor);
+    const replacement = await repo.preview(context, caseId, previewCommand(revoked), actor);
+    const current = await repo.command(context, caseId, approveCommand(replacement.latest!), actor);
+    expect(current.latest!.id).not.toBe(view.id);
+    expect(current.messages[0]!.status).toBe('revoked');
+    expect(await repo.command(context, caseId, cancel, actor)).toEqual(current);
+    expect(await code(() => repo.command(context, caseId, { ...cancel, expectedRevision: cancel.expectedRevision + 1 }, actor))).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+    expect(current.sinkCount).toBe(0);
+  });
+
+  it('replays reconciliation and the unknown advance after a later retry delivers', async () => {
+    const { caseId, view } = await approved();
+    const advance = advanceCommand(view, 'no_response');
+    const unknown = await repo.command(context, caseId, advance, actor);
+    const reconcile = simple('reconcile', unknown.latest!);
+    const retry = await repo.command(context, caseId, reconcile, actor);
+    expect(retry.latest!.status).toBe('retryable');
+    const done = await repo.command(context, caseId, advanceCommand(retry.latest!), actor);
+    for (const command of [advance, reconcile]) {
+      expect(await repo.command(context, caseId, command, actor)).toEqual(done);
+      expect(await code(() => repo.command(context, caseId, { ...command, expectedRevision: command.expectedRevision + 1 }, actor))).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+    }
+    expect(done.sinkCount).toBe(1);
+    expect(done.latest!.attempts).toBe(2);
+  });
+});
+
+describe('terminal changed-source refusal in real PostgreSQL (Sol 3)', () => {
+  it('cancels an exhausted refusal, appends blocked history and releases a replacement preview', async () => {
+    const { caseId, view } = await approved();
+    let current = view;
+    // Four genuine definite failures through the real service; the fifth attempt hits the real changed-source adapter.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      current = (await repo.command(context, caseId, advanceCommand(current, 'definite_failure'), actor)).latest!;
+      expect(current.status).toBe('retryable');
+    }
+    await amend(caseId, 32400);
+    await executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('dead_letter');
+    expect((await admin.query('SELECT outcome,error_code FROM app.action_attempt WHERE action_id=$1 AND attempt_number=5', [view.approval!.outboxActionId])).rows)
+      .toEqual([{ outcome: 'failed', error_code: 'FAKE_BLOCKED_CHANGED' }]);
+    const blocked = await repo.read(context, caseId);
+    expect(blocked.latest!.status).toBe('blocked');
+    expect(blocked.latest!.history.at(-1)!.kind).toBe('blocked');
+    expect(await outboxStatus(view.approval!.outboxActionId)).toBe('cancelled');
+    expect(await sinkCount(view.id)).toBe(0);
+    const pack = await packs.generate(context, caseId, { commandId: randomUUID() }, actor.actorRef);
+    await packs.approveAttachment(context, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
+    const replacement = await repo.preview(context, caseId, previewCommand(await repo.read(context, caseId)), actor);
+    expect(replacement.latest).toMatchObject({ sequence: 2, status: 'previewed' });
+    expect(replacement.messages[0]!.status).toBe('blocked');
+    expect(await repo.read(context, caseId)).toEqual(replacement);
+  });
+});
+
+// EvidencePackRepository is outside this lane. Its reverse ownership check is a required follow-up, not waived.
+describe('recovery refuses real evidence-pack command IDs (Sol 4, recovery half)', () => {
+  it.each(['generate', 'approve_attachment'] as const)('sequential %s IDs conflict on every recovery action with no recovery effect', async family => {
+    const { caseId: packCase, pack } = await attached();
+    const commandId = randomUUID();
+    if (family === 'generate') await packs.generate(context, packCase, { commandId }, actor.actorRef);
+    else await packs.approveAttachment(context, packCase, pack.id, { commandId, expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
+    const base = await approved();
+    const ready = await repo.read(context, base.caseId);
+    for (const run of [
+      () => repo.preview(context, base.caseId, previewCommand(ready, commandId), actor),
+      ...[approveCommand(base.view, commandId), advanceCommand(base.view, 'success', commandId), simple('revoke', base.view, commandId), simple('reconcile', base.view, commandId)]
+        .map(command => () => repo.command(context, base.caseId, command, actor)),
+    ]) expect(await code(run)).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+    expect(await repo.read(context, base.caseId)).toEqual(ready);
+    expect(await count('SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2', [fixture.tenantId, commandId])).toBe(0);
+  });
+
+  it.each([['generate', 'preview'], ['approve_attachment', 'preview'], ['generate', 'approve'], ['approve_attachment', 'approve']] as const)('waits for concurrent real %s before refusing recovery %s on another case', async (family, action) => {
+    const base = await previewed(), packCase = await attached();
+    const commandId = randomUUID(), preview = previewCommand(base.state, commandId);
+    const holder = await admin.connect();
+    const waiting = async (key: string) => (await admin.query("SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted AND objid::bigint=(hashtext($1)::bigint & 4294967295)", [key])).rowCount !== 0;
+    let packOutcome: Promise<unknown> | undefined, messageOutcome: Promise<string> | undefined;
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [fixture.tenantId, packCase.caseId]);
+      packOutcome = family === 'generate'
+        ? packs.generate(context, packCase.caseId, { commandId }, actor.actorRef)
+        : packs.approveAttachment(context, packCase.caseId, packCase.pack.id, { commandId, expectedManifestHash: packCase.pack.manifestHash, expectedContentHash: packCase.pack.contentHash }, actor.actorRef);
+      // Observe real service lock acquisition; no fictional family rows or timing sleeps choose the winner.
+      await until(() => waiting(packCase.caseId), 'the real pack service case lock');
+      messageOutcome = code(() => action === 'preview' ? repo.preview(context, base.caseId, preview, actor) : repo.command(context, base.caseId, approveCommand(base.view, commandId), actor));
+      await until(() => waiting(`pack-command:${commandId}`), 'recovery waiting on the pack command identity');
+      await holder.query('COMMIT');
+      await packOutcome;
+      expect(await messageOutcome).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+      expect(await repo.read(context, base.caseId)).toEqual(base.state);
+    } finally {
+      await holder.query('ROLLBACK').catch(() => undefined); holder.release();
+      await Promise.allSettled([packOutcome, messageOutcome].filter(Boolean));
+    }
+  });
+});

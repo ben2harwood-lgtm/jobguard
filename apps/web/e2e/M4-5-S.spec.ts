@@ -183,21 +183,44 @@ test("uses supplier wording and recipient, shows an unknown outcome as unknown, 
   const requirement = (await get(page, `/api/jobs/${source.jobId}/materials`)).materials.at(-1);
   await post(page, `/api/jobs/${source.jobId}/purchase-orders/revisions`, { version: "purchase-order-draft.v1", requirementId: requirement.id, quantity: "40", unitPricePence: 2000, recipient: "orders@fictional-merchant.invalid", requiredDate: "2026-10-01", expectedRevision: 0 });
   const documentsPath = `/api/jobs/${source.jobId}/supplier-documents`;
+  await page.goto(`/jobs/${source.jobId}#supplier-documents`);
   for (const fixtureId of ["materials-B-delivery", "materials-320-invoice"]) {
-    const before = await get(page, documentsPath);
-    await post(page, `${documentsPath}/intake`, { version: "supplier-document-intake.v1", fixtureId, channel: "picker", expectedRevision: before.state.intakeRevision });
+    await expect(page.getByLabel("Generated document", { exact: true })).toBeEnabled();
+    await page.getByLabel("Generated document", { exact: true }).selectOption(fixtureId);
+    const imported = page.waitForResponse(response => response.url().endsWith("/supplier-documents/intake") && response.request().method() === "POST");
+    await click(page, "Import generated document");
+    expect((await imported).ok()).toBe(true);
+    await expect(button(page, "Import generated document")).toBeEnabled();
   }
   const documents = (await get(page, documentsPath)).state;
   const invoice = documents.facts.filter((fact: { document_number: string }) => fact.document_number === "INV-M320-001").at(-1);
   const delivery = documents.documents.find((document: { document_type: string; status: string }) => document.document_type === "delivery" && document.status === "ready");
-  // The workbench's own picker attaches only the agreement and invoice; a message needs a pack with no omissions, so the case
-  // names the recorded delivery note too. This is the supplied practice records, not a rule about real supplier documents.
-  await post(page, `/api/jobs/${source.jobId}/recovery-cases`, {
-    version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "merchant_overcharge", claimedNetPence: 32000, counterparty: "Fictional Builders Merchant",
-    book: "supplier_cost", sourceType: "supplier_documents", sourceRefs: [rate.id, invoice.version_id, delivery.id], reviewerRef: "practice-owner", expectedRevision: 0,
-  });
-  const caseId = ((await get(page, `/api/jobs/${source.jobId}/recovery-cases`)).cases.at(-1)).id as string;
-  await page.goto(`/jobs/${source.jobId}#recovery-cases`);
+  // This fixture is a partial delivery against this very job's order, not an assertion that 40 units were delivered.
+  expect(documents.receipt).toMatchObject({ ordered: "40", delivered: "10", accepted: "8", missing: "32" });
+  const database = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
+  const client = await database.connect();
+  try {
+    await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    const associated = await client.query(`SELECT r.document_id,r.ordered_quantity::text,d.job_id
+      FROM app.goods_receipt r JOIN app.purchase_order_draft d ON (d.tenant_id,d.id)=(r.tenant_id,r.order_draft_id)
+      WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.document_id=$3`, [DEMO_TENANT_ID, source.jobId, delivery.id]);
+    expect(associated.rows).toHaveLength(1);
+    expect(associated.rows[0]).toMatchObject({ document_id: delivery.id, job_id: source.jobId });
+    expect(Number(associated.rows[0].ordered_quantity)).toBe(40);
+  } finally { await client.query("ROLLBACK"); client.release(); await database.end(); }
+  // Both source selection and case opening use the visible UI. GETs only inspect their authoritative result.
+  await page.reload();
+  const picker = page.getByLabel("Fictional delivery source", { exact: true });
+  await picker.focus(); await expect(picker).toBeFocused();
+  expect(await picker.evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe("none");
+  const bounds = await picker.boundingBox(); expect(bounds).not.toBeNull();
+  expect(bounds!.height).toBeGreaterThanOrEqual(44); expect(bounds!.width).toBeGreaterThanOrEqual(44);
+  await picker.selectOption(delivery.id);
+  await click(page, "Open materials-320 overcharge");
+  await V(page, "case-claimed-net", "£320.00");
+  const opened = (await get(page, `/api/jobs/${source.jobId}/recovery-cases`)).cases.at(-1);
+  expect(opened.sourceRefs).toEqual([rate.id, invoice.version_id, delivery.id]);
+  const caseId = opened.id as string;
   await click(page, "Build evidence pack");
   await expect(page.getByTestId("pack-state")).toHaveText("Sources mapped — inspect the evidence");
   await click(page, "Approve this pack for attachment");

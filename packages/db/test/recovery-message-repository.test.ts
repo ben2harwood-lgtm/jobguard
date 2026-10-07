@@ -86,3 +86,40 @@ describe('two-context approval identity (P2-8)', () => {
     } finally { dispatch.mockRestore(); }
   });
 });
+
+
+describe('terminal changed-source refusal normalisation (Sol 3)', () => {
+  it('closes a terminal refusal as blocked rather than retaining a failed live effect', async () => {
+    const { repo, history } = interrupted('started');
+    const service = repo as unknown as { [key: string]: (...args: any[]) => Promise<any> };
+    const row = { id: id(6), job_id: id(2), outbox_action_id: id(8), outbox_status: 'dead_letter',
+      content_hash: 'a'.repeat(64), approving_membership_id: actor.membershipId };
+    service.messageRows = async () => [row];
+    const db = { $client: { query: async (sql: string) => {
+      if (sql.startsWith('UPDATE app.action_outbox')) return { rows: [], rowCount: 1 };
+      if (sql.includes('FROM app.action_outbox')) return { rows: [{ status: 'dead_letter', claimed_at: null }], rowCount: 1 };
+      if (sql.includes('FROM app.recovery_message_event')) return { rows: history.map((kind, i) => ({ kind, revision: i + 1, command_id: id(50), request_hash: 'c'.repeat(64), actor_membership_id: actor.membershipId })), rowCount: history.length };
+      if (sql.includes('FROM app.action_attempt')) return { rows: [{ id: id(90), attempt_number: 5, outcome: 'failed', error_code: 'FAKE_BLOCKED_CHANGED' }], rowCount: 1 };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    } } };
+    await service.finishHistory!(db, ctx.tenantId, id(1));
+    expect(row.outbox_status).toBe('cancelled');
+    expect(history.at(-1)).toBe('blocked');
+  });
+});
+
+describe('real evidence-pack command ownership boundary (Sol 4)', () => {
+  it.each(['generation', 'attachment approval'])('refuses an id owned by pack %s before recording a recovery effect', async family => {
+    const repo = new RecoveryMessageRepository({} as Pool);
+    const service = repo as unknown as { [key: string]: (...args: any[]) => Promise<any> };
+    service.lockCase = async () => undefined;
+    const db = { $client: { query: async (sql: string) => {
+      if (sql.includes('pg_advisory') || sql.includes('INSERT INTO app.command_receipt')) return { rows: [], rowCount: 1 };
+      if (sql.includes('app.evidence_pack_revision') || sql.includes('app.evidence_pack_attachment_approval')) return { rows: [{ family }], rowCount: 1 };
+      if (sql.includes('app.recovery_case') || sql.includes('app.membership')) return { rows: [{}], rowCount: 1 };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    } } };
+    await expect(service.begin!(db, ctx.tenantId, id(1), id(50), actor, true, { action: 'preview', requestHash: 'c'.repeat(64) }))
+      .rejects.toMatchObject({ code: 'RECOVERY_MESSAGE_COMMAND_CONFLICT' });
+  });
+});
