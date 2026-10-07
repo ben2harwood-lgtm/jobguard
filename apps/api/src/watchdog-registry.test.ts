@@ -15,6 +15,7 @@ import { EvidenceError, ProofCommandError, WatchdogError } from "@jobguard/db";
 import { ProofApplication, ProofApplicationError, finalizeFailure } from "./proof/proof.application.js";
 import { WatchdogExceptionFilter } from "./watchdog.filter.js";
 const root = new URL("../../../", import.meta.url);
+const watchdogMigration = MIGRATION_URLS.find(url => url.pathname.endsWith("_watchdog_live.sql"))!;
 const MUTATION_VERBS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 type Reader = (file: string) => string | undefined;
 const bindingNames = (name: ts.BindingName): string[] => ts.isIdentifier(name) ? [name.text]
@@ -312,6 +313,59 @@ describe("CH-2 command coverage and lock order", () => {
   });
 });
 
+describe("round 10 deployed Next conflict adapters", () => {
+  const routes = [
+    { path: "purchase-orders/revisions", service: "purchaseOrders", method: "revise", kind: "purchase_order.revise" },
+    { path: "supplier-documents/intake", service: "supplierDocuments", method: "intake", kind: "supplier_document.intake" },
+    { path: "supplier-documents/receipts", service: "supplierDocuments", method: "receipt", kind: "supplier_document.receipt" },
+    { path: "relevance-inbox/decisions/[decisionId]", service: "inboxRelevance", method: "dismiss", kind: "inbox.dismiss" },
+    { path: "proof", service: "proof", method: "command", kind: "evidence.begin_upload" },
+  ] as const;
+  it.each(routes.flatMap(route => ["payload", "kind", "job"].map(change => ({ ...route, change }))))(
+    "$path returns Nest's stable 409 for changed $change from the real identity claim", async route => {
+      const spec = { tenantId: "11111111-1111-4111-8111-111111111111", commandId: replayCommand,
+        jobId: replayJob, kind: route.kind, requestHash: "a".repeat(64) };
+      const original = { job_id: route.change === "job" ? otherJob : spec.jobId,
+        command_type: route.change === "kind" ? "readiness.record" : spec.kind,
+        request_hash: route.change === "payload" ? "b".repeat(64) : spec.requestHash };
+      const database = { $client: { query: async (sql: string) => ({
+        rows: sql.startsWith("SELECT job_id,command_type,request_hash") ? [original] : [], rowCount: 0,
+      }) } } as unknown as TenantTransaction;
+      const error = await claimCommandIdentity(database, spec).catch(e => e);
+      expect(error).toBeInstanceOf(WatchdogError);
+      const nest = dispatchConflict(error);
+      expect(nest).toEqual({ status: 409, body: { code: "IDEMPOTENCY_CONFLICT" } });
+      const refuse = vi.fn().mockRejectedValue(error);
+      routeApplication.current = { [route.service]: { [route.method]: refuse } };
+      const handler = await import(fileURLToPath(new URL(`apps/web/app/api/jobs/[id]/${route.path}/route.ts`, root)));
+      const body = { commandId: replayCommand, version: "synthetic-conflict-probe.v1" };
+      const response = await handler.POST(new Request("https://synthetic.invalid/conflict", { method: "POST", body: JSON.stringify(body) }),
+        { params: Promise.resolve({ id: replayJob, decisionId: scopeId }) });
+      expect(refuse).toHaveBeenCalledWith(...(route.method === "dismiss" ? [replayJob, scopeId, body] : [replayJob, body]));
+      expect({ status: response.status, body: await response.json() }).toEqual(nest);
+    },
+  );
+});
+
+describe("round 10 browser setup and migration portability source checks", () => {
+  it("opens the second page by job deep link in its existing session, preserving the changed-job assertion", async () => {
+    const source = await readFile(new URL("apps/web/e2e/CH-2.spec.ts", root), "utf8");
+    const setup = source.split("const otherPage = await page.context().newPage();")[1]!.split("await otherPage.close();")[0]!;
+    expect(setup).not.toContain("openLiveWatchdogJob(otherPage)");
+    expect(setup).toContain("await otherPage.goto(`/jobs/${");
+    expect(setup).toContain('expect(otherJobId).not.toBe(jobId)');
+    expect(setup).toContain('expect(changedJob.status()).toBe(409)');
+    expect(setup).toContain('expect(await changedJob.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" })');
+  });
+  it.each(["watchdog-migration-owner", "UIWIRE-12", "demo-bootstrap"])("%s selects migration names and uses the registered total", async name => {
+    const source = await readFile(new URL(`packages/db/test/${name}.integration.test.ts`, root), "utf8");
+    expect(source).not.toMatch(/(?:toHaveLength|toBe)\(45\)|migrations: 45/u);
+    expect(source).not.toMatch(/previous\.at\(-1\).*0053/u);
+    expect(source).not.toContain('const TARGET = "0096_watchdog_live.sql"');
+    expect(source).not.toContain("BETWEEN '0000_tenancy.sql' AND '0096_watchdog_live.sql'");
+  });
+});
+
 describe("proof finalisation failures", () => {
   it("answers a command id reused with another request as a conflict (409), not an invalid proof (Codex P2 4197412772)", () => {
     const answer = finalizeFailure(new EvidenceError("COMMAND_CONFLICT"));
@@ -361,19 +415,24 @@ describe("watchdog identity conflicts at the Nest boundary", () => {
     expect(error).toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
   });
   it("keeps the previous-writer id reservation non-blocking after audit", async () => {
-    const migration = await readFile(new URL("packages/db/migrations/0096_watchdog_live.sql", root), "utf8");
+    const migration = await readFile(watchdogMigration, "utf8");
     const body = migration.split("CREATE FUNCTION app.reserve_watchdog_command_id()")[1]!.split("END $$;")[0]!;
     expect(body).toMatch(/IF NOT pg_try_advisory_xact_lock\([\s\S]+?RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'/u);
     expect(body).not.toMatch(/PERFORM pg_advisory_xact_lock/u);
   });
 });
 
-it("registers CH-2 last, after the merged SH-1 schema, with unchanged migration count", () => {
+it("registers every migration once, with CH-2 last and after the merged SH-1 schema", async () => {
   const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!);
-  expect(names).toHaveLength(45);
-  expect(new Set(names).size).toBe(45);
-  expect(names.at(-1)).toBe("0096_watchdog_live.sql");
-  expect(names.at(-2)).toBe("0053_shared_money_origin.sql");
+  const files = (await readdir(new URL("packages/db/migrations/", root))).filter(name => name.endsWith(".sql")).sort();
+  expect(names).toEqual(files);
+  expect(files).toHaveLength(MIGRATION_URLS.length);
+  expect(new Set(names).size).toBe(MIGRATION_URLS.length);
+  expect(names.filter(name => name.endsWith("_watchdog_live.sql"))).toHaveLength(1);
+  expect(names.at(-1)).toBe(watchdogMigration.pathname.split("/").at(-1));
+  const sharedIndex = names.findIndex(name => name.endsWith("_shared_money_origin.sql"));
+  expect(sharedIndex).toBeGreaterThan(-1);
+  expect(sharedIndex).toBeLessThan(names.length - 1);
   expect(names).toEqual([...names].sort());
 });
 

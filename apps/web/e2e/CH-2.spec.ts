@@ -56,8 +56,12 @@ test("watchdog panels require the persisted live state and retain authoritative 
   const changedKind = await page.request.post(`/api/jobs/${jobId}/readiness/advance`, { data: { version: "readiness-clock.v1", commandId: readinessId, scenarioNow: readiness.scenarioNow } });
   expect(changedKind.status()).toBe(409); expect(await changedKind.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" });
   const otherPage = await page.context().newPage();
-  await openLiveWatchdogJob(otherPage);
-  const otherJobId = (await otherPage.locator(".quote-editor").getAttribute("data-job-id"))!;
+  // This context is already signed in: reopen the seeded live job directly.
+  await otherPage.goto(`/jobs/${seededJobs[0].id}`);
+  await expect(otherPage.getByTestId("job-status")).toHaveText(seededJobs[0].label);
+  const otherJobId = (await otherPage.getByTestId("job-id").textContent())!;
+  expect(otherJobId).toBe(seededJobs[0].id);
+  expect((await jsonResult(otherPage.request.get(`/api/jobs/${otherJobId}`), "Read second live job")).job.status).toBe("live");
   expect(otherJobId).not.toBe(jobId);
   const changedJob = await page.request.post(`/api/jobs/${otherJobId}/readiness/plan`, { data: readiness });
   expect(changedJob.status()).toBe(409); expect(await changedJob.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" });

@@ -218,6 +218,7 @@ set; claims are made outside savepoints. A store that holds at most one row per 
 claim can safely wait for a previous-schema write, then recheck its committed ownership. A previous-schema write
 racing a claim conflicts immediately; it must roll back before retrying. This avoids the audit-first versus claim-first
 lock cycle while retaining database enforcement (Ben: "keep triggers", Command Center, 7 October 2026).
+Any previous-schema write that meets another open writer of the same id, including another previous-schema retry such as a concurrent begin-upload retry, conflicts immediately instead of waiting, fails safe, and must be retried after that writer ends.
 
 **Isolation assumption:** supported previous and current application transactions use PostgreSQL READ COMMITTED
 (plain `BEGIN` in `withTenant`). The trigger ownership lookup needs a fresh statement snapshot after acquiring the

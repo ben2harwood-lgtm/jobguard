@@ -38,7 +38,8 @@ beforeAll(async () => {
   // Upgrade fixture: these rows existed in the preceding supported schema, where
   // proof uploads were possible before/after live. No guard is bypassed/disabled.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for (const url of MIGRATION_URLS.filter(url => basename(fileURLToPath(url)) < "0096")) { // the schema before CH-2's 0096, whatever follows it
+  const watchdogMigration = MIGRATION_URLS.find(url => url.pathname.endsWith("_watchdog_live.sql"))!;
+  for (const url of MIGRATION_URLS.filter(url => basename(fileURLToPath(url)) < basename(fileURLToPath(watchdogMigration)))) { // the schema before CH-2, whatever its number
     await admin.query(await readFile(url, "utf8"));
     await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)", [basename(fileURLToPath(url))]);
   }

@@ -16,9 +16,9 @@ import { closeTestPools } from "./pool-test-utils.js";
 // that (a) the link is found, (b) nothing is half-applied, (c) FORCE RLS is intact
 // afterwards, and (d) the same migration applies once the legacy row is repaired.
 const name = (url: URL) => basename(fileURLToPath(url));
-const TARGET = "0096_watchdog_live.sql";
+const target = MIGRATION_URLS.find(url => name(url).endsWith("_watchdog_live.sql"))!;
+const TARGET = name(target);
 const previous = MIGRATION_URLS.filter(url => name(url) < TARGET);
-const target = MIGRATION_URLS.find(url => name(url) === TARGET)!;
 const forcedTables = ["job", "scope_identity", "material_requirement", "purchase_order_draft", "evidence_upload", "evidence_object", "evidence_link", "stage_completion", "synthetic_evidence_original"];
 const newConstraints = ["purchase_order_requirement_job_fk", "evidence_upload_job_fk", "evidence_upload_scope_job_fk", "evidence_object_job_fk", "evidence_object_scope_job_fk", "evidence_object_upload_job_fk", "evidence_object_original_job_fk", "evidence_link_evidence_job_fk", "stage_completion_evidence_job_fk", "synthetic_original_upload_job_fk"];
 const tenantA = randomUUID(), tenantB = randomUUID();
@@ -42,14 +42,16 @@ async function applyAsMigrationOwner() {
 // The pre-deploy mislink check is documented in MIGRATIONS.md; the suite runs that exact text.
 async function documentedMislinkCheck() {
   const docs = await readFile(new URL("../MIGRATIONS.md", import.meta.url), "utf8");
-  const sql = docs.match(/```sql\n(-- 0096 pre-deploy check[\s\S]*?)```/u)?.[1];
-  expect(sql, "MIGRATIONS.md must contain the 0096 pre-deploy check").toBeTruthy();
+  const sql = docs.match(/```sql\n(-- \d+ pre-deploy check[\s\S]*?)```/u)?.[1];
+  expect(sql, `MIGRATIONS.md must contain the ${TARGET} pre-deploy check`).toBeTruthy();
   return (await admin.query<{ constraint_name: string; violations: string }>(sql!)).rows.filter(row => Number(row.violations) > 0).map(row => [row.constraint_name, Number(row.violations)]);
 }
 const posture = async () => (await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname", [forcedTables])).rows;
 
 beforeAll(async () => {
-  expect(name(previous.at(-1)!)).toBe("0053_shared_money_origin.sql");
+  expect(previous.some(url => name(url).endsWith("_shared_money_origin.sql"))).toBe(true);
+  expect([...previous, target]).toEqual(MIGRATION_URLS);
+  expect(previous.length + 1).toBe(MIGRATION_URLS.length);
   expect(name(MIGRATION_URLS.at(-1)!)).toBe(TARGET);
   directory = await mkdtemp(join(tmpdir(), "jg-ch2-owner-"));
   const port = 60500 + Math.floor(Math.random() * 400);
