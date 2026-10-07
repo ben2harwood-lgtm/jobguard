@@ -326,3 +326,32 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   for(const table of ['decision','action_authorization','action_outbox','journal','customer_invoice'])expect((await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[p.tenantId])).rows[0].n).toBe(0);
  });
 });
+
+// CH-3b append-only extension of ENT-1's permission × role × scope conformance suite.
+it('CH-3b client customer link requires organisation.manage on the exact client',async()=>{
+ const {ContractorPartyRepository,JobRepository,JobPartiesRepository}=await import('../src/index.js');
+ const links=new ContractorPartyRepository(runtime),jobs=new JobRepository(runtime),registry=new JobPartiesRepository(runtime);
+ const {p,v}=await setup(),branch=v.teams[0]!.branch_id,region=v.units.find(x=>x.kind==='region')!.id;
+ const otherBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:region,name:'Fictional adjacent branch'})).id;
+ const otherRegion=(await command(p,{kind:'unit.create',unitKind:'region',parentId:p.tenantId,name:'Fictional distant region'})).id;
+ const distantBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:otherRegion,name:'Fictional distant branch'})).id;
+ const job=(await jobs.create(verifiedTenantContextFromMembership(p),['job:update'],{title:'Fictional client registry command anchor'})).id;
+ const customer=await registry.command(verifiedTenantContextFromMembership(p),p.membershipId,job,{version:'job-parties-command.v1',commandId:randomUUID(),action:'create_customer',customer:{version:'customer.v1',name:'Fictional insurer',type:'insurer'}});
+ const clientForApprover=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional approver client',clientType:'insurer'})).id;
+ for(const role of contractorRoles)for(const scope of ['tenant','region','branch','team'] as const){
+  if(role==='finance'&&scope!=='tenant'||role==='client_approver'&&scope!=='tenant')continue;
+  const kind=role==='client_approver'?'client':scope;
+  const scopeId=kind==='client'?clientForApprover:kind==='tenant'?p.tenantId:kind==='region'?region:kind==='branch'?branch:v.teams[0]!.id;
+  const actor=await fixtureMember(p,role,kind,scopeId,role==='client_approver'?scopeId:null);
+  for(const targetBranch of [branch,otherBranch,distantBranch]){
+   const clientId=(await command(p,{kind:'client.create',branchId:targetBranch,name:'Fictional scoped registry client',clientType:'insurer'})).id;
+   const raw={version:'contractor-customer-link.v1',environment:'synthetic_demo',commandId:randomUUID(),customerRevisionId:customer.revisionId};
+   const permitted=(role==='owner'||role==='admin')&&(scope==='tenant'||scope==='region'&&targetBranch!==distantBranch||scope==='branch'&&targetBranch===branch);
+   const result=links.linkCustomer(actor,clientId,raw);
+   if(permitted)await expect(result).resolves.toMatchObject({realExternalActions:0});else{
+    await expect(result).rejects.toMatchObject({code:'NOT_FOUND',message:'NOT_FOUND'});
+    await expect(links.linkCustomer(actor,randomUUID(),raw)).rejects.toMatchObject({code:'NOT_FOUND',message:'NOT_FOUND'});
+   }
+  }
+ }
+},60000);
