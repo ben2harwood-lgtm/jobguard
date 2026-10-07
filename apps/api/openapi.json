@@ -360,7 +360,7 @@
             "description": ""
           },
           "409": {
-            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1133,7 +1133,7 @@
             "description": ""
           },
           "409": {
-            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1170,7 +1170,7 @@
             "description": ""
           },
           "409": {
-            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
             "content": {
               "application/json": {
                 "schema": {

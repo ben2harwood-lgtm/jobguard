@@ -5,10 +5,14 @@ import { claimCommandIdentity, MIGRATION_URLS, type TenantTransaction } from "@j
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
+import type { Pool } from "pg";
+import { PurchaseOrderApplication } from "./purchase-order.application.js";
+import { ReadinessApplication } from "./readiness.application.js";
 import { jobMutationRegistry, watchdogCommandGuards } from "@jobguard/core";
 import { EvidenceError, ProofCommandError, WatchdogError } from "@jobguard/db";
-import { ProofApplicationError, finalizeFailure } from "./proof/proof.application.js";
+import { ProofApplication, ProofApplicationError, finalizeFailure } from "./proof/proof.application.js";
 import { WatchdogExceptionFilter } from "./watchdog.filter.js";
 const root = new URL("../../../", import.meta.url);
 const MUTATION_VERBS = ["POST", "PUT", "PATCH", "DELETE"] as const;
@@ -311,7 +315,12 @@ describe("CH-2 command coverage and lock order", () => {
 describe("proof finalisation failures", () => {
   it("answers a command id reused with another request as a conflict (409), not an invalid proof (Codex P2 4197412772)", () => {
     const answer = finalizeFailure(new EvidenceError("COMMAND_CONFLICT"));
-    expect(answer).toBeInstanceOf(ProofApplicationError); expect((answer as ProofApplicationError).code).toBe("CONFLICT");
+    expect(answer).toBeInstanceOf(WatchdogError); expect((answer as WatchdogError).code).toBe("IDEMPOTENCY_CONFLICT");
+  });
+  it("normalizes proof-command replay conflicts to the same stable code", () => {
+    const answer = finalizeFailure(new ProofCommandError("COMMAND_CONFLICT"));
+    expect(answer).toBeInstanceOf(WatchdogError);
+    expect(dispatchConflict(answer)).toEqual({ status: 409, body: { code: "IDEMPOTENCY_CONFLICT" } });
   });
   it("keeps watchdog and proof-command refusals, and treats any other failure as an invalid proof", () => {
     const watchdog = new WatchdogError("JOB_NOT_LIVE"), proof = new ProofCommandError("FORBIDDEN");
@@ -366,4 +375,140 @@ it("registers CH-2 last, after the merged SH-1 schema, with unchanged migration 
   expect(names.at(-1)).toBe("0096_watchdog_live.sql");
   expect(names.at(-2)).toBe("0053_shared_money_origin.sql");
   expect(names).toEqual([...names].sort());
+});
+
+
+// Actual applications/repositories and exception dispatch; only PostgreSQL transport and
+// synthetic session/bootstrap are doubled. No socket, provider, or database guarantee is implied.
+const routeApplication = vi.hoisted(() => ({ current: undefined as unknown }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "synthetic-test-session" }) }) }));
+vi.mock("../../web/app/lib/synthetic-server", () => ({ hasSyntheticSession: () => true }));
+vi.mock("../../web/app/lib/workspace-server", () => ({ workspaceApplication: () => routeApplication.current }));
+
+function dispatchConflict(error: unknown) {
+  if (!(error instanceof Error)) throw new Error("Expected an application refusal");
+  const response = { status: 0, body: undefined as unknown };
+  const host = { getArgByIndex: () => response, switchToHttp: () => ({ getResponse: () => ({
+    status(code: number) { response.status = code; return { json(body: unknown) { response.body = body; } }; }
+  }) }) };
+  const handler = new ExceptionsHandler({ isHeadersSent: () => false,
+    reply: (_r: unknown, body: unknown, status: number) => { response.status = status; response.body = body; }
+  } as never);
+  const filter = new WatchdogExceptionFilter();
+  handler.setCustomFilters([{ func: filter.catch.bind(filter), exceptionMetatypes: Reflect.getMetadata(FILTER_CATCH_EXCEPTIONS, WatchdogExceptionFilter) }]);
+  handler.next(error, host as never);
+  return response;
+}
+const replayJob = "33333333-3333-4333-8333-333333333333";
+const replayCommand = "22222222-2222-4222-8222-222222222222";
+const otherJob = "44444444-4444-4444-8444-444444444444";
+const scopeId = "55555555-5555-4555-8555-555555555555";
+const sha = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+function replayPool(select: (sql: string) => object[] | undefined) {
+  const statements: string[] = [];
+  const client = { release: vi.fn(), query: async (sql: string) => {
+    statements.push(sql);
+    const rows = select(sql);
+    if (rows) return { rows, rowCount: rows.length };
+    if (/^(?:BEGIN|COMMIT|ROLLBACK|SELECT set_config|SELECT pg_advisory_xact_lock|SELECT app.require_watchdog_live)/u.test(sql)) return { rows: [], rowCount: 0 };
+    if (sql.includes("UNION ALL")) return { rows: [], rowCount: 0 };
+    if (sql.startsWith("INSERT INTO app.watchdog_command_identity")) return { rows: [{ command_id: replayCommand }], rowCount: 1 };
+    throw new Error(`Unexpected replay query: ${sql}`);
+  } };
+  return { pool: { connect: async () => client } as unknown as Pool, statements, client };
+}
+function expectRefused(statements: string[]) {
+  expect(statements).toContain("ROLLBACK");
+  expect(statements).not.toContain("COMMIT");
+  expect(statements.filter(sql => /^(?:INSERT|UPDATE|DELETE)/u.test(sql) && !sql.startsWith("INSERT INTO app.watchdog_command_identity"))).toEqual([]);
+}
+
+describe("round 9 saved proof response and legacy readiness adapter conflicts", () => {
+  it("still returns the exact saved proof response for an identical request", async () => {
+    const command = { version: "practice-proof-command.v1", action: "select_generated", commandId: replayCommand, scopeItemId: scopeId, fixture: "completion-photo" };
+    const request = { jobId: replayJob, ...command };
+    const requestHash = createHash("sha256").update(JSON.stringify(request, Object.keys(request).sort())).digest("hex");
+    const saved = { version: "practice-proof-view.v1", jobId: replayJob, decisionId: "original-decision" };
+    const { pool, statements } = replayPool(sql => {
+      if (sql.startsWith("SELECT 1 FROM app.membership")) return [{}];
+      if (sql.startsWith("SELECT job_id,action,request_hash,response")) return [{ job_id: replayJob, action: command.action, request_hash: requestHash, response: saved }];
+      return undefined;
+    });
+    expect(await new ProofApplication(pool).command(replayJob, command)).toEqual(saved);
+    expect(statements).toContain("COMMIT");
+    expect(statements.some(sql => /^(?:INSERT|UPDATE|DELETE)/u.test(sql))).toBe(false);
+  });
+
+  it.each(["payload", "job", "action"].flatMap(change => ["Nest", "Next"].map(adapter => ({ change, adapter }))))("saved proof response: changed $change returns 409 through $adapter", async ({ change, adapter }) => {
+    const command = { version: "practice-proof-command.v1", action: "select_generated", commandId: replayCommand, scopeItemId: scopeId, fixture: "completion-photo" };
+    const original = { jobId: replayJob, ...command };
+    const requestHash = createHash("sha256").update(JSON.stringify(original, Object.keys(original).sort())).digest("hex");
+    const savedResponse = { version: "practice-proof-view.v1", marker: "first answer must not leak" };
+    const { pool, statements } = replayPool(sql => {
+      if (sql.startsWith("SELECT 1 FROM app.membership")) return [{}];
+      if (sql.startsWith("SELECT job_id,action,request_hash,response")) return [{ job_id: replayJob, action: command.action, request_hash: requestHash, response: savedResponse }];
+      return undefined;
+    });
+    const app = new ProofApplication(pool), job = change === "job" ? otherJob : replayJob;
+    const request = change === "payload" ? { ...command, scopeItemId: otherJob }
+      : change === "action" ? { version: command.version, action: "finalize", commandId: replayCommand, uploadId: scopeId, objectVersionId: "synthetic-version" } : command;
+    const error = await app.command(job, request).catch(e => e);
+    if (adapter === "Nest") {
+      expect(dispatchConflict(error)).toEqual({ status: 409, body: { code: "IDEMPOTENCY_CONFLICT" } });
+    } else {
+      routeApplication.current = { proof: app };
+      const routePath = fileURLToPath(new URL("apps/web/app/api/jobs/[id]/proof/route.ts", root));
+      const route = await import(routePath);
+      const response = await route.POST(new Request("https://synthetic.invalid/proof", { method: "POST", body: JSON.stringify(request) }), { params: Promise.resolve({ id: job }) });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" });
+    }
+    expect(error).toBeInstanceOf(WatchdogError);
+    expectRefused(statements);
+  });
+  it.each((["record", "advance"] as const).flatMap(action => ["Nest", "Next"].map(adapter => ({ action, adapter }))))("legacy readiness $action payload mismatch returns 409 through $adapter", async ({ action, adapter }) => {
+    const original = { version: action === "record" ? "readiness-plan.v1" : "readiness-clock.v1", commandId: replayCommand, scenarioNow: "2026-04-08T10:00:00.000Z" };
+    const { pool, statements } = replayPool(sql => {
+      if (action === "record" && sql.startsWith("SELECT id,payload_hash,revision,job_id FROM app.planned_work_revision")) return [{ id: scopeId, payload_hash: sha({ jobId: replayJob, ...original }), revision: 1, job_id: replayJob }];
+      if (action === "advance" && sql.startsWith("SELECT payload_hash,job_id,snapshot_id FROM app.readiness_decision")) return [{ snapshot_id: scopeId, payload_hash: sha({ jobId: replayJob, ...original }), job_id: replayJob }];
+      return undefined;
+    });
+    const app = new ReadinessApplication(pool), request = { ...original, scenarioNow: "2026-04-09T10:00:00.000Z" };
+    const error = await app[action](replayJob, request).catch(e => e);
+    if (adapter === "Nest") {
+      expect(dispatchConflict(error)).toEqual({ status: 409, body: { code: "IDEMPOTENCY_CONFLICT" } });
+    } else {
+      routeApplication.current = { readiness: app };
+      const routePath = fileURLToPath(new URL("apps/web/app/api/jobs/[id]/readiness/[action]/route.ts", root));
+      const route = await import(routePath);
+      const response = await route.POST(new Request("https://synthetic.invalid/readiness", { method: "POST", body: JSON.stringify(request) }), { params: Promise.resolve({ id: replayJob, action: action === "record" ? "plan" : "advance" }) });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" });
+    }
+    expect(error).toBeInstanceOf(WatchdogError);
+    expectRefused(statements);
+  });
+  it.each(["foreign job", "dispatcher receipt"])("purchase-order %s replay conflict is typed at the Nest boundary", async conflict => {
+    const { pool, statements } = replayPool(sql => {
+      if (sql.startsWith("SELECT role FROM app.membership")) return [{ role: "owner" }];
+      if (sql.startsWith("SELECT 1 FROM app.command_receipt c")) return conflict === "foreign job" ? [{}] : [];
+      if (sql.startsWith("INSERT INTO app.command_receipt")) return [];
+      if (sql.startsWith("SELECT request_hash,status,result FROM app.command_receipt")) return [{ request_hash: "different", status: "succeeded", result: { privateOriginal: true } }];
+      return undefined;
+    });
+    const command = { version: "command.v1", commandId: replayCommand, commandType: "purchase_order.place", semanticKey: "synthetic-order",
+      actorMembershipId: scopeId, subjectType: "purchase_order", subjectRef: scopeId,
+      action: { actionType: "purchase_order.simulate", recipient: "merchant@synthetic.invalid", contentHash: "a".repeat(64), aggregateRevision: 1,
+        amountPence: 100, currency: "GBP", policyVersion: "synthetic-po.v1", expiresAt: "2099-01-01T00:00:00.000Z" } };
+    const error = await new PurchaseOrderApplication(pool).place(replayJob, { version: "purchase-order-placement.v1", command }).catch(e => e);
+    expect(dispatchConflict(error)).toEqual({ status: 409, body: { code: "IDEMPOTENCY_CONFLICT" } });
+    expect(error).toBeInstanceOf(WatchdogError);
+    expect(statements).toContain("ROLLBACK");
+    expect(statements).not.toContain("COMMIT");
+    expect(statements.some(sql => /^(?:INSERT INTO app\.(?:decision|action_outbox|audit_event)|UPDATE|DELETE)/u.test(sql))).toBe(false);
+  });
+  it.each(["readiness-repository", "discrepancy-repository", "supplier-match-repository", "supplier-document-repository", "purchase-order-repository", "inbox-relevance-repository"])("%s keeps replay identity conflicts typed", async name => {
+    const source = await readFile(new URL(`packages/db/src/${name}.ts`, root), "utf8");
+    expect(source).not.toMatch(/new Error\("(?:IDEMPOTENCY_CONFLICT|COMMAND_CONFLICT)"\)/u);
+  });
 });

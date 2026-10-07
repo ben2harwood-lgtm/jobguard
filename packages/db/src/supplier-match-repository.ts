@@ -1,4 +1,4 @@
-import { beginStoredCommand, requestHashFor, requireLiveJob, storeCommandResult, type WatchdogCommandType } from "./watchdog.js";
+import { WatchdogError, beginStoredCommand, requestHashFor, requireLiveJob, storeCommandResult, type WatchdogCommandType } from "./watchdog.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
@@ -26,7 +26,7 @@ export class SupplierMatchRepository {
         `SELECT r.job_id,r.proposal_id,r.revision,ae.payload->'hashes'->>'payloadHash' AS request_hash FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.command_id=$2 AND ae.event_type='supplier_match.confirmed'`,
         [context.tenantId, input.commandId])).rows[0];
       if (written) {
-        if (written.job_id !== jobId || written.request_hash !== hash(input)) throw new Error("IDEMPOTENCY_CONFLICT");
+        if (written.job_id !== jobId || written.request_hash !== hash(input)) throw new WatchdogError("IDEMPOTENCY_CONFLICT");
         return this.viewIn(db.$client, context.tenantId, jobId, { proposalId: written.proposal_id, revision: Number(written.revision) });
       }
       const sources = await this.sources(db.$client, context.tenantId, jobId);
@@ -115,7 +115,7 @@ export class SupplierMatchRepository {
         payloadHash = hash(input);
       if (replay) {
         if (replay.job_id !== jobId || replay.payload_hash !== payloadHash)
-          throw new Error("IDEMPOTENCY_CONFLICT");
+          throw new WatchdogError("IDEMPOTENCY_CONFLICT");
         // Its first result: the proposal and history as of the revision this command wrote, not the latest.
         return this.viewIn(db.$client, context.tenantId, jobId, { proposalId: replay.proposal_id, revision: Number(replay.revision) });
       }
