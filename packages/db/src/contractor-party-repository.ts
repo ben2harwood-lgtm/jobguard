@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { ContractorPartyError, contractorPartyErrorCodes, contractorCustomerLinkV1, contractorPartyImportV1, contractorPartyResultV1, contractorResidentReadV1, contractorPartyAuditPayload } from "@jobguard/core";
+import { ContractorPartyError, contractorPartyErrorCodes, contractorCustomerLinkV1, contractorPartyImportBoundaryV1, contractorPartyResultV1, contractorResidentReadV1, contractorPartyAuditPayload } from "@jobguard/core";
 import { ContractorRepository } from "./contractor-repository.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, verifiedTenantContextFromMembership, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
@@ -42,9 +42,14 @@ export class ContractorPartyRepository {
       });
     } catch (error) { failure(error); }
   }
-  /** ENT-2 must call bindInTransaction inside its own import transaction, append all audit events last, and commit once. */
+  /**
+   * ENT-2 must call bindInTransaction inside its own import transaction, append all audit events last, and commit once.
+   * An absent or null client, contract, site, or resident contact/reason is not a malformed command: after the membership
+   * check the controlled routine refuses it with CONTRACTOR_PARTIES_REQUIRED, writing nothing. A refusal aborts the caller's
+   * PostgreSQL transaction, so the caller must roll it back.
+   */
   async bindInTransaction(db: TenantTransaction, principal: AuthenticatedMembership, raw: unknown) {
-    const parsed = contractorPartyImportV1.safeParse(raw);
+    const parsed = contractorPartyImportBoundaryV1.safeParse(raw);
     if (!parsed.success) throw new ContractorPartyError("INVALID_COMMAND");
     try {
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [principal.tenantId]);
@@ -57,7 +62,8 @@ export class ContractorPartyRepository {
     try {
       return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
         const result = await this.bindInTransaction(db, principal, raw);
-        const input = contractorPartyImportV1.parse(raw);
+        // Reached only after the routine accepted a complete import, so the job ID is present and valid.
+        const input = contractorPartyImportBoundaryV1.parse(raw);
         await this.audit(db, principal, "bound", input.jobId, result.commandId, result.id);
         return result;
       });

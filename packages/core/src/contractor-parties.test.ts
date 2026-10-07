@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contractorCustomerLinkV1, contractorPartyImportV1, residentContactV1, noResidentReasons, contractorPartyAuditPayloadV1, contractorPartyAuditPayload } from "./contractor-parties.js";
+import { contractorCustomerLinkV1, contractorPartyImportV1, contractorPartyImportBoundaryV1, residentContactV1, noResidentReasons, contractorPartyAuditPayloadV1, contractorPartyAuditPayload } from "./contractor-parties.js";
 const id = "11111111-1111-4111-8111-111111111111";
 const link = { version: "contractor-customer-link.v1", environment: "synthetic_demo", commandId: id, customerRevisionId: id };
 const binding = { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: id, jobId: id, workOrderId: id, expectedJobRevision: 0, clientId: id, contractId: id, siteRevisionId: id, resident: { kind: "contact", contact: { version: "resident-contact.v1", name: "Fictional Resident", email: "resident@example.invalid" } } };
@@ -33,5 +33,31 @@ describe("CH-3b strict boundaries", () => {
         expect(contractorPartyAuditPayloadV1.safeParse({ ...payload, references: { ...payload.references, [field]: "secret" } }).success).toBe(false);
       }
     }
+  });
+});
+
+describe("CH-3b import-entry boundary (the routine, not the schema, refuses a missing party)", () => {
+  it("is the strict schema plus nullable parties: complete imports parse identically", () => {
+    expect(contractorPartyImportBoundaryV1.parse(binding)).toEqual(contractorPartyImportV1.parse(binding));
+    for (const reason of noResidentReasons) expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, resident: { kind: "none", reason } }).success).toBe(true);
+  });
+  it("lets an absent or null party through so the routine can raise CONTRACTOR_PARTIES_REQUIRED", () => {
+    for (const key of ["clientId", "contractId", "siteRevisionId", "resident"]) {
+      expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, [key]: null }).success).toBe(true);
+      expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, [key]: undefined }).success).toBe(true);
+    }
+    const base = { version: "resident-contact.v1" };
+    for (const resident of [{ kind: "contact", contact: null }, { kind: "contact" }, { kind: "none", reason: null }, { kind: "none" }, { kind: "contact", contact: { ...base, name: "Fictional Resident" } }, { kind: "contact", contact: { ...base, phone: "00000000000" } }]) {
+      expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, resident }).success).toBe(true);
+      expect(contractorPartyImportV1.safeParse({ ...binding, resident }).success).toBe(false);
+    }
+  });
+  it("still refuses malformed values and browser authority at every level", () => {
+    const base = { version: "resident-contact.v1", name: "Fictional Resident" };
+    for (const resident of [{ kind: "none", reason: "unknown" }, { kind: "contact", contact: { ...base, email: "bad" } }, { kind: "contact", contact: { ...base, phone: " " } }, { kind: "contact", contact: { ...base, email: "real@example.org" } }, { kind: "contact", contact: { ...base, phone: "00000000000", role: "owner" } }, { kind: "other" }]) {
+      expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, resident }).success).toBe(false);
+    }
+    for (const key of ["tenantId", "role", "provenance", "isIndividual"]) expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, [key]: id }).success).toBe(false);
+    for (const key of ["clientId", "contractId", "siteRevisionId"]) expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, [key]: "not-a-uuid" }).success).toBe(false);
   });
 });

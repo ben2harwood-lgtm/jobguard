@@ -34,7 +34,8 @@ beforeAll(async () => {
   const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" }); await control.query("CREATE DATABASE jobguard_synthetic_demo"); await control.end();
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "jobguard_synthetic_demo" });
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for (const url of MIGRATION_URLS.slice(0, -1)) { await admin.query(await readFile(url, "utf8")); await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]); }
+  const ownPosition = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("/0102_contractor_parties.sql")); expect(ownPosition).toBeGreaterThan(0);
+  for (const url of MIGRATION_URLS.slice(0, ownPosition)) { await admin.query(await readFile(url, "utf8")); await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]); }
   await migrate(admin); await migrate(admin);
   await admin.query("CREATE ROLE ch3b_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO ch3b_login");
   runtime = new Pool({ host: "127.0.0.1", port, user: "ch3b_login", password: "synthetic", database: "jobguard_synthetic_demo", max: 6 });
@@ -78,13 +79,16 @@ describe("CH-3b PostgreSQL guarantees", () => {
   });
   it("DW3 denies unresolved job scopes, all excluded roles and unknown IDs identically", async () => {
     const f = await setup(); await parties.linkCustomer(f.p, f.client, linkInput(f.customer.revisionId!)); await parties.bind(f.p, f.input);
-    for (const role of contractorRoles) {
+    for (const role of contractorRoles.filter(r => r !== "owner")) {
       const id = randomUUID(), scope = role === "client_approver" ? { kind: "client", id: f.client } : role === "operative" ? { kind: "team", id: f.v.teams[0]!.id } : { kind: "tenant", id: f.p.tenantId };
       await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope, clientId: role === "client_approver" ? f.client : null, contractId: null });
       const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
       const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
       for (const jobId of [f.job, randomUUID()]) await expect(parties.readResident(actor, jobId)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     }
+    // ENT-1 refuses to invite an owner (0054:233): the owner row is the practice principal itself, and the refusal is asserted.
+    await expect(command(f.p, { kind: "member.invite", id: randomUUID(), role: "owner", email: "owner-invite@fictional.invalid", scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    for (const jobId of [f.job, randomUUID()]) await expect(parties.readResident(f.p, jobId)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     for (const projection of [await f.jp.list(ctx(f.p), f.p.membershipId), await f.jp.view(ctx(f.p), f.p.membershipId, f.job), await query(f.p), await new JobRepository(runtime).get(ctx(f.p), ["job:view"], f.job)]) {
       const serialized = JSON.stringify(projection); for (const value of Object.values(resident.contact)) expect(serialized).not.toContain(value);
       for (const key of ["resident", "residentContact", "resident_name", "resident_email", "resident_phone"]) expect(serialized).not.toContain(`"${key}"`);
@@ -126,6 +130,17 @@ describe("CH-3b PostgreSQL guarantees", () => {
       expect(grants).toEqual({ owner: "jobguard_migration", runtime: true, infrastructure: false });
     }
     await expect(runtime.query("SELECT app.bind_contractor_parties($1,$2::jsonb)", [f.p.membershipId, JSON.stringify(f.input)])).rejects.toMatchObject({ message: "NOT_FOUND" });
+    // Every CH-3b function pins search_path; the three routines and the record trigger function are the only SECURITY DEFINER ones.
+    const functions = (await admin.query("SELECT p.proname,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY p.proname", [["bind_contractor_parties", "link_contractor_customer", "read_contractor_resident", "require_contractor_party_receipt", "require_contractor_party_record", "valid_contractor_resident"]])).rows;
+    const pinned = ["search_path=pg_catalog"];
+    expect(functions).toEqual([
+      { proname: "bind_contractor_parties", prosecdef: true, proconfig: pinned, runtime: true, infrastructure: false },
+      { proname: "link_contractor_customer", prosecdef: true, proconfig: pinned, runtime: true, infrastructure: false },
+      { proname: "read_contractor_resident", prosecdef: true, proconfig: pinned, runtime: true, infrastructure: false },
+      { proname: "require_contractor_party_receipt", prosecdef: false, proconfig: pinned, runtime: false, infrastructure: false },
+      { proname: "require_contractor_party_record", prosecdef: true, proconfig: pinned, runtime: false, infrastructure: false },
+      { proname: "valid_contractor_resident", prosecdef: false, proconfig: pinned, runtime: true, infrastructure: false },
+    ]);
   });
   it("denies foreign tenant/job, revoked membership, unlinked client and wrong payer without effects", async () => {
     const a = await setup(), b = await setup(); await parties.linkCustomer(a.p, a.client, linkInput(a.customer.revisionId!));
@@ -202,7 +217,97 @@ it('refuses a runtime-forged succeeded receipt with no authoritative binding or 
  const f=await setup();await parties.linkCustomer(f.p,f.client,linkInput(f.customer.revisionId!));
  await expect(withTenant(runtime,ctx(f.p),async db=>{
   const hash=(await db.$client.query("SELECT encode(sha256(convert_to($1::jsonb::text,'UTF8')),'hex') h",[JSON.stringify(f.input)])).rows[0].h;
-  await db.$client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id) VALUES($1,$2,'contractor_parties.bind',$1::text,$3,'succeeded',$4::jsonb,$5)",[f.input.commandId,f.p.tenantId,hash,JSON.stringify({version:'contractor-party-result.v1',environment:'synthetic_demo',commandId:f.input.commandId,id:randomUUID(),realExternalActions:0}),f.p.membershipId]);
+  await db.$client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id) VALUES($1::uuid,$2,'contractor_parties.bind',$6::text,$3,'succeeded',$4::jsonb,$5)",[f.input.commandId,f.p.tenantId,hash,JSON.stringify({version:'contractor-party-result.v1',environment:'synthetic_demo',commandId:f.input.commandId,id:randomUUID(),realExternalActions:0}),f.p.membershipId,f.input.commandId]);
  })).rejects.toMatchObject({code:'23514'});
  await expect(parties.bind(f.p,f.input)).resolves.toMatchObject({realExternalActions:0});
+});
+
+// ---- CH-3b round 2: ENT-2 entry points (P2-1) and current-revision linking (P2-2) ----
+type Fixture = Awaited<ReturnType<typeof setup>>;
+/** Everything a refused import must leave untouched. */
+const effects = (f: Fixture) => withTenant(runtime, ctx(f.p), async db => (await db.$client.query(
+  "SELECT (SELECT count(*) FROM app.contractor_party_binding WHERE job_id=$1)::int bindings,(SELECT count(*) FROM app.contractor_resident_contact WHERE job_id=$1)::int residents,(SELECT count(*) FROM app.job_party_binding WHERE job_id=$1)::int party_bindings,(SELECT count(*) FROM app.job_party_binding WHERE customer_revision_id=ANY($3::uuid[]))::int pinned_stale,(SELECT count(*) FROM app.command_receipt WHERE command_id=$2)::int receipts,(SELECT count(*) FROM app.audit_event WHERE event_type='contractor.parties.bound')::int bound_audit,(SELECT count(*) FROM app.action_outbox)::int outbox,(SELECT revision FROM app.job WHERE id=$1)::int job_revision",
+  [f.job, f.input.commandId, [f.customer.revisionId]])).rows[0]);
+async function invite(f: Fixture, role: string): Promise<AuthenticatedMembership> {
+  const id = randomUUID(); await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null });
+  const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
+  return { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
+}
+async function reviseCustomer(f: Fixture, type: string, name = "Fictional Client") {
+  const current = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT max(revision)::int n FROM app.customer_revision WHERE customer_id=$1", [f.customer.id]))).rows[0].n;
+  return jobPartiesCommandResultV1.parse(await f.jp.command(ctx(f.p), f.p.membershipId, f.job, { version: "job-parties-command.v1", commandId: randomUUID(), action: "revise_customer", customerId: f.customer.id, expectedRevision: current, customer: { version: "customer.v1", name, type, email: "client@example.invalid" } }));
+}
+const linkRows = (f: Fixture) => withTenant(runtime, ctx(f.p), async db => (await db.$client.query("SELECT customer_revision_id FROM app.contractor_client_customer WHERE client_id=$1", [f.client])).rows);
+
+describe("CH-3b round 2: ENT-2 entry points", () => {
+  it("P2-1 bindInTransaction and bind return CONTRACTOR_PARTIES_REQUIRED for each absent party and write nothing", async () => {
+    const f = await setup(); await parties.linkCustomer(f.p, f.client, linkInput(f.customer.revisionId!));
+    const before = await effects(f), name = resident.contact.name, base = { version: "resident-contact.v1" as const };
+    const variants: Array<[string, Record<string, unknown>]> = [];
+    for (const key of ["clientId", "contractId", "siteRevisionId", "resident"]) {
+      variants.push([`${key} null`, { ...f.input, [key]: null }]);
+      const { [key]: _omitted, ...rest } = f.input as unknown as Record<string, unknown>; variants.push([`${key} omitted`, rest]);
+    }
+    for (const [label, value] of [
+      ["contact with a name only", { kind: "contact", contact: { ...base, name } }], ["contact with a phone only", { kind: "contact", contact: { ...base, phone: "00000123456" } }],
+      ["contact null", { kind: "contact", contact: null }], ["contact omitted", { kind: "contact" }], ["no-resident reason null", { kind: "none", reason: null }], ["no-resident reason omitted", { kind: "none" }],
+    ] as const) variants.push([label, { ...f.input, resident: value }]);
+    for (const [label, input] of variants) {
+      // The command ID is deliberately reused: a refusal stores no receipt, so none of these may leave one behind.
+      await assertContractorPartiesRequired(() => parties.bind(f.p, input));
+      await assertContractorPartiesRequired(() => withTenant(runtime, ctx(f.p), db => parties.bindInTransaction(db, f.p, input)));
+      await expect(parties.bind(f.p, input), label).rejects.toMatchObject({ code: "CONTRACTOR_PARTIES_REQUIRED", message: "CONTRACTOR_PARTIES_REQUIRED" });
+      expect(await effects(f), label).toEqual(before);
+    }
+    // Present but malformed is a different, typed refusal: it is not "missing".
+    for (const resident of [{ kind: "contact", contact: { ...base, name, email: "not-an-email" } }, { kind: "contact", contact: { ...base, name, phone: " " } }, { kind: "none", reason: "unknown" }]) {
+      await expect(parties.bind(f.p, { ...f.input, resident })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+    }
+    expect(await effects(f)).toEqual(before);
+    // Order is membership, then completeness, then role authority: a missing client leaves no scope to authorise against.
+    // A member without the import permission still gets the same 404 as before for a complete command, and nothing is written either way.
+    const readOnly = await invite(f, "read_only");
+    await expect(parties.bind(readOnly, f.input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await assertContractorPartiesRequired(() => parties.bind(readOnly, { ...f.input, clientId: null }));
+    expect(await effects(f)).toEqual(before);
+    await expect(parties.bind(f.p, f.input)).resolves.toMatchObject({ realExternalActions: 0 });
+  }, 60000);
+});
+
+describe("CH-3b round 2: the customer's current revision is the only one linked or pinned", () => {
+  it("refuses to link an older customer revision and checks the type of the latest one", async () => {
+    const f = await setup(); // insurer client, insurer customer revision 1
+    const renamed = await reviseCustomer(f, "insurer", "Fictional Client Renamed");
+    await expect(parties.linkCustomer(f.p, f.client, linkInput(f.customer.revisionId!))).rejects.toMatchObject({ code: "STALE_REVISION" });
+    const person = await reviseCustomer(f, "person");
+    await expect(parties.linkCustomer(f.p, f.client, linkInput(renamed.revisionId!))).rejects.toMatchObject({ code: "STALE_REVISION" });
+    await expect(parties.linkCustomer(f.p, f.client, linkInput(person.revisionId!))).rejects.toMatchObject({ code: "CUSTOMER_TYPE_MISMATCH" });
+    expect(await linkRows(f)).toEqual([]);
+    const latest = await reviseCustomer(f, "insurer");
+    await expect(parties.linkCustomer(f.p, f.client, linkInput(latest.revisionId!))).resolves.toMatchObject({ realExternalActions: 0 });
+    expect(await linkRows(f)).toEqual([{ customer_revision_id: latest.revisionId }]);
+  }, 60000);
+  it("refuses an import after the linked customer is revised to another type, pins nothing, and recovers on the right type", async () => {
+    const f = await setup(); // linked while the customer is an insurer (revision 1)
+    await parties.linkCustomer(f.p, f.client, linkInput(f.customer.revisionId!));
+    const person = await reviseCustomer(f, "person"); // revision 2: the insurer became a homeowner
+    const stale = [f.customer.revisionId!, person.revisionId!], before = await effects(f);
+    const staleEffects = () => withTenant(runtime, ctx(f.p), async db => (await db.$client.query("SELECT count(*)::int n FROM app.job_party_binding WHERE customer_revision_id=ANY($1::uuid[])", [stale])).rows[0].n);
+    await expect(parties.bind(f.p, f.input)).rejects.toMatchObject({ code: "CUSTOMER_TYPE_MISMATCH" });
+    await expect(withTenant(runtime, ctx(f.p), db => parties.bindInTransaction(db, f.p, f.input))).rejects.toMatchObject({ code: "CUSTOMER_TYPE_MISMATCH" });
+    expect(await effects(f)).toEqual(before); expect(await staleEffects()).toBe(0);
+    expect((await f.jp.view(ctx(f.p), f.p.membershipId, f.job)).current).toBeNull();
+    const back = await reviseCustomer(f, "insurer"); // revision 3
+    await expect(parties.bind(f.p, f.input)).resolves.toMatchObject({ realExternalActions: 0 });
+    const current = (await f.jp.view(ctx(f.p), f.p.membershipId, f.job)).current!;
+    expect(current.customerRevisionId).toBe(back.revisionId); expect(current.payingPartyRevisionId).toBe(back.revisionId);
+    expect(await staleEffects()).toBe(0);
+  }, 60000);
+  it("pins the latest revision at import when the type still matches", async () => {
+    const f = await setup(); await parties.linkCustomer(f.p, f.client, linkInput(f.customer.revisionId!));
+    const renamed = await reviseCustomer(f, "insurer", "Fictional Client Renamed");
+    await parties.bind(f.p, f.input);
+    const current = (await f.jp.view(ctx(f.p), f.p.membershipId, f.job)).current!;
+    expect(current.customerRevisionId).toBe(renamed.revisionId); expect(current.customerRevisionId).not.toBe(f.customer.revisionId);
+  }, 60000);
 });

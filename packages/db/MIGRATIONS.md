@@ -294,7 +294,8 @@ Expand-only, after 0095 and 0054. Adds immutable `contractor_client_customer`,
 `contractor_party_binding` and restricted `contractor_resident_contact`, all
 migration-owned with tenant-qualified FKs and FORCE RLS. Adds a composite unique
 key to the existing client-contract-version table without changing its rows.
-Client types must match the pinned customer revision exactly. Named synthetic
+A client links only to its customer's latest revision, and every import re-resolves and
+re-checks that latest revision's type against the client kind. Named synthetic
 controlled routines link a client, bind an import inside its caller transaction,
 and read resident contact through persisted job scope. No runtime direct writes;
 resident payload columns have no runtime SELECT grant. Deferred guards require

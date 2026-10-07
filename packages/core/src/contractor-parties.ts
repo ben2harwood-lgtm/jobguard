@@ -2,22 +2,39 @@ import { z } from "zod";
 const uuid = z.string().uuid();
 export const noResidentReasons = ["void_property", "communal_area", "client_withheld"] as const;
 /** Synthetic-only entry boundary. No route accepts real resident contacts while G1 is closed. */
-export const residentContactV1 = z.object({
-  version: z.literal("resident-contact.v1"), name: z.string().trim().min(1).max(160),
+const residentContactFields = {
   phone: z.string().trim().min(3).max(40).optional(),
   email: z.string().trim().email().max(320).endsWith(".invalid").optional(),
+};
+export const residentContactV1 = z.object({
+  version: z.literal("resident-contact.v1"), name: z.string().trim().min(1).max(160), ...residentContactFields,
 }).strict().refine(value => value.phone !== undefined || value.email !== undefined, { message: "A phone or email is required" });
 export const contractorResidentV1 = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("contact"), contact: residentContactV1 }).strict(),
   z.object({ kind: z.literal("none"), reason: z.enum(noResidentReasons) }).strict(),
 ]);
+/**
+ * Import-entry boundary only. It carries the same strict shape as the schemas above, but lets a party be absent or null (and a
+ * contact lack its name, or lack both phone and email) so that the controlled routine, not the schema, refuses the import with
+ * CONTRACTOR_PARTIES_REQUIRED. Present-but-malformed values still fail here as INVALID_COMMAND.
+ */
+export const contractorResidentBoundaryV1 = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("contact"), contact: z.object({ version: z.literal("resident-contact.v1"), name: z.string().trim().min(1).max(160).optional(), ...residentContactFields }).strict().nullish() }).strict(),
+  z.object({ kind: z.literal("none"), reason: z.enum(noResidentReasons).nullish() }).strict(),
+]);
 export const contractorCustomerLinkV1 = z.object({
   version: z.literal("contractor-customer-link.v1"), environment: z.literal("synthetic_demo"), commandId: uuid, customerRevisionId: uuid,
 }).strict();
-export const contractorPartyImportV1 = z.object({
+const contractorPartyImportFields = {
   version: z.literal("contractor-party-import.v1"), environment: z.literal("synthetic_demo"), commandId: uuid,
-  jobId: uuid, workOrderId: uuid, expectedJobRevision: z.number().int().nonnegative().max(2147483646),
-  clientId: uuid, contractId: uuid, siteRevisionId: uuid, payingPartyRevisionId: uuid.optional(), resident: contractorResidentV1,
+  jobId: uuid, workOrderId: uuid, expectedJobRevision: z.number().int().nonnegative().max(2147483646), payingPartyRevisionId: uuid.optional(),
+};
+export const contractorPartyImportV1 = z.object({
+  ...contractorPartyImportFields, clientId: uuid, contractId: uuid, siteRevisionId: uuid, resident: contractorResidentV1,
+}).strict();
+/** Accepted by `ContractorPartyRepository.bindInTransaction`/`bind`; see `contractorResidentBoundaryV1`. */
+export const contractorPartyImportBoundaryV1 = z.object({
+  ...contractorPartyImportFields, clientId: uuid.nullish(), contractId: uuid.nullish(), siteRevisionId: uuid.nullish(), resident: contractorResidentBoundaryV1.nullish(),
 }).strict();
 export type ContractorPartyImport = z.infer<typeof contractorPartyImportV1>;
 export const contractorPartyResultV1 = z.object({

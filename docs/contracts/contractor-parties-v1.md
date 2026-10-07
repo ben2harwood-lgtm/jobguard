@@ -5,13 +5,23 @@ contractor is controller of client and resident contacts; JobGuard is processor.
 No contact is used for JobGuard's own purposes, training or cross-tenant analytics.
 
 `contractor-customer-link.v1` links an ENT-1 client identity to one CH-3a customer
-identity and its exact revision. `organisation.manage` on that persisted client
+identity. `organisation.manage` on that persisted client
 is required, checked under ENT-1's tenant advisory lock. All other roles/scopes
 receive the same `NOT_FOUND` as an absent client. Types must be identical:
 `person`, `landlord_or_agent`, `local_authority`, `housing_association`, `insurer`
 and `main_contractor`. `business` matches none. The immutable link cannot be
-replaced by editing a customer or retrying with another command. Subsequent
-customer revisions do not silently change the linked commercial revision.
+replaced by editing a customer or retrying with another command.
+
+**Current revision only (integrator decision, 7 Oct 2026, CH-3b round 2).** The
+revision supplied to the link command must be the customer's latest revision; an
+older one is refused with `STALE_REVISION` before its type is looked at, and the
+latest revision's type must equal the client's kind (`CUSTOMER_TYPE_MISMATCH`).
+The revision seen at link time is kept as evidence only. Every import re-resolves
+the linked customer's latest revision and re-checks its type against the client
+kind: a customer later revised to another type (for example an insurer revised to
+a person) refuses the import with `CUSTOMER_TYPE_MISMATCH`, writes nothing, and
+the stale revision is never pinned on a job. Once the customer is revised back to
+the client's kind, imports pin the then-latest revision.
 
 `contractor-party-import.v1` binds a job and opaque work-order UUID, client,
 contract, site revision, optional distinct paying-party revision, and exactly one
@@ -27,14 +37,31 @@ contractor membership and `organisation.manage` on the client or ENT-1's existin
 `data.import` on the tenant. It does not require work-order provenance: ENT-2 owns
 that provenance, work-order records, job assignment and live entry. A missing
 client, contract, site or resident/reason raises `CONTRACTOR_PARTIES_REQUIRED`;
-a client without its immutable customer link also raises that code. Invalid
-resident/input raises `INVALID_COMMAND`. Unknown revisions raise `PARTY_NOT_FOUND`.
+a client without its immutable customer link also raises that code. "Missing"
+means absent or JSON null. For the resident it also covers a no-resident entry
+without its reason, a contact entry without a contact, and a contact that lacks
+a name or lacks both a phone and an email (decision recorded in CH-3b round 2:
+the card requires a name plus at least one of phone or email, so anything less is
+not a resident contact). Present but malformed values (blank text, a malformed or
+non-`.invalid` email, an unknown reason, extra keys) raise `INVALID_COMMAND`.
+The order of refusal is: active contractor membership, then completeness, then
+role authority. Completeness precedes authority because a missing client leaves
+no client scope to authorise against; it reveals only the shape of the caller's
+own payload. Unknown revisions raise `PARTY_NOT_FOUND`.
+`ContractorPartyRepository.bindInTransaction` and `.bind` accept a nullish client,
+contract, site or resident at their boundary (`contractorPartyImportBoundaryV1`,
+the strict import schema with those fields nullable) so that the same
+`CONTRACTOR_PARTIES_REQUIRED` comes back through them, which is what
+`assertContractorPartiesRequired` expects. A refusal aborts the caller's
+PostgreSQL transaction; ENT-2 must roll back.
 The client/tenant-qualified contract and contract-version FKs reject foreign
 contracts independently of application filtering. The latest immutable contract
 version is pinned under ENT-1's lock; later contract revisions leave it unchanged.
 
-Customer comes from the exact linked CH-3a revision; payer defaults to it; a
-work-order-named payer must be another verified revision in the same tenant.
+Customer is the linked customer's latest CH-3a revision at the moment of import
+(see "Current revision only"); payer defaults to it; a work-order-named payer must
+be another verified revision in the same tenant (that revision is not yet required
+to be its customer's latest; recorded as a follow-up).
 Site comes from the supplied CH-3a site revision. The routine appends a CH-3a
 binding with server-written `work_order_import`, the contractor binding and its
 separate resident row, replaces only CH-3a's current pointer and advances job

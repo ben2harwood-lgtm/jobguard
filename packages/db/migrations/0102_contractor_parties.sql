@@ -43,17 +43,17 @@ GRANT SELECT ON app.contractor_client_customer,app.contractor_party_binding TO j
 -- Resident contents cannot be selected through arbitrary runtime SQL, even with a correct tenant context.
 GRANT SELECT(tenant_id,id,job_id,binding_id,retention_class,created_at) ON app.contractor_resident_contact TO jobguard_runtime;
 
-CREATE FUNCTION app.valid_contractor_resident(d jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
+CREATE FUNCTION app.valid_contractor_resident(d jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $fn$
  SELECT coalesce(jsonb_typeof(d)='object' AND CASE d->>'kind'
  WHEN 'none' THEN d-ARRAY['kind','reason']='{}'::jsonb AND jsonb_typeof(d->'reason')='string' AND d->>'reason' IN('void_property','communal_area','client_withheld')
  WHEN 'contact' THEN d-ARRAY['kind','contact']='{}'::jsonb AND jsonb_typeof(d->'contact')='object'
-  AND d->'contact'-ARRAY['version','name','phone','email']='{}'::jsonb AND d->'contact'->>'version'='resident-contact.v1'
+  AND (d->'contact')-ARRAY['version','name','phone','email']='{}'::jsonb AND d->'contact'->>'version'='resident-contact.v1'
   AND app.valid_party_revision_text(d->'contact'->'name',1,160) AND (d->'contact' ? 'phone' OR d->'contact' ? 'email')
   AND (NOT d->'contact' ? 'phone' OR app.valid_party_revision_text(d->'contact'->'phone',3,40))
   AND (NOT d->'contact' ? 'email' OR (app.valid_party_revision_text(d->'contact'->'email',1,320)
    AND d->'contact'->>'email' ~* $email$^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+invalid$$email$))
  ELSE false END,false)
-$$;
+$fn$;
 ALTER FUNCTION app.valid_contractor_resident(jsonb) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.valid_contractor_resident(jsonb) FROM PUBLIC,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.valid_contractor_resident(jsonb) TO jobguard_runtime;
@@ -76,9 +76,12 @@ BEGIN
   OR NOT EXISTS(SELECT 1 FROM app.contractor_client_customer b WHERE b.tenant_id=t AND b.client_id=client AND b.command_id=prior.command_id AND b.id::text=prior.result->>'id') THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
   RETURN prior.result;
  END IF;
- SELECT * INTO c FROM app.customer_revision WHERE tenant_id=t AND id=(payload->>'customerRevisionId')::uuid;
+ -- The parameter is qualified with the function name because customer_revision also has a payload column.
+ SELECT r.* INTO c FROM app.customer_revision r WHERE r.tenant_id=t AND r.id=(link_contractor_customer.payload->>'customerRevisionId')::uuid;
  IF c.id IS NULL THEN RAISE EXCEPTION 'PARTY_NOT_FOUND' USING ERRCODE='23503'; END IF;
- SELECT client_type INTO client_kind FROM app.client_organisation WHERE tenant_id=t AND id=client;
+ -- Integrator decision (CH-3b round 2): a link is made against the customer's LATEST revision only; an older revision fails closed.
+ IF c.revision<>(SELECT max(r.revision) FROM app.customer_revision r WHERE r.tenant_id=t AND r.customer_id=c.customer_id) THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
+ SELECT o.client_type INTO client_kind FROM app.client_organisation o WHERE o.tenant_id=t AND o.id=client;
  IF c.payload->>'type' IS DISTINCT FROM client_kind THEN RAISE EXCEPTION 'CUSTOMER_TYPE_MISMATCH' USING ERRCODE='22023'; END IF;
  IF EXISTS(SELECT 1 FROM app.contractor_client_customer WHERE tenant_id=t AND client_id=client) THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
  result:=jsonb_build_object('version','contractor-party-result.v1','environment','synthetic_demo','commandId',payload->>'commandId','id',row_id,'realExternalActions',0);
@@ -92,14 +95,26 @@ END $$;
 CREATE FUNCTION app.bind_contractor_parties(actor uuid,payload jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; j app.job; link app.contractor_client_customer; c app.customer_revision; p app.customer_revision; s app.site_revision;
- cv uuid; prior app.command_receipt; h text; result jsonb; row_id uuid:=gen_random_uuid(); party_id uuid:=gen_random_uuid(); expected integer;
+ cv uuid; prior app.command_receipt; h text; result jsonb; row_id uuid:=gen_random_uuid(); party_id uuid:=gen_random_uuid(); expected integer; client_kind text; res jsonb;
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' OR payload->>'environment' IS DISTINCT FROM 'synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
  IF t IS NULL OR NOT coalesce(app.contractor_member_active(actor),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
- IF payload->>'clientId' IS NULL OR payload->>'contractId' IS NULL OR payload->>'siteRevisionId' IS NULL OR payload->'resident' IS NULL OR payload->'resident'='null'::jsonb THEN RAISE EXCEPTION 'CONTRACTOR_PARTIES_REQUIRED' USING ERRCODE='22023'; END IF;
+ IF jsonb_typeof(payload) IS DISTINCT FROM 'object' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='22023'; END IF;
+ -- Order: active membership, then completeness, then role authority. Completeness is judged before authority because a missing client
+ -- leaves no client scope to check; the refusal reveals only the shape of the caller's own payload.
+ -- "Missing" means absent or JSON null: client, contract, site, or a resident that is neither a complete contact (a name plus a phone or an email)
+ -- nor a no-resident reason. Present but malformed values (blank text, bad email, unknown reason) are INVALID_COMMAND instead.
+ res:=payload->'resident';
+ IF payload->>'clientId' IS NULL OR payload->>'contractId' IS NULL OR payload->>'siteRevisionId' IS NULL OR res IS NULL OR res='null'::jsonb
+ OR (jsonb_typeof(res)='object' AND (
+  (res->>'kind'='none' AND coalesce(jsonb_typeof(res->'reason'),'null')='null')
+  OR (res->>'kind'='contact' AND (coalesce(jsonb_typeof(res->'contact'),'null')='null'
+   OR (jsonb_typeof(res->'contact')='object' AND (coalesce(jsonb_typeof(res->'contact'->'name'),'null')='null'
+    OR (coalesce(jsonb_typeof(res->'contact'->'phone'),'null')='null' AND coalesce(jsonb_typeof(res->'contact'->'email'),'null')='null'))))))
+ ) THEN RAISE EXCEPTION 'CONTRACTOR_PARTIES_REQUIRED' USING ERRCODE='22023'; END IF;
  IF NOT (coalesce(app.contractor_allowed(actor,'organisation.manage',(payload->>'clientId')::uuid),false) OR coalesce(app.contractor_allowed(actor,'data.import',t),false)) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
- IF jsonb_typeof(payload) IS DISTINCT FROM 'object' OR payload-ARRAY['version','environment','commandId','jobId','workOrderId','expectedJobRevision','clientId','contractId','siteRevisionId','payingPartyRevisionId','resident']<>'{}'::jsonb
+ IF payload-ARRAY['version','environment','commandId','jobId','workOrderId','expectedJobRevision','clientId','contractId','siteRevisionId','payingPartyRevisionId','resident']<>'{}'::jsonb
  OR payload->>'version' IS DISTINCT FROM 'contractor-party-import.v1' OR NOT payload ?& ARRAY['commandId','jobId','workOrderId','expectedJobRevision']
  OR payload->>'commandId' IS NULL OR payload->>'jobId' IS NULL OR payload->>'workOrderId' IS NULL
  OR jsonb_typeof(payload->'expectedJobRevision') IS DISTINCT FROM 'number' OR payload->>'expectedJobRevision' !~ '^(0|[1-9][0-9]*)$'
@@ -117,10 +132,16 @@ BEGIN
  IF j.revision<>expected OR j.status NOT IN('draft','quoting') OR EXISTS(SELECT 1 FROM app.contractor_party_binding WHERE tenant_id=t AND (job_id=j.id OR work_order_id=(payload->>'workOrderId')::uuid)) THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
  SELECT * INTO link FROM app.contractor_client_customer WHERE tenant_id=t AND client_id=(payload->>'clientId')::uuid;
  IF link.id IS NULL THEN RAISE EXCEPTION 'CONTRACTOR_PARTIES_REQUIRED' USING ERRCODE='22023'; END IF;
- SELECT * INTO c FROM app.customer_revision WHERE tenant_id=t AND id=link.customer_revision_id;
- SELECT * INTO p FROM app.customer_revision WHERE tenant_id=t AND id=coalesce((payload->>'payingPartyRevisionId')::uuid,c.id);
- SELECT * INTO s FROM app.site_revision WHERE tenant_id=t AND id=(payload->>'siteRevisionId')::uuid;
- IF c.id IS NULL OR p.id IS NULL OR s.id IS NULL THEN RAISE EXCEPTION 'PARTY_NOT_FOUND' USING ERRCODE='23503'; END IF;
+ -- Integrator decision (CH-3b round 2): every import uses the customer's LATEST revision, never the revision seen at link time,
+ -- and re-checks its type against the client kind. A customer revised to another type fails closed; the old revision is never pinned.
+ SELECT r.* INTO c FROM app.customer_revision r WHERE r.tenant_id=t AND r.customer_id=link.customer_id ORDER BY r.revision DESC LIMIT 1;
+ IF c.id IS NULL THEN RAISE EXCEPTION 'PARTY_NOT_FOUND' USING ERRCODE='23503'; END IF;
+ SELECT o.client_type INTO client_kind FROM app.client_organisation o WHERE o.tenant_id=t AND o.id=link.client_id;
+ IF c.payload->>'type' IS DISTINCT FROM client_kind THEN RAISE EXCEPTION 'CUSTOMER_TYPE_MISMATCH' USING ERRCODE='22023'; END IF;
+ -- The parameter is qualified with the function name because customer_revision and site_revision also have a payload column.
+ SELECT r.* INTO p FROM app.customer_revision r WHERE r.tenant_id=t AND r.id=coalesce((bind_contractor_parties.payload->>'payingPartyRevisionId')::uuid,c.id);
+ SELECT r.* INTO s FROM app.site_revision r WHERE r.tenant_id=t AND r.id=(bind_contractor_parties.payload->>'siteRevisionId')::uuid;
+ IF p.id IS NULL OR s.id IS NULL THEN RAISE EXCEPTION 'PARTY_NOT_FOUND' USING ERRCODE='23503'; END IF;
  -- Select by contract identity, then let the composite FK prove client+tenant binding independently.
  SELECT id INTO cv FROM app.client_contract_version WHERE tenant_id=t AND contract_id=(payload->>'contractId')::uuid ORDER BY revision DESC LIMIT 1;
  result:=jsonb_build_object('version','contractor-party-result.v1','environment','synthetic_demo','commandId',payload->>'commandId','id',row_id,'realExternalActions',0);
@@ -138,7 +159,7 @@ BEGIN
  RETURN result;
 END $$;
 
-CREATE FUNCTION app.read_contractor_resident(actor uuid,job uuid) RETURNS jsonb
+CREATE FUNCTION app.read_contractor_resident(actor uuid,p_job uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; result jsonb;
 BEGIN
@@ -146,12 +167,12 @@ BEGIN
  PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
  -- Never substitute client/branch/team membership for a persisted job assignment.
  -- ENT-1 deliberately cannot resolve job IDs; ENT-2 must provide that resolution and prove its positive cases.
- IF t IS NULL OR NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=job)
- OR EXISTS(SELECT 1 FROM app.org_unit WHERE tenant_id=t AND id=job UNION ALL SELECT 1 FROM app.team WHERE tenant_id=t AND id=job UNION ALL SELECT 1 FROM app.client_organisation WHERE tenant_id=t AND id=job)
- OR NOT coalesce(app.contractor_allowed(actor,'resident.read',job),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
- SELECT jsonb_build_object('version','contractor-resident-read.v1','environment','synthetic_demo','jobId',job,'resident',
+ IF t IS NULL OR NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=p_job)
+ OR EXISTS(SELECT 1 FROM app.org_unit WHERE tenant_id=t AND id=p_job UNION ALL SELECT 1 FROM app.team WHERE tenant_id=t AND id=p_job UNION ALL SELECT 1 FROM app.client_organisation WHERE tenant_id=t AND id=p_job)
+ OR NOT coalesce(app.contractor_allowed(actor,'resident.read',p_job),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ SELECT jsonb_build_object('version','contractor-resident-read.v1','environment','synthetic_demo','jobId',p_job,'resident',
  CASE WHEN r.contact IS NULL THEN jsonb_build_object('kind','none','reason',r.no_resident_reason) ELSE jsonb_build_object('kind','contact','contact',r.contact) END)
- INTO result FROM app.contractor_resident_contact r WHERE r.tenant_id=t AND r.job_id=job;
+ INTO result FROM app.contractor_resident_contact r WHERE r.tenant_id=t AND r.job_id=p_job;
  IF result IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
  RETURN result;
 END $$;
@@ -164,7 +185,7 @@ DECLARE receipt app.command_receipt; action text; subject text; BEGIN
  action:=CASE TG_TABLE_NAME WHEN 'contractor_client_customer' THEN 'customer_linked' ELSE 'bound' END;
  subject:=CASE TG_TABLE_NAME WHEN 'contractor_client_customer' THEN NEW.client_id::text ELSE to_jsonb(NEW)->>'job_id' END;
  IF receipt.status IS DISTINCT FROM 'succeeded' OR receipt.actor_membership_id IS DISTINCT FROM NEW.actor_membership_id OR receipt.result->>'id' IS DISTINCT FROM NEW.id::text
- OR receipt.command_type IS DISTINCT FROM CASE TG_TABLE_NAME WHEN 'contractor_client_customer' THEN 'contractor_parties.link' ELSE 'contractor_parties.bind' END
+ OR receipt.command_type IS DISTINCT FROM (CASE TG_TABLE_NAME WHEN 'contractor_client_customer' THEN 'contractor_parties.link' ELSE 'contractor_parties.bind' END)
  OR NOT EXISTS(SELECT 1 FROM app.audit_event e WHERE e.tenant_id=NEW.tenant_id AND e.id=NEW.command_id AND e.actor_ref='membership:'||NEW.actor_membership_id
   AND e.event_type='contractor.parties.'||action AND e.subject_ref=subject AND e.payload->'references'->>'commandId'=NEW.command_id::text
   AND e.payload->'references'->>'identityId'=NEW.id::text AND e.payload->'hashes'->>'document'=receipt.request_hash)
