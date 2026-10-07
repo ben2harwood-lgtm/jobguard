@@ -7,6 +7,8 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, RecoveryCaseRepository, type VerifiedTenantContext, withTenant } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
+// Test-only shared contract import from source: DB tests need no API build artifact.
+import { recoveryCommandRefusalV1, recoveryCommandRefusalRulesV1, recoveryCaseCommandResponseV1 } from "../../../apps/api/src/recovery-case.contracts.js";
 
 const T="10000000-0000-4000-8000-000000000001",J="20000000-0000-4000-8000-000000000002",C1="30000000-0000-4000-8000-000000000003",C2="30000000-0000-4000-8000-000000000004",R="40000000-0000-4000-8000-000000000004",E="50000000-0000-4000-8000-000000000005",EA1="60000000-0000-4000-8000-000000000006",LA1="70000000-0000-4000-8000-000000000007",EA2="60000000-0000-4000-8000-000000000008",LA2="70000000-0000-4000-8000-000000000009";
 const context={tenantId:T} as VerifiedTenantContext;const owner={membershipId:randomUUID(),identityUserId:randomUUID()},owner2={membershipId:randomUUID(),identityUserId:randomUUID()};let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
@@ -66,6 +68,50 @@ describe("structural recovery fee guard",()=>{
   const allocationsAndDerivations = async (caseId: string, w = base) => (await admin.query("SELECT (SELECT count(*) FROM app.landing_allocation WHERE tenant_id=$1 AND case_id=$2)::int allocations,(SELECT count(*) FROM app.recovery_fee_derivation d JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(d.tenant_id,d.source_allocation_id) WHERE d.tenant_id=$1 AND a.case_id=$2)::int derivations,(SELECT count(*) FROM app.recovery_fee_journal j JOIN app.recovery_fee_derivation d ON(d.tenant_id,d.id)=(j.tenant_id,j.derivation_id) JOIN app.landing_allocation a ON(a.tenant_id,a.id)=(d.tenant_id,d.source_allocation_id) WHERE j.tenant_id=$1 AND a.case_id=$2)::int journal", [w.tenant, caseId])).rows[0];
   const reverseApproved = (allocationId: string, amount: number, w = base) => withTenant(runtime, w.ctx, db => db.$client.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7) id", [w.tenant, randomUUID(), randomUUID(), randomUUID(), allocationId, amount, "Practice receipt reversed"]));
   const viewOf = async (repo: RecoveryCaseRepository, id: string, w = base) => (await repo.list(w.ctx, w.job)).find(x => x.id === id)!;
+
+  it("repair 17: delayed original, below-settled retry, approved reversal and late execution keep the browser attempt unknown until replay", async () => {
+   const repo = new RecoveryCaseRepository(runtime), w = await createWorld(false);
+   let c = await open(repo, 250000, w);
+   c = await step(repo, c, {eventType:"assemble_evidence"}, w);
+   const body = {version:"recovery-case-command.v1",action:"amend_claim",commandId:randomUUID(),caseId:c.id,expectedRevision:c.revision,claimedNetPence:90000};
+   let release!:()=>void, started!:()=>void;
+   const gate = new Promise<void>(resolve=>{release=resolve}), entered = new Promise<void>(resolve=>{started=resolve});
+   // Only the original's connection is gated, before its transaction. All queries,
+   // runtime permissions, replay lookups, posting routines and commits are real PG.
+   const delayedPool = new Proxy(runtime,{get(target,key){
+    if(key==="connect")return async()=>{started();await gate;return target.connect()};
+    const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;
+   }});
+   const original = new RecoveryCaseRepository(delayedPool).command(w.ctx,w.job,body,w.reviewer);
+   const late = original.then(value=>({value}),error=>({error}));
+   try {
+    await entered;
+    const approved = (await readyToLand(c,100000,w))(100000);
+    await land(approved,w);
+    expect(await viewOf(repo,c.id,w)).toMatchObject({revision:c.revision,claimedNetPence:250000,approvedLandedNetPence:100000});
+    const failure = await repo.command(w.ctx,w.job,body,w.reviewer).then(()=>{throw new Error("Expected below-settled refusal")},error=>error as Error & {code:string});
+    expect(failure.code).toBe("RECOVERY_CLAIM_BELOW_SETTLED");
+    const retry = {status:400,body:{code:failure.code}};
+    expect(recoveryCommandRefusalV1.parse(retry)).toEqual(retry);
+    expect(recoveryCommandRefusalRulesV1["RECOVERY_CLAIM_BELOW_SETTLED"].settlesUnknown).toBe(false);
+    expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[w.tenant,body.commandId])).rows[0].n).toBe(0);
+    await reverseApproved(approved.allocationId,100000,w);
+    expect(await viewOf(repo,c.id,w)).toMatchObject({revision:c.revision,claimedNetPence:250000,approvedLandedNetPence:0,landedNetPence:0});
+    release();
+    const result = await late;
+    expect(result).not.toHaveProperty("error");
+    if(!("value" in result))throw result.error;
+    expect(result.value).toMatchObject({id:c.id,claimedNetPence:90000,revision:c.revision+2});
+    // The old retry refusal still cannot settle the attempt after the original commits.
+    expect(recoveryCommandRefusalV1.parse(retry)).toEqual(retry);
+    expect(recoveryCommandRefusalRulesV1["RECOVERY_CLAIM_BELOW_SETTLED"].settlesUnknown).toBe(false);
+    const replay = await repo.command(w.ctx,w.job,body,w.reviewer);
+    expect(replay).toEqual(result.value);
+    expect(recoveryCaseCommandResponseV1.parse({version:"recovery-case-workbench.v1",environment:"synthetic_demo",realExternalActions:0,affectedCaseId:c.id,cases:[replay]})).toMatchObject({affectedCaseId:c.id,cases:[{claimedNetPence:90000}]});
+    expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[w.tenant,body.commandId])).rows[0].n).toBe(1);
+    expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.amend_claim'",[w.tenant,c.id])).rows[0].n).toBe(1);
+   } finally {release();await late}
+  });
 
   it("shows a computed per-case fee; eligibility approval creates neither a landing nor a fee, and an approved landing does (Sol P2, Opus P1 fee label)", async () => {
    const repo = new RecoveryCaseRepository(runtime);

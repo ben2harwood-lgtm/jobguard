@@ -24,7 +24,7 @@ export type CommandAnswer = Readonly<{ status: number; body: unknown }> | undefi
 export type CommandOutcome =
   /** The server saved it and said so in the shape the contract promises. */
   | Readonly<{ kind: "saved"; response: RecoveryCaseCommandResponse }>
-  /** A validated application refusal or recorded payload conflict settles this attempt. */
+  /** A validated first refusal, permanent retry refusal or recorded conflict settles this attempt. */
   | Readonly<{ kind: "refused"; message: string }>
   /** The answer was lost or cannot be used: the command may or may not have been saved, so the attempt is NOT over. */
   | Readonly<{ kind: "unknown"; message: string }>;
@@ -39,8 +39,10 @@ export const refusalText = (body: unknown): string => {
  * Decide what an answer means.
  *
  * Only a known application error with its expected status is a refusal. On retry,
- * a pre-replay refusal leaves the earlier outcome UNKNOWN; a post-replay refusal
- * establishes that no command was recorded. Anything else that is not a valid success is UNKNOWN, including a 5xx (a command can
+ * a refusal only settles an earlier UNKNOWN when its conditions permanently block
+ * the identical original, or the id already has a recorded payload conflict. An
+ * absent replay record cannot prevent a delayed original from executing later.
+ * Anything else that is not a valid success is UNKNOWN, including a 5xx (a command can
  * commit and then fail while its answer is being built, or a gateway can answer for a server that did the work) and a 2xx that does not match the command contract.
  */
 export function commandOutcome(answer: CommandAnswer, earlierOutcomeUnknown = false): CommandOutcome {
@@ -53,9 +55,9 @@ export function commandOutcome(answer: CommandAnswer, earlierOutcomeUnknown = fa
   const refusal = recoveryCommandRefusalV1.safeParse(answer);
   if (!refusal.success) return { kind: "unknown", message: unreadableAnswer };
   const rule = recoveryCommandRefusalRulesV1[refusal.data.body.code];
-  // Session, membership, preflight and parsing checks precede replay, so their
-  // refusals cannot establish what happened to an earlier unknown attempt.
-  if (earlierOutcomeUnknown && rule.stage === "before_replay") return { kind: "unknown", message: `${refusalText(refusal.data.body)}. Your earlier action may or may not have been saved. ${resend}` };
+  // Pre-replay and reversible post-replay refusals cannot settle a delayed original.
+  // Keep its exact request held until replay confirms a durable outcome.
+  if (earlierOutcomeUnknown && !rule.settlesUnknown) return { kind: "unknown", message: `${refusalText(refusal.data.body)}. Your earlier action may or may not have been saved. ${resend}` };
   // An identical retry preserves its body and path. A payload conflict therefore
   // means this id is already recorded under a different server-derived membership
   // hash. The membership is fixed in this synthetic bridge. Once SBOX-SESSION-1

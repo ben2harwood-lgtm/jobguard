@@ -90,3 +90,9 @@ it("repair 16: invalid command parsing is an application 400, while unclassified
   expect(recoveryCommandFailure(new Error(code))).toMatchObject({status:503,body:{code:"RECOVERY_COMMAND_OUTCOME_UNKNOWN",outcome:"unknown"}});
  }
 });
+
+// Repair 17: inherited properties are not application statuses, for either error representation.
+it.each(["constructor", "toString", "__proto__"])("repair 17: inherited read status %s defaults to DATABASE_UNAVAILABLE", code => {
+ expect(recoveryReadFailure(new Error(code))).toEqual({status:503,body:{code:"DATABASE_UNAVAILABLE"}});
+ expect(recoveryReadFailure(Object.assign(new Error("driver failure"),{code}))).toEqual({status:503,body:{code:"DATABASE_UNAVAILABLE"}});
+});

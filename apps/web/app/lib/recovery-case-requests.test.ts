@@ -46,11 +46,14 @@ describe("repair 16: only a validated recovery error with its expected status se
     ["INVALID_COMMAND", 400], ["UNAUTHENTICATED", 401], ["MEMBERSHIP_FORBIDDEN", 403],
     ["RECOVERY_REVIEWER_FORBIDDEN", 403], ["ELIGIBILITY_REVIEWER_FORBIDDEN", 403], ["JOB_NOT_FOUND", 404],
   ] as const;
-  const afterReplay = [
+  const reversibleAfterReplay = [
     ["RECOVERY_JOB_NOT_FOUND", 404], ["RECOVERY_CASE_NOT_FOUND", 404], ["ELIGIBILITY_REVIEW_NOT_FOUND", 404],
-    ["RECOVERY_STALE_REVISION", 409], ["ELIGIBILITY_STALE_REVISION", 409], ["ELIGIBILITY_REVIEW_REQUIRED", 409],
+    ["RECOVERY_STALE_REVISION", 409], ["ELIGIBILITY_STALE_REVISION", 409],
     ["RECOVERY_SOURCE_NOT_RECOGNISED", 400], ["RECOVERY_TRANSITION_FORBIDDEN", 400],
-    ["RECOVERY_CLAIM_BELOW_SETTLED", 400], ["RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE", 400], ["ELIGIBILITY_NOT_APPROVABLE", 400],
+    ["RECOVERY_CLAIM_BELOW_SETTLED", 400],
+  ] as const;
+  const permanentAfterReplay = [
+    ["RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE", 400], ["ELIGIBILITY_REVIEW_REQUIRED", 409], ["ELIGIBILITY_NOT_APPROVABLE", 400],
   ] as const;
   it.each(beforeReplay)("%s/%i settles the first attempt, but a retry cannot establish the earlier outcome", (code, status) => {
     expect(commandOutcome({ status, body: { code } })).toEqual({ kind: "refused", message: code });
@@ -62,16 +65,26 @@ describe("repair 16: only a validated recovery error with its expected status se
       expect(retry.message).toContain("may or may not have been saved");
     }
   });
-  it.each(afterReplay)("%s/%i proves no command was recorded, for a first attempt and a retry", (code, status) => {
+  it.each(permanentAfterReplay)("%s/%i permanently prevents the identical command, for a first attempt and a retry", (code, status) => {
     for (const retry of [false, true]) {
       expect(commandOutcome({ status, body: { code } }, retry)).toEqual({ kind: "refused", message: code });
       expect(commandOutcome({ status, body: { code, message: "Command refused" } }, retry)).toEqual({ kind: "refused", message: "Command refused" });
     }
   });
+  it.each(reversibleAfterReplay)("repair 17: %s/%i refuses a first attempt but cannot settle an unfinished original on retry", (code, status) => {
+    for (const body of [{code}, {code,message:"Command refused"}]) {
+      expect(commandOutcome({status,body})).toEqual({kind:"refused",message:refusalText(body)});
+      const retry = commandOutcome({status,body}, true);
+      expect(retry.kind).toBe("unknown");
+      if(retry.kind!=="unknown")throw new Error("Retry must stay unknown");
+      expect(retry.message).toContain("may or may not have been saved");
+      expect(retry.message).toContain(refusalText(body));
+    }
+  });
   it("the known payload conflict settles both attempts for the current fixed synthetic membership", () => {
     for (const retry of [false, true]) expect(commandOutcome({ status: 409, body: { code: "IDEMPOTENCY_PAYLOAD_CONFLICT" } }, retry)).toEqual({ kind: "refused", message: "IDEMPOTENCY_PAYLOAD_CONFLICT" });
   });
-  it.each([...beforeReplay, ...afterReplay, ["IDEMPOTENCY_PAYLOAD_CONFLICT", 409] as const])("%s cannot settle under a different status than %i", (code, status) => {
+  it.each([...beforeReplay, ...reversibleAfterReplay, ...permanentAfterReplay, ["IDEMPOTENCY_PAYLOAD_CONFLICT", 409] as const])("%s cannot settle under a different status than %i", (code, status) => {
     for (const otherStatus of [400, 401, 403, 404, 408, 409, 422, 429, 500, 503].filter(value => value !== status)) {
       for (const retry of [false, true]) expect(commandOutcome({ status: otherStatus, body: { code } }, retry), `${code}/${otherStatus}, retry=${retry}`).toEqual({ kind: "unknown", message: unreadableAnswer });
     }

@@ -336,3 +336,83 @@ test("approved £2,500 plus overlapping manual £1,000 remains received in full 
  await expect(page.getByText("Practice sandbox — synthetic data; nothing is sent or charged",{exact:true})).toHaveCount(1);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });
+
+// Repair 17: transport failure leaves the first request queued, while every result
+// and refusal below comes from the real application/PostgreSQL. No success API is fulfilled.
+test("repair 17: a below-settled retry keeps a delayed £900 amendment held across an approved reversal and late execution", async ({page,browser}) => {
+ const {Pool} = await import("pg"), {randomUUID} = await import("node:crypto");
+ const jobId = await confirmedJob(page), path = `/api/jobs/${jobId}/recovery-cases`;
+ await button(page,"Open £2,500 withheld payment").click(); await V(page,"case-claimed-net","£2,500.00");
+ await button(page,"Evidence assembled").click(); await V(page,"case-state","Evidence assembled");
+ const c = (await (await page.request.get(path)).json()).cases[0] as {id:string;revision:number};
+ const admin = new Pool({host:"127.0.0.1",port:55432,user:"postgres",password:"sbox-e2e-owner",database:"jobguard_synthetic_demo",max:1});
+ let release!:()=>void;
+ const gate = new Promise<void>(resolve=>{release=resolve});
+ let original:ReturnType<typeof page.request.post>|undefined;
+ const sent:string[] = [];
+ await page.route(`**${path}`,async route=>{
+  if(route.request().method()!=="POST"){await route.continue();return}
+  const body = route.request().postData()!; sent.push(body);
+  if(sent.length===1){
+   // Delay forwarding the original request and abort only its browser transport.
+   // page.request uses the same authenticated cookies and bypasses route interception.
+   original = gate.then(()=>page.request.post(route.request().url(),{data:JSON.parse(body)}));
+   await route.abort("connectionfailed");
+  } else await route.continue();
+ });
+ try {
+  await page.getByLabel("New claimed amount (£)",{exact:true}).fill("900.00"); await button(page,"Amend claim").click();
+  const alert = page.locator("p[role=alert]");
+  await expect(alert).toContainText("may or may not have been saved"); await expect(alert).toBeFocused();
+  expect(sent).toHaveLength(1);
+  const body = JSON.parse(sent[0]!) as {commandId:string;expectedRevision:number};
+  expect(body).toMatchObject({action:"amend_claim",caseId:c.id,expectedRevision:c.revision,claimedNetPence:90000});
+  const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1",[jobId])).rows[0].tenant_id;
+  const activation=randomUUID(),upload=randomUUID(),evidence=randomUUID(),receipt=randomUUID(),eligibility=randomUUID(),landing=randomUUID(),allocation=randomUUID();
+  const db=await admin.connect();
+  try {
+   await db.query("BEGIN");
+   await db.query("SET LOCAL session_replication_role=replica");
+   await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES($1,$2,$3,$4,1,repeat('a',64),'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$5,now())",[activation,tenantId,jobId,randomUUID(),randomUUID()]);
+   await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",[randomUUID(),tenantId,jobId,activation,randomUUID()]);
+   await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES($1,$2,$3,$4,repeat('b',64),'application/pdf',1,'standard_evidence','verified','synthetic-v1',now(),now()+interval '1 hour')",[upload,tenantId,jobId,`synthetic/${upload}`]);
+   await db.query("SET LOCAL session_replication_role=origin");
+   await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'synthetic-v1',repeat('b',64),1,'application/pdf','standard_evidence',now(),now())",[evidence,tenantId,upload,jobId,`synthetic/${upload}`]);
+   await db.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1::uuid,$2,$3,$1::text,$1::text,'settled',100000,'GBP',true,now())",[receipt,tenantId,jobId]);
+   for(const [id,kind] of [[eligibility,"eligibility"],[landing,"landing"]]) await db.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id)VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',now()+interval '1 hour',$7)",[id,tenantId,jobId,c.id,kind,c.revision,randomUUID()]);
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
+   await db.query("SET LOCAL ROLE jobguard_runtime");
+   await db.query("SELECT app.approve_synthetic_landing($1::jsonb)",[{version:"recovery.landing.approve.v1",policyVersion:"reference_fee_policy_v1",jobId,caseId:c.id,expectedCaseRevision:c.revision,receiptId:receipt,evidenceId:evidence,eligibilityApprovalId:eligibility,landingApprovalId:landing,allocationId:allocation,derivationId:randomUUID(),journalId:randomUUID(),grossPence:100000,eligibleNetPence:100000,currency:"GBP",netTaxBasis:"known_net",causationConfirmed:true}]);
+   await db.query("COMMIT");
+  } catch(error) {await db.query("ROLLBACK");throw error} finally {db.release()}
+  const retryResponse = page.waitForResponse(r=>r.url().endsWith(path)&&r.request().method()==="POST");
+  await button(page,"Try again").click();
+  const refused = await retryResponse; expect(refused.status()).toBe(400); expect(await refused.json()).toMatchObject({code:"RECOVERY_CLAIM_BELOW_SETTLED"});
+  expect(sent).toHaveLength(2); expect(sent[1]).toBe(sent[0]);
+  await expect(alert).toContainText("may or may not have been saved"); await expect(alert).toBeFocused();
+  for(const name of ["Open materials-320 overcharge","Open £320 withheld payment","Open £2,500 withheld payment","Record prevention"])await expect(button(page,name)).toBeDisabled();
+  expect((await (await page.request.get(path)).json()).cases[0]).toMatchObject({revision:c.revision,approvedLandedNetPence:100000,claimedNetPence:250000});
+  const reversed=await admin.connect();
+  try {
+   await reversed.query("BEGIN"); await reversed.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]); await reversed.query("SET LOCAL ROLE jobguard_runtime");
+   await reversed.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7)",[tenantId,randomUUID(),randomUUID(),randomUUID(),allocation,100000,"Practice receipt reversed"]);
+   await reversed.query("COMMIT");
+  } catch(error) {await reversed.query("ROLLBACK");throw error} finally {reversed.release()}
+  expect((await (await page.request.get(path)).json()).cases[0]).toMatchObject({revision:c.revision,approvedLandedNetPence:0,claimedNetPence:250000});
+  release(); expect(original).toBeDefined(); const late=await original!; expect(late.status()).toBe(200);
+  expect((await late.json()).cases[0]).toMatchObject({id:c.id,claimedNetPence:90000,revision:c.revision+2});
+  await expect(alert).toContainText("may or may not have been saved"); await expect(button(page,"Open £320 withheld payment")).toBeDisabled();
+  await expectTouchTarget(button(page,"Try again"));
+  await button(page,"Try again").click(); await V(page,"case-claimed-net","£900.00");
+  expect(sent).toHaveLength(3); expect(sent[2]).toBe(sent[0]); await expect(alert).toHaveCount(0);
+  await expect(button(page,"Open £320 withheld payment")).toBeEnabled();
+  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[tenantId,body.commandId])).rows[0].n).toBe(1);
+  const persisted=await (await page.request.get(path)).json();
+  expect(persisted.cases).toHaveLength(1); expect(persisted.cases[0]).toMatchObject({id:c.id,claimedNetPence:90000,revision:c.revision+2,landedNetPence:0});
+  await page.reload(); await V(page,"case-claimed-net","£900.00");
+  const second=await signedInSecondPage(browser,jobId);
+  try {await V(second.secondPage,"case-claimed-net","£900.00");expect(await (await second.secondPage.request.get(path)).json()).toEqual(persisted)} finally {await second.context.close()}
+  await expect(page.getByText("Practice sandbox — synthetic data; nothing is sent or charged",{exact:true})).toHaveCount(1);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+ } finally {release();if(original)await original;await admin.end()}
+});

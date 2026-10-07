@@ -3,27 +3,33 @@ import { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryCaseStateF
 export { recoveryCaseCommandV1, recoveryEligibilityCommandV1 };
 
 // V1 application error contract shared by the server and workbench. The stage is
-// where a refusal is raised, not part of the wire body. Only after-replay refusals
-// establish that an earlier unknown command was not recorded under the same lock.
+// where a refusal is raised, not part of the wire body. Replay absence only proves
+// nothing was recorded YET: a delayed original may still execute. settlesUnknown
+// requires a permanent barrier to that identical command, or a recorded conflict.
+// Missing records/sources can appear; stale checks also cover expected revisions
+// ahead of current ones; transition amount guards use independently reversible cash.
+// Closed-claim guards depend only on case history. Eligibility approval guards run
+// AFTER matching the exact immutable review revision. Those three refusals cannot
+// become false without invalidating the command's bound revision.
 export const recoveryCommandRefusalRulesV1 = {
- INVALID_COMMAND: { status: 400, stage: "before_replay" },
- UNAUTHENTICATED: { status: 401, stage: "before_replay" },
- MEMBERSHIP_FORBIDDEN: { status: 403, stage: "before_replay" },
- RECOVERY_REVIEWER_FORBIDDEN: { status: 403, stage: "before_replay" },
- ELIGIBILITY_REVIEWER_FORBIDDEN: { status: 403, stage: "before_replay" },
- JOB_NOT_FOUND: { status: 404, stage: "before_replay" },
- RECOVERY_JOB_NOT_FOUND: { status: 404, stage: "after_replay" },
- RECOVERY_CASE_NOT_FOUND: { status: 404, stage: "after_replay" },
- ELIGIBILITY_REVIEW_NOT_FOUND: { status: 404, stage: "after_replay" },
- RECOVERY_STALE_REVISION: { status: 409, stage: "after_replay" },
- ELIGIBILITY_STALE_REVISION: { status: 409, stage: "after_replay" },
- ELIGIBILITY_REVIEW_REQUIRED: { status: 409, stage: "after_replay" },
- RECOVERY_SOURCE_NOT_RECOGNISED: { status: 400, stage: "after_replay" },
- RECOVERY_TRANSITION_FORBIDDEN: { status: 400, stage: "after_replay" },
- RECOVERY_CLAIM_BELOW_SETTLED: { status: 400, stage: "after_replay" },
- RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE: { status: 400, stage: "after_replay" },
- ELIGIBILITY_NOT_APPROVABLE: { status: 400, stage: "after_replay" },
- IDEMPOTENCY_PAYLOAD_CONFLICT: { status: 409, stage: "recorded_conflict" },
+ INVALID_COMMAND: { status: 400, stage: "before_replay", settlesUnknown: false },
+ UNAUTHENTICATED: { status: 401, stage: "before_replay", settlesUnknown: false },
+ MEMBERSHIP_FORBIDDEN: { status: 403, stage: "before_replay", settlesUnknown: false },
+ RECOVERY_REVIEWER_FORBIDDEN: { status: 403, stage: "before_replay", settlesUnknown: false },
+ ELIGIBILITY_REVIEWER_FORBIDDEN: { status: 403, stage: "before_replay", settlesUnknown: false },
+ JOB_NOT_FOUND: { status: 404, stage: "before_replay", settlesUnknown: false },
+ RECOVERY_JOB_NOT_FOUND: { status: 404, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_CASE_NOT_FOUND: { status: 404, stage: "after_replay", settlesUnknown: false },
+ ELIGIBILITY_REVIEW_NOT_FOUND: { status: 404, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_STALE_REVISION: { status: 409, stage: "after_replay", settlesUnknown: false },
+ ELIGIBILITY_STALE_REVISION: { status: 409, stage: "after_replay", settlesUnknown: false },
+ ELIGIBILITY_REVIEW_REQUIRED: { status: 409, stage: "after_replay", settlesUnknown: true },
+ RECOVERY_SOURCE_NOT_RECOGNISED: { status: 400, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_TRANSITION_FORBIDDEN: { status: 400, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_CLAIM_BELOW_SETTLED: { status: 400, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_CLAIM_AMENDMENT_ON_CLOSED_CASE: { status: 400, stage: "after_replay", settlesUnknown: true },
+ ELIGIBILITY_NOT_APPROVABLE: { status: 400, stage: "after_replay", settlesUnknown: true },
+ IDEMPOTENCY_PAYLOAD_CONFLICT: { status: 409, stage: "recorded_conflict", settlesUnknown: true },
 } as const;
 type RecoveryCommandRefusalCode = keyof typeof recoveryCommandRefusalRulesV1;
 const refusalCodes = Object.keys(recoveryCommandRefusalRulesV1) as [RecoveryCommandRefusalCode, ...RecoveryCommandRefusalCode[]];

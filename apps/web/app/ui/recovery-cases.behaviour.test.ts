@@ -678,7 +678,8 @@ describe("M4-1-S-R repair 13, Sol P2-2: an unknown save outcome never permits a 
   it.each([
     ["RECOVERY_STALE_REVISION", 409], ["RECOVERY_CASE_NOT_FOUND", 404], ["RECOVERY_JOB_NOT_FOUND", 404],
     ["RECOVERY_TRANSITION_FORBIDDEN", 400], ["RECOVERY_SOURCE_NOT_RECOGNISED", 400], ["RECOVERY_CLAIM_BELOW_SETTLED", 400],
-  ] as const)("repair 16: a retry refused after replay with %s/%i releases the hold and can reload", async (code, status) => {
+    ["ELIGIBILITY_REVIEW_NOT_FOUND", 404], ["ELIGIBILITY_STALE_REVISION", 409],
+  ] as const)("repair 17: a reversible post-replay refusal %s/%i retains the original attempt and blocks new commands", async (code, status) => {
     const w = await ready();
     w.click("Open £320 withheld payment"); await w.settle();
     const first = writes()[0]!;
@@ -688,15 +689,20 @@ describe("M4-1-S-R repair 13, Sol P2-2: an unknown save outcome never permits a 
     expect(writes()[1]!.url).toBe(first.url);
     writes()[1]!.json({ code }, status); await w.settle();
     expect(w.screen().alert()).not.toBe("");
-    expect(w.screen().alert()).not.toContain(MAY);
+    expect(w.screen().alert()).toContain(MAY);
+    for (const name of OPEN_BUTTONS) {
+      expect(w.screen().button(name).props.disabled, name).toBe(true);
+      w.forceClick(name);
+    }
+    await w.settle(); expect(writes()).toHaveLength(2);
     w.click("Try again"); await w.settle();
-    expect(writes()).toHaveLength(2);
-    expect(reads()).toHaveLength(2);
-    reads()[1]!.json(answerBody([])); await w.settle();
-    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
-    w.click("Open £320 withheld payment"); await w.settle();
+    expect(reads()).toHaveLength(1);
     expect(writes()).toHaveLength(3);
-    expect(commandIdOf(writes()[2]!)).not.toBe(commandIdOf(first));
+    expect(writes()[2]!.body).toEqual(first.body);
+    expect(writes()[2]!.url).toBe(first.url);
+    writes()[2]!.json(answerBody([caseView()], CASE_A)); await w.settle();
+    expect(w.screen().alert()).toBe("");
+    for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled, name).toBe(false);
   });
 
   it("moving to another job abandons the held request: job B starts clean and nothing is ever re-sent for job A", async () => {
@@ -928,4 +934,39 @@ describe("repair 15: an authorisation refusal leaves the original unknown attemp
     writes()[1]!.json(answerBody([caseView()], CASE_A)); await w.settle();
     expect(w.screen().testId("case-claimed-net")).toBe("£320.00");
   });
+});
+
+
+describe("repair 17: a refusal is not a durable result for a delayed original", () => {
+ const MAY = "may or may not have been saved";
+ it("delayed £900 amendment, refused retry, approved reversal and late original stay unknown until identical replay confirms the save", async () => {
+  // The adapter models an original waiting before the transaction; its lost response cannot cancel execution.
+  const originalCase = caseView({claimedNetPence:250000,landedNetPence:0,outstandingNetPence:250000,state:"evidence_assembled",revision:3});
+  let persisted = originalCase;
+  const w = start(); await w.settle(); reads()[0]!.json(answerBody([persisted])); await w.settle();
+  const label = [...walk(w.inst.tree)].find(el => el.type === "label" && textOf(el).startsWith("New claimed amount (£)"))!;
+  const input = [...walk(label)].find(el => el.type === "input")!;
+  (input.props.onChange as (e:{target:{value:string}})=>void)({target:{value:"900.00"}}); await w.settle();
+  w.click("Amend claim"); await w.settle(); const first = writes()[0]!;
+  expect(first.body).toMatchObject({action:"amend_claim",caseId:CASE_A,claimedNetPence:90000,expectedRevision:3});
+  const executeDelayedOriginal = () => {persisted = {...persisted,claimedNetPence:90000,outstandingNetPence:90000,revision:5}};
+  first.reject(); await w.settle();
+  persisted = {...persisted,approvedLandedNetPence:100000,landedNetPence:100000,outstandingNetPence:150000};
+  w.click("Try again"); await w.settle();
+  expect(writes()[1]!.body).toEqual(first.body);
+  writes()[1]!.json({code:"RECOVERY_CLAIM_BELOW_SETTLED"},400); await w.settle();
+  expect(w.screen().alert()).toContain(MAY);
+  for (const name of OPEN_BUTTONS) {expect(w.screen().button(name).props.disabled,name).toBe(true);w.forceClick(name)}
+  await w.settle(); expect(writes()).toHaveLength(2);
+  // An approved reversal changes money but not revision, so the delayed identical request can execute.
+  persisted = {...persisted,approvedLandedNetPence:0,landedNetPence:0,outstandingNetPence:250000};
+  expect(persisted.revision).toBe(3); executeDelayedOriginal();
+  expect(w.screen().alert()).toContain(MAY);
+  w.click("Try again"); await w.settle();
+  expect(reads()).toHaveLength(1); expect(writes()).toHaveLength(3);
+  expect(writes()[2]!.body).toEqual(first.body); expect(writes()[2]!.url).toBe(first.url);
+  writes()[2]!.json(answerBody([persisted],CASE_A)); await w.settle();
+  expect(w.screen().alert()).toBe(""); expect(w.screen().testId("case-claimed-net")).toBe("£900.00");
+  for (const name of OPEN_BUTTONS) expect(w.screen().button(name).props.disabled,name).toBe(false);
+ });
 });
