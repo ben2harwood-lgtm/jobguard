@@ -147,6 +147,26 @@ Operations-only `assign_commercial_track` has no runtime/infrastructure EXECUTE 
 
 Forward fix is preferred: revert application usage first, retain append-only data, then apply a separately reviewed corrective migration. Do not drop populated commercial history or rewrite versions. The preceding demo is unchanged apart from its expected migration count and expanded catalog assertions. Fresh install and Neon owner-role compatibility remain covered by existing migration/bootstrap tests; ENT-1 additionally tests upgrade from the previous schema. No seed modifies existing tenants.
 
+## 0094 — SBOX-SESSION-1 practice ownership
+
+Reserved by the §12.2 ledger amendment under Ben's 5 October 2026 merge-ahead ruling. Adds a restricted `control_plane.practice_session` registry of token digests, expiry/revocation and synthetic environment; it is a reviewed identity/control-plane exception, contains no business content, and grants runtime neither schema usage nor table access. Narrow fixed-search-path routines issue/authenticate the synthetic principal against current owner membership. New generated home scenarios are owned at insertion, rather than assigning legacy fixture jobs to the first viewer.
+
+Adds nullable immutable creator-session digest and scenario to `app.job`, with a session FK and complete-pair check. Capture persists both in its creation transaction and verifies ownership before idempotent replay. Sandbox creation also binds both before writing run/audit records. FORCE RLS and existing job/runtime grants remain; runtime cannot update ownership and the trigger rejects owner-role attempts to transfer or backfill it. No legacy attribution or first-touch backfill. Legacy/unbound jobs are intentionally inaccessible through practice applications; the underlying existing non-practice fixture tests remain valid.
+
+Forward fix: preserve bindings and revoke affected sessions; repair a routine or guard in a later reviewed migration. Do not drop the ownership check, rewrite owners or roll back application code to UUID-shape authorization. A destructive schema rollback is unsuitable after owned practice jobs exist. New synthetic authentication sessions have a seven-day server expiry and session-cookie lifetime; this does not establish a production identity or retention policy. Database fresh/upgrade/catalog/privilege and adversarial regressions must run in CI; they were not executed in the restricted builder sandbox.
+
+Round-2 repair (7 October): the same unmerged 0094 also binds new practice
+merchant, SKU, alias, pack-conversion and rate rows to the authenticated session
+digest. Restrictive policies combine with the existing tenant policy; FORCE RLS,
+`jobguard_migration` ownership and runtime SELECT/INSERT-only grants are unchanged.
+Invoker triggers prohibit ownership changes and mismatched parent/requirement
+links. Existing unbound rows are not attributed or copied. Non-practice material
+repositories keep their original tenant-wide catalogue and revision behavior.
+Practice material transactions install the digest locally before business SQL;
+purchase-order pricing and evidence-pack supplier agreements use the same scope.
+The existing forward-fix/revocation strategy applies. CI must run the two-session
+regression, preceding-schema upgrade and earlier real-tenant material tests.
+
 ### 0100 — SV-2 shadow persistence and isolation
 
 Expand-only after 0054. Adds eight restricted shadow tables and one append-only
