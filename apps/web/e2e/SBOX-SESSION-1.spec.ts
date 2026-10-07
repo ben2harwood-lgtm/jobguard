@@ -47,6 +47,8 @@ test("creation binds ownership before another session's first read or write", as
       const { jobId, proposal } = await liveCapture.json();
       await page.goto(`/jobs/${jobId}`);
       await expect(page.getByRole("heading", { name: "Check the work items" })).toBeVisible();
+      await page.getByRole("button",{name:"Save customer and site",exact:true}).click();
+      await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
       for (const line of proposal.lines) {
         await page.getByRole("button", { name: `Accept ${line.description.value}`, exact: true }).click();
         if (line.quantity.value === null) await page.getByLabel(`Quantity ${line.description.value}`, { exact: true }).fill("1");
