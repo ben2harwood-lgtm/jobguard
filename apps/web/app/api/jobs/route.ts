@@ -1,3 +1,4 @@
+import { practiceFailure } from "../../lib/synthetic-server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { tenantIdV1 } from "../../lib/contracts";
@@ -7,7 +8,7 @@ export async function GET(request: NextRequest) {
   if (!hasSyntheticSession((await cookies()).get("jg_session")?.value)) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   const parsed = tenantIdV1.safeParse(request.nextUrl.searchParams.get("tenantId"));
   let workspace: Awaited<ReturnType<typeof syntheticWorkspace>>;
-  try { workspace = await syntheticWorkspace(); } catch { return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
+  try { workspace = await syntheticWorkspace(); } catch (practiceError){const denied=practiceFailure(practiceError);if(denied)return denied; return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
   if (!parsed.success || !workspace.tenants.some(({ id }) => id === parsed.data)) return NextResponse.json({ code: "TENANT_FORBIDDEN" }, { status: 403 });
   const requestedJob = request.nextUrl.searchParams.get("jobId");
   const visible = workspace.jobs.filter((job) => job.tenantId === parsed.data);

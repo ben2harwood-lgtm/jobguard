@@ -31,6 +31,7 @@ export async function readSyntheticDemo(pool: Pool) {
       `SELECT id::text,title,status,revision,updated_at AS "updatedAt"
          FROM app.job j
          WHERE j.tenant_id=$1
+           AND j.practice_session_digest IS NULL
            AND NOT EXISTS (
              SELECT 1 FROM app.job_record_proposal cp
               WHERE cp.tenant_id=j.tenant_id AND cp.job_id=j.id

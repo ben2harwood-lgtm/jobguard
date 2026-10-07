@@ -52,5 +52,8 @@ export * from "./discrepancy-repository.js";
 export * from "./readiness-repository.js";
 export * from "./inbox-relevance-repository.js";
 export * from "./evidence-pack-repository.js";
+export * from "./contractor-repository.js";
+
+export * from "./practice-session.js";
 export * from "./recovery-message-adapter.js";
 export * from "./recovery-message-repository.js";

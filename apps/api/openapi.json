@@ -1074,46 +1074,48 @@
         ]
       }
     },
-    "/recovery-cases/{id}/messages": {
+    "/contractor/practice": {
+      "post": {
+        "operationId": "ContractorController_start",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Generate an isolated synthetic contractor organisation; no sends or charges",
+        "tags": [
+          "contractor-organisation"
+        ]
+      }
+    },
+    "/contractor": {
       "get": {
-        "operationId": "RecoveryMessageController_get",
+        "operationId": "ContractorController_read",
         "parameters": [],
         "responses": {
           "200": {
             "description": ""
           }
         },
-        "summary": "Read the saved practice messages, delivery state and practice sink for a recovery case",
+        "summary": "Read contractor organisation or scoped immutable client contracts",
         "tags": [
-          "recovery-messages"
-        ]
-      },
-      "post": {
-        "operationId": "RecoveryMessageController_preview",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Preview the exact factual practice message bound to the attachment-approved evidence pack; exact replays return current case/message state",
-        "tags": [
-          "recovery-messages"
+          "contractor-organisation"
         ]
       }
     },
-    "/recovery-cases/{id}/messages/{messageId}/commands": {
+    "/contractor/commands": {
       "post": {
-        "operationId": "RecoveryMessageController_command",
+        "operationId": "ContractorController_command",
         "parameters": [],
         "responses": {
           "201": {
             "description": ""
           }
         },
-        "summary": "Approve, revoke, advance or reconcile a practice message by an exact versioned command; exact replays return current case/message state",
+        "summary": "Execute an audited versioned contractor administration command",
         "tags": [
-          "recovery-messages"
+          "contractor-organisation"
         ]
       }
     }
