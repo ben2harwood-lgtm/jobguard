@@ -1,0 +1,77 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/sbox-session-1/apps/api
+
+ ❯ src/proof/proof.application.test.ts (5 tests | 1 failed) 26ms
+   × proof complete preserves ownership and domain validation for owned pending upload 16ms
+ ❯ src/evidence-pack.application.test.ts (14 tests | 5 failed) 52ms
+     × list binds every repository call to the authorized material scope 16ms
+     × generate binds every repository call to the authorized material scope 14ms
+     × approveAttachment binds every repository call to the authorized material scope 1ms
+     × inspect binds every repository call to the authorized material scope 1ms
+     × download binds every repository call to the authorized material scope 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/evidence-pack.application.test.ts > evidence pack API repair boundaries > list binds every repository call to the authorized material scope
+ FAIL  src/evidence-pack.application.test.ts > evidence pack API repair boundaries > inspect binds every repository call to the authorized material scope
+ FAIL  src/evidence-pack.application.test.ts > evidence pack API repair boundaries > download binds every repository call to the authorized material scope
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ src/evidence-pack.application.test.ts:87:36
+     85|       if (method === "download") await app.download(sessionId, caseId,…
+     86|       const calls = method === "generate" || method === "approveAttach…
+     87|       expect(practiceMaterialPool).toHaveBeenCalledTimes(calls);
+       |                                    ^
+     88|       for (const call of vi.mocked(practiceMaterialPool).mock.calls) e…
+     89|       expect(repository.binding.mock.calls).toEqual(Array.from({ lengt…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/evidence-pack.application.test.ts > evidence pack API repair boundaries > generate binds every repository call to the authorized material scope
+AssertionError: expected "vi.fn()" to be called 2 times, but got 1 times
+ ❯ src/evidence-pack.application.test.ts:87:36
+     85|       if (method === "download") await app.download(sessionId, caseId,…
+     86|       const calls = method === "generate" || method === "approveAttach…
+     87|       expect(practiceMaterialPool).toHaveBeenCalledTimes(calls);
+       |                                    ^
+     88|       for (const call of vi.mocked(practiceMaterialPool).mock.calls) e…
+     89|       expect(repository.binding.mock.calls).toEqual(Array.from({ lengt…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/evidence-pack.application.test.ts > evidence pack API repair boundaries > approveAttachment binds every repository call to the authorized material scope
+AssertionError: expected "vi.fn()" to be called 2 times, but got 0 times
+ ❯ src/evidence-pack.application.test.ts:87:36
+     85|       if (method === "download") await app.download(sessionId, caseId,…
+     86|       const calls = method === "generate" || method === "approveAttach…
+     87|       expect(practiceMaterialPool).toHaveBeenCalledTimes(calls);
+       |                                    ^
+     88|       for (const call of vi.mocked(practiceMaterialPool).mock.calls) e…
+     89|       expect(repository.binding.mock.calls).toEqual(Array.from({ lengt…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/proof/proof.application.test.ts > proof complete preserves ownership and domain validation for owned pending upload
+AssertionError: expected [Function] to throw error including 'PROOF_INVALID' but got 'NOT_FOUND'
+
+Expected: "PROOF_INVALID"
+Received: "NOT_FOUND"
+
+ ❯ src/proof/proof.application.test.ts:32:161
+     30|     const get = vi.spyOn(app, "get").mockResolvedValue({ scopeItemId: …
+     31|     const complete = vi.spyOn(ProofCommandService.prototype, "complete…
+     32|     await expect(app.command(jobId, { version: "practice-proof-command…
+       |                                                                                                                                                                 ^
+     33|       scenario === "owned pending upload" ? "PROOF_INVALID" : "NOT_FOU…
+     34|     expect(complete).toHaveBeenCalledTimes(scenario === "owned pending…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  6 failed | 13 passed (19)
+   Start at  13:31:38
+   Duration  9.30s (transform 11.36s, setup 0ms, import 17.63s, tests 78ms, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sbox-session-1/apps/api:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/evidence-pack.application.test.ts src/proof/proof.application.test.ts
