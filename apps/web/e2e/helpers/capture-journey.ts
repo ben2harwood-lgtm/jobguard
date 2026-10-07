@@ -27,6 +27,8 @@ export async function openReview(page: Page) {
   const checkDraft = page.getByRole("button", { name: "Check and edit my draft" });
   await expect(checkDraft).toBeVisible(); await expect(checkDraft).toBeEnabled(); await checkDraft.click();
   await expect(page.getByRole("heading", { name: "Check the work items" })).toBeVisible();
+  await page.getByRole("button",{name:"Save customer and site",exact:true}).click();
+  await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
 }
 
 export async function confirmCapturedScope(page: Page) {

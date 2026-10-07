@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import { EvidenceService, ProofCommandService, migrate, withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { listConfirmedPracticeScopes } from "../src/practice-scope.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenant="a1000000-0000-4000-8000-000000000001", otherTenant="a1000000-0000-4000-8000-000000000002";
 const job="a2000000-0000-4000-8000-000000000001",otherJob="a2000000-0000-4000-8000-000000000002",emptyJob="a2000000-0000-4000-8000-000000000003",foreignJob="a2000000-0000-4000-8000-000000000004";
@@ -19,8 +19,8 @@ const context={tenantId:tenant} as VerifiedTenantContext,foreignContext={tenantI
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 beforeAll(async()=>{
  directory=await mkdtemp(join(tmpdir(),"jobguard-practice-scope-"));const port=59000+Math.floor(Math.random()*300);
- postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
- admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);
+ postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
+ admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id) VALUES('${tenant}'),('${otherTenant}');
  INSERT INTO identity.identity_user(id) VALUES('a4000000-0000-4000-8000-000000000001');
  INSERT INTO app.account(id,tenant_id,name) VALUES('a5000000-0000-4000-8000-000000000001','${tenant}','Synthetic proof regression');

@@ -90,7 +90,7 @@ export class UserCommandDispatcher {
       await database.$client.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolutionId,context.tenantId,decisionId,command.actorMembershipId]);
       await database.$client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[authorizationId,context.tenantId,decisionId,resolutionId,command.actorMembershipId,command.action.actionType,command.action.recipient,command.action.contentHash,command.action.aggregateRevision,command.action.amountPence,command.action.currency,command.action.policyVersion,command.action.expiresAt]);
-      const result=await handler.mutate(database,command);
+      const result=await handler.mutate(database,{...command,decisionId,resolutionId,authorizationId});
       await appendAuditBatch(database,[...(handler.auditEvents?.(result,command)??[]),{id:randomUUID(),version:"audit.v1",actorRef:`membership:${command.actorMembershipId}`,eventType:"command.succeeded",subjectType:command.subjectType,subjectRef:command.subjectRef,payload:{references:{commandId:command.commandId,authorizationId},classifications:{action:"commercial"}}}]);
       await database.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,command.commandId,JSON.stringify(result)]);
       return result;

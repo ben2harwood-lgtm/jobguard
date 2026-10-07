@@ -115,6 +115,105 @@ Existing 0041 rows keep their historical labels and lack a verified artifact/req
 
 0042 first updates the two 0041 tenant policies to use missing-safe, empty-safe tenant context, so the migration no longer fails with `unrecognized configuration parameter` under `jobguard_migration`. That alone would make the new case-qualified foreign key pass without looking at any row (the owner has no tenant context under FORCE RLS), so 0042 also lifts FORCE ROW LEVEL SECURITY on `evidence_pack` and `evidence_pack_revision` for the one `ADD CONSTRAINT … FOREIGN KEY` statement, inside the same transaction, and restores it immediately afterwards. Existing rows are therefore genuinely validated: a 0041 revision whose case differs from its pack's case makes 0042 fail with 23503 and roll back, and the data must be corrected first. Absent context still admits no rows; ownership, policies and runtime grants are unchanged and FORCE is never off outside the migration. No business rows are rewritten. Proof: `packages/db/test/evidence-pack-upgrade.integration.test.ts` (real 0041 database, applied as `jobguard_migration`).
 
+### 0095 — CH-3a job parties
+
+Renumbered from reserved 0051 under the 7 October merge-ahead ledger amendment
+(BUILD_PLAN §12.2). SQL is unchanged; the runner applies it last, after merged
+0053. There are still 45 registered migrations (0000–0042, 0053, 0095).
+
+Expand-only customer/site identities and revisions, append-only party bindings,
+a unique current pointer, tenant/job-qualified activation/import references, and
+nullable document snapshot columns. Existing quote/invoice snapshots, bytes and
+hashes are untouched. New quote PDFs and synthetic invoices include the exact
+party revisions. Customer/site/binding mutations are denied to runtime; only the
+narrow binding routine can advance the current pointer and job revision.
+
+Each of the one-to-four address-line strings rejects CR/LF in the versioned
+schema before trimming (`INVALID_PARTIES`) and in the named database constraint
+`site_revision_address_lines_no_cr_lf`. This preserves the editor's one-row-per-line
+round trip and unchanged-save identity. The unapplied 0095 migration is amended
+in place; no existing party history is rewritten. After rollout, forward-fix a
+constraint under review rather than dropping immutable revisions or bindings.
+
+Encoding: site revision writes and synthetic party backfill need a UTF8 database.
+0095 can be installed on an empty SQL_ASCII database: the text validator uses
+ASCII dollar-quoted regex escapes, interpreted at execution rather than Unicode
+SQL literals converted at CREATE FUNCTION time. In UTF8 these preserve the
+JavaScript trim set and UTF-16 length rule. Site match keys apply NFKC `normalize()`,
+which PostgreSQL only allows when the server encoding is UTF8 (otherwise every
+site revision insert fails with "Unicode normalization can only be performed if
+server encoding is UTF8"). Neon and the standard PostgreSQL images are UTF8; the
+embedded test clusters that write site revisions pass `--encoding=UTF8` to `initdb`
+because `embedded-postgres` starts `initdb` with no locale environment, which would
+otherwise create SQL_ASCII. Practice-session issuance now writes a generated site
+revision, so the practice-session suite (`practice-session.integration.test.ts`) passes
+`--encoding=UTF8` too. The party suite also installs the complete migration
+chain in an explicitly SQL_ASCII database; the six earlier non-UTF8 suites retain
+their original encoding flags.
+
+The runner sets the backfill mode inside 0095's transaction. Only an explicit
+`JOBGUARD_ENV=synthetic_demo` uses the generated recipe (Practice Customer,
+14 Fictional Street, London, SW1A 1AA), preserving the latest issued quote's
+customer name when present. All other modes create details-needed Decisions and
+invent no parties. Backfill iterates control-plane tenant IDs and sets tenant
+context before reading each tenant's jobs, including under the Neon migration
+role and FORCE RLS. The migration registry makes reruns idempotent.
+
+The existing 13-argument adoption routine now refuses missing parties. The
+18-argument routine accepts verified customer/site revision references and binds
+before entering live. It is a controlled write: inside the routine it requires a
+current owner membership for the actor, a `processing` `job.adopt_in_flight`
+command receipt for that actor, and an unexpired, unrevoked, approved
+authorization bound to the same job, actor, content hash, amount, policy version
+and zero aggregate revision (`FORBIDDEN` / `AUTHORIZATION_INVALID`, SQLSTATE
+42501). The command dispatcher supplies the command and authorization ids and
+appends the audit events in the same transaction, so a refusal leaves no receipt,
+decision, job or audit row.
+
+The receipt must be the adoption's own (`semantic_key = import:<job>`). A
+deferred constraint trigger on `app.imported_job_baseline` makes the record
+mandatory at commit: a succeeded adoption receipt for that job and actor, a
+`command.succeeded` audit event naming that receipt and an authorization bound to
+the same job, actor, baseline hash, amount and terms, and the adoption's own
+`job.imported_baseline_attested` event. A direct call that does not complete the
+receipt and append both events cannot commit (`ADOPTION_RECORD_REQUIRED`,
+SQLSTATE 23514).
+
+Binding changes: `bind_job_parties` stores the exact `job.parties` receipt on the
+binding (`command_id`, unique per tenant, so one receipt authorizes one binding
+effect). A deferred constraint trigger requires, at commit, a succeeded receipt
+that is that command and names the binding in its result, and an audit event for
+the job naming that command and binding (`job.parties.bind`, or
+`job.parties.correct` when a correction reason was given); otherwise the
+transaction fails (`BINDING_RECORD_REQUIRED`, SQLSTATE 23514). Generated backfill
+and adoption bindings carry no command and are covered by their own rules.
+
+Post-live correction: for a `live`, `invoiced` or `paid` job `bind_job_parties`
+refuses unless the correction flag `IS TRUE` and the reason is non-blank
+(`CORRECTION_REASON_REQUIRED`, SQLSTATE 22023). The test is null-safe: a null flag
+with a reason cannot skip the refusal and be stored as a plain binding with no reason.
+Round 12 amends only the two reason checks in unapplied 0095: the routine explicitly
+rejects null, and both routine and binding constraint use
+`valid_party_revision_text(to_jsonb(reason),1,500)` for the versioned schema's
+JavaScript trim set and UTF-16 length. Tab, LF, CR, NBSP and BOM alone are refused.
+The existing ASCII-only regex patterns and SQL_ASCII installation path are unchanged.
+Fresh/upgrade and runtime-role rollback cases remain CI requirements. If already
+applied outside this unmerged task, use a reviewed forward-fix migration; do not
+rewrite recorded party history or weaken the constraint.
+
+Quote send: `IssueQuoteMutation` takes the job lock (`require_current_job_parties`,
+`FOR SHARE`, which `bind_job_parties`' `FOR UPDATE` waits on) and compares the
+binding the document froze with the current binding before creating any send
+effect; a mismatch raises `QUOTE_CHANGED` and the whole transaction rolls back. Update the application before using adoption. The previous
+synthetic demo's fixture bootstrap remains supported; fresh bootstrap explicitly
+seeds generated parties before marking its example job live.
+
+Forward fix only after any new binding/document is recorded: retain immutable
+revisions and issued artifacts; append a corrective binding with a reason.
+Do not drop these tables/columns or rewrite historical documents as rollback.
+Database execution, fresh/upgrade, runtime catalog, Neon bootstrap and restore
+checks remain mandatory in CI; local collection/type checks are not DB evidence.
+
 ## 0053 — SH-1 shared money and origin
 
 Adds immutable `job_commercial_track` and `extra_origin` tables with FORCE RLS,
@@ -166,6 +265,28 @@ Practice material transactions install the digest locally before business SQL;
 purchase-order pricing and evidence-pack supplier agreements use the same scope.
 The existing forward-fix/revocation strategy applies. CI must run the two-session
 regression, preceding-schema upgrade and earlier real-tenant material tests.
+
+
+### 0095 round 13 — practice-session compatibility
+
+0094 remains byte-identical, including its issuer. The unapplied 0095 adds an
+invoker-only BEFORE INSERT trigger ordered before the existing live party guard.
+Only the trusted migration-role creation path, with the fixed synthetic tenant,
+home/live recipe and a valid persisted session, supplies generated customer,
+payer and site parties before the live job insert. The existing deferred job FK
+allows that ordering. Client row fields/GUCs cannot forge the invoking role;
+runtime cannot assume it. The original live guard and SH-1's live INSERT track
+hook still execute. Quoting/capture jobs remain unbound until user details exist.
+Earlier explicit test fixture bindings are retained. No guard exemption, new
+caller argument, session-ownership transfer, privileged helper EXECUTE grant or
+merged routine/migration change. Round 10's ASCII-only validator patterns and
+round 12 reason checks are unchanged.
+
+Run the entire practice-session, sandbox and job-parties integration suites,
+plus fresh/upgrade/catalog/restore and both browser projects in CI. The builder
+sandbox cannot start PostgreSQL or bind localhost. Use a reviewed forward-fix
+migration if 0095 has been applied elsewhere; never edit merged 0000–0094 or
+rewrite existing bindings, ownership, issued documents or audit history.
 
 ### 0096 — CH-2 live-only watchdog inputs
 
