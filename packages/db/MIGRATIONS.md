@@ -178,9 +178,18 @@ existing application capture path starts issuing `LogBuilderExtra`; the legacy
 synthetic insert compatibility remains for earlier demos and fixtures.
 
 Fresh superuser installs create the two NOLOGIN shadow roles idempotently. The
-non-superuser Neon bootstrap creates/checks them before migration and removes
-implicit creator membership; migration owner remains NOCREATEROLE. No support
-holder is appointed. Runtime has no shadow-table privilege; catch-source probes
+non-superuser Neon bootstrap creates/checks them before migration; migration owner
+remains NOCREATEROLE. PostgreSQL 16 gives that CREATEROLE bootstrap owner an
+automatic ADMIN-only membership in each role it creates (no INHERIT, no SET,
+granted by the bootstrap superuser). The owner cannot revoke it, so it stays; the
+bootstrap accepts exactly that shape, fails closed on any other holder, and the
+support route checks `USAGE` (not `MEMBER`) so the leftover membership grants no
+support authority. No support holder is appointed. Because the schema `app` is
+now usable by these two roles, 0100 revokes PUBLIC EXECUTE from the four older
+SECURITY DEFINER routines that never had it revoked (`advance_final_account_draft`,
+`invalidate_stale_final_account_authorizations`, `reserve_customer_invoice_number`,
+`issue_practice_customer_invoice`); `jobguard_runtime` keeps its explicit grants.
+Runtime has no shadow-table privilege; catch-source probes
 are denied before PostgreSQL's RLS-bypassing FK checks. Emergency reads and every
 disclosure append audit atomically. New facts reject UPDATE/DELETE/TRUNCATE;
 signal source fields and disclosure provenance are immutable/monotonic.

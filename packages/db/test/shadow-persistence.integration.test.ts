@@ -10,14 +10,14 @@ import { withTenant, verifiedTenantContextFromMembership } from "../src/tenant-c
 import { closeTestPools } from "./pool-test-utils.js";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
-let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string;
+let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
 const migrationURL=new URL("../migrations/0100_shadow_persistence.sql",import.meta.url);
 async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
  const id=randomUUID();await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
  VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low',$5)`,[tenantId,jobId,id,randomUUID(),state]);return id;
 }
 async function setup() {
- directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));const port=59000+Math.floor(Math.random()*500);
+ directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));port=59000+Math.floor(Math.random()*500);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
  await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
  for(const [tenant,job] of [[T,J],[T,K],[O,L]]) {
@@ -30,7 +30,8 @@ async function setup() {
  for(const [login,role] of [["sv2_runtime","jobguard_runtime"],["sv2_shadow","jobguard_shadow"],["sv2_emergency","jobguard_shadow_emergency_access"]]) {
   await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT ${role} TO ${login}`);
  }
- const pool=(user:string)=>new Pool({host:"127.0.0.1",port,user,password:"synthetic",max:4});
+ // Name the database: with none, pg connects to a database called after the login, which does not exist.
+ const pool=(user:string)=>new Pool({host:"127.0.0.1",port,database:"postgres",user,password:"synthetic",max:4});
  runtime=pool("sv2_runtime");shadow=pool("sv2_shadow");emergency=pool("sv2_emergency");
 }
 async function cleanup(){await closeTestPools(runtime,shadow,emergency,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});}
@@ -78,6 +79,24 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
    expect((await admin.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1",[s])).rows[0].disclosed_before_lock).toBe(true);
   }
  });
+ it("an ADMIN-only membership of the support role (PostgreSQL 16's automatic creator shape) cannot use the support route",async()=>{
+  // The creator membership has no INHERIT and no SET. pg_has_role MEMBER is true for it; USAGE and SET are false.
+  await admin.query(`CREATE ROLE sv2_admin_only LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+   GRANT jobguard_shadow TO sv2_admin_only;
+   GRANT jobguard_shadow_emergency_access TO sv2_admin_only WITH ADMIN TRUE, INHERIT FALSE, SET FALSE`);
+  expect((await admin.query("SELECT pg_has_role('sv2_admin_only','jobguard_shadow_emergency_access','MEMBER') AS member,pg_has_role('sv2_admin_only','jobguard_shadow_emergency_access','USAGE') AS usage,pg_has_role('sv2_admin_only','jobguard_shadow_emergency_access','SET') AS \"set\"")).rows)
+   .toEqual([{member:true,usage:false,set:false}]);
+  const adminOnly=new Pool({host:"127.0.0.1",port,database:"postgres",user:"sv2_admin_only",password:"synthetic",max:2});
+  try{
+   const id=await signal(),eventId=randomUUID();
+   await expect(new ShadowRepository(adminOnly).supportDisclosure(context(),{version:"shadow-support-disclosure.v1",jobId:J,signalId:id,eventId})).rejects.toMatchObject({code:"42501",message:"separate support permission required"});
+   expect((await admin.query("SELECT * FROM app.shadow_disclosure_event WHERE id=$1",[eventId])).rowCount).toBe(0);
+   expect((await admin.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1",[id])).rows[0].disclosed_before_lock).toBe(false);
+   // The same login is otherwise a working shadow-worker principal, so the refusal is the support permission alone.
+   await withTenant(adminOnly,context(),db=>db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'defect')",[T,J,id,randomUUID()]));
+   expect((await admin.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1",[id])).rows[0].disclosed_before_lock).toBe(true);
+  }finally{await closeTestPools(adminOnly)}
+ });
  it("binds immutable evidence to exact tenant/job, object version, hash and authoritative receive time",async()=>{
   const id=await signal(),upload=randomUUID(),e=randomUUID(),received=new Date("2026-09-30T10:00:00Z");
   await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')`,[upload,T,J,`synthetic/${upload}`,H]);
@@ -104,10 +123,12 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
   const classify=()=>withTenant(shadow,context(),db=>db.$client.query("INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[T,J,randomUUID(),run,id]));
   await classify();await expect(classify()).rejects.toMatchObject({code:"23505"});
   // Superuser fixtures isolate FK behavior from RLS denial and routine permission checks.
+  // A still-unclassified signal keeps the (tenant, run, signal) uniqueness from raising 23505 ahead of the foreign key.
+  const unclassified=await signal();
   for(const [tenant,job] of [[T,K],[O,L]]) {
    for(const [sql,args] of [
     ["INSERT INTO app.shadow_signal_ineligibility(tenant_id,job_id,id,signal_id,reason,source_ref) VALUES($1,$2,$3,$4,'attribution_disputed','synthetic')",[tenant,job,randomUUID(),id]],
-    ["INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'reveal')",[tenant,job,randomUUID(),run,id]],
+    ["INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'reveal')",[tenant,job,randomUUID(),run,unclassified]],
     ["INSERT INTO app.shadow_signal_disposition(tenant_id,job_id,id,run_id,signal_id,disposition) VALUES($1,$2,$3,$4,$5,'not_completed')",[tenant,job,randomUUID(),run,id]],
     ["INSERT INTO app.shadow_disclosure_event(tenant_id,job_id,id,signal_id,route,actor_ref,before_lock) VALUES($1,$2,$3,$4,'defect','synthetic',true)",[tenant,job,randomUUID(),id]],
    ] as const)await expect(admin.query(sql,[...args])).rejects.toMatchObject({code:"23503"});

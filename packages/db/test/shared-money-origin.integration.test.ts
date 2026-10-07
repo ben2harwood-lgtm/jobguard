@@ -132,7 +132,7 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
  it("maps every raising command to exactly one allowed origin, including command-backed builder capture",async()=>{
   const contractor=await contractorJob();
   for(const [track,kind,type] of [
-   ["small_builder","builder_logged","LogBuilderExtra"],["small_builder","final_review","AddFinalReviewExtra"],["small_builder","jobguard_catch","ConfirmJobGuardCatch"],
+   ["small_builder","builder_logged","LogBuilderExtra"],["small_builder","final_review","AddFinalReviewExtra"],
    ["contractor","site_user","LogSiteExtra"],["contractor","jobguard_surfaced_confirmed","ConfirmPrompt"],["contractor","office_entry","RecordOfficeExtra"],["contractor","client_instruction","RecordClientInstruction"],
   ] as const) {
    const id=randomUUID(),command=randomUUID(),target=track==="small_builder"?J:contractor;
@@ -145,6 +145,37 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
    });
    expect((await admin.query("SELECT kind,command_id,provenance FROM app.extra_origin WHERE variation_id=$1",[id])).rows).toEqual([{kind,command_id:command,provenance:"command"}]);
   }
+  // SV-2 (lane amendment for this one row): a ConfirmJobGuardCatch origin must name a real shadow signal and is
+  // never written through the runtime role. Runtime is refused with the probe barrier's identical error whatever
+  // source id it offers; the ConfirmJobGuardCatch -> jobguard_catch mapping is proven by a privileged
+  // (migration-role) insert tied to a real shadow_commercial_signal on the same job.
+  const signal=randomUUID();
+  await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band)
+   VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low')`,[T,J,signal,randomUUID()]);
+  const catchOrigin=async(db:Pick<PoolClient,"query">,id:string,command:string,source:string|null,type="ConfirmJobGuardCatch")=>{
+   await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,$3,$4,$5,'processing',$6)",[T,command,type,`extra-origin:${J}:${id}`,H,M]);
+   await insertVariation(db,id,J,"small_builder","jobguard_catch");
+   await db.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_signal_id)
+    VALUES($1,$2,$3,'small_builder','jobguard_catch',$4,$5,'owner','command',$6)`,[T,J,id,command,M,source]);
+   await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[T,command]);
+  };
+  const runtimeRefusal=async(source:string|null)=>{
+   try{await withTenant(runtime,ctx(),db=>catchOrigin(db.$client,randomUUID(),randomUUID(),source));throw new Error("runtime catch succeeded")}
+   catch(e){const p=e as {code:string;message:string;detail?:string;constraint?:string};return {code:p.code,message:p.message,detail:p.detail,constraint:p.constraint}}
+  };
+  const refusedReal=await runtimeRefusal(signal);
+  expect(refusedReal).toEqual(await runtimeRefusal(randomUUID()));expect(refusedReal).toEqual(await runtimeRefusal(null));
+  expect(refusedReal).toMatchObject({code:"42501",message:"shadow origin unavailable through runtime"});
+  const privileged=async(source:string|null,type?:string)=>{
+   const client=await admin.connect(),id=randomUUID(),command=randomUUID();
+   try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[T]);await client.query("SET LOCAL ROLE jobguard_migration");
+    await catchOrigin(client,id,command,source,type);await client.query("COMMIT");return {id,command};
+   }catch(e){await client.query("ROLLBACK");throw e}finally{client.release()}
+  };
+  await expect(privileged(signal,"LogBuilderExtra")).rejects.toMatchObject({code:"23514"});
+  await expect(privileged(null)).rejects.toMatchObject({code:"23514"});
+  const {id:catchId,command:catchCommand}=await privileged(signal);
+  expect((await admin.query("SELECT kind,command_id,provenance,source_signal_id FROM app.extra_origin WHERE variation_id=$1",[catchId])).rows).toEqual([{kind:"jobguard_catch",command_id:catchCommand,provenance:"command",source_signal_id:signal}]);
  });
  it("creates exactly one legacy origin atomically and preserves it after pricing/state updates",async()=>{
   const id=randomUUID();await withTenant(runtime,ctx(),db=>insertVariation(db.$client,id,J));

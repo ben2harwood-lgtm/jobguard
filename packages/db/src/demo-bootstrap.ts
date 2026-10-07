@@ -45,11 +45,20 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
     }
   }
   const owner = (await admin.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
-  // PostgreSQL 16 gives a non-superuser creator automatic ADMIN membership.
-  // Remove that implicit holder too: neither bootstrap nor migration appoints support.
+  // PostgreSQL 16 gives a non-superuser (CREATEROLE) creator an automatic membership in every role it
+  // creates: ADMIN OPTION only, with no INHERIT and no SET, recorded as granted by the bootstrap superuser.
+  // The creator cannot remove it: its own REVOKE finds no grant it made, and GRANTED BY the superuser is
+  // superuser-only. So it stays. It carries no privileges of the role (pg_has_role USAGE and SET are false,
+  // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
+  // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
+  // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
   for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access"]) {
-    const implicit = await admin.query("SELECT 1 FROM pg_auth_members WHERE roleid=(SELECT oid FROM pg_roles WHERE rolname=$1) AND member=(SELECT oid FROM pg_roles WHERE rolname=$2)", [name, owner]);
-    if (implicit.rowCount) await admin.query(`REVOKE ${name} FROM ${quoteIdentifier(owner)}`);
+    const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
+      `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
+       FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
+    if (holders.rows.some(row => row.member !== owner || !row.admin_option || row.inherit_option || row.set_option)) {
+      throw new Error(`${name} has a holder other than the PostgreSQL 16 ADMIN-only creator membership`);
+    }
   }
   await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_runtime TO ${quoteIdentifier(owner)}`);

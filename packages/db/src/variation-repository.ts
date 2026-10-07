@@ -44,7 +44,13 @@ export class VariationRepository{
     if(!prior || prior.request_hash!==requestHash || prior.status!=="succeeded")throw new BuilderCaptureError("COMMAND_CONFLICT");
     return prior.result;
    }
-   const job=await db.$client.query(`SELECT j.id FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2 AND j.status='live' AND t.job_track='small_builder' AND t.environment='synthetic_demo' FOR UPDATE OF j`,[context.tenantId,p.jobId]);
+   // No row lock on app.job: PostgreSQL demands UPDATE privilege for every FOR [NO KEY] UPDATE/SHARE
+   // strength and jobguard_runtime has none on app.job. Exactly-once comes from the receipt claim above
+   // (its unique key makes a concurrent twin wait for this transaction) and the variation/origin keys.
+   // The variation insert's foreign keys take KEY SHARE locks on this job's track and scope rows.
+   // Every synthetic practice environment is accepted (the track column admits only these two);
+   // any other value, such as a production one, is refused by default.
+   const job=await db.$client.query(`SELECT j.id FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2 AND j.status='live' AND t.job_track='small_builder' AND t.environment IN ('synthetic_demo','pilot_no_charge')`,[context.tenantId,p.jobId]);
    if(!job.rowCount)throw new BuilderCaptureError("FORBIDDEN");
    await insertVariationProposal(db,context.tenantId,p);
    await db.$client.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,device_id,device_captured_at,provenance)

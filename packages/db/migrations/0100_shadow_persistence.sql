@@ -15,6 +15,16 @@ DO $$ BEGIN
 END $$;
 GRANT USAGE ON SCHEMA app TO jobguard_shadow,jobguard_shadow_emergency_access;
 -- No membership grants. Emergency holders are a separate G1 approval, not established here.
+-- Schema USAGE is new for these two roles. Four older SECURITY DEFINER routines in app were
+-- never revoked from PUBLIC, so the new roles would inherit EXECUTE on them. Close that now;
+-- jobguard_runtime keeps its own explicit grants on each (granted in 0016, 0017 and 0027) and
+-- the owner keeps EXECUTE, so builder behaviour does not change.
+REVOKE EXECUTE ON FUNCTION
+ app.advance_final_account_draft(uuid,uuid,uuid,integer),
+ app.invalidate_stale_final_account_authorizations(uuid,uuid,char(64)),
+ app.reserve_customer_invoice_number(uuid),
+ app.issue_practice_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,date)
+ FROM PUBLIC;
 
 ALTER TABLE app.evidence_object ADD CONSTRAINT evidence_shadow_version_identity
  UNIQUE(tenant_id,job_id,id,object_version_id,sha256,server_received_at);
@@ -231,7 +241,9 @@ DECLARE locked boolean:=false;prior app.shadow_disclosure_event;visible_at times
 BEGIN
  IF p_tenant IS NULL OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'tenant context mismatch' USING ERRCODE='42501'; END IF;
  IF p_event IS NULL OR p_signal IS NULL OR p_job IS NULL OR p_route IS NULL OR p_route NOT IN ('must_surface_override','support_conversation','export','data_subject_access','defect','tell_me_now','trial_job_live','paid_human_review','drawing_review','upgrade_bridge') THEN RAISE EXCEPTION 'invalid disclosure' USING ERRCODE='22023'; END IF;
- IF p_route='support_conversation' AND NOT pg_has_role(session_user,'jobguard_shadow_emergency_access','MEMBER') THEN
+ -- USAGE, not MEMBER: PostgreSQL 16 gives a non-superuser role creator an ADMIN-only membership
+ -- (no INHERIT, no SET) that must not count as holding the separate support permission.
+ IF p_route='support_conversation' AND NOT pg_has_role(session_user,'jobguard_shadow_emergency_access','USAGE') THEN
   RAISE EXCEPTION 'separate support permission required' USING ERRCODE='42501';
  END IF;
  PERFORM 1 FROM app.job WHERE tenant_id=p_tenant AND id=p_job FOR UPDATE;

@@ -10,14 +10,14 @@ import { withTenant, verifiedTenantContextFromMembership } from "../src/tenant-c
 import { closeTestPools } from "./pool-test-utils.js";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
-let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string;
+let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
 const migrationURL=new URL("../migrations/0100_shadow_persistence.sql",import.meta.url);
 async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
  const id=randomUUID();await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
  VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low',$5)`,[tenantId,jobId,id,randomUUID(),state]);return id;
 }
 async function setup() {
- directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));const port=59000+Math.floor(Math.random()*500);
+ directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));port=59000+Math.floor(Math.random()*500);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
  await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
  for(const [tenant,job] of [[T,J],[T,K],[O,L]]) {
@@ -30,7 +30,8 @@ async function setup() {
  for(const [login,role] of [["sv2_runtime","jobguard_runtime"],["sv2_shadow","jobguard_shadow"],["sv2_emergency","jobguard_shadow_emergency_access"]]) {
   await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT ${role} TO ${login}`);
  }
- const pool=(user:string)=>new Pool({host:"127.0.0.1",port,user,password:"synthetic",max:4});
+ // Name the database: with none, pg connects to a database called after the login, which does not exist.
+ const pool=(user:string)=>new Pool({host:"127.0.0.1",port,database:"postgres",user,password:"synthetic",max:4});
  runtime=pool("sv2_runtime");shadow=pool("sv2_shadow");emergency=pool("sv2_emergency");
 }
 async function cleanup(){await closeTestPools(runtime,shadow,emergency,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});}
@@ -77,7 +78,8 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   const session=await issuePracticeSession(runtime),stranger=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session);
   // SBOX's issuance routine creates the live home job with immutable ownership.
   const job=(await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",[DEMO_TENANT_ID,auth.digest])).rows[0].id as string,scope=randomUUID();
-  await admin.query("UPDATE app.job SET accepted_net_value_pence=10000,recovery_cap_pence=150 WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,job]);
+  // job_baseline_shape needs the full imported-baseline columns together; a lone pair of values is refused.
+  await admin.query("UPDATE app.job SET provenance='imported',accepted_net_value_pence=10000,fee_policy_version='reference_fee_policy_v1',recovery_cap_pence=150 WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,job]);
   await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
   const input={version:"variation-command.v1",action:"propose",proposalId:randomUUID(),scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:scope,description:"Synthetic tap",captureText:"Synthetic captured tap",price:{quantity:"1",unit:"item",unitRatePence:80000,direction:"addition"}};
   const application=new VariationApplication(runtime,session);
@@ -96,6 +98,57 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   await expect(new VariationApplication(runtime,stranger).command(job,input)).rejects.toMatchObject({code:"NOT_FOUND"});
   expect(await effects()).toEqual(captured);
   expect(await application.get(job)).toEqual(first);
+  } finally { vi.unstubAllEnvs(); }
+ });
+ it("a runtime capture needs no row lock on app.job, and concurrent captures on one job both commit",async()=>{
+  // Regression: FOR UPDATE OF j on app.job failed with 42501 for the real runtime login, which has no UPDATE
+  // privilege on app.job. PostgreSQL refuses every row-lock strength without it, so none may be reintroduced.
+  expect((await admin.query("SELECT has_any_column_privilege('jobguard_runtime','app.job','UPDATE') AS can_update")).rows[0].can_update).toBe(false);
+  for(const clause of ["FOR UPDATE","FOR NO KEY UPDATE","FOR SHARE","FOR KEY SHARE"])
+   await expect(withTenant(runtime,context(),db=>db.$client.query(`SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 ${clause}`,[T,J]))).rejects.toMatchObject({code:"42501"});
+  const repo=new VariationRepository(runtime),first=capture(),second=capture(),third=capture();
+  await expect(repo.logBuilderExtra(context(),first)).resolves.toEqual({variationId:first.proposal.id});
+  await expect(Promise.all([repo.logBuilderExtra(context(),second),repo.logBuilderExtra(context(),third)])).resolves.toEqual([{variationId:second.proposal.id},{variationId:third.proposal.id}]);
+  expect((await admin.query("SELECT kind,count(*)::int AS n FROM app.extra_origin WHERE variation_id=ANY($1) GROUP BY kind",[[first,second,third].map(x=>x.proposal.id)])).rows).toEqual([{kind:"builder_logged",n:3}]);
+ });
+ it("logs an extra on a job started with the default No charge practice scenario (pilot_no_charge)",async()=>{
+  // The track column admits exactly the two synthetic modes; a production mode cannot exist on a job.
+  const noChargeJob=async(status="live")=>{
+   const id=randomUUID();
+   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional No charge practice job','draft')",[id,T]);
+   await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[T,id]);
+   if(status!=="draft")await admin.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2",[T,id,status]);
+   return id;
+  };
+  await expect(admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','production_billing','quote_activation')",[T,K])).rejects.toMatchObject({code:"23514"});
+  const job=await noChargeJob(),repo=new VariationRepository(runtime),input=capture();input.proposal={...input.proposal,jobId:job};
+  expect((await admin.query("SELECT environment FROM app.job_commercial_track WHERE job_id=$1",[job])).rows).toEqual([{environment:"pilot_no_charge"}]);
+  await expect(repo.logBuilderExtra(context(),input)).resolves.toEqual({variationId:input.proposal.id});
+  expect((await admin.query("SELECT kind,job_track,provenance,raising_role FROM app.extra_origin WHERE variation_id=$1",[input.proposal.id])).rows).toEqual([{kind:"builder_logged",job_track:"small_builder",provenance:"command",raising_role:"owner"}]);
+  await expect(repo.logBuilderExtra(context(),input)).resolves.toEqual({variationId:input.proposal.id});
+  // A job that is not live is still refused.
+  const draft=capture();draft.proposal={...draft.proposal,jobId:await noChargeJob("draft")};
+  await expect(repo.logBuilderExtra(context(),draft)).rejects.toMatchObject({code:"FORBIDDEN"});
+ });
+ it("the existing application propose action works on a No charge (pilot_no_charge) practice job",async()=>{
+  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
+  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic application') ON CONFLICT DO NOTHING",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
+  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+  try {
+   const session=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session),job=randomUUID(),scope=randomUUID();
+   // The end state of a job started with the UI's default No charge scenario: owned by this practice session, bound pilot_no_charge.
+   await admin.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional No charge practice job','draft',$3,'capture')",[job,DEMO_TENANT_ID,auth.digest]);
+   await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[DEMO_TENANT_ID,job]);
+   await admin.query("UPDATE app.job SET status='live',provenance='imported',accepted_net_value_pence=10000,fee_policy_version='reference_fee_policy_v1',recovery_cap_pence=150 WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,job]);
+   await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
+   const input={version:"variation-command.v1",action:"propose",proposalId:randomUUID(),scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:scope,description:"Synthetic tap",captureText:"Synthetic captured tap",price:{quantity:"1",unit:"item",unitRatePence:80000,direction:"addition"}};
+   const application=new VariationApplication(runtime,session);
+   const first=await application.command(job,input);
+   expect(first.variations).toEqual([expect.objectContaining({id:input.proposalId,state:"priced"})]);
+   expect(await application.command(job,input)).toEqual(first);
+   expect((await admin.query("SELECT kind,provenance,raising_membership_id FROM app.extra_origin WHERE variation_id=$1",[input.proposalId])).rows).toEqual([{kind:"builder_logged",provenance:"command",raising_membership_id:DEMO_MEMBERSHIP_ID}]);
   } finally { vi.unstubAllEnvs(); }
  });
  it("uniformly refuses runtime signal-id probes before any FK lookup",async()=>{
@@ -138,9 +191,12 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   // Isolated real database: apply the exact supported predecessor, seed before SH-1,
   // and compare origins before/after 0100. No second hand-written backfill.
   await client.query(`CREATE DATABASE ${schema}`);client.release();
-  const upgrade=new Pool({...admin.options,database:schema});
+  // Pass every connection field explicitly: spreading admin.options drops pg-pool's non-enumerable password.
+  const upgrade=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:schema});
   try{
-   const urls=MIGRATION_URLS.slice(0,-1),sh1=urls.findIndex(u=>u.pathname.endsWith("0053_shared_money_origin.sql"));
+   // The supported predecessor is every migration listed before 0100, selected by name: later migrations may follow it.
+   const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0100_shadow_persistence.sql"));expect(own).toBeGreaterThan(0);
+   const urls=MIGRATION_URLS.slice(0,own),sh1=urls.findIndex(u=>u.pathname.endsWith("0053_shared_money_origin.sql"));expect(sh1).toBeGreaterThan(-1);
    for(const url of urls.slice(0,sh1))await upgrade.query(await readFile(url,"utf8"));
    const t=randomUUID(),j=randomUUID(),s=randomUUID(),v=randomUUID();
    await upgrade.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[t]);

@@ -30,12 +30,28 @@ exposed by SV-2.
 | `jobguard_shadow_emergency_access` | No table privileges. EXECUTE `read_shadow_emergency(uuid,uuid,text)` and `record_shadow_disclosure(uuid,uuid,uuid,uuid,text)` only. |
 | `jobguard_migration` | Owner and tenant-scoped routine authority; private audit helper is owner-only. |
 
+Schema `app` USAGE is new for both shadow roles. 0100 therefore revokes PUBLIC EXECUTE
+from four older SECURITY DEFINER routines that never had it revoked
+(`advance_final_account_draft`, `invalidate_stale_final_account_authorizations`,
+`reserve_customer_invoice_number`, `issue_practice_customer_invoice`). `jobguard_runtime`
+keeps its existing explicit grants on each, unchanged. A catalog test proves each new
+role can execute, among non-trigger routines in `app`, only its SV-2 grants above plus two
+pure non-SECURITY-DEFINER arithmetic helpers (`half_even_ratio`, `reference_recovery_cap`)
+that keep their default PUBLIC EXECUTE, and that the four older routines are refused to
+real logins of both roles.
+
 Both new roles are NOLOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOINHERIT,
 NOBYPASSRLS and members of no other role. Bootstrap creates them before switching
-to the migration owner, rejects unsafe posture, and removes PostgreSQL 16's
-implicit role-creator membership. Neither bootstrap nor the migration appoints a
-support holder. Who may hold the emergency role outside synthetic mode requires
-an explicit G1 decision. Tests grant membership only to generated synthetic
+to the migration owner and rejects unsafe posture. PostgreSQL 16 gives the
+CREATEROLE bootstrap owner an automatic ADMIN-only membership in each role it
+creates (no INHERIT, no SET; granted by the bootstrap superuser). The owner cannot
+remove it, so it remains: bootstrap and its test accept exactly that shape (the
+bootstrap owner, `admin_option` true, `inherit_option` false, `set_option` false)
+and fail closed on any other holder. It confers none of the role's privileges
+(`pg_has_role` `USAGE` and `SET` are false), but ADMIN OPTION would still let that
+owner grant the role to a login; who may hold the emergency role outside synthetic
+mode therefore stays an explicit G1 decision. Neither bootstrap nor the migration
+appoints a support holder. Tests grant membership only to generated synthetic
 logins; runtime and shadow never hold emergency permission.
 
 The repository takes a server-verified tenant context and versioned Zod inputs.
@@ -62,8 +78,11 @@ ineligibility reasons. The disclosed state cannot be cleared or moved out of the
 terminal early-surface state. An identical event-ID replay returns the existing
 fact; changed job/signal/route/actor conflicts. The support repository function
 pins route `support_conversation`, with no HTTP surface. The routine requires
-the caller session to hold the separate emergency role for that route; worker
-EXECUTE permission alone cannot impersonate a support conversation. The routine does not
+the caller session to be able to use the separate emergency role (`pg_has_role`
+`USAGE`) for that route; worker EXECUTE permission alone cannot impersonate a
+support conversation, and an ADMIN-only membership, such as PostgreSQL 16's
+automatic creator membership, does not satisfy it. A holder must therefore be
+granted the role with INHERIT. The routine does not
 return the signal description.
 
 Emergency reads require the separate role and a nonempty, bounded reason. They
@@ -87,13 +106,17 @@ The shared command names remain exactly:
 | ConfirmCatch | ConfirmJobGuardCatch | jobguard_catch |
 
 The existing application propose action now uses `LogBuilderExtra`, with a
-processing receipt, active owner check, exact job/variation semantic key, stored
+processing receipt, active owner check, a live small-builder job check in either
+synthetic practice mode (`synthetic_demo` or the UI's default No charge scenario,
+`pilot_no_charge`; the track column admits no other value), exact job/variation semantic key, stored
 capture hash, raising actor/role, authoritative server time and separately
 labelled optional device metadata. Text capture has no evidence-object claim;
 its evidence hash is null. The proposal ID is also its stable command ID. Capture,
 optional initial pricing, origin, audit and receipt completion commit together.
 Concurrent unchanged retries return one effect; changed content conflicts. It
-creates no commercial send authority or platform fee.
+takes no row lock on `app.job`: PostgreSQL requires UPDATE privilege for every row-lock
+strength and `jobguard_runtime` has none there. Exactly-once rests on the receipt claim
+and the variation/origin keys. It creates no commercial send authority or platform fee.
 
 After SBOX-SESSION-1, every variation read and command first authenticates the
 practice cookie and checks the job's immutable `practice_session_digest` through
