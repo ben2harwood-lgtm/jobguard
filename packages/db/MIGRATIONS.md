@@ -146,3 +146,35 @@ Expand-only after the supported schema through 0053 (0042 evidence-pack repair a
 Operations-only `assign_commercial_track` has no runtime/infrastructure EXECUTE grant. It requires a generated synthetic agreement reference, expected assignment revision and a same-transaction audit event enforced by a deferred trigger. It never rewrites jobs. Pending D12/D16 approvals mean real track assignment remains disabled. Contractor admin writes use one bounded function, a tenant advisory lock, current membership/grants, expected organisation revision and the existing command receipt/audit tables; no commercial Decision, outbox or money effect occurs. The audit append is the final lock. Team moves append membership events and replace affected team grants with explicit revocation/new grant facts. A member may still belong to other teams.
 
 Forward fix is preferred: revert application usage first, retain append-only data, then apply a separately reviewed corrective migration. Do not drop populated commercial history or rewrite versions. The preceding demo is unchanged apart from its expected migration count and expanded catalog assertions. Fresh install and Neon owner-role compatibility remain covered by existing migration/bootstrap tests; ENT-1 additionally tests upgrade from the previous schema. No seed modifies existing tenants.
+
+### 0100 — SV-2 shadow persistence and isolation
+
+Expand-only after 0054. Adds eight restricted shadow tables and one append-only
+variation-withdrawal fact, qualified evidence/version/hash/receive-time identity,
+small-builder catch-source enforcement, bounded reveal/disclosure/emergency read
+routines, and a private audit implementation using the existing serialized chain.
+No backfill: SH-1's completed origins and source labels remain unchanged. The
+existing application capture path starts issuing `LogBuilderExtra`; the legacy
+synthetic insert compatibility remains for earlier demos and fixtures.
+
+Fresh superuser installs create the two NOLOGIN shadow roles idempotently. The
+non-superuser Neon bootstrap creates/checks them before migration and removes
+implicit creator membership; migration owner remains NOCREATEROLE. No support
+holder is appointed. Runtime has no shadow-table privilege; catch-source probes
+are denied before PostgreSQL's RLS-bypassing FK checks. Emergency reads and every
+disclosure append audit atomically. New facts reject UPDATE/DELETE/TRUNCATE;
+signal source fields and disclosure provenance are immutable/monotonic.
+
+The reveal routine fails closed when SV-4's lock relation is absent. It checks
+only a matching tenant/job lock when present. SV-4 owes positive reveal tests and
+must acquire the job lock before recording the lock/audit; SV-5 adds exact locked
+line/disposition bindings. Neither dependency is simulated with a new lock table.
+
+Forward fix: disable application use of affected routines first, retain evidence,
+origin, disclosure and audit history, then append a reviewed corrective migration.
+Do not down-migrate populated history or weaken the probe barrier. A migration
+failure rolls its SQL transaction back, leaving the predecessor schema intact.
+Before acceptance CI must execute real PostgreSQL fresh/upgrade, least-privilege
+catalog, support disclosure, rollback, immutable metadata, source-FK/probe and
+non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
+and browser regressions. Local sandbox initialization errors are not DB passes.

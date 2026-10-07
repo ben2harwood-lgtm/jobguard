@@ -24,16 +24,21 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     admin = new Pool({ connectionString: ownerUrl });
   }, 60_000);
   afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); await rm(directory, { recursive: true, force: true }); });
-  it("creates roles, applies 0000..0042, 0053 and 0054, reports actual migrations, seeds once, and keeps pooled RLS local", async () => {
+  it("creates roles, applies 0000..0042, 0053, 0054 and 0100, reports actual migrations, seeds once, and keeps pooled RLS local", async () => {
     process.env.JOBGUARD_ENV = "synthetic_demo";
-    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 45, tenantId: DEMO_TENANT_ID });
-    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 45 });
+    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 46, tenantId: DEMO_TENANT_ID });
+    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 46 });
     const verifier = await admin.connect();
     await verifier.query("SET ROLE jobguard_migration");
     await verifier.query("SELECT set_config('app.tenant_id',$1,false)", [DEMO_TENANT_ID]);
-    expect((await verifier.query("SELECT migration_name FROM jobguard_schema_migration ORDER BY migration_name")).rows.map(({ migration_name }) => migration_name)).toHaveLength(45);
+    expect((await verifier.query("SELECT migration_name FROM jobguard_schema_migration ORDER BY migration_name")).rows.map(({ migration_name }) => migration_name)).toHaveLength(46);
     expect((await verifier.query("SELECT semantic_key FROM app.command_receipt WHERE tenant_id=$1", [DEMO_TENANT_ID])).rowCount).toBe(demoCheckpoints.length);
     await verifier.query("RESET ROLE"); verifier.release();
+    expect((await admin.query("SELECT rolname,rolsuper,rolbypassrls,rolcanlogin,rolcreaterole,rolcreatedb,rolinherit FROM pg_roles WHERE rolname IN ('jobguard_shadow','jobguard_shadow_emergency_access') ORDER BY rolname")).rows).toEqual([
+      { rolname: "jobguard_shadow", rolsuper: false, rolbypassrls: false, rolcanlogin: false, rolcreaterole: false, rolcreatedb: false, rolinherit: false },
+      { rolname: "jobguard_shadow_emergency_access", rolsuper: false, rolbypassrls: false, rolcanlogin: false, rolcreaterole: false, rolcreatedb: false, rolinherit: false },
+    ]);
+    expect((await admin.query("SELECT * FROM pg_auth_members WHERE roleid IN (SELECT oid FROM pg_roles WHERE rolname IN ('jobguard_shadow','jobguard_shadow_emergency_access'))")).rows).toEqual([]);
     expect((await admin.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_runtime'")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
     expect((await admin.query(`SELECT count(*)::int AS count FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control','infrastructure') AND tableowner <> 'jobguard_migration'`)).rows).toEqual([{ count: 0 }]);
     expect((await admin.query(`SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relkind IN ('r','p') AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity)`)).rows).toEqual([{ count: 0 }]);
