@@ -27,11 +27,12 @@ import { describe, expect, it } from "vitest";
  * names, so every use is visible to the scan by name. A local type alias, interface, `import X = ns.T`,
  * `ReturnType<typeof constructor>` or `typeof withTenant` is a derivation of the context type: it is tracked to a fixed point
  * within the file when it is a cast target, and exporting one is refused (another file could import and cast it).
- * Typed values and inferred local aliases (including assignments after declaration) cannot be reconstructed through
- * spread, Object.create/assign/fromEntries, structuredClone or JSON.parse/stringify. Reconstruction is refused even if
- * no tenant replacement is visible yet. Context property writes, destructuring targets and reflective/descriptor writes
- * are refused regardless of the property key. Typed initializers, returns and satisfies are checked as well.
- * Passing the original context through is allowed, including Object.freeze in the auth bridge.
+ * Context values follow an allow-list (round 7): pass whole as a call argument, return whole, bind whole to a const
+ * that follows these same rules, or read .tenantId as a value. Every other use is refused at the original use, including
+ * containers, destructuring, spread/rest, member storage/writes, computed access/keys and mutable bindings. All Object.*
+ * and Reflect.* helpers, and their static aliases, are refused (also JSON and structuredClone for earlier regressions).
+ * Inferred const aliases and local forwarding function returns propagate provenance to a fixed point.
+ * Only the context definition may freeze its literal BEFORE minting; the principal bridge returns the minted value whole.
  *
  * Fixture binding (round 3): a name such as DEMO_TENANT_ID is trusted because of WHERE IT COMES FROM, not because of how it
  * is spelled. In all application source such a name may only be an unaliased import from `@jobguard/db` or, inside
@@ -93,7 +94,7 @@ const UUID_LITERAL = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const CONTEXT_DERIVED = /\bReturnType\s*<\s*typeof\s+[\w$.]*verifiedTenantContextFromMembership\b|\btypeof\s+[\w$.]*withTenant\b/u;
 // Cheap pre-filter so only files that can possibly hold an occurrence are parsed (a file without any of these words cannot
 // construct, alias, cast to or assign an effective tenant context, nor bind a fixture constant). Keeps the scan fast.
-const RELEVANT = /verifiedTenantContextFromMembership|VerifiedTenantContext|effective_tenant_id|effectiveTenantId|typeof\s+[\w$.]*withTenant|DEMO_[A-Z_]*(?:TENANT_ID|MEMBERSHIP_ID|IDENTITY_USER_ID)/u;
+const RELEVANT = /verifiedTenantContextFromMembership|VerifiedTenantContext|effective_tenant_id|effectiveTenantId|resolveVerifiedTenantContext|typeof\s+[\w$.]*withTenant|DEMO_[A-Z_]*(?:TENANT_ID|MEMBERSHIP_ID|IDENTITY_USER_ID)/u;
 
 interface SourceFile { path: string; text: string }
 type Occurrence =
@@ -170,10 +171,11 @@ function parse(file: SourceFile): Analysis {
   const bind = (name: string, binding: Binding) => { const list = bindings.get(name); if (list) list.push(binding); else bindings.set(name, [binding]); };
   const assertions: (ts.AsExpression | ts.TypeAssertion)[] = [];
   const values: (ts.VariableDeclaration | ts.ParameterDeclaration)[] = [];
-  const functions: (ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction)[] = [];
+  const functions: (ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction | ts.MethodDeclaration)[] = [];
   const objects: ts.ObjectLiteralExpression[] = [];
   const assignments: ts.BinaryExpression[] = [];
-  const mutationCandidates: ts.Node[] = [];
+  const contextUses: ts.Expression[] = [];
+  const members: (ts.PropertyDeclaration | ts.PropertySignature)[] = [];
   // Type declarations that may be (an alias of) the context type, and local names exported without a module specifier.
   const typeNames: { name: string; text: string; node: ts.Node; exported: boolean }[] = [];
   const exportedLocals: { name: string; node: ts.Node }[] = [];
@@ -181,10 +183,11 @@ function parse(file: SourceFile): Analysis {
   const visit = (node: ts.Node): void => {
     if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) assertions.push(node);
     if (ts.isVariableDeclaration(node) || ts.isParameter(node)) values.push(node);
-    if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) functions.push(node);
+    if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isMethodDeclaration(node)) functions.push(node);
     if (ts.isObjectLiteralExpression(node)) objects.push(node);
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) assignments.push(node);
-    if (ts.isCallExpression(node) || ts.isBinaryExpression(node) || ts.isDeleteExpression(node) || ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node) || ts.isForInStatement(node) || ts.isForOfStatement(node)) mutationCandidates.push(node);
+    if (ts.isIdentifier(node) || ts.isCallExpression(node) || ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) || ts.isAsExpression(node) || ts.isTypeAssertionExpression(node) || ts.isSatisfiesExpression(node)) contextUses.push(node);
+    if (ts.isPropertyDeclaration(node) || ts.isPropertySignature(node)) members.push(node);
 
     // Bindings of every name, at any scope (variables, parameters, patterns, functions, classes, imports).
     if (ts.isVariableDeclaration(node)) for (const id of bindingNames(node.name)) bind(id.text, ts.isIdentifier(node.name) ? { kind: "variable", node } : { kind: "other", node });
@@ -248,14 +251,17 @@ function parse(file: SourceFile): Analysis {
   const taintPattern = new RegExp(`\\b(?:${[...tainted].map(name => name.replace(/\$/gu, "\\$")).join("|")})\\b`, "u");
   const contextType = (type: ts.TypeNode | undefined): boolean => type !== undefined && (taintPattern.test(type.getText(source)) || CONTEXT_DERIVED.test(type.getText(source)));
 
-  // Reconstructing a context copies its compile-time brand without verifying membership. Refuse the reconstruction
-  // itself, regardless of the replacement source or a later mutation. Only forwarding the original value is permitted.
-  // Track inferred aliases from initializers AND later assignments to a fixed point (including serialization carriers).
+  // The allow-list is checked at the original context use. In particular, a context cannot enter a
+  // container, binding pattern or reflection helper in the first place; tracking every way OUT of a
+  // container is unnecessary. Propagation only identifies additional uses to check, never authorizes one.
   const contextValues = new Set(values.filter(value => ts.isIdentifier(value.name) && contextType(value.type)).map(value => (value.name as ts.Identifier).text));
-  const contextFunctions = new Set<string>();
+  const contextMembers = new Set(members.filter(member => contextType(member.type)).map(member => literalKey(member.name)).filter((name): name is string => name !== undefined));
+  const contextFunctions = new Set<string>(["resolveVerifiedTenantContext"]);
+  const functionName = (fn: typeof functions[number]): string | undefined =>
+    fn.name && ts.isIdentifier(fn.name) ? fn.name.text : ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name) ? fn.parent.name.text : undefined;
   for (const fn of functions.filter(fn => contextType(fn.type))) {
-    if (fn.name && ts.isIdentifier(fn.name)) contextFunctions.add(fn.name.text);
-    else if (ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name)) contextFunctions.add(fn.parent.name.text);
+    const name = functionName(fn);
+    if (name) contextFunctions.add(name);
   }
   const callName = (expression: ts.Expression): string | undefined => {
     const value = unwrap(expression);
@@ -270,9 +276,33 @@ function parse(file: SourceFile): Analysis {
     }
     return undefined;
   };
-  const reconstructions = new Set(["structuredClone", "Object.create", "Object.assign", "Object.fromEntries", "JSON.parse"]);
-  const carriers = new Set([...reconstructions, "Object.entries", "JSON.stringify", "Object.freeze"]);
-  // Expressions are revisited during propagation and mutation checks. Cache only within one taint-set revision.
+  // Refuse every Object/Reflect helper, rather than maintaining a list of mutation methods.
+  // JSON/structuredClone remain refused to preserve earlier serialization/copy regressions.
+  const helperValues = new Set(["Object", "Reflect", "JSON", "structuredClone", "Array", "Map", "Set"]);
+  // Known containers cannot receive the context through push/add/set (or a helper alias of these).
+  const containerType = (type: ts.TypeNode | undefined): boolean => type !== undefined && /\b(?:Array|ReadonlyArray|Map|ReadonlyMap|Set|ReadonlySet)\b|\[\]/u.test(type.getText(source));
+  const helperMembers = new Set(members.filter(member => containerType(member.type)).map(member => literalKey(member.name)).filter((name): name is string => name !== undefined));
+  for (const value of values) if (containerType(value.type)) for (const id of bindingNames(value.name)) helperValues.add(id.text);
+  const helperMemo = new Map<ts.Expression, boolean>();
+  const helperExpression = (expression: ts.Expression): boolean => {
+    const cached = helperMemo.get(expression);
+    if (cached !== undefined) return cached;
+    const result = inspectHelperExpression(expression);
+    helperMemo.set(expression, result);
+    return result;
+  };
+  const inspectHelperExpression = (expression: ts.Expression): boolean => {
+    const value = unwrap(expression);
+    if (ts.isIdentifier(value)) return helperValues.has(value.text);
+    if (ts.isPropertyAccessExpression(value)) return helperMembers.has(value.name.text) || ["Object", "Reflect", "JSON", "Array", "Map", "Set"].includes(value.name.text) || helperExpression(value.expression);
+    if (ts.isElementAccessExpression(value)) return helperExpression(value.expression) || ts.isStringLiteralLike(value.argumentExpression) && helperValues.has(value.argumentExpression.text);
+    if (ts.isCallExpression(value) || ts.isNewExpression(value)) return helperExpression(value.expression);
+    if (ts.isConditionalExpression(value)) return helperExpression(value.whenTrue) || helperExpression(value.whenFalse);
+    if (ts.isArrayLiteralExpression(value)) return true;
+    if (ts.isObjectLiteralExpression(value)) return value.properties.some(property =>
+      ts.isPropertyAssignment(property) ? helperExpression(property.initializer) : ts.isShorthandPropertyAssignment(property) ? helperValues.has(property.name.text) : ts.isSpreadAssignment(property) && helperExpression(property.expression));
+    return false;
+  };
   const contextMemo = new Map<ts.Expression, boolean>();
   const contextExpression = (expression: ts.Expression): boolean => {
     const cached = contextMemo.get(expression);
@@ -286,63 +316,127 @@ function parse(file: SourceFile): Analysis {
     const value = unwrap(expression);
     if (ts.isIdentifier(value)) return contextValues.has(value.text);
     if (ts.isAwaitExpression(value)) return contextExpression(value.expression);
-    if (ts.isSpreadElement(value)) return contextExpression(value.expression);
-    if (ts.isArrayLiteralExpression(value)) return value.elements.some(element => !ts.isOmittedExpression(element) && contextExpression(element));
-    if (ts.isConditionalExpression(value)) return contextExpression(value.whenTrue) || contextExpression(value.whenFalse);
+    if (ts.isPropertyAccessExpression(value)) return contextMembers.has(value.name.text);
     if (ts.isCallExpression(value)) {
-      const name = callName(value.expression);
-      const memberName = name?.split(".").at(-1);
-      if (memberName !== undefined && (memberName === CONSTRUCTOR || contextFunctions.has(memberName))) return true;
-      if (name !== undefined && carriers.has(name)) return value.arguments.some(contextExpression);
-      return false;
+      const callee = unwrap(value.expression);
+      if (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)) return returnValues(callee).some(contextExpression);
+      const name = callName(callee)?.split(".").at(-1);
+      return name !== undefined && (name === CONSTRUCTOR || contextFunctions.has(name));
     }
-    if (ts.isObjectLiteralExpression(value)) return value.properties.some(property => ts.isSpreadAssignment(property) && contextExpression(property.expression));
     return false;
   };
+  const returnValues = (fn: typeof functions[number]): ts.Expression[] => {
+    if (!fn.body) return [];
+    if (!ts.isBlock(fn.body)) return [fn.body];
+    const returned: ts.Expression[] = [];
+    const visitReturns = (node: ts.Node): void => {
+      if (ts.isFunctionLike(node)) return; // A nested function has its own return provenance.
+      if (ts.isReturnStatement(node) && node.expression) returned.push(node.expression);
+      ts.forEachChild(node, visitReturns);
+    };
+    visitReturns(fn.body);
+    return returned;
+  };
+  const returns = new Map(functions.map(fn => [fn, returnValues(fn)]));
+  const functionsByName = new Map<string, typeof functions>();
+  for (const fn of functions) {
+    const name = functionName(fn);
+    if (name) functionsByName.set(name, [...(functionsByName.get(name) ?? []), fn]);
+  }
+  const localCalls = contextUses.filter(ts.isCallExpression).flatMap(call => {
+    const callee = unwrap(call.expression);
+    const targets = ts.isArrowFunction(callee) || ts.isFunctionExpression(callee) ? [callee] : ts.isIdentifier(callee) ? functionsByName.get(callee.text) ?? [] : [];
+    return targets.map(fn => ({ call, fn }));
+  });
+  const inferredParameters = new Set<ts.ParameterDeclaration>();
   for (let changed = true; changed;) {
     changed = false;
     contextMemo.clear();
-    for (const value of values) if (ts.isIdentifier(value.name) && value.initializer && !contextValues.has(value.name.text) && contextExpression(value.initializer)) { contextValues.add(value.name.text); changed = true; }
+    helperMemo.clear();
+    for (const { call, fn } of localCalls) {
+      for (let i = 0; i < fn.parameters.length; i++) {
+        const parameter = fn.parameters[i]!, argument = call.arguments[i];
+        if (argument && contextExpression(argument)) {
+          inferredParameters.add(parameter);
+          for (const id of bindingNames(parameter.name)) if (!contextValues.has(id.text)) { contextValues.add(id.text); changed = true; }
+        }
+      }
+    }
+    for (const value of values) {
+      if (ts.isIdentifier(value.name) && value.initializer && !contextValues.has(value.name.text) && contextExpression(value.initializer)) { contextValues.add(value.name.text); changed = true; }
+      if (ts.isIdentifier(value.name) && value.initializer) {
+        const name = callName(value.initializer);
+        if (name && contextFunctions.has(name.split(".").at(-1)!) && !contextFunctions.has(value.name.text)) { contextFunctions.add(value.name.text); changed = true; }
+      }
+      if (value.initializer && helperExpression(value.initializer)) for (const id of bindingNames(value.name)) if (!helperValues.has(id.text)) { helperValues.add(id.text); changed = true; }
+    }
     for (const assignment of assignments) {
       const target = unwrap(assignment.left);
       if (ts.isIdentifier(target) && !contextValues.has(target.text) && contextExpression(assignment.right)) { contextValues.add(target.text); changed = true; }
+      if (ts.isIdentifier(target) && !helperValues.has(target.text) && helperExpression(assignment.right)) { helperValues.add(target.text); changed = true; }
+    }
+    for (const member of members) {
+      const name = literalKey(member.name);
+      if (name && ts.isPropertyDeclaration(member) && member.initializer && helperExpression(member.initializer) && !helperMembers.has(name)) { helperMembers.add(name); changed = true; }
+    }
+    for (const fn of functions) {
+      const name = functionName(fn);
+      if (name && !contextFunctions.has(name) && returns.get(fn)!.some(contextExpression)) { contextFunctions.add(name); changed = true; }
+      if (name && !helperValues.has(name) && returns.get(fn)!.some(helperExpression)) { helperValues.add(name); changed = true; }
     }
   }
-  const contextReceiver = (expression: ts.Expression): boolean => {
-    const value = unwrap(expression);
-    // All property writes are refused, including constant or unknown computed keys: no key resolution can permit a write.
-    return (ts.isPropertyAccessExpression(value) || ts.isElementAccessExpression(value)) && contextExpression(value.expression);
+  contextMemo.clear();
+  helperMemo.clear();
+  const refuse = (node: ts.Node): void => {
+    problems.push(`${at(node)} use outside the allow-list reconstructs a verified tenant context or mutates a verified tenant context; pass or return the whole context, bind it to const, or read .tenantId as a value`);
   };
-  const writesContext = (target: ts.Expression): boolean => {
-    const value = unwrap(target);
-    if (contextReceiver(value)) return true;
-    if (ts.isObjectLiteralExpression(value)) return value.properties.some(property =>
-      ts.isPropertyAssignment(property) ? writesContext(property.initializer) : ts.isSpreadAssignment(property) && writesContext(property.expression));
-    if (ts.isArrayLiteralExpression(value)) return value.elements.some(element => !ts.isOmittedExpression(element) && writesContext(element));
-    if (ts.isSpreadElement(value)) return writesContext(value.expression);
-    if (ts.isBinaryExpression(value) && value.operatorToken.kind === ts.SyntaxKind.EqualsToken) return writesContext(value.left);
+  const constantBinding = (node: ts.VariableDeclaration): boolean => ts.isIdentifier(node.name) && ts.isVariableDeclarationList(node.parent) && (node.parent.flags & ts.NodeFlags.Const) !== 0;
+  for (const value of values) {
+    if (!contextType(value.type) && !(ts.isParameter(value) && inferredParameters.has(value)) && !(value.initializer && contextExpression(value.initializer))) continue;
+    if (ts.isVariableDeclaration(value) ? !constantBinding(value) : !ts.isIdentifier(value.name) || ts.isParameterPropertyDeclaration(value, value.parent)) refuse(value);
+  }
+  for (const member of members) if (ts.isPropertyDeclaration(member) && (contextType(member.type) || member.initializer && contextExpression(member.initializer))) refuse(member);
+
+  const valueUse = (node: ts.Node): ts.Node => {
+    let current = outerExpression(node);
+    while (ts.isAwaitExpression(current.parent)) current = outerExpression(current.parent);
+    return current;
+  };
+  const writeTarget = (node: ts.Node): boolean => {
+    let current = valueUse(node);
+    for (;;) {
+      const parent = current.parent;
+      if (ts.isBinaryExpression(parent) && parent.left === current && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment) return true;
+      if (ts.isDeleteExpression(parent) || ((ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)) && (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken))) return true;
+      if ((ts.isForOfStatement(parent) || ts.isForInStatement(parent)) && parent.initializer === current) return true;
+      if (ts.isPropertyAssignment(parent) && parent.initializer === current || ts.isObjectLiteralExpression(parent) || ts.isArrayLiteralExpression(parent) || ((ts.isSpreadAssignment(parent) || ts.isSpreadElement(parent)) && parent.expression === current)) current = valueUse(parent);
+      else return false;
+    }
+  };
+  const allowedUse = (node: ts.Expression): boolean => {
+    const outer = valueUse(node), parent = outer.parent;
+    if (ts.isCallExpression(parent) && parent.arguments.includes(outer as ts.Expression)) return !helperExpression(parent.expression);
+    if (ts.isReturnStatement(parent) && parent.expression === outer || ts.isArrowFunction(parent) && parent.body === outer) return true;
+    if (ts.isVariableDeclaration(parent) && parent.initializer === outer) return constantBinding(parent);
+    if (ts.isPropertyAccessExpression(parent) && parent.expression === outer && parent.name.text === "tenantId") {
+      const property = valueUse(parent), use = property.parent;
+      return !writeTarget(property) && !(ts.isCallExpression(use) && use.expression === property) && !(ts.isNewExpression(use) && use.expression === property);
+    }
     return false;
   };
-  const inspectMutation = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const name = callName(node.expression);
-      if (name !== undefined && reconstructions.has(name) && node.arguments.some(contextExpression)) {
-        problems.push(`${at(node)} reconstructs a verified tenant context; forward the verified value instead`);
-      }
-      if (name !== undefined && ["Reflect.set", "Reflect.defineProperty", "Reflect.deleteProperty", "Reflect.setPrototypeOf", "Object.defineProperty", "Object.defineProperties", "Object.setPrototypeOf"].includes(name) && node.arguments[0] && contextExpression(node.arguments[0])) {
-        problems.push(`${at(node)} mutates a verified tenant context through reflection or descriptors`);
-      }
+  for (const node of contextUses) {
+    if (!contextExpression(node)) continue;
+    const parent = node.parent;
+    // Declarations, member names and type positions are not value uses. Binding legality was checked above.
+    if (ts.isIdentifier(node)) {
+      if ((ts.isVariableDeclaration(parent) || ts.isParameter(parent)) && parent.name === node) continue;
+      if (ts.isPropertyAccessExpression(parent) && parent.name === node || ts.isPropertyAssignment(parent) && parent.name === node || ts.isBindingElement(parent) && parent.propertyName === node) continue;
+      let inType = false;
+      for (let ancestor: ts.Node | undefined = parent; ancestor; ancestor = ancestor.parent) if (ts.isTypeNode(ancestor)) { inType = true; break; }
+      if (inType) continue;
     }
-    const write = ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment ? node.left
-      : ts.isDeleteExpression(node) ? node.expression
-      : (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) && (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken) ? node.operand
-      : (ts.isForInStatement(node) || ts.isForOfStatement(node)) && !ts.isVariableDeclarationList(node.initializer) ? node.initializer : undefined;
-    if (write && writesContext(write)) {
-      problems.push(`${at(node)} mutates a verified tenant context; forward the verified value instead`);
-    }
-  };
-  // The initial traversal collects every candidate; avoid walking the full AST again for mutation checks.
-  for (const node of mutationCandidates) inspectMutation(node);
+    if (!allowedUse(node)) refuse(node);
+  }
   for (const object of objects) {
     let contextual = false;
     for (let wrapped: ts.Node = object; wrapped !== outerExpression(object); wrapped = wrapped.parent) {
@@ -760,11 +854,99 @@ describe("M0-6L round 6: refuse every identifiable context reconstruction", () =
     for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}\nfunction change(context: VerifiedTenantContext, tenantId: string, unknownKey: string) { ${code} }`), path).toEqual(mentions("mutates a verified tenant context"));
   });
 
-  it("permits original-value forwarding, delayed aliases and ordinary object copies", () => {
+  it("permits original-value forwarding, const aliases and ordinary object copies", () => {
     for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}
-function forward(context: VerifiedTenantContext): VerifiedTenantContext { let alias; alias = context; return alias; }
+function forward(context: VerifiedTenantContext): VerifiedTenantContext { const alias = context; return alias; }
 function read(context: VerifiedTenantContext) { return context.tenantId; }
 function ordinary(input: { tenantId: string }) { return Object.assign({}, input); }`), path).toEqual([]);
+  });
+});
+
+describe("M0-6L round 7: context use allow-list", () => {
+  const contextImport = `import type { VerifiedTenantContext } from "@jobguard/db";`;
+  it.each([
+    ["Sol: destructured typed parameter", `function change({ ...copy }: VerifiedTenantContext, tenantId: string): VerifiedTenantContext { copy.tenantId = tenantId; return copy; }`],
+    ["Sol: local object destructuring", `function change(context: VerifiedTenantContext, tenantId: string): VerifiedTenantContext { const { ...copy } = context; copy.tenantId = tenantId; return copy; }`],
+    ["Sol: local array destructuring", `function change(context: VerifiedTenantContext, tenantId: string): VerifiedTenantContext { const [copy] = [context]; return Object.assign({}, copy, { tenantId }); }`],
+    ["Sol: object container access", `function change(context: VerifiedTenantContext, tenantId: string): VerifiedTenantContext { const copy = { context }.context; return Object.assign({}, copy, { tenantId }); }`],
+    ["Sol: typed class member", `class Holder { constructor(readonly context: VerifiedTenantContext) {} change(tenantId: string): VerifiedTenantContext { return Object.assign({}, this.context, { tenantId }); } }`],
+    ["Sol: static Object.assign alias", `function change(context: VerifiedTenantContext, tenantId: string): VerifiedTenantContext { const assign = Object.assign; return assign({}, context, { tenantId }); }`],
+  ])("rejects %s", (_name, code) => {
+    for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}\n${code}`), path).toEqual(mentions("verified tenant context"));
+  });
+
+  it.each([
+    ["let alias", `let alias = context; return alias;`],
+    ["var alias", `var alias = context; return alias;`],
+    ["delayed alias", `let alias; alias = context; return alias;`],
+    ["reassignment of typed binding", `let alias: VerifiedTenantContext = context; alias = replacement; return alias;`],
+    ["destructured tenant", `const { tenantId } = context; return tenantId;`],
+    ["array container", `return [context];`],
+    ["object container", `return { original: context };`],
+    ["shorthand container", `return { context };`],
+    ["Map container", `return new Map([["context", context]]);`],
+    ["Set container", `return new Set([context]);`],
+    ["Map.set storage", `const holder = new Map(); holder.set("context", context);`],
+    ["Set.add storage", `const holder = new Set(); holder.add(context);`],
+    ["array push storage", `const holder = []; holder.push(context);`],
+    ["typed Map storage", `function store(holder: Map<string, VerifiedTenantContext>) { holder.set("context", context); }`],
+    ["aliased container method", `const holder = new Map(); const store = holder.set.bind(holder); store("context", context);`],
+    ["helper factory alias", `function getAssign() { return Object.assign; } const assign = getAssign(); return assign({}, context, { tenantId });`],
+    ["global Object alias", `const assign = globalThis.Object.assign; return assign({}, context, { tenantId });`],
+    ["member assignment", `holder.context = context;`],
+    ["typed class field", `class Holder { context: VerifiedTenantContext = context; } return new Holder();`],
+    ["computed key", `return { [context]: replacement };`],
+    ["computed lookup", `return holder[context];`],
+    ["computed tenant read", `return context["tenantId"];`],
+    ["unknown member read", `return context.other;`],
+    ["boolean use", `return !context;`],
+    ["conditional use", `return context ? replacement : replacement;`],
+    ["comparison", `return context === replacement;`],
+    ["context callee", `return context();`],
+    ["spread call", `return forward(...context);`],
+    ["captured context mutation", `return () => { context.tenantId = tenantId; };`],
+    ["captured alias reassignment", `const alias = context; return () => { alias = replacement; };`],
+    ["nested assignment target", `({ nested: [context.tenantId] } = input);`],
+    ["assignment default", `({ tenantId: context.tenantId = tenantId } = input);`],
+    ["iteration target", `for (context.tenantId of input) {}`],
+    ["delete", `delete context.tenantId;`],
+    ["increment", `context.tenantId++;`],
+    ["unlisted Object helper", `return Object.getOwnPropertyDescriptors(context);`],
+    ["unlisted Reflect helper", `return Reflect.ownKeys(context);`],
+    ["Object namespace alias", `const helpers = Object; return helpers.assign({}, context, { tenantId });`],
+    ["Reflect destructuring alias", `const { set: mutate } = Reflect; mutate(context, "tenantId", tenantId);`],
+    ["Object destructuring alias", `const { assign } = Object; return assign({}, context, { tenantId });`],
+    ["helper alias chain", `const first = Object.assign; const second = first; return second({}, context, { tenantId });`],
+    ["bracketed helper alias", `const assign = Object["assign"]; return assign({}, context, { tenantId });`],
+    ["bound helper alias", `const assign = Object.assign.bind(Object); return assign({}, context, { tenantId });`],
+    ["container helper alias", `const helpers = { assign: Object.assign }; return helpers.assign({}, context, { tenantId });`],
+    ["delayed helper alias", `let assign; assign = Object.assign; return assign({}, context, { tenantId });`],
+    ["inline forwarding result", `const alias = ((value) => value)(context); return { ...alias, tenantId };`],
+    ["unannotated forwarding result", `function forward(value) { return value; } const alias = forward(context); return { ...alias, tenantId };`],
+    ["generic helper reconstruction", `function copy<T extends { tenantId: string }>(value: T) { return { ...value, tenantId }; } return copy(context);`],
+    ["generic mutable parameter", `function mutate<T extends { tenantId: string }>(value: T) { value.tenantId = tenantId; } mutate(context);`],
+    ["forwarding function alias", `function forward(value: VerifiedTenantContext) { return value; } const pass = forward; const alias = pass(context); return { ...alias, tenantId };`],
+    ["inferred forwarding return", `const forward = () => context; const alias = forward(); return { ...alias, tenantId };`],
+    ["inferred async forwarding return", `async function forward() { return context; } const alias = await forward(); return { ...alias, tenantId };`],
+  ])("refuses uses outside the allow-list: %s", (_name, body) => {
+    for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}\nasync function change(context: VerifiedTenantContext, replacement: VerifiedTenantContext, tenantId: string) { ${body} }`), path).toEqual(mentions("verified tenant context"));
+  });
+
+  it("accepts only whole forwarding, const chains and value reads, including captured returns", () => {
+    for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}
+function forward(context: VerifiedTenantContext) { const first = context; const second = first; forwardWhole(second); return second; }
+const arrow = (context: VerifiedTenantContext) => context;
+function read(context: VerifiedTenantContext) { const tenantId = context.tenantId; return { tenantId }; }
+function capture(context: VerifiedTenantContext) { return () => context; }
+function wrapped(context: VerifiedTenantContext) { return ((context)); }
+async function resolved() { const context = await resolveVerifiedTenantContext(provider, request, origin); return context; }`), path).toEqual([]);
+    expect(rogueAt(APPROVED_SYNTHETIC, `${validSynthetic}
+const original = context(); const alias = original; forwardWhole(alias); const tenantId = alias.tenantId;`)).toEqual([]);
+  });
+
+  it("rejects container use of an inferred minted context and never exempts a context getter's mutation", () => {
+    expect(rogueAt(APPROVED_SYNTHETIC, `${validSynthetic}\nconst original = context(); const alias = original; const holder = { alias };`)).toEqual(mentions("verified tenant context"));
+    expect(rogueAt(PLANT_PATHS[0]!, `${contextImport}\nfunction capture(context: VerifiedTenantContext) { Object.defineProperty(holder, "context", { get: () => { context.tenantId = "other"; return context; } }); }`)).toEqual(mentions("verified tenant context"));
   });
 });
 

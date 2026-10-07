@@ -119,6 +119,25 @@ describe("principal to tenant bridge", () => {
     expect(callers).toEqual(["principal-bridge.ts"]);
   });
 
+  it("forwards the original context through a non-replaceable request getter", async () => {
+    const { provider, session, membership } = await signup();
+    const request = {
+      cookies: { jobguard_session: session.sessionToken },
+      headers: { origin: ORIGIN, "x-tenant-id": membership.tenantId, "x-csrf-token": session.csrfToken },
+    };
+    const execution = { switchToHttp: () => ({ getRequest: () => request }) } as ExecutionContext;
+    await expect(new TenantAuthGuard(provider, ORIGIN).canActivate(execution)).resolves.toBe(true);
+    const descriptor = Object.getOwnPropertyDescriptor(request, "verifiedTenantContext")!;
+    const original = descriptor.get!();
+    expect(original).toEqual({ tenantId: membership.tenantId });
+    expect(Object.isFrozen(original)).toBe(true);
+    expect(descriptor.get!()).toBe(original);
+    expect(descriptor.set).toBeUndefined();
+    expect(descriptor.configurable).toBe(false);
+    expect(() => Object.assign(request, { verifiedTenantContext: { tenantId: "20000000-0000-4000-8000-000000000002" } })).toThrow(TypeError);
+    expect(descriptor.get!()).toBe(original);
+  });
+
   it("makes the Nest guard reject a bypassed web route without a session", async () => {
     const { provider, membership } = await signup();
     const request = { headers: { origin: ORIGIN, "x-tenant-id": membership.tenantId } };
