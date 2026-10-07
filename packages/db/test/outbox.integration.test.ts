@@ -245,6 +245,43 @@ describe("transactional outbox and fake worker execution", () => {
     expect(await statusOf(action.id)).toBe("retryable");
   });
 
+  it("dead-letters five retryable deliveries with a failed fifth attempt and no executing work", async () => {
+    const action = await appendAction();
+    let calls = 0;
+    const retryable = adapter(async (delivered) => {
+      expect(delivered).toEqual(action);
+      calls++;
+      return { kind: "retryable", code: "synthetic_unavailable" };
+    });
+    const executor = new ActionExecutor(runtime, new Map([[retryable.name, retryable]]), telemetry);
+
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      await executor.execute(context, action.id);
+      expect(await statusOf(action.id)).toBe(attempt === 5 ? "dead_letter" : "retryable");
+    }
+    await executor.execute(context, action.id);
+    expect(calls).toBe(5);
+    await withTenant(runtime, context, async (db) => {
+      const attempts = (await db.$client.query(
+        "SELECT attempt_number,outcome,provider_reference,error_code,finished_at FROM app.action_attempt WHERE action_id=$1 ORDER BY attempt_number",
+        [action.id],
+      )).rows;
+      expect(attempts).toEqual(Array.from({ length: 5 }, (_, index) => ({
+        attempt_number: index + 1,
+        outcome: index === 4 ? "failed" : "retryable",
+        provider_reference: null,
+        error_code: "synthetic_unavailable",
+        finished_at: expect.any(Date),
+      })));
+      expect((await db.$client.query(
+        "SELECT id FROM app.action_outbox WHERE id=$1 AND status='executing'", [action.id],
+      )).rows).toEqual([]);
+      expect((await db.$client.query(
+        "SELECT id FROM app.action_attempt WHERE action_id=$1 AND outcome='started'", [action.id],
+      )).rows).toEqual([]);
+    });
+  });
+
   it("does not send expired authorization", async () => {
     const action = await appendAction({ expiresAt: "2000-01-01T00:00:00Z" });
     let calls = 0;
