@@ -31,3 +31,6 @@ No live provider, production mode, real data, spending, decision approval, deplo
 | Main merges | JobGuard integrators | ed8d2e3, 91f7923, 58eef49, 9e664bc, aac02ef |
 | Independent checks | Fresh Claude Opus review agents | PR comments above; copies in this folder |
 | Technical acceptance and merge | JobGuard integrator (evening), Claude Opus 5.5 | this file |
+
+## Addendum (8 October 2026)
+The first CI run on the acceptance commit 8fc423c had `checks` green but `dependency-review` red for two Next.js advisories published 7 October that affected `main` and every PR (not this PR's defect). They were cleared on `main` by SEC-DEPS-2026-10-08 (#122, merge c4409f7). This addendum commit is documentation only; its CI run tests this PR against that `main`. The PR touches neither `package.json` nor `pnpm-lock.yaml`, and GitHub reports it mergeable without conflict, so the code verdict bound to e66d50a is unaffected.
