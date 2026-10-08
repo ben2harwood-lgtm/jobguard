@@ -1,4 +1,3 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -7,10 +6,10 @@ import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, withTenant } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, type VerifiedTenantContext, withTenant } from "../src/index.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T="11000000-0000-4000-8000-000000000001", A="21000000-0000-4000-8000-000000000002", U="31000000-0000-4000-8000-000000000003", M="41000000-0000-4000-8000-000000000004";
-const context=testTenantContext(T);
+const context={tenantId:T} as VerifiedTenantContext;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,repo:PracticeInvoiceRepository;
 type Fixture={jobId:string;invoiceId:string;quoteId:string;draftId:string;revisionId:string};
 type ReceiptInput=Parameters<PracticeInvoiceRepository["recordReceipt"]>[1];
@@ -33,8 +32,8 @@ async function rawRecord(c:ReceiptInput,overrides:Record<string,unknown>={}) {
 }
 beforeAll(async()=>{
  dir=await mkdtemp(join(tmpdir(),"uiwire12-pg-"));
- const port=59000+Math.floor(Math.random()*400);
- pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
+ const port=await freePort(59000,400);
+ pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await pg.initialise();await pg.start();
  admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
  // Establish a real 0029 database, issue/record/reverse there, then upgrade it.
@@ -51,15 +50,17 @@ beforeAll(async()=>{
  legacy=await freshInvoice();legacyInput=command(legacy);legacyPayment=await repo.recordReceipt(context,legacyInput);legacyReverseCommand=randomUUID();
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
- await migrate(admin);
- expect(MIGRATION_URLS).toHaveLength(44);
- expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN '0000_tenancy.sql' AND '0053_shared_money_origin.sql'`)).rowCount).toBe(44);
+ await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
+ const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!);
+ const applied=await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name`);
+ expect(applied.rowCount).toBe(MIGRATION_URLS.length);
+ expect(applied.rows.map(row=>row.migration_name)).toEqual(names);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 
 describe("UIWIRE-12 customer receipts",()=>{
  it("upgrades without changing old command hashes and replays old receipts and reversals",async()=>{
-  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(44);
+  expect((await admin.query(`SELECT count(*)::int n FROM public.jobguard_schema_migration`)).rows[0].n).toBe(MIGRATION_URLS.length);
   expect((await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows).toEqual(legacyHashes);
   expect(await repo.recordReceipt(context,legacyInput)).toEqual(legacyPayment);
   expect(await repo.reverseReceipt(context,{...reversal(legacy,legacyPayment.paymentId),commandId:legacyReverseCommand})).toEqual({reversalId:legacyReversal});
@@ -118,7 +119,7 @@ describe("UIWIRE-12 customer receipts",()=>{
   await expect(repo.reverseReceipt(context,{...reversal(f,p.paymentId),invoiceId:other.id})).rejects.toThrow("PAYMENT_NOT_FOUND");
   expect((await repo.receiptView(context,f.jobId,f.invoiceId)).receipts[0]!.reversal).toBeNull();
   await expect(repo.recordReceipt(context,{...command(f),jobId:randomUUID()})).rejects.toThrow("INVOICE_NOT_FOUND");
-  await expect(repo.receiptView(testTenantContext(randomUUID()),f.jobId,f.invoiceId)).rejects.toThrow("INVOICE_NOT_FOUND");
+  await expect(repo.receiptView({tenantId:randomUUID()} as VerifiedTenantContext,f.jobId,f.invoiceId)).rejects.toThrow("INVOICE_NOT_FOUND");
  });
  it("rechecks membership before replay, rather than trusting an old successful command",async()=>{
   const f=await freshInvoice(),c=command(f);await repo.recordReceipt(context,c);

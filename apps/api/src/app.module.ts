@@ -1,3 +1,6 @@
+import { APP_FILTER } from "@nestjs/core";
+import { WatchdogExceptionFilter } from "./watchdog.filter.js";
+import { PracticeErrorsFilter } from "./practice-errors.filter.js";
 import { Module } from "@nestjs/common";
 import { HealthController } from "./health.controller.js";
 import { Pool } from "pg";
@@ -29,5 +32,8 @@ import { CommercialIntegrityController } from "./commercial-integrity.controller
 import { CommercialIntegrityApplication } from "./commercial-integrity.application.js";
 import { EvidencePackController } from "./evidence-pack.controller.js";
 
-@Module({ controllers: [HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController], providers:[{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,CommercialIntegrityApplication] })
+import { ContractorController } from "./contractor/contractor.controller.js";
+import { JobPartiesController,JobPartiesListController } from "./job-parties.controller.js";
+
+@Module({ controllers: [HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController,ContractorController,JobPartiesController,JobPartiesListController], providers:[{provide:APP_FILTER,useClass:WatchdogExceptionFilter},{provide:APP_FILTER,useClass:PracticeErrorsFilter},{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService] })
 export class AppModule {}
