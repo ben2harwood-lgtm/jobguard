@@ -6,7 +6,6 @@ import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
-import { MIGRATION_URLS } from "../src/migrate.js";
 import { DEMO_TENANT_ID, demoCheckpoints } from "../src/demo-seed.js";
 import { closeTestPools } from "./pool-test-utils.js";
 import { MIGRATION_URLS } from "../src/migrate.js";
