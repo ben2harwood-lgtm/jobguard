@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "./demo-seed.js";
 import { verifiedTenantContextFromMembership, withTenant } from "./tenant-context.js";
 
-export type SyntheticDemoJob = Readonly<{ id: string; title: string; status: string; revision: number; updatedAt: Date }>;
+export type SyntheticDemoJob = Readonly<{ id: string; title: string; status: string; revision: number; updatedAt: Date; customerLabel?: string; siteLabel?: string }>;
 
 export class SyntheticDemoReadError extends Error {
   constructor(readonly code: "DATABASE_UNAVAILABLE" | "MEMBERSHIP_FORBIDDEN" | "JOB_NOT_FOUND", options?: ErrorOptions) {
@@ -28,9 +28,13 @@ export async function readSyntheticDemo(pool: Pool) {
     );
     if (membership.rowCount !== 1) throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
     const jobs = await database.$client.query<SyntheticDemoJob>(
-      `SELECT id::text,title,status,revision,updated_at AS "updatedAt"
-         FROM app.job j
+      `SELECT j.id::text,j.title,j.status,j.revision,j.updated_at AS "updatedAt",
+         coalesce(s.snapshot->'customer'->>'name','Details needed') AS "customerLabel",
+         coalesce(concat_ws(', ',s.snapshot->'site'->>'unit',s.snapshot->'site'->'addressLines'->>0,s.snapshot->'site'->>'postcode'),'Details needed') AS "siteLabel"
+         FROM app.job j LEFT JOIN app.job_party_current pc ON(pc.tenant_id,pc.job_id)=(j.tenant_id,j.id)
+         LEFT JOIN app.job_party_snapshot s ON(s.tenant_id,s.binding_id)=(pc.tenant_id,pc.binding_id)
          WHERE j.tenant_id=$1
+           AND j.practice_session_digest IS NULL
            AND NOT EXISTS (
              SELECT 1 FROM app.job_record_proposal cp
               WHERE cp.tenant_id=j.tenant_id AND cp.job_id=j.id
@@ -39,7 +43,7 @@ export async function readSyntheticDemo(pool: Pool) {
              SELECT 1 FROM app.sandbox_run sr
               WHERE sr.tenant_id=j.tenant_id AND sr.job_id=j.id
            )
-         ORDER BY created_at,id`,
+         ORDER BY j.created_at,j.id`,
       [DEMO_TENANT_ID],
     );
     return { tenant: { id: DEMO_TENANT_ID, name: membership.rows[0].name as string }, jobs: jobs.rows };

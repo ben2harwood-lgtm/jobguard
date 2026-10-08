@@ -3321,6 +3321,18 @@ These numbers follow the dependency order, so migration-order merging works: 004
 
 Each repair's specification is its verdict file: every finding is fixed or explicitly accepted by Ben, the verdict is re-recorded against the new head, and CI is green. Tasks that build on a merged task with a HOLD or FAIL verdict depend on its repair (`-R`), not on the original.
 
+**Ledger amendment — SBOX-SESSION-1, 5 October 2026 (Ben's released dispatch, merge-ahead ruling).** `codex/sandbox/sbox-session-1` takes **0094** (`practice_session_ownership`). The supplied checkout's highest merged migration is 0053; 0054–0093 are reserved in §12.3, so 0094 is the next number neither merged nor reserved above that baseline. This task may merge ahead under Ben's 5 October ruling. Existing reservations are unchanged. Scope is synthetic practice authentication and immutable creator/session/job binding across the shared application and Next/Nest transports; no live identity, provider, charging or release approval. The older founder-held session prerequisite notes remain historical; this explicit dispatch releases their shared ownership repair, and does not independently accept any dependent feed implementation. M4-7-S and M4-5-S are absent from this checkout and must consume this boundary when integrated.
+
+**Ledger amendment — CH-3a, 7 October 2026 (merge-ahead ruling).** `codex/sandbox/ch-3a` moves from its reserved 0051 to **0095** (`job_parties`), because 0053 merged ahead; 0054–0093 stay reserved and 0094 is SBOX-SESSION-1's. CH-3a must merge after any PR holding a lower unmerged number that merges first, or renumber again.
+
+**Ledger amendment — CH-2, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0050 to **0096** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
+
+**Ledger amendment — M4-1-S-R, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0043 to **0097** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
+
+**Ledger amendment — CH-3b, 8 October 2026 (merge-ahead ruling).** CH-3b was issued on 7 October with **0102** (`contractor_parties`), the next free number at its dispatch, in place of its §12.3 reservation 0055; 0054–0093 stay reserved otherwise. It merges on 8 October ahead of the open lower numbers 0098 (M0-6L), 0099 (M4-5-S), 0100 (SV-2) and 0101 (M4-7-S) under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`), which the coordinator applied to CH-3b on 8 October; each of those takes the next free number at its own merge. 0103 (MON-7a) and 0104 (CH-1) stay allocated.
+
+**Ledger amendment — MON-7a, 8 October 2026 (merge-ahead ruling).** MON-7a (B1, B2, B3, B5, B6 of MON-7; B4 is MON-7b, parked by Ben on 7 October) was issued on 7 October with **0103** (`prevention_checks`), the next free number at its dispatch. It follows CH-3b's merged 0102 directly; the open lower numbers 0098 (M0-6L), 0099 (M4-5-S), 0100 (SV-2) and 0101 (M4-7-S) take the next free number at their own merges under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`). 0104 (CH-1) and 0105 (ENT-2) stay allocated.
+
 **Ledger amendment — M0-6L, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0052 to **0098** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
 
 ### 12.3 The graph (synthetic work, buildable after adoption)

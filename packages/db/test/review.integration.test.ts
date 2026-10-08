@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,12 +14,11 @@ import {
   ProposalReviewRepository,
   reviewContentHash,
   UserCommandDispatcher,
-  type VerifiedTenantContext,
   withTenant,
 } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
-const TENANT="10000000-0000-4000-8000-000000000001",ACCOUNT="20000000-0000-4000-8000-000000000002",USER="30000000-0000-4000-8000-000000000003",MEMBER="40000000-0000-4000-8000-000000000004";const context={tenantId:TENANT}as VerifiedTenantContext;let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,port:number;
-beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"review-pg-"));port=56500+Math.floor(Math.random()*300);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic-test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic-test-only"});await migrate(admin);await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${TENANT}');INSERT INTO identity.identity_user(id)VALUES('${USER}');INSERT INTO app.account(id,tenant_id,name)VALUES('${ACCOUNT}','${TENANT}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${MEMBER}','${TENANT}','${ACCOUNT}','${USER}','owner');CREATE ROLE review_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO review_login;`);},60000);
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+const TENANT="10000000-0000-4000-8000-000000000001",ACCOUNT="20000000-0000-4000-8000-000000000002",USER="30000000-0000-4000-8000-000000000003",MEMBER="40000000-0000-4000-8000-000000000004";const context=testTenantContext(TENANT);let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,port:number;
+beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"review-pg-"));port=56500+Math.floor(Math.random()*300);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic-test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic-test-only"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${TENANT}');INSERT INTO identity.identity_user(id)VALUES('${USER}');INSERT INTO app.account(id,tenant_id,name)VALUES('${ACCOUNT}','${TENANT}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${MEMBER}','${TENANT}','${ACCOUNT}','${USER}','owner');CREATE ROLE review_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO review_login;`);},60000);
 beforeEach(()=>{runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"review_login",password:"synthetic",max:6});});
 afterEach(async()=>{
   // Pool.end waits for every checked-out client. Keeping this at test scope makes

@@ -1,3 +1,4 @@
+import { seedSyntheticPartyFixture } from "./synthetic-party-fixture.js";
 import { createHash } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { migrate } from "./migrate.js";
@@ -70,7 +71,16 @@ async function seedDatabase(client: PoolClient) {
     await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Practice kitchen','quoting') ON CONFLICT DO NOTHING", [DEMO_JOB_ID, DEMO_TENANT_ID]);
-    await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','live'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+    await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','quoting'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+    await client.query("SET LOCAL ROLE jobguard_migration");
+    for(const jobId of [DEMO_JOB_ID,"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]) await seedSyntheticPartyFixture(client,DEMO_TENANT_ID,jobId);
+    // SH-1's legacy binder runs on INSERT, whereas this fixture enters live by UPDATE.
+    // Use the existing migration-owned binding path in the same fixture transaction.
+    await client.query(`INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id)
+      VALUES($1,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','small_builder','synthetic_demo','legacy_synthetic_live_fixture','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+      ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
+    await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
+    await client.query("SET LOCAL ROLE jobguard_runtime");
     await seedDemo("synthetic_demo", { execute: async (command: DemoSeedCommand) => {
       const result = await client.query(
         `INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
