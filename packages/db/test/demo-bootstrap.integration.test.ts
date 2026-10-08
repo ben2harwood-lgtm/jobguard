@@ -16,6 +16,8 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
       queries.push({ sql, values });
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
+      // SV-2's two shadow roles: a least-privilege posture row each, and no holder other than the creator's (none in this trace).
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, member: false }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
       if (sql.includes("count(*)::int count")) return { rowCount: 1, rows: [{ count: 45 }] };
@@ -108,7 +110,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     await admin.query("GRANT jobguard_shadow_emergency_access TO sv2_probe_holder");
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).rejects.toThrow("holder other than the PostgreSQL 16 ADMIN-only creator membership");
     await admin.query("REVOKE jobguard_shadow_emergency_access FROM sv2_probe_holder");
-    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: 47 });
+    await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: MIGRATION_URLS.length });
     expect(await holderShape()).toEqual([{ role: "jobguard_shadow", ...adminOnly }, { role: "jobguard_shadow_emergency_access", ...adminOnly }]);
   }, 60_000);
   it("creates and commits the subsequent builder origin using the actual runtime role", async () => {

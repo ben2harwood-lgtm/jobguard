@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, VariationRepository } from "@jobguard/db";
+import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, VariationRepository, practiceOwnedJobsSql } from "@jobguard/db";
 import { createHash } from "node:crypto";
 import { VariationApplication } from "./variation.application.js";
 
@@ -12,12 +12,15 @@ const input = {
  captureText: "Fictional outside tap fitted", description: "Synthetic tap",
  price: { quantity: "1", unit: "item", unitRatePence: 80000, direction: "addition" },
 };
+// Ownership is whatever the shared practice-session resolver runs (main's recursive practice_owned_job query);
+// recognising it by the resolver's own SQL prefix keeps this test from pinning a copied literal.
+const isOwnershipQuery = (sql: string) => sql.startsWith(practiceOwnedJobsSql());
 const view = { baselinePence: 10000, capPence: 150, parentScopeItemId: input.scopeItemId, variations: [] };
 function fixture(ownsJob: boolean, authenticates = true) {
  const query = vi.fn(async (sql: string) => ({ rows:
   sql.includes("authenticate_practice_session") && authenticates
    ? [{ tenant_id: DEMO_TENANT_ID, membership_id: DEMO_MEMBERSHIP_ID, identity_user_id: DEMO_IDENTITY_USER_ID }]
-   : sql.includes("practice_session_digest=$3") && ownsJob ? [{ id: job }] : [],
+   : isOwnershipQuery(sql) && ownsJob ? [{ id: job }] : [],
  }));
  const connect = vi.fn(async () => ({ query, release: vi.fn() }));
  const pool = { query, connect } as unknown as Pool;
@@ -44,10 +47,15 @@ it.each([true, false])("owned propose preserves LogBuilderExtra provenance (pric
  });
  expect(f.transact).not.toHaveBeenCalled();
  const calls = f.query.mock.calls as unknown as [string, unknown[]?][];
- expect(calls.filter(([sql]) => sql.includes("practice_session_digest=$3"))).toEqual([
-  ["SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3", [DEMO_TENANT_ID, job, createHash("sha256").update(session).digest("hex")]],
-  ["SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3", [DEMO_TENANT_ID, job, createHash("sha256").update(session).digest("hex")]],
- ]);
+ const digest = createHash("sha256").update(session).digest("hex");
+ const ownership = calls.flatMap(([sql, values], index) => isOwnershipQuery(sql)
+  ? [{ values, order: f.query.mock.invocationCallOrder[index]! }] : []);
+ // One ownership check guards the propose command and one guards the response read, both on the session digest.
+ expect(ownership.map(call => call.values)).toEqual([[DEMO_TENANT_ID, job, digest], [DEMO_TENANT_ID, job, digest]]);
+ // Ownership is proven before the capture runs; the second check belongs to the read that follows it.
+ const [captured] = f.capture.mock.invocationCallOrder;
+ expect(ownership[0]!.order).toBeLessThan(captured!);
+ expect(ownership[1]!.order).toBeGreaterThan(captured!);
  expect(calls.flatMap(([, values]) => values ?? [])).not.toContain(session);
 });
 

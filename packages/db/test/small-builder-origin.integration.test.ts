@@ -3,23 +3,30 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant, verifiedTenantContextFromMembership } from "../src/tenant-context.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
 const migrationURL=new URL("../migrations/0100_shadow_persistence.sql",import.meta.url);
+// CH-3a/CH-2 row-level guards read the tenant from the session: fixture writes that touch live-job state run in a
+// transaction with app.tenant_id set, the way main's own fixtures do.
+async function asTenant<R>(tenant:string,work:(db:PoolClient)=>Promise<R>):Promise<R> {
+ const db=await admin.connect();
+ try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);const out=await work(db);await db.query("COMMIT");return out}
+ catch(error){await db.query("ROLLBACK");throw error}finally{db.release()}
+}
 async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
  const id=randomUUID();await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
  VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low',$5)`,[tenantId,jobId,id,randomUUID(),state]);return id;
 }
 async function setup() {
  directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));port=59000+Math.floor(Math.random()*500);
- postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
+ postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
+ await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  for(const [tenant,job] of [[T,J],[T,K],[O,L]]) {
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenant]);
   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional SV-2 job','live')",[job,tenant]);
@@ -115,9 +122,11 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   // The track column admits exactly the two synthetic modes; a production mode cannot exist on a job.
   const noChargeJob=async(status="live")=>{
    const id=randomUUID();
-   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional No charge practice job','draft')",[id,T]);
-   await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[T,id]);
-   if(status!=="draft")await admin.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2",[T,id,status]);
+   await asTenant(T,async db=>{
+    await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional No charge practice job','draft')",[id,T]);
+    await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[T,id]);
+    if(status!=="draft")await db.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2",[T,id,status]);
+   });
    return id;
   };
   await expect(admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','production_billing','quote_activation')",[T,K])).rejects.toMatchObject({code:"23514"});
@@ -139,9 +148,11 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   try {
    const session=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session),job=randomUUID(),scope=randomUUID();
    // The end state of a job started with the UI's default No charge scenario: owned by this practice session, bound pilot_no_charge.
-   await admin.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional No charge practice job','draft',$3,'capture')",[job,DEMO_TENANT_ID,auth.digest]);
-   await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[DEMO_TENANT_ID,job]);
-   await admin.query("UPDATE app.job SET status='live',provenance='imported',accepted_net_value_pence=10000,fee_policy_version='reference_fee_policy_v1',recovery_cap_pence=150 WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,job]);
+   await asTenant(DEMO_TENANT_ID,async db=>{
+    await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional No charge practice job','draft',$3,'capture')",[job,DEMO_TENANT_ID,auth.digest]);
+    await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[DEMO_TENANT_ID,job]);
+    await db.query("UPDATE app.job SET status='live',provenance='imported',accepted_net_value_pence=10000,fee_policy_version='reference_fee_policy_v1',recovery_cap_pence=150 WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,job]);
+   });
    await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
    const input={version:"variation-command.v1",action:"propose",proposalId:randomUUID(),scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:scope,description:"Synthetic tap",captureText:"Synthetic captured tap",price:{quantity:"1",unit:"item",unitRatePence:80000,direction:"addition"}};
    const application=new VariationApplication(runtime,session);

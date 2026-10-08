@@ -3,23 +3,30 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant, verifiedTenantContextFromMembership } from "../src/tenant-context.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
 const migrationURL=new URL("../migrations/0100_shadow_persistence.sql",import.meta.url);
+// CH-2's live-job input guard reads the tenant from the session: fixture writes to guarded evidence tables run in a
+// transaction with app.tenant_id set, the way main's own fixtures do.
+async function asTenant<R>(tenant:string,work:(db:PoolClient)=>Promise<R>):Promise<R> {
+ const db=await admin.connect();
+ try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);const out=await work(db);await db.query("COMMIT");return out}
+ catch(error){await db.query("ROLLBACK");throw error}finally{db.release()}
+}
 async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
  const id=randomUUID();await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
  VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low',$5)`,[tenantId,jobId,id,randomUUID(),state]);return id;
 }
 async function setup() {
  directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));port=59000+Math.floor(Math.random()*500);
- postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
+ postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
+ await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  for(const [tenant,job] of [[T,J],[T,K],[O,L]]) {
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenant]);
   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional SV-2 job','live')",[job,tenant]);
@@ -99,8 +106,10 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
  });
  it("binds immutable evidence to exact tenant/job, object version, hash and authoritative receive time",async()=>{
   const id=await signal(),upload=randomUUID(),e=randomUUID(),received=new Date("2026-09-30T10:00:00Z");
-  await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')`,[upload,T,J,`synthetic/${upload}`,H]);
-  await admin.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','proof_photo',$5,'version-v1',$6,10,'image/png','standard_evidence',$7,clock_timestamp())`,[e,T,upload,J,`synthetic/${upload}`,H,received]);
+  await asTenant(T,async db=>{
+   await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')`,[upload,T,J,`synthetic/${upload}`,H]);
+   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','proof_photo',$5,'version-v1',$6,10,'image/png','standard_evidence',$7,clock_timestamp())`,[e,T,upload,J,`synthetic/${upload}`,H,received]);
+  });
   const link=(jobId=J,tenantId=T,version="version-v1",hash=H,time=received)=>withTenant(shadow,context(tenantId),db=>db.$client.query(`INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)`,[tenantId,jobId,id,e,version,hash,time]));
   for(const [job,tenant,version,hash,time] of [[K,T,"version-v1",H,received],[L,O,"version-v1",H,received],[J,T,"wrong",H,received],[J,T,"version-v1","b".repeat(64),received],[J,T,"version-v1",H,new Date("1900-01-01")]] as const)await expect(link(job,tenant,version,hash,time)).rejects.toMatchObject({code:"23503"});
   await link();await expect(link()).rejects.toMatchObject({code:"23505"});
