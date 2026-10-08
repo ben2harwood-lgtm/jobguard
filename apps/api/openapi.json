@@ -269,6 +269,21 @@
         ]
       }
     },
+    "/jobs/{id}/quotes/preview": {
+      "post": {
+        "operationId": "QuoteController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview a quote with its immutable customer, paying party and site revisions",
+        "tags": [
+          "quotes"
+        ]
+      }
+    },
     "/jobs/{id}/variations": {
       "get": {
         "operationId": "VariationController_get",
@@ -358,6 +373,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -638,6 +675,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append a synthetic purchase-order draft revision",
@@ -653,6 +712,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Authorize one exact simulated purchase-order placement",
@@ -683,6 +764,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Ingest one generated merchant fixture",
@@ -698,6 +801,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append an actual synthetic goods receipt",
@@ -713,6 +838,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Confirm or correct cited supplier facts",
@@ -741,6 +888,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Create a deterministic source match proposal",
@@ -756,6 +925,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append a human source-match correction",
@@ -829,6 +1020,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Evaluate confirmed matched facts with a versioned pure rule",
@@ -844,6 +1057,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Dismiss or dispute a finding with a reason",
@@ -859,6 +1094,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Approve a confirmed source-backed replacement bill",
@@ -889,6 +1146,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Confirm an immutable synthetic work-plan revision",
@@ -904,6 +1183,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Advance the per-run scenario clock and deduplicate the due review",
@@ -934,6 +1235,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Record deterministic synthetic findings",
@@ -964,6 +1287,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Dismiss one job-bound advisory Decision idempotently",
@@ -1116,6 +1461,91 @@
         "summary": "Execute an audited versioned contractor administration command",
         "tags": [
           "contractor-organisation"
+        ]
+      }
+    },
+    "/jobs/{id}/parties": {
+      "get": {
+        "operationId": "JobPartiesController_view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted customer, paying party, site and recognition projection"
+          }
+        },
+        "summary": "Read job-parties-workspace.v1 with tenant-scoped identity suggestions",
+        "tags": [
+          "job-parties"
+        ]
+      },
+      "post": {
+        "operationId": "JobPartiesController_command",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Typed revision, identity or idempotency conflict"
+          }
+        },
+        "summary": "Execute job-parties-command.v1 (operational; no commercial approval)",
+        "tags": [
+          "job-parties"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import": {
+      "post": {
+        "operationId": "JobPartiesController_adopt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "JOB_PARTIES_REQUIRED or stale source binding"
+          }
+        },
+        "summary": "Adopt the supplied fictional job using the exact saved party binding",
+        "tags": [
+          "job-parties"
+        ]
+      }
+    },
+    "/job-parties/jobs": {
+      "get": {
+        "operationId": "JobPartiesListController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read job-parties-list.v1 including captured jobs and saved customer/site labels",
+        "tags": [
+          "job-parties"
         ]
       }
     }
