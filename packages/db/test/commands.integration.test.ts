@@ -6,6 +6,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CommandError, UserCommandDispatcher, executeAuthorizedCommercialAction, migrate, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { ObservedPool, analyseLockOrder, mutableTables } from "./lock-observer.js";
 
 const TENANT="81000000-0000-4000-8000-000000000001", ACCOUNT="82000000-0000-4000-8000-000000000001";
 const USER="83000000-0000-4000-8000-000000000001", MEMBER="84000000-0000-4000-8000-000000000001";
@@ -75,5 +76,26 @@ describe("consequential command authorization",()=>{
   await admin.query("UPDATE app.membership SET expires_at=NULL,revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[TENANT,MEMBER]);
   await expect(dispatcher.dispatch(context,command("87000000-0000-4000-8000-000000000009",{semanticKey:"revoked-member"}),handler)).rejects.toMatchObject({code:"FORBIDDEN"});
   expect(calls).toBe(0);
+ });
+ it("is observed in PostgreSQL: the job aggregate is locked for update before the audit append, and no contending lock follows it",async()=>{
+  // CH-2 extends this M0-8 lock-order test to the guarded commands (watchdog-lock-order.integration.test.ts); here the same observer reads the consequential
+  // command layer itself: every statement of the real dispatcher transaction, as the real runtime role, with what the backend holds after each.
+  const job="85000000-0000-4000-8000-000000000002",quote="86000000-0000-4000-8000-000000000002";
+  await admin.query(`INSERT INTO app.job(id,tenant_id,title,status,revision) VALUES('${job}','${TENANT}','Observed','accepted',1);
+   INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES('${quote}','${TENANT}','${job}',1,'${HASH}',10000,'accepted');
+   UPDATE app.job SET accepted_quote_version_id='${quote}' WHERE tenant_id='${TENANT}' AND id='${job}';
+   UPDATE app.membership SET revoked_at=NULL,expires_at=NULL WHERE tenant_id='${TENANT}' AND id='${MEMBER}'`);
+  const jobRow=`app.job#${(await admin.query<{c:string}>("SELECT ctid::text c FROM app.job WHERE id=$1",[job])).rows[0]!.c}`;
+  const observed=new ObservedPool(runtime,admin),ownership={mutable:await mutableTables(admin)};
+  const switching={mutate:async(d:any)=>{const row=(await d.$client.query(`SELECT * FROM app.transition_job($1,$2,1,'live','switch_live',$3,10000,'pilot-no-charge-v1',0)`,[TENANT,job,quote])).rows[0];return{jobId:job,revision:row.revision,status:row.status}}};
+  const {value,transactions}=await observed.record(()=>new UserCommandDispatcher(observed.pool).dispatch(context,command("87000000-0000-4000-8000-000000000020",{semanticKey:`job:${job}:switch_live`,subjectRef:job}),switching));
+  expect(value).toMatchObject({status:"live"});
+  expect(transactions).toHaveLength(1);
+  const analysis=analyseLockOrder(transactions[0]!,ownership), steps=transactions[0]!.statements;
+  expect(analysis.auditIndex,"the transaction must be seen holding the audit head").toBeDefined();
+  const lockedBefore=steps.slice(0,analysis.auditIndex).some(step=>(step.footprint.rows.get(jobRow)??0)>=3);
+  expect(lockedBefore,"the job aggregate must be locked for update before the audit head is taken").toBe(true);
+  expect(analysis.afterAudit.map(violation=>`${violation.statement} => ${violation.locks.join(", ")}`)).toEqual([]);
+  expect(analysis.strongTableLocks).toEqual([]);
  });
 });

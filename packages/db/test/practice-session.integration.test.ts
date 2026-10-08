@@ -52,6 +52,22 @@ it("stranger first GET and POST authorization fail before any first-touch effect
  await expect(new CaptureRepository(runtime).persist(strangerAuth.context,{...x.input,practiceSessionDigest:strangerAuth.digest})).rejects.toThrow("NOT_FOUND");
  expect((await admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1",[DEMO_TENANT_ID])).rows[0].n).toBe(0);
 });
+it("round 16: session issuance binds the generated live job before watchdog input and leaves quoting jobs inactive", async () => {
+ const token = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, token);
+ const homes = (await admin.query("SELECT id,status FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND practice_scenario='home'", [DEMO_TENANT_ID, auth.digest])).rows;
+ expect(homes).toHaveLength(3);
+ const live = homes.filter(job => job.status === "live"), quoting = homes.filter(job => job.status === "quoting");
+ expect(live).toHaveLength(1); expect(quoting).toHaveLength(2);
+ const { JobPartiesRepository, ReadinessRepository } = await import("../src/index.js");
+ const parties = await new JobPartiesRepository(runtime).view(auth.context, auth.membershipId, live[0].id, auth.digest);
+ expect(parties.current).not.toBeNull(); expect(parties.realExternalActions).toBe(0);
+ const repo = new ReadinessRepository(runtime), input = { commandId: randomUUID(), scenarioNow: "2026-03-27T09:00:00.000Z" };
+ const first = await repo.record(auth.context, live[0].id, input);
+ expect(first.snapshot).toMatchObject({ revision: 1 });
+ expect(await repo.record(auth.context, live[0].id, input)).toEqual(first);
+ for (const job of quoting) await expect(repo.record(auth.context, job.id, { ...input, commandId: randomUUID() })).rejects.toMatchObject({ code: "JOB_NOT_LIVE" });
+ expect((await admin.query("SELECT count(*)::int n FROM app.planned_work_revision WHERE tenant_id=$1 AND job_id=ANY($2::uuid[])", [DEMO_TENANT_ID, quoting.map(job => job.id)])).rows[0].n).toBe(0);
+});
 it("unknown, missing, expired and revoked sessions fail closed; legacy jobs cannot be claimed",async()=>{
  for(const token of [undefined,randomUUID()])await expect(authorizePracticeJob(runtime,token,legacyJob)).rejects.toThrow("UNAUTHENTICATED");
  const token=await issuePracticeSession(runtime);await expect(authorizePracticeJob(runtime,token,legacyJob)).rejects.toThrow("NOT_FOUND");
@@ -188,23 +204,31 @@ it("practice merchant evidence packs approve with session-scoped rates and still
  const hash = (text: string) => createHash("sha256").update(text).digest("hex");
  const proofBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aNioAAAAASUVORK5CYII=", "base64");
  const proofHash = createHash("sha256").update(proofBytes).digest("hex");
+ const supplierIds = [randomUUID(), randomUUID()];
  const db = await admin.connect();
  try {
   await db.query("BEGIN");
-    // This pre-CH-3a test assembles a quote directly; supply its fictional parties
-    // explicitly rather than bypassing the document guard. Capture itself remains unbound.
-    await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
-    await seedSyntheticPartyFixture(db, tenantId, jobId);
+  // Supply fictional parties before the immutable quote and lifecycle commands.
+  await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+  await seedSyntheticPartyFixture(db, tenantId, jobId);
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
     await db.query("INSERT INTO app.quote_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [quoteDraftId, tenantId, jobId]);
     await db.query("INSERT INTO app.quote_revision(id,tenant_id,job_id,quote_draft_id,revision,currency,tax_policy_version,subtotal_pence,discount_pence,net_pence,tax_pence,total_pence,issuable,blockers) VALUES($1,$2,$3,$4,1,'GBP','candidate_m1_standard_v1',1880000,0,1880000,376000,2256000,true,'[]')", [quoteRevisionId, tenantId, jobId, quoteDraftId]);
     await db.query("INSERT INTO app.quote_document_version(id,tenant_id,job_id,quote_revision_id,document_version,reference,content_hash,object_key,object_version_id,pdf_byte_length,issuer,customer,snapshot) VALUES($1,$2,$3,$4,1,'FIXTURE-QUOTE-1',$5,'fixture/quote','quote-object-v1',1,'{}','{}',$6)", [quoteId, tenantId, jobId, quoteRevisionId, hash("quote immutable fixture"), {netPence:1880000,taxPence:376000,totalPence:2256000}]);
     await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,1880000,'accepted')", [quoteId, tenantId, jobId, hash("quote immutable fixture")]);
-    await db.query("UPDATE app.job SET accepted_quote_version_id=$1,status='accepted' WHERE tenant_id=$2 AND id=$3", [quoteId,tenantId,jobId]);
+    // Use the real lifecycle routine before recording watchdog inputs, with all triggers enabled.
+    await db.query("SELECT app.transition_job($1,$2,0,'quoting','start_quote')", [tenantId, jobId]);
+    await db.query("SELECT app.transition_job($1,$2,1,'accepted','accept_quote',$3)", [tenantId, jobId, quoteId]);
     await db.query("INSERT INTO app.quote_acceptance(id,tenant_id,job_id,document_id,document_version,document_hash,accepted_total_pence,currency,acceptance_kind,actor_membership_id,stated_customer_name,stated_method,accepted_at) VALUES($1,$2,$3,$4,1,$5,2256000,'GBP','builder_attestation',$6,'Fictional Customer','verbal','2026-09-20T12:00:00Z')", [acceptanceId, tenantId, jobId, quoteId, hash("quote immutable fixture"), memberId]);
+    await db.query("SELECT app.transition_job($1,$2,2,'live','switch_live',$3,1880000,'reference_fee_policy_v1',28200)", [tenantId, jobId, quoteId]);
     await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,'fixture/proof',$5,'image/png',$6,'standard_evidence','verified','proof-object-v1',now(),now()+interval '1 hour')", [uploadId, tenantId, jobId, scopeId, proofHash, proofBytes.length]);
     await db.query("INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,'fixture/proof','proof-object-v1','synthetic_demo','image/png',$5)", [tenantId, uploadId, jobId, scopeId, proofBytes]);
     await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','site_photo','fixture/proof','proof-object-v1',$6,$7,'image/png','standard_evidence',now(),now())", [proofId, tenantId, uploadId, jobId, scopeId, proofHash, proofBytes.length]);
+
+    for (const [id, type] of [[supplierIds[0], "invoice"], [supplierIds[1], "delivery"]] as const) {
+     await db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status) VALUES($1,$2,$3,'fictional-merchant',$4,$5,$6,'ready')", [id, tenantId, jobId, type, `SYNTHETIC-${type}`, hash(type)]);
+     await db.query("INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count) VALUES($1,$2,$3,$4,1,'text/plain',1,$5,1)", [randomUUID(), tenantId, jobId, id, hash(type)]);
+    }
 
   await db.query("COMMIT");
  } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
@@ -216,11 +240,6 @@ it("practice merchant evidence packs approve with session-scoped rates and still
   jobId, scopeItemId: scopeId, skuId: rate.skuId, quantity: "40", unit: "each", expectedRevision: 0,
  });
  expect((await admin.query("SELECT practice_session_digest FROM app.material_rate_revision WHERE id=$1", [rate.id])).rows[0].practice_session_digest).toBe(x.auth.digest);
- const supplierIds = [randomUUID(), randomUUID()];
- for (const [id, type] of [[supplierIds[0], "invoice"], [supplierIds[1], "delivery"]] as const) {
-  await admin.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status) VALUES($1,$2,$3,'fictional-merchant',$4,$5,$6,'ready')", [id, tenantId, jobId, type, `SYNTHETIC-${type}`, hash(type)]);
-  await admin.query("INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count) VALUES($1,$2,$3,$4,1,'text/plain',1,$5,1)", [randomUUID(), tenantId, jobId, id, hash(type)]);
- }
  const opened = await new RecoveryCaseApplication(runtime, x.creator).command(jobId, {
   version: "recovery-case-command.v1", action: "open", commandId: randomUUID(), caseType: "merchant_overcharge",
   claimedNetPence: 32000, counterparty: "Fictional merchant", book: "supplier_cost", sourceType: "supplier_documents",

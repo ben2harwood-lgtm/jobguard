@@ -27,6 +27,7 @@ export * from "./activation-repository.js";
 export * from "./decision-repository.js";
 export * from "./variation-repository.js";
 export * from "./proof-repository.js";
+export * from "./proof-application-repository.js";
 export * from "./final-account-repository.js";
 export * from "./practice-invoice-repository.js";
 export * from "./customer-billing-repository.js";
@@ -58,5 +59,6 @@ export * from "./practice-session.js";
 export * from "./job-parties-repository.js";
 export * from "./synthetic-party-fixture.js";
 
+export * from "./watchdog.js";
 export * from "./prevention-check-repository.js";
 export * from "./prevention-register-fixtures.js";

@@ -3325,6 +3325,10 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — CH-3a, 7 October 2026 (merge-ahead ruling).** `codex/sandbox/ch-3a` moves from its reserved 0051 to **0095** (`job_parties`), because 0053 merged ahead; 0054–0093 stay reserved and 0094 is SBOX-SESSION-1's. CH-3a must merge after any PR holding a lower unmerged number that merges first, or renumber again.
 
+**Ledger amendment — CH-2, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0050 to **0096** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
+
+**Ledger amendment — M4-1-S-R, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0043 to **0097** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |

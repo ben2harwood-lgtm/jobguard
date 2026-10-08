@@ -42,5 +42,5 @@ export * from "./extra-origin.js";
 export * from "./enterprise-domain/index.js";
 export * from "./shadow-domain/index.js";
 export * from "./contractor.js";
-
+export * from "./watchdog.js";
 export * from "./prevention-checks.js";
