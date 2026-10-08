@@ -6,6 +6,8 @@ const button=(page:Page,name:string)=>page.getByRole("button",{name,exact:true})
 const expectTouchTarget=async(target:Locator)=>{const box=await target.boundingBox();expect(box).not.toBeNull();expect(box!.width).toBeGreaterThanOrEqual(44);expect(box!.height).toBeGreaterThanOrEqual(44)};
 // C7: a keyboard user reaches the action and sees a real focus indicator (not outline:none with no replacement).
 const expectVisibleKeyboardFocus=async(page:Page,name:string)=>{const target=button(page,name);await expect(target).toBeFocused();expect(await target.evaluate(el=>{const s=getComputedStyle(el);return el.matches(":focus-visible")&&((s.outlineStyle!=="none"&&parseFloat(s.outlineWidth)>0)||s.boxShadow!=="none")})).toBe(true)};
+// CH-2 (rebase onto main): the proof stage on the same page now announces its own role=alert ("This proof record could not load") while a job is not live,
+// so every workbench alert below is read inside the recovery workbench (#recovery-cases), where the text, focus and count assertions are unchanged.
 test("opens and manages evidence-linked recovery cases without inventing recovered money",async({page,browser},testInfo)=>{
  await openReview(page);
  for(const n of["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await page.getByRole("button",{name:`Accept ${n}`,exact:true}).click();
@@ -42,9 +44,9 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  // Negative paths: each rejected command is announced in an alert that takes focus, and nothing is recorded.
  // (a) a receipt larger than the claim is refused by the server; (b) float-style input such as 1e3 is refused before any command is sent.
  await page.getByLabel("Received (£)",{exact:true}).fill("2500.01");await button(page,"Record a landed recovery").click();
- await expect(page.locator("p[role=alert]")).toContainText("is not allowed");await expect(page.locator("p[role=alert]")).toBeFocused();await V(page,"case-landed-net","£0.00");
+ await expect(page.locator("#recovery-cases p[role=alert]")).toContainText("is not allowed");await expect(page.locator("#recovery-cases p[role=alert]")).toBeFocused();await V(page,"case-landed-net","£0.00");
  await page.getByLabel("Received (£)",{exact:true}).fill("1e3");await button(page,"Record a landed recovery").click();
- await expect(page.locator("p[role=alert]")).toContainText("Enter a non-negative price in pounds");await expect(page.locator("p[role=alert]")).toBeFocused();await V(page,"case-landed-net","£0.00");
+ await expect(page.locator("#recovery-cases p[role=alert]")).toContainText("Enter a non-negative price in pounds");await expect(page.locator("#recovery-cases p[role=alert]")).toBeFocused();await V(page,"case-landed-net","£0.00");
  await page.getByLabel("Received (£)",{exact:true}).fill("1000.00");await button(page,"Record a landed recovery").click();
  await V(page,"case-landed-net","£1,000.00");await V(page,"case-outstanding-net","£1,500.00");await V(page,"case-fee","£0.00");await V(page,"case-fee-note","No approved qualifying landing yet, so no fee exists");
  await button(page,"Write off remainder").click();await expect(page.getByText("£1,500.00 written off",{exact:true})).toBeVisible();await expect(page.getByText("£2,500 recovered",{exact:true})).toHaveCount(0);
@@ -82,7 +84,7 @@ test("amends a claim to what was received, closes it as recovered and reverses i
  await page.getByRole("button",{name:"Dismiss Replace shelves",exact:true}).click();await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");
  await page.getByRole("button",{name:"Confirm scope",exact:true}).click();
  const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
- const alert=page.locator("p[role=alert]"),received=page.getByLabel("Received (£)",{exact:true}),claim=page.getByLabel("New claimed amount (£)",{exact:true}),reversed=page.getByLabel("Reversed (£)",{exact:true});
+ const alert=page.locator("#recovery-cases p[role=alert]"),received=page.getByLabel("Received (£)",{exact:true}),claim=page.getByLabel("New claimed amount (£)",{exact:true}),reversed=page.getByLabel("Reversed (£)",{exact:true});
  const refuse=async(text:string)=>{await expect(alert).toContainText(text);await expect(alert).toBeFocused()};
  // The OLDER case (£2,500) is opened and part-received first; the NEWER case (£320) is opened afterwards and is selected on opening.
  await button(page,"Open £2,500 withheld payment").click();await V(page,"case-claimed-net","£2,500.00");
@@ -119,7 +121,7 @@ test("amends a claim to what was received, closes it as recovered and reverses i
  await expect(button(page,"Record a landed recovery")).toBeEnabled();await expect(button(page,"Close as recovered")).toBeDisabled();
  // The stale page still holds the old revision: its action is refused with a plain message, focus on the alert, and nothing changes.
  await stalePage.getByLabel("Received (£)",{exact:true}).fill("1.00");await stalePage.getByRole("button",{name:"Record a landed recovery",exact:true}).click();
- await expect(stalePage.locator("p[role=alert]")).toContainText("changed since it was loaded");await expect(stalePage.locator("p[role=alert]")).toBeFocused();
+ await expect(stalePage.locator("#recovery-cases p[role=alert]")).toContainText("changed since it was loaded");await expect(stalePage.locator("#recovery-cases p[role=alert]")).toBeFocused();
  await V(stalePage,"case-landed-net","£1,000.00");await stalePage.close();
  // Persisted results: the authoritative read, the reloaded page and a SECOND browser context agree, and the untouched newer case is unchanged.
  const persisted=await(await page.request.get(`/api/jobs/${jobId}/recovery-cases`)).json();
@@ -156,7 +158,7 @@ const signedInSecondPage=async(browser:import("@playwright/test").Browser,jobId:
 // Sol P2-2 and P2-3: a case never strands after write-off, reversal and re-landing, and a fully received case can close again after a dispute.
 test("a written-off case that is reversed and re-landed ends closed, and a fully received case closes again after a dispute",async({page},testInfo)=>{
  const jobId=await confirmedJob(page);
- const alert=page.locator("p[role=alert]"),received=page.getByLabel("Received (£)",{exact:true}),claim=page.getByLabel("New claimed amount (£)",{exact:true}),reversed=page.getByLabel("Reversed (£)",{exact:true});
+ const alert=page.locator("#recovery-cases p[role=alert]"),received=page.getByLabel("Received (£)",{exact:true}),claim=page.getByLabel("New claimed amount (£)",{exact:true}),reversed=page.getByLabel("Reversed (£)",{exact:true});
  // P2-2: claim 2,500.00 -> receive 1,000.00 -> write off 1,500.00 -> reverse 1,000.00 -> receive 1,000.00 again.
  await button(page,"Open £2,500 withheld payment").click();await V(page,"case-claimed-net","£2,500.00");
  await button(page,"Evidence assembled").click();await V(page,"case-state","Evidence assembled");
@@ -220,7 +222,7 @@ test("two browsers opening cases at the same time each select the case they open
 // Sol P3-8: a case list that is still loading, or that could not be read, is never presented as an empty register.
 test("an unread case list is shown as loading or failed, never as empty, and the failure can be retried",async({page})=>{
  const jobId=await confirmedJob(page);
- const readUrl=`**/api/jobs/${jobId}/recovery-cases`,alert=page.locator("p[role=alert]"),empty=page.getByText("No recovery cases yet.",{exact:true});
+ const readUrl=`**/api/jobs/${jobId}/recovery-cases`,alert=page.locator("#recovery-cases p[role=alert]"),empty=page.getByText("No recovery cases yet.",{exact:true});
  const isRead=(route:import("@playwright/test").Route)=>route.request().method()==="GET";
  // Loading: the first read is held open, and nothing claims the register is empty meanwhile.
  let release:()=>void=()=>undefined;const gate=new Promise<void>(resolve=>{release=resolve});
@@ -255,7 +257,7 @@ test("an unread case list is shown as loading or failed, never as empty, and the
 // The server really commits the first request; only the answer is lost. The retry must be the same command id, and the register must end with exactly one case.
 test("a lost save answer cannot be turned into a duplicate case: the only retry re-sends the same command id",async({page})=>{
  const jobId=await confirmedJob(page);
- const url=`**/api/jobs/${jobId}/recovery-cases`,alert=page.locator("p[role=alert]");
+ const url=`**/api/jobs/${jobId}/recovery-cases`,alert=page.locator("#recovery-cases p[role=alert]");
  const openNames=["Open materials-320 overcharge","Open £320 withheld payment","Open £2,500 withheld payment","Record prevention"];
  const commandIds:string[]=[];let lose=true;
  await page.route(url,async route=>{
@@ -299,14 +301,21 @@ test("approved £2,500 plus overlapping manual £1,000 remains received in full 
  const admin = new Pool({host:"127.0.0.1",port:55432,user:"postgres",password:"sbox-e2e-owner",database:"jobguard_synthetic_demo",max:1});
  try {
   const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1",[jobId])).rows[0].tenant_id;
-  const activation=randomUUID(),upload=randomUUID(),evidence=randomUUID(),receipt=randomUUID(),eligibility=randomUUID(),landing=randomUUID();
+  const activation=randomUUID(),baseline=randomUUID(),upload=randomUUID(),evidence=randomUUID(),receipt=randomUUID(),eligibility=randomUUID(),landing=randomUUID();
   const db=await admin.connect();
   try {
    await db.query("BEGIN");
    await db.query("SET LOCAL session_replication_role=replica");
-   await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES($1,$2,$3,$4,1,repeat('a',64),'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$5,now())",[activation,tenantId,jobId,randomUUID(),randomUUID()]);
-   await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",[randomUUID(),tenantId,jobId,activation,randomUUID()]);
+   await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES($1,$2,$3,$4,1,repeat('a',64),'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$5,now())",[activation,tenantId,jobId,baseline,randomUUID()]);
+   await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",[randomUUID(),tenantId,jobId,activation,baseline]);
    await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES($1,$2,$3,$4,repeat('b',64),'application/pdf',1,'standard_evidence','verified','synthetic-v1',now(),now()+interval '1 hour')",[upload,tenantId,jobId,`synthetic/${upload}`]);
+   // CH-2: an evidence record is a watchdog input, accepted only for a LIVE job under that job's tenant. Move the job live with the real lifecycle
+   // routine (never a direct status write), on the same fictional baseline as the activation and cap rows above.
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
+   const lifecycle=(await db.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0] as {status:string;revision:number};
+   expect(lifecycle.status).toBe("quoting");
+   const move=(expected:number,to:string,reason:string,live=false)=>db.query("SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)",[tenantId,jobId,expected,to,reason,baseline,live?1880000:null,live?"reference_fee_policy_v1":null,live?28200:null]);
+   await move(lifecycle.revision,"accepted","accept_quote");await move(lifecycle.revision+1,"live","switch_live",true);
    // Restore normal constraints before recording verified evidence, settled synthetic cash and exact approvals.
    await db.query("SET LOCAL session_replication_role=origin");
    await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'synthetic-v1',repeat('b',64),1,'application/pdf','standard_evidence',now(),now())",[evidence,tenantId,upload,jobId,`synthetic/${upload}`]);
@@ -359,20 +368,27 @@ test("repair 17: a below-settled retry keeps a delayed £900 amendment held acro
  });
  try {
   await page.getByLabel("New claimed amount (£)",{exact:true}).fill("900.00"); await button(page,"Amend claim").click();
-  const alert = page.locator("p[role=alert]");
+  const alert = page.locator("#recovery-cases p[role=alert]");
   await expect(alert).toContainText("may or may not have been saved"); await expect(alert).toBeFocused();
   expect(sent).toHaveLength(1);
   const body = JSON.parse(sent[0]!) as {commandId:string;expectedRevision:number};
   expect(body).toMatchObject({action:"amend_claim",caseId:c.id,expectedRevision:c.revision,claimedNetPence:90000});
   const tenantId = (await admin.query("SELECT tenant_id FROM app.job WHERE id=$1",[jobId])).rows[0].tenant_id;
-  const activation=randomUUID(),upload=randomUUID(),evidence=randomUUID(),receipt=randomUUID(),eligibility=randomUUID(),landing=randomUUID(),allocation=randomUUID();
+  const activation=randomUUID(),baseline=randomUUID(),upload=randomUUID(),evidence=randomUUID(),receipt=randomUUID(),eligibility=randomUUID(),landing=randomUUID(),allocation=randomUUID();
   const db=await admin.connect();
   try {
    await db.query("BEGIN");
    await db.query("SET LOCAL session_replication_role=replica");
-   await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES($1,$2,$3,$4,1,repeat('a',64),'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$5,now())",[activation,tenantId,jobId,randomUUID(),randomUUID()]);
-   await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",[randomUUID(),tenantId,jobId,activation,randomUUID()]);
+   await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES($1,$2,$3,$4,1,repeat('a',64),'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$5,now())",[activation,tenantId,jobId,baseline,randomUUID()]);
+   await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",[randomUUID(),tenantId,jobId,activation,baseline]);
    await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES($1,$2,$3,$4,repeat('b',64),'application/pdf',1,'standard_evidence','verified','synthetic-v1',now(),now()+interval '1 hour')",[upload,tenantId,jobId,`synthetic/${upload}`]);
+   // CH-2: an evidence record is a watchdog input, accepted only for a LIVE job under that job's tenant. Move the job live with the real lifecycle
+   // routine (never a direct status write), on the same fictional baseline as the activation and cap rows above.
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
+   const lifecycle=(await db.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0] as {status:string;revision:number};
+   expect(lifecycle.status).toBe("quoting");
+   const move=(expected:number,to:string,reason:string,live=false)=>db.query("SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)",[tenantId,jobId,expected,to,reason,baseline,live?1880000:null,live?"reference_fee_policy_v1":null,live?28200:null]);
+   await move(lifecycle.revision,"accepted","accept_quote");await move(lifecycle.revision+1,"live","switch_live",true);
    await db.query("SET LOCAL session_replication_role=origin");
    await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'synthetic-v1',repeat('b',64),1,'application/pdf','standard_evidence',now(),now())",[evidence,tenantId,upload,jobId,`synthetic/${upload}`]);
    await db.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at)VALUES($1::uuid,$2,$3,$1::text,$1::text,'settled',100000,'GBP',true,now())",[receipt,tenantId,jobId]);
