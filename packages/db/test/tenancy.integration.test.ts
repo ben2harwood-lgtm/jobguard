@@ -263,6 +263,7 @@ describe("migration and privilege catalog", () => {
       { relname: "merchant_sku_alias", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "org_unit", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "planned_work_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "proof_application_response", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proposal_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proposal_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proposal_review_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -326,6 +327,8 @@ describe("migration and privilege catalog", () => {
       { relname: "variation_rate_observation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "variation_rejection", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "variation_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "watchdog_command_identity", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "watchdog_command_result", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
     ]);
   });
 
@@ -437,6 +440,7 @@ describe("migration and privilege catalog", () => {
       { relname: "merchant_sku_alias", owner: "jobguard_migration" },
       { relname: "org_unit", owner: "jobguard_migration" },
       { relname: "planned_work_revision", owner: "jobguard_migration" },
+      { relname: "proof_application_response", owner: "jobguard_migration" },
       { relname: "proposal_line", owner: "jobguard_migration" },
       { relname: "proposal_review", owner: "jobguard_migration" },
       { relname: "proposal_review_line", owner: "jobguard_migration" },
@@ -500,6 +504,8 @@ describe("migration and privilege catalog", () => {
       { relname: "variation_rate_observation", owner: "jobguard_migration" },
       { relname: "variation_rejection", owner: "jobguard_migration" },
       { relname: "variation_revision", owner: "jobguard_migration" },
+      { relname: "watchdog_command_identity", owner: "jobguard_migration" },
+      { relname: "watchdog_command_result", owner: "jobguard_migration" },
     ]);
   });
 });

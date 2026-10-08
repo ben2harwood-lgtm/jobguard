@@ -1,3 +1,4 @@
+import { WatchdogError, beginStoredCommand, requestHashFor, requireLiveJob, storeCommandResult, type WatchdogCommandType } from "./watchdog.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
@@ -15,7 +16,19 @@ export class SupplierMatchRepository {
     jobId: string,
     input: { commandId: string; expectedRevision: number },
   ) {
-    return withTenant(this.pool, context, async (db) => {
+    return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
+      await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
+      const requestHash = hash({ jobId, ...input }), { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.create", requestHash: requestHashFor("supplier_match.create", jobId, request) });
+      if (began.replay) return began.result;
+      // A creation written before results were stored: its revision row carries the command id and its audit event the hash of this very request.
+      // It replays as the match stood at that revision, on its own job and for its own request only.
+      const written = (await db.$client.query<any>(
+        `SELECT r.job_id,r.proposal_id,r.revision,ae.payload->'hashes'->>'payloadHash' AS request_hash FROM app.supplier_match_revision r JOIN app.audit_event ae ON(ae.tenant_id,ae.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.command_id=$2 AND ae.event_type='supplier_match.confirmed'`,
+        [context.tenantId, input.commandId])).rows[0];
+      if (written) {
+        if (written.job_id !== jobId || written.request_hash !== hash(input)) throw new WatchdogError("IDEMPOTENCY_CONFLICT");
+        return this.viewIn(db.$client, context.tenantId, jobId, { proposalId: written.proposal_id, revision: Number(written.revision) });
+      }
       const sources = await this.sources(db.$client, context.tenantId, jobId);
       const proposal = proposeSupplierMatch({
         version: "supplier-match-input.v1",
@@ -32,7 +45,7 @@ export class SupplierMatchRepository {
           [context.tenantId, jobId, proposal.digest],
         )
       ).rows[0];
-      if (existing) return this.viewIn(db.$client, context.tenantId, jobId);
+      if (existing) return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.create", requestHash);
       const payloadHash = hash(proposal);
       const audits = await appendAuditBatch(db, [
         {id:randomUUID(),version:"audit.v1",actorRef:"member:synthetic-builder",eventType:"supplier_match.proposed",subjectType:"job",subjectRef:jobId,payload:{references:{proposalId:proposal.id},hashes:{payloadHash},classifications:{action:"operational"}}},
@@ -76,7 +89,7 @@ export class SupplierMatchRepository {
           },
           audits[1]!.id,
         );
-      return this.viewIn(db.$client, context.tenantId, jobId);
+      return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.create", requestHash);
     });
   }
   async correct(
@@ -84,7 +97,10 @@ export class SupplierMatchRepository {
     jobId: string,
     input: SupplierMatchCorrection,
   ) {
-    return withTenant(this.pool, context, async (db) => {
+    return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
+      await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
+      const requestHash = hash({ jobId, ...input }), { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.correct", requestHash: requestHashFor("supplier_match.correct", jobId, request) });
+      if (began.replay) return began.result;
       if (
         new Set(input.allocations.map((x) => x.receiptVersionId)).size !==
         input.allocations.length
@@ -92,15 +108,16 @@ export class SupplierMatchRepository {
         throw new Error("RECEIVED_QUANTITY_ALREADY_ALLOCATED");
       const replay = (
           await db.$client.query<any>(
-            `SELECT payload_hash FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2`,
+            `SELECT payload_hash,job_id,proposal_id,revision FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2`,
             [context.tenantId, input.commandId],
           )
         ).rows[0],
         payloadHash = hash(input);
       if (replay) {
-        if (replay.payload_hash !== payloadHash)
-          throw new Error("IDEMPOTENCY_CONFLICT");
-        return this.viewIn(db.$client, context.tenantId, jobId);
+        if (replay.job_id !== jobId || replay.payload_hash !== payloadHash)
+          throw new WatchdogError("IDEMPOTENCY_CONFLICT");
+        // Its first result: the proposal and history as of the revision this command wrote, not the latest.
+        return this.viewIn(db.$client, context.tenantId, jobId, { proposalId: replay.proposal_id, revision: Number(replay.revision) });
       }
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [input.proposalId]);
       const proposal = (
@@ -167,7 +184,7 @@ export class SupplierMatchRepository {
         input,
         audit.id,
       );
-      return this.viewIn(db.$client, context.tenantId, jobId);
+      return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.correct", requestHash);
     });
   }
   async view(context: VerifiedTenantContext, jobId: string) {
@@ -256,18 +273,24 @@ export class SupplierMatchRepository {
         [randomUUID(), tenantId, jobId, id, a.receiptVersionId, a.quantity],
       );
   }
-  private async viewIn(db: any, tenantId: string, jobId: string) {
+  /** The command's first result is stored with it, in the same transaction, so a replay (including of a no-op) returns exactly this. */
+  private async finish(db: any, tenantId: string, jobId: string, commandId: string, kind: WatchdogCommandType, requestHash: string) {
+    const result = await this.viewIn(db.$client, tenantId, jobId);
+    await storeCommandResult(db, { tenantId, commandId, result });
+    return result;
+  }
+  private async viewIn(db: any, tenantId: string, jobId: string, at?: { proposalId: string; revision: number }) {
     const row = (
       await db.query(
-        `SELECT p.*,r.id revision_id,r.revision,(SELECT quantity_decimal::text FROM app.purchase_order_revision o WHERE o.tenant_id=p.tenant_id AND o.id=p.order_revision_id) ordered,(SELECT quantity_decimal::text FROM app.supplier_fact_revision b WHERE b.tenant_id=p.tenant_id AND b.id=p.bill_revision_id) billed,COALESCE((SELECT sum(a.quantity_decimal)::text FROM app.supplier_match_allocation a WHERE a.tenant_id=p.tenant_id AND a.match_revision_id=r.id),'0') received FROM app.supplier_match_proposal p LEFT JOIN LATERAL(SELECT * FROM app.supplier_match_revision x WHERE x.tenant_id=p.tenant_id AND x.proposal_id=p.id ORDER BY x.revision DESC LIMIT 1)r ON true WHERE p.tenant_id=$1 AND p.job_id=$2 ORDER BY p.created_at DESC LIMIT 1`,
-        [tenantId, jobId],
+        `SELECT p.*,r.id revision_id,r.revision,(SELECT quantity_decimal::text FROM app.purchase_order_revision o WHERE o.tenant_id=p.tenant_id AND o.id=p.order_revision_id) ordered,(SELECT quantity_decimal::text FROM app.supplier_fact_revision b WHERE b.tenant_id=p.tenant_id AND b.id=p.bill_revision_id) billed,COALESCE((SELECT sum(a.quantity_decimal)::text FROM app.supplier_match_allocation a WHERE a.tenant_id=p.tenant_id AND a.match_revision_id=r.id),'0') received FROM app.supplier_match_proposal p LEFT JOIN LATERAL(SELECT * FROM app.supplier_match_revision x WHERE x.tenant_id=p.tenant_id AND x.proposal_id=p.id AND ($4::int IS NULL OR x.revision<=$4::int) ORDER BY x.revision DESC LIMIT 1)r ON true WHERE p.tenant_id=$1 AND p.job_id=$2 AND ($3::uuid IS NULL OR p.id=$3::uuid) ORDER BY p.created_at DESC LIMIT 1`,
+        [tenantId, jobId, at?.proposalId ?? null, at?.revision ?? null],
       )
     ).rows[0];
     if (!row) return { proposal: null, revision: 0, history: [] };
     const history = (
       await db.query(
-        `SELECT r.id,r.revision,r.order_revision_id,r.receipt_version_ids,r.bill_revision_id,r.payload_hash,e.sequence audit_sequence,r.invalidates_unresolved_findings FROM app.supplier_match_revision r JOIN app.audit_event e ON(e.tenant_id,e.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.proposal_id=$3 ORDER BY r.revision`,
-        [tenantId, jobId, row.id],
+        `SELECT r.id,r.revision,r.order_revision_id,r.receipt_version_ids,r.bill_revision_id,r.payload_hash,e.sequence audit_sequence,r.invalidates_unresolved_findings FROM app.supplier_match_revision r JOIN app.audit_event e ON(e.tenant_id,e.id)=(r.tenant_id,r.audit_event_id) WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.proposal_id=$3 AND ($4::int IS NULL OR r.revision<=$4::int) ORDER BY r.revision`,
+        [tenantId, jobId, row.id, at?.revision ?? null],
       )
     ).rows;
     return {

@@ -51,10 +51,10 @@ beforeAll(async()=>{
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
  await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
- const declared=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!);
- expect(declared).toContain("0102_contractor_parties.sql");
- // Exactly the declared migrations are recorded, by name, whatever other migrations sit beside 0102.
- expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration`)).rows.map(row=>row.migration_name as string).sort()).toEqual([...declared].sort());
+ const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!);
+ const applied=await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name`);
+ expect(applied.rowCount).toBe(MIGRATION_URLS.length);
+ expect(applied.rows.map(row=>row.migration_name)).toEqual(names);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 
