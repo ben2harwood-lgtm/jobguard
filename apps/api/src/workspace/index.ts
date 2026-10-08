@@ -54,3 +54,6 @@ export * from "../contractor/contractor-parties.application.js";
 export * from "../contractor/contractor-parties.contracts.js";
 export * from "../prevention-check.application.js";
 export * from "../prevention-check.contracts.js";
+export * from "../practice-feed.contracts.js";
+export * from "../practice-feed.application.js";
+export * from "../practice-feed.http.js";

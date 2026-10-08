@@ -56,6 +56,10 @@
     "./commercial-integrity": {
       "types": "./src/commercial-integrity.application.ts",
       "import": "./dist/commercial-integrity.application.js"
+    },
+    "./practice-feed-contracts": {
+      "types": "./src/practice-feed.contracts.ts",
+      "import": "./dist/practice-feed.contracts.js"
     }
   },
   "scripts": {

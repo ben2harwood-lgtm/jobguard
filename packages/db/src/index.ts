@@ -65,3 +65,4 @@ export * from "./contractor-party-repository.js";
 export * from "./prevention-check-repository.js";
 export * from "./prevention-register-fixtures.js";
 export * from "./identity-repository.js";
+export * from "./practice-feed-repository.js";
