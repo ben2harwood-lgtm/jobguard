@@ -301,8 +301,19 @@ export class RecoveryMessageRepository {
         m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
       }
       if (m.outbox_status !== "outcome_unknown") return fail("RECOVERY_MESSAGE_NOT_RECONCILABLE");
-      const last = (await db.$client.query<{ kind: string }>("SELECT kind FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision DESC LIMIT 1", [ctx.tenantId, messageId])).rows[0];
-      if (last?.kind === "reconcile_started") fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
+      const last = (await db.$client.query<{ kind: string; abandoned: boolean }>(
+        "SELECT kind,created_at<clock_timestamp()-($3::int*interval '1 millisecond') AS abandoned FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision DESC LIMIT 1",
+        [ctx.tenantId, messageId, STALE_EXECUTION_MS])).rows[0];
+      if (last?.kind === "reconcile_started") {
+        // A check that started less than STALE_EXECUTION_MS ago may still be running, so a fresh click is refused. An older one is
+        // abandoned (it died before recording the provider's answer, and the browser no longer holds its command id), exactly as an
+        // executing claim is. The practice provider is only asked, never told to send, so a fresh authorised check can take over
+        // with no resend. The abandoned check's answer stays unknown in the history, then this command starts the next check (the
+        // shared guards allow reconcile_started only after outcome_unknown). Both events land in this one transaction.
+        if (!last.abandoned) fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
+        previous = await this.event(db, ctx.tenantId, ref, actor, "outcome_unknown", input.commandId, requestHash, previous);
+        audit.push(this.auditInput(actor, messageId, "outcome_unknown", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash));
+      }
       const started = await this.event(db, ctx.tenantId, ref, actor, "reconcile_started", input.commandId, requestHash, previous);
       audit.push(this.auditInput(actor, messageId, "reconcile_started", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash));
       await this.appendHistoryAudit(db, audit);

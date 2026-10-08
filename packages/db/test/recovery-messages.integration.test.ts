@@ -953,6 +953,164 @@ describe('an abandoned delivery can be checked and recovered through the applica
   });
 });
 
+describe('a fresh check finishes an abandoned reconcile without resending (round 8, Opus P2-1)', () => {
+  const failure = async (run: () => Promise<unknown>) => { try { await run(); } catch (error) { return (error as Error).message; } throw new Error('expected the call to fail'); };
+  /** The practice-provider check dies after `reconcile_started` committed: a fault on the outbox answer that the check records. */
+  const failOutboxAnswer = async () => {
+    await admin.query(`CREATE OR REPLACE FUNCTION public.injected_outbox_answer_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.status='outcome_unknown' AND NEW.status IN ('succeeded','retryable') THEN RAISE EXCEPTION 'INJECTED_OUTBOX_ANSWER_FAULT' USING ERRCODE='XX000'; END IF; RETURN NEW; END $$`);
+    await admin.query('CREATE TRIGGER zz_injected_outbox_answer_fault BEFORE UPDATE ON app.action_outbox FOR EACH ROW EXECUTE FUNCTION public.injected_outbox_answer_fault()');
+    return () => admin.query('DROP TRIGGER IF EXISTS zz_injected_outbox_answer_fault ON app.action_outbox');
+  };
+  /** Makes the newest check start older than the five-minute window that already marks an executing claim as abandoned. */
+  const ageCheck = (messageId: string) => admin.query(
+    "UPDATE app.recovery_message_event SET created_at=clock_timestamp()-interval '10 minutes' WHERE message_id=$1 AND revision=(SELECT max(revision) FROM app.recovery_message_event WHERE message_id=$1)", [messageId]);
+  const receipts = (commandId: string) => count('SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2', [fixture.tenantId, commandId]);
+  const eventCount = (messageId: string, kind: string) => count('SELECT count(*) n FROM app.recovery_message_event WHERE message_id=$1 AND kind=$2', [messageId, kind]);
+  const auditCount = (messageId: string, type: string) => count("SELECT count(*) n FROM app.audit_event WHERE subject_type='recovery_message' AND subject_ref=$1 AND event_type=$2", [messageId, type]);
+  const UNKNOWN = ['previewed', 'approved', 'started', 'outcome_unknown'];
+  /** An unknown outcome whose first check committed `reconcile_started` and then failed before recording the provider's answer. */
+  async function abandonedCheck(outcome: 'response_lost' | 'no_response') {
+    const base = await approved();
+    const unknown = await repo.command(context, base.caseId, advanceCommand(base.view, outcome), actor);
+    const original = simple('reconcile', unknown.latest!);
+    const clear = await failOutboxAnswer();
+    try { expect(await failure(() => repo.command(context, base.caseId, original, actor))).toContain('INJECTED_OUTBOX_ANSWER_FAULT'); } finally { await clear(); }
+    const outboxId = base.view.approval!.outboxActionId;
+    expect(await outboxStatus(outboxId)).toBe('outcome_unknown');
+    expect(await storedKinds(base.view.id)).toEqual([...UNKNOWN, 'reconcile_started']);
+    return { ...base, outboxId, original, stuck: (await repo.read(context, base.caseId)).latest! };
+  }
+
+  it('refuses a fresh check inside the window, then lets one take over, finish and record the answer exactly once', async () => {
+    const { caseId, view, outboxId, original, stuck } = await abandonedCheck('response_lost');
+    expect(stuck).toMatchObject({ status: 'outcome_unknown', attempts: 1 });
+    // A check that began moments ago may still be running: a fresh click is refused and leaves nothing behind.
+    const before = await writeCounts();
+    for (let click = 0; click < 2; click++) {
+      const fresh = simple('reconcile', stuck);
+      expect(await code(() => repo.command(context, caseId, fresh, actor))).toBe('RECOVERY_MESSAGE_EXECUTION_PENDING');
+      expect(await receipts(fresh.commandId)).toBe(0);
+    }
+    expect(await writeCounts()).toEqual(before);
+    expect(await storedKinds(view.id)).toEqual([...UNKNOWN, 'reconcile_started']);
+    // Past the window that already marks an executing claim abandoned, a fresh command id from a reloaded browser finishes it.
+    await ageCheck(view.id);
+    const reloaded = (await repo.read(context, caseId)).latest!;
+    expect(reloaded).toMatchObject({ status: 'outcome_unknown', revision: stuck.revision });
+    const fresh = simple('reconcile', reloaded);
+    const done = await repo.command(context, caseId, fresh, actor);
+    expect(done.latest).toMatchObject({ status: 'simulated_delivery', attempts: 1 });
+    const finished = [...UNKNOWN, 'reconcile_started', 'outcome_unknown', 'reconcile_started', 'reconciled'];
+    expect(kinds(done.latest!)).toEqual(finished);
+    expect(await storedKinds(view.id)).toEqual(finished);
+    expect(await outboxStatus(outboxId)).toBe('succeeded');
+    // Exactly one answer, one audit record for it, one provider record, and no second delivery attempt.
+    expect(await eventCount(view.id, 'reconciled')).toBe(1);
+    expect(await auditCount(view.id, 'recovery.message.reconciled')).toBe(1);
+    expect(await auditCount(view.id, 'recovery.message.reconcile_started')).toBe(2);
+    expect(await sinkCount(view.id)).toBe(1);
+    expect(await attemptCount(outboxId)).toBe(1);
+    // Replays of the abandoned original and of the takeover both return the settled state and record nothing more.
+    const settled = await writeCounts();
+    expect(await repo.command(context, caseId, original, actor)).toEqual(done);
+    expect(await repo.command(context, caseId, fresh, actor)).toEqual(done);
+    expect(await writeCounts()).toEqual(settled);
+    // The message is no longer stuck.
+    expect(await code(() => repo.command(context, caseId, simple('reconcile', done.latest!), actor))).toBe('RECOVERY_MESSAGE_NOT_RECONCILABLE');
+  });
+
+  it('finds no provider record after a takeover, offers one safe retry and never resends by itself', async () => {
+    const { caseId, view, outboxId, stuck } = await abandonedCheck('no_response');
+    await ageCheck(view.id);
+    const checked = await repo.command(context, caseId, simple('reconcile', stuck), actor);
+    expect(checked.latest).toMatchObject({ status: 'retryable', attempts: 1 });
+    expect(kinds(checked.latest!)).toEqual([...UNKNOWN, 'reconcile_started', 'outcome_unknown', 'reconcile_started', 'retryable']);
+    expect(await eventCount(view.id, 'retryable')).toBe(1);
+    expect(await auditCount(view.id, 'recovery.message.retryable')).toBe(1);
+    expect(checked.sinkCount).toBe(0);
+    expect(await attemptCount(outboxId)).toBe(1);
+    const delivered = await repo.command(context, caseId, advanceCommand(checked.latest!), actor);
+    expect(delivered.latest).toMatchObject({ status: 'simulated_delivery', attempts: 2 });
+    expect(delivered.sinkCount).toBe(1);
+  });
+
+  it('still lets the original command id resume its own check inside the window, with no takeover recorded', async () => {
+    const { caseId, view, outboxId, original } = await abandonedCheck('response_lost');
+    const resumed = await repo.command(context, caseId, original, actor);
+    expect(resumed.latest!.status).toBe('simulated_delivery');
+    expect(kinds(resumed.latest!)).toEqual([...UNKNOWN, 'reconcile_started', 'reconciled']);
+    expect(await eventCount(view.id, 'reconciled')).toBe(1);
+    expect(await sinkCount(view.id)).toBe(1);
+    expect(await attemptCount(outboxId)).toBe(1);
+  });
+
+  it('lets a takeover that itself failed be resumed by its own id, and refuses a fresh id while it is recent', async () => {
+    const { caseId, view, stuck } = await abandonedCheck('response_lost');
+    await ageCheck(view.id);
+    const takeover = simple('reconcile', stuck);
+    const clear = await failOutboxAnswer();
+    try { expect(await failure(() => repo.command(context, caseId, takeover, actor))).toContain('INJECTED_OUTBOX_ANSWER_FAULT'); } finally { await clear(); }
+    expect(await storedKinds(view.id)).toEqual([...UNKNOWN, 'reconcile_started', 'outcome_unknown', 'reconcile_started']);
+    const recent = (await repo.read(context, caseId)).latest!;
+    const fresh = simple('reconcile', recent);
+    expect(await code(() => repo.command(context, caseId, fresh, actor))).toBe('RECOVERY_MESSAGE_EXECUTION_PENDING');
+    expect(await receipts(fresh.commandId)).toBe(0);
+    const resumed = await repo.command(context, caseId, takeover, actor);
+    expect(kinds(resumed.latest!)).toEqual([...UNKNOWN, 'reconcile_started', 'outcome_unknown', 'reconcile_started', 'reconciled']);
+    expect(await eventCount(view.id, 'reconciled')).toBe(1);
+    expect(await sinkCount(view.id)).toBe(1);
+  });
+
+  it('lets a later fresh check take over again when the first takeover is also abandoned', async () => {
+    const { caseId, view, outboxId, stuck } = await abandonedCheck('no_response');
+    await ageCheck(view.id);
+    const clear = await failOutboxAnswer();
+    try { expect(await failure(() => repo.command(context, caseId, simple('reconcile', stuck), actor))).toContain('INJECTED_OUTBOX_ANSWER_FAULT'); } finally { await clear(); }
+    await ageCheck(view.id);
+    const again = (await repo.read(context, caseId)).latest!;
+    const checked = await repo.command(context, caseId, simple('reconcile', again), actor);
+    expect(checked.latest!.status).toBe('retryable');
+    expect(kinds(checked.latest!)).toEqual([...UNKNOWN, 'reconcile_started', 'outcome_unknown', 'reconcile_started', 'outcome_unknown', 'reconcile_started', 'retryable']);
+    expect(await eventCount(view.id, 'retryable')).toBe(1);
+    expect(await attemptCount(outboxId)).toBe(1);
+    expect(checked.sinkCount).toBe(0);
+  });
+
+  it('also takes over an abandoned check that began from an abandoned delivery claim', async () => {
+    const { caseId, view } = await approved();
+    const outboxId = view.approval!.outboxActionId;
+    const dying: OutboundAdapter = { name: 'fake_recovery_message', supportsProviderDeduplication: true, deliver: async () => { throw new Error('PROCESS_DIED'); }, reconcile: async () => 'unknown' };
+    await expect(executorWith(dying).execute(context, outboxId)).rejects.toThrow('PROCESS_DIED');
+    await admin.query("UPDATE app.action_outbox SET claimed_at=clock_timestamp()-interval '10 minutes' WHERE id=$1", [outboxId]);
+    const unknown = (await repo.read(context, caseId)).latest!;
+    expect(unknown).toMatchObject({ status: 'outcome_unknown', claimAbandoned: true });
+    const clear = await failOutboxAnswer();
+    try { expect(await failure(() => repo.command(context, caseId, simple('reconcile', unknown), actor))).toContain('INJECTED_OUTBOX_ANSWER_FAULT'); } finally { await clear(); }
+    expect(await storedKinds(view.id)).toEqual([...UNKNOWN, 'reconcile_started']);
+    expect(await code(async () => repo.command(context, caseId, simple('reconcile', (await repo.read(context, caseId)).latest!), actor))).toBe('RECOVERY_MESSAGE_EXECUTION_PENDING');
+    await ageCheck(view.id);
+    const checked = await repo.command(context, caseId, simple('reconcile', (await repo.read(context, caseId)).latest!), actor);
+    expect(checked.latest!.status).toBe('retryable');
+    expect(kinds(checked.latest!)).toEqual([...UNKNOWN, 'reconcile_started', 'outcome_unknown', 'reconcile_started', 'retryable']);
+    expect(await attemptCount(outboxId)).toBe(1);
+    expect(checked.sinkCount).toBe(0);
+  });
+
+  it('lets exactly one of two simultaneous fresh checks take over', async () => {
+    const { caseId, view, outboxId, stuck } = await abandonedCheck('response_lost');
+    await ageCheck(view.id);
+    const settled = await Promise.allSettled([repo.command(context, caseId, simple('reconcile', stuck), actor), repo.command(context, caseId, simple('reconcile', stuck), actor)]);
+    expect(settled.map(result => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const rejected = settled.find(result => result.status === 'rejected') as PromiseRejectedResult;
+    expect((rejected.reason as { code?: string }).code).toBe('RECOVERY_MESSAGE_STALE_REVISION');
+    expect(await storedKinds(view.id)).toEqual([...UNKNOWN, 'reconcile_started', 'outcome_unknown', 'reconcile_started', 'reconciled']);
+    expect(await eventCount(view.id, 'reconciled')).toBe(1);
+    expect(await auditCount(view.id, 'recovery.message.reconciled')).toBe(1);
+    expect(await sinkCount(view.id)).toBe(1);
+    expect(await attemptCount(outboxId)).toBe(1);
+  });
+});
+
 describe('history cannot be forged under the runtime role (P2-7)', () => {
   const everyKind = ['approved', 'revoked', 'started', 'succeeded', 'retryable', 'failed', 'outcome_unknown', 'reconcile_started', 'reconciled', 'blocked'];
 
