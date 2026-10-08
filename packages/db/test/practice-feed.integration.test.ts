@@ -84,7 +84,10 @@ beforeAll(async () => {
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password });
   // Upgrade from exactly the preceding supported schema, retaining a prior job.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for (const url of MIGRATION_URLS.slice(0, -1)) {
+  // The previous schema is every migration registered before 0101, so later migrations (0102, 0103, ...) never change what this suite upgrades from.
+  const feedIndex = MIGRATION_URLS.findIndex((url) => fileURLToPath(url).split("/").at(-1) === "0101_practice_feed.sql");
+  if (feedIndex < 0) throw new Error("0101_practice_feed.sql is missing from MIGRATION_URLS");
+  for (const url of MIGRATION_URLS.slice(0, feedIndex)) {
     await admin.query(await readFile(url, "utf8"));
     await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [fileURLToPath(url).split("/").at(-1)]);
   }
@@ -102,11 +105,11 @@ beforeAll(async () => {
 afterAll(async () => { if (priorEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = priorEnvironment; await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
 describe("M4-7-S real PostgreSQL practice feed", () => {
-  it("upgrades from 0094, preserves prior rows and applies 0101 exactly once without taking reserved migrations", async () => {
+  it("upgrades from the schema just before 0101, preserves prior rows and applies 0101 exactly once without taking reserved migrations", async () => {
     expect((await admin.query("SELECT title FROM app.job WHERE id=$1", [previousJob])).rows[0].title).toBe("Previous schema job");
     const names = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map((row) => row.migration_name);
     expect(names).toHaveLength(MIGRATION_URLS.length);
-    expect(names).toEqual(MIGRATION_URLS.map(url => fileURLToPath(url).split("/").at(-1))); expect(names.at(-1)).toBe("0101_practice_feed.sql");
+    expect(names).toEqual(MIGRATION_URLS.map(url => fileURLToPath(url).split("/").at(-1))); expect(names.filter((name) => name === "0101_practice_feed.sql")).toHaveLength(1);
     // Other migrations (0095-0100) may merge between SBOX-SESSION-1 and this one: 0094 only has to be applied first.
     expect(names).toContain("0094_practice_session_ownership.sql");
     expect(names.indexOf("0094_practice_session_ownership.sql")).toBeLessThan(names.indexOf("0101_practice_feed.sql"));
