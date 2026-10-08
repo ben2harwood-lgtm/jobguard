@@ -1,6 +1,105 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/prevention-checks": {
+      "get": {
+        "operationId": "PreventionCheckController_view",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "Missing or invalid practice session"
+          },
+          "404": {
+            "description": "Job absent or owned by another practice session"
+          }
+        },
+        "summary": "Read persisted cited prevention checks and the saved paying party; synthetic only",
+        "tags": [
+          "prevention-checks"
+        ]
+      }
+    },
+    "/jobs/{id}/prevention-checks/{action}": {
+      "post": {
+        "operationId": "PreventionCheckController_command",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "action",
+                  "expectedBindingId",
+                  "scenarioNow",
+                  "fixture"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "prevention-command.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "property",
+                      "company",
+                      "start_watch",
+                      "stop_watch",
+                      "evaluate_watch"
+                    ]
+                  },
+                  "expectedBindingId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scenarioNow": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "fixture": {
+                    "type": "string",
+                    "enum": [
+                      "mixed",
+                      "fresh",
+                      "stale",
+                      "missing"
+                    ]
+                  },
+                  "expectedWatchRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Required for watch commands"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid strict command or not a registered company"
+          },
+          "409": {
+            "description": "Command, binding or watch revision conflict"
+          }
+        },
+        "summary": "Explicit synthetic property/company check or start, stop, evaluate a customer watch; no sends, Decisions or fees",
+        "tags": [
+          "prevention-checks"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_health",
