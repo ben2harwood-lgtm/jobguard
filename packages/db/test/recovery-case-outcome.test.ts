@@ -4,8 +4,9 @@ import { afterEach, expect, it, vi } from "vitest";
 const transaction = vi.hoisted(() => ({ committed: 0 }));
 vi.mock("../src/tenant-context.js", () => ({ withTenant: vi.fn(async () => { transaction.committed++; }) }));
 import { RecoveryCaseRepository } from "../src/recovery-case-repository.js";
-import type { VerifiedTenantContext } from "../src/tenant-context.js";
-const context = { tenantId: randomUUID() } as VerifiedTenantContext;
+// The mock above replaces withTenant only; the real constructor still gives this context its stamp.
+const { verifiedTenantContextFromMembership } = await vi.importActual<typeof import("../src/tenant-context.js")>("../src/tenant-context.js");
+const context = verifiedTenantContextFromMembership({ identityUserId: randomUUID(), membershipId: randomUUID(), tenantId: randomUUID() } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 const reviewer = { membershipId: randomUUID(), identityUserId: randomUUID() };
 afterEach(() => { vi.restoreAllMocks(); transaction.committed = 0; });
 it.each(["command", "eligibilityCommand"] as const)("%s: every post-commit read error is typed unknown, even if it resembles a refusal", async method => {
