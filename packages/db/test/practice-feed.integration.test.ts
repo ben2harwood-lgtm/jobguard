@@ -12,7 +12,7 @@ import {
   type VerifiedTenantContext,
 } from "../src/index.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const priorEnvironment = process.env.JOBGUARD_ENV;
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
@@ -47,8 +47,16 @@ async function connected() {
 // A real issued practice invoice (£1,320.00) so that builder-attested receipts are recorded through the real routine.
 async function invoice(jobId: string) {
   const invoices = new PracticeInvoiceRepository(runtime), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();
-  await admin.query("UPDATE app.job SET status='live' WHERE id=$1", [jobId]);
   await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,110000,'accepted')", [quoteId, DEMO_TENANT_ID, jobId, "b".repeat(64)]);
+  // CH-2/CH-3a: take the job live through the real lifecycle routine, under the tenant context that the live-job and party guards read.
+  const lifecycle = await admin.connect();
+  try {
+    await lifecycle.query("BEGIN"); await lifecycle.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await lifecycle.query("SELECT app.transition_job($1,$2,0,'quoting','start_quote')", [DEMO_TENANT_ID, jobId]);
+    await lifecycle.query("SELECT app.transition_job($1,$2,1,'accepted','accept_quote',$3)", [DEMO_TENANT_ID, jobId, quoteId]);
+    await lifecycle.query("SELECT app.transition_job($1,$2,2,'live','switch_live',$3,110000,'reference_fee_policy_v1',app.reference_recovery_cap(110000))", [DEMO_TENANT_ID, jobId, quoteId]);
+    await lifecycle.query("COMMIT");
+  } catch (error) { await lifecycle.query("ROLLBACK").catch(() => undefined); throw error; } finally { lifecycle.release(); }
   await admin.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draftId, DEMO_TENANT_ID, jobId]);
   await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
     VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',110000,22000,132000,false,'[]')`, [revisionId, DEMO_TENANT_ID, jobId, draftId, "b".repeat(64), quoteId]);
@@ -71,7 +79,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "jobguard-practice-feed-"));
   const port = 60300 + Math.floor(Math.random() * 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password,
-    persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
+    persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password });
   // Upgrade from exactly the preceding supported schema, retaining a prior job.
@@ -86,6 +94,8 @@ beforeAll(async () => {
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
   await admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Previous schema job')", [previousJob, DEMO_TENANT_ID]);
   await migrate(admin); await migrate(admin);
+  // CH-3a: a job cannot go live without parties. This suite exercises the feed, not the party registry, so it installs the same explicit fictional party recipe as the other pre-CH-3a suites.
+  await installLegacySyntheticPartyFixtures(admin);
   await admin.query("CREATE ROLE practice_feed_test_login LOGIN PASSWORD 'synthetic-feed-test-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO practice_feed_test_login");
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "practice_feed_test_login", password, max: 8 });
 }, 90_000);
