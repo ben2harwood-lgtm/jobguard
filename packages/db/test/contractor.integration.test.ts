@@ -18,7 +18,7 @@ beforeAll(async()=>{
  admin=new Pool({host:'127.0.0.1',port,user:'postgres',password:'synthetic',database:'jobguard_synthetic_demo'});
  // Upgrade the preceding supported schema, then rerun the tracked migrator (idempotence).
  await admin.query('CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())');
- for(const url of MIGRATION_URLS.slice(0,-1)){await admin.query(await readFile(url,'utf8'));await admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)',[url.pathname.split('/').at(-1)]);}
+ for(const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0102_contractor_parties.sql')))){await admin.query(await readFile(url,'utf8'));await admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)',[url.pathname.split('/').at(-1)]);}
  await migrate(admin);await migrate(admin);
  expect((await admin.query('SELECT count(*)::int n FROM public.jobguard_schema_migration')).rows[0].n).toBe(MIGRATION_URLS.length);
  await admin.query("CREATE ROLE ent1_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO ent1_login");
@@ -326,3 +326,34 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   for(const table of ['decision','action_authorization','action_outbox','journal','customer_invoice'])expect((await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[p.tenantId])).rows[0].n).toBe(0);
  });
 });
+
+// CH-3b append-only extension of ENT-1's permission × role × scope conformance suite.
+it('CH-3b client customer link requires organisation.manage on the exact client',async()=>{
+ const {ContractorPartyRepository,JobRepository,JobPartiesRepository}=await import('../src/index.js');
+ const links=new ContractorPartyRepository(runtime),jobs=new JobRepository(runtime),registry=new JobPartiesRepository(runtime);
+ const {p,v}=await setup(),branch=v.teams[0]!.branch_id,region=v.units.find(x=>x.kind==='region')!.id;
+ const otherBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:region,name:'Fictional adjacent branch'})).id;
+ const otherRegion=(await command(p,{kind:'unit.create',unitKind:'region',parentId:p.tenantId,name:'Fictional distant region'})).id;
+ const distantBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:otherRegion,name:'Fictional distant branch'})).id;
+ const job=(await jobs.create(verifiedTenantContextFromMembership(p),['job:update'],{title:'Fictional client registry command anchor'})).id;
+ const customer=await registry.command(verifiedTenantContextFromMembership(p),p.membershipId,job,{version:'job-parties-command.v1',commandId:randomUUID(),action:'create_customer',customer:{version:'customer.v1',name:'Fictional insurer',type:'insurer'}});
+ const clientForApprover=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional approver client',clientType:'insurer'})).id;
+ for(const role of contractorRoles)for(const scope of ['tenant','region','branch','team'] as const){
+  // ENT-1 refuses to invite an owner (0054:233): the owner row is the practice principal at tenant scope, and the refusal is asserted below.
+  if(role==='finance'&&scope!=='tenant'||role==='client_approver'&&scope!=='tenant'||role==='owner'&&scope!=='tenant')continue;
+  const kind=role==='client_approver'?'client':scope;
+  const scopeId=kind==='client'?clientForApprover:kind==='tenant'?p.tenantId:kind==='region'?region:kind==='branch'?branch:v.teams[0]!.id;
+  const actor=role==='owner'?p:await fixtureMember(p,role,kind,scopeId,role==='client_approver'?scopeId:null);
+  for(const targetBranch of [branch,otherBranch,distantBranch]){
+   const clientId=(await command(p,{kind:'client.create',branchId:targetBranch,name:'Fictional scoped registry client',clientType:'insurer'})).id;
+   const raw={version:'contractor-customer-link.v1',environment:'synthetic_demo',commandId:randomUUID(),customerRevisionId:customer.revisionId};
+   const permitted=(role==='owner'||role==='admin')&&(scope==='tenant'||scope==='region'&&targetBranch!==distantBranch||scope==='branch'&&targetBranch===branch);
+   const result=links.linkCustomer(actor,clientId,raw);
+   if(permitted)await expect(result).resolves.toMatchObject({realExternalActions:0});else{
+    await expect(result).rejects.toMatchObject({code:'NOT_FOUND',message:'NOT_FOUND'});
+    await expect(links.linkCustomer(actor,randomUUID(),raw)).rejects.toMatchObject({code:'NOT_FOUND',message:'NOT_FOUND'});
+   }
+  }
+ }
+ await expect(command(p,{kind:'member.invite',id:randomUUID(),role:'owner',email:'owner-invite@fictional.invalid',scope:{kind:'tenant',id:p.tenantId},clientId:null,contractId:null})).rejects.toMatchObject({code:'FORBIDDEN'});
+},60000);
