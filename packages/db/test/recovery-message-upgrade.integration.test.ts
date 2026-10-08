@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +10,7 @@ import { EvidencePackRepository, MIGRATION_URLS, RecoveryMessageRepository, migr
 import { closeTestPools, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
 
-// Upgrade path for 0099 on a database that is at the previous supported schema (through 0096) and already holds recovery cases and evidence packs,
+// Upgrade path for 0099 on a database that is at the previous supported schema (through 0097) and already holds recovery cases and evidence packs,
 // applied by the non-superuser migration role the Neon/Vercel bootstrap uses (FORCE RLS applies to that owner).
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 let fixture: Awaited<ReturnType<typeof seedEvidencePackFixture>>;
@@ -21,6 +21,7 @@ const history = async () => (await admin.query(`SELECT
   (SELECT md5(coalesce(string_agg(id::text||manifest_hash||content_hash||coalesce(artifact_text,''),',' ORDER BY id),'')) FROM app.evidence_pack_revision) AS packs,
   (SELECT md5(coalesce(string_agg(id::text||manifest_hash||content_hash,',' ORDER BY id),'')) FROM app.evidence_pack_attachment_approval) AS approvals,
   (SELECT md5(coalesce(string_agg(id::text||case_type||source_refs::text,',' ORDER BY id),'')) FROM app.recovery_case) AS cases,
+  (SELECT md5(coalesce(string_agg(id::text||revision::text||claim_pence::text||landed::text||written_off::text||state,',' ORDER BY id),'')) FROM app.recovery_case_current) AS current_state,
   (SELECT count(*)::int FROM app.audit_event) AS audits,
   (SELECT count(*)::int FROM app.decision) AS decisions`)).rows[0];
 
@@ -31,7 +32,7 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C', '--encoding=UTF8'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
   admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'postgres' });
-  // A real previous-release database (through 0096): apply every migration the runner would, stop before 0099.
+  // A real previous-release database (through 0097, M4-1-S-R's recovery_case_current included): apply every migration the runner would, stop before 0099.
   await admin.query('CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())');
   for (const url of MIGRATION_URLS) {
     if (nameOf(url).startsWith('0099_')) break;
@@ -46,7 +47,11 @@ beforeAll(async () => {
   await admin.query("CREATE ROLE upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO upgrade_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'upgrade_login', password: 'synthetic', database: 'postgres' });
   context = { tenantId: fixture.tenantId } as VerifiedTenantContext;
-  // Old-release data: a generated, attachment-approved pack for an existing customer case.
+  // Old-release data. A workbench case always starts with its opening event (claim revision 1 + event 1), which is what makes recovery_case_current (0097) return it;
+  // the shared fixture writes only the claim revision, so the opening event is recorded here, before the pack that cites the case's records.
+  await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",
+    [randomUUID(), fixture.tenantId, fixture.jobId, fixture.customerCaseId, randomUUID(), createHash('sha256').update(`open:${fixture.customerCaseId}`).digest('hex')]);
+  // A generated, attachment-approved pack for an existing customer case.
   const packs = new EvidencePackRepository(runtime), actorRef = `membership:${fixture.memberId}`;
   const pack = await packs.generate(context, fixture.customerCaseId, { commandId: randomUUID() }, actorRef);
   await packs.approveAttachment(context, fixture.customerCaseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actorRef);
@@ -54,7 +59,7 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
-describe('0099 upgrade from a populated previous supported schema (through 0096)', () => {
+describe('0099 upgrade from a populated previous supported schema (through 0097)', () => {
   it('is absent before the upgrade and applies under the migration role without touching existing records', async () => {
     expect((await admin.query("SELECT to_regclass('app.recovery_message') IS NOT NULL AS present")).rows[0].present).toBe(false);
     const before = await history();

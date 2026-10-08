@@ -3,18 +3,18 @@ BEGIN;
 -- Source write-lock triggers are added to the 19 existing mapper tables so delivery cannot race an evidence change.
 -- The four new tables are append-only (runtime SELECT/INSERT), forced-RLS and migration-owned. All helpers are invoker-only.
 
--- One read-only view of "where is this case now" shared by the guards, matching the repository's case workbench:
--- revision = latest claim revision + event count; outstanding = claim - landed (net of reversals) - written off.
+-- One read-only reading of "where is this case now" shared by the guards. It is not a second calculation: it reads
+-- app.recovery_case_current (0097, M4-1-S-R), the one contract the workbench and the approved-landing routine also use, so a
+-- message states exactly what the workbench shows. revision = latest claim revision + event count; outstanding = claim - landed
+-- - written off, where landed is the LARGER of the hand-recorded landings (net of reversals) and the approved landings, never
+-- their sum. A case without workbench history (no claim revision: a legacy 0018 creation snapshot) has no row here, so it can
+-- never be previewed, approved or delivered; neither can a partly written history, which the view itself does not return.
 CREATE FUNCTION app.recovery_message_case_snapshot(p_tenant uuid, p_job uuid, p_case uuid)
 RETURNS TABLE(case_type text, synthetic boolean, environment text, source_refs jsonb, case_revision integer, outstanding_pence bigint)
 LANGUAGE sql STABLE AS $$
- SELECT rc.case_type::text, rc.synthetic, rc.environment::text, rc.source_refs,
-        (cl.revision + (SELECT count(*) FROM app.recovery_case_event e WHERE e.tenant_id=rc.tenant_id AND e.case_id=rc.id))::integer,
-        (cl.claimed_net_pence - coalesce((SELECT sum(CASE e.event_type WHEN 'record_landing' THEN e.amount_pence WHEN 'reverse_landing' THEN -e.amount_pence WHEN 'write_off' THEN e.amount_pence ELSE 0 END)
-          FROM app.recovery_case_event e WHERE e.tenant_id=rc.tenant_id AND e.case_id=rc.id),0))::bigint
- FROM app.recovery_case rc
- JOIN LATERAL (SELECT q.revision, q.claimed_net_pence FROM app.recovery_claim_revision q WHERE q.tenant_id=rc.tenant_id AND q.case_id=rc.id ORDER BY q.revision DESC LIMIT 1) cl ON true
- WHERE rc.tenant_id=p_tenant AND rc.job_id=p_job AND rc.id=p_case
+ SELECT c.case_type::text, c.synthetic, c.environment::text, c.source_refs, c.revision::integer, (c.claim_pence - c.landed - c.written_off)::bigint
+ FROM app.recovery_case_current c
+ WHERE c.tenant_id=p_tenant AND c.job_id=p_job AND c.id=p_case AND c.claim_revision IS NOT NULL
 $$;
 
 -- The stored message is exactly the canonical builder's JSON text, rebuilt here from the row's own columns (the source
@@ -374,7 +374,7 @@ ALTER FUNCTION app.guard_recovery_message_sink() OWNER TO jobguard_migration;
 ALTER FUNCTION app.recovery_message_source_refs(text) OWNER TO jobguard_migration;
 ALTER FUNCTION app.recovery_message_canonical_content(uuid,uuid,text,integer,bigint,uuid,integer,text,text,text,text,text,text,jsonb) OWNER TO jobguard_migration;
 ALTER FUNCTION app.recovery_message_proofs_current(uuid,uuid,jsonb) OWNER TO jobguard_migration;
--- Invoker functions only. The snapshot is readable by the runtime role through its own row security; the guards are trigger-only.
+-- Invoker functions only. The snapshot is readable by the runtime role through the invoker view and its own row security; the guards are trigger-only.
 REVOKE ALL ON FUNCTION app.recovery_message_case_snapshot(uuid,uuid,uuid), app.guard_recovery_message(), app.guard_recovery_message_approval(), app.guard_recovery_message_event(), app.guard_recovery_message_sink(),
  app.recovery_message_source_refs(text), app.recovery_message_canonical_content(uuid,uuid,text,integer,bigint,uuid,integer,text,text,text,text,text,text,jsonb), app.recovery_message_proofs_current(uuid,uuid,jsonb) FROM PUBLIC;
 -- The snapshot and the pure content and proof helpers are evaluated by CHECK constraints and guards that run as the runtime role.

@@ -25,6 +25,8 @@ const count = async (sql: string, args: unknown[] = []) => Number((await admin.q
 const kinds = (view: { history: Array<{ kind: string }> }) => view.history.map(item => item.kind);
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const OPENED = 2; // claim revision 1 + the opening event
+/** The server-selected principal M4-1-S-R's workbench commands require: the fixture tenant's owner membership and its identity (a client reviewer field is ignored). */
+const reviewerOf = async () => ({ membershipId: fixture.memberId, identityUserId: (await admin.query('SELECT identity_user_id FROM app.membership WHERE id=$1', [fixture.memberId])).rows[0].identity_user_id as string });
 
 async function code(run: () => Promise<unknown>): Promise<string> {
   try { await run(); } catch (error) { return (error as { code?: string; message?: string }).code ?? (error as Error).message; }
@@ -111,7 +113,7 @@ async function until(check: () => Promise<boolean>, what: string) {
   for (let attempt = 0; attempt < 100; attempt++) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
   throw new Error(`timed out waiting for ${what}`);
 }
-const amend = (caseId: string, claimedNetPence: number, expectedRevision = OPENED) => cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'amend_claim', commandId: randomUUID(), caseId, claimedNetPence, reviewerRef: 'practice-owner', expectedRevision });
+const amend = async (caseId: string, claimedNetPence: number, expectedRevision = OPENED) => cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'amend_claim', commandId: randomUUID(), caseId, claimedNetPence, reviewerRef: 'practice-owner', expectedRevision }, await reviewerOf());
 /** The sink insert a forging caller would run, with the message's own approved values. */
 const rawSink = (caseId: string, view: NonNullable<RecoveryMessageState['latest']>) => inTenant(query => query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)`, [randomUUID(), fixture.tenantId, view.message.jobId, caseId, view.id, view.approval!.outboxActionId, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash]));
@@ -239,7 +241,7 @@ describe('previewing a source-bound factual message', () => {
   it('marks a saved preview as changed when the case or its evidence moves on', async () => {
     const { caseId, view } = await previewed();
     expect(view.changedSinceReview).toBe(false);
-    await cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'amend_claim', commandId: randomUUID(), caseId, claimedNetPence: 32100, reviewerRef: 'practice-owner', expectedRevision: OPENED });
+    await cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'amend_claim', commandId: randomUUID(), caseId, claimedNetPence: 32100, reviewerRef: 'practice-owner', expectedRevision: OPENED  }, await reviewerOf());
     const after = await repo.read(context, caseId);
     expect(after.latest).toMatchObject({ id: view.id, changedSinceReview: true, status: 'previewed' });
     // The saved preview is immutable and still says what it said; approving it is refused.
@@ -493,7 +495,7 @@ describe('revocation and changed evidence block execution', () => {
 
   it('blocks execution when the case or its evidence changed after approval', async () => {
     const { caseId, view } = await approved();
-    await cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'amend_claim', commandId: randomUUID(), caseId, claimedNetPence: 32300, reviewerRef: 'practice-owner', expectedRevision: OPENED });
+    await cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'amend_claim', commandId: randomUUID(), caseId, claimedNetPence: 32300, reviewerRef: 'practice-owner', expectedRevision: OPENED  }, await reviewerOf());
     expect((await viewOf(caseId)).changedSinceReview).toBe(true);
     expect(await code(() => repo.command(context, caseId, advanceCommand(view), actor))).toBe('RECOVERY_MESSAGE_BLOCKED');
     expect((await viewOf(caseId)).status).toBe('blocked');
@@ -1445,5 +1447,207 @@ describe('exhausted plain delivery failures in real PostgreSQL (Opus P1-2)', () 
     expect(await writeCounts()).toEqual(before);
     expect(await attemptCount(view.approval!.outboxActionId)).toBe(5);
     expect(await sinkCount(view.id)).toBe(0);
+  });
+});
+
+// ---- Round 9: M4-1-S-R integration. app.recovery_case_current is the one read contract for a case's live revision, claim and
+// received money (received = GREATEST(manual landings, approved landings), never their sum). A message must state exactly what
+// the workbench shows, and the delivery guard must compare against the same figure.
+describe('a message states the one current case figures, approved landings included (round 9)', () => {
+  /** What the workbench shows for the case, from the shared projection and nothing else. */
+  const currentOf = async (caseId: string) => {
+    const row = (await admin.query('SELECT revision,claim_pence,landed,manual_landed,approved_landed,written_off,claim_pence-landed-written_off AS outstanding FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2', [fixture.tenantId, caseId])).rows[0];
+    return { revision: Number(row.revision), claim: Number(row.claim_pence), landed: Number(row.landed), manual: Number(row.manual_landed), approvedLanded: Number(row.approved_landed), writtenOff: Number(row.written_off), outstanding: Number(row.outstanding) };
+  };
+  /** The message snapshot as the guards read it. */
+  const snapshotOf = async (caseId: string) => {
+    const row = (await admin.query('SELECT case_revision,outstanding_pence FROM app.recovery_message_case_snapshot($1,$2,$3)', [fixture.tenantId, fixture.jobId, caseId])).rows[0];
+    return row ? { revision: Number(row.case_revision), outstanding: Number(row.outstanding_pence) } : null;
+  };
+  /** The fixture job is live with an accepted quote; the landing routine also needs the synthetic activation and cap that switch-live demos record. */
+  async function activateJobForLanding() {
+    const activation = randomUUID(), db = await admin.connect();
+    try {
+      await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+      await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at) VALUES($1,$2,$3,$4,1,$5,'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$6,now())",
+        [activation, fixture.tenantId, fixture.jobId, fixture.quoteId, hash('quote immutable fixture'), fixture.memberId]);
+      await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative) VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",
+        [randomUUID(), fixture.tenantId, fixture.jobId, activation, fixture.quoteId]);
+      await db.query('COMMIT');
+    } catch (error) { await db.query('ROLLBACK').catch(() => undefined); throw error; } finally { db.release(); }
+  }
+  /** A settled synthetic receipt plus current eligibility and landing approvals for the case's current revision; returns the landing command for those. */
+  async function landingCommand(caseId: string, grossPence: number, eligibleNetPence = grossPence) {
+    const receipt = randomUUID(), eligibility = randomUUID(), landing = randomUUID(), { revision } = await currentOf(caseId);
+    await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at) VALUES($1::uuid,$2::uuid,$3::uuid,$1::text,$1::text,'settled',$4,'GBP',true,now())", [receipt, fixture.tenantId, fixture.jobId, grossPence]);
+    for (const [id, kind] of [[eligibility, 'eligibility'], [landing, 'landing']]) {
+      await admin.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id) VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',now()+interval '1 hour',$7)", [id, fixture.tenantId, fixture.jobId, caseId, kind, revision, randomUUID()]);
+    }
+    return { version: 'recovery.landing.approve.v1', policyVersion: 'reference_fee_policy_v1', allocationId: randomUUID(), derivationId: randomUUID(), journalId: randomUUID(), jobId: fixture.jobId, caseId,
+      receiptId: receipt, evidenceId: fixture.proofId, eligibilityApprovalId: eligibility, landingApprovalId: landing, grossPence, eligibleNetPence, currency: 'GBP', expectedCaseRevision: revision };
+  }
+  const approveLanding = (command: object) => inTenant(query => query('SELECT app.approve_synthetic_landing($1::jsonb) id', [command]));
+  /** Land `pence` through the approved-landing routine on a case (a fresh receipt and fresh approvals each time). */
+  const land = async (caseId: string, pence: number) => { await approveLanding(await landingCommand(caseId, pence)); };
+  /** A pack for the case as it stands now, with its attachment approved, so that a message can be previewed over it. */
+  async function packAndApprove(caseId: string) {
+    const pack = await packs.generate(context, caseId, { commandId: randomUUID() }, actor.actorRef);
+    await packs.approveAttachment(context, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
+    return pack;
+  }
+  /** Is anything waiting for this case's advisory lock key (the key 0097's landing routine and every message guard take)? */
+  const waitingForCaseLock = async (caseId: string) => (await admin.query(
+    "SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted AND objsubid=2 AND classid=(hashtext($1)::bigint & 4294967295)::oid AND objid=(hashtext($2)::bigint & 4294967295)::oid", [fixture.tenantId, caseId])).rowCount !== 0;
+  const byHand = async (caseId: string, revision: number, extra: Record<string, unknown>) => cases.command(context, fixture.jobId, { version: 'recovery-case-command.v1', action: 'transition', commandId: randomUUID(), caseId, reviewerRef: 'practice-owner', expectedRevision: revision, ...extra }, await reviewerOf());
+
+  it('previews the amount and revision recovery_case_current shows after an approved landing', async () => {
+    await inIsolatedWorld(async () => {
+      await activateJobForLanding();
+      const { caseId } = await attached();
+      await land(caseId, 12000);
+      const figures = await currentOf(caseId);
+      expect(figures).toEqual({ revision: OPENED, claim: 32000, landed: 12000, manual: 0, approvedLanded: 12000, writtenOff: 0, outstanding: 20000 });
+      const ready = await repo.read(context, caseId);
+      expect(ready.readiness).toMatchObject({ eligible: true, caseRevision: figures.revision, outstandingPence: figures.outstanding });
+      const view = (await repo.preview(context, caseId, previewCommand(ready), actor)).latest!;
+      expect(view.message).toMatchObject({ amountPence: figures.outstanding, caseRevision: figures.revision });
+      expect(view.message.body).toBe(customerBody.replace('£320.00', '£200.00'));
+      const stored = (await admin.query('SELECT amount_pence,case_revision FROM app.recovery_message WHERE id=$1', [view.id])).rows[0];
+      expect({ amount: Number(stored.amount_pence), revision: stored.case_revision }).toEqual({ amount: figures.outstanding, revision: figures.revision });
+    });
+  });
+
+  it('counts money recorded by hand and the same money approved as one amount, never their sum', async () => {
+    await inIsolatedWorld(async () => {
+      await activateJobForLanding();
+      const caseId = await newCase();
+      const assembled = await byHand(caseId, OPENED, { eventType: 'assemble_evidence' });
+      const landed = await byHand(caseId, assembled.revision, { eventType: 'record_landing', amountPence: 12000 });
+      await packAndApprove(caseId);
+      // The same £120.00 approved as well: still £120.00 received, so £200.00 is outstanding (a sum would say £80.00).
+      await land(caseId, 12000);
+      expect(await currentOf(caseId)).toMatchObject({ revision: landed.revision, landed: 12000, manual: 12000, approvedLanded: 12000, outstanding: 20000 });
+      const first = (await repo.preview(context, caseId, previewCommand(await repo.read(context, caseId)), actor)).latest!;
+      expect(first.message).toMatchObject({ amountPence: 20000, caseRevision: landed.revision });
+      // Approved money beyond the hand-recorded amount: received is the larger figure, £200.00, so £120.00 is outstanding (a sum would be exhausted).
+      await land(caseId, 8000);
+      const figures = await currentOf(caseId);
+      expect(figures).toMatchObject({ revision: landed.revision, landed: 20000, manual: 12000, approvedLanded: 20000, outstanding: 12000 });
+      const ready = await repo.read(context, caseId);
+      expect(ready.readiness).toMatchObject({ eligible: true, caseRevision: figures.revision, outstandingPence: 12000 });
+      expect(ready.latest).toMatchObject({ id: first.id, changedSinceReview: true });
+      const second = (await repo.preview(context, caseId, previewCommand(ready), actor)).latest!;
+      expect(second.message).toMatchObject({ amountPence: 12000, caseRevision: figures.revision });
+      expect(second.message.body).toBe(customerBody.replace('£320.00', '£120.00'));
+    });
+  });
+
+  it('gives the snapshot the same revision and outstanding as recovery_case_current for every case shape', async () => {
+    await inIsolatedWorld(async () => {
+      await activateJobForLanding();
+      const opened = await newCase();
+      expect(await snapshotOf(opened)).toEqual({ revision: OPENED, outstanding: 32000 });
+      const handed = await newCase();
+      const partly = await byHand(handed, (await byHand(handed, OPENED, { eventType: 'assemble_evidence' })).revision, { eventType: 'record_landing', amountPence: 5000 });
+      const writtenOff = await byHand(handed, partly.revision, { eventType: 'write_off' });
+      expect(await snapshotOf(handed)).toEqual({ revision: writtenOff.revision, outstanding: 0 });
+      const approvedOnly = await newCase();
+      await land(approvedOnly, 7000);
+      const mixed = await newCase();
+      await byHand(mixed, (await byHand(mixed, OPENED, { eventType: 'assemble_evidence' })).revision, { eventType: 'record_landing', amountPence: 3000 });
+      await land(mixed, 9000);
+      const amended = await newCase();
+      await amend(amended, 40000);
+      for (const caseId of [opened, handed, approvedOnly, mixed, amended]) {
+        const figures = await currentOf(caseId);
+        expect(await snapshotOf(caseId), caseId).toEqual({ revision: figures.revision, outstanding: figures.outstanding });
+      }
+      expect(await currentOf(approvedOnly)).toMatchObject({ landed: 7000, outstanding: 25000 });
+      expect(await currentOf(mixed)).toMatchObject({ landed: 9000, manual: 3000, approvedLanded: 9000, outstanding: 23000 });
+    });
+  });
+
+  it('keeps a case with no workbench history out of messages, as before', async () => {
+    await inIsolatedWorld(async () => {
+      const legacy = randomUUID();
+      await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP','identified',0,true,'withheld_customer_payment','Fictional counterparty','builder_customer','customer_invoice',$4)",
+        [legacy, fixture.tenantId, fixture.jobId, JSON.stringify([fixture.invoiceId])]);
+      // The shared projection does show it (from its creation snapshot); a message is never built from that snapshot.
+      expect((await admin.query('SELECT revision,claim_pence FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2', [fixture.tenantId, legacy])).rows[0]).toMatchObject({ revision: 0, claim_pence: '32000' });
+      expect(await snapshotOf(legacy)).toBeNull();
+      expect(await code(() => repo.read(context, legacy))).toBe('RECOVERY_MESSAGE_NOT_FOUND');
+    });
+  });
+
+  it('refuses to deliver a message previewed and approved before an approved landing, and sinks nothing', async () => {
+    await inIsolatedWorld(async () => {
+      await activateJobForLanding();
+      const { caseId, view } = await approved();
+      expect(view.message.amountPence).toBe(32000);
+      await land(caseId, 12000);
+      // The landing does not move the case revision, only the money outstanding; the saved message must still see that it changed.
+      expect(await currentOf(caseId)).toMatchObject({ revision: OPENED, outstanding: 20000 });
+      expect((await viewOf(caseId)).changedSinceReview).toBe(true);
+      expect(await code(() => repo.command(context, caseId, advanceCommand(view), actor))).toBe('RECOVERY_MESSAGE_BLOCKED');
+      expect(await sinkCount(view.id)).toBe(0);
+      expect(await outboxStatus(view.approval!.outboxActionId)).toBe('cancelled');
+      expect((await viewOf(caseId)).status).toBe('blocked');
+    });
+  });
+
+  it('refuses the shared executor and a raw sink row after an approved landing, whatever the caller', async () => {
+    await inIsolatedWorld(async () => {
+      await activateJobForLanding();
+      const direct = await approved();
+      const raw = await approved();
+      await land(direct.caseId, 12000);
+      await land(raw.caseId, 4000);
+      await executorWith(practiceAdapter()).execute(context, direct.view.approval!.outboxActionId);
+      expect(await sinkCount(direct.view.id)).toBe(0);
+      expect(await outboxStatus(direct.view.approval!.outboxActionId)).toBe('retryable');
+      expect((await admin.query('SELECT error_code FROM app.action_attempt WHERE action_id=$1', [direct.view.approval!.outboxActionId])).rows).toEqual([{ error_code: 'FAKE_BLOCKED_CHANGED' }]);
+      await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [raw.view.approval!.outboxActionId]);
+      expect(await code(() => rawSink(raw.caseId, raw.view))).toBe('23514');
+      expect(await sinkCount(raw.view.id)).toBe(0);
+    });
+  });
+
+  it('serializes a delivery and the approved-landing routine on the one case lock, in both orders', async () => {
+    await inIsolatedWorld(async () => {
+      await activateJobForLanding();
+      // Order 1: the landing routine holds the case lock, so a delivery that started meanwhile waits for it and then sees the landing.
+      const first = await approved();
+      const landing = await runtime.connect();
+      try {
+        await landing.query('BEGIN'); await landing.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        await landing.query('SELECT app.approve_synthetic_landing($1::jsonb) id', [await landingCommand(first.caseId, 12000)]);
+        const running = executorWith(practiceAdapter()).execute(context, first.view.approval!.outboxActionId);
+        await until(() => waitingForCaseLock(first.caseId), 'the delivery held behind the landing routine');
+        expect(await sinkCount(first.view.id)).toBe(0);
+        await landing.query('COMMIT'); await running;
+      } finally { await landing.query('ROLLBACK').catch(() => undefined); landing.release(); }
+      expect(await sinkCount(first.view.id)).toBe(0); // the delivery waited, then found the case had changed
+      expect(await outboxStatus(first.view.approval!.outboxActionId)).toBe('retryable');
+      expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [first.caseId])).toBe(1);
+      // Order 2: a delivery transaction holds the case lock at the sink, so the landing routine waits and lands only after the delivery committed.
+      const second = await approved();
+      await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [second.view.approval!.outboxActionId]);
+      const command = await landingCommand(second.caseId, 12000);
+      const sink = await runtime.connect();
+      try {
+        await sink.query('BEGIN'); await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        await sink.query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'locked','synthetic_demo',0)`, [randomUUID(), fixture.tenantId, fixture.jobId, second.caseId, second.view.id, second.view.approval!.outboxActionId, second.view.message.recipient, second.view.message.body, second.view.message.contentHash, second.view.message.attachmentHash]);
+        let landed = false;
+        const landing2 = approveLanding(command).then(() => { landed = true; });
+        await until(() => waitingForCaseLock(second.caseId), 'the landing routine held behind the delivery');
+        expect(landed).toBe(false);
+        expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [second.caseId])).toBe(0);
+        await sink.query('COMMIT'); await landing2;
+        expect(landed).toBe(true);
+      } finally { await sink.query('ROLLBACK').catch(() => undefined); sink.release(); }
+      expect(await sinkCount(second.view.id)).toBe(1);
+      expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [second.caseId])).toBe(1);
+    });
   });
 });
