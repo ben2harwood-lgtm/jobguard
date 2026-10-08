@@ -48,3 +48,5 @@ export * from "../evidence-pack.application.js";
 export { createContractorApplication, contractorHttpStatus } from "../contractor/contractor.application.js";
 
 export * from "../practice-access.js";
+
+export * from "../job-parties.application.js";

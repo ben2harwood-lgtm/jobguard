@@ -49,6 +49,8 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0053_shared_money_origin.sql", import.meta.url),
   new URL("../migrations/0054_contractor_organisation.sql", import.meta.url),
   new URL("../migrations/0094_practice_session_ownership.sql", import.meta.url),
+  new URL("../migrations/0095_job_parties.sql", import.meta.url),
+  new URL("../migrations/0096_watchdog_live.sql", import.meta.url),
   new URL("../migrations/0097_recovery_case_current.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
@@ -62,7 +64,9 @@ export async function migrate(pool: Pick<Pool | PoolClient, "query">): Promise<v
     const applied = await pool.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name=$1", [migrationName]);
     if (applied.rowCount) continue;
     const sql = await readFile(fileURLToPath(migrationUrl), "utf8");
-    await pool.query(sql);
+    // Select backfill mode within this migration's transaction, even with a pooled connection.
+    const mode = process.env.JOBGUARD_ENV === "synthetic_demo" ? "synthetic_demo" : "details_needed";
+    await pool.query(migrationName === "0095_job_parties.sql" ? sql.replace("BEGIN;", `BEGIN; SELECT set_config('app.deployment_mode','${mode}',true);`) : sql);
     await pool.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1) ON CONFLICT DO NOTHING", [migrationName]);
   }
 }
