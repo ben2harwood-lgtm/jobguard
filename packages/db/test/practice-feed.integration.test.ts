@@ -9,10 +9,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { practiceMovementCatalogueV1, type PracticeFeedView } from "@jobguard/core";
 import {
   CaptureRepository, SandboxRepository, issuePracticeSession, authenticatePracticeSession, appendAuditBatch, migrate, MIGRATION_URLS, PracticeFeedRepository, PracticeInvoiceRepository, verifiedTenantContextFromMembership, withTenant,
-  type VerifiedTenantContext,
 } from "../src/index.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
 import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const priorEnvironment = process.env.JOBGUARD_ENV;
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
@@ -397,7 +397,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
       expect((await view(ctx.f)).movements[0]!.state).toBe("pending");
       expect(await count("SELECT count(*) n FROM app.practice_feed_event WHERE job_id=$1", [ctx.f.jobId])).toBe(1);
       expect((await runtime.query("SELECT * FROM app.practice_feed_event")).rowCount).toBe(0);
-      expect((await withTenant(runtime, { tenantId: otherTenant } as VerifiedTenantContext, (db) => db.$client.query("SELECT * FROM app.practice_feed_event"))).rowCount).toBe(0);
+      expect((await withTenant(runtime, testTenantContext(otherTenant), (db) => db.$client.query("SELECT * FROM app.practice_feed_event"))).rowCount).toBe(0);
     });
     it("refuses events outside a synthetic environment setting and with no session setting", async () => {
       const ctx = await setup();
