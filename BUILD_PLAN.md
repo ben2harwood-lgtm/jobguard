@@ -3331,6 +3331,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — CH-3b, 8 October 2026 (merge-ahead ruling).** CH-3b was issued on 7 October with **0102** (`contractor_parties`), the next free number at its dispatch, in place of its §12.3 reservation 0055; 0054–0093 stay reserved otherwise. It merges on 8 October ahead of the open lower numbers 0098 (M0-6L), 0099 (M4-5-S), 0100 (SV-2) and 0101 (M4-7-S) under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`), which the coordinator applied to CH-3b on 8 October; each of those takes the next free number at its own merge. 0103 (MON-7a) and 0104 (CH-1) stay allocated.
 
+**Ledger amendment — MON-7a, 8 October 2026 (merge-ahead ruling).** MON-7a (B1, B2, B3, B5, B6 of MON-7; B4 is MON-7b, parked by Ben on 7 October) was issued on 7 October with **0103** (`prevention_checks`), the next free number at its dispatch. It follows CH-3b's merged 0102 directly; the open lower numbers 0098 (M0-6L), 0099 (M4-5-S), 0100 (SV-2) and 0101 (M4-7-S) take the next free number at their own merges under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`). 0104 (CH-1) and 0105 (ENT-2) stay allocated.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
