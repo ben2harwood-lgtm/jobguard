@@ -29,12 +29,12 @@ export async function syntheticWorkspace() {
   const token=(await cookies()).get("jg_session")?.value;
   const auth=await authenticatePracticeSession(syntheticPool(),token);
   const seeded = await readSyntheticDemo(syntheticPool());
-  const jobs=await withTenant(syntheticPool(),auth.context,async db=>(await db.$client.query<{id:string;title:string;status:string;revision:number}>("SELECT id,title,status,revision FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND practice_scenario='home' ORDER BY created_at,id",[auth.context.tenantId,auth.digest])).rows);
+  const jobs=await withTenant(syntheticPool(),auth.context,async db=>(await db.$client.query<{id:string;title:string;status:string;revision:number;customerLabel?:string;siteLabel?:string}>("SELECT id,title,status,revision FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND practice_scenario='home' ORDER BY created_at,id",[auth.context.tenantId,auth.digest])).rows);
   return {
     tenants: seeded.tenants,
     jobs: jobs.map((job): JobSummary => ({
       id: job.id, tenantId: seeded.tenant.id, title: job.title,
-      customerLabel: "Synthetic customer · demo only", status: job.status as JobSummary["status"],
+      customerLabel: job.customerLabel??"Details needed", siteLabel: job.siteLabel||"Details needed", status: job.status as JobSummary["status"],
       document: job.title === "Kitchen extension"
         ? { kind: "quote", reference: "Q-1007", delivery: "delivered" }
         : job.title === "Loft conversion"

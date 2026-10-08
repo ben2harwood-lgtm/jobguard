@@ -48,6 +48,7 @@ const hashRequest = (v: ConsequentialCommand) => {
 
 export interface CommandMutation<TResult extends Record<string, unknown>> {
   /** Must lock and mutate every business aggregate before returning. Audit append follows immediately. */
+  lock?(database: TenantTransaction, command: ConsequentialCommand): Promise<void>;
   mutate(database: TenantTransaction, command: ConsequentialCommand): Promise<TResult>;
   auditEvents?(result: TResult, command: ConsequentialCommand): readonly AuditEventInput[];
 }
@@ -57,6 +58,12 @@ export class UserCommandDispatcher {
   async dispatch<TResult extends Record<string, unknown>>(context: VerifiedTenantContext, raw: unknown, handler: CommandMutation<TResult>): Promise<TResult> {
     const command=consequentialCommandV1Schema.parse(raw), requestHash=hashRequest(command);
     return withTenant(this.pool,context,async database=>{
+      if (handler.lock) {
+        const member=(await database.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2
+          AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,command.actorMembershipId])).rows[0];
+        if (!member || member.role!=="owner") throw new CommandError("FORBIDDEN");
+        await handler.lock(database, command);
+      }
       const claimed=await database.$client.query(`INSERT INTO app.command_receipt
         (command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)
         VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`,
@@ -83,7 +90,7 @@ export class UserCommandDispatcher {
       await database.$client.query(`INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)`,[resolutionId,context.tenantId,decisionId,command.actorMembershipId]);
       await database.$client.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[authorizationId,context.tenantId,decisionId,resolutionId,command.actorMembershipId,command.action.actionType,command.action.recipient,command.action.contentHash,command.action.aggregateRevision,command.action.amountPence,command.action.currency,command.action.policyVersion,command.action.expiresAt]);
-      const result=await handler.mutate(database,command);
+      const result=await handler.mutate(database,{...command,decisionId,resolutionId,authorizationId});
       await appendAuditBatch(database,[...(handler.auditEvents?.(result,command)??[]),{id:randomUUID(),version:"audit.v1",actorRef:`membership:${command.actorMembershipId}`,eventType:"command.succeeded",subjectType:command.subjectType,subjectRef:command.subjectRef,payload:{references:{commandId:command.commandId,authorizationId},classifications:{action:"commercial"}}}]);
       await database.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,command.commandId,JSON.stringify(result)]);
       return result;

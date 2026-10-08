@@ -23,13 +23,32 @@ export async function authenticatePracticeSession(pool: Pool, token: string | un
  const context=verifiedTenantContextFromMembership({tenantId:principal.tenant_id,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership);
  return {context,digest,membershipId:principal.membership_id,identityUserId:principal.identity_user_id};
 }
+
+/**
+ * 0095's controlled adoption routine creates an unowned imported job; 0094
+ * prohibits assigning ownership later. An adopted job inherits its source's owner via
+ * the immutable adoption audit event written in that same command transaction.
+ * No first-touch claim or mutation of job ownership is permitted. UNION handles
+ * repeated imports without duplicating identities or following cycles forever.
+ */
+export function practiceOwnedJobsSql(digestParameter: "$2" | "$3" = "$3") {
+ return `WITH RECURSIVE practice_owned_job AS (
+  SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=${digestParameter}
+  UNION
+  SELECT j.id FROM practice_owned_job source
+  JOIN app.audit_event e ON e.tenant_id=$1 AND e.subject_type='job'
+   AND e.event_type='job.imported_baseline_attested' AND e.payload->'references'->>'sourceJobId'=source.id::text
+  JOIN app.job j ON j.tenant_id=e.tenant_id AND j.id::text=e.subject_ref
+   AND j.provenance='imported' AND j.practice_session_digest IS NULL
+ )`;
+}
 /** Immutable job ownership is checked before any projection, command or replay. */
 export async function authorizePracticeJob(pool: Pool, token: string | undefined, id: unknown, kind: "job" | "case" | "decision" = "job") {
  const auth=await authenticatePracticeSession(pool,token);
  if(!z.string().uuid().safeParse(id).success)throw new PracticeAccessError("NOT_FOUND");
  // A short tenant transaction solely reads immutable ownership. No business lock,
  // audit allocation or action can precede this check. No existence is disclosed.
- const sql=kind==="case"?"SELECT j.id FROM app.job j JOIN app.recovery_case c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND c.id=$2 AND j.practice_session_digest=$3":kind==="decision"?"SELECT j.id FROM app.job j JOIN app.job_finding f ON(f.tenant_id,f.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND f.decision_id=$2 AND j.practice_session_digest=$3":"SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3";
+ const sql=practiceOwnedJobsSql()+(kind==="case"?" SELECT j.id FROM practice_owned_job j JOIN app.recovery_case c ON c.tenant_id=$1 AND c.job_id=j.id WHERE c.id=$2":kind==="decision"?" SELECT j.id FROM practice_owned_job j JOIN app.job_finding f ON f.tenant_id=$1 AND f.job_id=j.id WHERE f.decision_id=$2":" SELECT id FROM practice_owned_job WHERE id=$2");
  const found=await withTenant(pool,auth.context,async db=>(await db.$client.query(sql,[auth.context.tenantId,id,auth.digest])).rows[0]);
  if(!found)throw new PracticeAccessError("NOT_FOUND"); return auth;
 }

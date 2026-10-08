@@ -8,7 +8,7 @@ import { loadEvidencePackSources } from "../src/evidence-pack-sources.js";
 import { migrate } from "../src/migrate.js";
 import { withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let pg: EmbeddedPostgres | undefined, admin: Pool | undefined, runtime: Pool, dir: string;
 let fixture: Awaited<ReturnType<typeof seedEvidencePackFixture>>;
@@ -16,11 +16,12 @@ beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "jg-evidence-sources-"));
   const port = 58750 + Math.floor(Math.random() * 100);
   const postgresLog: string[] = [];
-  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: message => { postgresLog.push(message); } });
+  pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: message => { postgresLog.push(message); } });
   try { await pg.initialise(); await pg.start(); }
   catch (error) { throw new Error(`${String(error)}\n${postgresLog.join("\n")}`); }
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic" });
   await migrate(admin);
+  await installLegacySyntheticPartyFixtures(admin);
   fixture = await seedEvidencePackFixture(admin);
   await admin.query("CREATE ROLE evidence_sources_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO evidence_sources_login");
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "evidence_sources_login", password: "synthetic" });
