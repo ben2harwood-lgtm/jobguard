@@ -139,6 +139,7 @@ describe("tenant context and PostgreSQL RLS", () => {
   });
 
   it("fails closed for missing/malformed context and does not retain pooled tenant state", async () => {
+    // Deliberately unstamped so the malformed context reaches withTenant's INVALID_TENANT_CONTEXT refusal.
     await expect(withTenant(runtime, { tenantId: "not-a-uuid" } as VerifiedTenantContext, async () => undefined)).rejects.toMatchObject({
       code: "INVALID_TENANT_CONTEXT",
     });

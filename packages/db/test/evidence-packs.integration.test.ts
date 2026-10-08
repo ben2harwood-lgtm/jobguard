@@ -85,6 +85,7 @@ describe('immutable evidence pack commands on PostgreSQL', () => {
     await expect(repo.download(context, fixture.customerCaseId, pack.id)).rejects.toThrow('EVIDENCE_PACK_NOT_FOUND');
     await expect(repo.download(testTenantContext(fixture.otherTenantId), fixture.caseId, pack.id)).rejects.toThrow('EVIDENCE_PACK_NOT_FOUND');
     await expect(repo.generate(context, randomUUID(), { commandId: randomUUID() }, actor)).rejects.toThrow('EVIDENCE_PACK_CASE_NOT_FOUND');
+    // Deliberately unstamped: an empty context must be refused with INVALID_TENANT_CONTEXT.
     await expect(repo.list({} as VerifiedTenantContext, fixture.caseId)).rejects.toThrow('A verified tenant context');
     const intact = await repo.inspect(context, fixture.caseId, pack.id, 'intact');
     expect(intact).toMatchObject({ contentMatches: true, complete: false });

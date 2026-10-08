@@ -20,6 +20,7 @@ function fakePool() {
 }
 
 describe("stamped tenant context boundary", () => {
+  // Deliberately unstamped or forged inputs: withTenant must refuse each one with INVALID_TENANT_CONTEXT.
   const forgeries: Array<[string, (ctx: VerifiedTenantContext) => unknown]> = [
     ["object literal cast", () => ({ tenantId: TENANT } as VerifiedTenantContext)],
     ["spread copy", ctx => ({ ...ctx })],
