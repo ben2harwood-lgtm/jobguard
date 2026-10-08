@@ -567,3 +567,30 @@ reservation; no deployed database is altered here. An environment already tracki
 0043 needs a separately reviewed forward fix before reusing it with 0097; historical
 receipts retain their original migration names. Merge after
 any lower-numbered PR that lands first, or renumber again. Forward-fix only as above.
+
+## 0102 — contractor parties (CH-3b)
+
+Expand-only, after 0095 and 0054. Adds immutable `contractor_client_customer`,
+`contractor_party_binding` and restricted `contractor_resident_contact`, all
+migration-owned with tenant-qualified FKs and FORCE RLS. Adds a composite unique
+key to the existing client-contract-version table without changing its rows.
+A client links only to its customer's latest revision, and every import re-resolves and
+re-checks that latest revision's type against the client kind. Named synthetic
+controlled routines link a client, bind an import inside its caller transaction,
+and read resident contact through persisted job scope. No runtime direct writes;
+resident payload columns have no runtime SELECT grant. Deferred guards require
+matching succeeded receipts and audit records before commit. No data backfill,
+provider action, retention period or production enablement.
+
+ENT-1 cannot yet resolve job IDs; reads deny until ENT-2 supplies authoritative
+job assignment scope and proves held positive cases. ENT-2 must call the binding
+routine before live entry and append audit after all domain writes. Migration
+0102 is issued by the integrator; BUILD_PLAN §12.2 amendment is integrator-owned.
+
+Validation: new PostgreSQL suite runs fresh preceding-schema install plus tracked
+upgrade/idempotence; global tenancy/bootstrap suites exercise fresh install,
+privilege/catalog inspection and preceding demo compatibility. Exact observed
+results, including sandbox restrictions, are in the CH-3b receipt. Roll forward
+for deployed repair; no rollback destroys resident/binding/audit history. Before
+any destructive rollback, stop callers and obtain the approved retention/export
+plan. Previous application code remains compatible with the additive tables.
