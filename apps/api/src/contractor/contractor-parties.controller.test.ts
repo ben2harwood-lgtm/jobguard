@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import { HttpException } from "@nestjs/common";
@@ -8,6 +9,13 @@ import { ContractorPartiesController } from "./contractor-parties.controller.js"
 afterEach(() => vi.restoreAllMocks());
 const id = "11111111-1111-4111-8111-111111111111";
 describe("contractor party transport (adapter tests, not PostgreSQL proof)", () => {
+  it.each([
+    ["/contractor/clients/{clientId}/customer-link", "post", "clientId"],
+    ["/contractor/jobs/{id}/resident-contact", "get", "id"],
+  ])("documents the required UUID path parameter for %s", async (path, method, name) => {
+    const spec = JSON.parse(await readFile(new URL("../../openapi.json", import.meta.url), "utf8"));
+    expect(spec.paths[path][method].parameters).toContainEqual({ name, required: true, in: "path", schema: { format: "uuid", type: "string" } });
+  });
   it("uses the session principal and identical 404 body for hidden and absent residents", async () => {
     const call = vi.spyOn(ContractorPartiesApplication.prototype, "readResident").mockRejectedValue(new ContractorPartyError("NOT_FOUND"));
     const controller = new ContractorPartiesController(new Pool());

@@ -51,7 +51,8 @@ CREATE FUNCTION app.valid_contractor_resident(d jsonb) RETURNS boolean LANGUAGE 
   AND app.valid_party_revision_text(d->'contact'->'name',1,160) AND (d->'contact' ? 'phone' OR d->'contact' ? 'email')
   AND (NOT d->'contact' ? 'phone' OR app.valid_party_revision_text(d->'contact'->'phone',3,40))
   AND (NOT d->'contact' ? 'email' OR (app.valid_party_revision_text(d->'contact'->'email',1,320)
-   AND d->'contact'->>'email' ~* $email$^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+invalid$$email$))
+   AND d->'contact'->>'email' ~* $email$^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+invalid$$email$
+   AND d->'contact'->>'email' LIKE '%.invalid'))
  ELSE false END,false)
 $fn$;
 ALTER FUNCTION app.valid_contractor_resident(jsonb) OWNER TO jobguard_migration;

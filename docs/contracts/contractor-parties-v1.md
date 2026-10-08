@@ -44,6 +44,9 @@ a name or lacks both a phone and an email (decision recorded in CH-3b round 2:
 the card requires a name plus at least one of phone or email, so anything less is
 not a resident contact). Present but malformed values (blank text, a malformed or
 non-`.invalid` email, an unknown reason, extra keys) raise `INVALID_COMMAND`.
+A complete contact with a null optional field (for example name plus email,
+with `phone: null`) reaches the routine but remains `INVALID_COMMAND`: optional
+fields must be omitted or contain valid strings when the contact is complete.
 The order of refusal is: active contractor membership, then completeness, then
 role authority. Completeness precedes authority because a missing client leaves
 no client scope to authorise against; it reveals only the shape of the caller's

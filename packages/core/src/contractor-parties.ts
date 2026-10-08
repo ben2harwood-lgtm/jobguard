@@ -19,7 +19,7 @@ export const contractorResidentV1 = z.discriminatedUnion("kind", [
  * CONTRACTOR_PARTIES_REQUIRED. Present-but-malformed values still fail here as INVALID_COMMAND.
  */
 export const contractorResidentBoundaryV1 = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("contact"), contact: z.object({ version: z.literal("resident-contact.v1"), name: z.string().trim().min(1).max(160).optional(), ...residentContactFields }).strict().nullish() }).strict(),
+  z.object({ kind: z.literal("contact"), contact: z.object({ version: z.literal("resident-contact.v1"), name: z.string().trim().min(1).max(160).nullish(), phone: residentContactFields.phone.nullish(), email: residentContactFields.email.nullish() }).strict().nullish() }).strict(),
   z.object({ kind: z.literal("none"), reason: z.enum(noResidentReasons).nullish() }).strict(),
 ]);
 export const contractorCustomerLinkV1 = z.object({

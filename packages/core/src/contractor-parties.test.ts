@@ -7,7 +7,7 @@ describe("CH-3b strict boundaries", () => {
   it("requires a name and phone or email, trims text, and accepts both", () => {
     expect(residentContactV1.parse({ version: "resident-contact.v1", name: " Fictional Resident ", phone: "00000000000" }).name).toBe("Fictional Resident");
     expect(residentContactV1.safeParse(binding.resident.contact).success).toBe(true);
-    for (const raw of [{ version: "resident-contact.v1", name: "Name" }, { ...binding.resident.contact, name: "  " }, { ...binding.resident.contact, email: "bad" }, { ...binding.resident.contact, phone: " " }, { ...binding.resident.contact, email: "real@example.org" }]) expect(residentContactV1.safeParse(raw).success).toBe(false);
+    for (const raw of [{ version: "resident-contact.v1", name: "Name" }, { ...binding.resident.contact, name: "  " }, { ...binding.resident.contact, email: "bad" }, { ...binding.resident.contact, phone: " " }, { ...binding.resident.contact, email: "real@example.org" }, { ...binding.resident.contact, email: "resident@example.INVALID" }]) expect(residentContactV1.safeParse(raw).success).toBe(false);
   });
   it("accepts exactly the closed no-resident reasons", () => {
     expect(noResidentReasons).toEqual(["void_property", "communal_area", "client_withheld"]);
@@ -59,5 +59,15 @@ describe("CH-3b import-entry boundary (the routine, not the schema, refuses a mi
     }
     for (const key of ["tenantId", "role", "provenance", "isIndividual"]) expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, [key]: id }).success).toBe(false);
     for (const key of ["clientId", "contractId", "siteRevisionId"]) expect(contractorPartyImportBoundaryV1.safeParse({ ...binding, [key]: "not-a-uuid" }).success).toBe(false);
+  });
+  it.each([
+    { version: "resident-contact.v1", name: null, phone: "00000000000" },
+    { version: "resident-contact.v1", name: "Fictional Resident", phone: null },
+    { version: "resident-contact.v1", name: "Fictional Resident", phone: null, email: null },
+    { version: "resident-contact.v1", name: "Fictional Resident", phone: null, email: "resident@example.invalid" },
+  ])("passes null contact fields to the routine while the strict schema refuses them: %j", contact => {
+    const input = { ...binding, resident: { kind: "contact", contact } };
+    expect(contractorPartyImportBoundaryV1.parse(input)).toEqual(input);
+    expect(contractorPartyImportV1.safeParse(input).success).toBe(false);
   });
 });

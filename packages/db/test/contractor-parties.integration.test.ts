@@ -250,12 +250,17 @@ describe("CH-3b round 2: ENT-2 entry points", () => {
     }
     for (const [label, value] of [
       ["contact with a name only", { kind: "contact", contact: { ...base, name } }], ["contact with a phone only", { kind: "contact", contact: { ...base, phone: "00000123456" } }],
+      ["contact name null", { kind: "contact", contact: { ...base, name: null, phone: "00000123456" } }],
+      ["contact phone null without email", { kind: "contact", contact: { ...base, name, phone: null } }],
+      ["contact phone and email null", { kind: "contact", contact: { ...base, name, phone: null, email: null } }],
       ["contact null", { kind: "contact", contact: null }], ["contact omitted", { kind: "contact" }], ["no-resident reason null", { kind: "none", reason: null }], ["no-resident reason omitted", { kind: "none" }],
     ] as const) variants.push([label, { ...f.input, resident: value }]);
     for (const [label, input] of variants) {
       // The command ID is deliberately reused: a refusal stores no receipt, so none of these may leave one behind.
       await assertContractorPartiesRequired(() => parties.bind(f.p, input));
+      expect(await effects(f), `${label}: bind`).toEqual(before);
       await assertContractorPartiesRequired(() => withTenant(runtime, ctx(f.p), db => parties.bindInTransaction(db, f.p, input)));
+      expect(await effects(f), `${label}: bindInTransaction`).toEqual(before);
       await expect(parties.bind(f.p, input), label).rejects.toMatchObject({ code: "CONTRACTOR_PARTIES_REQUIRED", message: "CONTRACTOR_PARTIES_REQUIRED" });
       expect(await effects(f), label).toEqual(before);
     }
@@ -263,6 +268,11 @@ describe("CH-3b round 2: ENT-2 entry points", () => {
     for (const resident of [{ kind: "contact", contact: { ...base, name, email: "not-an-email" } }, { kind: "contact", contact: { ...base, name, phone: " " } }, { kind: "none", reason: "unknown" }]) {
       await expect(parties.bind(f.p, { ...f.input, resident })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
     }
+    expect(await effects(f)).toEqual(before);
+    // A complete contact with a null optional field reaches SQL, which still refuses that explicit null.
+    const nullOptional = { ...f.input, resident: { kind: "contact", contact: { ...base, name, phone: null, email: "resident@example.invalid" } } };
+    await expect(parties.bind(f.p, nullOptional)).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+    await expect(withTenant(runtime, ctx(f.p), db => parties.bindInTransaction(db, f.p, nullOptional))).rejects.toMatchObject({ code: "INVALID_COMMAND" });
     expect(await effects(f)).toEqual(before);
     // Order is membership, then completeness, then role authority: a missing client leaves no scope to authorise against.
     // A member without the import permission still gets the same 404 as before for a complete command, and nothing is written either way.
@@ -272,6 +282,16 @@ describe("CH-3b round 2: ENT-2 entry points", () => {
     expect(await effects(f)).toEqual(before);
     await expect(parties.bind(f.p, f.input)).resolves.toMatchObject({ realExternalActions: 0 });
   }, 60000);
+});
+
+describe("CH-3b round 3: raw resident boundary", () => {
+  it("refuses an uppercase .INVALID email suffix in the raw routine without effects", async () => {
+    const f = await setup(); await parties.linkCustomer(f.p, f.client, linkInput(f.customer.revisionId!));
+    const before = await effects(f);
+    const input = { ...f.input, resident: { ...resident, contact: { ...resident.contact, email: "resident@example.INVALID" } } };
+    await expect(withTenant(runtime, ctx(f.p), db => rawBind(db, f.p, input))).rejects.toMatchObject({ code: "22023", message: "INVALID_COMMAND" });
+    expect(await effects(f)).toEqual(before);
+  });
 });
 
 describe("CH-3b round 2: the customer's current revision is the only one linked or pinned", () => {

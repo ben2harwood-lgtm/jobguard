@@ -1467,7 +1467,17 @@
     "/contractor/clients/{clientId}/customer-link": {
       "post": {
         "operationId": "ContractorPartiesController_link",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -1482,7 +1492,17 @@
     "/contractor/jobs/{id}/resident-contact": {
       "get": {
         "operationId": "ContractorPartiesController_read",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
