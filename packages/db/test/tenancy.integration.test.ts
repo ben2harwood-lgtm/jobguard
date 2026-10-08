@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -14,9 +15,9 @@ const ACCOUNT_B = "b0000000-0000-4000-8000-000000000002";
 const USER_A = "c0000000-0000-4000-8000-000000000001";
 const USER_B = "d0000000-0000-4000-8000-000000000002";
 
-// Authentication creates these in M0-6. This test-only cast exercises M0-4 given trusted context.
+// Synthetic authenticated membership creates stamped contexts for the RLS tests.
 const context = (tenantId: string): VerifiedTenantContext =>
-  ({ tenantId }) as VerifiedTenantContext;
+  testTenantContext(tenantId);
 
 let postgres: EmbeddedPostgres;
 let admin: Pool;
@@ -138,7 +139,8 @@ describe("tenant context and PostgreSQL RLS", () => {
   });
 
   it("fails closed for missing/malformed context and does not retain pooled tenant state", async () => {
-    await expect(withTenant(runtime, context("not-a-uuid"), async () => undefined)).rejects.toMatchObject({
+    // Deliberately unstamped so the malformed context reaches withTenant's INVALID_TENANT_CONTEXT refusal.
+    await expect(withTenant(runtime, { tenantId: "not-a-uuid" } as VerifiedTenantContext, async () => undefined)).rejects.toMatchObject({
       code: "INVALID_TENANT_CONTEXT",
     });
     const missing = await runtime.query("SELECT * FROM app.account");

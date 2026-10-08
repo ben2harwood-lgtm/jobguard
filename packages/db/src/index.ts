@@ -5,6 +5,7 @@ export * from "./schema.js";
 export {
   InvalidTenantContextError,
   verifiedTenantContextFromMembership,
+  verifiedTenantContextForQueuedJob,
   withTenant,
   type AuthenticatedMembership,
   type TenantTransaction,
