@@ -10,7 +10,7 @@ import {
   ActionExecutor, EvidencePackRepository, FakeRecoveryMessageAdapter, RecoveryCaseRepository, RecoveryMessageRepository, migrate, withTenant,
   type OutboundAdapter, type RecoveryMessageActor, type RecoveryMessageState, type VerifiedTenantContext,
 } from '../src/index.js';
-import { closeTestPools } from './pool-test-utils.js';
+import { closeTestPools, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
 
 // Real PostgreSQL 16, real migrations, the real non-owner runtime role: no SQLite/ORM mock stands in for a guarantee here.
@@ -135,10 +135,11 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'jg-recovery-messages-'));
   const port = 60900 + Math.floor(Math.random() * 200);
   const postgresLog: string[] = [];
-  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C'], onLog: message => { postgresLog.push(message); } });
+  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C', '--encoding=UTF8'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
   admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'postgres' });
-  await migrate(admin); fixture = await seedEvidencePackFixture(admin);
+  // CH-3a: every job needs fictional parties before its quote document and live switch; the shared fixture recipe supplies them.
+  await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedEvidencePackFixture(admin);
   await admin.query("CREATE ROLE message_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO message_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'postgres', max: 12 });
   context = { tenantId: fixture.tenantId } as VerifiedTenantContext;

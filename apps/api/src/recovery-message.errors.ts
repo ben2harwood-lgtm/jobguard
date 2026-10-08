@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { WatchdogError } from "@jobguard/db";
 
 const CONFLICTS = new Set([
   "RECOVERY_MESSAGE_CHANGED", "RECOVERY_MESSAGE_EXPIRED", "RECOVERY_MESSAGE_STALE_REVISION", "RECOVERY_MESSAGE_COMMAND_CONFLICT", "RECOVERY_MESSAGE_EXISTING_EFFECT",
@@ -14,6 +15,8 @@ const CONFLICTS = new Set([
  */
 export function recoveryMessageFailure(error: unknown): { status: number; code: string } {
   if (error instanceof ZodError || error instanceof SyntaxError || (error instanceof Error && error.name === "ZodError")) return { status: 400, code: "INVALID_COMMAND" };
+  // Next has no global filter: give a watchdog refusal the status and code WatchdogExceptionFilter gives it on every Nest route.
+  if (error instanceof WatchdogError) return { status: error.code === "JOB_NOT_FOUND" ? 404 : 409, code: error.code };
   const message = error instanceof Error ? error.message : "";
   if (message === "UNAUTHENTICATED") return { status: 401, code: message };
   if (message === "FORBIDDEN" || message === "RECOVERY_MESSAGE_FORBIDDEN") return { status: 403, code: message };

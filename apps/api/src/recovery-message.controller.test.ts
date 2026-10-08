@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpException } from "@nestjs/common";
-import { PracticeAccessError } from "@jobguard/db";
+import { PracticeAccessError, WatchdogError } from "@jobguard/db";
 import { PracticeErrorsFilter } from "./practice-errors.filter.js";
+import { WatchdogExceptionFilter } from "./watchdog.filter.js";
+import { recoveryMessageFailure } from "./recovery-message.errors.js";
+import { Test } from "@nestjs/testing";
+import { RouterExceptionFilters } from "@nestjs/core/router/router-exception-filters.js";
+import type { ApplicationConfig } from "@nestjs/core/application-config.js";
+import type { NestContainer } from "@nestjs/core/injector/container.js";
+import { AppModule } from "./app.module.js";
+import { Pool as PoolProvider } from "pg";
 import type { ArgumentsHost } from "@nestjs/common";
 import type { Pool } from "pg";
 
@@ -92,4 +100,62 @@ it.each(["read/list", "draft", "approve", "advance", "reconcile", "revoke"])("Ne
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(business.failure).not.toHaveBeenCalled();
   }
+});
+
+describe("recovery-message routes beside the global practice and watchdog filters", () => {
+  const actions = ["read/list", "draft", "approve", "advance", "reconcile", "revoke"] as const;
+  const call = (controller: InstanceType<typeof RecoveryMessageController>, action: (typeof actions)[number]) =>
+    action === "read/list" ? controller.get(request, caseId) : action === "draft" ? controller.preview(request, caseId, {}) : controller.command(request, caseId, messageId, { action });
+  // The real AppModule, then Nest's own route-level exception dispatch for the recovery-message controller.
+  async function withModuleDispatch(run: (dispatch: (error: unknown) => { status: number; body: unknown }, controller: InstanceType<typeof RecoveryMessageController>) => Promise<void>) {
+    const module = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PoolProvider).useValue({}).compile();
+    const app = module.createNestApplication();
+    try {
+      await app.init();
+      const internals = app as unknown as { config: ApplicationConfig; container: NestContainer };
+      expect(internals.config.getGlobalFilters().map(filter => filter.constructor)).toEqual(expect.arrayContaining([PracticeErrorsFilter, WatchdogExceptionFilter]));
+      const controller = app.get(RecoveryMessageController);
+      expect(controller).toBeInstanceOf(RecoveryMessageController);
+      const handler = new RouterExceptionFilters(internals.container, internals.config, app.getHttpAdapter()).create(controller, controller.command as never, undefined);
+      await run(error => {
+        if (!(error instanceof Error)) throw new Error("Expected a typed application error");
+        const response = { status: 0, body: undefined as unknown };
+        const reply = { headersSent: false, getHeader: () => undefined, status(code: number) { response.status = code; return reply; }, json(body: unknown) { response.body = body; return reply; } };
+        handler.next(error, { getArgByIndex: () => reply, switchToHttp: () => ({ getResponse: () => reply }) } as never);
+        return response;
+      }, controller);
+    } finally { await app.close(); }
+  }
+  it.each(actions)("%s hands a watchdog refusal to WatchdogExceptionFilter unchanged, and nothing else does", async action => {
+    await withModuleDispatch(async (dispatch, controller) => {
+      for (const [code, status] of [["JOB_NOT_LIVE", 409], ["IDEMPOTENCY_CONFLICT", 409], ["JOB_NOT_FOUND", 404]] as const) {
+        const error = new WatchdogError(code);
+        for (const method of Object.values(application)) method.mockReset().mockRejectedValue(error);
+        await expect(call(controller, action)).rejects.toBe(error);
+        expect(dispatch(error)).toEqual({ status, body: { code } });
+        // The Next adapters have no filter; the shared mapping gives them the same status and code.
+        expect(recoveryMessageFailure(error)).toEqual({ status, code });
+      }
+    });
+  });
+  it.each(actions)("%s keeps practice denials with PracticeErrorsFilter and its own typed conflicts with the controller", async action => {
+    await withModuleDispatch(async (dispatch, controller) => {
+      for (const [code, status] of [["NOT_FOUND", 404], ["UNAUTHENTICATED", 401]] as const) {
+        const error = new PracticeAccessError(code);
+        for (const method of Object.values(application)) method.mockReset().mockRejectedValue(error);
+        await expect(call(controller, action)).rejects.toBe(error);
+        expect(dispatch(error)).toEqual({ status, body: { code } });
+      }
+      for (const method of Object.values(application)) method.mockReset().mockRejectedValue(new Error("RECOVERY_MESSAGE_CHANGED"));
+      const conflict = await failureOf(() => call(controller, action));
+      expect(conflict).toEqual({ status: 409, body: { code: "RECOVERY_MESSAGE_CHANGED" } });
+      // Neither global filter claims a recovery-message conflict: it is answered once, by the controller's own HttpException.
+      const thrown = await call(controller, action).catch(error => error);
+      expect(thrown).toBeInstanceOf(HttpException);
+      expect(dispatch(thrown)).toEqual({ status: 409, body: { code: "RECOVERY_MESSAGE_CHANGED" } });
+      // A look-alike message on an ordinary error is not a watchdog refusal and stays a fixed 500.
+      for (const method of Object.values(application)) method.mockReset().mockRejectedValue(new Error("JOB_NOT_LIVE"));
+      expect(await failureOf(() => call(controller, action))).toEqual({ status: 500, body: { code: "INTERNAL_ERROR" } });
+    });
+  });
 });

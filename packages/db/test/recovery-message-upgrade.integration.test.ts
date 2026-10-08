@@ -7,10 +7,10 @@ import EmbeddedPostgres from 'embedded-postgres';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EvidencePackRepository, MIGRATION_URLS, RecoveryMessageRepository, migrate, type VerifiedTenantContext } from '../src/index.js';
-import { closeTestPools } from './pool-test-utils.js';
+import { closeTestPools, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
 
-// Upgrade path for 0099 on a database that is at the previous supported schema (through 0094) and already holds recovery cases and evidence packs,
+// Upgrade path for 0099 on a database that is at the previous supported schema (through 0096) and already holds recovery cases and evidence packs,
 // applied by the non-superuser migration role the Neon/Vercel bootstrap uses (FORCE RLS applies to that owner).
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 let fixture: Awaited<ReturnType<typeof seedEvidencePackFixture>>;
@@ -28,16 +28,20 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'jg-message-upgrade-'));
   const port = 61200 + Math.floor(Math.random() * 200);
   const postgresLog: string[] = [];
-  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C'], onLog: message => { postgresLog.push(message); } });
+  postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C', '--encoding=UTF8'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
   admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'postgres' });
-  // A real previous-release database (through 0094): apply every migration the runner would, stop before 0099.
+  // A real previous-release database (through 0096): apply every migration the runner would, stop before 0099.
   await admin.query('CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())');
   for (const url of MIGRATION_URLS) {
     if (nameOf(url).startsWith('0099_')) break;
-    await admin.query(await readFile(fileURLToPath(url), 'utf8'));
+    const sql = await readFile(fileURLToPath(url), 'utf8');
+    // The runner selects 0095's backfill mode inside that migration's own transaction; this database holds no job yet, so it backfills nothing.
+    await admin.query(nameOf(url) === '0095_job_parties.sql' ? sql.replace('BEGIN;', "BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);") : sql);
     await admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)', [nameOf(url)]);
   }
+  // CH-3a (0095): every job needs fictional parties before its quote document and live switch; the shared fixture recipe supplies them.
+  await installLegacySyntheticPartyFixtures(admin);
   fixture = await seedEvidencePackFixture(admin);
   await admin.query("CREATE ROLE upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO upgrade_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'upgrade_login', password: 'synthetic', database: 'postgres' });
@@ -50,7 +54,7 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
-describe('0099 upgrade from a populated previous supported schema (through 0094)', () => {
+describe('0099 upgrade from a populated previous supported schema (through 0096)', () => {
   it('is absent before the upgrade and applies under the migration role without touching existing records', async () => {
     expect((await admin.query("SELECT to_regclass('app.recovery_message') IS NOT NULL AS present")).rows[0].present).toBe(false);
     const before = await history();

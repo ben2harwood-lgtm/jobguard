@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpException, Param, Post, Req } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
-import { PracticeAccessError } from "@jobguard/db";
+import { PracticeAccessError, WatchdogError } from "@jobguard/db";
 import { practiceCookie } from "./practice-access.js";
 import { Pool } from "pg";
 import { RecoveryMessageApplication } from "./recovery-message.application.js";
@@ -15,7 +15,7 @@ export class RecoveryMessageController {
   private session(request: Request) { return practiceCookie(request.headers.cookie); }
   private async invoke<T>(run: () => Promise<T>) {
     try { return await run(); }
-    catch (error) { if (error instanceof PracticeAccessError) throw error; const { status, code } = recoveryMessageFailure(error); throw new HttpException({ code }, status); }
+    catch (error) { if (error instanceof PracticeAccessError || error instanceof WatchdogError) throw error; const { status, code } = recoveryMessageFailure(error); throw new HttpException({ code }, status); }
   }
   @Get()
   @ApiOperation({ summary: "Read the saved practice messages, delivery state and practice sink for a recovery case" })

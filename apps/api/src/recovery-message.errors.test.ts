@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
+import { WatchdogError } from "@jobguard/db";
 import { recoveryMessageFailure } from "./recovery-message.errors.js";
 
 describe("recovery message failure mapping", () => {
@@ -16,6 +17,11 @@ describe("recovery message failure mapping", () => {
     expect(recoveryMessageFailure(Object.assign(new Error(code), { code }))).toEqual({ status, code });
     expect(recoveryMessageFailure(new Error(code))).toEqual({ status, code });
   });
+  it.each([["JOB_NOT_FOUND", 404], ["JOB_NOT_LIVE", 409], ["IDEMPOTENCY_CONFLICT", 409]] as const)(
+    "keeps a watchdog refusal %s as HTTP %i, the status and code WatchdogExceptionFilter gives it", (code, status) => {
+      expect(recoveryMessageFailure(new WatchdogError(code))).toEqual({ status, code });
+    },
+  );
   it("maps malformed commands (schema or JSON) to a fixed INVALID_COMMAND 400 without their text", () => {
     expect(recoveryMessageFailure(new ZodError([]))).toEqual({ status: 400, code: "INVALID_COMMAND" });
     expect(recoveryMessageFailure(new SyntaxError("Unexpected token } in JSON at position 41"))).toEqual({ status: 400, code: "INVALID_COMMAND" });
