@@ -3312,7 +3312,7 @@ Basic backups, restore, privacy operations, permissions, and financial security 
 | M4-1-S-R | Repair of merged M4-1-S against its HOLD verdict (`docs/verdicts/M4-1-S/54adf02.md` on the branch) | `codex/sandbox/m4-1-s-repair` | 0043 (`recovery_case_current`; the branch currently uses 0046 and must rename) |
 | M4-2-S-R | Repair of merged M4-2-S against its HOLD verdict (`be81bd5`) | `codex/sandbox/m4-2-s-repair` | 0044 if needed |
 | M4-5-S | Committed §10.4 scope | `codex/sandbox/m4-5-s-v2` | 0045 if needed |
-| M4-7-S | Committed §10.4 scope | `codex/sandbox/m4-7-s` | 0046 (`practice_feed`; the branch currently uses 0043 and must rename) |
+| M4-7-S | Committed §10.4 scope | `codex/sandbox/m4-7-s-r3` | 0046 (`practice_feed`; the earlier attempts on `m4-7-s` and `m4-7-s-r2` are superseded) |
 | M4-6-S | After M4-5-S | `codex/sandbox/m4-6-s` | 0047 if needed |
 | M4-8-S (case allocation only) | The permitted in-flight part; the receipt-to-line allocator is the post-adoption extension in §12.3 | `codex/sandbox/m4-8-s` | 0048 |
 | — | Spare | — | 0049 |
@@ -3332,6 +3332,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 **Ledger amendment — CH-3b, 8 October 2026 (merge-ahead ruling).** CH-3b was issued on 7 October with **0102** (`contractor_parties`), the next free number at its dispatch, in place of its §12.3 reservation 0055; 0054–0093 stay reserved otherwise. It merges on 8 October ahead of the open lower numbers 0098 (M0-6L), 0099 (M4-5-S), 0100 (SV-2) and 0101 (M4-7-S) under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`), which the coordinator applied to CH-3b on 8 October; each of those takes the next free number at its own merge. 0103 (MON-7a) and 0104 (CH-1) stay allocated.
 
 **Ledger amendment — MON-7a, 8 October 2026 (merge-ahead ruling).** MON-7a (B1, B2, B3, B5, B6 of MON-7; B4 is MON-7b, parked by Ben on 7 October) was issued on 7 October with **0103** (`prevention_checks`), the next free number at its dispatch. It follows CH-3b's merged 0102 directly; the open lower numbers 0098 (M0-6L), 0099 (M4-5-S), 0100 (SV-2) and 0101 (M4-7-S) take the next free number at their own merges under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`). 0104 (CH-1) and 0105 (ENT-2) stay allocated.
+
+**Ledger amendment — M4-7-S, 8 October 2026 (merge-ahead ruling).** This PR moved from its reserved 0046 to 0101 (`practice_feed`) because 0053 merged ahead, and on 8 October to **0106** because CH-3b's 0102 merged first (Ben's 5 October merge-ahead ruling; the lane path was swapped under Ben's standing yes for renumber lane swaps). 0103 is MON-7a's, 0104 CH-1's and 0105 ENT-2's; 0098 (M0-6L), 0099 (M4-5-S) and 0100 (SV-2) take the next free number at their own merges. It must merge after any lower-numbered PR that merges first, or renumber again.
 
 ### 12.3 The graph (synthetic work, buildable after adoption)
 

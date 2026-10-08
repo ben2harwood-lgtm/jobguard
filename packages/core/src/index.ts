@@ -45,3 +45,4 @@ export * from "./contractor.js";
 export * from "./watchdog.js";
 export * from "./contractor-parties.js";
 export * from "./prevention-checks.js";
+export * from "./practice-feed.js";
