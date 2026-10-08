@@ -1464,6 +1464,56 @@
         ]
       }
     },
+    "/contractor/clients/{clientId}/customer-link": {
+      "post": {
+        "operationId": "ContractorPartiesController_link",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append an audited synthetic client to customer link; organisation.manage required",
+        "tags": [
+          "contractor-parties"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/resident-contact": {
+      "get": {
+        "operationId": "ContractorPartiesController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read resident contact only through persisted contractor job scope; unknown scope returns 404",
+        "tags": [
+          "contractor-parties"
+        ]
+      }
+    },
     "/jobs/{id}/parties": {
       "get": {
         "operationId": "JobPartiesController_view",
