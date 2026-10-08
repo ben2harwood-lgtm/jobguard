@@ -1,6 +1,148 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/recovery-cases/{id}/messages": {
+      "get": {
+        "operationId": "RecoveryMessageController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the saved practice messages, delivery state and practice sink for a recovery case",
+        "tags": [
+          "recovery-messages"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryMessageController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview the exact factual practice message bound to the attachment-approved evidence pack; exact replays return current case/message state",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/messages/{messageId}/commands": {
+      "post": {
+        "operationId": "RecoveryMessageController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve, revoke, advance or reconcile a practice message by an exact versioned command; exact replays return current case/message state",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
+    },
+    "/jobs/{id}/prevention-checks": {
+      "get": {
+        "operationId": "PreventionCheckController_view",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "Missing or invalid practice session"
+          },
+          "404": {
+            "description": "Job absent or owned by another practice session"
+          }
+        },
+        "summary": "Read persisted cited prevention checks and the saved paying party; synthetic only",
+        "tags": [
+          "prevention-checks"
+        ]
+      }
+    },
+    "/jobs/{id}/prevention-checks/{action}": {
+      "post": {
+        "operationId": "PreventionCheckController_command",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "action",
+                  "expectedBindingId",
+                  "scenarioNow",
+                  "fixture"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "prevention-command.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "property",
+                      "company",
+                      "start_watch",
+                      "stop_watch",
+                      "evaluate_watch"
+                    ]
+                  },
+                  "expectedBindingId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scenarioNow": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "fixture": {
+                    "type": "string",
+                    "enum": [
+                      "mixed",
+                      "fresh",
+                      "stale",
+                      "missing"
+                    ]
+                  },
+                  "expectedWatchRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Required for watch commands"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid strict command or not a registered company"
+          },
+          "409": {
+            "description": "Command, binding or watch revision conflict"
+          }
+        },
+        "summary": "Explicit synthetic property/company check or start, stop, evaluate a customer watch; no sends, Decisions or fees",
+        "tags": [
+          "prevention-checks"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_health",
@@ -1464,6 +1606,56 @@
         ]
       }
     },
+    "/contractor/clients/{clientId}/customer-link": {
+      "post": {
+        "operationId": "ContractorPartiesController_link",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append an audited synthetic client to customer link; organisation.manage required",
+        "tags": [
+          "contractor-parties"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/resident-contact": {
+      "get": {
+        "operationId": "ContractorPartiesController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read resident contact only through persisted contractor job scope; unknown scope returns 404",
+        "tags": [
+          "contractor-parties"
+        ]
+      }
+    },
     "/jobs/{id}/parties": {
       "get": {
         "operationId": "JobPartiesController_view",
@@ -1549,46 +1741,317 @@
         ]
       }
     },
-    "/recovery-cases/{id}/messages": {
+    "/jobs/{id}/practice-feed": {
       "get": {
-        "operationId": "RecoveryMessageController_get",
-        "parameters": [],
+        "operationId": "PracticeFeedController_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Persisted practice-feed-view.v1; synthetic movement facts only, never an allocation"
+          },
+          "401": {
+            "description": "No practice session"
+          },
+          "403": {
+            "description": "Synthetic environment or client-selected tenant forbidden"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
           }
         },
-        "summary": "Read the saved practice messages, delivery state and practice sink for a recovery case",
+        "summary": "Read session-owned synthetic settled movement facts without connecting any provider",
         "tags": [
-          "recovery-messages"
+          "practice-feed"
         ]
       },
       "post": {
-        "operationId": "RecoveryMessageController_preview",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
+        "operationId": "PracticeFeedController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "connect"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "disconnect"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "step"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "advance"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960",
+                          "supplier-refund-540"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "settled",
+                          "replay",
+                          "page_overlap",
+                          "alternate_representation",
+                          "unknown_duplicate"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reconcile_duplicate"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960",
+                          "supplier-refund-540"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "paymentId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "match_receipt"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960"
+                        ]
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
           }
         },
-        "summary": "Preview the exact factual practice message bound to the attachment-approved evidence pack; exact replays return current case/message state",
-        "tags": [
-          "recovery-messages"
-        ]
-      }
-    },
-    "/recovery-cases/{id}/messages/{messageId}/commands": {
-      "post": {
-        "operationId": "RecoveryMessageController_command",
-        "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "Persisted practice-feed-view.v1; settlement never allocates money"
+          },
+          "400": {
+            "description": "Invalid or forged command"
+          },
+          "401": {
+            "description": "No authenticated practice session"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
+          },
+          "409": {
+            "description": "Stale revision, conflicting replay, unsettled or mismatched receipt, or disconnected feed"
           }
         },
-        "summary": "Approve, revoke, advance or reconcile a practice message by an exact versioned command; exact replays return current case/message state",
+        "summary": "Connect, advance a generated movement, reconcile a duplicate, match a builder-attested receipt, or disconnect the practice feed",
         "tags": [
-          "recovery-messages"
+          "practice-feed"
         ]
       }
     }

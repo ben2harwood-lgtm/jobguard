@@ -581,3 +581,70 @@ An exhausted fifth retryable delivery is backed by `action_attempt.outcome=faile
 Outbox attempt facts and original message intents durably reconstruct interrupted terminal history and its audit atomically on reads/replays. A stale executing claim projects uncertainty; the authorized checking command records that uncertainty before reconciliation and never resends it. A check that began more than five minutes ago (the same window as an abandoned executing claim) and never recorded the provider's answer is likewise abandoned: a fresh authorized check records the answer as still unknown and starts the next check in one transaction, with no resend and no migration change, so a failed check never jams the message; a check inside the window is still refused as in progress, and the original command id still resumes its own check. Historical source projections use the saved pack's content and hashes even after rebuilding or invalidation.
 
 Forward-fix only. Nothing is deleted or updated: a wrong preview is superseded by a new one, a wrong approval is revoked (an authorization revocation plus a cancelled outbox action), and history, sink and audit are kept. No backfill: cases that existed before the upgrade have no message until someone previews one, and an older evidence-pack approval does not carry across a rebuilt pack. Proof: `packages/db/test/recovery-message-upgrade.integration.test.ts` (real database at the previous schema, through 0097, holding approved packs, 0099 applied as `jobguard_migration`, existing records and the `recovery_case_current` projection byte-identical afterwards) and `packages/db/test/recovery-messages.integration.test.ts`. The migration list has numbering gaps; the runner applies by list order and records names, so the gaps are harmless.
+
+## 0102 — contractor parties (CH-3b)
+
+Expand-only, after 0095 and 0054. Adds immutable `contractor_client_customer`,
+`contractor_party_binding` and restricted `contractor_resident_contact`, all
+migration-owned with tenant-qualified FKs and FORCE RLS. Adds a composite unique
+key to the existing client-contract-version table without changing its rows.
+A client links only to its customer's latest revision, and every import re-resolves and
+re-checks that latest revision's type against the client kind. Named synthetic
+controlled routines link a client, bind an import inside its caller transaction,
+and read resident contact through persisted job scope. No runtime direct writes;
+resident payload columns have no runtime SELECT grant. Deferred guards require
+matching succeeded receipts and audit records before commit. No data backfill,
+provider action, retention period or production enablement.
+
+ENT-1 cannot yet resolve job IDs; reads deny until ENT-2 supplies authoritative
+job assignment scope and proves held positive cases. ENT-2 must call the binding
+routine before live entry and append audit after all domain writes. Migration
+0102 is issued by the integrator; BUILD_PLAN §12.2 amendment is integrator-owned.
+
+Validation: new PostgreSQL suite runs fresh preceding-schema install plus tracked
+upgrade/idempotence; global tenancy/bootstrap suites exercise fresh install,
+privilege/catalog inspection and preceding demo compatibility. Exact observed
+results, including sandbox restrictions, are in the CH-3b receipt. Roll forward
+for deployed repair; no rollback destroys resident/binding/audit history. Before
+any destructive rollback, stop callers and obtain the approved retention/export
+plan. Previous application code remains compatible with the additive tables.
+
+### 0103 — MON-7a synthetic prevention facts
+
+Additive `property_constraint_fact` and `counterparty_check`, tenant/job/binding-qualified
+FKs and invoker subject guards, strict cited result validation, reference-only
+staleness, indexes, immutable triggers, ENABLE/FORCE RLS, migration ownership and
+runtime SELECT/INSERT only. Watches append explicit start/stop commands and
+revision-scoped feed evaluations; no default watch, provider route, scheduling,
+Decision, outbox or financial effect. No data backfill. The prior application
+remains compatible. Audit FKs are deferred; audit head is the final command lock.
+The counterparty guard fails closed on the customer's LATEST revision: the binding's
+pinned revision must still be the latest and the latest must be a business with a
+valid company number, else `NOT_REGISTERED_COMPANY` (23514). 0103 is unmerged, so
+this is part of the same migration, not a new one.
+
+Fresh install and upgrade are covered by the PostgreSQL tests; the upgrade test
+applies every registered migration before 0103 (now including 0096 and 0097),
+seeds a quoting job, then applies 0103. They need embedded PostgreSQL or CI.
+0103 writes no table that 0096 guards, so 0096's live-only guards neither block
+nor are blocked by it. After application, use a reviewed
+forward-fix migration and retain historical facts/audit; disable affected commands
+while fixing a validator or projection rather than rewriting history. No schema
+rollback with data deletion is proposed. See `docs/contracts/prevention-checks-v1.md`.
+B4 is parked as MON-7b; MON-7 is not fully accepted while it is parked.
+
+## 0106_practice_feed.sql (M4-7-S)
+
+Adds the provider-neutral synthetic practice feed: `practice_feed_job_owner` (the session that owns a job for this feed), `practice_feed_account` (fake account and its read-only consent), `practice_feed_command` (append-only commands, one revision each), `practice_feed_event` (validated generated adapter events) and `practice_feed_receipt_match` (a builder-attested customer receipt matched to one settled movement). Number history: reserved as 0046, renumbered to 0101 under Ben's 5 October merge-ahead ruling (merged main then ended at 0094, 0095–0099 were held by open PRs and 0100 by SV-2), then renumbered again to 0106 on 8 October because CH-3b's 0102 merged first (0103 is allocated to MON-7a, 0104 to CH-1 and 0105 to ENT-2). The file is `0106_practice_feed.sql`; its SQL is byte-identical to the 0101 version. The registry is in filename order and grows as later migrations merge; nothing in this section or in the feed suite depends on 0106 being the last entry.
+
+All five tables are tenant-owned: non-null `tenant_id`, tenant/job-qualified foreign keys (the match's payment FK is `(tenant_id, job_id, payment_id)`, so a receipt from another job cannot be linked; an account's session FK points at the job's owner row), `jobguard_migration` ownership, ENABLE + FORCE RLS with a policy for both roles, and runtime SELECT/INSERT only. There is no SECURITY DEFINER function and no routine grant: two SECURITY INVOKER trigger functions (`guard_practice_feed`, `require_practice_feed_effect`) have EXECUTE revoked from the runtime role. The catalogue amounts (£384, £3,000, £41,280, £24,000, £17,280, £960 and the £540 supplier refund) are also table CHECK constraints, so no runtime SQL can insert another amount for a movement, a state that does not match its event kind, or a non-synthetic `environment` value.
+
+What the database does and does not enforce, stated exactly:
+- **Ownership.** The application uses SBOX's `PracticeAccess` before any repository call: missing/unissued/expired sessions receive 401; another creator's job, a nonexistent job and an old unbound job receive the same 404. The repository rechecks the immutable `app.job.practice_session_digest` and live server-issued session before snapshot, registration or connect. The SQL trigger checks that binding and authenticates the session before every feed insert, including direct owner/account insertion. `practice_feed_job_owner` and its claim audit register existing creation-time ownership only; insertion order cannot select an owner. No legacy backfill or first-touch assignment is permitted. The `jg_session` cookie is a 7-day bearer token, so the feed never stores it: `session_digest` on the owner and account rows, the transaction setting `app.practice_feed_session_digest` and the `sessionDigest` audit references all carry only SBOX's sha256 digest (the same value as `app.job.practice_session_digest`); the repository takes the digest from `PracticeAccess` and never receives the token.
+- **Environment.** The application and the repository refuse every `JOBGUARD_ENV` other than `synthetic_demo`. The trigger additionally requires the transaction setting `app.practice_feed_environment = 'synthetic_demo'` and the session-digest setting. Those settings are written by the repository, so the database alone cannot tell a pilot deployment from a synthetic one; physical separation of pilot and production databases (BUILD_PLAN §3) is the real boundary. The trigger does **not** look at a job's activation mode: the practice sandbox starts jobs as `pilot_no_charge` in its no-charge scenario, so that mode cannot be the discriminator.
+- **Effects.** Events must belong to the account's latest, matching `advance` command (exact kind, movement and an integrity hash that is not a signature); receipt matches must belong to a matching `match_receipt` command with a builder-attested, unreversed payment of exactly the movement amount, a settled identified movement and no unreconciled duplicate. Deferred constraint triggers require the claim and connect commands' audit events, the match row for a match command, and every event identity an advance step generates (an identity stored by an earlier command satisfies a replay), so a half-written effect cannot commit.
+- A movement never touches allocation, landing, fee, journal or ledger tables, and a match never sets `qualifying_recovery_proof`. A matched receipt qualifies only while its movement is currently settled and unheld, and stops qualifying if the receipt is reversed; the saved match is history and is never edited. One movement verifies one receipt for life: a reversed receipt's match keeps its movement used (the UI says so); a correction path belongs with M4-8-S's reversal work.
+
+Expand-compatible: new tables only; the preceding application ignores them. The integration suite exercises upgrade from the schema just before 0106 (currently through 0102) on a database carrying an unbound prior job, as well as fresh install in demo-bootstrap; execution is required in CI. Roll forward to correct: movement facts, commands, matches, ownership and audit are history and are never rolled back destructively. Disconnect appends a command and keeps every fact.
+
+The feed is deliberately unavailable for CH-3a-adopted (imported) jobs and for SBOX-2 generated jobs without a capture record: they have no customer payments and no receipts screen, so there is nothing for the feed to match. Extending it to them would be a separately reviewed change (Opus P2-1/P2-2, rated P3 at e8892c1).

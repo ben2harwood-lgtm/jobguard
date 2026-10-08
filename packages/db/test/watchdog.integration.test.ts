@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,7 +11,7 @@ import {
   MIGRATION_URLS, migrate, withTenant, requireLiveJob, JobRepository,
   PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository,
   DiscrepancyRepository, ReadinessRepository, InboxRelevanceRepository,
-  EvidenceService, ProofCommandService, MaterialRepository, JobPartiesRepository, type VerifiedTenantContext,
+  EvidenceService, ProofCommandService, MaterialRepository, JobPartiesRepository,
 } from "../src/index.js";
 import type { PrivateVersionedStorage } from "@jobguard/storage";
 import { watchdogCommandGuards } from "@jobguard/core";
@@ -18,7 +19,7 @@ import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), otherTenant = randomUUID(), member = randomUUID();
-const context = { tenantId: tenant } as VerifiedTenantContext;
+const context = testTenantContext(tenant);
 const states = ["draft", "quoting", "accepted", "invoiced", "paid", "lost"];
 const legacy = Object.fromEntries(states.map(status => [status, { jobId: randomUUID(), uploadId: randomUUID() }]));
 const tables = ["purchase_order_draft", "purchase_order_revision", "purchase_order_placement", "supplier_document", "supplier_document_version", "supplier_document_intake", "goods_receipt", "supplier_fact_proposal", "supplier_fact_revision", "supplier_match_proposal", "supplier_match_revision", "supplier_match_allocation", "discrepancy_finding_revision", "discrepancy_review_outcome", "supplier_bill_supersession", "planned_work_revision", "readiness_snapshot", "readiness_decision", "inbox_finding_revision", "inbox_decision_revision", "inbox_outcome_event", "evidence_upload", "evidence_object", "evidence_link", "synthetic_evidence_original", "stage_completion", "watchdog_command_identity"];
@@ -121,7 +122,7 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     const triggers = await admin.query("SELECT c.relname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgname='a_watchdog_live_before_insert'");
     expect(triggers.rows.map(r => r.relname).sort()).toEqual([...tables].sort());
     await expect(runtime.query("SELECT app.require_watchdog_live($1)", [legacy.draft!.jobId])).rejects.toMatchObject({ code: "42501" });
-    await expect(withTenant(runtime, { tenantId: otherTenant } as VerifiedTenantContext, db => requireLiveJob(db, legacy.draft!.jobId))).rejects.toMatchObject({ code: "JOB_NOT_FOUND" });
+    await expect(withTenant(runtime, testTenantContext(otherTenant), db => requireLiveJob(db, legacy.draft!.jobId))).rejects.toMatchObject({ code: "JOB_NOT_FOUND" });
     for (const lock of ["SHARE", "UPDATE"]) await expect(withTenant(runtime, context, db => db.$client.query(`SELECT id FROM app.job WHERE id=$1 FOR ${lock}`, [legacy.draft!.jobId]))).rejects.toMatchObject({ code: "42501" });
   });
   it("rejects forged cross-job source links, recovery exceptions, and direct finalisation", async () => {

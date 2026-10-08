@@ -5,6 +5,7 @@ export * from "./schema.js";
 export {
   InvalidTenantContextError,
   verifiedTenantContextFromMembership,
+  verifiedTenantContextForQueuedJob,
   withTenant,
   type AuthenticatedMembership,
   type TenantTransaction,
@@ -62,3 +63,7 @@ export * from "./synthetic-party-fixture.js";
 export * from "./watchdog.js";
 export * from "./recovery-message-adapter.js";
 export * from "./recovery-message-repository.js";
+export * from "./contractor-party-repository.js";
+export * from "./prevention-check-repository.js";
+export * from "./prevention-register-fixtures.js";
+export * from "./practice-feed-repository.js";
