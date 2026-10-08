@@ -664,9 +664,14 @@ business RLS. SQL privileges and migration-owner-only routines require independe
 Existing users need no backfill: legacy synthetic users stay in their existing demo path.
 Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
 0098 replaces this PR’s reservation of 0052: 0053 is already merged, 0054–0093 stay reserved,
-and 0094–0097 belong to other tasks. The runner appends 0098 last, after 0053.
+and 0094–0097 belong to other tasks. The runner places 0098 immediately after
+0097_recovery_case_current.sql and immediately before 0102_contractor_parties.sql;
+0103_prevention_checks.sql and 0106_practice_feed.sql also apply on top of 0098.
+The integrator renumbers 0098 at merge; its number and SQL bytes stay unchanged in this repair.
 Fresh-install coverage remains in the tenancy/Neon suites; `identity.integration.test.ts`
-executes upgrade from the state immediately before 0098 (including merged 0053), repeat migration, races, privilege/catalog checks and rollback.
+executes upgrade from the state immediately before 0098 (through merged 0097),
+checks the complete applied list against MIGRATION_URLS, and covers repeat migration,
+races, privilege/catalog checks and rollback.
 These are PostgreSQL tests, not claimed executed in the restricted builder sandbox.
 
 Forward fix: disable identity endpoints/credential, preserve existing tables and add a

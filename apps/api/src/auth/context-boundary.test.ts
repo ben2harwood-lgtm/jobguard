@@ -51,7 +51,8 @@ import { describe, expect, it } from "vitest";
  * Limits, stated so nobody mistakes the scan for a type-checker: it cannot see a context laundered through `any`/`never`
  * or a type derived through an arbitrary signature (for example Parameters<SomeClass["method"]>[0]), or a dynamically
  * selected reconstruction helper. Pass-through functions (O11 Promise.resolve, R8 Promise.all, R10 an imported generic
- * patch helper) are outside a per-file syntax scan. TENANT-STAMP-1 closes context substitution at runtime: withTenant
+ * patch helper), and `id<typeof c>({tenantId} as any)` (a type argument with an `any` cast), are outside a per-file
+ * syntax scan. TENANT-STAMP-1's runtime check refuses that reconstruction. It closes context substitution: withTenant
  * rejects every unregistered reconstruction before connecting. Returning the unchanged stamped object is safe.
  * TypeScript branding and this scan alone do not prove runtime provenance; constructor callers remain a reviewed
  * authentication trust boundary, and the stamp is not proof against compromised authentication/database credentials.
