@@ -3327,6 +3327,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — CH-2, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0050 to **0096** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
 
+**Ledger amendment — M4-1-S-R, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0043 to **0097** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
+
 **Ledger amendment — M4-5-S, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0045 to **0099** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
 
 ### 12.3 The graph (synthetic work, buildable after adoption)
