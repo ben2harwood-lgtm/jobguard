@@ -3337,6 +3337,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — M4-7-S, 8 October 2026 (merge-ahead ruling).** This PR moved from its reserved 0046 to 0101 (`practice_feed`) because 0053 merged ahead, and on 8 October to **0106** because CH-3b's 0102 merged first (Ben's 5 October merge-ahead ruling; the lane path was swapped under Ben's standing yes for renumber lane swaps). 0103 is MON-7a's, 0104 CH-1's and 0105 ENT-2's; 0098 (M0-6L), 0099 (M4-5-S) and 0100 (SV-2) take the next free number at their own merges. It must merge after any lower-numbered PR that merges first, or renumber again.
 
+**Ledger amendment — M4-5-S, 8 October 2026 (merge-ahead ruling).** This PR held **0099** (`recovery_messages`) from 7 October; because 0102 (CH-3b), 0103 (MON-7a) and 0106 (M4-7-S) merged first under Ben's 5 October merge-ahead ruling, it renumbers at its merge to **0107**, the next number neither merged nor allocated (0104 is CH-1's and 0105 ENT-2's). The lane path was swapped under Ben's standing yes for renumber lane swaps. 0098 (M0-6L) and 0100 (SV-2) take the next free number at their own merges. It must merge after any lower-numbered PR that merges first, or renumber again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
