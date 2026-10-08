@@ -23,7 +23,9 @@ export type SwitchLiveV3 = z.infer<typeof switchLiveV3>;
 
 export const activationTermsV1 = z.object({
   version: z.literal("job-activation-terms.v1"), id: uuid, tenantId: uuid, jobId: uuid,
-  activationId: uuid, baselineQuoteVersionId: uuid, acceptedNetPence: pence,
+  activationId: uuid, baselineQuoteVersionId: uuid,
+  baselineDocumentVersion: z.number().int().positive(),
+  baselineDocumentHash: z.string().regex(/^[a-f0-9]{64}$/u), acceptedNetPence: pence,
   highestSentNetPence: pence, smallJob: z.boolean(), policyVersion: activationFeePolicyV3,
   commercialTrack: z.literal("small_builder"),
   // Coordinator ruling, 8 October 2026: MON-2A/MON-3 supersede this later.

@@ -1,3 +1,5 @@
+> Attempt-1 historical receipt. Continued implementation and current holds are recorded in [BUILDER_RECEIPT_attempt2.md](./BUILDER_RECEIPT_attempt2.md).
+
 # CH-1 builder receipt — HOLD, incomplete implementation
 
 Issued header: JobGuard integrator, 8 October 2026; header overrides the 7 October draft. Builder: Codex. Dispatcher commits; builder performed only read-only git inspection and working-tree edits, under the confirmed 7 October dispatcher-commits ruling. No commit, push, PR, merge, technical acceptance, independent model verdict or release was performed.

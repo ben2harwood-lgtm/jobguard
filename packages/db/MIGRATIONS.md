@@ -567,3 +567,9 @@ reservation; no deployed database is altered here. An environment already tracki
 0043 needs a separately reviewed forward fix before reusing it with 0097; historical
 receipts retain their original migration names. Merge after
 any lower-numbered PR that lands first, or renumber again. Forward-fix only as above.
+
+## 0104 — CH-1 job activation terms
+
+Expand-compatible v3 synthetic activation: immutable tenant/job terms with FORCE RLS, qualified quote/document/track keys and controlled inserts, no historic financial effects, existing parties/track/watchdog transition guards. Existing v1 rows and activation routines are untouched. The job baseline shape additionally permits v3 with a null recovery cap. A new session-owned saved v1 sample supports historic regressions; its marker cannot be selected or changed by runtime SQL. No data backfill is required.
+
+Upgrade from 0097 applies only additive objects and expanded checks; re-running the migration runner is idempotent. Forward-fix is preferred. Rollback requires disabling v3 entry first and confirming there are no v3 activations or saved v1 samples before removing new triggers/functions/table/columns and restoring the previous checks. Never delete activated commercial history to roll back. No production fees are enabled.
