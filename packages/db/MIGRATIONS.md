@@ -595,6 +595,30 @@ for deployed repair; no rollback destroys resident/binding/audit history. Before
 any destructive rollback, stop callers and obtain the approved retention/export
 plan. Previous application code remains compatible with the additive tables.
 
+### 0103 — MON-7a synthetic prevention facts
+
+Additive `property_constraint_fact` and `counterparty_check`, tenant/job/binding-qualified
+FKs and invoker subject guards, strict cited result validation, reference-only
+staleness, indexes, immutable triggers, ENABLE/FORCE RLS, migration ownership and
+runtime SELECT/INSERT only. Watches append explicit start/stop commands and
+revision-scoped feed evaluations; no default watch, provider route, scheduling,
+Decision, outbox or financial effect. No data backfill. The prior application
+remains compatible. Audit FKs are deferred; audit head is the final command lock.
+The counterparty guard fails closed on the customer's LATEST revision: the binding's
+pinned revision must still be the latest and the latest must be a business with a
+valid company number, else `NOT_REGISTERED_COMPANY` (23514). 0103 is unmerged, so
+this is part of the same migration, not a new one.
+
+Fresh install and upgrade are covered by the PostgreSQL tests; the upgrade test
+applies every registered migration before 0103 (now including 0096 and 0097),
+seeds a quoting job, then applies 0103. They need embedded PostgreSQL or CI.
+0103 writes no table that 0096 guards, so 0096's live-only guards neither block
+nor are blocked by it. After application, use a reviewed
+forward-fix migration and retain historical facts/audit; disable affected commands
+while fixing a validator or projection rather than rewriting history. No schema
+rollback with data deletion is proposed. See `docs/contracts/prevention-checks-v1.md`.
+B4 is parked as MON-7b; MON-7 is not fully accepted while it is parked.
+
 ## 0106_practice_feed.sql (M4-7-S)
 
 Adds the provider-neutral synthetic practice feed: `practice_feed_job_owner` (the session that owns a job for this feed), `practice_feed_account` (fake account and its read-only consent), `practice_feed_command` (append-only commands, one revision each), `practice_feed_event` (validated generated adapter events) and `practice_feed_receipt_match` (a builder-attested customer receipt matched to one settled movement). Number history: reserved as 0046, renumbered to 0101 under Ben's 5 October merge-ahead ruling (merged main then ended at 0094, 0095–0099 were held by open PRs and 0100 by SV-2), then renumbered again to 0106 on 8 October because CH-3b's 0102 merged first (0103 is allocated to MON-7a, 0104 to CH-1 and 0105 to ENT-2). The file is `0106_practice_feed.sql`; its SQL is byte-identical to the 0101 version. The registry is in filename order and grows as later migrations merge; nothing in this section or in the feed suite depends on 0106 being the last entry.

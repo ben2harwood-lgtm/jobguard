@@ -30,6 +30,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/parties/import": "pre_live_allowed",
   // M4-7-S: the synthetic practice feed is session-owned practice data that no watchdog table records, usable at any job stage.
   "/api/jobs/[id]/practice-feed": "pre_live_allowed",
+  "/api/jobs/[id]/prevention-checks/[action]": "pre_live_allowed",
   "/api/jobs/[id]/proof": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
@@ -95,6 +96,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/parties": "pre_live_allowed",
   "nest:/jobs/:id/parties/import": "pre_live_allowed",
   "nest:/jobs/:id/practice-feed": "pre_live_allowed",
+  "nest:/jobs/:id/prevention-checks/:action": "pre_live_allowed",
   "nest:/jobs/:id/proof": "watchdog_live_only",
   "nest:/jobs/:id/purchase-orders/placement": "watchdog_live_only",
   "nest:/jobs/:id/purchase-orders/revisions": "watchdog_live_only",
