@@ -96,7 +96,7 @@ test("previews, approves and simulates one factual customer message that is deli
     expect(href).toMatch(/^#pack-source-/u);
     await expect(page.locator(href!)).toHaveCount(1);
   }
-  await links.first().click(); expect(page.url()).toContain("#pack-source-");
+  await links.first().click(); await expect(page).toHaveURL(/#pack-source-/u);
   const saved = (await state(page, caseId)).latest;
   expect(saved).toMatchObject({ status: "previewed", revision: 1, changedSinceReview: false, approval: null });
   expect(saved.message).toMatchObject({ body: customerBody, recipient: "practice-customer@example.invalid", amountPence: 32000, packId: pack.id, attachmentHash: pack.contentHash, sourceRefs: [source.invoiceId] });
@@ -307,6 +307,8 @@ test("revocation and changed evidence both block execution and nothing is sent",
 test("two browser contexts approving the same revision yield one approval and a typed stale conflict", async ({ page, browser }) => {
   const { source, caseId } = await customerCaseWithPack(page);
   await click(page, "Preview factual message");
+  // The second context reads the saved preview when its page loads, so the first must have saved it before that page opens.
+  await V(page, "pursuit-delivery", "Preview only — awaiting your approval");
   const second = await browser.newContext({ storageState: await page.context().storageState() });
   try {
     const other = await second.newPage(); await other.goto(`/jobs/${source.jobId}#recovery-cases`);
@@ -363,6 +365,8 @@ test("an interrupted claim becomes uncertain after its lease and can be checked 
 test("a new practice session cannot see or act on another session's recovery messages", async ({ page, browser }) => {
   const { source, caseId } = await customerCaseWithPack(page);
   await click(page, "Preview factual message");
+  // The click only sends the preview; the panel shows this line once the server has saved it. Read the saved state after that, never straight after the click.
+  await V(page, "pursuit-delivery", "Preview only — awaiting your approval");
   const saved = await state(page, caseId), message = saved.latest;
   const missingMessage = await command(page, caseId, randomUUID(), { action: "advance", expectedRevision: message.revision, outcome: "success" });
   expect(missingMessage.status(), await missingMessage.text()).toBe(404);
@@ -398,4 +402,56 @@ test("a new practice session cannot see or act on another session's recovery mes
     await expect(other.getByTestId("pursuit-body")).toHaveCount(0);
     expect(await state(page, caseId)).toEqual(saved);
   } finally { await stranger.close(); await missing.close(); }
+});
+
+test("once the register has loaded, the delivery lookup and the evidence-pack tick never disable the Open buttons or move focus", async ({ page }) => {
+  const source = await persistedRecoverySources(page);
+  const openNames = ["Open materials-320 overcharge", "Open £320 withheld payment", "Open £2,500 withheld payment", "Record prevention"];
+  // Hold every read of this job's supplier documents (the workbench's delivery lookup and the supplier panel's own) until the register has loaded and a button has focus,
+  // so the lookup settles after the first register read, which is the moment the workbench must stay still.
+  const lookups: string[] = [];
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**/api/jobs/${source.jobId}/supplier-documents`, async route => { if (route.request().method() === "GET") await held; await route.continue(); });
+  page.on("response", response => { if (response.request().method() === "GET" && response.url().endsWith(`/api/jobs/${source.jobId}/supplier-documents`)) lookups.push(response.url()); });
+  await page.goto(`/jobs/${source.jobId}#recovery-cases`);
+  for (const name of openNames) await expect(button(page, name)).toBeEnabled();
+  const focused = button(page, "Open £2,500 withheld payment");
+  await focused.focus(); await expect(focused).toBeFocused();
+  // From here every change to the four buttons' disabled state (or their removal) and every focus move is recorded.
+  const watch = async () => page.evaluate(() => {
+    const events: string[] = []; (window as unknown as { recoveryWatch: string[] }).recoveryWatch = events;
+    const actions = document.querySelector("#recovery-cases .recovery-actions")!;
+    new MutationObserver(records => { for (const record of records) events.push(`${record.type}:${record.attributeName ?? ""}:${(record.target.textContent ?? "").slice(0, 40)}`); }).observe(actions, { subtree: true, childList: true, attributes: true });
+    for (const kind of ["focusin", "focusout"]) document.addEventListener(kind, event => events.push(`${kind}:${((event.target as Element).textContent ?? "").slice(0, 40)}`), true);
+  });
+  const events = () => page.evaluate(() => (window as unknown as { recoveryWatch: string[] }).recoveryWatch);
+  const twoFrames = () => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await watch();
+  release();
+  await expect.poll(() => lookups.length).toBeGreaterThanOrEqual(2);
+  await twoFrames();
+  expect(await events()).toEqual([]);
+  await expect(focused).toBeFocused();
+  for (const name of openNames) await expect(button(page, name)).toBeEnabled();
+
+  // Opening a case is the workbench's own command and does disable the buttons while it runs; open one, then focus a button again and watch the evidence-pack tick.
+  await click(page, "Open £320 withheld payment");
+  await expect(page.getByTestId("case-claimed-net")).toHaveText("£320.00");
+  await focused.focus(); await expect(focused).toBeFocused();
+  await watch();
+  await expect(button(page, "Build evidence pack")).toBeEnabled();
+  // dispatchEvent starts the pack build without moving focus the way a mouse click would.
+  await button(page, "Build evidence pack").dispatchEvent("click");
+  await expect(page.getByTestId("pack-state")).toHaveText("Sources mapped — inspect the evidence");
+  await expect(page.getByTestId("pursuit-not-ready")).toHaveText("Approve the current evidence pack for attachment first.");
+  await twoFrames();
+  expect(await events()).toEqual([]);
+  await expect(focused).toBeFocused();
+  for (const name of openNames) await expect(button(page, name)).toBeEnabled();
+
+  // Control: the same watch does see the workbench's own command disable and re-enable the buttons, so an empty list above is a real result.
+  await click(page, "Open £2,500 withheld payment");
+  await expect.poll(async () => (await events()).some(entry => entry.startsWith("attributes:disabled"))).toBe(true);
+  for (const name of openNames) await expect(button(page, name)).toBeEnabled();
 });
