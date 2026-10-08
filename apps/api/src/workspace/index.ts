@@ -49,6 +49,7 @@ export { createContractorApplication, contractorHttpStatus } from "../contractor
 
 export * from "../practice-access.js";
 
+export * from "../job-parties.application.js";
 export * from "../practice-feed.contracts.js";
 export * from "../practice-feed.application.js";
 export * from "../practice-feed.http.js";

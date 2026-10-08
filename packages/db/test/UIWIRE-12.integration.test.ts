@@ -7,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, type VerifiedTenantContext, withTenant } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T="11000000-0000-4000-8000-000000000001", A="21000000-0000-4000-8000-000000000002", U="31000000-0000-4000-8000-000000000003", M="41000000-0000-4000-8000-000000000004";
 const context={tenantId:T} as VerifiedTenantContext;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,repo:PracticeInvoiceRepository;
@@ -32,8 +32,8 @@ async function rawRecord(c:ReceiptInput,overrides:Record<string,unknown>={}) {
 }
 beforeAll(async()=>{
  dir=await mkdtemp(join(tmpdir(),"uiwire12-pg-"));
- const port=59000+Math.floor(Math.random()*400);
- pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
+ const port=await freePort(59000,400);
+ pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await pg.initialise();await pg.start();
  admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
  // Establish a real 0029 database, issue/record/reverse there, then upgrade it.
@@ -50,10 +50,11 @@ beforeAll(async()=>{
  legacy=await freshInvoice();legacyInput=command(legacy);legacyPayment=await repo.recordReceipt(context,legacyInput);legacyReverseCommand=randomUUID();
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
- await migrate(admin);
- const migrationNames=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!);
- expect(migrationNames).toEqual([...migrationNames].sort());
- expect((await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name BETWEEN $1 AND $2`,[migrationNames[0],migrationNames.at(-1)])).rowCount).toBe(MIGRATION_URLS.length);
+ await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
+ const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!);
+ const applied=await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name`);
+ expect(applied.rowCount).toBe(MIGRATION_URLS.length);
+ expect(applied.rows.map(row=>row.migration_name)).toEqual(names);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 
