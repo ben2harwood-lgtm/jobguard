@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { z } from "zod";
 import {
   RECOVERY_MESSAGE_CHANGED, RECOVERY_MESSAGE_EVENT_LABELS, RECOVERY_MESSAGE_STATUS_LABELS, parsePoundsToPence, recoveryMessageOutcomesV1,
 } from "@jobguard/core";
@@ -25,6 +26,39 @@ const notReady: Record<string, string> = {
   ATTACHMENT_APPROVAL_REQUIRED: "Approve the current evidence pack for attachment first.",
   CASE_NOT_ELIGIBLE: "This case has no outstanding amount that a practice message can describe.",
 };
+const UNREADABLE_READ = "UNREADABLE_READ", UNREADABLE_COMMAND = "UNREADABLE_COMMAND";
+
+/**
+ * What the screen reads from an answer, checked before any of it is adopted (round 10, Sol P3). The route answers with the API's
+ * `recovery-message-response.v1` (apps/api/src/recovery-message.contracts.ts, which the web cannot import, so the literal is pinned here and
+ * in the API's own test); a body that is not that, not this case's, or missing a field the screen reads is refused as a whole.
+ * The checked answer is adopted as it came, not the parsed copy, so nothing the server added is dropped.
+ */
+export const RECOVERY_MESSAGE_ANSWER_VERSION = "recovery-message-response.v1";
+const str = z.string(), whole = z.number().int().nonnegative();
+const known = (labels: Readonly<Record<string, string>>) => z.string().refine(value => Object.hasOwn(labels, value));
+const messageAnswer = (caseId: string) => {
+  const view = z.object({
+    id: str.min(1), revision: whole, status: known(RECOVERY_MESSAGE_STATUS_LABELS), changedSinceReview: z.boolean(), superseded: z.boolean(), claimAbandoned: z.boolean(),
+    message: z.object({ caseId: z.literal(caseId), packId: str.min(1), caseRevision: whole, amountPence: whole, sender: str, recipient: str, body: str, contentHash: str, attachmentHash: str }),
+    attachment: z.object({ packRevision: whole, sources: z.array(z.object({ sourceId: str, version: whole, label: str, content: str, contentHash: str })) }),
+    approval: z.object({ outboxActionId: str }).nullable(),
+    history: z.array(z.object({ revision: whole, kind: known(RECOVERY_MESSAGE_EVENT_LABELS) })),
+  });
+  return z.object({
+    version: z.literal(RECOVERY_MESSAGE_ANSWER_VERSION), caseId: z.literal(caseId),
+    readiness: z.object({ eligible: z.boolean(), reason: str.nullable(), caseRevision: whole, packId: str.nullable() }),
+    messages: z.array(view), latest: view.nullable(),
+    sink: z.array(z.object({ outboxActionId: str, recipient: str, contentHash: str, attachmentHash: str })), sinkCount: whole, realExternalActions: z.literal(0),
+  });
+};
+/** The answer as the screen's state, or undefined when it is not a usable answer for this case. */
+export const usableMessageState = (body: unknown, caseId: string): State | undefined => messageAnswer(caseId).safeParse(body).success ? body as State : undefined;
+/** The code of a refusal body, or the fallback when the body is not an object carrying one: a refusal never raises a JavaScript error. */
+const refusalCode = (body: unknown, fallback: string) => {
+  const code = typeof body === "object" && body !== null ? (body as { code?: unknown }).code : undefined;
+  return typeof code === "string" && code ? code : fallback;
+};
 const failureText = (code: string, action: Action) => {
   if (action === "approve" && /CHANGED|STALE_REVISION|EXPIRED|INVALID_COMMAND|CONTENT_INVALID/u.test(code)) return RECOVERY_MESSAGE_CHANGED;
   const text: Record<string, string> = {
@@ -42,6 +76,8 @@ const failureText = (code: string, action: Action) => {
     RECOVERY_MESSAGE_DELIVERY_INTERRUPTED: "The practice delivery process stopped. Refresh to see its saved claim; check the outcome when it becomes uncertain.",
     RECOVERY_MESSAGE_SOURCES_REQUIRED: notReady.PACK_REQUIRED!, RECOVERY_MESSAGE_ATTACHMENT_APPROVAL_REQUIRED: notReady.ATTACHMENT_APPROVAL_REQUIRED!,
     RECOVERY_MESSAGE_CASE_NOT_ELIGIBLE: notReady.CASE_NOT_ELIGIBLE!, UNAUTHENTICATED: "Start the practice session again to continue.",
+    [UNREADABLE_READ]: "The saved messages could not be read, so they were not used. The last good view is kept. Choose Refresh saved messages to try again.",
+    [UNREADABLE_COMMAND]: "The server's answer to that action could not be read, so it was not used. The action may or may not have been saved. Choose Refresh saved messages to see what is recorded before trying again.",
   };
   return text[code] ?? "That did not work. The saved state is shown; try again.";
 };
@@ -62,13 +98,15 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
     const own = ++generation.current;
     setLoading(true);
     try {
-      const response = await fetch(endpoint, { cache: "no-store" }), body = await response.json();
+      const response = await fetch(endpoint, { cache: "no-store" }), body: unknown = await response.json();
       if (own !== generation.current) return;
-      if (!response.ok) throw new Error(body.code ?? "LOAD_FAILED");
-      adopt(body); setError("");
+      if (!response.ok) throw new Error(refusalCode(body, "LOAD_FAILED"));
+      const next = usableMessageState(body, caseId);
+      if (!next) throw new Error(UNREADABLE_READ);
+      adopt(next); setError("");
     } catch (failure) { if (own === generation.current) setError(failureText(failure instanceof Error ? failure.message : "", "reconcile")); }
     finally { if (own === generation.current) setLoading(false); }
-  }, [endpoint, adopt]);
+  }, [endpoint, caseId, adopt]);
   // The case revision changes when a claim moves, so the saved preview is re-read and its change state recomputed.
   useEffect(() => { void load(); return () => { generation.current++; }; }, [load, caseRevision, evidenceTick]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
@@ -93,10 +131,12 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
         response = await fetch(`${endpoint}/${view.id}/commands`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
           version: "recovery-message-command.v1", commandId: crypto.randomUUID(), action, messageId: view.id, expectedRevision: view.revision, ...extra }) });
       }
-      const body = await response.json();
+      const body: unknown = await response.json();
       if (own !== generation.current) return;
-      if (!response.ok) throw new Error(body.code ?? "FAILED");
-      adopt(body);
+      if (!response.ok) throw new Error(refusalCode(body, "FAILED"));
+      const next = usableMessageState(body, caseId);
+      if (!next) throw new Error(UNREADABLE_COMMAND);
+      adopt(next);
     } catch (failure) {
       const text = failureText(failure instanceof Error ? failure.message : "", action);
       // Whatever happened, show what is actually saved (never an optimistic or half-applied view), then say why.

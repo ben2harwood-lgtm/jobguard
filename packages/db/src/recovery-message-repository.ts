@@ -283,7 +283,13 @@ export class RecoveryMessageRepository {
       if (await this.isReplay(db, ctx.tenantId, input.commandId, ["reconcile_started", "outcome_unknown"], caseId, requestHash)) {
         const m = await this.messageRow(db, ctx.tenantId, caseId, messageId);
         if (m.outbox_status !== "outcome_unknown") return { replayed: true as const };
-        return { replayed: false as const, started: await this.revisionOf(db, ctx.tenantId, messageId), outboxId: m.outbox_action_id!, jobId: m.job_id, contentHash: m.content_hash };
+        // Resume only a check of this very command that is still open: the message's newest event is its own reconcile_started, as the
+        // advance replay does for its own start. An "unknown" that belongs to a later attempt (or to a later check) is not this command's
+        // to answer, so the replay returns current state with no provider call and no write (Ben, 7 October; Opus P2-1 at 50f71cc).
+        const last = (await db.$client.query<{ revision: number; kind: string; command_id: string }>(
+          "SELECT revision,kind,command_id FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision DESC LIMIT 1", [ctx.tenantId, messageId])).rows[0];
+        if (!last || last.kind !== "reconcile_started" || last.command_id !== input.commandId) return { replayed: true as const };
+        return { replayed: false as const, started: last.revision, outboxId: m.outbox_action_id!, jobId: m.job_id, contentHash: m.content_hash };
       }
       if (!claimed) fail("RECOVERY_MESSAGE_COMMAND_CONFLICT"); // another family holds this id
       let m = await this.messageRow(db, ctx.tenantId, caseId, messageId);

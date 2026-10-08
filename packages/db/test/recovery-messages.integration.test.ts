@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildRecoveryMessage, recoveryMessageSourceOf, RECOVERY_MESSAGE_CHANGED } from '@jobguard/core';
 import {
   ActionExecutor, EvidencePackRepository, FakeRecoveryMessageAdapter, RecoveryCaseRepository, RecoveryMessageRepository, migrate, withTenant,
@@ -1649,5 +1649,103 @@ describe('a message states the one current case figures, approved landings inclu
       expect(await sinkCount(second.view.id)).toBe(1);
       expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [second.caseId])).toBe(1);
     });
+  });
+});
+
+describe('an old check request replayed after a retry cycle returns current state (round 10, Opus P2-1)', () => {
+  const UNKNOWN = ['previewed', 'approved', 'started', 'outcome_unknown'];
+  afterEach(() => { vi.restoreAllMocks(); });
+  /** Asks of the practice provider, counted: a replay that returns current state never reaches it. */
+  const providerChecks = () => vi.spyOn(FakeRecoveryMessageAdapter.prototype, 'reconcile');
+  /**
+   * Check C1 finds no provider record, the owner retries, and attempt 2 is uncertain again. C1 is now an old request: the uncertainty
+   * the message is in belongs to attempt 2, which no check has looked at yet.
+   */
+  async function retriedAndUncertainAgain() {
+    const base = await approved();
+    const outboxId = base.view.approval!.outboxActionId;
+    const unknown1 = await repo.command(context, base.caseId, advanceCommand(base.view, 'no_response'), actor);
+    const firstCheck = simple('reconcile', unknown1.latest!);
+    const checked = await repo.command(context, base.caseId, firstCheck, actor);
+    expect(checked.latest).toMatchObject({ status: 'retryable', attempts: 1 });
+    const unknown2 = await repo.command(context, base.caseId, advanceCommand(checked.latest!, 'no_response'), actor);
+    expect(unknown2.latest).toMatchObject({ status: 'outcome_unknown', attempts: 2 });
+    expect(await storedKinds(base.view.id)).toEqual([...UNKNOWN, 'reconcile_started', 'retryable', 'started', 'outcome_unknown']);
+    return { ...base, outboxId, firstCheck, unknown2 };
+  }
+
+  it('returns current state for the old check: no provider call, no write, no history, the delivery record still unknown', async () => {
+    const { caseId, view, outboxId, firstCheck, unknown2 } = await retriedAndUncertainAgain();
+    const kindsBefore = await storedKinds(view.id), auditsBefore = await auditTypes(view.id), before = await writeCounts();
+    const asked = providerChecks();
+    expect(await repo.command(context, caseId, firstCheck, actor)).toEqual(unknown2);
+    expect(await repo.command(context, caseId, firstCheck, actor)).toEqual(unknown2);
+    expect(asked).not.toHaveBeenCalled();
+    expect(await outboxStatus(outboxId)).toBe('outcome_unknown');
+    expect(await storedKinds(view.id)).toEqual(kindsBefore);
+    expect(await auditTypes(view.id)).toEqual(auditsBefore);
+    expect(await writeCounts()).toEqual(before);
+    expect(await attemptCount(outboxId)).toBe(2);
+    expect(await sinkCount(view.id)).toBe(0);
+    // Reusing the id for a different request is still a typed conflict, never a replay.
+    expect(await code(() => repo.command(context, caseId, { ...firstCheck, expectedRevision: firstCheck.expectedRevision + 1 }, actor))).toBe('RECOVERY_MESSAGE_COMMAND_CONFLICT');
+  });
+
+  it('leaves the message usable: typed refusals, then a fresh check and one retry that delivers exactly once', async () => {
+    const { caseId, view, outboxId, firstCheck, unknown2 } = await retriedAndUncertainAgain();
+    await repo.command(context, caseId, firstCheck, actor);
+    // Every refusal is a typed one (never a raw database rule error), and none of them wrote anything.
+    expect(await code(() => repo.command(context, caseId, advanceCommand(unknown2.latest!), actor))).toBe('RECOVERY_MESSAGE_RECONCILE_REQUIRED');
+    expect(await code(() => repo.command(context, caseId, simple('revoke', unknown2.latest!), actor))).toBe('RECOVERY_MESSAGE_NOT_REVOCABLE');
+    expect(await code(() => repo.preview(context, caseId, previewCommand(unknown2), actor))).toBe('RECOVERY_MESSAGE_EXISTING_EFFECT');
+    expect(await storedKinds(view.id)).toEqual([...UNKNOWN, 'reconcile_started', 'retryable', 'started', 'outcome_unknown']);
+    // A fresh check asks the provider about attempt 2, finds no record and records it.
+    const asked = providerChecks();
+    const checked = await repo.command(context, caseId, simple('reconcile', unknown2.latest!), actor);
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(checked.latest).toMatchObject({ status: 'retryable', attempts: 2 });
+    expect(await storedKinds(view.id)).toEqual([...UNKNOWN, 'reconcile_started', 'retryable', 'started', 'outcome_unknown', 'reconcile_started', 'retryable']);
+    expect(await sinkCount(view.id)).toBe(0);
+    const delivered = await repo.command(context, caseId, advanceCommand(checked.latest!), actor);
+    expect(delivered.latest).toMatchObject({ status: 'simulated_delivery', attempts: 3 });
+    expect(await sinkCount(view.id)).toBe(1);
+    expect(await outboxStatus(outboxId)).toBe('succeeded');
+    // The old request still returns current state, now the delivered one, with nothing more sent.
+    expect(await repo.command(context, caseId, firstCheck, actor)).toEqual(delivered);
+    expect(await sinkCount(view.id)).toBe(1);
+    expect(await attemptCount(outboxId)).toBe(3);
+  });
+
+  it('lets the owner revoke after a fresh check, never reaching a delivery', async () => {
+    const { caseId, view, outboxId, firstCheck, unknown2 } = await retriedAndUncertainAgain();
+    await repo.command(context, caseId, firstCheck, actor);
+    const checked = await repo.command(context, caseId, simple('reconcile', unknown2.latest!), actor);
+    expect(checked.latest!.status).toBe('retryable');
+    const revoked = await repo.command(context, caseId, simple('revoke', checked.latest!), actor);
+    expect(revoked.latest).toMatchObject({ status: 'revoked', attempts: 2 });
+    expect(await outboxStatus(outboxId)).toBe('cancelled');
+    expect(await sinkCount(view.id)).toBe(0);
+    expect(await repo.command(context, caseId, firstCheck, actor)).toEqual(revoked);
+  });
+
+  it('returns current state for a check whose own answer was "still unknown", asking the provider only once', async () => {
+    const base = await approved();
+    const outboxId = base.view.approval!.outboxActionId;
+    const unknown = await repo.command(context, base.caseId, advanceCommand(base.view, 'no_response'), actor);
+    const check = simple('reconcile', unknown.latest!);
+    const asked = providerChecks().mockResolvedValueOnce('unknown');
+    const answered = await repo.command(context, base.caseId, check, actor);
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(answered.latest).toMatchObject({ status: 'outcome_unknown', attempts: 1 });
+    expect(await storedKinds(base.view.id)).toEqual([...UNKNOWN, 'reconcile_started', 'outcome_unknown']);
+    const before = await writeCounts();
+    expect(await repo.command(context, base.caseId, check, actor)).toEqual(answered);
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(await writeCounts()).toEqual(before);
+    expect(await storedKinds(base.view.id)).toEqual([...UNKNOWN, 'reconcile_started', 'outcome_unknown']);
+    expect(await outboxStatus(outboxId)).toBe('outcome_unknown');
+    // A fresh check from the reloaded panel is what asks again, and it can settle the message.
+    const settled = await repo.command(context, base.caseId, simple('reconcile', answered.latest!), actor);
+    expect(settled.latest).toMatchObject({ status: 'retryable', attempts: 1 });
   });
 });

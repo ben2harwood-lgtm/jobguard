@@ -1,15 +1,18 @@
 import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
-import { buildRecoveryMessage, sha256 } from "@jobguard/core";
-import { RecoveryMessages } from "./recovery-messages";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { RECOVERY_MESSAGE_EVENT_LABELS, RECOVERY_MESSAGE_STATUS_LABELS, buildRecoveryMessage, sha256 } from "@jobguard/core";
+import { RECOVERY_MESSAGE_ANSWER_VERSION, RecoveryMessages, usableMessageState } from "./recovery-messages";
 import { RecoveryCases, changedDelivery, merchantSourceRefsWithDelivery } from "./recovery-cases";
 import { EvidencePacks } from "./evidence-packs";
 
-const hooks = vi.hoisted(() => ({ values: [] as unknown[] }));
+// `sets` records every state write as [position of the useState call in the render, value] and `effects` the effects the render asked for, so
+// the round 10 tests can run a panel's own read and command code against a stubbed fetch. The earlier tests only render markup and ignore both.
+const hooks = vi.hoisted(() => ({ values: [] as unknown[], slot: 0, sets: [] as Array<[number, unknown]>, effects: [] as Array<() => unknown> }));
 vi.mock("react", async original => ({ ...(await original<typeof import("react")>()),
-  useState: () => [hooks.values.shift(), () => undefined], useEffect: () => undefined,
+  useState: () => { const slot = hooks.slot++; return [hooks.values.shift(), (value: unknown) => { hooks.sets.push([slot, value]); }]; },
+  useEffect: (effect: () => unknown) => { hooks.effects.push(effect); },
   useCallback: (fn: unknown) => fn, useRef: () => ({ current: null }),
 }));
 vi.stubGlobal("React", React);
@@ -129,5 +132,165 @@ describe('opening the materials-320 claim with an explicitly chosen delivery', (
   });
   it('keeps the document id of the invoice out of the case: only the delivery chosen is added', () => {
     expect(merchantSourceRefsWithDelivery(recorded, answer(row(), row({ id: invoiceDocument, document_type: 'invoice' })), delivery)).toEqual([rate, invoiceVersion, delivery]);
+  });
+});
+
+
+// ---- round 10 (Sol P3): an answer the panel cannot use is never adopted ------------------------------------------------------------------
+// The panel's own `load` and command code run here against a stubbed fetch (hooks are mocked above, so the component is called as a plain
+// function and its effect and button handlers are used directly). A 200 answer that is not this case's `recovery-message-response.v1`
+// must leave the last good state alone, show a plain sentence, and leave "Refresh saved messages" usable: never a JavaScript error.
+describe("a malformed successful answer is refused, not adopted (round 10)", () => {
+  const SLOT = { state: 0, draft: 1, loading: 2, busy: 3, error: 4 } as const;
+  const realFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = realFetch; });
+  const serverView = (status: string, over: Record<string, unknown> = {}) => {
+    const { immutableContent: _omitted, ...shown } = message;
+    return { id: id(7), sequence: 1, revision: 3, status, claimAbandoned: false, superseded: false, changedSinceReview: false, message: shown,
+      attachment: { packId: id(3), packRevision: 1, manifestHash: message.manifestHash, contentHash: message.attachmentHash, sources: [source] },
+      approval: { decisionId: id(9), authorizationId: id(10), outboxActionId: id(8), revoked: false, expiresAt: "2026-10-08T12:00:00.000Z" }, attempts: 1,
+      history: [{ revision: 1, kind: "previewed", at: "2026-10-08T10:00:00.000Z" }, { revision: 2, kind: "approved", at: "2026-10-08T10:01:00.000Z" }],
+      createdAt: "2026-10-08T10:00:00.000Z", ...over };
+  };
+  /** What the route sends: the versioned wrapper around the repository's state. */
+  const answer = (status = "queued", over: Record<string, unknown> = {}) => {
+    const latest = serverView(status);
+    return { version: "recovery-message-response.v1", caseId: id(1), jobId: id(2), messages: [latest], latest, sink: [], sinkCount: 0, realExternalActions: 0, environment: "synthetic_demo",
+      readiness: { eligible: true, reason: null, caseRevision: 2, outstandingPence: 32000, packId: id(3), packRevision: 1 }, ...over };
+  };
+  /** The same answer with one nested field taken away or replaced. */
+  const withLatest = (change: (latest: Record<string, any>) => void) => { const body = answer(); change(body.latest as Record<string, any>); return { ...body, messages: [body.latest] }; };
+  const dropped = (path: string[], value?: unknown) => withLatest(latest => {
+    const holder = path.slice(0, -1).reduce((node, key) => node[key], latest);
+    if (value === undefined) delete holder[path.at(-1)!]; else holder[path.at(-1)!] = value;
+  });
+  const malformed: Array<[string, unknown]> = [
+    ["an empty object", {}], ["null", null], ["a string", "not json state"], ["a list", []],
+    ["the wrong version", { ...answer(), version: "recovery-message-response.v2" }], ["no version", (({ version: _v, ...rest }) => rest)(answer())],
+    ["another case's id", { ...answer(), caseId: id(99) }], ["no case id", (({ caseId: _c, ...rest }) => rest)(answer())],
+    ["a message of another case", dropped(["message", "caseId"], id(99))],
+    ["no readiness", (({ readiness: _r, ...rest }) => rest)(answer())],
+    ["a readiness with no packId", { ...answer(), readiness: { eligible: true, reason: null, caseRevision: 2 } }],
+    ["messages that are not a list", { ...answer(), messages: "none" }], ["no latest", (({ latest: _l, ...rest }) => rest)(answer())],
+    ["a latest with no message", dropped(["message"])], ["a latest with no amount", dropped(["message", "amountPence"])],
+    ["an amount that is text", dropped(["message", "amountPence"], "320.00")], ["a latest with no attachment", dropped(["attachment"])],
+    ["an attachment with no sources", dropped(["attachment", "sources"])], ["a latest with no history", dropped(["history"])],
+    ["a status the panel has no words for", dropped(["status"], "exploded")], ["a history kind the panel has no words for", dropped(["history"], [{ revision: 1, kind: "exploded" }])],
+    ["a latest with no revision", dropped(["revision"])], ["no sink", (({ sink: _s, ...rest }) => rest)(answer())],
+    ["a sink count that is text", { ...answer(), sinkCount: "0" }], ["a record of real external actions", { ...answer(), realExternalActions: 1 }],
+  ];
+  /** Mounts the panel holding `held` (the last good answer), with fetch answering from `replies` in order. Returns the fetch spy. */
+  function mount(held: ReturnType<typeof answer>, replies: Array<() => Promise<unknown>>) {
+    hooks.values = [held, { recipient: message.recipient, body: message.body, amount: "320.00" }, false, false, "", "success"];
+    hooks.slot = 0; hooks.sets = []; hooks.effects = [];
+    const queue = [...replies];
+    const fetched = vi.fn(async () => { const next = queue.shift(); if (!next) throw new Error("unexpected extra fetch"); return next(); });
+    globalThis.fetch = fetched as unknown as typeof fetch;
+    return { tree: RecoveryMessages({ caseId: id(1), caseRevision: 2 }), fetched };
+  }
+  const reply = (body: unknown, ok = true) => async () => ({ ok, json: async () => body });
+  const offline = async () => { throw new Error("offline"); };
+  const writes = (slot: number) => hooks.sets.filter(([at]) => at === slot).map(([, value]) => value);
+  const settled = (slot: number, value: unknown) => vi.waitFor(() => { expect(writes(slot).at(-1)).toBe(value); expect(writes(slot).length).toBeGreaterThan(1); });
+  function buttonOf(node: unknown, label: string): { onClick: () => void } | undefined {
+    if (Array.isArray(node)) { for (const child of node) { const hit = buttonOf(child, label); if (hit) return hit; } return undefined; }
+    if (!node || typeof node !== "object") return undefined;
+    const element = node as { type?: unknown; props?: { children?: unknown; onClick?: () => void } };
+    if (element.type === "button" && element.props?.children === label) return element.props as { onClick: () => void };
+    return buttonOf(element.props?.children, label);
+  }
+  /** What the screen would show once the panel stopped writing state: the last good answer, the error written, nothing busy. */
+  const shown = (held: unknown) => {
+    hooks.values = [held, { recipient: message.recipient, body: message.body, amount: "320.00" }, writes(SLOT.loading).at(-1), writes(SLOT.busy).at(-1) ?? false, writes(SLOT.error).at(-1), "success"];
+    return renderToStaticMarkup(createElement(RecoveryMessages, { caseId: id(1), caseRevision: 2 }));
+  };
+  const refreshButton = (html: string) => html.match(/<button[^>]*>Refresh saved messages<\/button>/u)?.[0] ?? "";
+
+  it("accepts exactly what the route sends, for every status and history kind the panel has words for", () => {
+    expect(RECOVERY_MESSAGE_ANSWER_VERSION).toBe("recovery-message-response.v1");
+    expect(usableMessageState(answer(), id(1))).toBeDefined();
+    for (const status of Object.keys(RECOVERY_MESSAGE_STATUS_LABELS)) expect(usableMessageState(answer(status), id(1))).toBeDefined();
+    const history = Object.keys(RECOVERY_MESSAGE_EVENT_LABELS).map((kind, index) => ({ revision: index + 1, kind, at: "2026-10-08T10:00:00.000Z" }));
+    expect(usableMessageState(withLatest(latest => { latest.history = history; }), id(1))).toBeDefined();
+    expect(usableMessageState(answer("previewed", { messages: [], latest: null }), id(1))).toBeDefined();
+    const accepted = answer();
+    expect(usableMessageState(accepted, id(1))).toBe(accepted); // adopted as it came, nothing the server added is dropped
+  });
+
+  it.each(malformed)("read: %s is not adopted, shows a plain sentence, keeps the last good state and stays refreshable", async (_name, body) => {
+    const held = answer("queued");
+    mount(held, [reply(body)]);
+    expect(hooks.effects).toHaveLength(2); // the read on mount, then the focus on an error
+    hooks.effects[0]!();
+    await settled(SLOT.loading, false);
+    expect(writes(SLOT.state)).toEqual([]);
+    expect(writes(SLOT.draft)).toEqual([]);
+    expect(writes(SLOT.error).at(-1)).toMatch(/saved messages could not be read, so they were not used/u);
+    expect(String(writes(SLOT.error).at(-1))).not.toMatch(/TypeError|Cannot read|undefined|is not/u);
+    const html = shown(held);
+    expect(html).toContain("could not be read");
+    expect(html).toContain(message.body); // the last good state is still on screen
+    expect(refreshButton(html)).not.toContain("disabled");
+  });
+
+  it.each(malformed)("command: %s is not adopted, shows a plain sentence, keeps the last good state and stays refreshable", async (_name, body) => {
+    const held = answer("outcome_unknown");
+    const { tree, fetched } = mount(held, [reply(body), offline]);
+    buttonOf(tree, "Check outcome")!.onClick();
+    await settled(SLOT.busy, false);
+    expect(fetched).toHaveBeenCalledTimes(2); // the command, then the panel's own re-read of what is saved (which here also failed)
+    expect(writes(SLOT.state)).toEqual([]);
+    expect(writes(SLOT.draft)).toEqual([]);
+    expect(writes(SLOT.error).at(-1)).toMatch(/answer to that action could not be read, so it was not used/u);
+    expect(String(writes(SLOT.error).at(-1))).not.toMatch(/TypeError|Cannot read|undefined|is not/u);
+    const html = shown(held);
+    expect(html).toContain("could not be read");
+    expect(html).toContain("Check outcome");
+    expect(refreshButton(html)).not.toContain("disabled");
+  });
+
+  it("command: an unusable answer is followed by a re-read, and a usable re-read replaces the shown state, with the sentence still shown", async () => {
+    const held = answer("outcome_unknown"), saved = answer("simulated_delivery", { sinkCount: 1 });
+    const { tree } = mount(held, [reply({}), reply(saved)]);
+    buttonOf(tree, "Check outcome")!.onClick();
+    await settled(SLOT.busy, false);
+    expect(writes(SLOT.state)).toEqual([saved]);
+    expect(writes(SLOT.error).at(-1)).toMatch(/could not be read, so it was not used/u);
+  });
+
+  it("preview: an unusable answer is refused the same way", async () => {
+    const held = answer("previewed", { messages: [], latest: null });
+    const { tree } = mount(held, [reply({}), offline]);
+    buttonOf(tree, "Preview factual message")!.onClick();
+    await settled(SLOT.busy, false);
+    expect(writes(SLOT.state)).toEqual([]);
+    expect(writes(SLOT.error).at(-1)).toMatch(/could not be read, so it was not used/u);
+  });
+
+  it("a refusal body that is not an object is a plain failure, never a JavaScript error, on both paths", async () => {
+    const held = answer("outcome_unknown");
+    mount(held, [reply(null, false)]);
+    hooks.effects[0]!();
+    await settled(SLOT.loading, false);
+    expect(writes(SLOT.error).at(-1)).toBe("That did not work. The saved state is shown; try again.");
+    const { tree } = mount(held, [reply(null, false), reply(null, false)]);
+    buttonOf(tree, "Check outcome")!.onClick();
+    await settled(SLOT.busy, false);
+    expect(writes(SLOT.error).at(-1)).toBe("That did not work. The saved state is shown; try again.");
+    expect(writes(SLOT.state)).toEqual([]);
+  });
+
+  it("control: a usable answer is adopted on both paths and clears the error", async () => {
+    const held = answer("outcome_unknown"), next = answer("retryable");
+    mount(held, [reply(next)]);
+    hooks.effects[0]!();
+    await settled(SLOT.loading, false);
+    expect(writes(SLOT.state)).toEqual([next]);
+    expect(writes(SLOT.error)).toEqual([""]);
+    const { tree } = mount(held, [reply(next), reply(next)]);
+    buttonOf(tree, "Check outcome")!.onClick();
+    await settled(SLOT.busy, false);
+    expect(writes(SLOT.state)[0]).toBe(next);
+    expect(writes(SLOT.error).filter(value => value !== "")).toEqual([]);
   });
 });
