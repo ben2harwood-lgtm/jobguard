@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,16 +12,20 @@ import { describe, expect, it } from "vitest";
  * principal bridge". This scans ALL application source (apps/api/src, apps/web/app, app-level files, packages/<each>/src
  * and /tools, and repository-root tools/) with the
  * TypeScript parser, not text search, and fails on any constructor call, alias, cast to VerifiedTenantContext or
- * effective-tenant identifier outside four explicit, individually tested categories:
+ * effective-tenant identifier outside explicit, individually tested categories:
  *
  *   real       apps/api/src/auth/principal-bridge.ts: exactly one call, fed by the verified membership lookup.
- *   definition packages/db/src/tenant-context.ts: the function itself and its one frozen { tenantId } cast.
- *   worker     apps/api/src/worker.ts: one cast, fed only by a strictly validated queue payload (server-created, never a request).
+ *   definition packages/db/src/tenant-context.ts: exactly TENANT-STAMP-1's two constructors, each with one frozen
+ *              literal cast and one add to its module-private WeakSet; withTenant must check the stamp first.
+ *   worker     apps/api/src/worker.ts: one queued-job constructor call, fed only by a strictly validated queue payload (server-created, never a request).
  *   synthetic  retained practice-sandbox composition: ONLY the files named in APPROVED_SYNTHETIC_FILES (a new caller needs a
  *              reviewed edit to that list). Every call/cast is fed ONLY the fixed DEMO_* tenant and membership constants, and
  *              those identifiers must resolve to the authoritative fixture module (see below). The file carries no
  *              request-derived tenant selector. Reachability is separately proven by identity.test.ts (global Nest guard;
  *              synthetic cookie refused outside synthetic_demo) and by the web adapters, which check JOBGUARD_ENV.
+ *   practice   APPROVED_PRACTICE_FILES: the three source-pinned, reviewed persisted practice-session bridges from main.
+ *              Only practice-session.ts's exact authentication result may carry its stamped context in a principal
+ *              envelope. No general container exception, production/pilot authority or approval follows from this list.
  *   rehearsal  packages/db/tools/synthetic-restore.mjs: disposable synthetic restore rehearsal that refuses any other mode.
  *
  * Aliases (round 3): the constructor and the context type may be imported, exported and destructured ONLY under their own
@@ -28,10 +33,11 @@ import { describe, expect, it } from "vitest";
  * `ReturnType<typeof constructor>` or `typeof withTenant` is a derivation of the context type: it is tracked to a fixed point
  * within the file when it is a cast target, and exporting one is refused (another file could import and cast it).
  * Context values follow an allow-list (round 7): pass whole as a call argument, return whole, bind whole to a const
- * that follows these same rules, or read .tenantId as a value. Every other use is refused at the original use, including
+ * that follows these same rules, or read .tenantId as a value; non-escaping !/nullish/typeof checks are also permitted. Every other use is refused at the original use, including
  * containers, destructuring, spread/rest, member storage/writes, computed access/keys and mutable bindings. All Object.*
  * and Reflect.* helpers, and their static aliases, are refused (also JSON and structuredClone for earlier regressions).
- * Inferred const aliases and local forwarding function returns propagate provenance to a fixed point.
+ * Inferred const aliases and local forwarding function returns propagate provenance to a fixed point. Whole-context
+ * returns from closures passed as call arguments are refused; ordinary whole returns/getters remain allowed.
  * Only the context definition may freeze its literal BEFORE minting; the principal bridge returns the minted value whole.
  *
  * Fixture binding (round 3): a name such as DEMO_TENANT_ID is trusted because of WHERE IT COMES FROM, not because of how it
@@ -44,7 +50,11 @@ import { describe, expect, it } from "vitest";
  *
  * Limits, stated so nobody mistakes the scan for a type-checker: it cannot see a context laundered through `any`/`never`
  * or a type derived through an arbitrary signature (for example Parameters<SomeClass["method"]>[0]), or a dynamically
- * selected reconstruction helper. These require review; TypeScript branding alone does not prove runtime provenance.
+ * selected reconstruction helper. Pass-through functions (O11 Promise.resolve, R8 Promise.all, R10 an imported generic
+ * patch helper) are outside a per-file syntax scan. TENANT-STAMP-1 closes context substitution at runtime: withTenant
+ * rejects every unregistered reconstruction before connecting. Returning the unchanged stamped object is safe.
+ * TypeScript branding and this scan alone do not prove runtime provenance; constructor callers remain a reviewed
+ * authentication trust boundary, and the stamp is not proof against compromised authentication/database credentials.
  *
  * Tests, fixtures and generated output are not application source.
  */
@@ -52,49 +62,46 @@ const REAL = "apps/api/src/auth/principal-bridge.ts";
 const DEFINITION = "packages/db/src/tenant-context.ts";
 const WORKER = "apps/api/src/worker.ts";
 const REHEARSAL = "packages/db/tools/synthetic-restore.mjs";
-const DECISIONS = "apps/api/src/decisions/decisions.application.ts";
 const FIXTURE_MODULE = "packages/db/src/demo-seed.ts";
 const SYNTHETIC_ROOTS = ["apps/api/src/", "packages/db/src/"];
 /** The complete, explicit set of retained synthetic-sandbox files that may build a context from the fixed DEMO identity. */
 const APPROVED_SYNTHETIC_FILES = [
-  "apps/api/src/capture/capture.application.ts",
-  "apps/api/src/customer-invoice.application.ts",
-  "apps/api/src/decisions/decisions.application.ts",
-  "apps/api/src/evidence-pack.application.ts",
-  "apps/api/src/final-account.application.ts",
-  "apps/api/src/inbox-relevance.application.ts",
-  "apps/api/src/material.application.ts",
-  "apps/api/src/proof/proof.application.ts",
-  "apps/api/src/purchase-order.application.ts",
-  "apps/api/src/quote/quote.application.ts",
-  "apps/api/src/readiness.application.ts",
-  "apps/api/src/recovery-case.application.ts",
-  "apps/api/src/supplier-document.application.ts",
-  "apps/api/src/supplier-match.application.ts",
-  "apps/api/src/things-to-check.application.ts",
-  "apps/api/src/value/value.application.ts",
-  "apps/api/src/variation/variation.application.ts",
   "packages/db/src/demo-runtime.ts",
   "packages/db/src/fee-illustration-repository.ts",
   "packages/db/src/recovery-demo-repository.ts",
-  "packages/db/src/sandbox-repository.ts",
 ];
+/** Reviewed persisted practice-session bridges only; this list grants no pilot/production authority. */
+const APPROVED_PRACTICE_FILES = [
+  "packages/db/src/practice-session.ts",
+  "packages/db/src/contractor-repository.ts",
+  "packages/db/src/contractor-party-repository.ts",
+];
+// Bound to the source-inspected main 41d83ac implementations, not arbitrary code at these paths.
+// A change to any bridge requires renewed caller review; the hashes are NOT computed from the tree under test.
+const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
+  "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
+  "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
+  "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
+};
+const reviewedPracticeSource = (file: SourceFile) => REVIEWED_PRACTICE_SOURCES[file.path] === createHash("sha256").update(file.text).digest("hex");
 const REQUEST_DERIVED = /x-tenant-id|tenantHeader|request\.headers|searchParams|\bcookies\s*\(|principal-bridge|resolveVerifiedTenantContext|IdentityApplication/u;
 // A synthetic service may read a client-supplied tenant only to REFUSE any value other than the fixed demo tenant.
 const CLIENT_TENANT = /requested_tenant_id|requestedTenantId/u;
 const CLIENT_TENANT_REFUSED = /requested_tenant_id\s*!==\s*DEMO_TENANT_ID/u;
 const CONSTRUCTOR = "verifiedTenantContextFromMembership";
+const QUEUED_CONSTRUCTOR = "verifiedTenantContextForQueuedJob";
+const CONSTRUCTORS = new Set([CONSTRUCTOR, QUEUED_CONSTRUCTOR]);
 const CONTEXT_TYPE = "VerifiedTenantContext";
-const WATCHED = new Set([CONSTRUCTOR, CONTEXT_TYPE]);
+const WATCHED = new Set([...CONSTRUCTORS, CONTEXT_TYPE]);
 const DEMO_TENANT = new Set(["DEMO_TENANT_ID", "DEMO_EMPTY_TENANT_ID"]);
 /** Names whose meaning is "the fixed demo identity" and therefore must come from the fixture module. */
 const FIXTURE_NAME = /^DEMO_(?:[A-Z]+_)*(?:TENANT_ID|MEMBERSHIP_ID|IDENTITY_USER_ID)$/u;
 const UUID_LITERAL = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 // A type that is the context type without naming it: the constructor's return type, or the context parameter of withTenant.
-const CONTEXT_DERIVED = /\bReturnType\s*<\s*typeof\s+[\w$.]*verifiedTenantContextFromMembership\b|\btypeof\s+[\w$.]*withTenant\b/u;
+const CONTEXT_DERIVED = /\bReturnType\s*<\s*typeof\s+[\w$.]*verifiedTenantContext(?:FromMembership|ForQueuedJob)\b|\btypeof\s+[\w$.]*withTenant\b/u;
 // Cheap pre-filter so only files that can possibly hold an occurrence are parsed (a file without any of these words cannot
 // construct, alias, cast to or assign an effective tenant context, nor bind a fixture constant). Keeps the scan fast.
-const RELEVANT = /verifiedTenantContextFromMembership|VerifiedTenantContext|effective_tenant_id|effectiveTenantId|resolveVerifiedTenantContext|typeof\s+[\w$.]*withTenant|DEMO_[A-Z_]*(?:TENANT_ID|MEMBERSHIP_ID|IDENTITY_USER_ID)/u;
+const RELEVANT = /verifiedTenantContextFromMembership|verifiedTenantContextForQueuedJob|VerifiedTenantContext|effective_tenant_id|effectiveTenantId|resolveVerifiedTenantContext|typeof\s+[\w$.]*withTenant|DEMO_[A-Z_]*(?:TENANT_ID|MEMBERSHIP_ID|IDENTITY_USER_ID)/u;
 
 interface SourceFile { path: string; text: string }
 type Occurrence =
@@ -225,7 +232,7 @@ function parse(file: SourceFile): Analysis {
 
     const named = ts.isIdentifier(node) || ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.parent !== undefined && (ts.isElementAccessExpression(node.parent) && node.parent.argumentExpression === node || ts.isPropertyAssignment(node.parent) && node.parent.name === node));
     if (named && (node as ts.Identifier | ts.StringLiteral).text.match(/^(effective_tenant_id|effectiveTenantId)$/u)) found.push({ kind: "effective", node });
-    if (named && (node as ts.Identifier | ts.StringLiteral).text === CONSTRUCTOR) {
+    if (named && CONSTRUCTORS.has((node as ts.Identifier | ts.StringLiteral).text)) {
       const parent = node.parent;
       if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) { /* module plumbing, not a use */ }
       else if (ts.isTypeQueryNode(parent)) { /* type position only */ }
@@ -248,14 +255,26 @@ function parse(file: SourceFile): Analysis {
     const taint = new RegExp(`\\b(?:${[...tainted].map(name => name.replace(/\$/gu, "\\$")).join("|")})\\b`, "u");
     for (const declared of typeNames) if (!tainted.has(declared.name) && (taint.test(declared.text) || CONTEXT_DERIVED.test(declared.text))) { tainted.add(declared.name); changed = true; }
   }
-  const taintPattern = new RegExp(`\\b(?:${[...tainted].map(name => name.replace(/\$/gu, "\\$")).join("|")})\\b`, "u");
-  const contextType = (type: ts.TypeNode | undefined): boolean => type !== undefined && (taintPattern.test(type.getText(source)) || CONTEXT_DERIVED.test(type.getText(source)));
+  let taintPattern = new RegExp(`\\b(?:${[...tainted].map(name => name.replace(/\$/gu, "\\$")).join("|")})\\b`, "u");
+  const contextValues = new Set<string>();
+  const contextMembers = new Set<string>();
+  const contextType = (type: ts.TypeNode | undefined): boolean => {
+    if (!type) return false;
+    if (taintPattern.test(type.getText(source)) || CONTEXT_DERIVED.test(type.getText(source))) return true;
+    if (ts.isTypeQueryNode(type)) {
+      const name = type.exprName;
+      if (ts.isIdentifier(name) ? contextValues.has(name.text) : ts.isQualifiedName(name) && contextMembers.has(name.right.text)) return true;
+    }
+    if (ts.isIndexedAccessTypeNode(type) && ts.isLiteralTypeNode(type.indexType) && ts.isStringLiteralLike(type.indexType.literal) && contextMembers.has(type.indexType.literal.text)) return true;
+    // typeof values and indexed members can occur within unions/utility types and aliases.
+    return ts.forEachChild(type, child => ts.isTypeNode(child) && contextType(child) ? true : undefined) === true;
+  };
 
   // The allow-list is checked at the original context use. In particular, a context cannot enter a
   // container, binding pattern or reflection helper in the first place; tracking every way OUT of a
   // container is unnecessary. Propagation only identifies additional uses to check, never authorizes one.
-  const contextValues = new Set(values.filter(value => ts.isIdentifier(value.name) && contextType(value.type)).map(value => (value.name as ts.Identifier).text));
-  const contextMembers = new Set(members.filter(member => contextType(member.type)).map(member => literalKey(member.name)).filter((name): name is string => name !== undefined));
+  for (const value of values) if (ts.isIdentifier(value.name) && contextType(value.type)) contextValues.add(value.name.text);
+  for (const member of members) if (contextType(member.type)) { const name = literalKey(member.name); if (name) contextMembers.add(name); }
   const contextFunctions = new Set<string>(["resolveVerifiedTenantContext"]);
   const functionName = (fn: typeof functions[number]): string | undefined =>
     fn.name && ts.isIdentifier(fn.name) ? fn.name.text : ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name) ? fn.parent.name.text : undefined;
@@ -294,7 +313,7 @@ function parse(file: SourceFile): Analysis {
   const inspectHelperExpression = (expression: ts.Expression): boolean => {
     const value = unwrap(expression);
     if (ts.isIdentifier(value)) return helperValues.has(value.text);
-    if (ts.isPropertyAccessExpression(value)) return helperMembers.has(value.name.text) || ["Object", "Reflect", "JSON", "Array", "Map", "Set"].includes(value.name.text) || helperExpression(value.expression);
+    if (ts.isPropertyAccessExpression(value)) return helperMembers.has(value.name.text) || ["Object", "Reflect", "JSON", "structuredClone", "Array", "Map", "Set"].includes(value.name.text) || helperExpression(value.expression);
     if (ts.isElementAccessExpression(value)) return helperExpression(value.expression) || ts.isStringLiteralLike(value.argumentExpression) && helperValues.has(value.argumentExpression.text);
     if (ts.isCallExpression(value) || ts.isNewExpression(value)) return helperExpression(value.expression);
     if (ts.isConditionalExpression(value)) return helperExpression(value.whenTrue) || helperExpression(value.whenFalse);
@@ -321,7 +340,7 @@ function parse(file: SourceFile): Analysis {
       const callee = unwrap(value.expression);
       if (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)) return returnValues(callee).some(contextExpression);
       const name = callName(callee)?.split(".").at(-1);
-      return name !== undefined && (name === CONSTRUCTOR || contextFunctions.has(name));
+      return name !== undefined && (CONSTRUCTORS.has(name) || contextFunctions.has(name));
     }
     return false;
   };
@@ -362,7 +381,23 @@ function parse(file: SourceFile): Analysis {
         }
       }
     }
+    // Type/value provenance is mutually dependent: typeof an inferred const, and aliases of it, need another pass.
+    for (const declared of typeNames) {
+      if (ts.isTypeAliasDeclaration(declared.node) && !tainted.has(declared.name) && contextType(declared.node.type)) {
+        tainted.add(declared.name); changed = true;
+        taintPattern = new RegExp(`\\b(?:${[...tainted].map(name => name.replace(/\$/gu, "\\$")).join("|")})\\b`, "u");
+      }
+    }
+    for (const member of members) {
+      const name = literalKey(member.name);
+      if (name && !contextMembers.has(name) && contextType(member.type)) { contextMembers.add(name); changed = true; }
+    }
+    for (const fn of functions) {
+      const name = functionName(fn);
+      if (name && !contextFunctions.has(name) && contextType(fn.type)) { contextFunctions.add(name); changed = true; }
+    }
     for (const value of values) {
+      if (ts.isIdentifier(value.name) && !contextValues.has(value.name.text) && contextType(value.type)) { contextValues.add(value.name.text); changed = true; }
       if (ts.isIdentifier(value.name) && value.initializer && !contextValues.has(value.name.text) && contextExpression(value.initializer)) { contextValues.add(value.name.text); changed = true; }
       if (ts.isIdentifier(value.name) && value.initializer) {
         const name = callName(value.initializer);
@@ -416,7 +451,21 @@ function parse(file: SourceFile): Analysis {
   const allowedUse = (node: ts.Expression): boolean => {
     const outer = valueUse(node), parent = outer.parent;
     if (ts.isCallExpression(parent) && parent.arguments.includes(outer as ts.Expression)) return !helperExpression(parent.expression);
-    if (ts.isReturnStatement(parent) && parent.expression === outer || ts.isArrowFunction(parent) && parent.body === outer) return true;
+    if (ts.isPrefixUnaryExpression(parent) && parent.operator === ts.SyntaxKind.ExclamationToken || ts.isTypeOfExpression(parent)) return true;
+    const nullish = (value: ts.Expression) => { const unwrapped = unwrap(value); return unwrapped.kind === ts.SyntaxKind.NullKeyword || ts.isIdentifier(unwrapped) && unwrapped.text === "undefined" || ts.isVoidExpression(unwrapped) && ts.isNumericLiteral(unwrapped.expression) && unwrapped.expression.text === "0"; };
+    if (ts.isBinaryExpression(parent) && [ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(parent.operatorToken.kind) && nullish(parent.left === outer ? parent.right : parent.left)) return true;
+    if (ts.isReturnStatement(parent) && parent.expression === outer || ts.isArrowFunction(parent) && parent.body === outer) {
+      let fn: ts.Node | undefined = parent;
+      while (fn && !ts.isFunctionLike(fn)) fn = fn.parent;
+      const closure = fn && outerExpression(fn), use = closure?.parent;
+      return !(use && ts.isCallExpression(use) && use.arguments.includes(closure as ts.Expression));
+    }
+    // The one source-pinned practice authentication bridge returns its stamped context in its principal envelope.
+    // This authorizes only the exact reviewed return, never arbitrary containers in this file or other applications.
+    if (file.path === "packages/db/src/practice-session.ts" && reviewedPracticeSource(file) && ts.isShorthandPropertyAssignment(parent) && parent.name === outer && parent.name.text === "context") {
+      const object = parent.parent, returned = object.parent;
+      if (ts.isObjectLiteralExpression(object) && ts.isReturnStatement(returned) && returned.expression === object && object.getText(source).replace(/\s+/gu, "") === "{context,digest,membershipId:principal.membership_id,identityUserId:principal.identity_user_id}") return true;
+    }
     if (ts.isVariableDeclaration(parent) && parent.initializer === outer) return constantBinding(parent);
     if (ts.isPropertyAccessExpression(parent) && parent.expression === outer && parent.name.text === "tenantId") {
       const property = valueUse(parent), use = property.parent;
@@ -425,6 +474,9 @@ function parse(file: SourceFile): Analysis {
     return false;
   };
   for (const node of contextUses) {
+    // A named forwarding closure passed as an argument can escape via the callee's container, just like an inline one.
+    const use = outerExpression(node), call = use.parent;
+    if (ts.isIdentifier(node) && contextFunctions.has(node.text) && ts.isCallExpression(call) && call.arguments.includes(use as ts.Expression)) refuse(node);
     if (!contextExpression(node)) continue;
     const parent = node.parent;
     // Declarations, member names and type positions are not value uses. Binding legality was checked above.
@@ -453,8 +505,7 @@ function parse(file: SourceFile): Analysis {
     if (contextual || contextExpression(object)) problems.push(`${at(object)} reconstructs a verified tenant context; forward the verified value or use an authorized constructor instead`);
   }
   for (const node of assertions) {
-    const target = node.type.getText(source);
-    if (taintPattern.test(target) || CONTEXT_DERIVED.test(target)) found.push({ kind: "cast", operand: unwrap(node.expression), node });
+    if (contextType(node.type)) found.push({ kind: "cast", operand: unwrap(node.expression), node });
   }
   for (const declared of typeNames) if (declared.exported && declared.name !== CONTEXT_TYPE && tainted.has(declared.name)) problems.push(`${at(declared.node)} exports an alias of ${CONTEXT_TYPE} (${declared.name}); another file could import it and cast to it`);
   for (const exported of exportedLocals) if (exported.name !== CONTEXT_TYPE && tainted.has(exported.name)) problems.push(`${at(exported.node)} exports an alias of ${CONTEXT_TYPE} (${exported.name}); another file could import it and cast to it`);
@@ -556,22 +607,44 @@ export function boundaryViolations(files: SourceFile[]): string[] {
     for (const o of found.filter(f => f.kind === "reference")) problems.push(`${at(o.node)} aliases or passes ${CONSTRUCTOR} instead of calling it`);
     for (const o of found.filter(f => f.kind === "effective")) if (file.path !== REAL) problems.push(`${at(o.node)} effective tenant identifier outside the principal bridge`);
 
+    const membershipCalls = calls.filter(c => ts.isCallExpression(c.node) && (ts.isIdentifier(c.node.expression) ? c.node.expression.text === CONSTRUCTOR : ts.isPropertyAccessExpression(c.node.expression) ? c.node.expression.name.text === CONSTRUCTOR : ts.isElementAccessExpression(c.node.expression) && ts.isStringLiteralLike(c.node.expression.argumentExpression) && c.node.expression.argumentExpression.text === CONSTRUCTOR));
+    const queuedCalls = calls.filter(c => !membershipCalls.includes(c));
+    if (file.path !== WORKER && queuedCalls.length) problems.push(`${file.path} only the worker may call the queued-job constructor`);
     if (file.path === REAL) {
-      if (calls.length !== 1 || casts.length || declarations.length) problems.push(`${file.path} must contain exactly one constructor call and no casts`);
+      if (calls.length !== 1 || membershipCalls.length !== 1 || casts.length || declarations.length) problems.push(`${file.path} must contain exactly one constructor call and no casts`);
       for (const c of calls) {
         const argument = c.argument && unwrap(c.argument);
         if (!argument || !ts.isCallExpression(argument) || !ts.isIdentifier(argument.expression) || argument.expression.text !== "asAuthenticatedMembership") problems.push(`${at(c.node)} the bridge may only construct from the verified membership lookup`);
       }
     } else if (file.path === DEFINITION) {
-      if (declarations.length !== 1 || calls.length || casts.length !== 1) problems.push(`${file.path} must declare the constructor once and cast once`);
-      for (const c of casts) if (c.operand.getText(source).replace(/\s+/gu, "") !== "Object.freeze({tenantId:membership.tenantId})") problems.push(`${at(c.node)} the definition may only freeze { tenantId: membership.tenantId }`);
-    } else if (file.path === WORKER) {
-      if (calls.length || declarations.length || casts.length !== 1) problems.push(`${file.path} must contain exactly one cast and no constructor call`);
-      for (const c of casts) {
-        const literal = c.operand;
-        const fromPayload = ts.isObjectLiteralExpression(literal) && literal.properties.length === 1 && propertyInitializer(literal, "tenantId") !== undefined && literal.getText(source).replace(/\s+/gu, "") === "{tenantId:parsed.tenantId}";
-        if (!fromPayload || !/const parsed=z\.object\(\{[^}]*tenantId:z\.string\(\)\.uuid\(\)[^}]*\}\)\.strict\(\)\.parse\(payload\)/u.test(file.text)) problems.push(`${at(c.node)} worker tenant must come only from a strictly validated queue payload`);
+      const compact = (node: ts.Node) => node.getText(source).replace(/\s+/gu, "");
+      const constructors = source.statements.filter(ts.isFunctionDeclaration).filter(fn => fn.name && CONSTRUCTORS.has(fn.name.text));
+      if (declarations.length !== 2 || constructors.length !== 2 || calls.length || casts.length !== 2) problems.push(`${file.path} must declare two stamped constructors, each casting once`);
+      const bodies = new Map([
+        [CONSTRUCTOR, `{if(!membership||!UUID.test(membership.identityUserId)||!UUID.test(membership.membershipId)||!UUID.test(membership.tenantId)){thrownewInvalidTenantContextError();}constcontext=Object.freeze({tenantId:membership.tenantId})asVerifiedTenantContext;genuineTenantContexts.add(context);returncontext;}`],
+        [QUEUED_CONSTRUCTOR, `{if(typeoftenantId!=="string"||!UUID.test(tenantId)){thrownewInvalidTenantContextError();}constcontext=Object.freeze({tenantId})asVerifiedTenantContext;genuineTenantContexts.add(context);returncontext;}`],
+      ]);
+      for (const name of CONSTRUCTORS) {
+        const matching = constructors.filter(fn => fn.name!.text === name);
+        if (matching.length !== 1 || !matching[0]!.body || compact(matching[0]!.body!) !== bodies.get(name)) problems.push(`${file.path} ${name} must validate, freeze its own literal, cast once, add once to the private stamp list and return that same context`);
       }
+      const stampBindings = bindings.get("genuineTenantContexts");
+      const stamp = stampBindings?.length === 1 ? stampBindings[0] : undefined;
+      if (!stamp || stamp.kind !== "variable" || stamp.node.parent.parent.parent !== source || (stamp.node.parent.flags & ts.NodeFlags.Const) === 0 || isExported(stamp.node.parent.parent) || !stamp.node.initializer || compact(stamp.node.initializer) !== "newWeakSet<object>()") problems.push(`${file.path} the stamp must be one module-private const WeakSet<object>`);
+      const stampUses: ts.Identifier[] = [];
+      const inspectStamp = (node: ts.Node): void => { if (ts.isIdentifier(node) && node.text === "genuineTenantContexts") stampUses.push(node); ts.forEachChild(node, inspectStamp); };
+      inspectStamp(source);
+      if (stampUses.length !== 4 || source.statements.some(statement => ts.isExportDeclaration(statement) && statement.exportClause?.getText(source).includes("genuineTenantContexts"))) problems.push(`${file.path} the stamp list may only be declared, added to by the two constructors and checked by withTenant; it cannot escape`);
+      const tenantBoundary = source.statements.filter(ts.isFunctionDeclaration).find(fn => fn.name?.text === "withTenant");
+      const first = tenantBoundary?.body?.statements[0];
+      if (!first || compact(first) !== `if(!genuineTenantContexts.has(context)||typeofcontext.tenantId!=="string"||!UUID.test(context.tenantId)){thrownewInvalidTenantContextError();}`) problems.push(`${file.path} withTenant must refuse unstamped contexts before opening a connection`);
+    } else if (file.path === WORKER) {
+      if (calls.length !== 1 || queuedCalls.length !== 1 || declarations.length || casts.length) problems.push(`${file.path} must contain exactly one queued-job constructor call and no casts`);
+      for (const c of calls) if (!c.argument || c.argument.getText(source) !== "parsed.tenantId" || !/const parsed=z\.object\(\{[^}]*tenantId:z\.string\(\)\.uuid\(\)[^}]*\}\)\.strict\(\)\.parse\(payload\)/u.test(file.text)) problems.push(`${at(c.node)} worker tenant must come only from a strictly validated queue payload`);
+    } else if (APPROVED_PRACTICE_FILES.includes(file.path)) {
+      // Exact reviewed source identities and call shapes; a name on the list alone never authorizes another minting path.
+      const expectedCalls = file.path.endsWith("practice-session.ts") ? 1 : file.path.endsWith("contractor-repository.ts") ? 2 : 3;
+      if (!reviewedPracticeSource(file) || membershipCalls.length !== expectedCalls || queuedCalls.length || casts.length || declarations.length) problems.push(`${file.path} practice constructors must match the exact reviewed authenticated practice-session source; changed code needs renewed caller review and grants no pilot/production authority`);
     } else if (file.path === REHEARSAL) {
       if (casts.length || declarations.length || calls.length !== 2 || !/SYNTHETIC_REHEARSAL_ONLY/u.test(file.text) || !/requiredMode/u.test(file.text)) problems.push(`${file.path} must be exactly two calls inside the synthetic-only rehearsal`);
       for (const c of calls) {
@@ -590,21 +663,17 @@ export function boundaryViolations(files: SourceFile[]): string[] {
       // The identifiers count only when they resolve to the authoritative fixture constants (see the header).
       const demoTenant = (name: string) => DEMO_TENANT.has(name) && fixtureBound(file, bindings, name);
       const demoMembership = (name: string) => /^DEMO_[A-Z_]*MEMBERSHIP_ID$/u.test(name) && fixtureBound(file, bindings, name);
-      const decisionsGate = file.path === DECISIONS
-        && /const membership=\(tenantId:string\)=>tenantId===DEMO_TENANT_ID\?DEMO_MEMBERSHIP_ID:tenantId===DEMO_EMPTY_TENANT_ID\?DEMO_EMPTY_MEMBERSHIP_ID:null;/u.test(file.text)
-        && /if\(!membershipId\)throw new DecisionsError\("FORBIDDEN"\)/u.test(file.text)
-        && ["DEMO_TENANT_ID", "DEMO_MEMBERSHIP_ID", "DEMO_EMPTY_TENANT_ID", "DEMO_EMPTY_MEMBERSHIP_ID"].every(name => fixtureBound(file, bindings, name));
       for (const c of calls) {
         let argument = c.argument && unwrap(c.argument);
         if (argument && ts.isIdentifier(argument)) argument = resolveFixedObject(source, bindings, argument.text);
         if (!argument || !ts.isObjectLiteralExpression(argument) || !plainLiteral(argument)) { problems.push(`${at(c.node)} synthetic constructor argument must be a fixed, plain literal object (one top-level const, no spread, computed key, accessor or duplicate property)`); continue; }
         const tenant = propertyInitializer(argument, "tenantId"), membership = propertyInitializer(argument, "membershipId");
-        const tenantOk = identifierIn(tenant, demoTenant) || (tenant === "shorthand" && decisionsGate);
-        const membershipOk = identifierIn(membership, demoMembership) || (membership === "shorthand" && decisionsGate);
+        const tenantOk = identifierIn(tenant, demoTenant);
+        const membershipOk = identifierIn(membership, demoMembership);
         if (!tenantOk || !membershipOk) problems.push(`${at(c.node)} synthetic constructor must use the fixed DEMO tenant and membership`);
       }
       for (const c of casts) {
-        if (!ts.isObjectLiteralExpression(c.operand) || !plainLiteral(c.operand) || !identifierIn(propertyInitializer(c.operand, "tenantId"), demoTenant)) problems.push(`${at(c.node)} synthetic cast must wrap the fixed DEMO tenant`);
+        if (!ts.isObjectLiteralExpression(c.operand) || !plainLiteral(c.operand) || !identifierIn(propertyInitializer(c.operand, "tenantId"), demoTenant)) problems.push(`${at(c.node)} synthetic cast to a verified tenant context must wrap the fixed DEMO tenant`);
       }
     }
     boundaryResults.set(key, problems.slice(start));
@@ -652,9 +721,9 @@ async function applicationSource(repositoryRoot: string = repository): Promise<S
   return paths.map(path => ({ path: relative(repository, path).split(sep).join("/"), text: readFileSync(path, "utf8") }));
 }
 
-// An approved retained synthetic file: the shape tests below run at this path so each negative case still fails for ITS OWN
+// An approved retained synthetic file that still constructs after SBOX-SESSION-1: shape tests run at this path so each negative case still fails for ITS OWN
 // reason and not merely because a made-up path is not on the approved list (that rule has its own tests further down).
-const APPROVED_SYNTHETIC = "apps/api/src/material.application.ts";
+const APPROVED_SYNTHETIC = "packages/db/src/fee-illustration-repository.ts";
 const validSynthetic = `import { DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, verifiedTenantContextFromMembership } from "@jobguard/db";
 const context = () => verifiedTenantContextFromMembership({ identityUserId: "d1500000-0000-4000-8000-000000000001", membershipId: DEMO_MEMBERSHIP_ID, tenantId: DEMO_TENANT_ID } as any);`;
 
@@ -664,7 +733,7 @@ describe("M0-6L sole-constructor boundary across all application source", () => 
     expect(files.length).toBeGreaterThan(200);
     expect(files.map(f => f.path)).toEqual(expect.arrayContaining([REAL, DEFINITION, WORKER, REHEARSAL, "apps/web/app/lib/identity-server.ts"]));
     expect(boundaryViolations(files)).toEqual([]);
-    // The real-user path has exactly one constructor in the whole tree: every other call is the fixed synthetic sandbox.
+    // The real-user path has exactly one bridge. Other calls are the explicitly reviewed practice/fixed-fixture bridges or queued work.
     const constructors = files.filter(f => occurrences(f).found.some(o => o.kind === "call")).map(f => f.path);
     expect(constructors).toContain(REAL);
     expect(constructors.filter(path => path.startsWith("apps/web/"))).toEqual([]);
@@ -710,7 +779,7 @@ export const context = (tenantId: string, membershipId: string) => verifiedTenan
     expect(rogue(REAL, "const effective_tenant_id = membership.tenantId;")).not.toContain(expect.stringContaining("effective tenant identifier"));
   });
 
-  it("allows the bridge exactly one verified-membership constructor, the worker exactly one payload cast, and nothing else", () => {
+  it("allows the bridge exactly one verified-membership constructor, the worker exactly one payload constructor, and nothing else", () => {
     const rogue = (path: string, text: string) => boundaryViolations([{ path, text }]);
     const bridge = `import { verifiedTenantContextFromMembership } from "@jobguard/db";
 export const make = (membership: unknown) => verifiedTenantContextFromMembership(asAuthenticatedMembership(membership));`;
@@ -719,14 +788,15 @@ export const make = (membership: unknown) => verifiedTenantContextFromMembership
     expect(rogue(REAL, bridge.replace("asAuthenticatedMembership(membership)", "membership"))).not.toEqual([]);
     expect(rogue(REAL, `${bridge}\nexport const c = { tenantId: "x" } as VerifiedTenantContext;`)).not.toEqual([]);
     const worker = `const parsed=z.object({actionId:z.string().uuid(),tenantId:z.string().uuid()}).strict().parse(payload);
-await executor.execute({tenantId:parsed.tenantId} as VerifiedTenantContext,parsed.actionId);`;
+await executor.execute(verifiedTenantContextForQueuedJob(parsed.tenantId),parsed.actionId);`;
     expect(rogue(WORKER, worker)).toEqual([]);
-    expect(rogue(WORKER, `${worker}\nawait executor.execute({tenantId:other} as VerifiedTenantContext,id);`)).not.toEqual([]);
+    expect(rogue(WORKER, `${worker}\nawait executor.execute(verifiedTenantContextForQueuedJob(other),id);`)).not.toEqual([]);
     expect(rogue(WORKER, worker.replace(".strict()", ""))).not.toEqual([]);
     expect(rogue(WORKER, worker.replace("parsed.tenantId", "payload.tenantId"))).not.toEqual([]);
     expect(rogue(WORKER, `${worker}\nconst c = verifiedTenantContextFromMembership({ tenantId: DEMO_TENANT_ID });`)).not.toEqual([]);
-    expect(rogue(DEFINITION, `export function verifiedTenantContextFromMembership(membership: M): VerifiedTenantContext { return Object.freeze({ tenantId: membership.tenantId }) as VerifiedTenantContext; }`)).toEqual([]);
-    expect(rogue(DEFINITION, `export function verifiedTenantContextFromMembership(membership: M): VerifiedTenantContext { return Object.freeze({ tenantId: input }) as VerifiedTenantContext; }`)).not.toEqual([]);
+    const definition = readFileSync(join(repository, DEFINITION), "utf8");
+    expect(rogue(DEFINITION, definition)).toEqual([]);
+    expect(rogue(DEFINITION, definition.replace("tenantId: membership.tenantId", "tenantId: input"))).not.toEqual([]);
     expect(rogue("apps/api/src/other.ts", `export function verifiedTenantContextFromMembership(m: M) { return m; }`)).not.toEqual([]);
   });
 });
@@ -772,11 +842,11 @@ export const context = () => verifiedTenantContextFromMembership(membership as P
     ["parenthesized increment", `++((membership as unknown as { tenantId: number }).tenantId);`],
     ["iteration target", `for (membership.tenantId of [input.tenant]) {}`],
   ])("rejects fixed membership mutation via %s", (_name, mutation) => {
-    expect(rogueAt("apps/api/src/recovery-case.application.ts", namedMembership(`export const swap = (input: { tenantId: string; tenant: string }) => { ${mutation} };`))).toEqual(mentions("fixed, plain literal object"));
+    expect(rogueAt(APPROVED_SYNTHETIC, namedMembership(`export const swap = (input: { tenantId: string; tenant: string }) => { ${mutation} };`))).toEqual(mentions("fixed, plain literal object"));
   });
 
   it("keeps wrapped property reads and destructuring source reads valid", () => {
-    expect(rogueAt("apps/api/src/recovery-case.application.ts", namedMembership(`export const read = () => { const value = { tenantId: (membership.tenantId) }; return value; };`))).toEqual([]);
+    expect(rogueAt(APPROVED_SYNTHETIC, namedMembership(`export const read = () => { const value = { tenantId: (membership.tenantId) }; return value; };`))).toEqual([]);
   });
 
   it("collects repository-root tools and rejects a planted caller while excluding test files", async () => {
@@ -899,7 +969,7 @@ describe("M0-6L round 7: context use allow-list", () => {
     ["computed lookup", `return holder[context];`],
     ["computed tenant read", `return context["tenantId"];`],
     ["unknown member read", `return context.other;`],
-    ["boolean use", `return !context;`],
+    ["escaping boolean use", `return context || replacement;`],
     ["conditional use", `return context ? replacement : replacement;`],
     ["comparison", `return context === replacement;`],
     ["context callee", `return context();`],
@@ -1062,11 +1132,11 @@ describe("M0-6L round 3: the retained synthetic exception is bound to the author
     expect(rogueAt(APPROVED_SYNTHETIC, `import { verifiedTenantContextFromMembership, DEMO_MEMBERSHIP_ID } from "@jobguard/db";\nimport * as DEMO_TENANT_ID from "./tenant.js";\n${CALL_FIXTURES}`)).toEqual(mentions("fixture constant DEMO_TENANT_ID"));
     // Inside packages/db the only authoritative relative module is demo-seed.
     const dbText = `import { DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "./demo-seed.js";\nimport { verifiedTenantContextFromMembership } from "./tenant-context.js";\n${CALL_FIXTURES}`;
-    expect(rogueAt("packages/db/src/sandbox-repository.ts", dbText)).toEqual([]);
-    expect(rogueAt("packages/db/src/sandbox-repository.ts", dbText.replace("./demo-seed.js", "./not-the-seed.js"))).toEqual(mentions("fixture constant"));
-    expect(rogueAt("packages/db/src/sandbox-repository.ts", dbText.replace("./demo-seed.js", "../../elsewhere/demo-seed.js"))).toEqual(mentions("fixture constant"));
+    expect(rogueAt("packages/db/src/demo-runtime.ts", dbText)).toEqual([]);
+    expect(rogueAt("packages/db/src/demo-runtime.ts", dbText.replace("./demo-seed.js", "./not-the-seed.js"))).toEqual(mentions("fixture constant"));
+    expect(rogueAt("packages/db/src/demo-runtime.ts", dbText.replace("./demo-seed.js", "../../elsewhere/demo-seed.js"))).toEqual(mentions("fixture constant"));
     // The relative form is not a way for the api to read some other file of the same name.
-    expect(rogueAt(APPROVED_SYNTHETIC, dbText)).toEqual(mentions("fixture constant"));
+    expect(rogueAt("apps/api/src/material.application.ts", dbText)).toEqual(mentions("fixture constant"));
   });
 
   it("requires every property of the constructor argument to be a literal property, so nothing can override the fixed tenant", () => {
@@ -1085,13 +1155,13 @@ describe("M0-6L round 3: the retained synthetic exception is bound to the author
 const membership = { identityUserId: DEMO_IDENTITY_USER_ID, membershipId: DEMO_MEMBERSHIP_ID, tenantId: DEMO_TENANT_ID };
 ${extra}
 export const context = () => verifiedTenantContextFromMembership(membership as any);`;
-    expect(rogueAt("apps/api/src/recovery-case.application.ts", named(""))).toEqual([]);
-    expect(rogueAt("apps/api/src/recovery-case.application.ts", named(`export const other = (membership: Record<string, string>) => membership;`))).not.toEqual([]);
-    expect(rogueAt("apps/api/src/recovery-case.application.ts", named(`const later = (input: Record<string, string>) => { const membership = input; return membership; };`))).not.toEqual([]);
-    expect(rogueAt("apps/api/src/recovery-case.application.ts", named(`let mutable = 1;`).replace("const membership =", "let membership ="))).not.toEqual([]);
+    expect(rogueAt(APPROVED_SYNTHETIC, named(""))).toEqual([]);
+    expect(rogueAt(APPROVED_SYNTHETIC, named(`export const other = (membership: Record<string, string>) => membership;`))).not.toEqual([]);
+    expect(rogueAt(APPROVED_SYNTHETIC, named(`const later = (input: Record<string, string>) => { const membership = input; return membership; };`))).not.toEqual([]);
+    expect(rogueAt(APPROVED_SYNTHETIC, named(`let mutable = 1;`).replace("const membership =", "let membership ="))).not.toEqual([]);
     // Resolution is by NAME only while the object cannot change afterwards: reads of its properties are fine, anything that
     // writes, deletes, hands it on or spreads it is not.
-    expect(rogueAt("apps/api/src/recovery-case.application.ts", named(`export const read = () => ({ id: membership.membershipId, who: membership.identityUserId });`))).toEqual([]);
+    expect(rogueAt(APPROVED_SYNTHETIC, named(`export const read = () => ({ id: membership.membershipId, who: membership.identityUserId });`))).toEqual([]);
     for (const [name, extra] of Object.entries({
       "property write": `export const swap = (input: { tenant: string }) => { (membership as Record<string, string>).tenantId = input.tenant; };`,
       "element write": `export const swap = (input: { tenant: string }) => { (membership as Record<string, string>)["tenantId"] = input.tenant; };`,
@@ -1103,7 +1173,7 @@ export const context = () => verifiedTenantContextFromMembership(membership as a
       "aliased": `export const alias = membership;`,
       "shorthand": `export const wrap = () => ({ membership });`,
       "method call": `export const call = () => (membership as { toString(): string }).toString();`,
-    })) expect(rogueAt("apps/api/src/recovery-case.application.ts", named(extra)), name).toEqual(mentions("fixed, plain literal object"));
+    })) expect(rogueAt(APPROVED_SYNTHETIC, named(extra)), name).toEqual(mentions("fixed, plain literal object"));
   });
 
   it("holds the fixture module itself to literal UUID constants and keeps every other file from redefining them", () => {
@@ -1129,11 +1199,12 @@ export const DEMO_MEMBERSHIP_ID = "d1500000-0000-4000-8000-000000000003";`;
   it("pins the approved list to files that exist and still construct, and it covers every file the real tree constructs in", async () => {
     const files = await applicationSource();
     const present = new Set(files.map(f => f.path));
-    const constructing = files.filter(f => /verifiedTenantContextFromMembership|as\s+VerifiedTenantContext/u.test(f.text) && occurrences(f).found.some(o => o.kind === "call" || o.kind === "cast")).map(f => f.path);
+    const constructing = files.filter(f => occurrences(f).found.some(o => o.kind === "call" || o.kind === "cast")).map(f => f.path);
     expect(APPROVED_SYNTHETIC_FILES.filter(path => !present.has(path))).toEqual([]);
     expect(APPROVED_SYNTHETIC_FILES.filter(path => !constructing.includes(path))).toEqual([]);
     const special = new Set([REAL, DEFINITION, WORKER, REHEARSAL]);
-    expect(constructing.filter(path => !special.has(path) && !APPROVED_SYNTHETIC_FILES.includes(path))).toEqual([]);
+    expect(APPROVED_PRACTICE_FILES.filter(path => !present.has(path) || !constructing.includes(path))).toEqual([]);
+    expect(constructing.filter(path => !special.has(path) && !APPROVED_SYNTHETIC_FILES.includes(path) && !APPROVED_PRACTICE_FILES.includes(path))).toEqual([]);
     // The authoritative fixture module really holds literal UUID constants for every name the scan trusts.
     const seed = files.find(f => f.path === "packages/db/src/demo-seed.ts")!;
     expect(boundaryViolations([seed])).toEqual([]);
@@ -1141,5 +1212,84 @@ export const DEMO_MEMBERSHIP_ID = "d1500000-0000-4000-8000-000000000003";`;
     expect(files.map(f => f.path)).toEqual(expect.arrayContaining(["apps/web/playwright.config.ts", "apps/web/vitest.config.ts"]));
     expect(rogueAt("apps/web/middleware.ts", `${IMPORT_FIXTURES}\n${CALL_FIXTURES}`)).toEqual(mentions("outside the synthetic composition roots"));
     expect(fixtureConstantNames(seed.text)).toEqual(expect.arrayContaining(["DEMO_TENANT_ID", "DEMO_EMPTY_TENANT_ID", "DEMO_MEMBERSHIP_ID", "DEMO_EMPTY_MEMBERSHIP_ID", "DEMO_IDENTITY_USER_ID"]));
+  });
+});
+
+
+describe("M0-6L round 8: dd0f53f typed substitutions", () => {
+  const contextImport = `import type { VerifiedTenantContext } from "@jobguard/db";`;
+  it.each([
+    ["O14 typeof context", `function change(context: VerifiedTenantContext, tenantId: string) { return withTenant(pool, { tenantId } as typeof context, work); }`],
+    ["R9 typeof context getter", `function change(context: VerifiedTenantContext, tenantId: string) { return { get tenantId() { return tenantId; } } as typeof context; }`],
+    ["typeof inferred alias", `function change(context: VerifiedTenantContext, tenantId: string) { const original = context; type C = typeof original; return { tenantId } as C; }`],
+    ["O16 indexed interface member", `interface Req { verifiedTenantContext: VerifiedTenantContext } function change(tenantId: string) { return { tenantId } as Req["verifiedTenantContext"]; }`],
+    ["indexed nested alias member", `type Req = { auth: { context: VerifiedTenantContext } }; type C = Req["auth"]["context"]; function change(tenantId: string) { return { tenantId } as C; }`],
+    ["indexed readonly optional member", `interface Req { readonly context?: Readonly<VerifiedTenantContext> } function change(tenantId: string) { return { tenantId } as Req["context"]; }`],
+    ["G1 globalThis structuredClone assign", `function change(context: VerifiedTenantContext, tenantId: string) { const copy = globalThis.structuredClone(context); Object.assign(copy, { tenantId }); return copy; }`],
+    ["G2 globalThis structuredClone write", `function change(context: VerifiedTenantContext, tenantId: string) { const copy = globalThis.structuredClone(context); (copy as { tenantId: string }).tenantId = tenantId; return copy; }`],
+    ["R7 self structuredClone", `function change(context: VerifiedTenantContext, tenantId: string) { const copy = self.structuredClone(context); Object.assign(copy, { tenantId }); return copy; }`],
+    ["arbitrary receiver structuredClone", `function change(context: VerifiedTenantContext, tenantId: string) { const copy = receiver().structuredClone(context); return copy; }`],
+    ["receiver Object", `function change(context: VerifiedTenantContext, tenantId: string) { return receiver().Object.assign({}, context, { tenantId }); }`],
+    ["receiver Reflect", `function change(context: VerifiedTenantContext) { return receiver().Reflect.ownKeys(context); }`],
+    ["receiver JSON", `function change(context: VerifiedTenantContext) { return receiver()["JSON"].stringify(context); }`],
+    ["receiver structuredClone alias", `function change(context: VerifiedTenantContext) { const clone = receiver()["structuredClone"]; return clone(context); }`],
+    ["R1 map closure return", `function change(context: VerifiedTenantContext, tenantId: string) { const copy = [0].map(() => context)[0]!; return { ...copy, tenantId }; }`],
+    ["callback block return", `function change(context: VerifiedTenantContext) { return consume(function () { return ((context)); }); }`],
+    ["callback async return", `function change(context: VerifiedTenantContext) { return consume(async () => context); }`],
+    ["named callback return", `function change(context: VerifiedTenantContext) { const callback = () => context; return consume(callback); }`],
+  ])("rejects %s", (_name, code) => {
+    for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}\n${code}`), path).toEqual(mentions("verified tenant context"));
+  });
+
+  it("accepts only non-escaping truth/null/typeof checks", () => {
+    for (const path of PLANT_PATHS) expect(rogueAt(path, `${contextImport}
+function guard(context: VerifiedTenantContext | undefined) {
+ if (!context || context == null || null === context || context !== undefined || typeof context !== "object") return;
+ return context;
+}`), path).toEqual([]);
+    // Comparisons expose only a boolean, but do not exempt the other operand's escaping use.
+    expect(rogueAt(PLANT_PATHS[0]!, `${contextImport}\nfunction bad(context: VerifiedTenantContext) { return context == store(context); }`)).not.toEqual([]);
+  });
+});
+
+
+describe("M0-6L round 8: exact stamped definition and reviewed practice callers", () => {
+  it("keeps the merged stamp private and requires both constructors to mint once before returning", () => {
+    const definition = readFileSync(join(repository, DEFINITION), "utf8");
+    expect(rogueAt(DEFINITION, definition)).toEqual([]);
+    for (const changed of [
+      definition.replace("const genuineTenantContexts", "export const genuineTenantContexts"),
+      `${definition}\nexport { genuineTenantContexts };`,
+      definition.replace("new WeakSet<object>()", "new Set<object>()"),
+      definition.replace("genuineTenantContexts.add(context);", ""),
+      definition.replace("genuineTenantContexts.add(context);", "genuineTenantContexts.add(context); genuineTenantContexts.add(context);"),
+      definition.replace("genuineTenantContexts.add(context);", "genuineTenantContexts.add({ ...context });"),
+      definition.replace("return context;", "return { ...context };"),
+      definition.replace("const context = Object.freeze({ tenantId })", "const context = Object.freeze({ tenantId: input })"),
+      definition.replace("!genuineTenantContexts.has(context)", "!context"),
+      definition.replace(" as VerifiedTenantContext;", " as typeof context;"),
+    ]) expect(rogueAt(DEFINITION, changed)).not.toEqual([]);
+  });
+
+  it("approves each main practice caller only at its exact reviewed source identity", () => {
+    for (const path of APPROVED_PRACTICE_FILES) {
+      const source = readFileSync(join(repository, path), "utf8");
+      expect(rogueAt(path, source), path).toEqual([]);
+      // Neither this file's name nor another reviewed file's contents suffice for new authority.
+      expect(rogueAt(path, `${source}\nconst extra = verifiedTenantContextFromMembership(input);`), path).not.toEqual([]);
+      expect(rogueAt("packages/db/src/new-practice.ts", source), path).not.toEqual([]);
+      expect(rogueAt(path, source.replace("verifiedTenantContextFromMembership(", "verifiedTenantContextFromMembership(requestTenant || ")), path).not.toEqual([]);
+    }
+    const path = "packages/db/src/practice-session.ts", source = readFileSync(join(repository, path), "utf8");
+    for (const changed of [source.replace("syntheticOnly(); const parsed", "const parsed"), source.replace("principalV1.parse(row)", "requestPrincipal"), source.replace("return {context,digest", "return {copy:context,context,digest")]) expect(rogueAt(path, changed)).not.toEqual([]);
+  });
+
+  it("revokes the superseded fixed-fixture constructor grants after request-scoped practice integration", () => {
+    for (const path of ["apps/api/src/material.application.ts", "apps/api/src/recovery-case.application.ts", "apps/api/src/evidence-pack.application.ts", "packages/db/src/sandbox-repository.ts"]) expect(rogueAt(path, validSynthetic)).toEqual(mentions("not an approved retained synthetic file"));
+    // The queue mint cannot be imported/aliased into a new business constructor either.
+    for (const path of PLANT_PATHS) {
+      expect(rogueAt(path, `import { verifiedTenantContextForQueuedJob } from "@jobguard/db"; export const context = verifiedTenantContextForQueuedJob(input);`)).not.toEqual([]);
+      expect(rogueAt(path, `import { verifiedTenantContextForQueuedJob as mint } from "@jobguard/db"; export const context = mint(input);`)).toEqual(mentions("under another name"));
+    }
   });
 });

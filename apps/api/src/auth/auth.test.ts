@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { withTenant } from "@jobguard/db";
+import { withTenant, type VerifiedTenantContext } from "@jobguard/db";
 import type { Pool } from "pg";
 import { AuthError, MemoryAuthProvider, rolePermits } from "./auth-provider.js";
 import { resolveVerifiedTenantContext } from "./principal-bridge.js";
@@ -158,6 +158,34 @@ describe("principal to tenant bridge", () => {
     await withTenant({ connect } as unknown as Pool, ctx, async () => undefined);
     expect(connect).toHaveBeenCalledOnce();
     expect(query).toHaveBeenCalledWith("SELECT set_config('app.tenant_id', $1, true)", [membership.tenantId]);
+  });
+
+  it.each(["O11 Promise.resolve", "R8 Promise.all", "R10 generic patch"])("refuses a substituted context after %s before connecting", async form => {
+    const { provider, session, membership } = await signup();
+    const context = await resolveVerifiedTenantContext(provider, {
+      sessionToken: session.sessionToken, csrfToken: session.csrfToken,
+      requestedTenantId: membership.tenantId, origin: ORIGIN,
+    }, ORIGIN);
+    const tenantId = "20000000-0000-4000-8000-000000000002";
+    // This opaque generic signature models R10's imported helper; no context-specific type or mutation is needed.
+    const patch = <T extends object>(value: T, change: Partial<T>): T => ({ ...value, ...change });
+    let substituted: VerifiedTenantContext;
+    if (form === "O11 Promise.resolve") {
+      const copy = await Promise.resolve(context);
+      substituted = { ...copy, tenantId };
+    } else if (form === "R8 Promise.all") {
+      const [copy] = await Promise.all([Promise.resolve(context)]);
+      substituted = { ...copy, tenantId };
+    } else {
+      substituted = patch(context, { tenantId });
+    }
+    expect(substituted.tenantId).toBe(tenantId);
+    expect(context.tenantId).toBe(membership.tenantId);
+    const connect = vi.fn();
+    const work = vi.fn();
+    await expect(withTenant({ connect } as unknown as Pool, substituted, work)).rejects.toMatchObject({ code: "INVALID_TENANT_CONTEXT" });
+    expect(connect).not.toHaveBeenCalled();
+    expect(work).not.toHaveBeenCalled();
   });
 
   it("allows only the worker to call the queued-system-job context constructor", async () => {

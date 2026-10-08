@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { syntheticPool, hasSyntheticSession, syntheticWorkspace } from "../../lib/synthetic-server";
 
 export async function GET() {
+  if (process.env.JOBGUARD_ENV !== "synthetic_demo") return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});
   if (!hasSyntheticSession((await cookies()).get("jg_session")?.value)) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   try { const workspace = await syntheticWorkspace(); return NextResponse.json({ version: 1, principal: { displayName: "Alex Builder" }, tenants: workspace.tenants }); }
   catch (practiceError){const denied=practiceFailure(practiceError);if(denied)return denied; return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }

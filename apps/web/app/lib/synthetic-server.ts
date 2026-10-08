@@ -4,12 +4,12 @@ import { NextResponse } from "next/server";
 import { authenticatePracticeSession, PracticeAccessError, withTenant } from "@jobguard/db";
 import { readSyntheticDemo } from "@jobguard/db";
 import { SYNTHETIC_SESSION as WORKSPACE_SYNTHETIC_SESSION } from "@jobguard/api/workspace";
-import { syntheticSessionAllowed } from "@jobguard/api/identity";
 import { Pool } from "pg";
 import type { JobSummary } from "./contracts";
 
 export const SYNTHETIC_SESSION = WORKSPACE_SYNTHETIC_SESSION;
-export function hasSyntheticSession(value: string | undefined) { return syntheticSessionAllowed(value,process.env.JOBGUARD_ENV); }
+/** Cookie shape only; mode and persisted membership are enforced by syntheticPool/workspace and PracticeAccess. */
+export function hasSyntheticSession(value: string | undefined) { return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value); }
 
 const poolRegistry = globalThis as typeof globalThis & { __jobguardSyntheticPool?: Pool };
 export function syntheticPool() {

@@ -1,5 +1,5 @@
 import { readFile, readdir } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ExecutionContext } from "@nestjs/common";
 import { syntheticSessionAllowed } from "./synthetic-session.js";
 import { FixtureIdentityEmail } from "./identity-email.js";
@@ -36,6 +36,40 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
    process.env.JOBGUARD_ENV="synthetic_demo";expect(await guard.canActivate(context)).toBe(true);
    request.headers.cookie="";await expect(guard.canActivate(context)).rejects.toMatchObject({status:401});
   }finally{if(saved===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=saved;}
+ });
+ it("keeps practice mode guards ahead of cookies, pools and authenticated workspace work",async()=>{
+  const {runInNewContext}=await import("node:vm");
+  const {transpileModule,ModuleKind}=await import("typescript");
+  const pool=vi.fn(), authenticate=vi.fn(), workspace=vi.fn(), cookie=vi.fn(async()=>({get:()=>({value:"b690f3c7-0d23-4c83-bca2-5f60ce9a0f19"})}));
+  const adapters:Record<string,unknown>={"server-only":{},"next/headers":{cookies:cookie},"next/server":{NextResponse:{json:Response.json}},"@jobguard/db":{authenticatePracticeSession:authenticate},"@jobguard/api/workspace":{createWorkspaceApplication:workspace},"pg":{Pool:pool}};
+  const environment:Record<string,string|undefined>={DATABASE_URL:"postgresql://fixture.invalid/synthetic"};
+  const load=async(path:string)=>{
+   const exports:Record<string,any>={};
+   const js=transpileModule(await readFile(new URL(`../../../web/app/${path}`,import.meta.url),"utf8"),{compilerOptions:{module:ModuleKind.CommonJS}}).outputText;
+   runInNewContext(js,{exports,require:(id:string)=>{if(!(id in adapters))throw new Error(`Unexpected practice import: ${id}`);return adapters[id]},Response,process:{env:environment}});
+   return exports;
+  };
+  const synthetic=await load("lib/synthetic-server.ts");
+  adapters["./synthetic-server"]=synthetic;
+  adapters["../../lib/synthetic-server"]=synthetic;
+  const requestWorkspace=await load("lib/workspace-server.ts");
+  const session=await load("api/session/route.ts");
+  // Shape checks grant no authority. Actual adapters refuse this well-formed bearer in every non-practice mode.
+  expect(synthetic.hasSyntheticSession("b690f3c7-0d23-4c83-bca2-5f60ce9a0f19")).toBe(true);
+  for(const token of [undefined,"","not-a-session"])expect(synthetic.hasSyntheticSession(token)).toBe(false);
+  for(const mode of ["pilot_no_charge","production",undefined,""]){
+   environment.JOBGUARD_ENV=mode;
+   expect(()=>synthetic.syntheticPool()).toThrow("Synthetic workflow is unavailable");
+   await expect(synthetic.syntheticWorkspace()).rejects.toMatchObject({code:"UNAUTHENTICATED"});
+   await expect(requestWorkspace.workspaceApplication()).rejects.toMatchObject({code:"UNAUTHENTICATED"});
+   const response=await session.GET();
+   expect(response.status).toBe(401);
+   expect(await response.json()).toEqual({code:"UNAUTHENTICATED"});
+   expect(cookie).not.toHaveBeenCalled();
+   expect(pool).not.toHaveBeenCalled();
+   expect(authenticate).not.toHaveBeenCalled();
+   expect(workspace).not.toHaveBeenCalled();
+  }
  });
  it("confines real identity context construction to the authenticated principal bridge",async()=>{
   const files=await readdir(new URL(".",import.meta.url));
