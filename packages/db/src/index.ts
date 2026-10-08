@@ -60,3 +60,4 @@ export * from "./job-parties-repository.js";
 export * from "./synthetic-party-fixture.js";
 
 export * from "./watchdog.js";
+export * from "./shadow-repository.js";

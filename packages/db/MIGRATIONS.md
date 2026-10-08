@@ -567,3 +567,44 @@ reservation; no deployed database is altered here. An environment already tracki
 0043 needs a separately reviewed forward fix before reusing it with 0097; historical
 receipts retain their original migration names. Merge after
 any lower-numbered PR that lands first, or renumber again. Forward-fix only as above.
+
+### 0100 — SV-2 shadow persistence and isolation
+
+Expand-only after 0094. Adds eight restricted shadow tables and one append-only
+variation-withdrawal fact, qualified evidence/version/hash/receive-time identity,
+small-builder catch-source enforcement, bounded reveal/disclosure/emergency read
+routines, and a private audit implementation using the existing serialized chain.
+No backfill: SH-1's completed origins and source labels remain unchanged. The
+existing application capture path starts issuing `LogBuilderExtra`; the legacy
+synthetic insert compatibility remains for earlier demos and fixtures.
+
+Fresh superuser installs create the two NOLOGIN shadow roles idempotently. The
+non-superuser Neon bootstrap creates/checks them before migration; migration owner
+remains NOCREATEROLE. PostgreSQL 16 gives that CREATEROLE bootstrap owner an
+automatic ADMIN-only membership in each role it creates (no INHERIT, no SET,
+granted by the bootstrap superuser). The owner cannot revoke it, so it stays; the
+bootstrap accepts exactly that shape, fails closed on any other holder, and the
+support route checks `USAGE` (not `MEMBER`) so the leftover membership grants no
+support authority. No support holder is appointed. Because the schema `app` is
+now usable by these two roles, 0100 revokes PUBLIC EXECUTE from the four older
+SECURITY DEFINER routines that never had it revoked (`advance_final_account_draft`,
+`invalidate_stale_final_account_authorizations`, `reserve_customer_invoice_number`,
+`issue_practice_customer_invoice`); `jobguard_runtime` keeps its explicit grants.
+Runtime has no shadow-table privilege; catch-source probes
+are denied before PostgreSQL's RLS-bypassing FK checks. Emergency reads and every
+disclosure append audit atomically. New facts reject UPDATE/DELETE/TRUNCATE;
+signal source fields and disclosure provenance are immutable/monotonic.
+
+The reveal routine fails closed when SV-4's lock relation is absent. It checks
+only a matching tenant/job lock when present. SV-4 owes positive reveal tests and
+must acquire the job lock before recording the lock/audit; SV-5 adds exact locked
+line/disposition bindings. Neither dependency is simulated with a new lock table.
+
+Forward fix: disable application use of affected routines first, retain evidence,
+origin, disclosure and audit history, then append a reviewed corrective migration.
+Do not down-migrate populated history or weaken the probe barrier. A migration
+failure rolls its SQL transaction back, leaving the predecessor schema intact.
+Before acceptance CI must execute real PostgreSQL fresh/upgrade, least-privilege
+catalog, support disclosure, rollback, immutable metadata, source-FK/probe and
+non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
+and browser regressions. Local sandbox initialization errors are not DB passes.
