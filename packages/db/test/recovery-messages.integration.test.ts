@@ -1,3 +1,4 @@
+import { testTenantContext } from './tenant-context-test-utils.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -87,7 +88,7 @@ async function makeMember(role: string, revoked: boolean): Promise<RecoveryMessa
 async function inIsolatedWorld<T>(run: () => Promise<T>): Promise<T> {
   const saved = { fixture, context, actor };
   fixture = await seedEvidencePackFixture(admin);
-  context = { tenantId: fixture.tenantId } as VerifiedTenantContext;
+  context = testTenantContext(fixture.tenantId);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   try { return await run(); } finally { ({ fixture, context, actor } = saved); }
 }
@@ -144,8 +145,8 @@ beforeAll(async () => {
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedEvidencePackFixture(admin);
   await admin.query("CREATE ROLE message_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO message_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'postgres', max: 12 });
-  context = { tenantId: fixture.tenantId } as VerifiedTenantContext;
-  otherContext = { tenantId: fixture.otherTenantId } as VerifiedTenantContext;
+  context = testTenantContext(fixture.tenantId);
+  otherContext = testTenantContext(fixture.otherTenantId);
   repo = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   // A non-owner member and a revoked owner in the same tenant, for authority checks.

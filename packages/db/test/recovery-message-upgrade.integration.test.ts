@@ -1,3 +1,4 @@
+import { testTenantContext } from './tenant-context-test-utils.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -46,7 +47,7 @@ beforeAll(async () => {
   fixture = await seedEvidencePackFixture(admin);
   await admin.query("CREATE ROLE upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO upgrade_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'upgrade_login', password: 'synthetic', database: 'postgres' });
-  context = { tenantId: fixture.tenantId } as VerifiedTenantContext;
+  context = testTenantContext(fixture.tenantId);
   // Old-release data. A workbench case always starts with its opening event (claim revision 1 + event 1), which is what makes recovery_case_current (0097) return it;
   // the shared fixture writes only the claim revision, so the opening event is recorded here, before the pack that cites the case's records.
   await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",

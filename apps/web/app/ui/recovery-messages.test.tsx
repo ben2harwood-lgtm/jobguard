@@ -294,3 +294,27 @@ describe("a malformed successful answer is refused, not adopted (round 10)", () 
     expect(writes(SLOT.error).filter(value => value !== "")).toEqual([]);
   });
 });
+
+// Round 11: the optional delivery lookup cannot compete with the first register read.
+describe("delivery lookup is separate from register loading (round 11)", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = realFetch; });
+  it.each(["loading", "failed", "ready"])("starts the delivery lookup only when the register is ready (%s)", async status => {
+    hooks.values = workbenchState([], ""); hooks.values[4] = status;
+    hooks.slot = 0; hooks.sets = []; hooks.effects = [];
+    const fetched = vi.fn(async () => ({ ok: true, json: async () => ({ state: { documents: [] } }) }));
+    globalThis.fetch = fetched as unknown as typeof fetch;
+    RecoveryCases({ jobId: id(2) });
+    // Error focus, initial register read, then the independent picker effect.
+    expect(hooks.effects).toHaveLength(3);
+    await hooks.effects[2]!();
+    if (status === "ready") {
+      await vi.waitFor(() => expect(hooks.sets).toHaveLength(2));
+      expect(fetched).toHaveBeenCalledExactlyOnceWith(`/api/jobs/${id(2)}/supplier-documents`, { cache: "no-store" });
+      expect(hooks.sets.map(([slot]) => slot)).toEqual([1, 2]); // Only deliveries and the selected delivery; no register, busy or error write.
+    } else {
+      expect(fetched).not.toHaveBeenCalled();
+      expect(hooks.sets).toEqual([]);
+    }
+  });
+});

@@ -1,13 +1,13 @@
+import { testTenantContext } from './tenant-context-test-utils.js';
 import { describe, expect, it, vi } from 'vitest';
 import { buildRecoveryMessage } from '@jobguard/core';
 import { UserCommandDispatcher } from '../src/commands.js';
 import type { Pool } from 'pg';
 import { RecoveryMessageRepository } from '../src/recovery-message-repository.js';
-import type { VerifiedTenantContext } from '../src/tenant-context.js';
 
 // Service fault tests only: these doubles prove orchestration/replay, never PostgreSQL guarantees.
 const id = (n: number) => `b0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-const ctx = { tenantId: id(100) } as VerifiedTenantContext;
+const ctx = testTenantContext(id(100));
 const actor = { membershipId: id(101), actorRef: `membership:${id(101)}` };
 function interrupted(kind: 'started' | 'reconcile_started') {
   const history = kind === 'started' ? ['previewed', 'approved', 'started'] : ['previewed', 'approved', 'started', 'outcome_unknown', 'reconcile_started'];

@@ -409,7 +409,8 @@ test("once the register has loaded, the delivery lookup and the evidence-pack ti
   const openNames = ["Open materials-320 overcharge", "Open £320 withheld payment", "Open £2,500 withheld payment", "Record prevention"];
   // Hold every read of this job's supplier documents (the workbench's delivery lookup and the supplier panel's own) until the register has loaded and a button has focus,
   // so the lookup settles after the first register read, which is the moment the workbench must stay still.
-  const lookups: string[] = [];
+  const lookups: string[] = [], registerReads: string[] = [];
+  page.on("request", request => { if (request.method() === "GET" && request.url().endsWith(`/api/jobs/${source.jobId}/recovery-cases`)) registerReads.push(request.url()); });
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   await page.route(`**/api/jobs/${source.jobId}/supplier-documents`, async route => { if (route.request().method() === "GET") await held; await route.continue(); });
@@ -432,6 +433,7 @@ test("once the register has loaded, the delivery lookup and the evidence-pack ti
   await expect.poll(() => lookups.length).toBeGreaterThanOrEqual(2);
   await twoFrames();
   expect(await events()).toEqual([]);
+  expect(registerReads).toHaveLength(1);
   await expect(focused).toBeFocused();
   for (const name of openNames) await expect(button(page, name)).toBeEnabled();
 
@@ -447,6 +449,7 @@ test("once the register has loaded, the delivery lookup and the evidence-pack ti
   await expect(page.getByTestId("pursuit-not-ready")).toHaveText("Approve the current evidence pack for attachment first.");
   await twoFrames();
   expect(await events()).toEqual([]);
+  expect(registerReads).toHaveLength(1);
   await expect(focused).toBeFocused();
   for (const name of openNames) await expect(button(page, name)).toBeEnabled();
 
