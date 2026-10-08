@@ -583,8 +583,11 @@ pinned revision must still be the latest and the latest must be a business with 
 valid company number, else `NOT_REGISTERED_COMPANY` (23514). 0103 is unmerged, so
 this is part of the same migration, not a new one.
 
-Fresh install and upgrade from 0095 are covered by the PostgreSQL tests; they
-require CI in the restricted builder sandbox. After application, use a reviewed
+Fresh install and upgrade are covered by the PostgreSQL tests; the upgrade test
+applies every registered migration before 0103 (now including 0096 and 0097),
+seeds a quoting job, then applies 0103. They need embedded PostgreSQL or CI.
+0103 writes no table that 0096 guards, so 0096's live-only guards neither block
+nor are blocked by it. After application, use a reviewed
 forward-fix migration and retain historical facts/audit; disable affected commands
 while fixing a validator or projection rather than rewriting history. No schema
 rollback with data deletion is proposed. See `docs/contracts/prevention-checks-v1.md`.
