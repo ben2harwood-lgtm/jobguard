@@ -635,7 +635,7 @@ Expand-compatible: new tables only; the preceding application ignores them. The 
 
 The feed is deliberately unavailable for CH-3a-adopted (imported) jobs and for SBOX-2 generated jobs without a capture record: they have no customer payments and no receipts screen, so there is nothing for the feed to match. Extending it to them would be a separately reviewed change (Opus P2-1/P2-2, rated P3 at e8892c1).
 
-### 0098 — persisted entered-code identity (M0-6L)
+### 0108 — persisted entered-code identity (M0-6L)
 
 Expands the existing restricted `identity` control plane with keyed challenge/session
 hashes, rate windows, immutable invitation grants, a membership discovery index and
@@ -663,13 +663,15 @@ business RLS. SQL privileges and migration-owner-only routines require independe
 
 Existing users need no backfill: legacy synthetic users stay in their existing demo path.
 Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
-0098 replaces this PR’s reservation of 0052: 0053 is already merged, 0054–0093 stay reserved,
-and 0094–0097 belong to other tasks. The runner places 0098 immediately after
-0097_recovery_case_current.sql and immediately before 0102_contractor_parties.sql;
-0103_prevention_checks.sql and 0106_practice_feed.sql also apply on top of 0098.
-The integrator renumbers 0098 at merge; its number and SQL bytes stay unchanged in this repair.
+0108 replaces this PR’s earlier reservations (0052, then 0098): 0102, 0103 and 0106 merged
+ahead of this PR, so 0108 is the next free number at merge; 0104, 0105 and 0107 are allocated
+to CH-1, ENT-2 and M4-5-S, which may merge later in their own numeric positions, and 0100 is held
+by SV-2. The runner places 0108 after 0106_practice_feed.sql (currently last); 0102_contractor_parties.sql,
+0103_prevention_checks.sql and 0106_practice_feed.sql therefore apply before 0108, and any of
+0104/0105/0107 that merges later will sit before it. The SQL bytes are unchanged by the
+renumber (SHA-256 9779d3f6…59e0).
 Fresh-install coverage remains in the tenancy/Neon suites; `identity.integration.test.ts`
-executes upgrade from the state immediately before 0098 (through merged 0097),
+executes upgrade from the state immediately before 0108 (everything listed ahead of it, merged through 0106),
 checks the complete applied list against MIGRATION_URLS, and covers repeat migration,
 races, privilege/catalog checks and rollback.
 These are PostgreSQL tests, not claimed executed in the restricted builder sandbox.
