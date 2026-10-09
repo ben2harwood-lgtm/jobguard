@@ -23,7 +23,7 @@ import { describe, expect, it } from "vitest";
  *              those identifiers must resolve to the authoritative fixture module (see below). The file carries no
  *              request-derived tenant selector. Reachability is separately proven by identity.test.ts (global Nest guard;
  *              synthetic cookie refused outside synthetic_demo) and by the web adapters, which check JOBGUARD_ENV.
- *   practice   APPROVED_PRACTICE_FILES: the three source-pinned, reviewed persisted practice-session bridges from main.
+ *   practice   APPROVED_PRACTICE_FILES: the seven source-pinned, reviewed membership bridges (three from main 41d83ac, four from ENT-2).
  *              Only practice-session.ts's exact authentication result may carry its stamped context in a principal
  *              envelope. No general container exception, production/pilot authority or approval follows from this list.
  *   rehearsal  packages/db/tools/synthetic-restore.mjs: disposable synthetic restore rehearsal that refuses any other mode.
@@ -76,13 +76,22 @@ const APPROVED_PRACTICE_FILES = [
   "packages/db/src/practice-session.ts",
   "packages/db/src/contractor-repository.ts",
   "packages/db/src/contractor-party-repository.ts",
+  "packages/db/src/work-order-repository.ts",
+  "packages/db/src/sor-repository.ts",
+  "packages/db/src/job-scheduling-repository.ts",
+  "packages/db/src/work-order-fixtures.ts",
 ];
-// Bound to the source-inspected main 41d83ac implementations, not arbitrary code at these paths.
+// Bound to the source-inspected main 41d83ac implementations and ENT-2's four contractor files at main fd81315
+// (Ben, 9 Oct, card jobguard-m06l-scanner-ent2-files-2026-10-09), not arbitrary code at these paths.
 // A change to any bridge requires renewed caller review; the hashes are NOT computed from the tree under test.
 const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
+  "packages/db/src/work-order-repository.ts": "4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3",
+  "packages/db/src/sor-repository.ts": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",
+  "packages/db/src/job-scheduling-repository.ts": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
+  "packages/db/src/work-order-fixtures.ts": "cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386",
 };
 const reviewedPracticeSource = (file: SourceFile) => REVIEWED_PRACTICE_SOURCES[file.path] === createHash("sha256").update(file.text).digest("hex");
 const REQUEST_DERIVED = /x-tenant-id|tenantHeader|request\.headers|searchParams|\bcookies\s*\(|principal-bridge|resolveVerifiedTenantContext|IdentityApplication/u;
@@ -644,7 +653,8 @@ export function boundaryViolations(files: SourceFile[]): string[] {
       for (const c of calls) if (!c.argument || c.argument.getText(source) !== "parsed.tenantId" || !/const parsed=z\.object\(\{[^}]*tenantId:z\.string\(\)\.uuid\(\)[^}]*\}\)\.strict\(\)\.parse\(payload\)/u.test(file.text)) problems.push(`${at(c.node)} worker tenant must come only from a strictly validated queue payload`);
     } else if (APPROVED_PRACTICE_FILES.includes(file.path)) {
       // Exact reviewed source identities and call shapes; a name on the list alone never authorizes another minting path.
-      const expectedCalls = file.path.endsWith("practice-session.ts") ? 1 : file.path.endsWith("contractor-repository.ts") ? 2 : 3;
+      const EXPECTED_PRACTICE_CALLS: Readonly<Record<string, number>> = { "packages/db/src/practice-session.ts": 1, "packages/db/src/contractor-repository.ts": 2, "packages/db/src/contractor-party-repository.ts": 3, "packages/db/src/work-order-repository.ts": 4, "packages/db/src/sor-repository.ts": 2, "packages/db/src/job-scheduling-repository.ts": 2, "packages/db/src/work-order-fixtures.ts": 3 };
+      const expectedCalls = EXPECTED_PRACTICE_CALLS[file.path] ?? -1;
       if (!reviewedPracticeSource(file) || membershipCalls.length !== expectedCalls || queuedCalls.length || casts.length || declarations.length) problems.push(`${file.path} practice constructors must match the exact reviewed authenticated practice-session source; changed code needs renewed caller review and grants no pilot/production authority`);
     } else if (file.path === REHEARSAL) {
       if (casts.length || declarations.length || calls.length !== 2 || !/SYNTHETIC_REHEARSAL_ONLY/u.test(file.text) || !/requiredMode/u.test(file.text)) problems.push(`${file.path} must be exactly two calls inside the synthetic-only rehearsal`);
