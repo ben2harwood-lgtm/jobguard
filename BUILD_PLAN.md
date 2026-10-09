@@ -3339,6 +3339,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — M4-5-S, 8 October 2026 (merge-ahead ruling).** This PR held **0099** (`recovery_messages`) from 7 October; because 0102 (CH-3b), 0103 (MON-7a) and 0106 (M4-7-S) merged first under Ben's 5 October merge-ahead ruling, it renumbers at its merge to **0107**, the next number neither merged nor allocated (0104 is CH-1's and 0105 ENT-2's). The lane path was swapped under Ben's standing yes for renumber lane swaps. 0098 (M0-6L) and 0100 (SV-2) take the next free number at their own merges. It must merge after any lower-numbered PR that merges first, or renumber again.
 
+**Ledger amendment — ENT-2, 9 October 2026 (merge-ahead ruling).** ENT-2 was issued on 8 October with **0105** (`work_orders`). Because 0106 (M4-7-S) merged first, attempt 2 was dispatched on 9 October with **0110**, the next number neither merged nor held (0107 M4-5-S, since merged; 0108 M0-6L, #104; 0109 CH-1, #123), under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`). The runner lists it in numeric order after 0107. Work-order import roles follow Ben's 9 October answer "Existing roles" (card `jobguard-ent-2-import-roles-2026-10-08`); no permission changed. Numbers held at this date: 0108 M0-6L, 0109 CH-1, 0111 M4-6-S, 0112 CH-7; 0100 (SV-2, #119) takes the next free number at its own merge. A PR whose number is not above every merged number when it lands renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
