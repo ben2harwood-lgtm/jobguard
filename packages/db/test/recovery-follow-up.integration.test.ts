@@ -624,3 +624,204 @@ describe("M4-6-S a reopened case (DW6)", () => {
     expect(await dueDecisions(base.followUp.id)).toBe(0);
   }, 90_000);
 });
+
+const TABLES = ["recovery_follow_up", "recovery_follow_up_owner", "recovery_follow_up_event", "recovery_follow_up_due", "recovery_follow_up_reminder", "recovery_follow_up_advance"] as const;
+
+describe("M4-6-S tenant, access and database boundaries", () => {
+  it("every table is tenant-owned with a non-null tenant id, forced row security, migration ownership and runtime SELECT/INSERT only", async () => {
+    const owners = (await admin.query(
+      `SELECT c.relname,pg_get_userbyid(c.relowner) AS owner,c.relrowsecurity AS rls,c.relforcerowsecurity AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1) ORDER BY 1`, [[...TABLES]])).rows;
+    expect(owners).toEqual([...TABLES].sort().map(relname => ({ relname, owner: "jobguard_migration", rls: true, forced: true })));
+    const nullable = (await admin.query("SELECT table_name FROM information_schema.columns WHERE table_schema='app' AND table_name=ANY($1) AND column_name='tenant_id' AND is_nullable='YES'", [[...TABLES]])).rows;
+    expect(nullable).toEqual([]);
+    for (const table of TABLES) {
+      const grants = (await admin.query("SELECT p AS privilege,has_table_privilege('jobguard_runtime',$1,p) AS granted FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p ORDER BY p", [`app.${table}`])).rows;
+      expect(grants, table).toEqual([{ privilege: "DELETE", granted: false }, { privilege: "INSERT", granted: true }, { privilege: "REFERENCES", granted: false }, { privilege: "SELECT", granted: true },
+        { privilege: "TRIGGER", granted: false }, { privilege: "TRUNCATE", granted: false }, { privilege: "UPDATE", granted: false }]);
+      expect((await admin.query("SELECT count(*)::int n FROM pg_policies WHERE schemaname='app' AND tablename=$1 AND policyname='tenant_isolation'", [table])).rows[0].n, table).toBe(1);
+    }
+    expect((await admin.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_runtime'")).rows[0]).toEqual({ rolsuper: false, rolbypassrls: false });
+  });
+
+  it("denies the runtime role any UPDATE, DELETE or TRUNCATE, so history and the cancellation are append-only", async () => {
+    const base = await scheduled();
+    await repo.cancel(ctx, base.caseId, cancelCommand(base.followUp), actor);
+    for (const table of TABLES) for (const sql of [`UPDATE app.${table} SET tenant_id=tenant_id`, `DELETE FROM app.${table}`, `TRUNCATE app.${table}`]) {
+      await expect(withTenant(runtime, ctx, db => db.$client.query(sql)), sql).rejects.toMatchObject({ code: "42501" });
+    }
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND follow_up_id=$2 AND kind='cancelled'", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+  });
+
+  it("shows nothing and accepts nothing without a tenant context, and nothing to another tenant", async () => {
+    const base = await scheduled();
+    for (const table of TABLES) expect((await runtime.query(`SELECT count(*)::int n FROM app.${table}`)).rows[0].n, table).toBe(0);
+    await expect(runtime.query("INSERT INTO app.recovery_follow_up_owner(tenant_id,follow_up_id,run_id,owner_kind,environment) VALUES($1,$2,$3,'practice_fake_clock','synthetic_demo')", [DEMO_TENANT_ID, base.followUp.id, base.runId])).rejects.toBeTruthy();
+    await expect(runtime.query("INSERT INTO app.recovery_follow_up_advance(tenant_id,command_id,run_id,follow_up_id,request_hash,tick_before,tick_after,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,0,0,$6,'synthetic_demo')", [DEMO_TENANT_ID, randomUUID(), base.runId, base.followUp.id, "a".repeat(64), DEMO_MEMBERSHIP_ID])).rejects.toMatchObject({ code: "42501" });
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_owner WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+    const stranger = testTenantContext(randomUUID());
+    for (const table of TABLES) expect((await withTenant(runtime, stranger, db => db.$client.query(`SELECT count(*)::int n FROM app.${table}`))).rows[0].n, table).toBe(0);
+    // The case is not theirs, and refusing says nothing more than "not found".
+    expect(await code(() => repo.read(stranger, base.caseId))).toBe("RECOVERY_MESSAGE_NOT_FOUND");
+    expect(await code(() => repo.schedule(stranger, base.caseId, scheduleCommand(base.message, 2), actor))).toBe("RECOVERY_FOLLOW_UP_NOT_FOUND");
+    expect(await code(() => repo.cancel(stranger, base.caseId, cancelCommand(base.followUp), actor))).toBe("RECOVERY_FOLLOW_UP_NOT_FOUND");
+    expect(await code(() => advance(base.caseId, base.followUp.id, base.runId).then(() => repo.advanceTime(stranger, base.caseId, { version: V, action: "advance_time", commandId: randomUUID(), followUpId: base.followUp.id }, actor, async () => undefined)))).toBe("RECOVERY_FOLLOW_UP_NOT_FOUND");
+  });
+
+  it("refuses an actor who is not an active owner", async () => {
+    const base = await deliveredCase(); await newRun();
+    const stranger = { membershipId: randomUUID(), actorRef: `membership:${randomUUID()}` };
+    expect(await code(() => repo.schedule(ctx, base.caseId, scheduleCommand(base.message, 2), stranger))).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+    expect(await code(() => repo.schedule(ctx, base.caseId, scheduleCommand(base.message, 2), { ...actor, actorRef: "membership:forged" }))).toBe("RECOVERY_FOLLOW_UP_FORBIDDEN");
+  });
+
+  it("ties every row to its own tenant, job and case by composite foreign keys: a same-tenant wrong job or wrong case cannot be linked", async () => {
+    const base = await scheduled();
+    const other = await deliveredCase();
+    const wrongJob = (await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id<>$2 ORDER BY id LIMIT 1", [DEMO_TENANT_ID, fixture.jobId])).rows[0].id as string;
+    await admin.query("ALTER TABLE app.recovery_follow_up_event DISABLE TRIGGER recovery_follow_up_event_guard; ALTER TABLE app.recovery_follow_up_reminder DISABLE TRIGGER recovery_follow_up_reminder_guard");
+    try {
+      const event = (caseId: string, jobId: string) => admin.query(
+        "INSERT INTO app.recovery_follow_up_event(id,tenant_id,job_id,case_id,follow_up_id,revision,kind,command_id,request_hash,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,9,'cancelled',$6,$7,$8,'synthetic_demo')",
+        [randomUUID(), DEMO_TENANT_ID, jobId, caseId, base.followUp.id, randomUUID(), "a".repeat(64), DEMO_MEMBERSHIP_ID]);
+      await expect(event(base.caseId, wrongJob)).rejects.toMatchObject({ code: "23503" });
+      await expect(event(other.caseId, fixture.jobId)).rejects.toMatchObject({ code: "23503" });
+      const link = (caseId: string, jobId: string, messageId: string) => admin.query(
+        "INSERT INTO app.recovery_follow_up_reminder(tenant_id,job_id,case_id,follow_up_id,period,attempt,message_id,environment) VALUES($1,$2,$3,$4,1,1,$5,'synthetic_demo')", [DEMO_TENANT_ID, jobId, caseId, base.followUp.id, messageId]);
+      await expect(link(other.caseId, fixture.jobId, other.message.id)).rejects.toMatchObject({ code: "23503" });
+      await expect(link(base.caseId, wrongJob, base.message.id)).rejects.toMatchObject({ code: "23503" });
+    } finally { await admin.query("ALTER TABLE app.recovery_follow_up_event ENABLE TRIGGER recovery_follow_up_event_guard; ALTER TABLE app.recovery_follow_up_reminder ENABLE TRIGGER recovery_follow_up_reminder_guard"); }
+    await admin.query("ALTER TABLE app.recovery_follow_up DISABLE TRIGGER recovery_follow_up_guard");
+    try {
+      const intent = (jobId: string, caseId: string, messageId: string) => admin.query(
+        `INSERT INTO app.recovery_follow_up(id,tenant_id,job_id,case_id,run_id,source_message_id,source_message_sequence,case_revision,case_event_sequence,created_tick,due_tick,due_after_ticks,fixture_version,command_id,request_hash,actor_membership_id,environment)
+         VALUES($1,$2,$3,$4,$5,$6,1,2,1,0,1,1,'recovery-follow-up-fixture.v1',$7,$8,$9,'synthetic_demo')`, [randomUUID(), DEMO_TENANT_ID, jobId, caseId, base.runId, messageId, randomUUID(), "a".repeat(64), DEMO_MEMBERSHIP_ID]);
+      await expect(intent(wrongJob, base.caseId, base.message.id)).rejects.toMatchObject({ code: "23503" });
+      await expect(intent(fixture.jobId, other.caseId, base.message.id)).rejects.toMatchObject({ code: "23503" });
+    } finally { await admin.query("ALTER TABLE app.recovery_follow_up ENABLE TRIGGER recovery_follow_up_guard"); }
+  });
+
+  it("is synthetic only: a production or pilot environment is refused by the database, and the contract carries no mode at all", async () => {
+    const base = await scheduled();
+    await advance(base.caseId, base.followUp.id, base.runId);
+    for (const environment of ["production", "pilot_no_charge"]) {
+      await expect(admin.query("INSERT INTO app.recovery_follow_up_advance(tenant_id,command_id,run_id,follow_up_id,request_hash,tick_before,tick_after,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,0,0,$6,$7)",
+        [DEMO_TENANT_ID, randomUUID(), base.runId, base.followUp.id, "a".repeat(64), DEMO_MEMBERSHIP_ID, environment])).rejects.toMatchObject({ code: "23514" });
+      await expect(admin.query("INSERT INTO app.recovery_follow_up_owner(tenant_id,follow_up_id,run_id,owner_kind,environment) VALUES($1,$2,$3,'practice_fake_clock',$4)", [DEMO_TENANT_ID, base.followUp.id, base.runId, environment])).rejects.toMatchObject({ code: "23514" });
+    }
+    await expect(admin.query("INSERT INTO app.recovery_follow_up_owner(tenant_id,follow_up_id,run_id,owner_kind,environment) VALUES($1,$2,$3,'temporal','synthetic_demo')", [DEMO_TENANT_ID, base.followUp.id, base.runId])).rejects.toMatchObject({ code: "23514" });
+    for (const forged of [{ mode: "production" }, { environment: "pilot_no_charge" }, { tenantId: randomUUID() }]) {
+      await expect(repo.schedule(ctx, base.caseId, { ...scheduleCommand(base.message, 2), ...forged }, actor)).rejects.toMatchObject({ name: "ZodError" });
+    }
+  });
+
+  it("has exactly one persisted owner per follow-up, which must be the intent's own run, and no intent exists without its owner and scheduled event", async () => {
+    const base = await scheduled();
+    const otherRun = await newRun();
+    await expect(withTenant(runtime, ctx, db => db.$client.query("INSERT INTO app.recovery_follow_up_owner(tenant_id,follow_up_id,run_id,owner_kind,environment) VALUES($1,$2,$3,'practice_fake_clock','synthetic_demo')", [DEMO_TENANT_ID, base.followUp.id, base.runId]))).rejects.toMatchObject({ code: "23505" });
+    await expect(withTenant(runtime, ctx, db => db.$client.query("INSERT INTO app.recovery_follow_up_owner(tenant_id,follow_up_id,run_id,owner_kind,environment) VALUES($1,$2,$3,'practice_fake_clock','synthetic_demo')", [DEMO_TENANT_ID, base.followUp.id, otherRun]))).rejects.toBeTruthy();
+    // An intent written without its owner and scheduled event is refused when the transaction ends.
+    const fresh = await deliveredCase(); const run = await newRun();
+    const lastEvent = Number((await admin.query("SELECT max(sequence)::int n FROM app.recovery_case_event WHERE tenant_id=$1 AND case_id=$2", [DEMO_TENANT_ID, fresh.caseId])).rows[0].n);
+    await expect(withTenant(runtime, ctx, db => db.$client.query(
+      `INSERT INTO app.recovery_follow_up(id,tenant_id,job_id,case_id,run_id,source_message_id,source_message_sequence,case_revision,case_event_sequence,created_tick,due_tick,due_after_ticks,fixture_version,command_id,request_hash,actor_membership_id,environment)
+       VALUES($1,$2,$3,$4,$5,$6,1,2,$7,0,1,1,'recovery-follow-up-fixture.v1',$8,$9,$10,'synthetic_demo')`,
+      [randomUUID(), DEMO_TENANT_ID, fixture.jobId, fresh.caseId, run, fresh.message.id, lastEvent, randomUUID(), "a".repeat(64), DEMO_MEMBERSHIP_ID]))).rejects.toThrow("RECOVERY_FOLLOW_UP_INCOMPLETE");
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up WHERE tenant_id=$1 AND case_id=$2", [DEMO_TENANT_ID, fresh.caseId])).toBe(0);
+  });
+
+  it("refuses a hand-made follow-up that is not on the case's delivered message, the case as reviewed, or its own session's active run", async () => {
+    const preview = await (async () => { const caseId = await newCase(); await buildPack(caseId); const state = await messages.preview(ctx, caseId, previewCommand(await messages.read(ctx, caseId)), actor); return { caseId, view: state.latest! }; })();
+    const delivered = await deliveredCase(); const run = await newRun();
+    const second = await issuePracticeSession(runtime);
+    const foreignRun = (await sandbox.create(second, randomUUID())).id;
+    const raw = (caseId: string, over: Record<string, unknown>) => withTenant(runtime, ctx, db => db.$client.query(
+      `INSERT INTO app.recovery_follow_up(id,tenant_id,job_id,case_id,run_id,source_message_id,source_message_sequence,case_revision,case_event_sequence,created_tick,due_tick,due_after_ticks,fixture_version,command_id,request_hash,actor_membership_id,environment)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,'recovery-follow-up-fixture.v1',$12,$13,$14,'synthetic_demo')`,
+      [randomUUID(), DEMO_TENANT_ID, fixture.jobId, caseId, over.run ?? run, over.message, over.sequence ?? 1, over.revision ?? 2, over.events ?? 1, over.tick ?? 0, ((over.tick as number | undefined) ?? 0) + 1, randomUUID(), "a".repeat(64), DEMO_MEMBERSHIP_ID]));
+    await expect(raw(preview.caseId, { message: preview.view.id })).rejects.toThrow("RECOVERY_FOLLOW_UP_MESSAGE_NOT_DELIVERED");
+    await expect(raw(delivered.caseId, { message: delivered.message.id, run: foreignRun })).rejects.toThrow("RECOVERY_FOLLOW_UP_RUN_INVALID");
+    await expect(raw(delivered.caseId, { message: delivered.message.id, revision: 3 })).rejects.toThrow("RECOVERY_FOLLOW_UP_CHANGED");
+    await expect(raw(delivered.caseId, { message: delivered.message.id, events: 5 })).rejects.toThrow("RECOVERY_FOLLOW_UP_CHANGED");
+    await expect(raw(delivered.caseId, { message: delivered.message.id, tick: 1 })).rejects.toThrow("RECOVERY_FOLLOW_UP_CLOCK_INVALID");
+  });
+
+  it("refuses a hand-made due row unless the follow-up's own clock reached its due tick and its Decision is a pending, unauthorized one", async () => {
+    const base = await scheduled();
+    const decide = (db: { $client: Pool["query"] extends never ? never : any }, subject: string, resolve = false) => (async () => {
+      const id = randomUUID();
+      await db.$client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'recovery_follow_up',$3,'recovery.message.simulate')", [id, DEMO_TENANT_ID, subject]);
+      if (resolve) await db.$client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [randomUUID(), DEMO_TENANT_ID, id, DEMO_MEMBERSHIP_ID]);
+      return id;
+    })();
+    const rawDue = (decision: string, tick: number) => (db: any) => db.$client.query(
+      "INSERT INTO app.recovery_follow_up_due(tenant_id,job_id,case_id,follow_up_id,period,decision_id,due_tick,clock_tick,environment) VALUES($1,$2,$3,$4,1,$5,1,$6,'synthetic_demo')", [DEMO_TENANT_ID, fixture.jobId, base.caseId, base.followUp.id, decision, tick]);
+    // Before the clock reaches the due tick, nothing can be made due by hand.
+    await expect(withTenant(runtime, ctx, async db => rawDue(await decide(db, `${base.followUp.id}:1`), 1)(db))).rejects.toThrow("RECOVERY_FOLLOW_UP_DUE_INVALID");
+    // Once it has, a Decision that already carries a resolution, or is named for another follow-up, is still refused: elapsed time never creates consent.
+    await admin.query("ALTER TABLE app.sandbox_run_event DISABLE TRIGGER recovery_follow_up_due_on_advance");
+    try { await sandbox.advance(token, base.runId, randomUUID()); } finally { await admin.query("ALTER TABLE app.sandbox_run_event ENABLE TRIGGER recovery_follow_up_due_on_advance"); }
+    await expect(withTenant(runtime, ctx, async db => rawDue(await decide(db, `${base.followUp.id}:1`, true), 1)(db))).rejects.toThrow("RECOVERY_FOLLOW_UP_DUE_INVALID");
+    await expect(withTenant(runtime, ctx, async db => rawDue(await decide(db, `${randomUUID()}:1`), 1)(db))).rejects.toThrow("RECOVERY_FOLLOW_UP_DUE_INVALID");
+    await expect(withTenant(runtime, ctx, async db => rawDue(await decide(db, `${base.followUp.id}:1`), 3)(db))).rejects.toThrow("RECOVERY_FOLLOW_UP_DUE_INVALID");
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    // The clock's own evaluation, signalled now, is what makes it due: once.
+    expect(await repo.signalDue(ctx, base.runId)).toBe(1);
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+  }, 60_000);
+
+  it("refuses a hand-made reminder link or approval that is not the newest preview of an open, due follow-up", async () => {
+    const early = await scheduled();
+    // Not due yet: the source message itself, or any message, cannot be linked as a reminder.
+    await expect(withTenant(runtime, ctx, db => db.$client.query("INSERT INTO app.recovery_follow_up_reminder(tenant_id,job_id,case_id,follow_up_id,period,attempt,message_id,environment) VALUES($1,$2,$3,$4,1,1,$5,'synthetic_demo')",
+      [DEMO_TENANT_ID, fixture.jobId, early.caseId, early.followUp.id, early.message.id]))).rejects.toBeTruthy();
+    const base = await previewed();
+    // A second raw approval of the reminder through the plain M4-5-S route is still the one-effect refusal; only the follow-up's own command approves it.
+    expect(await code(() => messages.command(ctx, base.caseId, approveCommand(base.reminder), actor))).toBe("RECOVERY_MESSAGE_EXISTING_EFFECT");
+    // Another preview would change which reminder is the newest; the old link can then no longer be approved.
+    const msgs = await messages.read(ctx, base.caseId);
+    expect(msgs.messages.map(item => item.sequence)).toEqual([1, 2]);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_reminder WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+  });
+});
+
+describe("M4-6-S facts agree between the database and the pure rules", () => {
+  it("reads case facts identically in SQL and in followUpCaseFacts for every ending and reopening event, at every review point", async () => {
+    const sequence = ["opened", "assemble_evidence", "close_no_recovery", "dispute", "resume_pursuit", "reverse_landing", "write_off", "prevent", "close_recovered", "start_pursuit", "record_landing"];
+    const caseId = await newCase();
+    for (const [i, type] of sequence.entries()) {
+      if (i === 0) continue; // the opening event exists
+      await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,$5,$6,NULL,'identified','fixture-owner',$7,$8)",
+        [randomUUID(), DEMO_TENANT_ID, fixture.jobId, caseId, i + 1, type, randomUUID(), hash(`${caseId}:${i}`)]);
+    }
+    const events = sequence.map((eventType, i) => ({ sequence: i + 1, eventType }));
+    for (let after = 0; after <= sequence.length; after++) {
+      const sql = (await admin.query("SELECT stop_reason,reopened FROM app.recovery_follow_up_case_facts($1,$2,$3)", [DEMO_TENANT_ID, caseId, after])).rows[0];
+      const pure = followUpCaseFacts(events, after);
+      expect({ stop_reason: sql.stop_reason, reopened: sql.reopened }, `after ${after}`).toEqual({ stop_reason: pure.stopReason, reopened: pure.reopened });
+    }
+    // Each event on its own: the ruling's mapping, row by row.
+    for (const [eventType, reason] of Object.entries(RECOVERY_FOLLOW_UP_CASE_STOP_EVENTS)) {
+      const single = await newCase();
+      await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,2,$5,NULL,'identified','fixture-owner',$6,$7)", [randomUUID(), DEMO_TENANT_ID, fixture.jobId, single, eventType, randomUUID(), hash(`${single}:x`)]);
+      expect((await admin.query("SELECT stop_reason FROM app.recovery_follow_up_case_facts($1,$2,1)", [DEMO_TENANT_ID, single])).rows[0].stop_reason, eventType).toBe(reason);
+    }
+    for (const eventType of RECOVERY_FOLLOW_UP_REOPEN_EVENTS) {
+      const single = await newCase();
+      await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,2,$5,NULL,'identified','fixture-owner',$6,$7)", [randomUUID(), DEMO_TENANT_ID, fixture.jobId, single, eventType, randomUUID(), hash(`${single}:y`)]);
+      expect((await admin.query("SELECT stop_reason,reopened FROM app.recovery_follow_up_case_facts($1,$2,1)", [DEMO_TENANT_ID, single])).rows[0], eventType).toEqual({ stop_reason: null, reopened: false });
+    }
+  });
+});
+
+describe("M4-6-S audit trail", () => {
+  it("appends an identifier-only audit event for each step, exactly once, in a chain that still verifies", async () => {
+    const base = await previewed();
+    await repo.approveReminder(ctx, base.caseId, approveReminderCommand(base.followUp, base.reminder), actor);
+    const types = (await admin.query("SELECT event_type FROM app.audit_event WHERE tenant_id=$1 AND subject_type='recovery_follow_up' AND subject_ref=$2 ORDER BY sequence", [DEMO_TENANT_ID, base.followUp.id])).rows.map(row => row.event_type as string);
+    expect(types).toEqual(["recovery.follow_up.scheduled", "recovery.follow_up.time_advanced", "recovery.follow_up.became_due", "recovery.follow_up.reminder_previewed", "recovery.follow_up.reminder_approved"]);
+    const payloads = (await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_type='recovery_follow_up' AND subject_ref=$2", [DEMO_TENANT_ID, base.followUp.id])).rows.map(row => JSON.stringify(row.payload));
+    for (const payload of payloads) { expect(payload).not.toMatch(/practice-customer|Practice message|example\.invalid|£/u); }
+    const chain = (await admin.query("SELECT sequence::int,previous_hash,event_hash FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [DEMO_TENANT_ID])).rows;
+    chain.forEach((row, i) => { expect(row.sequence).toBe(i + 1); if (i > 0) expect(row.previous_hash).toBe(chain[i - 1].event_hash); });
+  }, 60_000);
+});
