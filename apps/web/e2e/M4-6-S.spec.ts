@@ -156,6 +156,24 @@ test("passing practice time only makes the reminder ready to review; only approv
     };
     await persisted(page, browser, source.jobId, assertDelivered);
     await assertLayout(page, ["Advance practice time", "Refresh follow-up", "Cancel this follow-up"]);
+    // Another practice session cannot see or act on this one's follow-up (a plain 404, nothing disclosed), and with no session at all it is a 401.
+    const saved = await get(page, followUps(caseId));
+    const stranger = await browser.newContext({ baseURL: "http://127.0.0.1:3000", viewport: page.viewportSize() });
+    const missing = await browser.newContext({ baseURL: "http://127.0.0.1:3000" });
+    try {
+      expect((await stranger.request.post("/api/session")).ok()).toBe(true);
+      const version = "recovery-follow-up-command.v1", followUpId = saved.latest.id;
+      for (const context of [stranger, missing]) {
+        const expected = context === stranger ? { status: 404, code: "NOT_FOUND" } : { status: 401, code: "UNAUTHENTICATED" };
+        const responses = [
+          await context.request.get(followUps(caseId)),
+          await context.request.post(followUps(caseId), { data: { version, action: "schedule", commandId: randomUUID(), sourceMessageId: randomUUID(), expectedCaseRevision: 2 } }),
+          ...await Promise.all(["advance_time", "cancel"].map(action => context.request.post(`${followUps(caseId)}/${followUpId}/commands`, { data: { version, action, commandId: randomUUID(), followUpId, ...(action === "cancel" ? { expectedRevision: saved.latest.revision } : {}) } }))),
+        ];
+        for (const response of responses) { expect(response.status(), await response.text()).toBe(expected.status); expect(await response.json()).toEqual({ code: expected.code }); }
+      }
+      expect(await get(page, followUps(caseId))).toEqual(saved);
+    } finally { await stranger.close(); await missing.close(); }
     await page.screenshot({ path: `test-results/M4-6-S-reminder-${testInfo.project.name}.png`, fullPage: true });
   } finally { await database.end(); }
 });
