@@ -110,6 +110,6 @@ export function generateWorkOrderSample(sample: WorkOrderSampleId, demo: WorkOrd
     ]);
   }
   const changed = demoRow(demo, 1, { expectedRevision: 1, lines: [{ clientLineReference: "L1", sorCode: "REPAIR-DOOR", quantity: "3" }, { clientLineReference: "L2", sorCode: demoSorItems[2]!.code, quantity: "2" }] });
-  const reprioritised = demoRow(demo, 2, { expectedRevision: 1, priority: "emergency", lines: [{ clientLineReference: "L1", sorCode: "REPAIR-DOOR", quantity: "1" }, { clientLineReference: "L2", sorCode: demoSorItems[3]!.code, quantity: "2" }, { clientLineReference: "L3", sorCode: "FIT-LOCK", quantity: "1" }] });
+  const reprioritised = demoRow(demo, 2, { expectedRevision: 1, priority: "routine", lines: [{ clientLineReference: "L1", sorCode: "REPAIR-DOOR", quantity: "1" }, { clientLineReference: "L2", sorCode: demoSorItems[3]!.code, quantity: "2" }, { clientLineReference: "L3", sorCode: "FIT-LOCK", quantity: "1" }] });
   return demoFile([changed, reprioritised, demoRow(demo, 3, { expectedRevision: 1, status: "cancelled", lines: [] }), demoRow(demo, 4, { expectedRevision: 1 })]);
 }

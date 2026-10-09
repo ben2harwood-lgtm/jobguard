@@ -189,8 +189,8 @@ export const workOrderSampleIds = ["starter_orders", "orders_with_errors", "revi
 export type WorkOrderSampleId = typeof workOrderSampleIds[number];
 export const workOrderSampleCatalogV1: readonly Readonly<{ id: WorkOrderSampleId; label: string; description: string }>[] = [
   { id: "starter_orders", label: "Starter orders (5 orders)", description: "Five clean fictional orders for the generated housing association. Import this first." },
-  { id: "orders_with_errors", label: "Orders with problems (6 rows)", description: "Two good orders and four rows that each show a typed error: unknown code, too many decimals, missing site, quantity below zero." },
-  { id: "revised_orders", label: "Revised orders (changes to the starter orders)", description: "Changes two starter orders, cancels one and repeats one unchanged. Import the starter orders first." },
+  { id: "orders_with_errors", label: "Orders with problems (7 rows)", description: "Two good orders and five rows that each show a typed error: unknown code, too many decimals, missing site, quantity below zero, price out of range." },
+  { id: "revised_orders", label: "Revised orders (changes to the starter orders)", description: "Changes two starter orders (one gets a new line and a new priority), cancels one and repeats one unchanged. Import the starter orders first." },
 ];
 const uuidValue = z.string().uuid();
 export const workOrderImportRequestV1 = z.object({
