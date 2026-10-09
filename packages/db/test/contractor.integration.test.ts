@@ -5,15 +5,15 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { contractorPermissions, contractorRoles, contractorPermissionMatrix, referenceApprovalRulesV1, type ContractorCommand } from "@jobguard/core";
-import { ContractorRepository, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, type AuthenticatedMembership, verifiedTenantContextFromMembership } from "../src/index.js";
+import { contractorPermissions, contractorRoles, contractorPermissionMatrix, contractorPermits, referenceApprovalRulesV1, type ContractorCommand, type ContractorGrant, type ContractorRole } from "@jobguard/core";
+import { ContractorRepository, ContractorPartyRepository, JobSchedulingRepository, SorRepository, WorkOrderRepository, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, demoFile, demoRow, prepareWorkOrderDemo, type AuthenticatedMembership, verifiedTenantContextFromMembership } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 let postgres:EmbeddedPostgres, admin:Pool,runtime:Pool,dir:string,repo:ContractorRepository;
 const tables=['commercial_track_assignment','org_unit','team','client_organisation','client_contract','approval_rule_version','client_contract_version','contractor_member','role_grant','role_grant_revocation','contractor_membership_revocation','team_membership'];
 const document={version:'client-contract.v1',reference:'FICTIONAL',startsOn:'2026-10-01',endsOn:null,sorVersionIds:[],tenderedAdjustment:{numerator:'-35',denominator:'1000'},photoRule:'required',vatCode:'synthetic-unreviewed',exportedNotBilledAlertDays:30};
 beforeAll(async()=>{
  dir=await mkdtemp(join(tmpdir(),'jg-ent1-'));const port=58000+Math.floor(Math.random()*500);
- postgres=new EmbeddedPostgres({databaseDir:dir,port,user:'postgres',password:'synthetic',persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C'],onLog:()=>undefined});await postgres.initialise();await postgres.start();
+ postgres=new EmbeddedPostgres({databaseDir:dir,port,user:'postgres',password:'synthetic',persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C','--encoding=UTF8'],onLog:()=>undefined});await postgres.initialise();await postgres.start();
  const control=new Pool({host:'127.0.0.1',port,user:'postgres',password:'synthetic',database:'postgres'});await control.query('CREATE DATABASE jobguard_synthetic_demo');await control.end();
  admin=new Pool({host:'127.0.0.1',port,user:'postgres',password:'synthetic',database:'jobguard_synthetic_demo'});
  // Upgrade the preceding supported schema, then rerun the tracked migrator (idempotence).
@@ -357,3 +357,51 @@ it('CH-3b client customer link requires organisation.manage on the exact client'
  }
  await expect(command(p,{kind:'member.invite',id:randomUUID(),role:'owner',email:'owner-invite@fictional.invalid',scope:{kind:'tenant',id:p.tenantId},clientId:null,contractId:null})).rejects.toMatchObject({code:'FORBIDDEN'});
 },60000);
+
+// ENT-2: every command and query it adds, for every role, against every scope kind the role can hold, judged by the pure rules in core.
+it('ENT-2 conformance: the work-order import, SoR import, register, batch, revision, assignment, visit, price-list and resident reads agree with the pure role and scope rules',async()=>{
+ const {p,v}=await setup(),demo=await prepareWorkOrderDemo(runtime,p),orders=new WorkOrderRepository(runtime),rates=new SorRepository(runtime),scheduling=new JobSchedulingRepository(runtime),links=new ContractorPartyRepository(runtime);
+ const region=v.units.find(x=>x.kind==='region')!.id,branch=demo.branchId,own=demo.teamId;
+ const otherTeam=(await command(p,{kind:'team.create',branchId:branch,name:'Fictional ENT-2 other team'})).id;
+ const otherBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:region,name:'Fictional ENT-2 other branch'})).id;
+ const otherBranchTeam=(await command(p,{kind:'team.create',branchId:otherBranch,name:'Fictional ENT-2 branch team'})).id;
+ const otherRegion=(await command(p,{kind:'unit.create',unitKind:'region',parentId:p.tenantId,name:'Fictional ENT-2 other region'})).id;
+ const distantBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:otherRegion,name:'Fictional ENT-2 distant branch'})).id;
+ const distantTeam=(await command(p,{kind:'team.create',branchId:distantBranch,name:'Fictional ENT-2 distant team'})).id;
+ const positions:Record<string,{teamId:string;branchId:string;regionId:string}>={own:{teamId:own,branchId:branch,regionId:region},otherTeam:{teamId:otherTeam,branchId:branch,regionId:region},otherBranchTeam:{teamId:otherBranchTeam,branchId:otherBranch,regionId:region},distantTeam:{teamId:distantTeam,branchId:distantBranch,regionId:otherRegion}};
+ const result=await orders.importCsv(p,{commandId:randomUUID(),name:'conformance.csv',kind:'csv',csv:demoFile(Object.values(positions).map((position,index)=>demoRow(demo,index+1,{teamId:position.teamId,assignedMembershipIds:index===0?[demo.operativeMembershipId]:[]})))});
+ expect(result.counts).toMatchObject({created:4,rejected:0});
+ const jobs=await Promise.all(Object.keys(positions).map(async(name,index)=>({name,orderId:result.rows[index]!.workOrderId!,jobId:(await admin.query<{job_id:string}>('SELECT job_id FROM app.work_order WHERE id=$1',[result.rows[index]!.workOrderId])).rows[0]!.job_id})));
+ const operative=await fixtureMember(p,'operative','team',own);
+ const assignedOperative=await(async()=>{const row=(await admin.query<{identity_user_id:string}>('SELECT identity_user_id FROM app.membership WHERE id=$1',[demo.operativeMembershipId])).rows[0]!;return {...p,membershipId:demo.operativeMembershipId,identityUserId:row.identity_user_id} as AuthenticatedMembership;})();
+ type Actor={label:string;actor:AuthenticatedMembership;grants:ContractorGrant[];assigned:ReadonlySet<string>};
+ const actors:Actor[]=[{label:'owner',actor:p,grants:[{role:'owner',scope:{kind:'tenant',id:p.tenantId}}],assigned:new Set()}];
+ const scopeIds:Record<string,string>={tenant:p.tenantId,region,branch,team:own};
+ for(const role of contractorRoles.filter(x=>x!=='owner'&&x!=='operative'&&x!=='client_approver'))for(const kind of role==='finance'?['tenant']:['tenant','region','branch','team'])actors.push({label:`${role}@${kind}`,actor:await fixtureMember(p,role,kind,scopeIds[kind]!),grants:[{role,scope:{kind:kind as 'tenant',id:scopeIds[kind]!}}],assigned:new Set()});
+ actors.push({label:'operative@team (assigned to the own-team job)',actor:assignedOperative,grants:[{role:'operative',scope:{kind:'team',id:own}}],assigned:new Set([jobs[0]!.jobId])});
+ actors.push({label:'operative@team (not assigned)',actor:operative,grants:[{role:'operative',scope:{kind:'team',id:own}}],assigned:new Set()});
+ actors.push({label:'client_approver@client',actor:await fixtureMember(p,'client_approver','client',demo.clientId,demo.clientId),grants:[{role:'client_approver',scope:{kind:'client',id:demo.clientId}}],assigned:new Set()});
+ const tenantTarget={tenantId:p.tenantId},clientTarget={tenantId:p.tenantId,regionId:region,branchId:branch,clientId:demo.clientId};
+ const outcome=async(work:()=>Promise<unknown>)=>work().then(()=>true,(error:{code?:string})=>{if(error.code!=='NOT_FOUND')throw error;return false;});
+ let sequence=0;
+ for(const {label,actor,grants,assigned} of actors){
+  const may=(permission:Parameters<typeof contractorPermits>[1],target:Parameters<typeof contractorPermits>[2])=>contractorPermits(grants,permission,target);
+  const canImport=may('organisation.manage',clientTarget)||may('data.import',tenantTarget)||may('organisation.manage',tenantTarget);
+  const unique=(n:number)=>demoFile([demoRow(demo,n,{workOrderReference:`CONFORM-${n}`,teamId:own,assignedMembershipIds:[]})]);
+  expect(await outcome(()=>orders.importCsv(actor,{commandId:randomUUID(),name:'c.csv',kind:'csv',csv:unique(++sequence+100)})),`${label}: work-order import`).toBe(canImport);
+  expect(await outcome(()=>rates.importVersion(actor,{version:'sor-version-import.v1',environment:'synthetic_demo',commandId:randomUUID(),scheduleId:randomUUID(),reference:`Conformance ${sequence}`,effectiveFrom:'2027-01-01',items:[{code:'C',description:'c',unit:'each',rate:{pence:1,currency:'GBP'}}]})),`${label}: SoR import`).toBe(may('contract.manage',tenantTarget));
+  expect(await outcome(()=>rates.list(actor)),`${label}: price-list read`).toBe(may('contract.read',tenantTarget)||may('contract.read',clientTarget));
+  expect(await outcome(()=>orders.overview(actor)),`${label}: register`).toBe(canImport);
+  expect(await outcome(()=>orders.batch(actor,result.batchId)),`${label}: batch`).toBe(canImport);
+  for(const {name,orderId,jobId} of jobs){
+   const target={tenantId:p.tenantId,...positions[name]!,assigned:assigned.has(jobId)};
+   expect(await outcome(()=>orders.revisions(actor,orderId)),`${label}: revisions of ${name}`).toBe(canImport||may('job.read',target));
+   expect(await outcome(()=>scheduling.assignments(actor,jobId)),`${label}: assignments of ${name}`).toBe(may('job.read',target));
+   expect(await outcome(()=>scheduling.siteVisits(actor,jobId)),`${label}: site visits of ${name}`).toBe(may('job.read',target));
+   expect(await outcome(()=>links.readResident(actor,jobId)),`${label}: resident of ${name}`).toBe(may('resident.read',target));
+   expect(await outcome(()=>scheduling.assignments(actor,randomUUID())),`${label}: unknown job`).toBe(false);
+  }
+ }
+ expect(actors.length).toBe(1+4*5+1+2+1+0);
+},180000);
+

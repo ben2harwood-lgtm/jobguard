@@ -223,12 +223,16 @@ describe("CH-2 command coverage and lock order", () => {
     ]);
     const next = routeKeys(files);
     expect(next).toEqual(["/api/contractor/work-order-imports", "PATCH /api/contractor/jobs/[id]/unclassified", "PUT /api/contractor/work-orders/[workOrderId]/revisions"]);
-    expect(() => assertClassified(next, jobMutationRegistry)).toThrow("Unclassified job mutation");
+    // The real registry now classifies the import (below); to prove the scans still refuse an unclassified one, take that entry away.
+    const unclassified = Object.fromEntries(Object.entries(jobMutationRegistry).filter(([key]) => !key.includes("contractor/work-order-imports")));
+    expect(jobMutationRegistry["/api/contractor/work-order-imports"]).toBe("pre_live_allowed");
+    expect(jobMutationRegistry["nest:/contractor/work-order-imports"]).toBe("pre_live_allowed");
+    expect(() => assertClassified(next, unclassified)).toThrow("Unclassified job mutation");
     const nest = nestKeys("contractor-import.ts", 'import { Controller, Post } from "@nestjs/common"; @Controller("contractor") class C { @Post("work-order-imports") importOrders() {} @Post("sor-versions") importRates() {} @Post("commands") administer() {} }').filter(inJobScope);
     expect(nest).toEqual(["nest:/contractor/work-order-imports"]);
-    expect(() => assertClassified(nest, jobMutationRegistry)).toThrow("Unclassified job mutation: nest:/contractor/work-order-imports");
-    expect(() => assertClassified(next, { ...jobMutationRegistry, "/api/contractor/work-order-imports": "pre_live_allowed", "PATCH /api/contractor/jobs/[id]/unclassified": "watchdog_live_only", "PUT /api/contractor/work-orders/[workOrderId]/revisions": "watchdog_live_only" })).not.toThrow();
-    expect(() => assertClassified(nest, { ...jobMutationRegistry, "nest:/contractor/work-order-imports": "pre_live_allowed" })).not.toThrow();
+    expect(() => assertClassified(nest, unclassified)).toThrow("Unclassified job mutation: nest:/contractor/work-order-imports");
+    expect(() => assertClassified(next, { ...unclassified, "/api/contractor/work-order-imports": "pre_live_allowed", "PATCH /api/contractor/jobs/[id]/unclassified": "watchdog_live_only", "PUT /api/contractor/work-orders/[workOrderId]/revisions": "watchdog_live_only" })).not.toThrow();
+    expect(() => assertClassified(nest, { ...unclassified, "nest:/contractor/work-order-imports": "pre_live_allowed" })).not.toThrow();
   });
   it("fails when any job mutation route is unclassified", async () => {
     const found = routeKeys(await readTree(new URL("apps/web/app/api/", root), name => name === "route.ts"));
