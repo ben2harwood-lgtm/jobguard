@@ -6,9 +6,10 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { migrate, MIGRATION_URLS, SwitchJobLiveMutation, withTenant, type VerifiedTenantContext, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, PracticeActivationRepository, FinalAccountRepository, QuoteRepository, insertVariationProposal, UserCommandDispatcher, SwitchJobLiveV3Mutation, prepareActivationFixtureV3, seedActivationFixturesV3, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
+import { migrate, MIGRATION_URLS, SwitchJobLiveMutation, withTenant, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, PracticeActivationRepository, FinalAccountRepository, QuoteRepository, insertVariationProposal, UserCommandDispatcher, SwitchJobLiveV3Mutation, prepareActivationFixtureV3, seedActivationFixturesV3, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
-const context={tenantId:T} as VerifiedTenantContext;
+import { testTenantContext } from "./tenant-context-test-utils.js";
+const context=testTenantContext(T);
 const originalEnvironment=process.env.JOBGUARD_ENV;
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
 beforeAll(async()=>{
@@ -76,7 +77,7 @@ describe("CH-1 v3 activation",()=>{
   expect((await runtime.query(`SELECT * FROM app.job_activation_terms`)).rows).toEqual([]);
   await expect(runtime.query(`SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,1,$6,0,$7,$8,$9)`,[T,randomUUID(),randomUUID(),job,randomUUID(),"a".repeat(64),M,randomUUID(),randomUUID()])).rejects.toMatchObject({code:"42501"});
   await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.job_activation_terms(id,tenant_id,job_id,activation_id,baseline_quote_version_id,baseline_document_version,baseline_document_hash,accepted_net_pence,highest_sent_net_pence,small_job,policy_version,commercial_track,trial_plan_context) VALUES($1,$2,$3,$4,$5,1,$6,100000,100000,true,'reference_fee_policy_v3','small_builder','none_recorded_pre_mon2a')`,[randomUUID(),T,job,randomUUID(),randomUUID(),"a".repeat(64)]))).rejects.toMatchObject({code:"42501"});
-  await expect(repo.view({tenantId:"22222222-2222-4222-8222-222222222222"} as VerifiedTenantContext,job)).rejects.toThrow("NOT_FOUND");
+  await expect(repo.view(testTenantContext("22222222-2222-4222-8222-222222222222"),job)).rejects.toThrow("NOT_FOUND");
   const row=(await admin.query(`SELECT accepted_quote_version_id FROM app.job WHERE id=$1`,[other])).rows[0];
   const doc=(await admin.query(`SELECT document_version,content_hash FROM app.quote_document_version WHERE id=$1`,[row.accepted_quote_version_id])).rows[0];
   const input={version:"switch-live.v3",activationId:randomUUID(),termsId:randomUUID(),jobId:job,acceptedDocumentId:row.accepted_quote_version_id,acceptedDocumentVersion:doc.document_version,acceptedDocumentHash:doc.content_hash,expectedJobRevision:(await admin.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[T,job])).rows[0].revision};
