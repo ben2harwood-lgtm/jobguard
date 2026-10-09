@@ -8,12 +8,11 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorPermissionMatrix, contractorRoles, encodeWorkOrderCsv, watchdogActive, type ContractorRole } from "@jobguard/core";
 import {
-  ContractorPartyRepository, ContractorRepository, JobSchedulingRepository, MIGRATION_URLS, SorRepository, WorkOrderRepository, assertContractorPartiesRequired, canonicalJson, demoFile, demoRow, migrate, prepareWorkOrderDemo, sha256Hex,
+  ContractorPartyRepository, ContractorRepository, JobSchedulingRepository, MIGRATION_URLS, SorRepository, WorkOrderRepository, addBranchClient, assertContractorPartiesRequired, canonicalJson, demoFile, demoRow, migrate, prepareWorkOrderDemo, sha256Hex,
   verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type WorkOrderDemo,
 } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { addBranchClient } from "./work-order-two-branch-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository, orders: WorkOrderRepository, rates: SorRepository, scheduling: JobSchedulingRepository;
 const ENT2_TABLES = ["schedule_of_rates", "sor_version", "sor_item", "import_batch", "import_row_receipt", "work_order", "work_order_revision", "work_order_line", "work_order_current", "job_assignment", "site_visit"];
