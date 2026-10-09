@@ -541,9 +541,12 @@ export class RecoveryFollowUpRepository {
     const total = views.reduce((sum, view) => sum + view.newSimulatedMessages, 0);
     // What scheduling would meet right now, first reason first.
     const source = await this.sourceMessage(db, tenantId, caseId);
+    // A follow-up needs only a synthetic case with something outstanding; a stale evidence pack is for the reminder's preview to ask about, not for scheduling.
+    const snapshot = (await db.$client.query<{ synthetic: boolean; environment: string; outstanding_pence: string }>(
+      "SELECT synthetic,environment,outstanding_pence FROM app.recovery_message_case_snapshot($1,$2,$3)", [tenantId, jobId, caseId])).rows[0];
     let reason: RecoveryFollowUpState["scheduling"]["reason"] = null;
     if (!source || !source.delivered) reason = "MESSAGE_NOT_DELIVERED";
-    else if (!messages.readiness.eligible) reason = "CASE_NOT_ELIGIBLE";
+    else if (!snapshot || !snapshot.synthetic || snapshot.environment !== "synthetic_demo" || Number(snapshot.outstanding_pence) <= 0) reason = "CASE_NOT_ELIGIBLE";
     else if (await this.liveFollowUp(db, tenantId, caseId)) reason = "ALREADY_ACTIVE";
     else if (!run) reason = "RUN_REQUIRED";
     else if (run.tick + RECOVERY_FOLLOW_UP_DUE_AFTER_TICKS > RECOVERY_FOLLOW_UP_CLOCK_LIMIT) reason = "CLOCK_EXHAUSTED";

@@ -114,7 +114,7 @@ async function scheduled(claimPence = 32000) {
   const base = await deliveredCase(claimPence);
   const runId = await newRun();
   const state = await repo.schedule(ctx, base.caseId, scheduleCommand(base.message, base.state.readiness.caseRevision), actor);
-  return { ...base, runId, state, followUp: state.latest! };
+  return { ...base, runId, state, followUp: state.latest!, caseRevision: base.state.readiness.caseRevision };
 }
 const advance = (caseId: string, followUpId: string, runId: string, commandId = randomUUID()) =>
   repo.advanceTime(ctx, caseId, { version: V, action: "advance_time", commandId, followUpId }, actor, (run, command) => sandbox.advance(token, run, command)).then(state => ({ state, commandId, runId }));
@@ -367,4 +367,260 @@ describe("M4-6-S elapsed time never creates consent (DW2)", () => {
     const review = reviewCommand((await repo.read(ctx, base.caseId)).latest!, await messages.read(ctx, base.caseId));
     expect(await code(() => repo.openReview(ctx, base.caseId, review, actor))).toBe("RECOVERY_FOLLOW_UP_COMPLETE");
   });
+});
+
+describe("M4-6-S repeated advances, restarts and duplicate signals (DW3)", () => {
+  it("DW3: repeated and racing advances leave exactly one due Decision and one owner, with no duplicate transition, journal or send", async () => {
+    const base = await scheduled();
+    const before = await tenantCounts(), decisionsBefore = await count("SELECT count(*) n FROM app.decision WHERE tenant_id=$1", [DEMO_TENANT_ID]);
+    // The very same command, from two connections at once, and then three more advances (the practice clock is bounded at 3).
+    const racing = randomUUID();
+    const raced = await Promise.all([advance(base.caseId, base.followUp.id, base.runId, racing), advance(base.caseId, base.followUp.id, base.runId, racing)]);
+    expect(raced.map(item => item.state.run!.fakeClockTick)).toEqual([1, 1]);
+    for (let i = 0; i < 3; i++) await advance(base.caseId, base.followUp.id, base.runId);
+    const final = await repo.read(ctx, base.caseId);
+    expect(final.run!.fakeClockTick).toBe(3);
+    expect(final.latest).toMatchObject({ state: "review_reminder", newSimulatedMessages: 0 });
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_due WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_owner WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+    expect(final.latest!.history.map(item => item.kind)).toEqual(["scheduled", "became_due"]);
+    expect(await count("SELECT count(*) n FROM app.sandbox_run_event WHERE tenant_id=$1 AND run_id=$2 AND kind='advanced'", [DEMO_TENANT_ID, base.runId])).toBe(3);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_advance WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).toBe(4);
+    expect(await tenantCounts()).toEqual(before);
+    expect(await count("SELECT count(*) n FROM app.decision WHERE tenant_id=$1", [DEMO_TENANT_ID])).toBe(decisionsBefore + 1);
+    // One audit record for the due transition, however many commands observed it.
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_type='recovery_follow_up' AND subject_ref=$2 AND event_type='recovery.follow_up.became_due'", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+  }, 60_000);
+
+  it("DW3: duplicated due signals, from several connections and a restarted process, create the one due Decision once", async () => {
+    const base = await scheduled();
+    const before = await tenantCounts();
+    // The clock moves while no evaluation runs (a missed signal), so only the signals can make it due.
+    await admin.query("ALTER TABLE app.sandbox_run_event DISABLE TRIGGER recovery_follow_up_due_on_advance");
+    try { await sandbox.advance(token, base.runId, randomUUID()); } finally { await admin.query("ALTER TABLE app.sandbox_run_event ENABLE TRIGGER recovery_follow_up_due_on_advance"); }
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "waiting" });
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    const restarted = new Pool({ host: "127.0.0.1", port, user: "jobguard_runtime", password, database: "jobguard_synthetic_demo", max: 6 });
+    try {
+      const other = new RecoveryFollowUpRepository(restarted, new RecoveryMessageRepository(restarted));
+      const made = await Promise.all(Array.from({ length: 10 }, (_, i) => (i % 2 ? other : repo).signalDue(ctx, base.runId)));
+      expect(made.reduce((sum, n) => sum + n, 0)).toBe(1);
+      expect(await other.signalDue(ctx, base.runId)).toBe(0);
+      expect(await repo.signalDue(ctx, base.runId)).toBe(0);
+    } finally { await closeTestPools(restarted); }
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND follow_up_id=$2 AND kind='became_due'", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.follow_up.became_due'", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+    // A real advance afterwards adds nothing; the signals authorized and sent nothing.
+    await advance(base.caseId, base.followUp.id, base.runId);
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    expect(await tenantCounts()).toEqual(before);
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "review_reminder", newSimulatedMessages: 0 });
+  }, 60_000);
+
+  it("DW3: a signal for another tenant's, or a missing, run does nothing and discloses nothing", async () => {
+    const base = await scheduled();
+    expect(await repo.signalDue(ctx, randomUUID())).toBe(0);
+    expect(await repo.signalDue(testTenantContext(randomUUID()), base.runId)).toBe(0);
+    expect(await withTenant(runtime, testTenantContext(randomUUID()), db => db.$client.query("SELECT app.evaluate_recovery_follow_ups($1,$2) AS n", [DEMO_TENANT_ID, base.runId]).then(() => "ok", (error: { message: string }) => error.message))).toBe("RECOVERY_FOLLOW_UP_TENANT_INVALID");
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+  });
+
+  it("DW3: an advance command replays its first result; the same id for another request, or from another command family, is a conflict", async () => {
+    const base = await scheduled();
+    const first = await advance(base.caseId, base.followUp.id, base.runId);
+    const again = await advance(base.caseId, base.followUp.id, base.runId, first.commandId);
+    expect(again.state.run!.fakeClockTick).toBe(1);
+    expect(again.state.latest).toEqual(first.state.latest);
+    expect(await count("SELECT count(*) n FROM app.sandbox_run_event WHERE tenant_id=$1 AND run_id=$2 AND kind='advanced'", [DEMO_TENANT_ID, base.runId])).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_advance WHERE tenant_id=$1 AND command_id=$2", [DEMO_TENANT_ID, first.commandId])).toBe(1);
+    // The same id for a different follow-up of the case.
+    const cancelled = await repo.cancel(ctx, base.caseId, { version: V, action: "cancel", commandId: randomUUID(), followUpId: base.followUp.id, expectedRevision: again.state.latest!.revision }, actor);
+    const second = await repo.schedule(ctx, base.caseId, scheduleCommand(base.message, base.caseRevision), actor);
+    expect(cancelled.latest!.state).toBe("stopped"); expect(second.latest!.id).not.toBe(base.followUp.id);
+    expect(await code(() => advance(base.caseId, second.latest!.id, base.runId, first.commandId))).toBe("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
+    // An id an M4-5-S message command already used.
+    const used = (await admin.query("SELECT command_id FROM app.recovery_message WHERE tenant_id=$1 AND case_id=$2", [DEMO_TENANT_ID, base.caseId])).rows[0].command_id as string;
+    expect(await code(() => advance(base.caseId, second.latest!.id, base.runId, used))).toBe("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
+    expect(await count("SELECT count(*) n FROM app.sandbox_run_event WHERE tenant_id=$1 AND run_id=$2 AND kind='advanced'", [DEMO_TENANT_ID, base.runId])).toBe(1);
+  }, 60_000);
+});
+
+const caseRevisionOf = async (caseId: string) => Number((await admin.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, caseId])).rows[0].revision);
+/** One M4-1-S workbench event on the case, as the builder would record it. */
+async function caseEvent(caseId: string, eventType: string, amountPence?: number) {
+  return cases.command(ctx, fixture.jobId, { version: "recovery-case-command.v1", action: "transition", commandId: randomUUID(), caseId, eventType, ...(amountPence ? { amountPence } : {}), reviewerRef: "practice-owner", expectedRevision: await caseRevisionOf(caseId) }, reviewer);
+}
+const cancelCommand = (followUp: { id: string; revision: number }, commandId = randomUUID()) => ({ version: V, action: "cancel" as const, commandId, followUpId: followUp.id, expectedRevision: followUp.revision });
+
+describe("M4-6-S Stopped (DW4)", () => {
+  it("DW4: a cancellation is recorded once, shows Stopped, and a later advance creates no due Decision", async () => {
+    const base = await scheduled();
+    const cancelled = await repo.cancel(ctx, base.caseId, cancelCommand(base.followUp), actor);
+    expect(cancelled.latest).toMatchObject({ state: "stopped", label: "Stopped", stopReason: "cancelled", reopened: false });
+    expect(cancelled.latest!.history.map(item => item.kind)).toEqual(["scheduled", "cancelled"]);
+    const moved = await advance(base.caseId, base.followUp.id, base.runId);
+    expect(moved.state.latest).toMatchObject({ state: "stopped", label: "Stopped" });
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND follow_up_id=$2", [DEMO_TENANT_ID, base.followUp.id])).toBe(2);
+    expect(await code(() => repo.cancel(ctx, base.caseId, cancelCommand(moved.state.latest!), actor))).toBe("RECOVERY_FOLLOW_UP_STOPPED");
+    const review = reviewCommand(moved.state.latest!, await messages.read(ctx, base.caseId));
+    expect(await code(() => repo.openReview(ctx, base.caseId, review, actor))).toBe("RECOVERY_FOLLOW_UP_STOPPED");
+    // The cancellation is replayable by its command id and conflicts with any other use of it.
+    const command = cancelCommand(base.followUp);
+    expect(await code(() => repo.cancel(ctx, base.caseId, { ...command, expectedRevision: 9 }, actor))).not.toBe("");
+  });
+
+  it("DW4: a stale cancel is refused", async () => {
+    const base = await due();
+    expect(await code(() => repo.cancel(ctx, base.caseId, { ...cancelCommand(base.followUp), expectedRevision: base.followUp.revision - 1 }, actor))).toBe("RECOVERY_FOLLOW_UP_STALE_REVISION");
+  });
+
+  const scenarios: Array<[string, string, Array<[string, number?]>]> = [
+    ["dispute", "case_disputed", [["assemble_evidence"], ["dispute"]]],
+    ["settlement", "case_settled", [["assemble_evidence"], ["record_landing", 32000], ["close_recovered"]]],
+    ["case cancelled (closed with no recovery)", "case_cancelled", [["close_no_recovery"]]],
+    ["case cancelled (prevented)", "case_cancelled", [["prevent"]]],
+    ["case cancelled (written off)", "case_cancelled", [["assemble_evidence"], ["start_pursuit"], ["write_off"]]],
+  ];
+  it.each(scenarios)("DW4: %s shows Stopped, and a later advance creates no due Decision", async (_name, reason, events) => {
+    const base = await scheduled();
+    for (const [eventType, amount] of events) {
+      // Until the ending event, the follow-up is only waiting: a case that merely moved on is not a stop.
+      expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "waiting" });
+      await caseEvent(base.caseId, eventType, amount);
+    }
+    const stopped = await repo.read(ctx, base.caseId);
+    expect(stopped.latest).toMatchObject({ state: "stopped", label: "Stopped", stopReason: reason });
+    const moved = await advance(base.caseId, base.followUp.id, base.runId);
+    expect(moved.state.latest).toMatchObject({ state: "stopped", label: "Stopped", stopReason: reason });
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_event WHERE tenant_id=$1 AND follow_up_id=$2 AND kind='became_due'", [DEMO_TENANT_ID, base.followUp.id])).toBe(0);
+  }, 60_000);
+
+  it("DW4: a case fact after the reminder is due also shows Stopped, and nothing more can be previewed or approved", async () => {
+    const base = await previewed();
+    await caseEvent(base.caseId, "assemble_evidence");
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "review_reminder", changedSinceReview: true });
+    await caseEvent(base.caseId, "dispute");
+    const stopped = await repo.read(ctx, base.caseId);
+    expect(stopped.latest).toMatchObject({ state: "stopped", label: "Stopped", stopReason: "case_disputed" });
+    const before = await tenantCounts();
+    expect(await code(() => repo.approveReminder(ctx, base.caseId, approveReminderCommand(stopped.latest!, base.reminder), actor))).toBe("RECOVERY_FOLLOW_UP_STOPPED");
+    const review = reviewCommand(stopped.latest!, await messages.read(ctx, base.caseId));
+    expect(await code(() => repo.openReview(ctx, base.caseId, review, actor))).toBe("RECOVERY_FOLLOW_UP_STOPPED");
+    expect(await tenantCounts()).toEqual(before);
+  }, 60_000);
+
+  it("DW4: an archived practice run stops its follow-up", async () => {
+    const base = await scheduled();
+    await sandbox.reset(token, base.runId, randomUUID());
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "stopped", label: "Stopped", stopReason: "run_archived" });
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+  });
+});
+
+describe("M4-6-S Approval needed again (DW5)", () => {
+  it("DW5: revoking the approval behind a pending reminder shows Approval needed again, blocks execution and writes no sink row", async () => {
+    const base = await previewed();
+    await repo.approveReminder(ctx, base.caseId, approveReminderCommand(base.followUp, base.reminder), actor);
+    const queued = (await messages.read(ctx, base.caseId)).latest!;
+    const sinkBefore = await sinkCount(base.caseId);
+    const revoked = await messages.command(ctx, base.caseId, messageCommand("revoke", queued), actor);
+    expect(revoked.latest!.status).toBe("revoked");
+    const shown = await repo.read(ctx, base.caseId);
+    expect(shown.latest).toMatchObject({ state: "approval_needed", label: "Approval needed again", newSimulatedMessages: 0 });
+    // Execution is refused through the message path and through a worker driving the shared executor directly: nothing is recorded.
+    expect(await code(() => messages.command(ctx, base.caseId, messageCommand("advance", revoked.latest!), actor))).toBe("RECOVERY_MESSAGE_REVOKED");
+    expect(await sinkCount(base.caseId)).toBe(sinkBefore);
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, queued.approval!.outboxActionId])).rows[0].status).toBe("cancelled");
+    expect(await count("SELECT count(*) n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2", [DEMO_TENANT_ID, queued.approval!.outboxActionId])).toBe(0);
+    // The follow-up cannot be cancelled away or re-approved on the old preview; it needs a fresh reviewed reminder.
+    expect(await code(() => repo.approveReminder(ctx, base.caseId, approveReminderCommand(shown.latest!, revoked.latest!), actor))).toBe("RECOVERY_FOLLOW_UP_STALE_REVISION");
+  }, 60_000);
+
+  it("DW5: a fresh reviewed reminder after a revocation needs its own approval, makes its own Decision, and sends exactly once", async () => {
+    const base = await previewed();
+    await repo.approveReminder(ctx, base.caseId, approveReminderCommand(base.followUp, base.reminder), actor);
+    await messages.command(ctx, base.caseId, messageCommand("revoke", (await messages.read(ctx, base.caseId)).latest!), actor);
+    const needed = (await repo.read(ctx, base.caseId)).latest!;
+    expect(needed.state).toBe("approval_needed");
+    const decisionsBefore = await count("SELECT count(*) n FROM app.decision WHERE tenant_id=$1", [DEMO_TENANT_ID]);
+    const reopened = await repo.openReview(ctx, base.caseId, reviewCommand(needed, await messages.read(ctx, base.caseId)), actor);
+    expect(reopened.latest).toMatchObject({ state: "review_reminder", reminder: { attempt: 2, status: "previewed" } });
+    const second = (await messages.read(ctx, base.caseId)).latest!;
+    const approved = await repo.approveReminder(ctx, base.caseId, approveReminderCommand(reopened.latest!, second), actor);
+    expect(approved.latest).toMatchObject({ state: "reminder_queued" });
+    // The due Decision was resolved once, for the first approval; the second approval made its own Decision.
+    expect(await count("SELECT count(*) n FROM app.decision WHERE tenant_id=$1", [DEMO_TENANT_ID])).toBe(decisionsBefore + 1);
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    await messages.command(ctx, base.caseId, messageCommand("advance", (await messages.read(ctx, base.caseId)).latest!), actor);
+    expect(await sinkCount(base.caseId)).toBe(2);
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "delivered", newSimulatedMessages: 1 });
+  }, 60_000);
+
+  it("DW5: a reminder cannot be cancelled away while its approval stands", async () => {
+    const base = await previewed();
+    const approved = await repo.approveReminder(ctx, base.caseId, approveReminderCommand(base.followUp, base.reminder), actor);
+    expect(await code(() => repo.cancel(ctx, base.caseId, cancelCommand(approved.latest!), actor))).toBe("RECOVERY_FOLLOW_UP_REMINDER_APPROVED");
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "reminder_queued" });
+  });
+
+  it("DW5: a reminder queued for delivery is never recorded as delivered once its practice run has been archived", async () => {
+    const base = await previewed();
+    await repo.approveReminder(ctx, base.caseId, approveReminderCommand(base.followUp, base.reminder), actor);
+    await sandbox.reset(token, base.runId, randomUUID());
+    const queued = (await messages.read(ctx, base.caseId)).latest!;
+    const sinkBefore = await sinkCount(base.caseId);
+    expect(await code(() => messages.command(ctx, base.caseId, messageCommand("advance", queued), actor))).toBe("RECOVERY_MESSAGE_BLOCKED");
+    expect(await sinkCount(base.caseId)).toBe(sinkBefore);
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "stopped", stopReason: "run_archived" });
+  }, 60_000);
+});
+
+describe("M4-6-S a reopened case (DW6)", () => {
+  it("DW6: the old follow-up stays stopped and is never reused; nothing is created until a new reviewed follow-up exists", async () => {
+    const base = await scheduled();
+    await caseEvent(base.caseId, "close_no_recovery");
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "stopped", stopReason: "case_cancelled", reopened: false });
+    await caseEvent(base.caseId, "dispute"); await caseEvent(base.caseId, "resume_pursuit");
+    const reopened = await repo.read(ctx, base.caseId);
+    expect(reopened.latest).toMatchObject({ state: "stopped", label: "Stopped", stopReason: "case_cancelled", reopened: true });
+    expect(reopened.scheduling).toMatchObject({ eligible: true, reason: null });
+    // Advancing the clock past the old due time creates no Decision for the old follow-up, or for anything.
+    const decisionsBefore = await count("SELECT count(*) n FROM app.decision WHERE tenant_id=$1", [DEMO_TENANT_ID]);
+    const moved = await advance(base.caseId, base.followUp.id, base.runId);
+    expect(moved.state.latest).toMatchObject({ state: "stopped", reopened: true });
+    expect(await count("SELECT count(*) n FROM app.decision WHERE tenant_id=$1", [DEMO_TENANT_ID])).toBe(decisionsBefore);
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+    // A new follow-up must be reviewed against the case as it now stands.
+    expect(await code(() => repo.schedule(ctx, base.caseId, scheduleCommand(base.message, base.caseRevision), actor))).toBe("RECOVERY_FOLLOW_UP_CHANGED");
+    const current = await messages.read(ctx, base.caseId);
+    const second = await repo.schedule(ctx, base.caseId, scheduleCommand(base.message, current.readiness.caseRevision), actor);
+    expect(second.followUps).toHaveLength(2);
+    expect(second.latest).toMatchObject({ state: "waiting", caseRevision: current.readiness.caseRevision, createdTick: 1, dueTick: 2 });
+    expect(second.followUps[0]).toMatchObject({ id: base.followUp.id, state: "stopped", reopened: true });
+    expect(await dueDecisions(second.latest!.id)).toBe(0);
+    // The new follow-up comes due on its own clock, once; the old one is untouched.
+    const next = await advance(base.caseId, second.latest!.id, base.runId);
+    expect(next.state.followUps.map(item => item.state)).toEqual(["stopped", "review_reminder"]);
+    expect(await dueDecisions(base.followUp.id)).toBe(0); expect(await dueDecisions(second.latest!.id)).toBe(1);
+    // Sending still needs the exact reminder approved: after the evidence is rebuilt, review gives a preview and nothing is sent.
+    await buildPack(base.caseId);
+    const preview = await repo.openReview(ctx, base.caseId, reviewCommand(next.state.latest!, await messages.read(ctx, base.caseId)), actor);
+    expect(preview.latest).toMatchObject({ state: "review_reminder", reminder: { status: "previewed" }, newSimulatedMessages: 0 });
+    expect(await sinkCount(base.caseId)).toBe(1);
+  }, 90_000);
+
+  it("DW6: a landing reversed after a close also reopens the case, and still revives nothing", async () => {
+    const base = await scheduled();
+    await caseEvent(base.caseId, "assemble_evidence"); await caseEvent(base.caseId, "record_landing", 32000); await caseEvent(base.caseId, "close_recovered");
+    expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "stopped", stopReason: "case_settled", reopened: false });
+    await caseEvent(base.caseId, "reverse_landing", 12000);
+    const reopened = await repo.read(ctx, base.caseId);
+    expect(reopened.latest).toMatchObject({ state: "stopped", stopReason: "case_settled", reopened: true });
+    await advance(base.caseId, base.followUp.id, base.runId);
+    expect(await dueDecisions(base.followUp.id)).toBe(0);
+  }, 90_000);
 });
