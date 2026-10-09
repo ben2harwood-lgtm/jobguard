@@ -36,8 +36,9 @@ export class SwitchJobLiveV3Mutation implements CommandMutation<Record<string,un
  async lock(db:TenantTransaction){
   const input=switchLiveV3.parse(this.raw);
   // Dispatcher rechecks active owner membership before calling this hook,
-  // including on receipt replay. Acquire the job before the command/audit heads.
-  const job=(await db.$client.query(`SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[this.tenantId,input.jobId])).rows[0];
+  // including on receipt replay. The runtime role has no UPDATE privilege on app.job, so this
+  // cannot take a row lock; app.switch_job_live_v3 locks the job FOR UPDATE inside the routine.
+  const job=(await db.$client.query(`SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2`,[this.tenantId,input.jobId])).rows[0];
   if(!job)throw new Error("NOT_FOUND");
  }
  async mutate(db:TenantTransaction,command:ConsequentialCommand){
@@ -65,7 +66,11 @@ export class PracticeActivationRepository{
  async start(context:VerifiedTenantContext,jobId:string,input:{commandId:string;scenario:"no_charge"|"simulated_base_obligation"}){
   const current=await this.view(context,jobId);if(current.savedV1Sample||current.activation?.policyVersion==="reference_fee_policy_v1")return this.startLegacy(context,jobId,input);
   const accepted=await withTenant(this.pool,context,async db=>(await db.$client.query<any>(`SELECT j.status,j.revision,j.accepted_quote_version_id,d.document_version,d.content_hash FROM app.job j LEFT JOIN app.quote_document_version d ON(d.tenant_id,d.job_id,d.id)=(j.tenant_id,j.id,j.accepted_quote_version_id) WHERE j.tenant_id=$1 AND j.id=$2`,[context.tenantId,jobId])).rows[0]);
-  if(!accepted||!accepted.accepted_quote_version_id||(!current.terms&&accepted.status!=="accepted"))throw new Error("ACCEPTED_PRICED_QUOTE_REQUIRED");
+  if(!accepted||!accepted.accepted_quote_version_id||(!current.terms&&accepted.status!=="accepted")){
+   // A concurrent first activation may have committed between the view above and this read; return it instead of failing.
+   const winner=await this.view(context,jobId);if(winner.terms)return winner;
+   throw new Error("ACCEPTED_PRICED_QUOTE_REQUIRED");
+  }
   const activation={version:"switch-live.v3",activationId:randomUUID(),termsId:randomUUID(),jobId,acceptedDocumentId:accepted.accepted_quote_version_id,acceptedDocumentVersion:Number(accepted.document_version),acceptedDocumentHash:accepted.content_hash,expectedJobRevision:Number(accepted.revision)};
   await new UserCommandDispatcher(this.pool).dispatch(context,{version:"command.v1",commandId:input.commandId,commandType:"job.switch_live",semanticKey:`practice-start-v3:${jobId}:${input.scenario}`,actorMembershipId:DEMO_MEMBERSHIP_ID,subjectType:"job",subjectRef:jobId,action:{actionType:"job.switch_live",recipient:null,contentHash:accepted.content_hash,aggregateRevision:Number(accepted.document_version),amountPence:null,currency:null,policyVersion:"synthetic_demo_activation.v3",expiresAt:new Date("2099-01-01T00:00:00.000Z")}},new SwitchJobLiveV3Mutation(context.tenantId,activation,input.scenario));
   return this.view(context,jobId);

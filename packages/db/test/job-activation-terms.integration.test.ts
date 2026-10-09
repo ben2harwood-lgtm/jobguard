@@ -6,15 +6,15 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { migrate, MIGRATION_URLS, SwitchJobLiveMutation, withTenant, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, PracticeActivationRepository, FinalAccountRepository, QuoteRepository, insertVariationProposal, UserCommandDispatcher, SwitchJobLiveV3Mutation, prepareActivationFixtureV3, seedActivationFixturesV3, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
+import { migrate, MIGRATION_URLS, SwitchJobLiveMutation, withTenant, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, PracticeActivationRepository, FinalAccountCommandService, QuoteRepository, insertVariationProposal, UserCommandDispatcher, SwitchJobLiveV3Mutation, prepareActivationFixtureV3, seedActivationFixturesV3, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 const context=testTenantContext(T);
 const originalEnvironment=process.env.JOBGUARD_ENV;
-let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
+let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,pgPort:number;
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";
- dir=await mkdtemp(join(tmpdir(),"ch1-pg-"));const port=await freePort(57200,200);
+ dir=await mkdtemp(join(tmpdir(),"ch1-pg-"));const port=pgPort=await freePort(57200,200);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start();
  admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1500000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1500000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1500000-0000-4000-8000-000000000002','d1500000-0000-4000-8000-000000000001','owner');CREATE ROLE ch1_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO ch1_login;`);
@@ -103,7 +103,7 @@ describe("CH-1 v3 activation",()=>{
   expect(keys).toContain("FOREIGN KEY (tenant_id, job_id, activation_id)");expect(keys).toContain("FOREIGN KEY (tenant_id, job_id, baseline_quote_version_id)");expect(keys).toContain("FOREIGN KEY (tenant_id, job_id, commercial_track)");
  });
  it("upgrades from the schema just before CH-1's migration without rewriting v1 commercial rows",async()=>{
-  await admin.query("CREATE DATABASE ch1_upgrade");const upgrade=new Pool({...admin.options,database:"ch1_upgrade"});
+  await admin.query("CREATE DATABASE ch1_upgrade");const upgrade=new Pool({host:"127.0.0.1",port:pgPort,user:"postgres",password:"synthetic",database:"ch1_upgrade"});
   try{
    // The existing migration runner, on real PG, is told the last migration is
    // already applied only during this setup pass. Its earlier SQL is unchanged.
@@ -121,7 +121,7 @@ describe("CH-1 v3 activation",()=>{
  });
  it("DW3 snapshots/exports and the immutable terms contain no historic copy",async()=>{
   const job=(await admin.query(`SELECT job_id FROM app.job_activation_terms LIMIT 1`)).rows[0].job_id;
-  await new FinalAccountRepository(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:job,actorMembershipId:M});
+  await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:job,actorMembershipId:M});
   const rows=await admin.query(`SELECT d.snapshot::text text FROM app.quote_document_version d JOIN app.job_activation_terms t ON(t.tenant_id,t.job_id)=(d.tenant_id,d.job_id) UNION ALL SELECT row_to_json(t)::text FROM app.job_activation_terms t UNION ALL SELECT row_to_json(f)::text FROM app.final_account_revision f WHERE job_id IN(SELECT job_id FROM app.job_activation_terms) UNION ALL SELECT convert_from(pdf_bytes,'UTF8') FROM app.customer_invoice WHERE job_id IN(SELECT job_id FROM app.job_activation_terms)`);
   expect(rows.rowCount).toBeGreaterThan(0);for(const row of rows.rows)expect(row.text).not.toMatch(/£79|\bcap\b|plan credit/iu);
  });
