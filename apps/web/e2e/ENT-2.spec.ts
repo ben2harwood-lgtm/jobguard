@@ -88,12 +88,11 @@ test('the office imports generated files, sees a typed error on a refused row, r
   for (const forbidden of ['Fictional Resident', 'resident-canary', 'phone', 'email']) expect(JSON.stringify(body)).not.toContain(forbidden);
   const batch = await page.request.get(`/api/contractor/work-order-imports/${body.batches[0].id}`);
   expect(batch.status()).toBe(200); expect((await batch.json()).rows.length).toBeGreaterThan(0);
-  const assignments = await page.request.get(`/api/contractor/jobs/${jobId}/assignments`);
-  expect(assignments.status()).toBe(200); expect((await assignments.json()).operatives).toHaveLength(1);
-  expect((await page.request.get(`/api/contractor/jobs/${jobId}/site-visits`)).status()).toBe(200);
-  // An owner holds no job.read, so the same id and an unknown id are the identical 404 for the unscoped office role.
-  const unknown = await page.request.get(`/api/contractor/jobs/${crypto.randomUUID()}/assignments`);
-  expect(unknown.status()).toBe(404); expect(await unknown.json()).toEqual({ version: 'work-order-error.v1', code: 'NOT_FOUND', recoverable: false });
+  // The owner imports and administers but holds no job.read: the job's own scheduling projection and an unknown id are the identical 404.
+  const hidden = await page.request.get(`/api/contractor/jobs/${jobId}/assignments`), unknown = await page.request.get(`/api/contractor/jobs/${crypto.randomUUID()}/assignments`);
+  expect(hidden.status()).toBe(404); expect(unknown.status()).toBe(404);
+  expect(await hidden.json()).toEqual({ version: 'work-order-error.v1', code: 'NOT_FOUND', recoverable: false }); expect(await unknown.json()).toEqual(await hidden.json());
+  expect((await page.request.get(`/api/contractor/jobs/${jobId}/site-visits`)).status()).toBe(404);
   // There is no scheduling write route, and an arbitrary upload or a cross-site write is refused.
   for (const method of ['post', 'put', 'delete'] as const) expect((await page.request[method](`/api/contractor/jobs/${jobId}/assignments`, { headers: { origin: base }, data: {} })).status()).toBe(405);
   const upload = await page.request.post('/api/contractor/work-order-imports', { headers: { origin: base }, data: { version: 'work-order-import-request.v1', environment: 'synthetic_demo', commandId: crypto.randomUUID(), source: { kind: 'csv', name: 'mine.csv', csv: 'version\r\n' } } });
@@ -113,8 +112,8 @@ test('the office imports generated files, sees a typed error on a refused row, r
 
 test('without a generated contractor practice the register asks you to start one, and a refused request never looks saved', async ({ page }) => {
   await page.goto('/contractor/work-orders');
-  await expect(page.getByRole('alert')).toContainText('Start the generated contractor practice first.');
-  await expect(page.getByRole('alert')).toBeFocused();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('Start the generated contractor practice first.');
+  await expect(page.getByRole('main').getByRole('alert')).toBeFocused();
   await expect(page.getByRole('link', { name: 'Open contractor practice', exact: true })).toBeVisible();
   await expect(page.getByText(banner, { exact: true })).toHaveCount(1);
   expect((await page.request.get('/api/contractor/work-order-imports')).status()).toBe(401);

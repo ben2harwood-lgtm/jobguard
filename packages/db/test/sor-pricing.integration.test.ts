@@ -144,7 +144,7 @@ describe("ENT-2 DW5 exact pricing", () => {
       const bound = await parties.bindInTransaction(db, p, { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: bindCommandId, jobId, workOrderId, expectedJobRevision: 0, clientId: demo.clientId, contractId: demo.contractId, siteRevisionId: demo.siteRevisionIds[0], resident: { kind: "none", reason: "void_property" } });
       // CH-3b's own audit requirement is always satisfied here, so what passes or fails below is ENT-2's.
       await parties.audit(db, p, "bound", jobId, bindCommandId, bound.id);
-      const payload: Record<string, any> = { version: "work-order-commit.v1", kind: "create", batchId: randomUUID(), rowNumber: 2, jobId, workOrderId, revisionId: randomUUID(), reference: "RAW-1", expectedRevision: 0, status: "ordered", issuedOn: "2026-10-08", dueOn: null, priority: "routine",
+      const payload: Record<string, any> = { version: "work-order-commit.v1", kind: "create", batchId: randomUUID(), rowNumber: 2, jobId, workOrderId, revisionId: randomUUID(), reference: `RAW-${randomUUID()}`, expectedRevision: 0, status: "ordered", issuedOn: "2026-10-08", dueOn: null, priority: "routine",
         contentHash: "a".repeat(64), diff: {}, sorVersionId: demo.sorVersionId, adjustment: demo.adjustment, team: { teamId: null, membershipIds: [] },
         lines: [{ id: randomUUID(), scopeItemId: randomUUID(), position: 0, clientLineReference: "L1", sorVersionId: demo.sorVersionId, sorCode: "REPAIR-DOOR", unit: "each", quantity: "1", ratePence: 10000, netPence: 9650, origin: "client_instruction" }] };
       mutate(payload);

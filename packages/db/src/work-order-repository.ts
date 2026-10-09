@@ -40,7 +40,7 @@ export function workOrderFailure(error: unknown): WorkOrderError {
   if (known) return new WorkOrderError(known);
   if (e.code === "23505") return new WorkOrderError("COMMAND_CONFLICT");
   if (e.code === "40001") return new WorkOrderError("STALE_REVISION");
-  if (e.code === "P0002" || e.code === "42501") return new WorkOrderError("NOT_FOUND");
+  if (e.code === "P0002" || e.code === "42501" || e.code === "INVALID_TENANT_CONTEXT") return new WorkOrderError("NOT_FOUND");
   return new WorkOrderError("DATABASE_UNAVAILABLE");
 }
 /** A row-level refusal is recorded in its receipt; anything else (including infrastructure failure) aborts the whole import. */
@@ -309,10 +309,14 @@ export class WorkOrderRepository {
           "SELECT id,revision,status,issued_on::text,due_on::text,priority,net_total_pence,batch_id,row_number,created_at,diff FROM app.work_order_revision WHERE tenant_id=$1 AND work_order_id=$2 ORDER BY revision", [principal.tenantId, workOrderId])).rows;
         const lines = (await c.query<{ revision_id: string; position: number; scope_item_id: string; client_line_reference: string | null; sor_code: string; unit: string; quantity: string; rate_pence: string; net_pence: string; origin: "client_instruction" }>(
           "SELECT revision_id,position,scope_item_id,client_line_reference,sor_code,unit,quantity,rate_pence,net_pence,origin FROM app.work_order_line WHERE tenant_id=$1 AND work_order_id=$2 ORDER BY position", [principal.tenantId, workOrderId])).rows;
+        const teams = (await c.query<{ revision_id: string; team_id: string; name: string; operatives: number }>(
+          `SELECT a.revision_id,a.team_id,t.name,(count(*) FILTER(WHERE a.membership_id IS NOT NULL))::int operatives FROM app.job_assignment a JOIN app.team t ON(t.tenant_id,t.id)=(a.tenant_id,a.team_id)
+           WHERE a.tenant_id=$1 AND a.work_order_id=$2 GROUP BY a.revision_id,a.team_id,t.name`, [principal.tenantId, workOrderId])).rows;
         return workOrderRevisionsV1.parse({
           version: "work-order-revisions.v1", environment: "synthetic_demo", realExternalActions: 0, workOrderId: order.id, reference: order.reference, jobId: order.job_id, jobStatus: order.job_status, currentRevision: revisions.at(-1)?.revision ?? 1,
           revisions: revisions.map(r => ({
             id: r.id, revision: r.revision, status: r.status, issuedOn: r.issued_on, dueOn: r.due_on, priority: r.priority, netTotalPence: Number(r.net_total_pence), batchId: r.batch_id, rowNumber: r.row_number, createdAt: iso(r.created_at), diff: r.diff,
+            team: teams.find(t => t.revision_id === r.id) ? { id: teams.find(t => t.revision_id === r.id)!.team_id, name: teams.find(t => t.revision_id === r.id)!.name } : null, operativeCount: teams.find(t => t.revision_id === r.id)?.operatives ?? 0,
             lines: lines.filter(l => l.revision_id === r.id).map(l => ({ position: l.position, scopeItemId: l.scope_item_id, clientLineReference: l.client_line_reference, sorCode: l.sor_code, unit: l.unit, quantity: l.quantity, ratePence: Number(l.rate_pence), netPence: Number(l.net_pence), origin: l.origin })),
           })),
         });

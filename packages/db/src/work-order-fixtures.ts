@@ -46,6 +46,8 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
         operative: (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.contractor_member WHERE email='demo.operative@fictional.invalid'")).rows[0]?.membership_id,
         sor: (await db.$client.query<{ schedule_id: string }>("SELECT schedule_id FROM app.sor_version WHERE id=$1", [document.sorVersionIds[0]])).rows[0]?.schedule_id,
       }));
+      // A half-prepared organisation is never guessed at: the caller sees the generic retryable failure.
+      if (stored.sites.length === 0 || !stored.operative || !stored.sor) throw new Error("The generated demo organisation is incomplete");
       return { clientId: existing.id, contractId: version.contract_id, contractVersionId: version.id, scheduleId: stored.sor!, sorVersionId: document.sorVersionIds[0]!, siteRevisionIds: stored.sites, teamId: team.id, branchId: team.branch_id, operativeMembershipId: stored.operative!, adjustment: document.tenderedAdjustment, issuedOn: "2026-10-08" };
     }
     const scheduleId = randomUUID();

@@ -11,8 +11,9 @@
 .main button:disabled {opacity:.5;cursor:not-allowed}
 .primary {background:#166534 !important;color:#fff !important;border-color:#166534 !important}
 .scroll {max-width:100%;overflow-x:auto}
-.main table {border-collapse:collapse;min-width:100%}
-.main th,.main td {text-align:left;padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top}
+.main table {border-collapse:collapse;min-width:max-content;width:100%}
+.main th,.main td {text-align:left;padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top;overflow-wrap:normal;word-break:normal;white-space:nowrap}
+.main td.wrap {white-space:normal;min-width:16em;overflow-wrap:anywhere}
 .rejected td {background:#fef2f2}
 .badge {display:inline-block;padding:2px 8px;border-radius:10px;border:1px solid #64748b;font-size:.85em;white-space:nowrap}
 .added {border-color:#166534;color:#166534}

@@ -227,6 +227,8 @@ export const workOrderRevisionsV1 = z.object({
   revisions: z.array(z.object({
     id: uuidValue, revision: z.number().int().positive(), status: z.enum(["ordered", "cancelled"]), issuedOn: z.string(), dueOn: z.string().nullable(), priority: z.enum(["routine", "urgent", "emergency"]),
     netTotalPence: z.number().int().nonnegative(), batchId: uuidValue, rowNumber: z.number().int().min(2), createdAt: z.string(),
+    // The assignment the revision itself names (shown to everyone who may see the revision; no contact or identity beyond the team name).
+    team: z.object({ id: uuidValue, name: z.string() }).strict().nullable(), operativeCount: z.number().int().nonnegative(),
     diff: z.object({ fields: z.array(z.string()), added: z.array(uuidValue), removed: z.array(uuidValue), changed: z.array(uuidValue) }).strict(),
     lines: z.array(workOrderLineViewV1),
   }).strict()),

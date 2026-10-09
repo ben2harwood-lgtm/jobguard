@@ -455,6 +455,29 @@ describe("ENT-2 roles: who may import (Ben, 9 Oct 2026, card jobguard-ent-2-impo
   });
 });
 
+describe("ENT-2 tenant boundary", () => {
+  it("answers another tenant's batch, order, job and revision ids exactly as it answers unknown ones, and refuses a context that is missing, hand-built or not a tenant's", async () => {
+    const a = await org(), b = await org();
+    const result = await importOf(b.p, demoFile([row1(b.demo, 1)])); const bOrder = result.rows[0]!.workOrderId!, bJob = (await admin.query("SELECT job_id FROM app.work_order WHERE id=$1", [bOrder])).rows[0].job_id as string;
+    const probes: Array<() => Promise<unknown>> = [() => orders.batch(a.p, result.batchId), () => orders.revisions(a.p, bOrder), () => scheduling.assignments(a.p, bJob), () => scheduling.siteVisits(a.p, bJob)];
+    const unknown: Array<() => Promise<unknown>> = [() => orders.batch(a.p, randomUUID()), () => orders.revisions(a.p, randomUUID()), () => scheduling.assignments(a.p, randomUUID()), () => scheduling.siteVisits(a.p, randomUUID())];
+    for (let i = 0; i < probes.length; i++) {
+      const hidden = await probes[i]!().catch(e => e) as Error & { code?: string }, absent = await unknown[i]!().catch(e => e) as Error & { code?: string };
+      expect(hidden, `probe ${i}`).toMatchObject({ code: "NOT_FOUND" }); expect({ ...hidden }).toEqual({ ...absent }); expect(hidden.message).toBe(absent.message);
+    }
+    // A principal naming tenant B with tenant A's membership, or tenant A's with an unrelated membership, is a non-member everywhere.
+    await expect(importOf({ ...a.p, tenantId: b.p.tenantId }, demoFile([row1(b.demo, 2)]))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(orders.overview({ ...b.p, membershipId: a.p.membershipId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // The controlled routines refuse to run without a transaction-local tenant, and a tenant context made by hand never reaches PostgreSQL.
+    for (const sql of ["SELECT app.work_order_begin($1,$2,'x')", "SELECT app.work_order_commit($1,'{}'::jsonb)", "SELECT app.import_batch_record($1,'{}'::jsonb)", "SELECT app.import_sor_version($1,'{}'::jsonb)", "SELECT app.work_order_parties_unchanged($1,$1,$1,$1,$1,'{}'::jsonb)"]) {
+      await expect(runtime.query(sql, sql.includes("$2") ? [a.p.membershipId, randomUUID()] : [a.p.membershipId]), sql).rejects.toMatchObject({ message: expect.stringMatching(/^(NOT_FOUND|MODE_FORBIDDEN|INVALID_COMMAND)$/u) });
+    }
+    await expect(withTenant(runtime, { tenantId: a.p.tenantId } as never, db => db.$client.query("SELECT 1"))).rejects.toMatchObject({ code: "INVALID_TENANT_CONTEXT" });
+    await expect(importOf({ ...a.p, tenantId: "not-a-uuid" }, demoFile([row1(a.demo, 3)]))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await counts(a.p.tenantId)).work_order).toBe(0);
+  });
+});
+
 describe("ENT-2 office reads", () => {
   it("lists batches and orders and shows each revision with its diff and stable line identities, for import-capable members and the job's own team", async () => {
     const { p, demo } = await org();
