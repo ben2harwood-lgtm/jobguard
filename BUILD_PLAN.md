@@ -1797,7 +1797,7 @@ The exact allocation and cumulative-rounding module is shared with the contracto
 
 - Catalog tests prove `jobguard_runtime` has no privilege on shadow tables, directly or through views.
 - `jobguard_shadow` cannot read identity or credential tables, alter policies, assume roles or bypass RLS.
-- The reveal routine returns nothing for an unlocked job, and returns only `revealed` rows for the right tenant and job. Its EXECUTE grant is specific and catalog-tested.
+- The reveal routine sits behind a lock check that returns nothing while no lock exists; with real `revealed` rows present it returns nothing for an unlocked job. Its EXECUTE grant is specific and catalog-tested. SV-2 introduces the guarded routine; SV-4 proves the locked-job half (Ben, 7 October 2026: "split the test").
 - No runtime role can update or delete links, receive times, disclosures, classifications, dispositions or origins. `disclosed_before_lock` never returns to false.
 - Links across tenants, or across jobs in one tenant, fail on composite foreign keys.
 - Break-glass reads need a separate permission and write an audit reason.
@@ -1851,6 +1851,7 @@ The exact allocation and cumulative-rounding module is shared with the contracto
 - The locked account can be rebuilt from its hashes, and changing any source row is detected.
 - A double submit, a second browser or a replay creates one lock, or a typed conflict.
 - A trigger test proves later revisions never change the lock row.
+- Once the job is locked, the reveal routine returns only `revealed` rows for that tenant and job, and still nothing for any other job or tenant (moved from SV-2's Done-when; Ben, 7 October 2026: "split the test").
 - A final or supplementary invoice without the lock or a completed reconciliation bound to that lock and cutoff fails in the command, controlled routine and UI. Race tests cover pending, failed and completing reconciliation. SV-4 introduces the fail-closed guard; SV-5 supplies the completion record. Deposit and interim invoices remain unaffected.
 - The lock screen, its response and "Running JobGuard's final check" are identical with zero signals and with many.
 - `await V('lock-state','Final account completed');` passes after a reload and when the job is opened from Jobs.
@@ -3507,6 +3508,7 @@ Agents append adjacent findings here rather than implementing them inline, with 
 | 2026-09-30 | `app.job` constraint `job_baseline_shape` (0020) and the lifecycle routine (0003) require a quote or imported baseline plus cap when a job goes live; contractor work-order jobs and v3 small-builder activations have neither | CH-1, ENT-2 | ENT-2 adds a `work_order` provenance and a controlled route into `live`; CH-1 relaxes the cap requirement for v3 |
 | 2026-09-30 | Flaky mobile browser tests: `e2e/M2-5-S.spec.ts` and `e2e/M2-1B-S.spec.ts` (mobile-360) each timed out on a 45-second poll in CI run 36748730218 on a docs-only commit, after identical code passed twice; recent PR histories show repeated CI failures before success | §2.4 C6; every task | Standalone repair `TEST-STAB-2026-09-30` before parallel dispatch: find the shared race (projection timing, seed readiness or server start under load) and fix it without lengthening timeouts, adding retries or skipping tests; CI must pass three consecutive runs |
 | 2026-09-30 | M0-6 is an in-memory auth scaffold (no persisted sessions or identity email) and the AI gateway is fixture-only (no Claude route or Deepgram adapter) | §11 M0-6L, M0-12a/b | Carried as live prerequisites before any real user signs in |
+| 2026-10-07 | SV-2's Done-when asked it to prove the reveal routine returns `revealed` rows for a locked job, but the lock table (`final_account_lock`) is SV-4's and SV-4 depends on SV-2, so SV-2 cannot prove that half (Command Center card `jobguard-sv2-reveal-lock-split-2026-10-07`) | SV-2; SV-4 | Ben ruled "split the test" (7 October 2026, 20:01): SV-2 proves the guarded routine returns nothing while no lock exists, plus its EXECUTE grant; SV-4 proves the locked-job half. Done-when lines changed in both cards; no code, invariant or decision record changes |
 
 ---
 
