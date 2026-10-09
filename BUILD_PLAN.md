@@ -3335,6 +3335,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — M4-7-S, 8 October 2026 (merge-ahead ruling).** This PR moved from its reserved 0046 to 0101 (`practice_feed`) because 0053 merged ahead, and on 8 October to **0106** because CH-3b's 0102 merged first (Ben's 5 October merge-ahead ruling; the lane path was swapped under Ben's standing yes for renumber lane swaps). 0103 is MON-7a's, 0104 CH-1's and 0105 ENT-2's; 0098 (M0-6L), 0099 (M4-5-S) and 0100 (SV-2) take the next free number at their own merges. It must merge after any lower-numbered PR that merges first, or renumber again.
 
+**Ledger amendment — CH-1, 9 October 2026 (merge-ahead ruling).** CH-1 was issued on 7–8 October with **0104** (`job_activation_terms`). Because 0106 (M4-7-S) merged first, CH-1 renumbers to **0109** under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`: a piece that lands after higher numbers takes the next free number, so steps run in the order they were merged); 0107 is M4-5-S's (#106) and 0108 M0-6L's (#104). The SQL is byte-identical and the runner lists it after 0106. The ch-1 lane is new on this branch, so its path changed with it. Numbers held at this date: 0107 M4-5-S, 0108 M0-6L, 0110 ENT-2; 0100 (SV-2, #119) takes the next free number at its own merge. A PR whose number is not above every merged number when it lands renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
