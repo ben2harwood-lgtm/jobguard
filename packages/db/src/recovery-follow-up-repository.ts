@@ -274,7 +274,7 @@ export class RecoveryFollowUpRepository {
         await lockRecoveryCase(db, ctx.tenantId, caseId);
         const again = await this.reminderFor(db, ctx.tenantId, caseId, followUpId, messageId, input);
         const current = await inspectRecoveryMessageCase(db, ctx.tenantId, caseId);
-        if (!current.ok || current.message.contentHash !== again.message.content_hash) fail("RECOVERY_FOLLOW_UP_CHANGED");
+        if (!current.ok || current.message.contentHash !== again.message.content_hash) throw new RecoveryMessageError("RECOVERY_MESSAGE_CHANGED");
         await appendOutboundAction(db, ctx.tenantId, {
           version: "outbound-action.v1", id: outboxId, authorizationId: authorised.authorizationId!, adapter: RECOVERY_MESSAGE_ADAPTER,
           providerEffectKey: `${RECOVERY_MESSAGE_EFFECT_PREFIX}${messageId}`, actionType: RECOVERY_MESSAGE_ACTION, recipient: again.message.recipient, contentHash: again.message.content_hash,
@@ -494,9 +494,11 @@ export class RecoveryFollowUpRepository {
     if (!message) fail("RECOVERY_FOLLOW_UP_REMINDER_REQUIRED");
     const newest = Number((await db.$client.query<{ n: number }>("SELECT max(case_sequence)::int AS n FROM app.recovery_message WHERE tenant_id=$1 AND case_id=$2", [tenantId, caseId])).rows[0]!.n);
     if (message!.approved || Number(message!.case_sequence) !== newest || Number(message!.revision) !== input.expectedMessageRevision) fail("RECOVERY_FOLLOW_UP_STALE_REVISION");
+    // Content that is not exactly what the canonical builder wrote, or a command that differs from it in any approved field, is the M4-5-S
+    // changed-message refusal itself: the same typed error and the same "Review the changed message before approving" the message panel shows.
     let content;
-    try { content = verifyRecoveryMessageContent(message!.immutable_content, message!.content_hash); } catch { return fail("RECOVERY_FOLLOW_UP_CHANGED"); }
-    if (!matchesRecoveryMessageApproval(content, { ...input, version: "recovery-message-command.v1", action: "approve", messageId, expectedRevision: input.expectedMessageRevision })) fail("RECOVERY_FOLLOW_UP_CHANGED");
+    try { content = verifyRecoveryMessageContent(message!.immutable_content, message!.content_hash); } catch { throw new RecoveryMessageError("RECOVERY_MESSAGE_CONTENT_INVALID"); }
+    if (!matchesRecoveryMessageApproval(content, { ...input, version: "recovery-message-command.v1", action: "approve", messageId, expectedRevision: input.expectedMessageRevision })) throw new RecoveryMessageError("RECOVERY_MESSAGE_CHANGED");
     // The first approval resolves the follow-up's own due Decision; after a revocation, a fresh approval makes a fresh Decision, never a second due one.
     return { message: message!, dueDecisionId: facts.due && !facts.dueResolved ? facts.dueDecisionId : null };
   }

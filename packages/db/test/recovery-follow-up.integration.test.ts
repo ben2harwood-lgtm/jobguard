@@ -108,7 +108,7 @@ async function deliveredCase(claimPence = 32000) {
   return { caseId, message: state.latest!, state };
 }
 const newRun = async () => (await sandbox.create(token, randomUUID())).id;
-const scheduleCommand = (message: { id: string }, caseRevision: number, commandId = randomUUID()) => ({ version: V, action: "schedule" as const, commandId, sourceMessageId: message.id, expectedCaseRevision: caseRevision });
+const scheduleCommand = (message: { id: string }, caseRevision: number, commandId: string = randomUUID()) => ({ version: V, action: "schedule" as const, commandId, sourceMessageId: message.id, expectedCaseRevision: caseRevision });
 /** A delivered message, a fresh practice run, and a follow-up scheduled on its clock. */
 async function scheduled(claimPence = 32000) {
   const base = await deliveredCase(claimPence);
@@ -116,7 +116,7 @@ async function scheduled(claimPence = 32000) {
   const state = await repo.schedule(ctx, base.caseId, scheduleCommand(base.message, base.state.readiness.caseRevision), actor);
   return { ...base, runId, state, followUp: state.latest!, caseRevision: base.state.readiness.caseRevision };
 }
-const advance = (caseId: string, followUpId: string, runId: string, commandId = randomUUID()) =>
+const advance = (caseId: string, followUpId: string, runId: string, commandId: string = randomUUID()) =>
   repo.advanceTime(ctx, caseId, { version: V, action: "advance_time", commandId, followUpId }, actor, (run, command) => sandbox.advance(token, run, command)).then(state => ({ state, commandId, runId }));
 const reviewCommand = (followUp: RecoveryFollowUpState["followUps"][number], state: RecoveryMessageState, commandId = randomUUID()) =>
   ({ version: V, action: "open_review" as const, commandId, followUpId: followUp.id, expectedRevision: followUp.revision, expectedCaseRevision: state.readiness.caseRevision, packId: state.readiness.packId! });
@@ -312,7 +312,7 @@ describe("M4-6-S elapsed time never creates consent (DW2)", () => {
     const before = await tenantCounts();
     for (const forged of [
       { body: `${base.reminder.message.body} Pay by Friday.` }, { recipient: "practice-supplier@example.invalid" }, { amountPence: 32001 }, { packId: randomUUID() }, { contentHash: "f".repeat(64) },
-    ]) expect(await code(() => repo.approveReminder(ctx, base.caseId, { ...exact, commandId: randomUUID(), ...forged }, actor))).toBe("RECOVERY_FOLLOW_UP_CHANGED");
+    ]) expect(await code(() => repo.approveReminder(ctx, base.caseId, { ...exact, commandId: randomUUID(), ...forged }, actor))).toBe("RECOVERY_MESSAGE_CHANGED");
     expect(await code(() => repo.approveReminder(ctx, base.caseId, { ...exact, commandId: randomUUID(), expectedMessageRevision: 7 }, actor))).toBe("RECOVERY_FOLLOW_UP_STALE_REVISION");
     expect(await code(() => repo.approveReminder(ctx, base.caseId, { ...exact, commandId: randomUUID(), messageId: base.message.id }, actor))).toBe("RECOVERY_FOLLOW_UP_REMINDER_REQUIRED");
     expect(await tenantCounts()).toEqual(before);
