@@ -3347,6 +3347,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — M0-6L, 9 October 2026 (merge-ahead ruling).** This PR held **0098** (`persisted_identity`) from 7 October; because 0102 (CH-3b), 0103 (MON-7a) and 0106 (M4-7-S) merged first under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`: a piece that lands after higher numbers takes the next free number, so steps run in the order they were merged), it renumbers to **0108**, the next number neither merged nor held (0107 is M4-5-S's, PR #106). The SQL is byte-identical; the runner lists it after 0106. The lane path was swapped under Ben's standing yes for renumber lane swaps. Numbers held at this date: 0107 M4-5-S (#106), 0109 CH-1, 0110 ENT-2; 0100 (SV-2, #119) takes the next free number at its own merge. A PR whose number is not above every merged number when it lands renumbers again.
 
+**Ledger amendment — M0-6L, 9 October 2026 (second renumber, merge-ahead ruling).** Because 0109 (CH-1) and 0110 (ENT-2) merged ahead of it, M0-6L renumbers again from 0108 to **0111**, the next number neither merged nor held; the SQL is byte-identical and the runner lists it after 0110. The lane path was swapped under Ben's standing yes for renumber lane swaps. Allocations at this date (integrator, by closeness to merge): 0112 M4-6-S, 0113 CH-7 (replacing the 0111/0112 held for them in the ENT-2 line); SV-2 (#119, 0100) takes the next free number at its own merge.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
