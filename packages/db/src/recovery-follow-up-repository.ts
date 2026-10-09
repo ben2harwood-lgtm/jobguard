@@ -17,13 +17,13 @@ import { RECOVERY_MESSAGE_ADAPTER, RECOVERY_MESSAGE_EFFECT_PREFIX } from "./reco
 import { RecoveryMessageError, RecoveryMessageRepository, type RecoveryMessageActor, type RecoveryMessageState } from "./recovery-message-repository.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
-const ERROR_CODES = [
+export const RECOVERY_FOLLOW_UP_ERROR_CODES = [
   "RECOVERY_FOLLOW_UP_NOT_FOUND", "RECOVERY_FOLLOW_UP_FORBIDDEN", "RECOVERY_FOLLOW_UP_RUN_REQUIRED", "RECOVERY_FOLLOW_UP_RUN_ARCHIVED", "RECOVERY_FOLLOW_UP_CLOCK_EXHAUSTED",
   "RECOVERY_FOLLOW_UP_MESSAGE_NOT_DELIVERED", "RECOVERY_FOLLOW_UP_CASE_NOT_ELIGIBLE", "RECOVERY_FOLLOW_UP_CHANGED", "RECOVERY_FOLLOW_UP_ALREADY_ACTIVE",
   "RECOVERY_FOLLOW_UP_STALE_REVISION", "RECOVERY_FOLLOW_UP_COMMAND_CONFLICT", "RECOVERY_FOLLOW_UP_STOPPED", "RECOVERY_FOLLOW_UP_NOT_DUE",
   "RECOVERY_FOLLOW_UP_REMINDER_REQUIRED", "RECOVERY_FOLLOW_UP_REMINDER_APPROVED", "RECOVERY_FOLLOW_UP_COMPLETE", "RECOVERY_FOLLOW_UP_REVIEW_NOT_NEEDED",
 ] as const;
-export type RecoveryFollowUpErrorCode = (typeof ERROR_CODES)[number];
+export type RecoveryFollowUpErrorCode = (typeof RECOVERY_FOLLOW_UP_ERROR_CODES)[number];
 export class RecoveryFollowUpError extends Error {
   constructor(readonly code: RecoveryFollowUpErrorCode) { super(code); this.name = "RecoveryFollowUpError"; }
 }
