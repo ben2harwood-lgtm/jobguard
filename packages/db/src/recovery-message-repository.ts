@@ -9,7 +9,7 @@ import {
 } from "@jobguard/core";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { CommandError, UserCommandDispatcher, type CommandMutation, type ConsequentialCommand } from "./commands.js";
-import { ActionExecutor, appendOutboundAction, reconcileOutbox, type SafeTelemetry } from "./outbox.js";
+import { ActionExecutor, appendOutboundAction, reconcileOutbox, type OutboundAdapter, type SafeTelemetry } from "./outbox.js";
 import { FakeRecoveryMessageAdapter, RECOVERY_MESSAGE_ADAPTER, RECOVERY_MESSAGE_EFFECT_PREFIX, PracticeProcessStopped, RECOVERY_MESSAGE_BLOCKED_CODE, type RecoveryMessageDeliveryMode } from "./recovery-message-adapter.js";
 import { inspectRecoveryMessageCase, lockRecoveryCase, type Current, type RecoveryMessageReadinessReason } from "./recovery-message-current.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
@@ -27,6 +27,14 @@ export class RecoveryMessageError extends Error {
   constructor(readonly code: RecoveryMessageErrorCode) { super(code); this.name = "RecoveryMessageError"; }
 }
 const fail = (code: RecoveryMessageErrorCode): never => { throw new RecoveryMessageError(code); };
+/**
+ * The executor's `OutboundAdapter` interface carries no tenant, so this hands the caller's stamped context whole to the fake adapter at
+ * each call. The fake adapter keeps no context; this wrapper exists only for the one executor or reconcile call it is built for.
+ */
+const executorAdapter = (adapter: FakeRecoveryMessageAdapter, ctx: VerifiedTenantContext): OutboundAdapter => ({
+  name: adapter.name, supportsProviderDeduplication: adapter.supportsProviderDeduplication,
+  deliver: action => adapter.deliver(ctx, action), reconcile: providerEffectKey => adapter.reconcile(ctx, providerEffectKey),
+});
 
 export type { RecoveryMessageReadinessReason } from "./recovery-message-current.js";
 export type RecoveryMessageView = {
@@ -259,7 +267,7 @@ export class RecoveryMessageRepository {
     if (claimed.replayed) return;
     if (claimed.blocked) return fail("RECOVERY_MESSAGE_BLOCKED");
     // Deliberate post-commit boundary: only the closed deterministic fake exists, with no transport or credential.
-    const adapter = new FakeRecoveryMessageAdapter(this.pool, ctx, input.outcome satisfies RecoveryMessageDeliveryMode);
+    const adapter = executorAdapter(new FakeRecoveryMessageAdapter(this.pool, input.outcome satisfies RecoveryMessageDeliveryMode), ctx);
     try { await new ActionExecutor(this.pool, new Map([[adapter.name, adapter]]), noTelemetry).execute(ctx, claimed.outboxId); }
     catch (error) { if (error instanceof PracticeProcessStopped) fail("RECOVERY_MESSAGE_DELIVERY_INTERRUPTED"); throw error; }
     await guarded(() => withTenant(this.pool, ctx, async db => {
@@ -277,7 +285,7 @@ export class RecoveryMessageRepository {
 
   // ---- reconcile: ask the practice provider what it recorded; never resend an unknown outcome -----------------
   private async reconcile(ctx: VerifiedTenantContext, caseId: string, messageId: string, input: Extract<RecoveryMessageCommand, { action: "reconcile" }>, actor: RecoveryMessageActor, requestHash: string) {
-    const adapter = new FakeRecoveryMessageAdapter(this.pool, ctx, "success");
+    const adapter = executorAdapter(new FakeRecoveryMessageAdapter(this.pool, "success"), ctx);
     const claimed = await guarded(() => withTenant(this.pool, ctx, async db => {
       const claimed = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, true, { action: "reconcile", requestHash });
       if (await this.isReplay(db, ctx.tenantId, input.commandId, ["reconcile_started", "outcome_unknown"], caseId, requestHash)) {

@@ -104,7 +104,10 @@ const writeCounts = async () => {
 const silent = { emit: () => undefined };
 /** The shared outbox executor, driven directly by a worker-like caller rather than through the repository. */
 const executorWith = (adapter: OutboundAdapter) => new ActionExecutor(runtime, new Map([[adapter.name, adapter]]), silent);
-const practiceAdapter = (mode: 'success' | 'response_lost' | 'no_response' | 'definite_failure' | 'process_stopped' = 'success') => new FakeRecoveryMessageAdapter(runtime, context, mode);
+const practiceAdapter = (mode: 'success' | 'response_lost' | 'no_response' | 'definite_failure' | 'process_stopped' = 'success'): OutboundAdapter => {
+  const fake = new FakeRecoveryMessageAdapter(runtime, mode), stamped = context;
+  return { name: fake.name, supportsProviderDeduplication: fake.supportsProviderDeduplication, deliver: action => fake.deliver(stamped, action), reconcile: key => fake.reconcile(stamped, key) };
+};
 const outboxStatus = async (outboxId: string) => (await admin.query('SELECT status FROM app.action_outbox WHERE id=$1', [outboxId])).rows[0].status as string;
 const sinkCount = (messageId: string) => count('SELECT count(*) n FROM app.recovery_message_sink WHERE message_id=$1', [messageId]);
 const attemptCount = (outboxId: string) => count('SELECT count(*) n FROM app.action_attempt WHERE action_id=$1', [outboxId]);
