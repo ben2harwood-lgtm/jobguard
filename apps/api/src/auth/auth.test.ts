@@ -1,6 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { withTenant } from "@jobguard/db";
+import type { Pool } from "pg";
 import { AuthError, MemoryAuthProvider, rolePermits } from "./auth-provider.js";
 import { resolveVerifiedTenantContext } from "./principal-bridge.js";
 import { TenantAuthGuard } from "./tenant-auth.guard.js";
@@ -111,6 +113,38 @@ describe("principal to tenant bridge", () => {
     const request = { headers: { origin: ORIGIN, "x-tenant-id": membership.tenantId } };
     const context = { switchToHttp: () => ({ getRequest: () => request }) } as ExecutionContext;
     await expect(new TenantAuthGuard(provider, ORIGIN).canActivate(context)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+
+  it("passes the principal bridge's stamped context to the same package module's database boundary", async () => {
+    const { provider, session, membership } = await signup();
+    const ctx = await resolveVerifiedTenantContext(provider, {
+      sessionToken: session.sessionToken, csrfToken: session.csrfToken,
+      requestedTenantId: membership.tenantId, origin: ORIGIN,
+    }, ORIGIN);
+    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [] }));
+    const connect = vi.fn(async () => ({ query, release: vi.fn() }));
+    await withTenant({ connect } as unknown as Pool, ctx, async () => undefined);
+    expect(connect).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith("SELECT set_config('app.tenant_id', $1, true)", [membership.tenantId]);
+  });
+
+  it("allows only the worker to call the queued-system-job context constructor", async () => {
+    const root = new URL("../../../../", import.meta.url);
+    const callers: string[] = [];
+    async function inspect(directory: string): Promise<void> {
+      for (const entry of await readdir(join(root.pathname, directory), { withFileTypes: true })) {
+        if (["node_modules", "dist", ".next"].includes(entry.name)) continue;
+        const path = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) await inspect(path);
+        else if (/\.(?:[cm]?[jt]s|tsx)$/u.test(entry.name) && !/\.(?:test|spec)\./u.test(entry.name)) {
+          // The definition and public re-export are not constructor callers.
+          if (["packages/db/src/tenant-context.ts", "packages/db/src/index.ts"].includes(path)) continue;
+          if ((await readFile(join(root.pathname, path), "utf8")).includes("verifiedTenantContextForQueuedJob")) callers.push(path);
+        }
+      }
+    }
+    for (const directory of ["apps", "packages", "tools"]) await inspect(directory);
+    expect(callers.sort()).toEqual(["apps/api/src/worker.ts"]);
   });
 });
 
