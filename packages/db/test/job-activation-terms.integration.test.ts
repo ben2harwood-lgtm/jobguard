@@ -101,12 +101,12 @@ describe("CH-1 v3 activation",()=>{
   const keys=(await admin.query(`SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.job_activation_terms'::regclass AND contype='f'`)).rows.map(r=>r.definition).join(" ");
   expect(keys).toContain("FOREIGN KEY (tenant_id, job_id, activation_id)");expect(keys).toContain("FOREIGN KEY (tenant_id, job_id, baseline_quote_version_id)");expect(keys).toContain("FOREIGN KEY (tenant_id, job_id, commercial_track)");
  });
- it("upgrades from 0097 without rewriting v1 commercial rows",async()=>{
+ it("upgrades from the schema just before CH-1's migration without rewriting v1 commercial rows",async()=>{
   await admin.query("CREATE DATABASE ch1_upgrade");const upgrade=new Pool({...admin.options,database:"ch1_upgrade"});
   try{
    // The existing migration runner, on real PG, is told the last migration is
    // already applied only during this setup pass. Its earlier SQL is unchanged.
-   await migrate({query:async(sql:string,values?:unknown[])=>values?.[0]==="0104_job_activation_terms.sql"&&sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")?{rows:[{}],rowCount:1}:upgrade.query(sql,values)} as Pick<Pool,"query">);
+   await migrate({query:async(sql:string,values?:unknown[])=>values?.[0]==="0109_job_activation_terms.sql"&&sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")?{rows:[{}],rowCount:1}:upgrade.query(sql,values)} as Pick<Pool,"query">);
    await upgrade.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1500000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1500000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1500000-0000-4000-8000-000000000002','d1500000-0000-4000-8000-000000000001','owner');`);
    const job=await prepareActivationFixtureV3(upgrade,context,"historic-upgrade",100000),row=(await upgrade.query(`SELECT j.revision,d.id,d.document_version,d.content_hash FROM app.job j JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(j.tenant_id,j.accepted_quote_version_id) WHERE j.id=$1`,[job])).rows[0];
    const input={version:"switch-live.v1",activationId:randomUUID(),capSnapshotId:randomUUID(),syntheticObligationId:null,jobId:job,acceptedDocumentId:row.id,acceptedDocumentVersion:row.document_version,acceptedDocumentHash:row.content_hash,expectedJobRevision:row.revision,acceptedNetValuePence:100000,recoveryCapPence:1500,mode:"pilot_no_charge",activationTermsVersion:"pilot_no_charge.v1",feePolicyVersion:"reference_fee_policy_v1",activatedAt:new Date()};
@@ -114,8 +114,8 @@ describe("CH-1 v3 activation",()=>{
    const snapshot=async()=>(await upgrade.query(`SELECT row_to_json(a) activation,row_to_json(c) snapshot FROM app.job_activation a JOIN app.cap_snapshot c ON(c.tenant_id,c.activation_id)=(a.tenant_id,a.id)`)).rows;
    const before=await snapshot();await migrate(upgrade);await migrate(upgrade);expect(await snapshot()).toEqual(before);
    expect((await upgrade.query(`SELECT count(*)::int n FROM app.job_activation_terms`)).rows[0].n).toBe(0);
-   expect(MIGRATION_URLS.at(-1)?.pathname).toContain("0104_job_activation_terms.sql");
-   expect((await readFile(fileURLToPath(MIGRATION_URLS.at(-1)!),"utf8")).trim()).toMatch(/^BEGIN;[\s\S]*COMMIT;$/u);
+   const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!),own=names.indexOf("0109_job_activation_terms.sql"),feed=names.indexOf("0106_practice_feed.sql");expect(feed).toBeGreaterThanOrEqual(0);expect(own).toBeGreaterThan(feed);expect(names.every((name,index)=>index===0||names[index-1]<name)).toBe(true);expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name)).toEqual(names);
+   expect((await readFile(fileURLToPath(MIGRATION_URLS[own]!),"utf8")).trim()).toMatch(/^BEGIN;[\s\S]*COMMIT;$/u);
   }finally{await closeTestPools(upgrade);}
  });
  it("DW3 snapshots/exports and the immutable terms contain no historic copy",async()=>{
