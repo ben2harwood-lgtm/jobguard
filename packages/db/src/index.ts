@@ -61,6 +61,8 @@ export * from "./job-parties-repository.js";
 export * from "./synthetic-party-fixture.js";
 
 export * from "./watchdog.js";
+export * from "./recovery-message-adapter.js";
+export * from "./recovery-message-repository.js";
 export * from "./contractor-party-repository.js";
 export * from "./prevention-check-repository.js";
 export * from "./prevention-register-fixtures.js";
