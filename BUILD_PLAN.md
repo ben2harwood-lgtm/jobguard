@@ -3343,6 +3343,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — ENT-2, 9 October 2026 (merge-ahead ruling).** ENT-2 was issued on 8 October with **0105** (`work_orders`). Because 0106 (M4-7-S) merged first, attempt 2 was dispatched on 9 October with **0110**, the next number neither merged nor held (0107 M4-5-S, since merged; 0108 M0-6L, #104; 0109 CH-1, #123), under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`). The runner lists it in numeric order after 0107. Work-order import roles follow Ben's 9 October answer "Existing roles" (card `jobguard-ent-2-import-roles-2026-10-08`); no permission changed. Numbers held at this date: 0108 M0-6L, 0109 CH-1, 0111 M4-6-S, 0112 CH-7; 0100 (SV-2, #119) takes the next free number at its own merge. A PR whose number is not above every merged number when it lands renumbers again.
 
+**Ledger amendment — M4-6-S, 9 October 2026 (merge-ahead ruling).** M4-6-S (reserved 0047 in the in-flight table) was issued on 9 October with **0112** (`recovery_follow_up`), the next number neither merged nor held at dispatch (merged 0102, 0103, 0106, 0107, 0109, 0110; 0111 held by M0-6L #104), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order. 0113 is held for CH-7; SV-2 (#119) takes the next free number at its own merge. A PR whose number is not above every merged number when it lands renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
