@@ -57,6 +57,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/things-to-check/[action]": "watchdog_live_only",
   "/api/jobs/[id]/variations": "post_live_billing",
   "/api/jobs/capture": "pre_live_allowed",
+  // ENT-2: the work-order import creates each job, binds its parties and enters live in one transaction; tenant administration and SoR imports are outside this registry.
+  "/api/contractor/work-order-imports": "pre_live_allowed",
   "/api/decisions#evaluate": "pre_live_allowed",
   "/api/decisions#resolve": "pre_live_allowed",
   "/api/recovery-cases/[id]/evidence-packs": "post_live_billing",
@@ -126,6 +128,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/things-to-check/supersede-bill": "watchdog_live_only",
   "nest:/jobs/:id/variations": "post_live_billing",
   "nest:/jobs/capture": "pre_live_allowed",
+  "nest:/contractor/work-order-imports": "pre_live_allowed",
   "nest:/recovery-cases/:id/evidence-packs": "post_live_billing",
   "nest:/recovery-cases/:id/evidence-packs/:packId/attachment-approval": "post_live_billing",
   "nest:/recovery-cases/:id/messages": "post_live_billing",

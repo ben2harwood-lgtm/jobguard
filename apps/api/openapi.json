@@ -1656,6 +1656,162 @@
         ]
       }
     },
+    "/contractor/work-order-imports": {
+      "get": {
+        "operationId": "WorkOrderController_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Office register of work-order import batches and orders, with the selectable generated files; organisation.manage or data.import required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      },
+      "post": {
+        "operationId": "WorkOrderController_import",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import a generated synthetic work-order file (work-order-import.v1); organisation.manage or data.import required, no arbitrary upload",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/work-order-imports/{batchId}": {
+      "get": {
+        "operationId": "WorkOrderController_batch",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "One import batch with its per-row receipts and typed errors",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/work-orders/{workOrderId}/revisions": {
+      "get": {
+        "operationId": "WorkOrderController_revisions",
+        "parameters": [
+          {
+            "name": "workOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Immutable revisions of one work order with diffs and stable line identities; resident contact is never included",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/sor-versions": {
+      "get": {
+        "operationId": "WorkOrderController_sorVersions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Immutable schedule-of-rates versions; contract.read required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      },
+      "post": {
+        "operationId": "WorkOrderController_importSor",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import an immutable schedule-of-rates version (sor-version-import.v1); contract.manage required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/assignments": {
+      "get": {
+        "operationId": "SchedulingController_assignments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The team and operatives assigned to a work-order job; job.read through the job's own scope, else the same 404 as an unknown job",
+        "tags": [
+          "contractor-scheduling"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/site-visits": {
+      "get": {
+        "operationId": "SchedulingController_siteVisits",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Recorded site visits (server times) of a work-order job; empty until ENT-3 records visits",
+        "tags": [
+          "contractor-scheduling"
+        ]
+      }
+    },
     "/jobs/{id}/parties": {
       "get": {
         "operationId": "JobPartiesController_view",

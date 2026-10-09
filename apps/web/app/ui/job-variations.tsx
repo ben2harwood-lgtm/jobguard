@@ -4,7 +4,7 @@ import {variationWorkspaceResponseV1,type VariationWorkspaceResponse} from "@job
 const ATT="Builder-recorded practice acceptance — not an authenticated customer signature";
 const pounds=(p:number)=>`${p<0?"−":""}£${(Math.abs(p)/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const toPence=(value:string)=>{const m=/^(\d{1,11})(?:\.(\d{0,2}))?$/u.exec(value.trim());if(!m)return null;const result=BigInt(m[1]!)*100n+BigInt((m[2]??"").padEnd(2,"0"));return result<=1_000_000_000_000n?Number(result):null;};
-export function JobVariations({jobId}:{jobId:string}) {
+export function JobVariations({jobId,legacyPricing=true}:{jobId:string;legacyPricing?:boolean}) {
  const [view,setView]=useState<VariationWorkspaceResponse|null>(null),[description,setDescription]=useState(""),[amount,setAmount]=useState(""),[direction,setDirection]=useState<"addition"|"omission">("addition"),[link,setLink]=useState<"new"|"existing">("new"),[notice,setNotice]=useState(""),[editing,setEditing]=useState<string|null>(null),[editAmount,setEditAmount]=useState("");
  const [busy,setBusy]=useState(false),[loadFailed,setLoadFailed]=useState(false);
  const writing=useRef(false);
@@ -47,7 +47,7 @@ export function JobVariations({jobId}:{jobId:string}) {
  if(!view)return <section className="variation-workspace"><h2>Extra work and omissions</h2>{loadFailed?<><p role="alert">Variations could not load.</p><button onClick={()=>void load()}>Try variations again</button></>:<p>Loading variations…</p>}</section>;
  return <section className="variation-workspace" aria-labelledby="variations-title" aria-busy={busy}>
   <h2 id="variations-title">Extra work and omissions</h2><p>{ATT}</p>
-  <div className="variation-summary"><div><span>Approved additions</span><strong data-testid="approved-additions">{pounds(view.approvedAdditionsPence)}</strong></div><div><span>Approved omissions</span><strong data-testid="approved-omissions">{pounds(view.approvedOmissionsPence)}</strong></div><div><span>Pending extras</span><strong data-testid="pending-extras">{pounds(view.pendingExtrasPence)}</strong></div><div><span>Accepted baseline</span><strong data-testid="variation-baseline">{pounds(view.baselinePence)}</strong></div><div><span>Recovery cap</span><strong data-testid="variation-cap">{pounds(view.capPence)}</strong></div></div>
+  <div className="variation-summary"><div><span>Approved additions</span><strong data-testid="approved-additions">{pounds(view.approvedAdditionsPence)}</strong></div><div><span>Approved omissions</span><strong data-testid="approved-omissions">{pounds(view.approvedOmissionsPence)}</strong></div><div><span>Pending extras</span><strong data-testid="pending-extras">{pounds(view.pendingExtrasPence)}</strong></div><div><span>Accepted baseline</span><strong data-testid="variation-baseline">{pounds(view.baselinePence)}</strong></div>{legacyPricing&&<div><span>Recovery cap</span><strong data-testid="variation-cap">{pounds(view.capPence)}</strong></div>}</div>
   <fieldset disabled={busy} style={{border:0,padding:0,margin:0,minWidth:0}}>
    <section className="variation-entry"><h3>Record changed work</h3>
     <label>Description<input value={description} onChange={e=>setDescription(e.target.value)}/></label>

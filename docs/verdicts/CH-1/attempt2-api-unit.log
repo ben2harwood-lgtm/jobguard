@@ -1,0 +1,79 @@
+
+> @jobguard/api@0.0.0 test /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api
+> vitest run src && pnpm openapi:check
+
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api
+
+ ❯ src/health.test.ts (1 test | 1 failed) 560ms
+     × reports liveness without configuring or opening a datasource 559ms
+ ❯ src/watchdog-registry.test.ts (120 tests | 1 failed) 9579ms
+     × classifies standalone job mutations and dispatcher command literals too 1748ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/health.test.ts > GET /healthz > reports liveness without configuring or opening a datasource
+TypeError: Cannot read properties of null (reading 'port')
+ ❯ Test.serverAddress ../../node_modules/.pnpm/supertest@7.1.1/node_modules/supertest/lib/test.js:64:31
+ ❯ new Test ../../node_modules/.pnpm/supertest@7.1.1/node_modules/supertest/lib/test.js:49:14
+ ❯ Object.obj.<computed> [as get] ../../node_modules/.pnpm/supertest@7.1.1/node_modules/supertest/index.js:39:18
+ ❯ src/health.test.ts:13:57
+     11|     const app = module.createNestApplication();
+     12|     await app.init();
+     13|     const response = await request(app.getHttpServer()).get("/healthz"…
+       |                                                         ^
+     14|     expect(response.body).toEqual({ status: "ok" });
+     15|     await app.close();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/watchdog-registry.test.ts > CH-2 command coverage and lock order > classifies standalone job mutations and dispatcher command literals too
+AssertionError: expected undefined to be defined
+ ❯ src/watchdog-registry.test.ts:319:128
+    317|     const found: string[] = [];
+    318|     for (const [file, source] of files) {
+    319|       for (const match of source.matchAll(/commandType\s*:\s*"([^"]+)"…
+       |                                                                                                                                ^
+    320|       found.push(...nestKeys(file, source).filter(inJobScope));
+    321|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 0.0.0.0
+ ❯ Server.setupListenHandle [as _listen2] node:net:1987:21
+ ❯ listenInCluster node:net:2066:12
+ ❯ Server.listen node:net:2171:7
+ ❯ Test.serverAddress ../../node_modules/.pnpm/supertest@7.1.1/node_modules/supertest/lib/test.js:63:35
+ ❯ new Test ../../node_modules/.pnpm/supertest@7.1.1/node_modules/supertest/lib/test.js:49:14
+ ❯ Object.obj.<computed> [as get] ../../node_modules/.pnpm/supertest@7.1.1/node_modules/supertest/index.js:39:18
+ ❯ src/health.test.ts:13:57
+     11|     const app = module.createNestApplication();
+     12|     await app.init();
+     13|     const response = await request(app.getHttpServer()).get("/healthz"…
+       |                                                         ^
+     14|     expect(response.body).toEqual({ status: "ok" });
+     15|     await app.close();
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ ../../node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '0.0.0.0' }
+This error originated in "src/health.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  2 failed | 20 passed (22)
+      Tests  2 failed | 580 passed (582)
+     Errors  1 error
+   Start at  06:43:29
+   Duration  35.02s (transform 84.08s, setup 0ms, import 232.45s, tests 18.08s, environment 7ms)
+
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @jobguard/api@0.0.0 test: `vitest run src && pnpm openapi:check`
+Exit status 1

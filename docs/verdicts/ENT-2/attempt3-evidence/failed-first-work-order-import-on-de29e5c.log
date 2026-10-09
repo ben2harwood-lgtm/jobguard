@@ -1,0 +1,199 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-2/packages/db
+
+ ❯ test/work-order-import.integration.test.ts (49 tests | 7 failed | 41 skipped) 1926ms
+     × pins search_path on every ENT-2 routine; only the controlled writers are SECURITY DEFINER; none is executable by the infrastructure role 6ms
+     × answers the same file twice in a row as a replay, but processes an earlier file again as rows once later revisions have moved on (A, B, A; verdict P2-1) 285ms
+     × shows a branch-scoped admin only the orders, batches and revisions of clients in that branch: the other branch's are the same not-found as an unknown id 27ms
+     × refuses a branch-A admin's revision and cancellation of a branch-B order through the import, as it would for an order that does not exist, and commits nothing of it 48ms
+     × answers a branch-A admin's party check on a branch-B order with the not-found whatever is guessed: the check is no yes/no oracle on another branch's resident contact 19ms
+     × refuses at work_order_commit a branch-A admin's revision and cancellation of a branch-B order, while the tenant-wide admin's and finance's identical commands are accepted 20ms
+     × refuses at work_order_commit a create whose parties were bound to a branch-B client when branch A's admin commits it (defence in depth), and accepts it for the tenant-wide admin 20ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/work-order-import.integration.test.ts > ENT-2 migration and catalog > pins search_path on every ENT-2 routine; only the controlled writers are SECURITY DEFINER; none is executable by the infrastructure role
+AssertionError: expected [ 'contractor_job_allowed', …(16) ] to deeply equal [ 'contractor_job_allowed', …(17) ]
+
+- Expected
++ Received
+
+@@ -11,10 +11,9 @@
+    "read_contractor_resident",
+    "require_work_order_audit",
+    "sor_import_permitted",
+    "sor_line_net_pence",
+    "work_order_begin",
+-   "work_order_client_permitted",
+    "work_order_commit",
+    "work_order_import_permitted",
+    "work_order_parties_unchanged",
+  ]
+
+ ❯ test/work-order-import.integration.test.ts:73:50
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  test/work-order-import.integration.test.ts > ENT-2 DW1 idempotent import > answers the same file twice in a row as a replay, but processes an earlier file again as rows once later revisions have moved on (A, B, A; verdict P2-1)
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/work-order-import.integration.test.ts:182:25
+    180|     // File A again is NOT answered from A's stored batch ("created 12…
+    181|     const a2 = await importOf(p, fileA, "file-A-again.csv");
+    182|     expect(a2.replayed).toBe(false);
+       |                         ^
+    183|     expect(a2.batchId).not.toBe(a1.batchId);
+    184|     expect(a2.counts).toEqual({ rows: N, created: 0, revised: 0, uncha…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  test/work-order-import.integration.test.ts > ENT-2 per-order authority: a manager scoped to one branch has no reach into another branch's orders (verdict REPAIR at de29e5c, P1-1) > shows a branch-scoped admin only the orders, batches and revisions of clients in that branch: the other branch's are the same not-found as an unknown id
+AssertionError: expected [ Array(3) ] to deeply equal [ 'WO-DEMO-0010' ]
+
+- Expected
++ Received
+
+  [
+    "WO-DEMO-0010",
++   "WO-DEMO-0011",
++   "WO-DEMO-0012",
+  ]
+
+ ❯ test/work-order-import.integration.test.ts:516:81
+    514|     const { p, demo } = fixture, s = await seed(10), bOnly = await imp…
+    515|     // Register: each branch admin lists exactly the orders of the cli…
+    516|     expect((await orders.overview(adminA)).orders.map(o => o.reference…
+       |                                                                                 ^
+    517|     expect((await orders.overview(adminB)).orders.map(o => o.reference…
+    518|     // Batches: a batch holding only the other branch's rows is not li…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  test/work-order-import.integration.test.ts > ENT-2 per-order authority: a manager scoped to one branch has no reach into another branch's orders (verdict REPAIR at de29e5c, P1-1) > refuses a branch-A admin's revision and cancellation of a branch-B order through the import, as it would for an order that does not exist, and commits nothing of it
+AssertionError: expected [ 'revised', 'revised', …(3) ] to deeply equal [ 'rejected', 'rejected', …(3) ]
+
+- Expected
++ Received
+
+  [
+-   "rejected",
+-   "rejected",
++   "revised",
++   "revised",
+    "rejected",
+    "rejected",
+    "revised",
+  ]
+
+ ❯ test/work-order-import.integration.test.ts:552:45
+    550|       row1(demo, 20, { expectedRevision: 1, lines: changedLines }),   …
+    551|     ]), "cross-branch.csv");
+    552|     expect(result.rows.map(r => r.outcome)).toEqual(["rejected", "reje…
+       |                                             ^
+    553|     expect(result.rows[0]!.errorCode).not.toBeNull(); expect(result.ro…
+    554|     expect(result.rows[1]!.errorCode).not.toBeNull(); expect(result.ro…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  test/work-order-import.integration.test.ts > ENT-2 per-order authority: a manager scoped to one branch has no reach into another branch's orders (verdict REPAIR at de29e5c, P1-1) > answers a branch-A admin's party check on a branch-B order with the not-found whatever is guessed: the check is no yes/no oracle on another branch's resident contact
+AssertionError: expected { ok: true, value: { same: true } } to deeply equal { ok: false, code: 'P0002', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "P0002",
+-   "message": "NOT_FOUND",
+-   "ok": false,
++   "ok": true,
++   "value": {
++     "same": true,
++   },
+  }
+
+ ❯ test/work-order-import.integration.test.ts:591:98
+    589|     expect(await probe(adminAll, check, [adminAll.membershipId, ...arg…
+    590|     // Branch A's admin gets the not-found to every guess, and to an o…
+    591|     expect(await probe(adminA, check, [adminA.membershipId, ...args, J…
+       |                                                                                                  ^
+    592|     expect(await probe(adminA, check, [adminA.membershipId, ...args, w…
+    593|     expect(await probe(adminA, check, [adminA.membershipId, randomUUID…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  test/work-order-import.integration.test.ts > ENT-2 per-order authority: a manager scoped to one branch has no reach into another branch's orders (verdict REPAIR at de29e5c, P1-1) > refuses at work_order_commit a branch-A admin's revision and cancellation of a branch-B order, while the tenant-wide admin's and finance's identical commands are accepted
+AssertionError: revise by the branch-A admin: expected { ok: true, …(1) } to deeply equal { ok: false, code: 'P0002', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "P0002",
+-   "message": "NOT_FOUND",
+-   "ok": false,
++   "ok": true,
++   "value": {
++     "result": {
++       "jobId": "16c6f5c5-6d51-4b0b-baae-d99a7738380f",
++       "revision": 2,
++       "revisionId": "51b11009-a5d4-4099-84b4-cce7f2a9273f",
++       "workOrderId": "e7d57946-3e1a-44af-915f-b6e3aa24dc40",
++     },
++   },
+  }
+
+ ❯ test/work-order-import.integration.test.ts:601:130
+    599|       expect(await probe(adminAll, commitSql, [adminAll.membershipId, …
+    600|       expect(await probe(finance, commitSql, [finance.membershipId, JS…
+    601|       expect(await probe(adminA, commitSql, [adminA.membershipId, JSON…
+       |                                                                                                                                  ^
+    602|     }
+    603|     expect(await probe(adminA, commitSql, [adminA.membershipId, JSON.s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  test/work-order-import.integration.test.ts > ENT-2 per-order authority: a manager scoped to one branch has no reach into another branch's orders (verdict REPAIR at de29e5c, P1-1) > refuses at work_order_commit a create whose parties were bound to a branch-B client when branch A's admin commits it (defence in depth), and accepts it for the tenant-wide admin
+AssertionError: expected [ { ok: true }, { ok: true } ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+    {
+-     "code": "P0002",
+-     "message": "NOT_FOUND",
+-     "ok": false,
++     "ok": true,
+    },
+    {
+      "ok": true,
+    },
+  ]
+
+ ❯ test/work-order-import.integration.test.ts:623:21
+    621|       throw new Error("roll the probe back");
+    622|     }).catch(error => { if ((error as Error).message !== "roll the pro…
+    623|     expect(created).toEqual([refused, { ok: true }]);
+       |                     ^
+    624|     expect((await admin.query("SELECT count(*)::int n FROM app.work_or…
+    625|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 1 passed | 41 skipped (49)
+   Start at  16:24:58
+   Duration  2.72s (transform 378ms, setup 0ms, import 726ms, tests 1.93s, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-2/packages/db:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run --maxWorkers=1 test/work-order-import.integration.test.ts -t per-order authority|A, B, A|pins search_path
