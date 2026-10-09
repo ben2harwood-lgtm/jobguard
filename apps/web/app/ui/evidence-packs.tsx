@@ -8,12 +8,14 @@ type Pack = Inspection & {
   id: string; revision: number; manifest: EvidenceManifest; manifestHash: string; contentHash: string;
   format: "TEXT"; sources: EvidenceSource[]; attachmentApprovalValid: boolean; attachmentApprovalRecorded: boolean;
 };
+/** Stable in-page target for one mapped source, so a message can link to the exact version it relies on. */
+export const packSourceAnchor = (sourceId: string, version: number) => `pack-source-${sourceId.replace(/[^A-Za-z0-9_-]/gu, "-")}-v${version}`;
 const errorMessage = (code: string) => /STALE|CONFLICT/u.test(code)
   ? "The evidence changed. Rebuild and review the current pack before approving."
   : code.includes("SOURCE_NOT_FOUND") ? "A referenced source is unavailable. Open a case using recorded source versions."
   : code;
 
-export function EvidencePacks({ caseId, claimedNetPence }: { caseId: string; claimedNetPence: number }) {
+export function EvidencePacks({ caseId, claimedNetPence, onChange }: { caseId: string; claimedNetPence: number; onChange?: () => void }) {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [scenario, setScenario] = useState("intact"), [inspection, setInspection] = useState<Inspection | null>(null);
@@ -53,7 +55,7 @@ export function EvidencePacks({ caseId, claimedNetPence }: { caseId: string; cla
       const body = await response.json();
       if (own !== generation.current) return;
       if (!response.ok) throw new Error(body.code);
-      setPacks(body.packs); setScenario("intact");
+      setPacks(body.packs); setScenario("intact"); onChange?.();
     } catch (failure) { if (own === generation.current) setError(failure instanceof Error ? failure.message : "Pack command failed"); }
     finally { if (own === generation.current) setBusy(false); }
   }
@@ -92,7 +94,7 @@ export function EvidencePacks({ caseId, claimedNetPence }: { caseId: string; cla
       </div>}
       <p>Claims still need human review.</p>
       <h5>Source explorer</h5>
-      <ol>{pack.manifest.entries.map(entry => <li key={`${entry.sourceId}:${entry.version}`}><details>
+      <ol>{pack.manifest.entries.map(entry => <li key={`${entry.sourceId}:${entry.version}`}><details id={packSourceAnchor(entry.sourceId, entry.version)}>
         <summary>{entry.label} · exact version {entry.version}</summary>
         <p>Source identity <code>{entry.sourceId}</code></p><p>SHA-256 <code>{entry.contentHash}</code></p>
         {entry.redactedFrom && <p>Redacted derivative of {entry.redactedFrom.sourceId} version {entry.redactedFrom.version}, original hash {entry.redactedFrom.hash}</p>}
