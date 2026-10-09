@@ -2,7 +2,7 @@
 
 9 October 2026 · branch `codex/sandbox/m4-6-s` · builder: Claude Sonnet 5.5 (Codex is out until 15 October).
 Base: `origin/main` `fd81315f956eb89152bc979af3b7ae1b720f7fa4` (M4-5-S 0107, CH-1 0109, ENT-2 0110, TENANT-ADAPTER-1 merged).
-Code head: `dda7b295c1dd686f69eca2bc3435b7fdf8dfa6bf`. The head of the branch is this receipt's own commit, which adds only this file; every run below was made on the code head.
+Code head: `dda7b295c1dd686f69eca2bc3435b7fdf8dfa6bf`. Later commits add only this receipt; every run below was made on the code head.
 Order read in full: `~/.local/share/full-steam/jg-orders/M4-6-S-issued.txt` (header wins over the draft). Migration: **0112_recovery_follow_up.sql**, registered last in `packages/db/src/migrate.ts`.
 
 **Builder receipt only — not independently verified, not accepted.**
@@ -85,7 +85,7 @@ Also: core `recovery-follow-up.test.ts` (20), failure mapping tests, `watchdog-r
 | `pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M4-6-S.spec.ts` | 0 | run as `CI=true playwright test -c playwright.local.config.ts …`: 4 passed (2 tests × 2 projects, ~27 s) |
 | neighbours: `M4-5-S`, `SBOX-2`, `M4-1-S`, `M4-3-S` specs, both projects, same way | 0 | 40 passed |
 
-Environment notes: embedded PostgreSQL would not start until the `@embedded-postgres/darwin-arm64` `scripts/hydrate-symlinks.js` was run (pnpm skips its postinstall); nothing else was changed. The pinned Playwright browser (`chromium_headless_shell-1193`) is missing, so the e2e used the UNCOMMITTED, git-excluded `apps/web/playwright.local.config.ts` that only sets `executablePath` to the installed `chromium_headless_shell-1234` (same file as in the `ent-2` worktree). The e2e used the production build (`next build`, `CI=true`), as CI does; a first attempt on `next dev` timed out inside the shared capture helper before any M4-6-S code ran (cold route compile), so it is not evidence. Heavy runs one at a time under `heavy-slot m4-6-s`. Disk free was 73 GB at the last check (floor 45 GB).
+Environment notes: embedded PostgreSQL would not start until the `@embedded-postgres/darwin-arm64` `scripts/hydrate-symlinks.js` was run (pnpm skips its postinstall); nothing else was changed. The pinned Playwright browser (`chromium_headless_shell-1193`) is missing, so the e2e used the UNCOMMITTED, git-excluded `apps/web/playwright.local.config.ts` that only sets `executablePath` to the installed `chromium_headless_shell-1234` (same file as in the `ent-2` worktree). The e2e used the production build (`next build`, `CI=true`), as CI does; a first attempt on `next dev` timed out inside the shared capture helper before any M4-6-S code ran (cold route compile), so it is not evidence. Heavy runs one at a time under `heavy-slot m4-6-s`. Disk free was 63 GB at the last check (floor 45 GB).
 
 Tests that bite: with the migration temporarily mutated and restored byte-for-byte (`git diff` clean afterwards), the DB file failed as expected: due guard ignoring a resolved Decision → 1 failure; evaluation ignoring stop reasons → 8; no trigger on the SBOX-2 advance → 21; sink guard ignoring a stopped follow-up → 1. Only the core tests were written strictly failing-first (log committed); the DB, API and e2e tests were written beside or after the layer they test, and the Q1 injected failure and the mutation runs above are the substitute evidence.
 
