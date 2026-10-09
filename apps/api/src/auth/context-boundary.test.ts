@@ -1294,3 +1294,48 @@ describe("M0-6L round 8: exact stamped definition and reviewed practice callers"
     }
   });
 });
+
+describe("M0-6L round 10: merged M4-5-S fake-adapter context storage (hash-bound)", () => {
+  const ADAPTER = "packages/db/src/recovery-message-adapter.ts", CALLER = "packages/db/src/recovery-message-repository.ts";
+  const read = (path: string) => readFileSync(join(repository, path), "utf8");
+
+  it("approves the reviewed fake adapter and its repository caller only as their exact reviewed sources", () => {
+    for (const path of [ADAPTER, CALLER]) expect(rogueAt(path, read(path)), path).toEqual([]);
+  });
+
+  it("refuses the same sources at any other path, and each source at the other's path", () => {
+    for (const path of [ADAPTER, CALLER]) {
+      expect(rogueAt("packages/db/src/new-recovery-message-adapter.ts", read(path)), path).not.toEqual([]);
+      expect(rogueAt("apps/api/src/new-recovery-message-adapter.ts", read(path)), path).not.toEqual([]);
+    }
+    expect(rogueAt(ADAPTER, read(CALLER))).not.toEqual([]);
+    expect(rogueAt(CALLER, read(ADAPTER))).not.toEqual([]);
+  });
+
+  it("refuses a one-byte change to either approved file", () => {
+    for (const path of [ADAPTER, CALLER]) {
+      const source = read(path);
+      expect(rogueAt(path, `${source} `), path).not.toEqual([]);
+      expect(rogueAt(path, `${source}\n`), path).not.toEqual([]);
+      expect(rogueAt(path, `// reviewed\n${source}`), path).not.toEqual([]);
+      expect(rogueAt(path, source.replace("const", "let")), path).not.toEqual([]);
+    }
+  });
+
+  it("refuses an extra context-storing site in an approved file", () => {
+    const adapter = read(ADAPTER), caller = read(CALLER);
+    for (const changed of [
+      `${adapter}\nexport class Second { constructor(private readonly context: VerifiedTenantContext) {} }`,
+      adapter.replace("readonly supportsProviderDeduplication = true;", "readonly supportsProviderDeduplication = true;\n  private copy?: VerifiedTenantContext;"),
+      adapter.replace("async reconcile(", "keep(): VerifiedTenantContext[] { return [this.context]; }\n\n  async reconcile("),
+      adapter.replace("this.context.tenantId, content.jobId", "{ ...this.context }.tenantId, content.jobId"),
+    ]) expect(rogueAt(ADAPTER, changed)).not.toEqual([]);
+    for (const changed of [
+      caller.replace('"success");', '"success");\n    const again = new FakeRecoveryMessageAdapter(this.pool, ctx, "success");'),
+      caller.replace('"success");', '"success");\n    const other = new Elsewhere(this.pool, ctx);'),
+      caller.replace("new FakeRecoveryMessageAdapter(this.pool, ctx, \"success\")", "new FakeRecoveryMessageAdapter(this.pool, { ...ctx }, \"success\")"),
+      caller.replace("new FakeRecoveryMessageAdapter(this.pool, ctx, \"success\")", "new FakeRecoveryMessageAdapter(this.pool, {tenantId: ctx.tenantId} as VerifiedTenantContext, \"success\")"),
+      `${caller}\nconst held: VerifiedTenantContext[] = [];`,
+    ]) expect(rogueAt(CALLER, changed)).not.toEqual([]);
+  });
+});
