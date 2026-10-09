@@ -3337,6 +3337,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — M0-6L, 7 October 2026 (merge-ahead ruling).** This PR moves from its reserved 0052 to **0098** because 0053 merged ahead; 0054–0093 stay reserved, 0094 is SBOX-SESSION-1's and 0095 CH-3a's. It must merge after any lower-numbered PR that merges first, or renumber again.
 
+**Ledger amendment — M0-6L, 9 October 2026 (merge-ahead ruling).** This PR held **0098** (`persisted_identity`) from 7 October; because 0102 (CH-3b), 0103 (MON-7a) and 0106 (M4-7-S) merged first under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`: a piece that lands after higher numbers takes the next free number, so steps run in the order they were merged), it renumbers to **0108**, the next number neither merged nor held (0107 is M4-5-S's, PR #106). The SQL is byte-identical; the runner lists it after 0106. The lane path was swapped under Ben's standing yes for renumber lane swaps. Numbers held at this date: 0107 M4-5-S (#106), 0109 CH-1, 0110 ENT-2; 0100 (SV-2, #119) takes the next free number at its own merge. A PR whose number is not above every merged number when it lands renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
