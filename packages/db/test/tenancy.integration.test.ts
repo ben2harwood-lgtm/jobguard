@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -14,9 +15,9 @@ const ACCOUNT_B = "b0000000-0000-4000-8000-000000000002";
 const USER_A = "c0000000-0000-4000-8000-000000000001";
 const USER_B = "d0000000-0000-4000-8000-000000000002";
 
-// Authentication creates these in M0-6. This test-only cast exercises M0-4 given trusted context.
+// Synthetic authenticated membership creates stamped contexts for the RLS tests.
 const context = (tenantId: string): VerifiedTenantContext =>
-  ({ tenantId }) as VerifiedTenantContext;
+  testTenantContext(tenantId);
 
 let postgres: EmbeddedPostgres;
 let admin: Pool;
@@ -138,7 +139,8 @@ describe("tenant context and PostgreSQL RLS", () => {
   });
 
   it("fails closed for missing/malformed context and does not retain pooled tenant state", async () => {
-    await expect(withTenant(runtime, context("not-a-uuid"), async () => undefined)).rejects.toMatchObject({
+    // Deliberately unstamped so the malformed context reaches withTenant's INVALID_TENANT_CONTEXT refusal.
+    await expect(withTenant(runtime, { tenantId: "not-a-uuid" } as VerifiedTenantContext, async () => undefined)).rejects.toMatchObject({
       code: "INVALID_TENANT_CONTEXT",
     });
     const missing = await runtime.query("SELECT * FROM app.account");
@@ -207,6 +209,7 @@ describe("migration and privilege catalog", () => {
       { relname: "contractor_membership_revocation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "contractor_party_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "contractor_resident_contact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "counterparty_check", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "customer", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "customer_credit_note", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "customer_credit_note_sequence", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -263,7 +266,13 @@ describe("migration and privilege catalog", () => {
       { relname: "merchant_sku_alias", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "org_unit", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "planned_work_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "practice_feed_account", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "practice_feed_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "practice_feed_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "practice_feed_job_owner", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "practice_feed_receipt_match", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proof_application_response", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "property_constraint_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proposal_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proposal_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "proposal_review_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -384,6 +393,7 @@ describe("migration and privilege catalog", () => {
       { relname: "contractor_membership_revocation", owner: "jobguard_migration" },
       { relname: "contractor_party_binding", owner: "jobguard_migration" },
       { relname: "contractor_resident_contact", owner: "jobguard_migration" },
+      { relname: "counterparty_check", owner: "jobguard_migration" },
       { relname: "customer", owner: "jobguard_migration" },
       { relname: "customer_credit_note", owner: "jobguard_migration" },
       { relname: "customer_credit_note_sequence", owner: "jobguard_migration" },
@@ -440,7 +450,13 @@ describe("migration and privilege catalog", () => {
       { relname: "merchant_sku_alias", owner: "jobguard_migration" },
       { relname: "org_unit", owner: "jobguard_migration" },
       { relname: "planned_work_revision", owner: "jobguard_migration" },
+      { relname: "practice_feed_account", owner: "jobguard_migration" },
+      { relname: "practice_feed_command", owner: "jobguard_migration" },
+      { relname: "practice_feed_event", owner: "jobguard_migration" },
+      { relname: "practice_feed_job_owner", owner: "jobguard_migration" },
+      { relname: "practice_feed_receipt_match", owner: "jobguard_migration" },
       { relname: "proof_application_response", owner: "jobguard_migration" },
+      { relname: "property_constraint_fact", owner: "jobguard_migration" },
       { relname: "proposal_line", owner: "jobguard_migration" },
       { relname: "proposal_review", owner: "jobguard_migration" },
       { relname: "proposal_review_line", owner: "jobguard_migration" },
