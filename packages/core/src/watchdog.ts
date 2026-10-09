@@ -61,6 +61,9 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/decisions#resolve": "pre_live_allowed",
   "/api/recovery-cases/[id]/evidence-packs": "post_live_billing",
   "/api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval": "post_live_billing",
+  // A recovery message belongs to a recovery case on an invoiced job: billing recovery, never a watchdog input.
+  "/api/recovery-cases/[id]/messages": "post_live_billing",
+  "/api/recovery-cases/[id]/messages/[messageId]/commands": "post_live_billing",
   "/api/jobs/[id]/proof#select_generated": "watchdog_live_only",
   "/api/jobs/[id]/proof#finalize": "watchdog_live_only",
   "/api/jobs/[id]/proof#complete": "watchdog_live_only",
@@ -79,6 +82,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:job.switch_live": "pre_live_allowed",
   "command:proof.complete": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
+  "command:recovery.message.approve": "post_live_billing",
   "command:quote.acceptance.attest": "pre_live_allowed",
   "command:quote.send": "pre_live_allowed",
   "nest:/decisions/evaluate": "pre_live_allowed",
@@ -124,6 +128,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/capture": "pre_live_allowed",
   "nest:/recovery-cases/:id/evidence-packs": "post_live_billing",
   "nest:/recovery-cases/:id/evidence-packs/:packId/attachment-approval": "post_live_billing",
+  "nest:/recovery-cases/:id/messages": "post_live_billing",
+  "nest:/recovery-cases/:id/messages/:messageId/commands": "post_live_billing",
 };
 
 
