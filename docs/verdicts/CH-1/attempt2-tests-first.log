@@ -1,0 +1,4 @@
+
+> @jobguard/db@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/db
+> tsc -p tsconfig.json --noEmit
+

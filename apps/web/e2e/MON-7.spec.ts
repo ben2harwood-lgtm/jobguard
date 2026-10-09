@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openQuote, openReview } from "./helpers/capture-journey";
+import { openQuote } from "./helpers/capture-journey"; import { openReview } from "./helpers/v1-sample-job";
 test.setTimeout(240_000);
 const B=(page:Page,name:string)=>page.getByRole("button",{name,exact:true});
 const read=async(page:Page,id:string)=>{const r=await page.request.get(`/api/jobs/${id}/prevention-checks`);expect(r.ok(),await r.text()).toBe(true);return r.json();};

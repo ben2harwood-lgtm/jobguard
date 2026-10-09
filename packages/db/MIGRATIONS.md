@@ -648,3 +648,9 @@ What the database does and does not enforce, stated exactly:
 Expand-compatible: new tables only; the preceding application ignores them. The integration suite exercises upgrade from the schema just before 0106 (currently through 0102) on a database carrying an unbound prior job, as well as fresh install in demo-bootstrap; execution is required in CI. Roll forward to correct: movement facts, commands, matches, ownership and audit are history and are never rolled back destructively. Disconnect appends a command and keeps every fact.
 
 The feed is deliberately unavailable for CH-3a-adopted (imported) jobs and for SBOX-2 generated jobs without a capture record: they have no customer payments and no receipts screen, so there is nothing for the feed to match. Extending it to them would be a separately reviewed change (Opus P2-1/P2-2, rated P3 at e8892c1).
+
+## 0109 — CH-1 job activation terms
+
+Expand-compatible v3 synthetic activation: immutable tenant/job terms with FORCE RLS, qualified quote/document/track keys and controlled inserts, no historic financial effects, existing parties/track/watchdog transition guards. Existing v1 rows and activation routines are untouched. The job baseline shape additionally permits v3 with a null recovery cap. A new session-owned saved v1 sample supports historic regressions; its marker cannot be selected or changed by runtime SQL. No data backfill is required.
+
+Upgrade from the schema just before this migration (every earlier registered migration, including 0102, 0103 and 0106) applies only additive objects and expanded checks; re-running the migration runner is idempotent. Forward-fix is preferred. Rollback requires disabling v3 entry first and confirming there are no v3 activations or saved v1 samples before removing new triggers/functions/table/columns and restoring the previous checks. Never delete activated commercial history to roll back. No production fees are enabled.

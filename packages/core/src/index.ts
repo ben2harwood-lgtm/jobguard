@@ -47,3 +47,4 @@ export * from "./recovery-message.js";
 export * from "./contractor-parties.js";
 export * from "./prevention-checks.js";
 export * from "./practice-feed.js";
+export * from "./activation-v3.js";

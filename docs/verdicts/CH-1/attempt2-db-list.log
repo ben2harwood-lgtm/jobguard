@@ -1,0 +1,14 @@
+test/activation.integration.test.ts > atomic switch-live > deduplicates concurrent pilot activation and creates no financial effect
+test/activation.integration.test.ts > atomic switch-live > isolates jobs and permits one authorized illustrative obligation plus separate simulated settlement
+test/activation.integration.test.ts > CH-3a corrections preserve the activation binding and issued quote snapshot/hash
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > owns the saved v1 sample per session and refuses a client pricing-generation switch
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > DW1/DW5 generates three named fixtures through the real command, without historic financial effects
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > binds a higher sent net even when the accepted net is small
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > DW1 replays, serializes two clients and rejects command-id reuse with a different payload
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > keeps parties mandatory and rolls failed activation back before audit
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > DW4 denies runtime edits and keeps classification after later commercial activity
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > fails closed for missing/foreign contexts, non-members and wrong-job accepted documents
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > rechecks revoked membership before replaying a successful activation
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > inspects actual catalog privileges, RLS, owner and qualified keys
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > upgrades from 0097 without rewriting v1 commercial rows
+test/job-activation-terms.integration.test.ts > CH-1 v3 activation > DW3 snapshots/exports and the immutable terms contain no historic copy
