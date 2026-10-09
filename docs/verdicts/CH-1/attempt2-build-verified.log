@@ -1,0 +1,158 @@
+
+> jobguard@ build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1
+> turbo run build
+
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running build in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:build: cache miss, executing 10a141ce9921edca
+@jobguard/storage:build: cache hit, replaying logs b78e5bb767bf3e1b
+@jobguard/storage:build: 
+@jobguard/storage:build: > @jobguard/storage@0.0.0 build /private/tmp/opus-ch-3b-9023506-0810/packages/storage
+@jobguard/storage:build: > tsc -p tsconfig.json
+@jobguard/storage:build: 
+@jobguard/config:build: cache hit, replaying logs 6ef42488d6109953
+@jobguard/config:build: 
+@jobguard/config:build: > @jobguard/config@0.0.0 build /private/tmp/opus-ch-3b-9023506-0810/packages/config
+@jobguard/config:build: > tsc -p tsconfig.json
+@jobguard/config:build: 
+@jobguard/core:build: 
+@jobguard/core:build: > @jobguard/core@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core
+@jobguard/core:build: > tsc -p tsconfig.json
+@jobguard/core:build: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/db:build: cache miss, executing f6d9b57577caf71e
+@jobguard/ai:build: cache miss, executing feda7d5972e8b3af
+@jobguard/ai:build: 
+@jobguard/ai:build: > @jobguard/ai@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/ai
+@jobguard/ai:build: > tsc -p tsconfig.json
+@jobguard/ai:build: 
+@jobguard/db:build: 
+@jobguard/db:build: > @jobguard/db@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/db
+@jobguard/db:build: > tsc -p tsconfig.json
+@jobguard/db:build: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:build: cache miss, executing 418d506348fc6021
+@jobguard/api:build: 
+@jobguard/api:build: > @jobguard/api@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api
+@jobguard/api:build: > nest build
+@jobguard/api:build: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/web:build: cache miss, executing a99737b85775c1bd
+@jobguard/web:build: 
+@jobguard/web:build: > @jobguard/web@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/web
+@jobguard/web:build: > next build
+@jobguard/web:build: 
+@jobguard/web:build:  ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+@jobguard/web:build:  We detected multiple lockfiles and selected the directory of /Users/benharwood/Claude/Projects/my-new-project/pnpm-lock.yaml as the root directory.
+@jobguard/web:build:  To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+@jobguard/web:build:    See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+@jobguard/web:build:  Detected additional lockfiles: 
+@jobguard/web:build:    * /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/pnpm-lock.yaml
+@jobguard/web:build: 
+@jobguard/web:build:    ▲ Next.js 15.5.27
+@jobguard/web:build: 
+@jobguard/web:build:    Creating an optimized production build ...
+@jobguard/web:build:  ✓ Compiled successfully in 22.4s
+@jobguard/web:build:    Linting and checking validity of types ...
+@jobguard/web:build:    Collecting page data ...
+@jobguard/web:build:    Generating static pages (0/16) ...
+@jobguard/web:build:    Generating static pages (4/16) 
+@jobguard/web:build:    Generating static pages (8/16) 
+@jobguard/web:build:    Generating static pages (12/16) 
+@jobguard/web:build:  ✓ Generating static pages (16/16)
+@jobguard/web:build:    Finalizing page optimization ...
+@jobguard/web:build:    Collecting build traces ...
+@jobguard/web:build: 
+@jobguard/web:build: Route (app)                                                                  Size  First Load JS
+@jobguard/web:build: ┌ ○ /                                                                     12.2 kB         171 kB
+@jobguard/web:build: ├ ○ /_not-found                                                             995 B         103 kB
+@jobguard/web:build: ├ ○ /admin/contractor                                                     3.59 kB         140 kB
+@jobguard/web:build: ├ ƒ /api/contractor                                                         291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/decisions                                                          291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs                                                               291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]                                                          291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/commercial-integrity                                     291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/commercial-integrity/reviews                             291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/confirm                                                  291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices                                        291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]                            291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes               291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes/preview       291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/receipts                   291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/receipts/reversals         291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/fee-illustration                                         291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/fee-illustration/what-if                                 291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account                                            291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/materials                                                291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/parties                                                  291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/parties/import                                           291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/proof                                                    291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/proposal                                                 291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders                                          291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders/placement                                291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders/revisions                                291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes                                                   291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/acceptance                                        291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/acceptance/disposition                            291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/activation                                        291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/artifacts/[artifactId]                            291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/delivery                                          291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/delivery/[action]                                 291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/preview                                           291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/readiness                                                291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/readiness/[action]                                       291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery                                                 291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-cases                                           291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-cases/eligibility                               291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery/[action]                                        291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox                                          291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox/[action]                                 291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox/decisions/[decisionId]                   291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/review                                                   291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents                                       291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/facts/confirm                         291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/intake                                291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/receipts                              291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-matches                                         291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-matches/corrections                             291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/things-to-check                                          291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/things-to-check/[action]                                 291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/value                                                    291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/variations                                               291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/capture                                                       291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/material-rates                                                     291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/quotes/preview                                                     291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs                                 291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval    291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/download               291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/inspect                291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/sandbox/runs                                                       291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/sandbox/runs/[id]                                                  291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/sandbox/runs/[id]/[action]                                         291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/session                                                            291 B         103 kB
+@jobguard/web:build: ├ ƒ /api/test-support/drain                                                 291 B         103 kB
+@jobguard/web:build: ├ ƒ /jobs/[id]                                                            24.6 kB         183 kB
+@jobguard/web:build: ├ ƒ /jobs/[id]/value                                                      1.81 kB         121 kB
+@jobguard/web:build: ├ ƒ /practice/[id]                                                        1.69 kB         121 kB
+@jobguard/web:build: ├ ○ /supplier-fixtures                                                      291 B         103 kB
+@jobguard/web:build: └ ○ /things-to-check-report                                                 291 B         103 kB
+@jobguard/web:build: + First Load JS shared by all                                              102 kB
+@jobguard/web:build:   ├ chunks/5096-5c878053d6d4a57e.js                                       46.2 kB
+@jobguard/web:build:   ├ chunks/ad454de0-744f847e295242ef.js                                   54.2 kB
+@jobguard/web:build:   └ other shared chunks (total)                                           1.95 kB
+@jobguard/web:build: 
+@jobguard/web:build: 
+@jobguard/web:build: ○  (Static)   prerendered as static content
+@jobguard/web:build: ƒ  (Dynamic)  server-rendered on demand
+@jobguard/web:build: 
+ WARNING  IO error: Operation not permitted (os error 1)
+
+ Tasks:    7 successful, 7 total
+Cached:    2 cached, 7 total
+  Time:    2m42.651s 
+
