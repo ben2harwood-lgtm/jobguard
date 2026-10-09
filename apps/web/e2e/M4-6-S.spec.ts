@@ -174,7 +174,7 @@ test("passing practice time only makes the reminder ready to review; only approv
       }
       expect(await get(page, followUps(caseId))).toEqual(saved);
     } finally { await stranger.close(); await missing.close(); }
-    await page.screenshot({ path: `test-results/M4-6-S-reminder-${testInfo.project.name}.png`, fullPage: true });
+    await page.locator("#recovery-follow-ups").screenshot({ path: `test-results/M4-6-S-reminder-${testInfo.project.name}.png` });
   } finally { await database.end(); }
 });
 
@@ -240,5 +240,5 @@ test("a cancellation, a dispute and a settlement each show Stopped and create no
   expect(all.filter(item => item.dueDecision).length).toBe(1);
   await persisted(page, browser, source.jobId, async target => { await V(target, "follow-up-state", "Review reminder"); await V(target, "new-simulated-messages", "0"); });
   await assertLayout(page, ["Advance practice time", "Refresh follow-up", "Schedule a follow-up reminder"]);
-  await page.screenshot({ path: `test-results/M4-6-S-stopped-${testInfo.project.name}.png`, fullPage: true });
+  await page.locator("#recovery-follow-ups").screenshot({ path: `test-results/M4-6-S-stopped-${testInfo.project.name}.png` });
 });
