@@ -27,10 +27,10 @@ beforeAll(async()=>{
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"fixture-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
  await postgres.initialise();await postgres.start();
  const base={host:"127.0.0.1",port,database:"postgres"};admin=new Pool({...base,user:"postgres",password:"fixture-only"});
- // Upgrade from exactly the state before identity (everything listed before 0108, merged through 0106), then repeat the runner.
+ // Upgrade from exactly the state before identity (everything listed before 0111, merged through 0110), then repeat the runner.
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- const identityIndex=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0108_persisted_identity.sql"));
- const precedingIndex=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0106_practice_feed.sql"));
+ const identityIndex=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0111_persisted_identity.sql"));
+ const precedingIndex=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0110_work_orders.sql"));
  expect(precedingIndex).toBeGreaterThanOrEqual(0);
  expect(identityIndex).toBeGreaterThanOrEqual(0);
  expect(identityIndex).toBeGreaterThan(precedingIndex);

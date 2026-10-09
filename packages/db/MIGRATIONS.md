@@ -663,7 +663,7 @@ Existing objects it touches, each based on its current definition: `job_provenan
 
 Expand-compatible: new tables and a widened CHECK only; the preceding application ignores them. Corrections ship as a new migration: revisions, lines and audit are historical facts, so there is no destructive rollback. Authority for the two imports follows the 9 October "Existing roles" answer; see `docs/contracts/work-order-import-v1.md`.
 
-### 0108 — persisted entered-code identity (M0-6L)
+## 0111 — persisted entered-code identity (M0-6L)
 
 Expands the existing restricted `identity` control plane with keyed challenge/session
 hashes, rate windows, immutable invitation grants, a membership discovery index and
@@ -691,15 +691,15 @@ business RLS. SQL privileges and migration-owner-only routines require independe
 
 Existing users need no backfill: legacy synthetic users stay in their existing demo path.
 Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
-0108 replaces this PR’s earlier reservations (0052, then 0098): 0102, 0103, 0106 and 0107 merged
-ahead of this PR, so 0108 is the next free number at merge. 0107 (M4-5-S, `recovery_messages`)
-has merged; CH-1 now holds 0109 and ENT-2 0110, both landing after 0108, and 0100 (SV-2) takes the next
-free number at its own merge. The runner places 0108 after 0107_recovery_messages.sql (currently last);
-0102_contractor_parties.sql, 0103_prevention_checks.sql, 0106_practice_feed.sql and
-0107_recovery_messages.sql therefore apply before 0108, and 0109 and 0110 will sit after it. The SQL
-bytes are unchanged by the renumber (SHA-256 9779d3f6…59e0).
+0111 replaces this PR’s earlier reservations (0052, then 0098, then 0108): 0102, 0103, 0106, 0107
+(M4-5-S, `recovery_messages`), 0109 (CH-1) and 0110 (ENT-2) merged ahead of this PR, so 0111 is the next
+free number at merge. 0112 (M4-6-S) and 0113 (CH-7) are allocated after it, and 0100 (SV-2) takes the
+next free number at its own merge. The runner places 0111 after 0110_work_orders.sql (currently last);
+0102_contractor_parties.sql, 0103_prevention_checks.sql, 0106_practice_feed.sql,
+0107_recovery_messages.sql, 0109_job_activation_terms.sql and 0110_work_orders.sql therefore apply before
+0111. The SQL bytes are unchanged by the renumber (SHA-256 9779d3f6…59e0).
 Fresh-install coverage remains in the tenancy/Neon suites; `identity.integration.test.ts`
-executes upgrade from the state immediately before 0108 (everything listed ahead of it, merged through 0107),
+executes upgrade from the state immediately before 0111 (everything listed ahead of it, merged through 0110),
 checks the complete applied list against MIGRATION_URLS, and covers repeat migration,
 races, privilege/catalog checks and rollback.
 These are PostgreSQL tests, not claimed executed in the restricted builder sandbox.
