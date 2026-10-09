@@ -50,6 +50,8 @@ export { createContractorApplication, contractorHttpStatus } from "../contractor
 export * from "../practice-access.js";
 
 export * from "../job-parties.application.js";
+export * from "../recovery-message.contracts.js";
+export * from "../recovery-message.application.js";
 export * from "../contractor/contractor-parties.application.js";
 export * from "../contractor/contractor-parties.contracts.js";
 export * from "../prevention-check.application.js";
