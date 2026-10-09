@@ -13,6 +13,7 @@ import {
 } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { addBranchClient } from "./work-order-two-branch-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository, orders: WorkOrderRepository, rates: SorRepository, scheduling: JobSchedulingRepository;
 const ENT2_TABLES = ["schedule_of_rates", "sor_version", "sor_item", "import_batch", "import_row_receipt", "work_order", "work_order_revision", "work_order_line", "work_order_current", "job_assignment", "site_visit"];
@@ -67,7 +68,7 @@ describe("ENT-2 migration and catalog", () => {
     }
   });
   it("pins search_path on every ENT-2 routine; only the controlled writers are SECURITY DEFINER; none is executable by the infrastructure role", async () => {
-    const names = ["work_order_begin", "work_order_commit", "import_batch_record", "import_sor_version", "work_order_parties_unchanged", "read_contractor_resident", "sor_line_net_pence", "contractor_job_allowed", "contractor_job_team", "contractor_job_assigned", "contractor_role_permits", "work_order_import_permitted", "sor_import_permitted", "guard_work_order_job", "guard_work_order_line", "guard_work_order_current", "require_work_order_audit"];
+    const names = ["work_order_begin", "work_order_commit", "import_batch_record", "import_sor_version", "work_order_parties_unchanged", "read_contractor_resident", "sor_line_net_pence", "contractor_job_allowed", "contractor_job_team", "contractor_job_assigned", "contractor_role_permits", "work_order_import_permitted", "work_order_client_permitted", "sor_import_permitted", "guard_work_order_job", "guard_work_order_line", "guard_work_order_current", "require_work_order_audit"];
     const functions = (await admin.query("SELECT p.proname,p.prosecdef,p.proconfig,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,pg_get_userbyid(p.proowner) owner FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY p.proname", [names])).rows;
     expect(functions.map(f => f.proname).sort()).toEqual([...names].sort());
     for (const f of functions) { expect(f.owner, f.proname).toBe("jobguard_migration"); expect(f.proconfig, f.proname).toEqual(expect.arrayContaining([expect.stringMatching(/^search_path=pg_catalog/u)])); expect(f.infrastructure, f.proname).toBe(false); }
@@ -159,6 +160,36 @@ describe("ENT-2 DW1 idempotent import", () => {
     expect(again).toMatchObject({ replayed: false, counts: { created: 0, unchanged: 1, rejected: 1 } });
     expect(again.batchId).not.toBe(first.batchId);
     expect(await importOf(p, csv, "x.csv", first.commandId)).toMatchObject({ replayed: true, batchId: first.batchId });
+  });
+
+  it("answers the same file twice in a row as a replay, but processes an earlier file again as rows once later revisions have moved on (A, B, A; verdict P2-1)", async () => {
+    const { p, demo } = await org(), N = 12, changed = new Set([2, 5, 9]);
+    const rows = Array.from({ length: N }, (_, i) => row1(demo, i + 1));
+    const fileA = demoFile(rows);
+    const fileB = demoFile(rows.map((r, i) => changed.has(i + 1) ? { ...r, expectedRevision: 1, lines: [{ clientLineReference: "L1", sorCode: "REPAIR-DOOR", quantity: "3" }, (r.lines as unknown[])[1]] } : { ...r, expectedRevision: 1 }));
+    const a1 = await importOf(p, fileA, "file-A.csv");
+    expect(a1).toMatchObject({ replayed: false, counts: { rows: N, created: N, rejected: 0 } });
+    // Same file twice in a row stays a pure replay.
+    const afterA = await counts(p.tenantId);
+    expect(await importOf(p, fileA, "file-A-twice.csv")).toMatchObject({ replayed: true, batchId: a1.batchId });
+    expect(await counts(p.tenantId)).toEqual(afterA);
+    // File B revises three of A's orders.
+    const b = await importOf(p, fileB, "file-B.csv");
+    expect(b).toMatchObject({ replayed: false, counts: { rows: N, created: 0, revised: 3, unchanged: N - 3, rejected: 0 } });
+    const afterB = await counts(p.tenantId);
+    // File A again is NOT answered from A's stored batch ("created 12"): it is processed row by row against what is now current.
+    const a2 = await importOf(p, fileA, "file-A-again.csv");
+    expect(a2.replayed).toBe(false);
+    expect(a2.batchId).not.toBe(a1.batchId);
+    expect(a2.counts).toEqual({ rows: N, created: 0, revised: 0, unchanged: N - 3, rejected: 3 });
+    // The three orders B revised are refused as stale (file A still says revision 0): B's later content is never silently overwritten, and the refusal is on the record.
+    expect(a2.rows.filter(r => r.outcome === "rejected").map(r => [r.rowNumber, r.errorCode])).toEqual([[3, "STALE_REVISION"], [6, "STALE_REVISION"], [10, "STALE_REVISION"]]);
+    expect(await counts(p.tenantId)).toEqual({ ...afterB, import_batch: afterB.import_batch! + 1, import_row_receipt: afterB.import_row_receipt! + N, audit_event: afterB.audit_event! + 1 });
+    expect((await admin.query("SELECT count(*)::int n FROM app.work_order_revision WHERE tenant_id=$1 AND revision=2", [p.tenantId])).rows[0].n).toBe(3);
+    // A batch with a refused row is never a replay source, so file A is processed again each time...
+    expect((await importOf(p, fileA, "file-A-third.csv")).replayed).toBe(false);
+    // ...while file B, whose batch still describes the current state of every order it touched, remains a replay.
+    expect(await importOf(p, fileB, "file-B-again.csv")).toMatchObject({ replayed: true, batchId: b.batchId });
   });
 });
 
@@ -366,7 +397,7 @@ describe("ENT-2 DW6 personal data and origin", () => {
       await expect(withTenant(admin, testTenantContext(p.tenantId), db => db.$client.query("INSERT INTO app.work_order_line(tenant_id,id,work_order_id,revision_id,job_id,position,scope_item_id,sor_version_id,sor_code,unit,rate_pence,quantity,net_pence,origin) VALUES($1,$2,$3,$4,$5,9,$6,$7,$8,$9,$10,$11,$12,$13)",
         [p.tenantId, randomUUID(), line.work_order_id, line.revision_id, line.job_id, randomUUID(), line.sor_version_id, line.sor_code, line.unit, line.rate_pence, line.quantity, line.net_pence, origin])), origin).rejects.toMatchObject({ code: expect.stringMatching(/^(23514|23503)$/u) });
     }
-    // SH-1's command-type map: the only receipts an import writes are contractor_parties.bind, which maps to no extra kind, so extra_origin refuses all seven contractor kinds.
+    // SH-1's command-type map: the only receipts an import writes are contractor_parties.bind, which maps to no extra kind, so extra_origin refuses all four contractor kinds tried below.
     const bind = (await admin.query("SELECT command_id,actor_membership_id FROM app.command_receipt WHERE tenant_id=$1 AND command_type='contractor_parties.bind'", [p.tenantId])).rows;
     expect(bind).toHaveLength(1);
     expect((await admin.query("SELECT DISTINCT command_type FROM app.command_receipt WHERE tenant_id=$1 AND command_type NOT LIKE 'contractor.%' ORDER BY command_type", [p.tenantId])).rows).toEqual([{ command_type: "contractor_parties.bind" }, { command_type: "contractor_parties.link" }]);
@@ -452,6 +483,155 @@ describe("ENT-2 roles: who may import (Ben, 9 Oct 2026, card jobguard-ent-2-impo
     expect((await scheduling.assignments(reader, created.jobId)).team).toMatchObject({ id: demo.teamId });
     expect((await scheduling.siteVisits(reader, created.jobId)).visits).toEqual([]);
     for (const id of [demo.teamId, demo.clientId, demo.branchId, p.tenantId]) await expect(scheduling.assignments(reader, id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("ENT-2 per-order authority: a manager scoped to one branch has no reach into another branch's orders (verdict REPAIR at de29e5c, P1-1)", () => {
+  let fixture: Awaited<ReturnType<typeof org>>, demoB: WorkOrderDemo, adminA: AuthenticatedMembership, adminB: AuthenticatedMembership, adminAll: AuthenticatedMembership, finance: AuthenticatedMembership;
+  const rowB = (n: number, overrides: Record<string, unknown> = {}) => demoRow(demoB, n, { assignedMembershipIds: [], ...overrides });
+  const changedLines = [{ clientLineReference: "L1", sorCode: "REPAIR-DOOR", quantity: "7" }, { clientLineReference: "L2", sorCode: "FIT-LOCK", quantity: "1" }];
+  /** A fresh order in each branch (references WO-DEMO-n for client A and WO-DEMO-(n+1) for client B), imported by the tenant owner. */
+  async function seed(n: number) {
+    const { p, demo } = fixture, result = await importOf(p, demoFile([row1(demo, n), rowB(n + 1)]), `seed-${n}.csv`);
+    const one = async (r: (typeof result.rows)[number]) => ({ id: r.workOrderId!, reference: r.reference!, jobId: (await admin.query("SELECT job_id FROM app.work_order WHERE id=$1", [r.workOrderId])).rows[0].job_id as string });
+    return { batchId: result.batchId, a: await one(result.rows[0]!), b: await one(result.rows[1]!) };
+  }
+  const stateOf = async (workOrderId: string) => (await admin.query("SELECT r.revision,r.status FROM app.work_order_current k JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(k.tenant_id,k.work_order_id,k.revision_id) WHERE k.work_order_id=$1", [workOrderId])).rows[0] as { revision: number; status: string };
+  const revisionCount = async (workOrderId: string) => (await admin.query("SELECT count(*)::int n FROM app.work_order_revision WHERE work_order_id=$1", [workOrderId])).rows[0].n as number;
+  const referencesOf = async (clientId: string) => (await admin.query("SELECT reference FROM app.work_order WHERE client_id=$1 ORDER BY reference", [clientId])).rows.map(r => r.reference as string);
+  const sameNotFound = (hidden: Error & { code?: string }, unknown: Error & { code?: string }) => { expect(hidden).toMatchObject({ code: "NOT_FOUND" }); expect({ ...hidden }).toEqual({ ...unknown }); expect(hidden.message).toBe(unknown.message); };
+  beforeAll(async () => {
+    fixture = await org(); const { p, demo } = fixture;
+    demoB = await addBranchClient(runtime, p, demo, "Second");
+    expect(demoB.branchId).not.toBe(demo.branchId); expect(demoB.clientId).not.toBe(demo.clientId);
+    adminA = await member(p, "admin", { kind: "branch", id: demo.branchId });
+    adminB = await member(p, "admin", { kind: "branch", id: demoB.branchId });
+    adminAll = await member(p, "admin", { kind: "tenant", id: p.tenantId });
+    finance = await member(p, "finance", { kind: "tenant", id: p.tenantId });
+  }, 180000);
+
+  it("shows a branch-scoped admin only the orders, batches and revisions of clients in that branch: the other branch's are the same not-found as an unknown id", async () => {
+    const { p, demo } = fixture, s = await seed(10), bOnly = await importOf(p, demoFile([rowB(12)]), "branch-b-only.csv"), bOrder = bOnly.rows[0]!.workOrderId!;
+    // Register: each branch admin lists exactly the orders of the clients in their own branch.
+    expect((await orders.overview(adminA)).orders.map(o => o.reference).sort()).toEqual((await referencesOf(demo.clientId)).sort());
+    expect((await orders.overview(adminB)).orders.map(o => o.reference).sort()).toEqual((await referencesOf(demoB.clientId)).sort());
+    // Batches: a batch holding only the other branch's rows is not listed; a mixed batch is listed with only this branch's rows counted.
+    const batchesA = (await orders.overview(adminA)).batches, batchesB = (await orders.overview(adminB)).batches;
+    expect(batchesA.map(b => b.sourceName)).toContain("seed-10.csv"); expect(batchesA.map(b => b.sourceName)).not.toContain("branch-b-only.csv");
+    expect(batchesB.map(b => b.sourceName)).toContain("branch-b-only.csv");
+    expect(batchesA.find(b => b.sourceName === "seed-10.csv")!.counts).toEqual({ rows: 1, created: 1, revised: 0, unchanged: 0, rejected: 0 });
+    // Batch view: only this branch's receipts; the other branch's batch is the same not-found as an unknown id.
+    const mixed = await orders.batch(adminA, s.batchId);
+    expect(mixed.rows.map(r => r.reference)).toEqual([s.a.reference]); expect(mixed.counts).toEqual({ rows: 1, created: 1, revised: 0, unchanged: 0, rejected: 0 });
+    expect((await orders.batch(adminB, s.batchId)).rows.map(r => r.reference)).toEqual([s.b.reference]);
+    sameNotFound(await orders.batch(adminA, bOnly.batchId).catch(e => e), await orders.batch(adminA, randomUUID()).catch(e => e));
+    // Revisions: own branch yes; the other branch's order is the same not-found as an unknown id.
+    expect((await orders.revisions(adminA, s.a.id)).revisions).toHaveLength(1); expect((await orders.revisions(adminB, s.b.id)).revisions).toHaveLength(1);
+    sameNotFound(await orders.revisions(adminA, s.b.id).catch(e => e), await orders.revisions(adminA, randomUUID()).catch(e => e));
+    sameNotFound(await orders.revisions(adminB, s.a.id).catch(e => e), await orders.revisions(adminB, randomUUID()).catch(e => e));
+    sameNotFound(await orders.revisions(adminA, bOrder).catch(e => e), await orders.revisions(adminA, randomUUID()).catch(e => e));
+    // A tenant-wide admin, finance (data.import) and the owner see both branches everywhere.
+    for (const [label, actor] of [["owner", p], ["tenant-wide admin", adminAll], ["finance", finance]] as const) {
+      const overview = await orders.overview(actor);
+      expect(overview.orders.map(o => o.reference), label).toEqual(expect.arrayContaining([s.a.reference, s.b.reference, "WO-DEMO-0012"]));
+      expect(overview.batches.map(b => b.sourceName), label).toEqual(expect.arrayContaining(["seed-10.csv", "branch-b-only.csv"]));
+      expect((await orders.batch(actor, s.batchId)).rows, label).toHaveLength(2); expect((await orders.batch(actor, bOnly.batchId)).rows, label).toHaveLength(1);
+      expect((await orders.revisions(actor, s.a.id)).revisions, label).toHaveLength(1); expect((await orders.revisions(actor, s.b.id)).revisions, label).toHaveLength(1);
+    }
+  });
+
+  it("refuses a branch-A admin's revision and cancellation of a branch-B order through the import, as it would for an order that does not exist, and commits nothing of it", async () => {
+    const { p, demo } = fixture, s1 = await seed(20), s2 = await seed(30), before = await counts(p.tenantId);
+    const result = await importOf(adminA, demoFile([
+      rowB(21, { expectedRevision: 1, lines: changedLines }),             // revise a branch-B order
+      rowB(31, { expectedRevision: 1, status: "cancelled", lines: [] }),  // cancel a branch-B order
+      rowB(97, { expectedRevision: 1, lines: changedLines }),             // the same shape for an order that does not exist
+      rowB(98, { expectedRevision: 1, status: "cancelled", lines: [] }),
+      row1(demo, 20, { expectedRevision: 1, lines: changedLines }),       // control: the admin's own branch revises normally
+    ]), "cross-branch.csv");
+    expect(result.rows.map(r => r.outcome)).toEqual(["rejected", "rejected", "rejected", "rejected", "revised"]);
+    expect(result.rows[0]!.errorCode).not.toBeNull(); expect(result.rows[0]!.errorCode).toBe(result.rows[2]!.errorCode);
+    expect(result.rows[1]!.errorCode).not.toBeNull(); expect(result.rows[1]!.errorCode).toBe(result.rows[3]!.errorCode);
+    for (const r of result.rows.slice(0, 4)) { expect(r.workOrderId).toBeNull(); expect(r.revisionId).toBeNull(); }
+    expect([await stateOf(s1.b.id), await stateOf(s2.b.id)]).toEqual([{ revision: 1, status: "ordered" }, { revision: 1, status: "ordered" }]);
+    expect([await revisionCount(s1.b.id), await revisionCount(s2.b.id), await revisionCount(s1.a.id)]).toEqual([1, 1, 2]);
+    const after = await counts(p.tenantId);
+    expect(after).toEqual({ ...before, work_order_revision: before.work_order_revision! + 1, work_order_line: before.work_order_line! + 2, job_assignment: before.job_assignment! + 2, import_batch: before.import_batch! + 1, import_row_receipt: before.import_row_receipt! + 5, audit_event: before.audit_event! + 2 });
+    // The reverse holds too: a branch-B admin cannot touch branch A.
+    const reverse = await importOf(adminB, demoFile([row1(demo, 20, { expectedRevision: 2, status: "cancelled", lines: [] })]), "reverse.csv");
+    expect(reverse.rows[0]).toMatchObject({ outcome: "rejected", workOrderId: null }); expect(await stateOf(s1.a.id)).toEqual({ revision: 2, status: "ordered" });
+  });
+
+  // Probes call the controlled routines directly, as the runtime role, inside a savepoint that is always rolled back: nothing is committed whatever the answer.
+  const probe = (actor: AuthenticatedMembership, sql: string, params: unknown[]) => withTenant(runtime, ctx(actor), async db => {
+    const c = db.$client; await c.query("SAVEPOINT probe");
+    try { return { ok: true as const, value: (await c.query(sql, params)).rows[0] }; }
+    catch (error) { return { ok: false as const, code: (error as { code?: string }).code, message: (error as Error).message }; }
+    finally { await c.query("ROLLBACK TO SAVEPOINT probe"); }
+  });
+  const refused = { ok: false, code: "P0002", message: "NOT_FOUND" };
+  const commitSql = "SELECT app.work_order_commit($1,$2::jsonb) result";
+  /** A complete, correctly priced revise payload for a branch-B order (and its cancellation); the tenant-wide admin's identical payload is accepted, which proves it is valid. */
+  const commitPayloads = (order: { id: string; jobId: string; reference: string }) => {
+    const base = { version: "work-order-commit.v1", kind: "revise", rowNumber: 2, jobId: order.jobId, workOrderId: order.id, reference: order.reference, expectedRevision: 1, issuedOn: fixture.demo.issuedOn, dueOn: null, priority: "routine", contentHash: "0".repeat(64), diff: {}, adjustment: fixture.demo.adjustment, team: { teamId: null, membershipIds: [] } };
+    return {
+      revise: () => ({ ...base, batchId: randomUUID(), revisionId: randomUUID(), status: "ordered", sorVersionId: fixture.demo.sorVersionId,
+        lines: [{ id: randomUUID(), scopeItemId: randomUUID(), position: 0, clientLineReference: "L1", sorVersionId: fixture.demo.sorVersionId, sorCode: "REPAIR-DOOR", unit: "each", quantity: "7", ratePence: 10000, netPence: 67550, origin: "client_instruction" }] }),
+      cancel: () => ({ ...base, batchId: randomUUID(), revisionId: randomUUID(), status: "cancelled", sorVersionId: null, lines: [] }),
+    };
+  };
+
+  it("answers a branch-A admin's party check on a branch-B order with the not-found whatever is guessed: the check is no yes/no oracle on another branch's resident contact", async () => {
+    const s = await seed(40), row = rowB(41), resident = { kind: "contact", contact: (row.resident as { contact: unknown }).contact }, wrong = JSON.stringify({ kind: "none", reason: "void_property" });
+    const check = "SELECT app.work_order_parties_unchanged($1,$2,$3,$4,$5,$6::jsonb) same", args = [s.b.id, demoB.clientId, demoB.contractId, row.siteRevisionId];
+    // A tenant-wide admin gets the real answer to the right and the wrong guess.
+    expect(await probe(adminAll, check, [adminAll.membershipId, ...args, JSON.stringify(resident)])).toEqual({ ok: true, value: { same: true } });
+    expect(await probe(adminAll, check, [adminAll.membershipId, ...args, wrong])).toEqual({ ok: true, value: { same: false } });
+    // Branch A's admin gets the not-found to every guess, and to an order that does not exist.
+    expect(await probe(adminA, check, [adminA.membershipId, ...args, JSON.stringify(resident)])).toEqual(refused);
+    expect(await probe(adminA, check, [adminA.membershipId, ...args, wrong])).toEqual(refused);
+    expect(await probe(adminA, check, [adminA.membershipId, randomUUID(), ...args.slice(1), JSON.stringify(resident)])).toEqual(refused);
+  });
+
+  it("refuses at work_order_commit a branch-A admin's revision and cancellation of a branch-B order, while the tenant-wide admin's and finance's identical commands are accepted", async () => {
+    const s = await seed(44), payloads = commitPayloads(s.b);
+    for (const [label, payload] of [["revise", payloads.revise], ["cancel", payloads.cancel]] as const) {
+      expect(await probe(adminAll, commitSql, [adminAll.membershipId, JSON.stringify(payload())]), `${label} by the tenant-wide admin`).toMatchObject({ ok: true, value: { result: { revision: 2 } } });
+      expect(await probe(finance, commitSql, [finance.membershipId, JSON.stringify(payload())]), `${label} by finance`).toMatchObject({ ok: true, value: { result: { revision: 2 } } });
+      expect(await probe(adminA, commitSql, [adminA.membershipId, JSON.stringify(payload())]), `${label} by the branch-A admin`).toEqual(refused);
+    }
+    expect(await probe(adminA, commitSql, [adminA.membershipId, JSON.stringify({ ...payloads.revise(), workOrderId: randomUUID() })]), "an order that does not exist").toEqual(refused);
+    expect(await stateOf(s.b.id)).toEqual({ revision: 1, status: "ordered" }); expect(await revisionCount(s.b.id)).toBe(1);
+  });
+
+  it("refuses at work_order_commit a create whose parties were bound to a branch-B client when branch A's admin commits it (defence in depth), and accepts it for the tenant-wide admin", async () => {
+    const s = await seed(48), row = rowB(49), resident = { kind: "contact", contact: (row.resident as { contact: unknown }).contact }, payloads = commitPayloads(s.b);
+    const created: Array<{ ok: boolean; code?: string | undefined; message?: string | undefined }> = [];
+    await withTenant(runtime, ctx(adminAll), async db => {
+      const c = db.$client, jobId = randomUUID(), workOrderId = randomUUID();
+      await c.query("SELECT app.work_order_begin($1,$2,'Work order probe')", [adminAll.membershipId, jobId]);
+      await parties.bindInTransaction(db, adminAll, { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: randomUUID(), jobId, workOrderId, expectedJobRevision: 0, clientId: demoB.clientId, contractId: demoB.contractId, siteRevisionId: row.siteRevisionId, resident });
+      const create = () => JSON.stringify({ ...payloads.revise(), kind: "create", jobId, workOrderId, reference: "WO-PROBE-CREATE", expectedRevision: 0 });
+      for (const actor of [adminA, adminAll]) {
+        await c.query("SAVEPOINT create_probe");
+        try { await c.query(commitSql, [actor.membershipId, create()]); created.push({ ok: true }); }
+        catch (error) { created.push({ ok: false, code: (error as { code?: string }).code, message: (error as Error).message }); }
+        finally { await c.query("ROLLBACK TO SAVEPOINT create_probe"); }
+      }
+      throw new Error("roll the probe back");
+    }).catch(error => { if ((error as Error).message !== "roll the probe back") throw error; });
+    expect(created).toEqual([refused, { ok: true }]);
+    expect((await admin.query("SELECT count(*)::int n FROM app.work_order WHERE reference='WO-PROBE-CREATE'")).rows[0].n).toBe(0);
+  });
+
+  it("lets a tenant-wide admin and finance revise and cancel the orders of both branches through the import, and each branch admin revise their own", async () => {
+    const { demo } = fixture, s = await seed(50), t = await seed(60);
+    const revisedBy = async (actor: AuthenticatedMembership, rows: Record<string, unknown>[], name: string) => (await importOf(actor, demoFile(rows), name)).rows.map(r => [r.outcome, r.errorCode]);
+    expect(await revisedBy(adminAll, [row1(demo, 50, { expectedRevision: 1, lines: changedLines }), rowB(51, { expectedRevision: 1, lines: changedLines })], "all-admin.csv")).toEqual([["revised", null], ["revised", null]]);
+    expect(await revisedBy(finance, [row1(demo, 60, { expectedRevision: 1, status: "cancelled", lines: [] }), rowB(61, { expectedRevision: 1, status: "cancelled", lines: [] })], "finance.csv")).toEqual([["revised", null], ["revised", null]]);
+    expect(await revisedBy(adminA, [row1(demo, 50, { expectedRevision: 2, priority: "emergency" })], "own-a.csv")).toEqual([["revised", null]]);
+    expect(await revisedBy(adminB, [rowB(51, { expectedRevision: 2, priority: "emergency" })], "own-b.csv")).toEqual([["revised", null]]);
+    expect([await stateOf(s.a.id), await stateOf(s.b.id), await stateOf(t.a.id), await stateOf(t.b.id)]).toEqual([{ revision: 3, status: "ordered" }, { revision: 3, status: "ordered" }, { revision: 2, status: "cancelled" }, { revision: 2, status: "cancelled" }]);
   });
 });
 

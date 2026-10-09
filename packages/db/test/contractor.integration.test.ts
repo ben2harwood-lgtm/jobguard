@@ -6,7 +6,8 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorPermissions, contractorRoles, contractorPermissionMatrix, contractorPermits, referenceApprovalRulesV1, type ContractorCommand, type ContractorGrant, type ContractorRole } from "@jobguard/core";
-import { ContractorRepository, ContractorPartyRepository, JobSchedulingRepository, SorRepository, WorkOrderRepository, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, demoFile, demoRow, prepareWorkOrderDemo, type AuthenticatedMembership, verifiedTenantContextFromMembership } from "../src/index.js";
+import { ContractorRepository, ContractorPartyRepository, JobSchedulingRepository, SorRepository, WorkOrderRepository, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, demoFile, demoRow, prepareWorkOrderDemo, type WorkOrderDemo, type AuthenticatedMembership, verifiedTenantContextFromMembership } from "../src/index.js";
+import { addBranchClient } from "./work-order-two-branch-test-utils.js";
 import { closeTestPools } from "./pool-test-utils.js";
 let postgres:EmbeddedPostgres, admin:Pool,runtime:Pool,dir:string,repo:ContractorRepository;
 const tables=['commercial_track_assignment','org_unit','team','client_organisation','client_contract','approval_rule_version','client_contract_version','contractor_member','role_grant','role_grant_revocation','contractor_membership_revocation','team_membership'];
@@ -359,7 +360,7 @@ it('CH-3b client customer link requires organisation.manage on the exact client'
 },60000);
 
 // ENT-2: every command and query it adds, for every role, against every scope kind the role can hold, judged by the pure rules in core.
-it('ENT-2 conformance: the work-order import, SoR import, register, batch, revision, assignment, visit, price-list and resident reads agree with the pure role and scope rules',async()=>{
+it('ENT-2 conformance: the work-order import, SoR import, register, batch, revision, assignment, visit, price-list and resident reads agree with the pure role and scope rules, per client in two branches',async()=>{
  const {p,v}=await setup(),demo=await prepareWorkOrderDemo(runtime,p),orders=new WorkOrderRepository(runtime),rates=new SorRepository(runtime),scheduling=new JobSchedulingRepository(runtime),links=new ContractorPartyRepository(runtime);
  const region=v.units.find(x=>x.kind==='region')!.id,branch=demo.branchId,own=demo.teamId;
  const otherTeam=(await command(p,{kind:'team.create',branchId:branch,name:'Fictional ENT-2 other team'})).id;
@@ -368,10 +369,16 @@ it('ENT-2 conformance: the work-order import, SoR import, register, batch, revis
  const otherRegion=(await command(p,{kind:'unit.create',unitKind:'region',parentId:p.tenantId,name:'Fictional ENT-2 other region'})).id;
  const distantBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:otherRegion,name:'Fictional ENT-2 distant branch'})).id;
  const distantTeam=(await command(p,{kind:'team.create',branchId:distantBranch,name:'Fictional ENT-2 distant team'})).id;
- const positions:Record<string,{teamId:string;branchId:string;regionId:string}>={own:{teamId:own,branchId:branch,regionId:region},otherTeam:{teamId:otherTeam,branchId:branch,regionId:region},otherBranchTeam:{teamId:otherBranchTeam,branchId:otherBranch,regionId:region},distantTeam:{teamId:distantTeam,branchId:distantBranch,regionId:otherRegion}};
- const result=await orders.importCsv(p,{commandId:randomUUID(),name:'conformance.csv',kind:'csv',csv:demoFile(Object.values(positions).map((position,index)=>demoRow(demo,index+1,{teamId:position.teamId,assignedMembershipIds:index===0?[demo.operativeMembershipId]:[]})))});
- expect(result.counts).toMatchObject({created:4,rejected:0});
- const jobs=await Promise.all(Object.keys(positions).map(async(name,index)=>({name,orderId:result.rows[index]!.workOrderId!,jobId:(await admin.query<{job_id:string}>('SELECT job_id FROM app.work_order WHERE id=$1',[result.rows[index]!.workOrderId])).rows[0]!.job_id})));
+ // A SECOND client in a SECOND branch (verdict REPAIR at de29e5c, P1-1): authority is judged per order, by the order's own client.
+ const demoB=await addBranchClient(runtime,p,demo,'Conformance second',region);
+ type ClientKey='A'|'B';
+ const demos:Record<string,{client:ClientKey;demo:WorkOrderDemo}>={own:{client:'A',demo},otherTeam:{client:'A',demo},otherBranchTeam:{client:'A',demo},distantTeam:{client:'A',demo},clientB:{client:'B',demo:demoB}};
+ const positions:Record<string,{teamId:string;branchId:string;regionId:string}>={own:{teamId:own,branchId:branch,regionId:region},otherTeam:{teamId:otherTeam,branchId:branch,regionId:region},otherBranchTeam:{teamId:otherBranchTeam,branchId:otherBranch,regionId:region},distantTeam:{teamId:distantTeam,branchId:distantBranch,regionId:otherRegion},clientB:{teamId:demoB.teamId,branchId:demoB.branchId,regionId:region}};
+ const baseRows=Object.entries(positions).map(([name,position],index)=>demoRow(demos[name]!.demo,index+1,{teamId:position.teamId,assignedMembershipIds:index===0?[demo.operativeMembershipId]:[]}));
+ const result=await orders.importCsv(p,{commandId:randomUUID(),name:'conformance.csv',kind:'csv',csv:demoFile(baseRows)});
+ expect(result.counts).toMatchObject({created:5,rejected:0});
+ const jobs=await Promise.all(Object.keys(positions).map(async(name,index)=>({name,client:demos[name]!.client,reference:baseRows[index]!.workOrderReference as string,orderId:result.rows[index]!.workOrderId!,jobId:(await admin.query<{job_id:string}>('SELECT job_id FROM app.work_order WHERE id=$1',[result.rows[index]!.workOrderId])).rows[0]!.job_id})));
+ const clientKeyOf=new Map<string,ClientKey>([[demo.clientId,'A'],[demoB.clientId,'B']]);
  const operative=await fixtureMember(p,'operative','team',own);
  const assignedOperative=await(async()=>{const row=(await admin.query<{identity_user_id:string}>('SELECT identity_user_id FROM app.membership WHERE id=$1',[demo.operativeMembershipId])).rows[0]!;return {...p,membershipId:demo.operativeMembershipId,identityUserId:row.identity_user_id} as AuthenticatedMembership;})();
  type Actor={label:string;actor:AuthenticatedMembership;grants:ContractorGrant[];assigned:ReadonlySet<string>};
@@ -381,21 +388,52 @@ it('ENT-2 conformance: the work-order import, SoR import, register, batch, revis
  actors.push({label:'operative@team (assigned to the own-team job)',actor:assignedOperative,grants:[{role:'operative',scope:{kind:'team',id:own}}],assigned:new Set([jobs[0]!.jobId])});
  actors.push({label:'operative@team (not assigned)',actor:operative,grants:[{role:'operative',scope:{kind:'team',id:own}}],assigned:new Set()});
  actors.push({label:'client_approver@client',actor:await fixtureMember(p,'client_approver','client',demo.clientId,demo.clientId),grants:[{role:'client_approver',scope:{kind:'client',id:demo.clientId}}],assigned:new Set()});
- const tenantTarget={tenantId:p.tenantId},clientTarget={tenantId:p.tenantId,regionId:region,branchId:branch,clientId:demo.clientId};
+ const tenantTarget={tenantId:p.tenantId},clientTargets:Record<ClientKey,{tenantId:string;regionId:string;branchId:string;clientId:string}>={A:{tenantId:p.tenantId,regionId:region,branchId:branch,clientId:demo.clientId},B:{tenantId:p.tenantId,regionId:region,branchId:demoB.branchId,clientId:demoB.clientId}};
  const outcome=async(work:()=>Promise<unknown>)=>work().then(()=>true,(error:{code?:string})=>{if(error.code!=='NOT_FOUND')throw error;return false;});
+ const value=async<T>(work:()=>Promise<T>)=>work().then(v=>v,(error:{code?:string})=>{if(error.code!=='NOT_FOUND')throw error;return null;});
+ const currentRevision=async(orderId:string)=>(await admin.query<{revision:number}>('SELECT r.revision FROM app.work_order_current k JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(k.tenant_id,k.work_order_id,k.revision_id) WHERE k.work_order_id=$1',[orderId])).rows[0]!.revision;
  let sequence=0;
  for(const {label,actor,grants,assigned} of actors){
   const may=(permission:Parameters<typeof contractorPermits>[1],target:Parameters<typeof contractorPermits>[2])=>contractorPermits(grants,permission,target);
-  const canImport=may('organisation.manage',clientTarget)||may('data.import',tenantTarget)||may('organisation.manage',tenantTarget);
-  const unique=(n:number)=>demoFile([demoRow(demo,n,{workOrderReference:`CONFORM-${n}`,teamId:own,assignedMembershipIds:[]})]);
-  expect(await outcome(()=>orders.importCsv(actor,{commandId:randomUUID(),name:'c.csv',kind:'csv',csv:unique(++sequence+100)})),`${label}: work-order import`).toBe(canImport);
+  // The same predicate as CH-3b's bind (0102:117), judged per client: organisation.manage on THIS client, or data.import tenant-wide.
+  const canImportFor=(client:ClientKey)=>may('organisation.manage',clientTargets[client])||may('data.import',tenantTarget)||may('organisation.manage',tenantTarget);
+  const canImportAny=canImportFor('A')||canImportFor('B');
+  // A new order for a client: true when created, false when refused (the coarse gate throws the not-found; an out-of-scope client's row is rejected with it).
+  const importNew=async(client:ClientKey,n:number)=>{
+   const d=demos[client==='A'?'own':'clientB']!.demo,team=client==='A'?own:demoB.teamId;
+   const done=await value(()=>orders.importCsv(actor,{commandId:randomUUID(),name:'c.csv',kind:'csv',csv:demoFile([demoRow(d,n,{workOrderReference:`CONFORM-${client}-${n}`,teamId:team,assignedMembershipIds:[]})])}));
+   if(!done)return false;
+   const row=done.rows[0]!;if(row.outcome==='created')return true;
+   if(row.outcome==='rejected'&&row.errorCode==='NOT_FOUND')return false;
+   throw new Error(`${label}: unexpected ${row.outcome} ${row.errorCode} importing a new order for client ${client}`);
+  };
+  // A revision of an existing order (a changed line each time): true when revised, false when refused, whatever the typed reason.
+  const reviseOld=async(job:(typeof jobs)[number])=>{
+   const row={...baseRows[Object.keys(positions).indexOf(job.name)]!,expectedRevision:await currentRevision(job.orderId),lines:[{clientLineReference:'L1',sorCode:'REPAIR-DOOR',quantity:String(++sequence)}]};
+   const done=await value(()=>orders.importCsv(actor,{commandId:randomUUID(),name:'r.csv',kind:'csv',csv:demoFile([row])}));
+   if(!done)return false;
+   const outcomeOf=done.rows[0]!.outcome;if(outcomeOf==='revised')return true;
+   if(outcomeOf==='rejected')return false;
+   throw new Error(`${label}: unexpected ${outcomeOf} revising ${job.name}`);
+  };
+  expect(await importNew('A',++sequence+100),`${label}: work-order import for client A`).toBe(canImportFor('A'));
+  expect(await importNew('B',++sequence+100),`${label}: work-order import for client B (other branch)`).toBe(canImportFor('B'));
+  for(const job of jobs.filter(j=>j.name==='own'||j.name==='clientB'))expect(await reviseOld(job),`${label}: revision of the ${job.name} order (client ${job.client}) through the import`).toBe(canImportFor(job.client));
   expect(await outcome(()=>rates.importVersion(actor,{version:'sor-version-import.v1',environment:'synthetic_demo',commandId:randomUUID(),scheduleId:randomUUID(),reference:`Conformance ${sequence}`,effectiveFrom:'2027-01-01',items:[{code:'C',description:'c',unit:'each',rate:{pence:1,currency:'GBP'}}]})),`${label}: SoR import`).toBe(may('contract.manage',tenantTarget));
-  expect(await outcome(()=>rates.list(actor)),`${label}: price-list read`).toBe(may('contract.read',tenantTarget)||may('contract.read',clientTarget));
-  expect(await outcome(()=>orders.overview(actor)),`${label}: register`).toBe(canImport);
-  expect(await outcome(()=>orders.batch(actor,result.batchId)),`${label}: batch`).toBe(canImport);
-  for(const {name,orderId,jobId} of jobs){
+  expect(await outcome(()=>rates.list(actor)),`${label}: price-list read`).toBe(may('contract.read',tenantTarget)||may('contract.read',clientTargets.A)||may('contract.read',clientTargets.B));
+  // The register and the batch view list exactly the orders (and receipts) of clients the actor may import for; with none, they are the not-found.
+  const register=await value(()=>orders.overview(actor));
+  expect(register!==null,`${label}: register`).toBe(canImportAny);
+  if(register){
+   const stored=(await admin.query<{reference:string;client_id:string}>('SELECT reference,client_id FROM app.work_order WHERE tenant_id=$1',[p.tenantId])).rows;
+   expect(register.orders.map(o=>o.reference).sort(),`${label}: register contents`).toEqual(stored.filter(o=>canImportFor(clientKeyOf.get(o.client_id)!)).map(o=>o.reference).sort());
+  }
+  const batchView=await value(()=>orders.batch(actor,result.batchId));
+  expect(batchView!==null,`${label}: batch`).toBe(canImportAny);
+  if(batchView)expect(batchView.rows.map(r=>r.reference).sort(),`${label}: batch contents`).toEqual(jobs.filter(j=>canImportFor(j.client)).map(j=>j.reference).sort());
+  for(const {name,client,orderId,jobId} of jobs){
    const target={tenantId:p.tenantId,...positions[name]!,assigned:assigned.has(jobId)};
-   expect(await outcome(()=>orders.revisions(actor,orderId)),`${label}: revisions of ${name}`).toBe(canImport||may('job.read',target));
+   expect(await outcome(()=>orders.revisions(actor,orderId)),`${label}: revisions of ${name}`).toBe(canImportFor(client)||may('job.read',target));
    expect(await outcome(()=>scheduling.assignments(actor,jobId)),`${label}: assignments of ${name}`).toBe(may('job.read',target));
    expect(await outcome(()=>scheduling.siteVisits(actor,jobId)),`${label}: site visits of ${name}`).toBe(may('job.read',target));
    expect(await outcome(()=>links.readResident(actor,jobId)),`${label}: resident of ${name}`).toBe(may('resident.read',target));
