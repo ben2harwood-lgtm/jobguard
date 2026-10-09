@@ -63,3 +63,26 @@ export function selectSorVersion<T extends { id: string; effectiveFrom: string }
   if (candidates[1]?.effectiveFrom === candidates[0].effectiveFrom) throw new SorPricingError("AMBIGUOUS_SOR_VERSION");
   return candidates[0];
 }
+
+/** A persisted SoR item as the pricing step sees it: its unit and rate come from the version, never from the order. */
+export type SorItemRate = Readonly<{ unit: string; ratePence: number }>;
+/**
+ * Prices every line of one order revision against one persisted SoR version and the contract version's tendered adjustment. An unknown
+ * code fails the whole order (the caller records the row's typed error); no line is priced twice or rounded more than once.
+ */
+export function priceWorkOrderLines(lines: readonly Readonly<{ sorCode: string; quantity: string }>[], items: ReadonlyMap<string, SorItemRate>, adjustment: z.infer<typeof sorAdjustmentV1>) {
+  return lines.map(line => {
+    const item = items.get(line.sorCode);
+    if (!item) throw new SorPricingError("UNKNOWN_SOR_CODE");
+    const net = priceSorLine({ version: "sor-line-pricing.v1", quantity: line.quantity, rate: { pence: item.ratePence, currency: "GBP" }, adjustment });
+    return { sorCode: line.sorCode, quantity: line.quantity, unit: item.unit, rate: { pence: item.ratePence, currency: "GBP" as const }, net: { pence: net.pence as number, currency: "GBP" as const } };
+  });
+}
+export const sorVersionResultV1 = z.object({
+  version: z.literal("sor-version-result.v1"), environment: z.literal("synthetic_demo"), versionId: z.string().uuid(), scheduleId: z.string().uuid(),
+  itemCount: z.number().int().positive(), effectiveFrom: z.string().date(), replayed: z.boolean(), realExternalActions: z.literal(0),
+}).strict();
+export const sorVersionListV1 = z.object({
+  version: z.literal("sor-version-list.v1"), environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0),
+  versions: z.array(z.object({ id: z.string().uuid(), scheduleId: z.string().uuid(), scheduleReference: z.string(), reference: z.string(), effectiveFrom: z.string().date(), itemCount: z.number().int().positive(), createdAt: z.string() }).strict()),
+}).strict();

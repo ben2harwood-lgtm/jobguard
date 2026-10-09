@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priceSorLine, selectSorVersion, sorVersionImportV1 } from "./sor-pricing.js";
+import { priceSorLine, priceWorkOrderLines, selectSorVersion, sorVersionImportV1 } from "./sor-pricing.js";
 const id = "11000000-0000-4000-8000-000000000001";
 const price = (quantity: string, ratePence: number, numerator = "0", denominator = "1000") =>
   priceSorLine({ version: "sor-line-pricing.v1", quantity, rate: { pence: ratePence, currency: "GBP" }, adjustment: { numerator, denominator } });
@@ -52,3 +52,17 @@ describe("ENT-2 exact SoR pricing (DW5)", () => {
     expect(sorVersionImportV1.safeParse({ ...command, items: [{ ...command.items[0], rate: { pence: 1000000000001, currency: "GBP" } }] }).success).toBe(false);
   });
 });
+describe("ENT-2 whole-order pricing from persisted items", () => {
+  const items = new Map([["REPAIR", { unit: "each", ratePence: 10000 }], ["TIE", { unit: "each", ratePence: 3 }]]);
+  const adjustment = { numerator: "-35", denominator: "1000" };
+  it("prices every line once with the item's own unit and rate (£100.00 at -35/1000 is £96.50)", () => {
+    const priced = priceWorkOrderLines([{ sorCode: "REPAIR", quantity: "1" }, { sorCode: "TIE", quantity: "0.5" }], items, adjustment);
+    expect(priced.map(l => [l.sorCode, l.unit, l.rate.pence, l.net.pence])).toEqual([["REPAIR", "each", 10000, 9650], ["TIE", "each", 3, 1]]);
+  });
+  it("refuses an unknown code, a negative multiplier and an out-of-range line with the typed error", () => {
+    expect(() => priceWorkOrderLines([{ sorCode: "NOPE", quantity: "1" }], items, adjustment)).toThrow("UNKNOWN_SOR_CODE");
+    expect(() => priceWorkOrderLines([{ sorCode: "REPAIR", quantity: "1" }], items, { numerator: "-1001", denominator: "1000" })).toThrow("NEGATIVE_MULTIPLIER");
+    expect(() => priceWorkOrderLines([{ sorCode: "REPAIR", quantity: "999999999999" }], items, adjustment)).toThrow("MONEY_OUT_OF_RANGE");
+  });
+});
+

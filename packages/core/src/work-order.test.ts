@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { contractorRoles } from "./contractor.js";
-import { workOrderRowV1, validateWorkOrderRow, parseWorkOrderCsv, encodeWorkOrderCsv, matchWorkOrderLines, diffWorkOrderRevision, workOrderImportPermits, sorImportPermits, workOrderAuditPayloadV1 } from "./work-order.js";
+import { contractorPermissionMatrix, contractorRoles } from "./contractor.js";
+import { workOrderRowV1, validateWorkOrderRow, parseWorkOrderCsv, encodeWorkOrderCsv, matchWorkOrderLines, diffWorkOrderRevision, workOrderImportPermits, sorImportPermits, workOrderAuditPayloadV1, workOrderBatchAuditPayloadV1, workOrderContentFields, workOrderPartiesComplete, workOrderImportRequestV1, workOrderErrorCodes, workOrderHttpStatus } from "./work-order.js";
 const id = "11000000-0000-4000-8000-000000000001";
 const other = "11000000-0000-4000-8000-000000000002";
 const row = { version: "work-order-import.v1", clientId: id, contractId: id, workOrderReference: "Fictional-001", issuedOn: "2026-10-08", dueOn: null, priority: "routine", status: "ordered", expectedRevision: 0, siteRevisionId: id, resident: { kind: "none", reason: "void_property" }, teamId: null, assignedMembershipIds: [], lines: [{ clientLineReference: null, sorCode: "REPAIR", quantity: "1" }] };
@@ -34,22 +34,67 @@ describe("ENT-2 import boundaries (DW2, DW6)", () => {
     const invalid = parseWorkOrderCsv(encodeWorkOrderCsv([workOrderRowV1.parse(row)]).replace('"[{', '"bad[{'));
     expect(invalid[0]).toEqual({ rowNumber: 2, error: "INVALID_ROW" });
   });
-  it("permits only the issued roles, scoped against server targets", () => {
+  it("permits the import to organisation.manage and data.import holders only, and the SoR import to contract.manage holders only (Ben, 9 Oct 2026, \"Existing roles\")", () => {
+    const importers = ["owner", "admin", "finance"], sorImporters = ["owner", "admin", "commercial_manager"];
     for (const role of contractorRoles) {
       const grants = [{ role, scope: { kind: "tenant" as const, id } }];
-      expect(workOrderImportPermits(grants, { tenantId: id })).toBe(["surveyor", "commercial_manager"].includes(role));
-      expect(sorImportPermits(grants, { tenantId: id })).toBe(role === "commercial_manager");
+      expect(workOrderImportPermits(grants, { tenantId: id })).toBe(importers.includes(role));
+      expect(sorImportPermits(grants, { tenantId: id })).toBe(sorImporters.includes(role));
       expect(workOrderImportPermits(grants, { tenantId: other })).toBe(false);
+      expect(sorImportPermits(grants, { tenantId: other })).toBe(false);
     }
+    // Surveyor and every other role get no import; the permission matrix itself is untouched.
+    expect(contractorPermissionMatrix.surveyor).not.toContain("organisation.manage");
+    expect(contractorPermissionMatrix.surveyor).not.toContain("data.import");
     expect(workOrderImportPermits([], { tenantId: id })).toBe(false);
-    expect(workOrderImportPermits([{ role: "surveyor", scope: { kind: "team", id } }], { tenantId: other, teamId: id })).toBe(true);
-    expect(workOrderImportPermits([{ role: "surveyor", scope: { kind: "team", id } }], { tenantId: other, teamId: other })).toBe(false);
+    expect(sorImportPermits([], { tenantId: id })).toBe(false);
+    // Finance is tenant-wide by construction; a team-scoped admin does not cover the tenant.
+    expect(workOrderImportPermits([{ role: "finance", scope: { kind: "team", id } }], { tenantId: id, teamId: id })).toBe(false);
+    expect(workOrderImportPermits([{ role: "admin", scope: { kind: "team", id } }], { tenantId: other, teamId: id })).toBe(true);
+    expect(workOrderImportPermits([{ role: "admin", scope: { kind: "team", id } }], { tenantId: other, teamId: other })).toBe(false);
+  });
+  it("hashes only the revisable fields: parties are bound once, a cancellation ignores its lines, assignee order does not matter", () => {
+    const base = workOrderRowV1.parse(row);
+    const fields = workOrderContentFields(base);
+    expect(workOrderContentFields({ ...base, siteRevisionId: other, resident: { kind: "none", reason: "void_property" } })).toEqual(fields);
+    expect(workOrderContentFields({ ...base, assignedMembershipIds: [], teamId: id })).not.toEqual(fields);
+    const two = workOrderRowV1.parse({ ...row, teamId: id, assignedMembershipIds: [id, other] });
+    expect(workOrderContentFields(two)).toEqual(workOrderContentFields({ ...two, assignedMembershipIds: [other, id] }));
+    const cancelled = workOrderContentFields(workOrderRowV1.parse({ ...row, status: "cancelled", lines: [] }));
+    expect(workOrderContentFields(workOrderRowV1.parse({ ...row, status: "cancelled" }))).toEqual(cancelled);
+    expect(cancelled.lines).toEqual([]);
+  });
+  it("judges party completeness for a revision exactly as the CH-3b routine does for a new order", () => {
+    const base = workOrderRowV1.parse(row);
+    expect(workOrderPartiesComplete(base)).toBe(true);
+    for (const field of ["clientId", "contractId", "siteRevisionId", "resident"] as const) expect(workOrderPartiesComplete({ ...base, [field]: null })).toBe(false);
+    expect(workOrderPartiesComplete({ ...base, resident: { kind: "none" } })).toBe(false);
+    expect(workOrderPartiesComplete({ ...base, resident: { kind: "contact", contact: { version: "resident-contact.v1", name: "Fictional Resident" } } })).toBe(false);
+    expect(workOrderPartiesComplete({ ...base, resident: { kind: "contact", contact: { version: "resident-contact.v1", name: "Fictional Resident", phone: "0000123" } } })).toBe(true);
+    expect(workOrderPartiesComplete({ ...base, resident: { kind: "contact", contact: { version: "resident-contact.v1", name: null, phone: "0000123" } } })).toBe(false);
+  });
+  it("refuses a due date before the issue date and a cancelled order without lines is fine", () => {
+    expect(workOrderRowV1.safeParse({ ...row, issuedOn: "2026-10-08", dueOn: "2026-10-07" }).success).toBe(false);
+    expect(workOrderRowV1.safeParse({ ...row, issuedOn: "2026-10-08", dueOn: "2026-10-08" }).success).toBe(true);
+  });
+  it("accepts a generated sample or a csv, strictly, and maps every typed error to one HTTP status", () => {
+    const base = { version: "work-order-import-request.v1", environment: "synthetic_demo", commandId: id };
+    expect(workOrderImportRequestV1.safeParse({ ...base, source: { kind: "generated", sample: "starter_orders" } }).success).toBe(true);
+    expect(workOrderImportRequestV1.safeParse({ ...base, source: { kind: "generated", sample: "../etc/passwd" } }).success).toBe(false);
+    expect(workOrderImportRequestV1.safeParse({ ...base, source: { kind: "csv", name: "orders.csv", csv: "x" } }).success).toBe(true);
+    expect(workOrderImportRequestV1.safeParse({ ...base, tenantId: id, source: { kind: "generated", sample: "starter_orders" } }).success).toBe(false);
+    for (const code of workOrderErrorCodes) expect([401, 403, 404, 409, 422, 503]).toContain(workOrderHttpStatus(code));
+    expect(workOrderHttpStatus("TRACK_FORBIDDEN")).toBe(403);
+    expect(workOrderHttpStatus("NOT_FOUND")).toBe(404);
   });
   it("audit allowlist cannot carry resident details or free text", () => {
     const payload = { references: { commandId: id, workOrderId: id, revisionId: id, environment: "synthetic_demo" }, hashes: { document: "a".repeat(64) }, classifications: { action: "operational" } };
     expect(workOrderAuditPayloadV1.safeParse(payload).success).toBe(true);
     expect(workOrderAuditPayloadV1.safeParse({ ...payload, resident: { name: "Fictional resident" } }).success).toBe(false);
     expect(workOrderAuditPayloadV1.safeParse({ ...payload, references: { ...payload.references, email: "fake@fictional.invalid" } }).success).toBe(false);
+    const batch = { references: { commandId: id, batchId: id, environment: "synthetic_demo" }, hashes: { document: "a".repeat(64) }, classifications: { action: "operational" } };
+    expect(workOrderBatchAuditPayloadV1.safeParse(batch).success).toBe(true);
+    expect(workOrderBatchAuditPayloadV1.safeParse({ ...batch, references: { ...batch.references, reference: "WO-1" } }).success).toBe(false);
   });
 });
 const line = (clientLineReference: string | null, sorCode: string, quantity: string, scopeItemId: string) => ({ clientLineReference, sorCode, quantity, scopeItemId, unit: "each", rate: { pence: 100, currency: "GBP" as const }, net: { pence: 100, currency: "GBP" as const }, origin: "client_instruction" as const });
@@ -71,5 +116,7 @@ describe("ENT-2 immutable revision derivation (DW3)", () => {
     expect(diffWorkOrderRevision(previous, { ...previous, status: "cancelled", lines: [b] })).toEqual({ fields: ["status"], added: [other], removed: [id], changed: [] });
     expect(diffWorkOrderRevision(previous, { ...previous, lines: [{ ...a, quantity: "2" }] })).toEqual({ fields: [], added: [], removed: [], changed: [id] });
     expect(diffWorkOrderRevision({ ...previous, lines: [a, b] }, { ...previous, lines: [b, a] })).toEqual({ fields: [], added: [], removed: [], changed: [other, id] });
+    expect(diffWorkOrderRevision({ ...previous, teamId: id, assignedMembershipIds: [id] }, { ...previous, teamId: other, assignedMembershipIds: [id, other], lines: [a] }).fields).toEqual(["teamId", "assignedMembershipIds"]);
+    expect(diffWorkOrderRevision({ ...previous, teamId: id, assignedMembershipIds: [id, other] }, { ...previous, teamId: id, assignedMembershipIds: [other, id] }).fields).toEqual([]);
   });
 });
