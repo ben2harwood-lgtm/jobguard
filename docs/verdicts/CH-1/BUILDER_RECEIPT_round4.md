@@ -66,7 +66,7 @@ Not enough local failures to say whether main would also fail under the CI's slo
 | `… --project=mobile-360 --repeat-each=8 M4-1-S.spec.ts:11` (main) | 0 | 8 pass |
 | `pnpm typecheck` | 0 | 7/7 packages |
 | `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7/7 packages |
-| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `ch-1`, merge-base 3a06a02, includes both new allow entries |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `ch-1`, includes both new allow entries; run before the commits (merge-base 3a06a02) and again at the final head (merge-base c283d4e, because `origin/main` was fetched meanwhile) |
 | `pnpm --filter @jobguard/web test` | 0 | 20 files / 361 tests |
 
 Not rerun this round (no code changed since attempt 3; only two spec import lines and one lane line): core, api and PostgreSQL integration suites, build, openapi check. Their attempt-3 results stand as recorded in `BUILDER_RECEIPT_attempt3.md`.
