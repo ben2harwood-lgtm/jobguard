@@ -82,6 +82,23 @@ function normalizeResident(resident: NonNullable<WorkOrderRow["resident"]>) {
 }
 const iso = (value: Date | string) => (value instanceof Date ? value.toISOString() : value);
 
+/**
+ * Per-order import authority in the office reads (verdict REPAIR at de29e5c, P1-1). `$1` is the tenant and `$2` the member. A member covers a client when they hold
+ * organisation.manage on it or data.import tenant-wide (app.work_order_client_permitted, the predicate CH-3b's bind applies); it is evaluated once per client, not per row.
+ * Tenant-wide import authority is data.import or organisation.manage over the whole tenant.
+ */
+const TENANT_WIDE_IMPORT = "coalesce(app.contractor_allowed($2,'data.import',$1) OR app.contractor_allowed($2,'organisation.manage',$1),false)";
+const COVERED_CLIENTS = "SELECT c.id FROM app.client_organisation c WHERE c.tenant_id=$1 AND coalesce(app.work_order_client_permitted($2,c.id),false)";
+/** CTEs `me` (wide) and `seen`: the receipts this member may see, optionally restricted to one batch. A receipt of an order is visible when its client is covered; a refused row names no order and is visible to tenant-wide importers and to the member who recorded the batch. */
+const visibleReceipts = (restriction: string) => `me AS MATERIALIZED (SELECT ${TENANT_WIDE_IMPORT} wide), covered AS MATERIALIZED (${COVERED_CLIENTS}),
+ seen AS (SELECT r.batch_id,r.row_number,r.outcome,r.error_code,r.work_order_reference,r.work_order_id,r.revision_id
+  FROM app.import_row_receipt r JOIN app.import_batch b ON(b.tenant_id,b.id)=(r.tenant_id,r.batch_id)
+  WHERE r.tenant_id=$1 ${restriction} AND (
+   (r.work_order_id IS NOT NULL AND EXISTS(SELECT 1 FROM app.work_order w JOIN covered ON covered.id=w.client_id WHERE(w.tenant_id,w.id)=(r.tenant_id,r.work_order_id)))
+   OR (r.work_order_id IS NULL AND ((SELECT wide FROM me) OR b.actor_membership_id=$2))))`;
+const receiptCounts = `count(s.batch_id)::int row_count, (count(s.batch_id) FILTER(WHERE s.outcome='created'))::int created_count, (count(s.batch_id) FILTER(WHERE s.outcome='revised'))::int revised_count,
+ (count(s.batch_id) FILTER(WHERE s.outcome='unchanged'))::int unchanged_count, (count(s.batch_id) FILTER(WHERE s.outcome='rejected'))::int rejected_count`;
+
 export class WorkOrderRepository {
   private readonly parties: ContractorPartyRepository;
   constructor(private readonly pool: Pool) { this.parties = new ContractorPartyRepository(pool); }
@@ -102,12 +119,19 @@ export class WorkOrderRepository {
         // Every contractor command of a tenant serialises on the ENT-1 lock; a concurrent import of the same file then sees this one's batch.
         await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [principal.tenantId]);
         await assertContractorGate(db, principal, "import");
+        // A stored batch answers this import only if (a) it is this very command, or (b) it holds the same file, was clean, was recorded by this member (or by a
+        // member with tenant-wide import authority, whom the file is no different for), and every order it touched is still at the revision that batch left it at.
+        // Once a later batch has revised one of those orders, the old batch no longer describes the orders, so the file is processed row by row instead (A, B, A).
         const prior = (await c.query<{ id: string; command_id: string; source_sha256: string }>(
-          "SELECT id,command_id,source_sha256 FROM app.import_batch WHERE tenant_id=$1 AND (command_id=$2 OR (source_sha256=$3 AND rejected_count=0)) ORDER BY (command_id=$2) DESC,created_at LIMIT 1",
-          [principal.tenantId, input.commandId, sourceSha256])).rows[0];
+          `WITH me AS MATERIALIZED (SELECT ${TENANT_WIDE_IMPORT} wide)
+           SELECT b.id,b.command_id,b.source_sha256 FROM app.import_batch b, me WHERE b.tenant_id=$1 AND (me.wide OR b.actor_membership_id=$2) AND (b.command_id=$4 OR (b.source_sha256=$3 AND b.rejected_count=0
+             AND NOT EXISTS(SELECT 1 FROM app.import_row_receipt r JOIN app.work_order_current k ON(k.tenant_id,k.work_order_id)=(r.tenant_id,r.work_order_id)
+               WHERE r.tenant_id=b.tenant_id AND r.batch_id=b.id AND k.revision_id IS DISTINCT FROM r.revision_id)))
+           ORDER BY (b.command_id=$4) DESC,b.created_at LIMIT 1`,
+          [principal.tenantId, principal.membershipId, sourceSha256, input.commandId])).rows[0];
         if (prior) {
           if (prior.command_id === input.commandId && prior.source_sha256 !== sourceSha256) throw new WorkOrderError("COMMAND_CONFLICT");
-          return workOrderImportResultV1.parse({ ...(await this.batchResult(db, prior.id)).result, replayed: true });
+          return workOrderImportResultV1.parse({ ...(await this.batchResult(db, principal, prior.id)).result, replayed: true });
         }
         const context: BatchContext = { db, principal, batchId: randomUUID(), commandId: input.commandId, items: new Map() };
         const receipts: WorkOrderReceipt[] = [], events: AuditEventInput[] = [];
@@ -137,18 +161,26 @@ export class WorkOrderRepository {
           payload: workOrderBatchAuditPayloadV1.parse({ references: { commandId: input.commandId, batchId: context.batchId, environment: "synthetic_demo" }, hashes: { document: sourceSha256 }, classifications: { action: "operational" } }) });
         // Audit is the last business lock in the transaction.
         await appendAuditBatch(db, events);
-        return workOrderImportResultV1.parse({ ...(await this.batchResult(db, context.batchId)).result, replayed: false });
+        return workOrderImportResultV1.parse({ ...(await this.batchResult(db, principal, context.batchId)).result, replayed: false });
       });
     } catch (error) { throw workOrderFailure(error); }
   }
 
-  private async batchResult(db: TenantTransaction, batchId: string) {
+  /**
+   * A batch as one importer may see it. A member with tenant-wide import authority sees the whole batch. Anyone else sees the receipts of orders whose
+   * client they cover (plus, in a batch they recorded themselves, the receipts of rows that were refused and so name no order), counted from those
+   * receipts alone; a batch with nothing they may see is the same not-found as an unknown id.
+   */
+  private async batchResult(db: TenantTransaction, principal: AuthenticatedMembership, batchId: string) {
     const c = db.$client;
     const batch = (await c.query<{ id: string; command_id: string; source_sha256: string; source_name: string; source_kind: "generated" | "csv"; row_count: number; created_count: number; revised_count: number; unchanged_count: number; rejected_count: number; created_at: Date }>(
-      "SELECT id,command_id,source_sha256,source_name,source_kind,row_count,created_count,revised_count,unchanged_count,rejected_count,created_at FROM app.import_batch WHERE id=$1", [batchId])).rows[0];
+      `WITH ${visibleReceipts("AND r.batch_id=$3")}
+       SELECT b.id,b.command_id,b.source_sha256,b.source_name,b.source_kind,b.created_at,${receiptCounts}
+       FROM app.import_batch b LEFT JOIN seen s ON s.batch_id=b.id WHERE b.tenant_id=$1 AND b.id=$3 AND ((SELECT wide FROM me) OR b.actor_membership_id=$2 OR s.batch_id IS NOT NULL) GROUP BY b.tenant_id,b.id`,
+      [principal.tenantId, principal.membershipId, batchId])).rows[0];
     if (!batch) throw new WorkOrderError("NOT_FOUND");
     const rows = (await c.query<{ row_number: number; outcome: WorkOrderReceipt["outcome"]; error_code: string | null; work_order_reference: string | null; work_order_id: string | null; revision_id: string | null }>(
-      "SELECT row_number,outcome,error_code,work_order_reference,work_order_id,revision_id FROM app.import_row_receipt WHERE batch_id=$1 ORDER BY row_number", [batchId])).rows;
+      `WITH ${visibleReceipts("AND r.batch_id=$3")} SELECT row_number,outcome,error_code,work_order_reference,work_order_id,revision_id FROM seen ORDER BY row_number`, [principal.tenantId, principal.membershipId, batchId])).rows;
     return {
       createdAt: iso(batch.created_at),
       result: {
@@ -162,8 +194,10 @@ export class WorkOrderRepository {
 
   private async applyRow(context: BatchContext, rowNumber: number, row: WorkOrderRow): Promise<Applied> {
     const c = context.db.$client, tenantId = context.principal.tenantId;
+    // An order of a client outside this member's scope is, to them, an order that does not exist (ENT-1): it is never found here, so a row naming it is
+    // answered exactly as a row naming no order. work_order_commit and work_order_parties_unchanged refuse it again in the database.
     const existing = row.contractId ? (await c.query<{ id: string; job_id: string; contract_version_id: string }>(
-      "SELECT id,job_id,contract_version_id FROM app.work_order WHERE tenant_id=$1 AND contract_id=$2 AND reference=$3", [tenantId, row.contractId, row.workOrderReference])).rows[0] : undefined;
+      "SELECT id,job_id,contract_version_id FROM app.work_order WHERE tenant_id=$1 AND contract_id=$2 AND reference=$3 AND coalesce(app.work_order_client_permitted($4,client_id),false)", [tenantId, row.contractId, row.workOrderReference, context.principal.membershipId])).rows[0] : undefined;
     return existing ? this.reviseOrder(context, rowNumber, row, existing) : this.createOrder(context, rowNumber, row);
   }
 
@@ -268,12 +302,18 @@ export class WorkOrderRepository {
       return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
         await assertContractorGate(db, principal, "import");
         const c = db.$client;
+        // Only what this member may import for: orders of clients they cover, and batches holding a receipt for such an order (or recorded by them),
+        // counted from the receipts they may see. Tenant-wide import authority (owner, tenant-wide admin, finance) sees everything.
         const batches = (await c.query<{ id: string; source_name: string; source_kind: "generated" | "csv"; row_count: number; created_count: number; revised_count: number; unchanged_count: number; rejected_count: number; created_at: Date }>(
-          "SELECT id,source_name,source_kind,row_count,created_count,revised_count,unchanged_count,rejected_count,created_at FROM app.import_batch ORDER BY created_at DESC,id LIMIT 25")).rows;
+          `WITH ${visibleReceipts("")}
+           SELECT b.id,b.source_name,b.source_kind,b.created_at,${receiptCounts}
+           FROM app.import_batch b LEFT JOIN seen s ON s.batch_id=b.id WHERE b.tenant_id=$1 AND ((SELECT wide FROM me) OR b.actor_membership_id=$2 OR s.batch_id IS NOT NULL)
+           GROUP BY b.tenant_id,b.id ORDER BY b.created_at DESC,b.id LIMIT 25`, [principal.tenantId, principal.membershipId])).rows;
         const orders = (await c.query<{ id: string; reference: string; job_id: string; job_status: string; client_name: string; status: "ordered" | "cancelled"; revision: number; priority: "routine" | "urgent" | "emergency"; issued_on: string; net_total_pence: string }>(
-          `SELECT w.id,w.reference,w.job_id,j.status job_status,o.name client_name,r.status,r.revision,r.priority,r.issued_on::text,r.net_total_pence
-           FROM app.work_order w JOIN app.work_order_current k ON(k.tenant_id,k.work_order_id)=(w.tenant_id,w.id) JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(k.tenant_id,k.work_order_id,k.revision_id)
-           JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id) JOIN app.client_organisation o ON(o.tenant_id,o.id)=(w.tenant_id,w.client_id) ORDER BY w.created_at DESC,w.reference LIMIT 200`)).rows;
+          `WITH covered AS MATERIALIZED (${COVERED_CLIENTS})
+           SELECT w.id,w.reference,w.job_id,j.status job_status,o.name client_name,r.status,r.revision,r.priority,r.issued_on::text,r.net_total_pence
+           FROM app.work_order w JOIN covered ON covered.id=w.client_id JOIN app.work_order_current k ON(k.tenant_id,k.work_order_id)=(w.tenant_id,w.id) JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(k.tenant_id,k.work_order_id,k.revision_id)
+           JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id) JOIN app.client_organisation o ON(o.tenant_id,o.id)=(w.tenant_id,w.client_id) ORDER BY w.created_at DESC,w.reference LIMIT 200`, [principal.tenantId, principal.membershipId])).rows;
         return workOrderOverviewV1.parse({
           version: "work-order-overview.v1", environment: "synthetic_demo", realExternalActions: 0, samples: workOrderSampleCatalogV1,
           batches: batches.map(b => ({ id: b.id, sourceName: b.source_name, sourceKind: b.source_kind, createdAt: iso(b.created_at), counts: { rows: b.row_count, created: b.created_count, revised: b.revised_count, unchanged: b.unchanged_count, rejected: b.rejected_count } })),
@@ -288,13 +328,13 @@ export class WorkOrderRepository {
     try {
       return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
         await assertContractorGate(db, principal, "import");
-        const { result, createdAt } = await this.batchResult(db, batchId);
+        const { result, createdAt } = await this.batchResult(db, principal, batchId);
         return workOrderBatchDetailV1.parse({ ...result, version: "work-order-batch.v1", createdAt });
       });
     } catch (error) { throw workOrderFailure(error); }
   }
 
-  /** Revisions with their diffs and stable line identities. Import-capable office members, or members who may read this job through its assignment. */
+  /** Revisions with their diffs and stable line identities. Members who may import for the order's client, or who may read this job through its assignment; any other order is the not-found. */
   async revisions(principal: AuthenticatedMembership, workOrderId: string) {
     if (!uuidSchema.safeParse(workOrderId).success) throw new WorkOrderError("NOT_FOUND");
     try {
@@ -302,7 +342,7 @@ export class WorkOrderRepository {
         await assertContractorGate(db, principal, "member");
         const c = db.$client;
         const order = (await c.query<{ id: string; reference: string; job_id: string; job_status: string; allowed: boolean }>(
-          `SELECT w.id,w.reference,w.job_id,j.status job_status,(coalesce(app.work_order_import_permitted($2),false) OR coalesce(app.contractor_job_allowed($2,'job.read',w.job_id),false)) allowed
+          `SELECT w.id,w.reference,w.job_id,j.status job_status,(coalesce(app.work_order_client_permitted($2,w.client_id),false) OR coalesce(app.contractor_job_allowed($2,'job.read',w.job_id),false)) allowed
            FROM app.work_order w JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id) WHERE w.tenant_id=$1 AND w.id=$3`, [principal.tenantId, principal.membershipId, workOrderId])).rows[0];
         if (!order || !order.allowed) throw new WorkOrderError("NOT_FOUND");
         const revisions = (await c.query<{ id: string; revision: number; status: "ordered" | "cancelled"; issued_on: string; due_on: string | null; priority: "routine" | "urgent" | "emergency"; net_total_pence: string; batch_id: string; row_number: number; created_at: Date; diff: unknown }>(

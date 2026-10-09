@@ -3,7 +3,10 @@ BEGIN;
 --
 -- Authority (Ben, 9 Oct 2026, card jobguard-ent-2-import-roles-2026-10-08, answer "Existing roles"; no new permission, no role-list change):
 --   * a work-order import is run by a member holding organisation.manage (owner, admin) or data.import (finance) - exactly the
---     predicate CH-3b's app.bind_contractor_parties (0102) enforces per order;
+--     predicate CH-3b's app.bind_contractor_parties (0102) enforces per order. It is judged for EACH ORDER'S OWN CLIENT
+--     (app.work_order_client_permitted): organisation.manage on that client or data.import tenant-wide. app.work_order_import_permitted
+--     below is only the coarse "may this member use the import at all" gate. A member whose grant covers one branch can therefore create,
+--     revise, cancel, party-check and read only the orders of clients in that branch; any other order is the ENT-1 not-found;
 --   * a schedule-of-rates (SoR) version import is run by a member holding contract.manage (owner, admin, commercial_manager).
 -- Every other role, and every non-member, gets the ENT-1 not-found (P0002).
 --
@@ -253,21 +256,30 @@ ALTER FUNCTION app.contractor_role_permits(text,text) OWNER TO jobguard_migratio
 REVOKE ALL ON FUNCTION app.contractor_role_permits(text,text) FROM PUBLIC,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.contractor_role_permits(text,text) TO jobguard_runtime;
 
--- Work-order import: organisation.manage (on a client, or tenant-wide) or data.import (tenant-wide). Same predicate as app.bind_contractor_parties (0102).
+-- Work-order import, COARSE gate only: organisation.manage (on a client, or tenant-wide) or data.import (tenant-wide) - may this member use the import at all.
+-- Every order is then judged on its own client by app.work_order_client_permitted below (the predicate app.bind_contractor_parties, 0102, applies to a new order).
 CREATE FUNCTION app.work_order_import_permitted(actor uuid) RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
  SELECT coalesce(app.contractor_member_active(actor) AND (
   app.contractor_allowed(actor,'data.import',nullif(current_setting('app.tenant_id',true),'')::uuid)
   OR app.contractor_allowed(actor,'organisation.manage',nullif(current_setting('app.tenant_id',true),'')::uuid)
   OR EXISTS(SELECT 1 FROM app.client_organisation c WHERE app.contractor_allowed(actor,'organisation.manage',c.id))),false)
 $$;
+-- Per-order authority: the same predicate as app.bind_contractor_parties (0102), applied to the client of an order that already exists (or is being
+-- committed). work_order_import_permitted above says only that the member may use the import somewhere; this says whether they may touch THIS client's orders.
+CREATE FUNCTION app.work_order_client_permitted(actor uuid, p_client uuid) RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
+ SELECT coalesce(p_client IS NOT NULL AND app.contractor_member_active(actor) AND (
+  app.contractor_allowed(actor,'organisation.manage',p_client)
+  OR app.contractor_allowed(actor,'data.import',nullif(current_setting('app.tenant_id',true),'')::uuid)),false)
+$$;
 -- SoR version import: contract.manage, tenant-wide (a price list is tenant data, not one client's).
 CREATE FUNCTION app.sor_import_permitted(actor uuid) RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
  SELECT coalesce(app.contractor_member_active(actor) AND app.contractor_allowed(actor,'contract.manage',nullif(current_setting('app.tenant_id',true),'')::uuid),false)
 $$;
 ALTER FUNCTION app.work_order_import_permitted(uuid) OWNER TO jobguard_migration;
+ALTER FUNCTION app.work_order_client_permitted(uuid,uuid) OWNER TO jobguard_migration;
 ALTER FUNCTION app.sor_import_permitted(uuid) OWNER TO jobguard_migration;
-REVOKE ALL ON FUNCTION app.work_order_import_permitted(uuid),app.sor_import_permitted(uuid) FROM PUBLIC,jobguard_infrastructure;
-GRANT EXECUTE ON FUNCTION app.work_order_import_permitted(uuid),app.sor_import_permitted(uuid) TO jobguard_runtime;
+REVOKE ALL ON FUNCTION app.work_order_import_permitted(uuid),app.work_order_client_permitted(uuid,uuid),app.sor_import_permitted(uuid) FROM PUBLIC,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.work_order_import_permitted(uuid),app.work_order_client_permitted(uuid,uuid),app.sor_import_permitted(uuid) TO jobguard_runtime;
 
 -- Authoritative job scope (ENT-1 deliberately cannot resolve a job id): the job's team is the team of its CURRENT revision's assignment.
 CREATE FUNCTION app.contractor_job_team(p_job uuid) RETURNS uuid LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
@@ -354,6 +366,8 @@ BEGIN
  IF k='create' THEN
   SELECT * INTO binding FROM app.contractor_party_binding WHERE tenant_id=t AND job_id=(payload->>'jobId')::uuid AND work_order_id=(payload->>'workOrderId')::uuid;
   IF binding.id IS NULL THEN RAISE EXCEPTION 'CONTRACTOR_PARTIES_REQUIRED' USING ERRCODE='22023'; END IF;
+  -- Defence in depth: CH-3b already checked the actor against this client when it bound the parties; the order is committed only for a member who may import for it.
+  IF NOT coalesce(app.work_order_client_permitted(actor,binding.client_id),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
   SELECT * INTO job_row FROM app.job WHERE tenant_id=t AND id=binding.job_id FOR UPDATE;
   IF job_row.provenance<>'work_order' OR job_row.status<>'draft' THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
   IF (payload->>'expectedRevision')::integer<>0 OR status_value<>'ordered' THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
@@ -362,7 +376,8 @@ BEGIN
   revision_no:=1;
  ELSE
   SELECT * INTO wo FROM app.work_order WHERE tenant_id=t AND id=(payload->>'workOrderId')::uuid FOR UPDATE;
-  IF wo.id IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  -- An order of a client outside the actor's scope is, to them, an order that does not exist (ENT-1): no revision, cancellation or line/team change.
+  IF wo.id IS NULL OR NOT coalesce(app.work_order_client_permitted(actor,wo.client_id),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
   SELECT r.* INTO cur FROM app.work_order_current c JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(c.tenant_id,c.work_order_id,c.revision_id) WHERE c.tenant_id=t AND c.work_order_id=wo.id;
   IF cur.id IS NULL OR cur.revision<>(payload->>'expectedRevision')::integer THEN RAISE EXCEPTION 'STALE_REVISION' USING ERRCODE='40001'; END IF;
   revision_no:=cur.revision+1;
@@ -469,9 +484,13 @@ GRANT EXECUTE ON FUNCTION app.import_sor_version(uuid,jsonb) TO jobguard_runtime
 -- never silently dropped. The resident contact is compared inside this routine and never leaves it.
 CREATE FUNCTION app.work_order_parties_unchanged(actor uuid, p_work_order uuid, p_client uuid, p_contract uuid, p_site_revision uuid, p_resident jsonb) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; bound_client uuid;
 BEGIN
  IF t IS NULL OR NOT coalesce(app.work_order_import_permitted(actor),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ -- Authority is judged on the order's own bound client BEFORE anything is compared, so the answer is no yes/no oracle on another branch's parties
+ -- or resident contact; an order that does not exist and an order outside the actor's scope are the same not-found.
+ SELECT client_id INTO bound_client FROM app.work_order WHERE tenant_id=t AND id=p_work_order;
+ IF bound_client IS NULL OR NOT coalesce(app.work_order_client_permitted(actor,bound_client),false) THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
  RETURN EXISTS(SELECT 1 FROM app.contractor_party_binding b
   JOIN app.job_party_binding jb ON(jb.tenant_id,jb.job_id,jb.id)=(b.tenant_id,b.job_id,b.party_binding_id)
   JOIN app.contractor_resident_contact r ON(r.tenant_id,r.job_id,r.binding_id)=(b.tenant_id,b.job_id,b.id)
