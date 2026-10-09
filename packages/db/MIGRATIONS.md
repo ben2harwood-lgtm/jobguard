@@ -677,15 +677,15 @@ business RLS. SQL privileges and migration-owner-only routines require independe
 
 Existing users need no backfill: legacy synthetic users stay in their existing demo path.
 Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
-0108 replaces this PR’s earlier reservations (0052, then 0098): 0102, 0103 and 0106 merged
-ahead of this PR, so 0108 is the next free number at merge; 0104, 0105 and 0107 are allocated
-to CH-1, ENT-2 and M4-5-S, which may merge later in their own numeric positions, and 0100 is held
-by SV-2. The runner places 0108 after 0106_practice_feed.sql (currently last); 0102_contractor_parties.sql,
-0103_prevention_checks.sql and 0106_practice_feed.sql therefore apply before 0108, and any of
-0104/0105/0107 that merges later will sit before it. The SQL bytes are unchanged by the
-renumber (SHA-256 9779d3f6…59e0).
+0108 replaces this PR’s earlier reservations (0052, then 0098): 0102, 0103, 0106 and 0107 merged
+ahead of this PR, so 0108 is the next free number at merge. 0107 (M4-5-S, `recovery_messages`)
+has merged; CH-1 now holds 0109 and ENT-2 0110, both landing after 0108, and 0100 (SV-2) takes the next
+free number at its own merge. The runner places 0108 after 0107_recovery_messages.sql (currently last);
+0102_contractor_parties.sql, 0103_prevention_checks.sql, 0106_practice_feed.sql and
+0107_recovery_messages.sql therefore apply before 0108, and 0109 and 0110 will sit after it. The SQL
+bytes are unchanged by the renumber (SHA-256 9779d3f6…59e0).
 Fresh-install coverage remains in the tenancy/Neon suites; `identity.integration.test.ts`
-executes upgrade from the state immediately before 0108 (everything listed ahead of it, merged through 0106),
+executes upgrade from the state immediately before 0108 (everything listed ahead of it, merged through 0107),
 checks the complete applied list against MIGRATION_URLS, and covers repeat migration,
 races, privilege/catalog checks and rollback.
 These are PostgreSQL tests, not claimed executed in the restricted builder sandbox.
