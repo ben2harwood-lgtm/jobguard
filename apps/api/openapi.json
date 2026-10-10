@@ -1,6 +1,49 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/recovery-cases/{id}/follow-ups": {
+      "get": {
+        "operationId": "RecoveryFollowUpController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the saved practice follow-ups, their displayed state and the run's fake clock for a recovery case",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryFollowUpController_schedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Schedule a practice follow-up for the delivered message and case revision the builder reviewed; exact replays return the current state",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/follow-ups/{followUpId}/commands": {
+      "post": {
+        "operationId": "RecoveryFollowUpController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Advance practice time, open the reminder review, approve the exact reminder or cancel a follow-up by an exact versioned command; exact replays return the current state",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      }
+    },
     "/recovery-cases/{id}/messages": {
       "get": {
         "operationId": "RecoveryMessageController_get",

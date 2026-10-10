@@ -8,6 +8,7 @@ import type { RecoveryMessageApplication } from "@jobguard/api/workspace";
 import { pounds } from "../lib/pounds";
 import { packSourceAnchor } from "./evidence-packs";
 import styles from "./recovery-messages.module.css";
+import { RecoveryFollowUps } from "./recovery-follow-ups";
 
 type State = Awaited<ReturnType<RecoveryMessageApplication["read"]>>;
 type View = NonNullable<State["latest"]>;
@@ -220,5 +221,6 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
         {state!.messages.length > 1 && <p>{state!.messages.length - 1} earlier preview{state!.messages.length === 2 ? "" : "s"} replaced by this one.</p>}
       </section>
     </>}
+    <RecoveryFollowUps caseId={caseId} caseRevision={caseRevision} evidenceTick={evidenceTick} />
   </section>;
 }
