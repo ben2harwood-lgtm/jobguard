@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./identity": {"types":"./src/auth/index.ts","import":"./dist/auth/index.js"},
     "./workspace": {
       "types": "./src/workspace/index.ts",
       "import": "./dist/workspace/index.js"

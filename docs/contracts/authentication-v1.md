@@ -1,9 +1,9 @@
-# Authentication contract v1 (M0-6 scaffold)
+# Authentication contract v1 (M0-6L persisted implementation)
 
-Status: **synthetic scaffold; no live identity or email provider**.
+Status: **persisted synthetic identity; real email dispatch blocked pending D04**.
 
 `AuthProvider` is the provider-neutral boundary used by the API. The included
-`MemoryAuthProvider` is deterministic test/development infrastructure only: it
+`MemoryAuthProvider` is test-only infrastructure: it
 keeps keyed code and token digests, never raw values, and sends codes only to an
 injected fixture delivery callback. A future Auth.js implementation belongs in
 a dedicated adapter; feature modules must not import Auth.js.
@@ -27,6 +27,39 @@ selection requests, never authority; disagreement or absent membership fails.
 The provider-neutral session contract is the future mobile exchange extension
 point. M0-6 does not implement mobile refresh tokens, live email delivery, or a
 third-party identity provider.
+
+
+M0-6L uses `PersistedAuthProvider` outside tests, with separate restricted identity
+credentials. Signup verifies an eight-digit code before creating one tenant and owner;
+existing-email signup cannot create another tenant. Invitations carry an immutable UUID,
+normalized email, tenant, account, assigned role, issuer and expiry. Challenge request and
+verification may include `invitationId`; acceptance must match it and the email exactly.
+Verification issues a session for the invited address, not for whoever was signed in: a browser signed in as a different
+address is switched to the invited account, and clients must say so rather than imply the business joins the previous
+account. Clients cannot provide tenant/role during signup or verification. Creating an invitation
+requires the current owner, CSRF and origin; owner transfer is not an invitation role.
+
+Challenges and sessions store keyed digests only, with a challenge-specific salt in the
+code digest. Failed-attempt updates commit even on invalid verification; transactions
+serialize the IP window before email locks, and all purposes share an email lock. Issuing
+a session, provisioning and consuming a code are atomic. Delivery follows commit and
+records fixture-delivered/pending/outcome-unknown; it never occurs inside a transaction.
+Identity security events are append-only for identity credentials and contain no addresses,
+codes or tokens. The fixture-only session records its environment and is refused in pilot
+or production. Live route initialization is absent and `.invalid` is enforced in the adapter.
+
+HTTP schemas are `identity-request.v1`, `identity-verify.v1` and
+`identity-invitation.v1`; `GET /api/auth/session` returns `identity-session.v1` with
+persisted principal UUID, CSRF token and current memberships. Next and Nest share the
+same application service. Opaque session tokens appear only in Secure HttpOnly
+SameSite=strict cookies, never response JSON. Fixture requests display an ephemeral
+fixture code only in `synthetic_demo`. API errors expose typed codes rather than raw
+validation/DB/provider content. No arbitrary client forwarded IP or tenant authority is trusted.
+
+The identity credential and authentication service remain a load-bearing trust boundary:
+RLS does not protect against their compromise or against a privileged database rewrite.
+Existing synthetic business modules cannot be executed as real-user commands. No real
+user enrollment, provider send, rollout or independent acceptance is claimed by this task.
 
 ### Synthetic practice extension — SBOX-SESSION-1 (5 October 2026)
 

@@ -50,9 +50,9 @@ beforeAll(async () => {
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
 
 describe("ENT-2 migration and catalog", () => {
-  it("registers 0110_work_orders.sql last, after 0106 (and any later merged number), with strictly increasing names, and every migration is applied once", async () => {
+  it("registers 0110_work_orders.sql after 0106 and 0109, with strictly increasing names, and every migration is applied once", async () => {
     const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!);
-    expect(names.at(-1)).toBe("0110_work_orders.sql"); expect(names.indexOf("0106_practice_feed.sql")).toBeGreaterThan(-1); expect(names.indexOf("0106_practice_feed.sql")).toBeLessThan(names.indexOf("0110_work_orders.sql")); expect(names.indexOf("0110_work_orders.sql")).toBe(names.length - 1);
+    expect(names.indexOf("0110_work_orders.sql")).toBeGreaterThan(-1); expect(names.indexOf("0106_practice_feed.sql")).toBeGreaterThan(-1); expect(names.indexOf("0109_job_activation_terms.sql")).toBeGreaterThan(-1); expect(names.indexOf("0106_practice_feed.sql")).toBeLessThan(names.indexOf("0110_work_orders.sql")); expect(names.indexOf("0109_job_activation_terms.sql")).toBeLessThan(names.indexOf("0110_work_orders.sql"));
     expect([...names].sort()).toEqual(names);
     expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY applied_at, migration_name")).rows.map(r => r.migration_name).sort()).toEqual(names);
   });
