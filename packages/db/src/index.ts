@@ -66,6 +66,7 @@ export * from "./recovery-message-repository.js";
 export * from "./contractor-party-repository.js";
 export * from "./prevention-check-repository.js";
 export * from "./prevention-register-fixtures.js";
+export * from "./identity-repository.js";
 export * from "./practice-feed-repository.js";
 export * from "./work-order-repository.js";
 export * from "./sor-repository.js";

@@ -16,13 +16,16 @@ export class TenantAuthGuard implements CanActivate {
 
   async canActivate(executionContext: ExecutionContext): Promise<boolean> {
     const request = executionContext.switchToHttp().getRequest<GuardRequest>();
-    request.verifiedTenantContext = await resolveVerifiedTenantContext(this.provider, {
+    const context = await resolveVerifiedTenantContext(this.provider, {
       sessionToken: request.cookies?.jobguard_session,
       requestedTenantId: request.body?.requested_tenant_id,
       tenantHeader: request.headers["x-tenant-id"],
       csrfToken: request.headers["x-csrf-token"],
       origin: request.headers.origin,
     }, this.allowedOrigin);
+    // Forward the minted value whole through a getter. The request cannot replace it and no
+    // context is copied into a writable member or descriptor. The constructor already freezes it.
+    Object.defineProperty(request, "verifiedTenantContext", { get: () => context });
     return true;
   }
 }

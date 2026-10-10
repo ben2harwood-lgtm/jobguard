@@ -2210,6 +2210,195 @@
           "practice-feed"
         ]
       }
+    },
+    "/auth/request": {
+      "post": {
+        "operationId": "IdentityController_request",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "email",
+                  "purpose"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-request.v1"
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "signup",
+                      "signin",
+                      "invitation"
+                    ]
+                  },
+                  "invitationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Non-enumerating acknowledgement; synthetic code shown only for .invalid fixtures"
+          }
+        },
+        "summary": "Request an entered identity code; fixture transport only until D04",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "operationId": "IdentityController_verify",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "email",
+                  "purpose",
+                  "code"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-verify.v1"
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "signup",
+                      "signin",
+                      "invitation"
+                    ]
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{8}$"
+                  },
+                  "invitationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Opaque HttpOnly Secure SameSite=strict cookie; no token in JSON"
+          }
+        },
+        "summary": "Consume an entered code atomically and set a secure session cookie",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "operationId": "IdentityController_session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "identity-session.v1; never honours a synthetic cookie"
+          }
+        },
+        "summary": "Read persisted session and current memberships",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/invitations": {
+      "post": {
+        "operationId": "IdentityController_invite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "email",
+                  "role"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-invitation.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "estimator",
+                      "foreman",
+                      "operative",
+                      "finance",
+                      "read_only"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable invitation; no real email dispatch"
+          }
+        },
+        "summary": "Owner-authorized invitation binds email, tenant and role",
+        "tags": [
+          "identity"
+        ]
+      }
     }
   },
   "info": {

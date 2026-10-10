@@ -662,3 +662,49 @@ Registered last, after `0106_practice_feed.sql`; it takes the next free number a
 Existing objects it touches, each based on its current definition: `job_provenance_check` (0020) keeps `system_generated_quote` and `imported` and adds `work_order`; `app.read_contractor_resident` (0102) is identical except that job scope is resolved by `app.contractor_job_allowed`. Nothing else an earlier migration defines is altered, and no merged migration file is edited. New job-level guards: a `work_order` job can only be inserted by the migration role as a draft, its provenance is immutable, and it can only enter `live` through the import routine.
 
 Expand-compatible: new tables and a widened CHECK only; the preceding application ignores them. Corrections ship as a new migration: revisions, lines and audit are historical facts, so there is no destructive rollback. Authority for the two imports follows the 9 October "Existing roles" answer; see `docs/contracts/work-order-import-v1.md`.
+
+## 0111 — persisted entered-code identity (M0-6L)
+
+Expands the existing restricted `identity` control plane with keyed challenge/session
+hashes, rate windows, immutable invitation grants, a membership discovery index and
+append-only security events. `jobguard_identity` is a separate NOLOGIN group/credential
+boundary: no business table access, owner status, superuser, BYPASSRLS, role inheritance,
+role creation, DDL or truncate permission. Business/worker roles cannot read these tables
+or execute the three narrow identity routines. Identity updates are column-scoped to
+challenge counters/consumption/delivery and session revocation; issued token/user bindings
+and challenge email/digest cannot be rewritten by the identity credential. The operator provisions a separate login;
+Neon bootstrap creates the group before switching to `jobguard_migration` (which cannot
+create roles). The fixture browser harness enables LOGIN only in its disposable database.
+
+Provisioning takes a verified, consumed challenge, never arbitrary tenant/role parameters.
+Signup always creates a new tenant and owner. Acceptance uses the invitation's immutable
+email/tenant/account/role, with tenant-qualified account/membership FKs. The membership locator outlives
+revocation and expiry, so it never blocks acceptance by itself: under row locks on the locator
+and its membership, only a currently active membership refuses a fresh invitation (which then
+stays unused). For a revoked or expired one, acceptance inserts a new invitation-bound membership
+and repoints the locator in the same transaction; the old membership row is kept as history. FORCE RLS remains
+on `app.account`/`app.membership`; additional migration-owner policies retain the same
+transaction-local tenant predicate. The discovery routine visits only the identity's
+locator rows and rechecks canonical membership revocation/expiry. Identity credentials
+are part of the authentication trust boundary; possession of them is not protected by
+business RLS. SQL privileges and migration-owner-only routines require independent review.
+
+Existing users need no backfill: legacy synthetic users stay in their existing demo path.
+Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
+0111 replaces this PR’s earlier reservations (0052, then 0098, then 0108): 0102, 0103, 0106, 0107
+(M4-5-S, `recovery_messages`), 0109 (CH-1) and 0110 (ENT-2) merged ahead of this PR, so 0111 is the next
+free number at merge. 0112 (M4-6-S) and 0113 (CH-7) are allocated after it, and 0100 (SV-2) takes the
+next free number at its own merge. The runner places 0111 after 0110_work_orders.sql (currently last);
+0102_contractor_parties.sql, 0103_prevention_checks.sql, 0106_practice_feed.sql,
+0107_recovery_messages.sql, 0109_job_activation_terms.sql and 0110_work_orders.sql therefore apply before
+0111. The SQL bytes are unchanged by the renumber (SHA-256 9779d3f6…59e0).
+Fresh-install coverage remains in the tenancy/Neon suites; `identity.integration.test.ts`
+executes upgrade from the state immediately before 0111 (everything listed ahead of it, merged through 0110),
+checks the complete applied list against MIGRATION_URLS, and covers repeat migration,
+races, privilege/catalog checks and rollback.
+These are PostgreSQL tests, not claimed executed in the restricted builder sandbox.
+
+Forward fix: disable identity endpoints/credential, preserve existing tables and add a
+reviewed corrective migration. Rollback of application code is expand compatible: the
+preceding demo ignores these tables. Never drop enrolled identities or tenants to roll
+back; restore rehearsal and real-data retention remain separate release gates.
