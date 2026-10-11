@@ -739,6 +739,29 @@ Renumbered from 0113 to 0119 on 11 October 2026 under the merge-ahead ruling bec
 
 Expand-only synthetic candidate reviews, tenant/job/case-qualified claim components and a typed supplier-credit link; adds `duplicate_supplier_payment` without changing old cases/reviews. Runtime tables are FORCE RLS, owned by `jobguard_migration`, SELECT/INSERT only, with invoker write guards and deferred audit/component completeness. No fee/posting, terms or pursuit routine changes. The consumed-credit positive path fails closed because merged 0106 has no supplier-invoice payment movement; see `docs/contracts/recovery-eligibility-v3.md`. Keep v1 data byte-for-byte. Forward fix with a new migration; any application rollback must retain a reader compatible with the new category after such cases exist. Never drop populated history or narrow a used category. PostgreSQL fresh/upgrade/catalog tests are written but NOT RUN in the builder sandbox. Round 1 (11 October 2026) adds, inside 0119 only, a new trigger `recovery_eligibility_v1_duplicate_payment_refusal` (function `app.refuse_v1_eligibility_for_duplicate_payment`, invoker rights) that refuses any new v1 review or approval row for a `duplicate_supplier_payment` case, and makes the stored v3 result guard require every result key with the right JSON type (an absent `reason` is no longer accepted as null). No merged routine is replaced and no merged column, policy or grant changes.
 
+## 0120 — ENT-10a synthetic SAML identity
+
+Renumbered 0114 → 0120 on 11 October 2026 under the merge-ahead ruling because 0115 merged first.
+
+Adds only new identity/control-plane tables and narrowly scoped routines. Eight
+scoped tables have tenant-qualified keys, enabled/FORCE RLS and migration ownership;
+`identity.sso_refusal_event` is an INSERT-only global identity-bootstrap exception.
+Business runtime/infrastructure gain no identity privileges. Existing schemas,
+tables, policies, roles, grants and auth/session routines are unchanged. Sessions
+and JIT memberships are inserted through the existing persisted mechanism, with
+an additional 900-second bound; SSO-derived grant/session revocations retain history.
+
+Upgrade is additive with no data backfill. `migrate` registers 0120 after the merged
+0115 (0116–0119 reserved by other pieces); tests compare migration names and increasing order.
+Fresh bootstrap and upgrade suites plus the new PostgreSQL identity tests are required
+in CI; they were NOT RUN in the socket-restricted builder sandbox.
+
+Rollback strategy: disable SSO and allow issued sessions to expire; preserve tables,
+request/assertion identities, links, revocations and audit records. Repair forward
+with a separately numbered migration. Do not drop identity/audit history or rewrite
+an already applied migration. No real-provider rollout or D04/G5 approval follows
+from migration success.
+
 ## 0121 — audit export (ENT-10b)
 
 Renumbered 0116 → 0121 on 11 October under the merge-ahead ruling.
