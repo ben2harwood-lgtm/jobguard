@@ -233,3 +233,30 @@ package .turbo caches and TypeScript build info); left no .pnpm-store,
 test-results or build output in the worktree. Final `git diff --check` exited 0.
 Intended conventional commit subject/body are written to
 `/private/tmp/jg-msg-practice-facts-1.txt`. No git write occurred.
+
+## CI repair 1 — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+Repair builder only. Not a review and not an acceptance. Run on the Mac where PostgreSQL starts; every number below is from a real run.
+
+**Catch-up.** `origin/main` dc16fd6 merged into the branch (merge commit b76171e). Conflicted files, all resolved by keeping both sides: `apps/api/src/app.module.ts` (imports; controller list now has `SsoController` first and `PracticeFactsController` last; the SSO provider kept), `apps/api/src/workspace/application.ts` (imports; the returned object carries both `sso` and `practiceFacts`), `apps/api/src/workspace/index.ts` (both export groups), `packages/db/src/migrate.ts` (0120 then 0124), `packages/db/MIGRATIONS.md` (the 0120 section, then the 0124 section). `apps/api/openapi.json` merged without conflict and `pnpm openapi:check` passes.
+
+**Renumber.** None. 0124 was still free (merged through 0120; 0121 and 0122 held by open pull requests; 0123 is CH-7-F17-BEFORE-OPEN). Registered in numeric order after 0120. `BUILD_PLAN.md` §12.2 gained one "Ledger amendment — PRACTICE-FACTS-1" paragraph before §12.3, and `BUILD_PLAN.md` was added to this piece's own lane line (the earlier statement above that BUILD_PLAN was not edited is superseded by this).
+
+**Routine diff.** Not applicable: `0124_practice_feed_facts.sql` contains no `CREATE FUNCTION` and restates no routine. It only drops and re-adds the six catalogue CHECK constraints. No column was added to any fingerprinted table.
+
+**Faults.**
+1. PostgreSQL would not start in this worktree (dylib symlinks not created because pnpm skips the package's install script). Fix: ran the package's own `scripts/hydrate-symlinks.js` inside `node_modules`. No repository file changed. Kind: environment.
+2. `packages/db/test/practice-facts.integration.test.ts:262` (test "fresh migration installs 0124 once without introducing business objects or changing grants", failing inside `migrate` at the first query): `error: empty password returned by client`. Cause: `new Pool({...admin.options,database})` drops the pool's non-enumerable password. Before: `new Pool({...admin.options,database})`. After: `new Pool({...admin.options,password,database})` using the file's own `password` constant. Kind (i), test set-up only; no `expect` or expected value touched.
+
+**Commands and results.**
+- `pnpm install --frozen-lockfile` exit 0; `pnpm turbo run build --filter=@jobguard/db... --filter=@jobguard/api...` exit 0 (6 of 6 tasks).
+- `packages/core`: `src/practice-facts.test.ts` + `src/practice-feed.test.ts` (merged, unedited) 58 passed, exit 0.
+- `apps/api`: `src/practice-facts.application.test.ts` + `src/practice-facts.controller.test.ts` 47 passed, exit 0.
+- `packages/db`: `test/practice-facts.integration.test.ts` 22 passed after fault 2 (before: 21 passed, 1 failed); `test/tenancy.integration.test.ts` + `test/demo-bootstrap.integration.test.ts` 13 passed; merged `test/practice-feed.integration.test.ts` (unedited; `git diff origin/main` on it is empty) + `test/recovery-eligibility-v3.integration.test.ts` 51 passed. All exit 0.
+- `apps/web`: `e2e/PRACTICE-FACTS-1.spec.ts`, `--workers=1`, both projects: 4 passed. `chromium_headless_shell-1193` is not installed (`playwright install` is forbidden), so the spec ran with a throw-away config kept outside the repository (`$HOME/.local/share/full-steam/jg-runs/pw-local-channel-pf1.config.ts`) that only sets `channel: "chromium"` to use the installed full chromium-1193. Kind: environment.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`, `pnpm typecheck`, `LANE_BASE_REF=origin/main pnpm lint`, `pnpm openapi:check`: all exit 0.
+- Every vitest run used `--maxWorkers=2` inside `heavy-slot`, one run at a time, memory free 77 to 78 percent. `recovery-follow-up-upgrade.integration.test.ts` was not run, as instructed.
+
+**Stopped on:** nothing. The INTERIM amounts (£1,440.00 due, paid £600.00 then £840.00) and the F18 receipts (£120.00 and £70.00) are unchanged and remain labelled synthetic fixture amounts, not product figures. No assertion, expected value, timeout, grant or policy was changed or loosened.
+
+Builder repair record only — not independently verified, not accepted.
