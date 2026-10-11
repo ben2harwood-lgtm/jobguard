@@ -51,6 +51,7 @@ export class PersistedAuthProvider implements AuthProvider {
     const email = input.email.trim().toLowerCase();
     this.assertRecipient(email);
     // Failure counters must commit: return a typed failure from the transaction, throw afterwards.
+    const refusals: { connectionId: string; code: string }[] = [];
     const result = await this.repository.transaction(async client => {
       await this.repository.lock(client, email);
       const c = await this.repository.latest(client, email, purpose);
@@ -58,14 +59,29 @@ export class PersistedAuthProvider implements AuthProvider {
       await client.query("UPDATE identity.challenge SET attempts=attempts+1 WHERE id=$1", [c.id]);
       const valid = timingSafeEqual(Buffer.from(c.digest, "hex"), Buffer.from(this.digest(`${c.id}:${code}`), "hex"));
       if (!valid || (c.invitation_id ?? undefined) !== invitationId) return undefined;
+      if (purpose === "invitation") {
+        const gate = (await client.query<{ allowed: boolean; connection_id: string | null }>("SELECT * FROM identity.sso_invitation_accept_allowed($1)", [invitationId])).rows[0];
+        if (gate?.allowed !== true || (gate.connection_id !== null && !this.isConnectionId(gate.connection_id))) {
+          await client.query("UPDATE identity.challenge SET consumed_at=$2 WHERE id=$1", [c.id,new Date(this.now())]);
+          refusals.push({connectionId:this.isConnectionId(gate?.connection_id)?gate.connection_id:"identity",code:"SSO_REQUIRED_INVITE_CLOSED"});
+          return undefined;
+        }
+      }
       await client.query("UPDATE identity.challenge SET consumed_at=$2,verified=true WHERE id=$1", [c.id,new Date(this.now())]);
       const userId = (await client.query<{ user_id: string | null }>("SELECT identity.provision_verified_challenge($1) user_id", [c.id])).rows[0]!.user_id;
       if (!userId) return undefined;
+      const gate = (await client.query<{ allowed: boolean; connections: string[] }>("SELECT * FROM identity.sso_code_signin_allowed($1)", [userId])).rows[0];
+      if (gate?.allowed !== true || !Array.isArray(gate.connections) || !gate.connections.every(connectionId=>this.isConnectionId(connectionId))) {
+        const targets = Array.isArray(gate?.connections)?gate.connections.filter(connectionId=>this.isConnectionId(connectionId)):[];
+        for (const connectionId of targets.length?targets:["identity"]) refusals.push({connectionId,code:"SSO_REQUIRED_CODE_SIGNIN"});
+        return undefined;
+      }
       const sessionToken = randomBytes(32).toString("base64url"), csrfToken = randomBytes(24).toString("base64url"), sessionId=randomUUID();
       await client.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,$4,$5,$6)", [sessionId,userId,this.digest(`session:${sessionToken}`),csrfToken,new Date(this.now()+86_400_000),this.environment]);
       await client.query("INSERT INTO identity.security_event(id,event_type,subject_id) VALUES($1,'session.issued',$2)", [randomUUID(),sessionId]);
       return { sessionToken, csrfToken };
     });
+    for (const refusal of refusals) await this.enterpriseIdentity.refusal(refusal.connectionId,refusal.code);
     if (!result) throw new AuthError("INVALID_CODE");
     return result;
   }
@@ -77,7 +93,7 @@ export class PersistedAuthProvider implements AuthProvider {
   async memberships(principal: AuthPrincipal): Promise<(ActiveMembership & { name: string })[]> {
     const scope = await this.enterpriseIdentity.sessionScope(principal.sessionId);
     if (scope?.revoked) return [];
-    return (await this.repository.memberships(principal.identityUserId)).filter(row => roles.includes(row.role as Role)
+    return (await this.repository.memberships(principal.identityUserId, principal.sessionId)).filter(row => roles.includes(row.role as Role)
       && (!scope || (row.tenant_id === scope.tenantId && row.id === scope.membershipId)))
       .map(row => ({id:row.id,identityUserId:row.identity_user_id,tenantId:row.tenant_id,role:row.role as Role,email:row.email,name:row.name}));
   }
@@ -86,7 +102,31 @@ export class PersistedAuthProvider implements AuthProvider {
     if (!membership) {
       const scope = await this.enterpriseIdentity.sessionScope(principal.sessionId);
       if (scope) await this.enterpriseIdentity.refusal(scope.connectionId ?? "identity", "TENANT_FORBIDDEN");
+      else {
+        const connectionId = (await this.repository.pool.query<{connection_id:string|null}>("SELECT identity.sso_required_refusal_target($1,$2) connection_id",[principal.identityUserId,tenantId])).rows[0]?.connection_id;
+        if (this.isConnectionId(connectionId)) await this.enterpriseIdentity.refusal(connectionId,"SSO_REQUIRED");
+      }
     }
     return membership;
+  }
+  private isConnectionId(value:unknown):value is string {
+    return typeof value==="string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value);
+  }
+  async recordInvitationRefusal(connectionId:unknown):Promise<void> {
+    await this.enterpriseIdentity.refusal(this.isConnectionId(connectionId)?connectionId:"identity","SSO_REQUIRED_INVITE_CLOSED");
+  }
+  /** Mailbox proof only: the latest signin challenge is consumed; no verified latch, provisioning or session. */
+  async proveEmergencyMailbox(emailInput:string,code:string):Promise<string|undefined> {
+    const input=verifyCodeV1.parse({email:emailInput,purpose:"signin",code}),email=input.email.trim().toLowerCase();
+    this.assertRecipient(email);
+    return this.repository.transaction(async client=>{
+      await this.repository.lock(client,email);
+      const c=await this.repository.latest(client,email,"signin");
+      if(!c || c.consumed_at || c.expires_at.getTime()<=this.now() || c.attempts>=5)return undefined;
+      await client.query("UPDATE identity.challenge SET attempts=attempts+1 WHERE id=$1",[c.id]);
+      if(!timingSafeEqual(Buffer.from(c.digest,"hex"),Buffer.from(this.digest(`${c.id}:${code}`),"hex")))return undefined;
+      await client.query("UPDATE identity.challenge SET consumed_at=$2 WHERE id=$1",[c.id,new Date(this.now())]);
+      return (await client.query<{user_id:string}>("SELECT user_id FROM identity.user_email WHERE email=$1",[email])).rows[0]?.user_id;
+    });
   }
 }

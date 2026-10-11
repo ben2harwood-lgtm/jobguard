@@ -76,3 +76,4 @@ export * from "./work-order-fixtures.js";
 
 export * from "./recovery-eligibility-v3-repository.js";
 export * from "./enterprise-identity-repository.js";
+export * from "./sso-required-repository.js";

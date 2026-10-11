@@ -761,3 +761,7 @@ request/assertion identities, links, revocations and audit records. Repair forwa
 with a separately numbered migration. Do not drop identity/audit history or rewrite
 an already applied migration. No real-provider rollout or D04/G5 approval follows
 from migration success.
+
+## 0126 — Single sign-on required (ENT-10d)
+
+Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
