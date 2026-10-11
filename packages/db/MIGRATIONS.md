@@ -771,6 +771,8 @@ Renumbered 0116 → 0121 on 11 October under the merge-ahead ruling.
 
 Adds `app.audit_export` and `app.audit_export_checkpoint`, tenant-qualified audit/membership/checkpoint FKs, FORCE RLS, migration ownership and append-only triggers. Runtime gets SELECT/INSERT on the new export table and SELECT only on the new checkpoint handoff; existing objects and privileges are unchanged. Existing restricted assurance credentials copy existing checkpoints; no runtime access to `audit_control` or new elevated routine. No backfill. Previous application remains compatible. Disable new routes and fix forward on failure; never rewrite/delete audit history or exports as rollback. Live signing/rotation remains HELD. Fresh install is covered by the existing migration/bootstrap suites; upgrade and catalogue/runtime attacks by `test/audit-export.integration.test.ts`. Database suites were NOT RUN in the builder sandbox.
 
-## 0126 — Single sign-on required (ENT-10d)
+## 0125 — Single sign-on required (ENT-10d)
+
+Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces).
 
 Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.

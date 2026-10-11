@@ -32,7 +32,7 @@ Changed files:
 - `docs/operations/sso-data-flow.md`
 - `docs/verdicts/ENT-10d/BUILDER_RECEIPT.md`
 - `packages/db/MIGRATIONS.md`
-- `packages/db/migrations/0126_sso_required.sql`
+- `packages/db/migrations/0125_sso_required.sql`
 - `packages/db/src/identity-repository.ts`
 - `packages/db/src/index.ts`
 - `packages/db/src/migrate.ts`
@@ -108,7 +108,7 @@ Existing exports, composition/controller registration and migration registration
 
 ## Migration and security objects
 
-`0126_sso_required.sql`, registered in increasing numeric order. No backfill. Real fresh installation, previous-supported-schema upgrade and repeated migration fixtures are authored; none executed locally. Deploy migration before application code. Forward-fix only: retain immutable event/audit history, use an authorized bound admin to append OFF where needed, then deploy a separately reviewed correction. Do not drop historical rows or lift the held rule as rollback.
+`0125_sso_required.sql`, registered in increasing numeric order. No backfill. Real fresh installation, previous-supported-schema upgrade and repeated migration fixtures are authored; none executed locally. Deploy migration before application code. Forward-fix only: retain immutable event/audit history, use an authorized bound admin to append OFF where needed, then deploy a separately reviewed correction. Do not drop historical rows or lift the held rule as rollback.
 
 **no object from 0111 or 0120 altered or restated**
 
