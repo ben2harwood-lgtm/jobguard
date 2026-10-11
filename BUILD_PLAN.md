@@ -3351,6 +3351,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — M4-6-S, 9 October 2026 (merge-ahead ruling).** M4-6-S (reserved 0047 in the in-flight table) was issued on 9 October with **0112** (`recovery_follow_up`), the next number neither merged nor held at dispatch (merged 0102, 0103, 0106, 0107, 0109, 0110; 0111 held by M0-6L #104), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order. 0113 is held for CH-7; SV-2 (#119) takes the next free number at its own merge. A PR whose number is not above every merged number when it lands renumbers again.
 
+**Ledger amendment — SV-2, 11 October 2026 (merge-ahead ruling).** SV-2 (pre-allocated 0061 in the table below; held **0100** while PR #119 waited for plan PR #118) takes **0118** (`shadow_persistence`) on 11 October 2026, the next number neither merged nor reserved (merged through 0112; 0113 CH-7, 0114 ENT-10a, 0115 M4-6-S-R1, 0116 ENT-10b and 0117 ENT-4b are reserved), under Ben's 5 October merge-ahead ruling (card `jobguard-merge-ahead-of-103-2026-10-05`: a piece that lands after higher numbers takes the next free number). The SQL is byte-identical; the runner lists it after 0112. The lane path was swapped on SV-2's own line only. A PR whose number is not above every merged number when it lands renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |

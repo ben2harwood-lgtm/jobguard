@@ -52,7 +52,6 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0095_job_parties.sql", import.meta.url),
   new URL("../migrations/0096_watchdog_live.sql", import.meta.url),
   new URL("../migrations/0097_recovery_case_current.sql", import.meta.url),
-  new URL("../migrations/0100_shadow_persistence.sql", import.meta.url),
   new URL("../migrations/0102_contractor_parties.sql", import.meta.url),
   new URL("../migrations/0103_prevention_checks.sql", import.meta.url),
   new URL("../migrations/0106_practice_feed.sql", import.meta.url),
@@ -61,6 +60,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0110_work_orders.sql", import.meta.url),
   new URL("../migrations/0111_persisted_identity.sql", import.meta.url),
   new URL("../migrations/0112_recovery_follow_up.sql", import.meta.url),
+  new URL("../migrations/0118_shadow_persistence.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 

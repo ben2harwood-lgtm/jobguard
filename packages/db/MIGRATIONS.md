@@ -721,7 +721,9 @@ Existing objects it touches: the three M4-5-S guards (`guard_recovery_message`, 
 
 Expand-compatible: new tables, functions and one trigger; the preceding application ignores them. Corrections ship as a new migration: events, due rows and links are historical facts, so there is no destructive rollback. Proof: `packages/db/test/recovery-follow-up.integration.test.ts` (including the same-transaction proof by `xmin` and by injected failure).
 
-### 0100 — SV-2 shadow persistence and isolation
+## 0118 — SV-2 shadow persistence and isolation
+
+Renumbered from 0100 to 0118 on 11 October under Ben's 5 October merge-ahead ruling: 0112 (M4-6-S) and lower have merged, 0113 (CH-7), 0114 (ENT-10a), 0115 (M4-6-S-R1), 0116 (ENT-10b) and 0117 (ENT-4b) are reserved, so 0118 is the next free number; the SQL bytes are unchanged.
 
 Expand-only after 0094. Adds eight restricted shadow tables and one append-only
 variation-withdrawal fact, qualified evidence/version/hash/receive-time identity,
@@ -739,7 +741,7 @@ granted by the bootstrap superuser). The owner cannot revoke it, so it stays; th
 bootstrap accepts exactly that shape, fails closed on any other holder, and the
 support route checks `USAGE` (not `MEMBER`) so the leftover membership grants no
 support authority. No support holder is appointed. Because the schema `app` is
-now usable by these two roles, 0100 revokes PUBLIC EXECUTE from the four older
+now usable by these two roles, 0118 revokes PUBLIC EXECUTE from the four older
 SECURITY DEFINER routines that never had it revoked (`advance_final_account_draft`,
 `invalidate_stale_final_account_authorizations`, `reserve_customer_invoice_number`,
 `issue_practice_customer_invoice`); `jobguard_runtime` keeps its explicit grants.
