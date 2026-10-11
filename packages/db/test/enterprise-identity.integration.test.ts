@@ -232,6 +232,19 @@ describe("ENT-10a / actual PostgreSQL identity trust boundary", () => {
     expect(await count("app.membership", f.principal.tenantId)).toBe(members);
   });
 
+  it("refuses a validly signed non-bearer subject confirmation with SAML_REFUSED, an audit row and no session, membership or subject (round 2)", async () => {
+    const f = await fixture(); await f.verify(); await f.mapping();
+    const sessions = await count("identity.sso_session_binding", f.principal.tenantId), members = await count("app.membership", f.principal.tenantId);
+    for (const confirmationMethod of ["urn:oasis:names:tc:SAML:2.0:cm:holder-of-key", "urn:example:cm:unknown", null]) {
+      const response = await f.response({ confirmationMethod }), before = await count("app.audit_event", f.principal.tenantId);
+      await expect(f.app.callback(f.connectionId, response.payload, response.request.relayState)).rejects.toHaveProperty("code", "SAML_REFUSED");
+      expect(await count("app.audit_event", f.principal.tenantId)).toBeGreaterThan(before);
+      expect(await count("identity.sso_session_binding", f.principal.tenantId)).toBe(sessions);
+      expect(await count("app.membership", f.principal.tenantId)).toBe(members);
+      expect(await count("identity.sso_subject", f.principal.tenantId)).toBe(0);
+    }
+    await expect(f.signin({ confirmationMethod: undefined })).resolves.toHaveProperty("sessionToken");
+  });
   it("refuses every unsolicited response and a solicited A response on B's callback", async () => {
     const sharedIdp = generateTestIdentityProvider(), a = await fixture(sharedIdp), b = await fixture(sharedIdp); await a.verify(); await b.verify(); await a.mapping(); await b.mapping();
     const response = await a.response(), bAudit = await count("app.audit_event", b.principal.tenantId);

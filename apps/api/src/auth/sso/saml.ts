@@ -83,6 +83,8 @@ export class SamlAdapter {
       requiredString(conditions.NotOnOrAfter);
       // Accept one bearer confirmation only; avoid ambiguity between library-selected and inspected confirmations.
       const confirmation = single(single(assertion.Subject).SubjectConfirmation);
+      // Bearer carries no key-possession proof to check, so it is the only method accepted; missing, unknown and holder-of-key are refused.
+      if (record(confirmation.$).Method !== "urn:oasis:names:tc:SAML:2.0:cm:bearer") throw new SamlValidationError();
       const confirmationData = record(single(confirmation.SubjectConfirmationData).$);
       if (confirmationData.Recipient !== this.connection.callbackUrl) throw new SamlValidationError();
       const requestId = requiredString(confirmationData.InResponseTo);

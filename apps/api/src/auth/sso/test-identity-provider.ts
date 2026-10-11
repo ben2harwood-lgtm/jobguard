@@ -19,6 +19,8 @@ export interface TestResponseOptions {
   notOnOrAfter?: string | null;
   confirmationNotOnOrAfter?: string;
   confirmationRequestId?: string | null;
+  /** Test-only: undefined keeps the bearer method; null omits the attribute; any other string is used verbatim. */
+  confirmationMethod?: string | null;
   signAssertion?: boolean;
   signResponse?: boolean;
   assertionSignatureAlgorithm?: SignatureAlgorithm;
@@ -49,7 +51,7 @@ export function generateTestIdentityProvider(): { idpCert: string; response(opti
         <saml:Assertion ID="${escapeXml(options.assertionId ?? `_${randomUUID()}`)}" Version="2.0" IssueInstant="${instant}">
           <saml:Issuer>${issuer}</saml:Issuer>
           <saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">${escapeXml(options.subject ?? "synthetic-subject")}</saml:NameID>
-            <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData Recipient="${escapeXml(options.recipient ?? options.connection.callbackUrl)}"${attribute("InResponseTo", options.confirmationRequestId === undefined ? options.requestId : options.confirmationRequestId)} NotOnOrAfter="${escapeXml(options.confirmationNotOnOrAfter ?? new Date(now + 300_000).toISOString())}"/></saml:SubjectConfirmation>
+            <saml:SubjectConfirmation${attribute("Method", options.confirmationMethod === undefined ? "urn:oasis:names:tc:SAML:2.0:cm:bearer" : options.confirmationMethod)}><saml:SubjectConfirmationData Recipient="${escapeXml(options.recipient ?? options.connection.callbackUrl)}"${attribute("InResponseTo", options.confirmationRequestId === undefined ? options.requestId : options.confirmationRequestId)} NotOnOrAfter="${escapeXml(options.confirmationNotOnOrAfter ?? new Date(now + 300_000).toISOString())}"/></saml:SubjectConfirmation>
           </saml:Subject>
           <saml:Conditions${attribute("NotBefore", notBefore)}${attribute("NotOnOrAfter", notOnOrAfter)}><saml:AudienceRestriction><saml:Audience>${escapeXml(options.audience ?? options.connection.spEntityId)}</saml:Audience></saml:AudienceRestriction></saml:Conditions>
           <saml:AuthnStatement AuthnInstant="${instant}" SessionIndex="synthetic-session"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>

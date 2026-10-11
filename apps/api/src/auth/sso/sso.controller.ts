@@ -5,6 +5,10 @@ import type { SsoApplication } from "./sso.application.js";
 import { SsoError, ssoStatus, ssoStateCookieOptions, ssoSessionCookieOptions, ssoCookieState } from "./sso.contracts.js";
 import { cookieToken, type IdentityHttpRequest } from "../identity-http.js";
 export const SSO_APPLICATION="SSO_APPLICATION";
+// The Next routes live under /api/auth/sso, but this Nest controller is served at /auth/sso (no /api prefix). A browser only
+// returns a cookie to a path inside the cookie's Path, so the Nest state cookie must be set and cleared on /auth/sso.
+const nestStateCookiePath="/auth/sso";
+const nestStateCookieOptions={...ssoStateCookieOptions,path:nestStateCookiePath};
 type ResponseCookies={cookie:(name:string,value:string,options:typeof ssoStateCookieOptions)=>void;clearCookie:(name:string,options:{path:string})=>void};
 @ApiTags("sso") @Controller("auth/sso")
 export class SsoController {
@@ -22,7 +26,7 @@ export class SsoController {
   return this.run(async()=>{
    const credentials={sessionToken:cookieToken(request),csrfToken:request.headers['x-csrf-token'],tenantHeader:request.headers['x-tenant-id'],origin:request.headers.origin};
    if(z.object({version:z.literal('sso-admin.v1')}).passthrough().safeParse(body).success)return this.application().admin(body,credentials);
-   const result=await this.application().start(id,body,credentials);response.cookie('jobguard_sso_state',result.relayState,ssoStateCookieOptions);return result;
+   const result=await this.application().start(id,body,credentials);response.cookie('jobguard_sso_state',result.relayState,nestStateCookieOptions);return result;
   });
  }
  @Post(":connectionId/callback") @ApiOperation({summary:"Validate solicited double-signed SAML, consume assertion once and issue bounded persisted session"})
@@ -33,7 +37,7 @@ export class SsoController {
    if(request.headers.origin!==this.application().allowedOrigin){await this.application().repository.refusal(id,'SSO_FORBIDDEN');throw new SsoError('SSO_FORBIDDEN');}
    const result=await this.application().callback(id,body,ssoCookieState(request.headers.cookie));
    response.cookie('jobguard_session',result.sessionToken,{...ssoSessionCookieOptions,maxAge:result.sessionLimitSeconds*1000});
-   response.clearCookie('jobguard_sso_state',{path:'/api/auth/sso'});
+   response.clearCookie('jobguard_sso_state',{path:nestStateCookiePath});
    return {version:'sso-signed-in.v1',environment:'synthetic_demo',csrfToken:result.csrfToken,tenantId:result.tenantId};
   });
  }

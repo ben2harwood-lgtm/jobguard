@@ -7,12 +7,18 @@ import { HttpException, type ExecutionContext } from "@nestjs/common";
 import { IdentityController } from "../identity.controller.js";
 import { ApplicationAuthGuard } from "../application-auth.guard.js";
 import { SsoApplication, SsoAuthProvider } from "./sso.application.js";
-import { SsoController } from "./sso.controller.js";
-import { ssoStatus } from "./sso.contracts.js";
+import { SsoController, SSO_APPLICATION } from "./sso.controller.js";
+import { SsoError, ssoStateCookieOptions, ssoStatus } from "./sso.contracts.js";
 import { PersistedAuthProvider } from "../persisted-auth-provider.js";
 import { createIdentityApplication, IdentityApplication } from "../identity.application.js";
 import { createWorkspaceApplication } from "../../workspace/application.js";
 import type { Pool } from "pg";
+import { randomBytes } from "node:crypto";
+import { Test } from "@nestjs/testing";
+import request from "supertest";
+import type { CacheItem, CacheProvider } from "@node-saml/node-saml";
+import { SamlAdapter, type SamlConnection } from "./saml.js";
+import { generateTestIdentityProvider } from "./test-identity-provider.js";
 const principal={identityUserId:"30000000-0000-4000-8000-000000000003",sessionId:"40000000-0000-4000-8000-000000000004",csrfToken:"a".repeat(32)};
 const member={id:"50000000-0000-4000-8000-000000000005",identityUserId:principal.identityUserId,tenantId:"10000000-0000-4000-8000-000000000001",role:"read_only" as const,email:"site@fixture.invalid"};
 function fixture() {
@@ -202,5 +208,97 @@ describe("Round 1 / shared Nest and Next factory composition",()=>{
     expect(facts.effects.invitations).toHaveLength(0);
    }finally{query.mockRestore();memberships.mockRestore();await app.provider.repository.pool.end();}
   }
+ });
+});
+
+// Round 2: transport-level proof for the Nest controller, which is served at /auth/sso (no /api prefix).
+// The application behind it is a thin double that does the real signed-SAML validation; what is under test is the
+// HTTP transport: which cookie the controller sets and clears, and whether a browser would send it back to the callback.
+class TransportRequestCache implements CacheProvider {
+ readonly entries=new Map<string,string>();
+ async saveAsync(key:string,value:string):Promise<CacheItem>{this.entries.set(key,value);return {value,createdAt:Date.now()};}
+ async getAsync(key:string):Promise<string|null>{return this.entries.get(key)??null;}
+ async removeAsync(key:string|null):Promise<string|null>{if(key===null)return null;const value=this.entries.get(key)??null;this.entries.delete(key);return value;}
+}
+/** RFC 6265 section 5.1.4 path-match plus the delete rules, so a cookie is only returned to a request path inside its Path. */
+class PathHonouringJar {
+ private readonly cookies=new Map<string,{name:string;value:string;path:string}>();
+ store(setCookie:string[]|string|undefined) {
+  for(const line of [setCookie??[]].flat()) {
+   const [pair,...attributes]=line.split(';').map(part=>part.trim()),at=pair!.indexOf('='),name=pair!.slice(0,at),value=pair!.slice(at+1);
+   const attribute=(key:string)=>attributes.find(part=>part.toLowerCase().startsWith(`${key}=`))?.slice(key.length+1);
+   const path=attribute('path')??'/',maxAge=attribute('max-age'),expires=attribute('expires');
+   const expired=(maxAge!==undefined&&Number(maxAge)<=0)||(expires!==undefined&&Date.parse(expires)<=Date.now());
+   if(expired)this.cookies.delete(`${name};${path}`);else this.cookies.set(`${name};${path}`,{name,value,path});
+  }
+ }
+ header(requestPath:string):string|undefined {
+  const sent=[...this.cookies.values()].filter(({path})=>requestPath===path||(requestPath.startsWith(path)&&(path.endsWith('/')||requestPath[path.length]==='/')));
+  return sent.length?sent.map(({name,value})=>`${name}=${value}`).join('; '):undefined;
+ }
+}
+async function nestTransport() {
+ const origin='https://jobguard.invalid',connectionId='70000000-0000-4000-8000-000000000007',idp=generateTestIdentityProvider();
+ const connection:SamlConnection={id:connectionId,tenantId:member.tenantId,idpEntityId:'urn:jobguard:synthetic-idp',spEntityId:`urn:jobguard:sp:${connectionId}`,callbackUrl:`${origin}/auth/sso/${connectionId}/callback`,entryPoint:`${origin}/test-idp`,idpCert:idp.idpCert};
+ const cache=new TransportRequestCache(),adapter=new SamlAdapter(connection,cache),requests=new Map<string,string>();
+ const double={
+  allowedOrigin:origin,
+  repository:{refusal:vi.fn(async()=>undefined)},
+  async start() {
+   const authnRequestUrl=await adapter.start(),requestId=[...cache.entries.keys()].at(-1)!;
+   const relayState=randomBytes(32).toString('base64url');requests.set(relayState,requestId);
+   return {version:'sso-started.v1' as const,connectionId,requestId,relayState,authnRequestUrl};
+  },
+  async callback(_id:string,raw:unknown,browserState:string|undefined) {
+   const input=raw as {SAMLResponse:string;relayState:string};
+   if(!browserState||browserState!==input.relayState)throw new SsoError('REQUEST_REFUSED');
+   await adapter.validate(input.SAMLResponse).catch(()=>{throw new SsoError('SAML_REFUSED');});
+   return {sessionToken:randomBytes(32).toString('base64url'),sessionLimitSeconds:900,csrfToken:'c'.repeat(32),tenantId:member.tenantId};
+  },
+ };
+ const module=await Test.createTestingModule({controllers:[SsoController],providers:[{provide:SSO_APPLICATION,useValue:()=>double}]}).compile();
+ const app=module.createNestApplication();await app.init();
+ return {app,origin,connectionId,connection,idp,startPath:`/auth/sso/${connectionId}/start`,callbackPath:`/auth/sso/${connectionId}/callback`};
+}
+describe("ENT-10a Nest SSO transport (round 2: state cookie path)",()=>{
+ it("sets the state cookie on /auth/sso, carries it from start to a successful signed callback, and clears it on the same path",async()=>{
+  const t=await nestTransport(),jar=new PathHonouringJar();
+  try {
+   const started=await request(t.app.getHttpServer()).post(t.startPath).set('Origin',t.origin).send({version:'sso-start.v1',action:'signin'}).expect(201);
+   const stateCookie=[started.headers['set-cookie']].flat().find(line=>line?.startsWith('jobguard_sso_state='))!;
+   expect(stateCookie).toContain(`jobguard_sso_state=${started.body.relayState}`);
+   expect(stateCookie).toContain('Path=/auth/sso;');
+   expect(stateCookie).not.toContain('/api/auth/sso');
+   for(const unchanged of ['Max-Age=600','HttpOnly','Secure','SameSite=Strict'])expect(stateCookie).toContain(unchanged);
+   jar.store(started.headers['set-cookie']);
+   // A browser must send the state cookie to the Nest callback path (served without /api).
+   const cookie=jar.header(t.callbackPath);expect(cookie).toBe(`jobguard_sso_state=${started.body.relayState}`);
+   const SAMLResponse=t.idp.response({connection:t.connection,requestId:started.body.requestId,subject:'operative-1',email:'site@fixture.invalid',groups:['site']});
+   const signedIn=await request(t.app.getHttpServer()).post(t.callbackPath).set('Origin',t.origin).set('Cookie',cookie!).send({version:'sso-callback.v1',SAMLResponse,relayState:started.body.relayState}).expect(201);
+   expect(signedIn.body).toMatchObject({version:'sso-signed-in.v1',environment:'synthetic_demo',tenantId:member.tenantId});
+   const lines=[signedIn.headers['set-cookie']].flat() as string[];
+   expect(lines.find(line=>line.startsWith('jobguard_sso_state=;'))).toContain('Path=/auth/sso');
+   const sessionCookie=lines.find(line=>line.startsWith('jobguard_session='))!;
+   for(const attribute of ['Path=/;','Max-Age=900','HttpOnly','Secure','SameSite=Strict'])expect(sessionCookie).toContain(attribute);
+   jar.store(signedIn.headers['set-cookie']);
+   // The clear matched the cookie's own Path, so only the session cookie is left in the jar.
+   expect(jar.header(t.callbackPath)).toMatch(/^jobguard_session=[^;]+$/u);
+   expect(jar.header(t.callbackPath)).not.toContain('jobguard_sso_state');
+  } finally {await t.app.close();}
+ });
+ it("does not send a state cookie scoped to /api/auth/sso to the Nest callback, so that callback is refused",async()=>{
+  const t=await nestTransport(),jar=new PathHonouringJar();
+  try {
+   const started=await request(t.app.getHttpServer()).post(t.startPath).set('Origin',t.origin).send({version:'sso-start.v1',action:'signin'}).expect(201);
+   jar.store(`jobguard_sso_state=${started.body.relayState}; Path=/api/auth/sso; Max-Age=600; HttpOnly; Secure; SameSite=Strict`);
+   expect(jar.header(`/api/auth/sso/${t.connectionId}/callback`)).toBe(`jobguard_sso_state=${started.body.relayState}`);
+   expect(jar.header(t.callbackPath)).toBeUndefined();
+   const SAMLResponse=t.idp.response({connection:t.connection,requestId:started.body.requestId,subject:'operative-1',email:'site@fixture.invalid',groups:['site']});
+   const refused=await request(t.app.getHttpServer()).post(t.callbackPath).set('Origin',t.origin).send({version:'sso-callback.v1',SAMLResponse,relayState:started.body.relayState}).expect(403);
+   expect(refused.body).toEqual({code:'REQUEST_REFUSED'});
+  } finally {await t.app.close();}
+ });
+ it("leaves the Next state-cookie contract on /api/auth/sso with every other attribute unchanged",()=>{
+  expect(ssoStateCookieOptions).toEqual({httpOnly:true,secure:true,sameSite:'strict',path:'/api/auth/sso',maxAge:600_000});
  });
 });

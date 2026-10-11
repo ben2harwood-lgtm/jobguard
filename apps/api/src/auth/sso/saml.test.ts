@@ -79,6 +79,15 @@ describe("ENT-10a strict SAML adapter (DW1)", () => {
     const xml = Buffer.from(idp.response({ connection, requestId }), "base64").toString().replace("operative@synthetic.invalid", "attacker@synthetic.invalid");
     await expect(adapter.validate(Buffer.from(xml).toString("base64"))).rejects.toBeInstanceOf(SamlValidationError);
   });
+  it.each([
+    ["holder-of-key", "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key"],
+    ["sender-vouches", "urn:oasis:names:tc:SAML:2.0:cm:sender-vouches"],
+    ["an unknown method", "urn:example:cm:unknown"],
+    ["an empty method", ""],
+    ["a missing method", null],
+  ] as const)("accepts only the bearer subject-confirmation method and refuses %s even when validly signed (round 2)", async (_label, confirmationMethod) => {
+    await refused({ confirmationMethod });
+  });
   it("refuses a missing assertion identity", async () => { await refused({ assertionId: "" }); });
   it("returns a typed refusal for malformed SAML", async () => {
     const { adapter } = await initiated();
