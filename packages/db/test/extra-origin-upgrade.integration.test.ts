@@ -11,7 +11,7 @@ describe("ENT-4b additive upgrade", () => {
  it("[S8] preserves old columns and fixture origins, adds only NULL columns; migrator idempotent and ordered", async () => {
   const names = MIGRATION_URLS.map(u => u.pathname.split("/").at(-1)!);
   expect(names).toEqual([...names].sort()); expect(new Set(names).size).toBe(names.length);
-  const own = names.indexOf("0117_extra_origin_persistence.sql"); expect(own).toBeGreaterThan(names.indexOf("0053_shared_money_origin.sql")); expect(own).toBeGreaterThan(names.indexOf("0110_work_orders.sql"));
+  const own = names.indexOf("0122_extra_origin_persistence.sql"); expect(own).toBeGreaterThan(names.indexOf("0053_shared_money_origin.sql")); expect(own).toBeGreaterThan(names.indexOf("0110_work_orders.sql"));
   const f = await fixture(c);
   const fixtureJob = await ownerTx(c, f.p.tenantId, async db => { const id = randomUUID(); await db.$client.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional contractor fixture')", [f.p.tenantId, id]); await db.$client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'contractor','synthetic_demo','work_order_import')", [f.p.tenantId, id]); return id; });
   await withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(), command = await receipt(db, f.p.tenantId, fixtureJob, id, f.p.membershipId); await rawVariation(db, f.p.tenantId, fixtureJob, id); await rawOrigin(db, { ...f, jobId: fixtureJob }, id, command, { raising_grant_id: undefined }); });
@@ -34,7 +34,7 @@ describe("ENT-4b additive upgrade", () => {
    for (const row of after) for (const col of added) expect(row[col]).toBeNull();
   }
   for (const row of existingFunctions) expect((await c.admin.query("SELECT pg_get_functiondef($1::oid) definition", [row.oid])).rows[0].definition).toBe(row.definition);
-  expect((await c.admin.query("SELECT * FROM public.jobguard_schema_migration WHERE migration_name='0117_extra_origin_persistence.sql'")).rowCount).toBe(1);
+  expect((await c.admin.query("SELECT * FROM public.jobguard_schema_migration WHERE migration_name='0122_extra_origin_persistence.sql'")).rowCount).toBe(1);
   for (const col of newOriginColumns) await expect(withTenant(c.runtime, f.ctx, async db => { const id = randomUUID(), command = await receipt(db, f.p.tenantId, fixtureJob, id, f.p.membershipId); await rawVariation(db, f.p.tenantId, fixtureJob, id); await rawOrigin(db, { ...f, jobId: fixtureJob }, id, command, { raising_grant_id: null, [col]: col === "raiser_assigned" ? false : col.includes("hash") ? "a".repeat(64) : col === "command_type" ? "LogSiteExtra" : randomUUID() }); })).rejects.toMatchObject({ code: "23514" });
   const fresh = await cluster(); try {
    const catalog = async (db: typeof c.admin) => (await db.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,pg_get_constraintdef(k.oid) definition FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_constraint k ON k.conrelid=c.oid WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname,definition", [newTables])).rows;

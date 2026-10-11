@@ -762,7 +762,9 @@ with a separately numbered migration. Do not drop identity/audit history or rewr
 an already applied migration. No real-provider rollout or D04/G5 approval follows
 from migration success.
 
-## 0117 — ENT-4b origin persistence and audit
+## 0122 — ENT-4b origin persistence and audit
+
+Renumbered 0117 → 0122 on 11 October 2026 under the merge-ahead ruling.
 
 Adds `app.extra_event`, `app.extra_duplicate_link` and `app.extra_order_line_link`, owned by `jobguard_migration`, with enabled/FORCE RLS, tenant policy, SELECT/INSERT-only runtime grants and immutable UPDATE/DELETE guards. Adds four SECURITY INVOKER trigger functions, all revoked from PUBLIC/runtime; no callable helper or SECURITY DEFINER routine.
 

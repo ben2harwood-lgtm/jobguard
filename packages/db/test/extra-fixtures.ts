@@ -20,7 +20,7 @@ export async function cluster(beforeOwn = false) {
  const admin = new Pool({ ...config, database: "jobguard_synthetic_demo" });
  if (beforeOwn) {
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for (const url of MIGRATION_URLS.filter(u => u.pathname.split("/").at(-1)! < "0117_extra_origin_persistence.sql")) {
+  for (const url of MIGRATION_URLS.filter(u => u.pathname.split("/").at(-1)! < "0122_extra_origin_persistence.sql")) {
    if (url.pathname.endsWith("0053_shared_money_origin.sql")) {
     // Actual pre-SH-1 input, so SH-1 itself produces the backfilled origin.
     const tenant = randomUUID(), user = randomUUID(), account = randomUUID(), member = randomUUID(), job = randomUUID(), scope = randomUUID();

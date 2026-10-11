@@ -8,7 +8,7 @@ Builder receipt only — not independently verified, not accepted.
 
 | Card | Source-inspected result |
 |---|---|
-| B1 Origin | BUILT contractor provenance in 0117 and ExtraRepository; command-receipt FK ALREADY MERGED in 0053_shared_money_origin.sql:26. |
+| B1 Origin | BUILT contractor provenance in 0122 (built as 0117; renumbered) and ExtraRepository; command-receipt FK ALREADY MERGED in 0053_shared_money_origin.sql:26. |
 | B2 Trigger | ALREADY MERGED command map/actor/track: 0053:136–161, CHECKs at 28–29 and 70–71. New work-order provenance guard BUILT after extra_origin_validate; existing function untouched. |
 | B3 Deferred origin | ALREADY MERGED variation_requires_origin: 0053:77–78; primary key at 24 prevents a second origin. Tests/catalog assertions added, no second constraint. |
 | B4 Event/link tables | BUILT extra_event, extra_duplicate_link, extra_order_line_link, composite keys, sequencing, graph guards, later-instruction links. Unlink rows/guards BUILT; unlink repository/receipt type HELD (Q9, plan names no command). |
@@ -26,7 +26,7 @@ Tests were written before feature implementation. Subsequent self-review strengt
 - `packages/core/src/extra-persistence.ts`
 - `packages/core/src/index.ts`
 - `packages/db/MIGRATIONS.md`
-- `packages/db/migrations/0117_extra_origin_persistence.sql`
+- `packages/db/migrations/0122_extra_origin_persistence.sql`
 - `packages/db/src/extra-repository.ts`
 - `packages/db/src/index.ts`
 - `packages/db/src/migrate.ts`
@@ -126,7 +126,7 @@ All of the following: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
 
 ## Migration and compatibility
 
-Migration **0117_extra_origin_persistence.sql** is registered in numeric order after 0112 on this base. Position test asserts strictly increasing migration names and 0117 after 0053/0110, never that it is last. No migration was run here.
+Migration **0122_extra_origin_persistence.sql** is registered in numeric order after 0112 on this base. Position test asserts strictly increasing migration names and 0122 after 0053/0110, never that it is last. No migration was run here.
 
 Existing objects extended, by addition only:
 
