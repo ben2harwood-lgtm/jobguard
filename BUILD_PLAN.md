@@ -3358,6 +3358,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — CH-7, 11 October 2026 (merge-ahead ruling).** CH-7 (pre-allocated 0060 in the in-flight table; issued with 0113 on 9–11 October) takes **0119** (`recovery_eligibility_v3`) on 11 October 2026, the next number neither merged nor reserved (merged through 0115; 0116 ENT-10b, 0117 ENT-4b and 0118 SV-2 reserved), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0115; the SQL is unchanged and the lane path was swapped with the renumber. A piece that lands after a higher number has merged renumbers again.
 
+**Ledger amendment — ENT-10b, 11 October 2026 (merge-ahead ruling).** ENT-10b (second sub-leaf of ENT-10; built with 0116) takes **0121** (`audit_export`) on 11 October 2026, the next number neither merged nor reserved (merged through 0115 and 0119; 0120 ENT-10a), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0119; the SQL is unchanged and the lane path was swapped with the renumber. A piece that lands after a higher number has merged renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
