@@ -252,3 +252,163 @@ Not run: `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, any package `test`
 Merge of `origin/main` `8e91b2d` (FIXLATER-3) into the branch at `30c30f4`, merge only, no conflicts and no edits (the diff against main is still the eleven paths). Re-run on the merged state, in `packages/db`: `pnpm exec vitest run test/audit-checkpoint-handoff.integration.test.ts --maxWorkers=2`, exit 0, 1 file, 17 passed; at the worktree root `LANE_BASE_REF=origin/main pnpm lint:lanes`, exit 0, lane boundary passed. A unit test builds a made-up database URL with a random run-time value on a `.invalid` host (`packages/db/src/audit-checkpoint-handoff.test.ts` line 11); it contains no secret.
 
 Mac run record only — not a review, not an acceptance.
+
+
+## Round 1 — 12 October 2026 repair
+
+Working-tree repair of `codex/sandbox/ent-10b-ops`, starting at
+`1be22ba75ca2d3f0c74d3d0c3df22247e80f6709`. Re-read the issued order header,
+AGENTS, applicable plan/contracts and both head-bound review sources before editing.
+This section is the evidence for this repair; earlier build and Mac sections remain
+historical evidence for their stated heads, and are not rebound to this diff.
+The dispatcher commits locally after this hand-off. No git write, GitHub-contacting
+command, install, migration, route, screen or scheduler was run or added.
+
+### Fix results
+
+| Fix | Status | Before / after |
+| --- | --- | --- |
+| 1 | DONE (implementation; PostgreSQL execution owed) | Two statements could skip a disagreement if the newest event moved. One statement now materializes candidates once, inserts missing rows and returns disagreements for exactly those candidates. The existing typed error names the tenant and sequence. Equal hashes skip; newly inserted rows retain the public return shape. |
+| 2 | DONE | The guard previously scanned only API/web/DB and DB export keys. The same parser-based guard now walks every transitive workspace dependency of API/web, follows imports and all re-export forms through relative and package paths, and inspects every `exports`/`main` target, including emitted targets and corresponding source. Mutation fixtures cover direct request imports, two-package aliases, export stars, import-then-export bindings, conditional export-map targets and main targets. |
+| 3 | DONE | Removed the nineteen-file historic-commit/hash assertion entirely, including its git subprocess and digest imports. C-OPS-5 now tests only this piece's operator source for request-context construction. The hashes below are a one-time record, not a test. No standing test added here freezes another piece's files. |
+| 4 | DONE (required evidence record); execution NOT RUN | `apps/web/e2e/ENT-10b.spec.ts` is unchanged. NOT RUN (sandbox cannot start a browser); owed on the Mac, both projects, on the repaired head. |
+
+The five command conditions retain their implementation behavior. Operator core/CLI,
+shared copy helper, package manifests/exports, security scanner and its pinned files,
+all migrations, grants, routines and hash rules are unchanged by this round.
+No migration is needed. Changes to `audit.ts` are confined to `exportAuditCheckpoints`.
+The three merged callers in `audit.integration.test.ts`,
+`audit-export.integration.test.ts` and `synthetic-restore.mjs` keep their signature
+and successful return shape. The operator command still does not call this helper.
+
+**Commit behavior on disagreement:** the one pool statement commits every valid
+missing checkpoint, including those of other companies, before TypeScript rejects.
+Existing checkpoint rows remain unchanged. The rejecting call returns no list;
+a later idle call skips the already committed records. This preserves the prior
+partial-success behavior and is stated in the appended contract. The operator
+command's separate per-company atomic commit/rollback behavior is unchanged.
+
+### Tests and commands
+
+Tests were written before the production query repair. The shape regression was
+executed against the old helper: exit 1, one failure (two query calls instead of
+one), 22 filtered tests. This is a deterministic unit failure, not PostgreSQL
+execution. The three new database cases are source-inspected only; they are
+NOT RUN (sandbox cannot start PostgreSQL). Against `1be22ba`, F1a/F1b would miss
+the rejection after the forced append; F1c would fail the single-statement count
+assertion (its equal-hash/no-duplicate behavior already worked on that head).
+
+The advisory-lock helper holds connection A immediately after its insert statement
+commits, before returning that query result to the function. It observes the actual
+lock wait, commits N+1 through a distinct runtime connection B, then releases A.
+There is no sleep ordering. The three named PostgreSQL cases are:
+
+- `[Round 1 F1a] candidate disagreement rejects naming company and sequence after an intervening append` — NOT RUN (sandbox cannot start PostgreSQL).
+- `[Round 1 F1b] other-company checkpoint is committed and kept when the candidate disagrees after an append` — NOT RUN (sandbox cannot start PostgreSQL).
+- `[Round 1 F1c] equal candidate hash skips without a duplicate after an intervening append` — NOT RUN (sandbox cannot start PostgreSQL).
+
+Executed unit coverage includes the one-statement shape, public return shape and
+exact disagreement identity; the source-graph guard on the repository; and the
+same guard against direct-import, indirect-alias, export-star, import-then-export,
+export-map and main mutations, with safe control fixtures. All existing operator
+unit cases remain, apart from the explicitly ordered removal of the byte freeze.
+
+The default pnpm launcher stalled twice (the initial filtered test and a version
+probe); both were interrupted, exit 130, before producing test results. Switched
+to the already installed pinned pnpm 10.28.1 via
+`PATH=/private/tmp/jg-ent-10b-ops-bin:$PATH`, a temporary symlink to
+`~/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`. All pnpm commands below use
+that PATH. No package download or dependency change was requested. Node v24.17.0.
+Only this piece's changed unit file was executed, one run at a time, with two
+workers maximum. No full package/repository test suite was run.
+
+| Command (worktree root unless stated) | Exit | Result |
+| --- | --- | --- |
+| `pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=2 -t 'Round 1 F1'` before repair | 1 | 1 failed, 22 filtered; expected old-helper red result. |
+| `pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=2` after initial repair | 0 | 23 passed, 1 file. |
+| Same command after additional return/error and manifest coverage | 0 | 25 passed, 1 file. |
+| Same command after emitted-entry control coverage | 0 | 26 passed, 1 file. |
+| Same command after final SQL ordering adjustment | 0 | 26 passed, 1 file; final unit run. |
+| `pnpm typecheck` | 0 | 7 successful tasks, 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | 0 | Root source/boundary lints and 7 successful package lint tasks, 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Registered ENT-10b-OPS lane passed, including working-tree changes. |
+| `pnpm build --concurrency=2` | 0 | 7 successful tasks, 4 cached; Next production build completed. |
+| `pnpm openapi:check` | 1 | tsx launcher refused IPC pipe binding with EPERM before the check ran; sandbox limitation. |
+| `node apps/api/dist/generate-openapi.js --check` | 1 | Compiled-generator fallback reported stale output; this is a different transpilation path from the mandated source check. No schema file changed. |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | 0 | Same source generator and installed tsx loader, bypassing only the IPC launcher; committed OpenAPI matched. |
+| `git diff --check` | 0 | No whitespace errors. |
+| Read-only nineteen-path comparison to HEAD and added-text credential-shape scan | 0 | All nineteen unchanged; no matching added credential shape. One-time deterministic checks, not standing tests or model review. |
+
+Logs of the final unit/typecheck/lint/lane/build/OpenAPI checks are in
+`/private/tmp/jg-ent-10b-ops-round1-*.log`. Turbo reported cache IO permission
+warnings during typecheck/lint/build; the real tasks completed successfully.
+The standard OpenAPI launcher is sandbox-blocked; the equivalent source/tsx-loader
+check passed. The compiled fallback failure is not reported as a source-check failure
+or repaired by changing any out-of-lane schema.
+
+`packages/db/test/audit-checkpoint-handoff.integration.test.ts` now has 20 cases
+(previously 17). The full file, merged PostgreSQL regression suites, migration
+checks and restore rehearsal are NOT RUN (sandbox cannot start PostgreSQL).
+`pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop ENT-10b.spec.ts`
+is NOT RUN (sandbox cannot start a browser); owed on the Mac. Database CI and
+browser evidence on the repaired commit remain outstanding. No earlier Mac result
+is claimed for this repair. AI evaluation is inapplicable: no AI/model/prompt change.
+
+### Nineteen-path preservation record
+
+SHA-256 values read from the working tree at base head `1be22ba`; every listed
+path was compared once with that head and remains unchanged. This table is a
+record, not a test, and does not constrain future authorized changes.
+
+| File | SHA-256 |
+| --- | --- |
+| `packages/db/test/audit-export.integration.test.ts` | `99d1b31a941ada69c31b0d9184b00ce8cbebf0efa0c14b6dbec749529ce70c45` |
+| `packages/db/test/verify-audit-export-cli.test.ts` | `bce6ddb9e84724e3a58cc631f92e878f8f5ff7eade68f6b13c6c2c482fdc1bfe` |
+| `packages/db/test/audit.integration.test.ts` | `c9060dfcbeba72c9b14e6e42aeea7c2cc2aec71f1e3ac7361b82eef8d1fb57c0` |
+| `packages/db/test/tenancy.integration.test.ts` | `443e068f784cd594b0ba7745294b4137bb57d7fdd3388f286f11a4ba952f7312` |
+| `packages/db/test/demo-bootstrap.integration.test.ts` | `9105566ea61864253a0ee7de158dbe6b076b5538457b454e75d97f33ce684b8f` |
+| `apps/api/src/audit-export/audit-export.application.test.ts` | `8bac90b630ea3f782c6be2f811fdcbf6ad154b262cfb7ee592547794590ae1bd` |
+| `apps/web/app/admin/contractor/audit-exports/page.test.tsx` | `d4da63e68075f6370c06964ceb6016ebb1984796cf749e01f2e08f295488abf8` |
+| `apps/web/e2e/ENT-10b.spec.ts` | `3acbff5c76f607296ca0c415ec3da4ff38f6915e985f32714e771d1218087023` |
+| `packages/db/tools/synthetic-restore.mjs` | `b95e18b6e8794b2ca75e28990dfef38e8d77d98bb922ce185c55a128c85e11bd` |
+| `packages/db/migrations/0001_audit.sql` | `0466f67cf6bd1e6c67dbc95538d1b50e2f9c2a0547478845323791c5432af9ca` |
+| `packages/db/migrations/0121_audit_export.sql` | `a4a36afbe8c4e0fdc7940e47057f8c7d3e52db1b2e651dd5cd56a983fc9eaf68` |
+| `apps/api/src/auth/context-boundary.test.ts` | `7f1914846f763c3534ffafc79701fc6f768e8e1546be2fe98e27bc32a99e0e8d` |
+| `packages/db/src/practice-session.ts` | `9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14` |
+| `packages/db/src/contractor-repository.ts` | `56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c` |
+| `packages/db/src/contractor-party-repository.ts` | `e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0` |
+| `packages/db/src/work-order-repository.ts` | `4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3` |
+| `packages/db/src/sor-repository.ts` | `45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5` |
+| `packages/db/src/job-scheduling-repository.ts` | `ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d` |
+| `packages/db/src/work-order-fixtures.ts` | `cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386` |
+
+### Strict self-review of the Round 1 diff
+
+Re-read the complete round diff, query shape, test graph, new concurrency helper
+and contract. Checked these possible statement pairs individually:
+
+1. `audit.ts / exportAuditCheckpoints`: the moving second read is gone. The sole materialized candidate set feeds both insert and disagreement join. UNION results include valid inserts and disagreements without throwing inside SQL, so valid inserts commit. Insert order remains tenant/sequence ordered; the discriminator is stripped from successful public results.
+2. `audit.ts / appendAuditBatch`: context read, head read, server-clock reads, event inserts and head advance remain protected by the head lock acquired before any event append. A concurrent ordinary appender cannot move that head until the transaction ends. `verifyAuditChain` has no database reads.
+3. `audit-checkpoint-handoff.ts / handleTenant`: head lock precedes newest-event, checkpoint and hand-off reads. All control rows are compared to their fixed tenant/sequence event, and the no-new-events check uses the captured locked head. Reacquiring that same lock in `appendAuditBatch` does not release it. Checkpoint insertion uses the returned event identity; there is no moving head read after insertion.
+4. `audit-checkpoint-handoff.ts / runAuditCheckpointHandoff`: identity read and positive-head enumeration precede per-company transactions. Enumeration is deliberately a fixed company list; each selected company obtains its own head lock and fresh reads. An intervening append is covered by that locked read, not skipped by a later newest-event lookup. CLI gates have no second database read.
+5. `audit-export-repository.ts / handoffAuditExportCheckpoint`: insert then fallback lookup both bind the exact supplied tenant, sequence, hash and millisecond timestamp. They never select newest; checkpoint/hand-off rows are immutable. An append cannot move this identity.
+6. `audit-export-repository.ts / create`: captures fixed hand-off checkpoints, takes the head lock through append, then reads entries under that held lock and verifies every captured checkpoint against the chain. The list/refusal/authorization paths have no moving checkpoint-candidate pair.
+
+No other append-sensitive second-read pair was found in these paths. This is
+builder source inspection, not independent verification or acceptance. The review
+guard conservatively forbids a module dependency that reaches either operator
+module even if only an unrelated binding was imported; aliases cannot bypass it.
+It parses TypeScript/JavaScript module syntax using the existing TypeScript package,
+walks declared workspace dependencies, follows relative/package re-export chains,
+and evaluates export/main targets without adding dependencies. Mutation tests use
+the exact repository guard, and the emitted-entry safe control ensures export-map
+coverage is exercised rather than incidental source scanning.
+
+Reconfirmed C-OPS-5's scanner and pinned files unchanged; the replacement standing
+check inspects only owned operator files. Original operator behavior and all five
+conditions are preserved. The fixture URL now uses a URL object and generated
+values, including the previously flagged line 11 shape. No load-bearing policy,
+new operator feature or later-list item was added. Intended conventional commit
+subject/body written to `/private/tmp/jg-msg-ent-10b-ops.txt` for the dispatcher.
+Fresh Opus review and fresh Sol re-check bound to the dispatcher's repaired commit,
+plus separate acceptance, remain required; builder does not accept this work.

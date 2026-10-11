@@ -7,7 +7,7 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
 import { runAuditCheckpointHandoff } from "../src/audit-checkpoint-handoff.js";
-import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, verifyAuditChain, verifySignedAuditExport, verifiedTenantContextFromMembership, type AuthenticatedMembership, type AuditEvent, type AuditCheckpoint } from "../src/index.js";
+import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, appendAuditBatch, verifyAuditChain, verifySignedAuditExport, verifiedTenantContextFromMembership, type AuthenticatedMembership, type AuditEvent, type AuditCheckpoint, type TenantTransaction } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, directory: string, admin: Pool, owner: Pool, runtime: Pool, ownerUrl: string, runtimeUrl: string, alternateUrl: string;
@@ -70,13 +70,16 @@ afterAll(async () => {
   try { if (admin) expect(await catalog()).toEqual(priorCatalog); }
   finally { await closeTestPools(runtime, owner, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); }
 });
-async function restrictedExport(pool: Pool = owner) {
+async function restrictedExport(pool: Pool = owner, afterInsert?: (client: PoolClient) => Promise<void>, onStatement?: () => void) {
   const client = await pool.connect();
   try {
     // The helper accepts a pool: give it a facade over this owner connection with a local role in each query transaction.
     const facade = { async query(sql: string) {
+      onStatement?.();
       await client.query("BEGIN"); await client.query("SET LOCAL ROLE jobguard_migration");
-      try { const result = await client.query(sql); await client.query("COMMIT"); return result; }
+      try { const result = await client.query(sql); await client.query("COMMIT");
+        if (sql.includes("INSERT INTO audit_control.checkpoint")) await afterInsert?.(client);
+        return result; }
       catch (error) { await client.query("ROLLBACK"); throw error; }
     } } as unknown as Pool;
     return await exportAuditCheckpoints(facade);
@@ -105,6 +108,60 @@ it("[A4] different stored hash fails verification while true other-company recor
   expect(await snapshot(a.tenantId)).toEqual(before);
   expect((await admin.query("SELECT * FROM audit_control.checkpoint WHERE tenant_id=$1", [b.tenantId])).rowCount).toBe(1);
 });
+// Hold A after its insert statement commits, at the old gap before the moving second read.
+// B is a real runtime connection; an advisory lock, rather than a delay, orders the append.
+async function interveningAppend(equal: boolean, keepOther: boolean) {
+  const h = await head(a.tenantId), otherHead = await head(b.tenantId);
+  await admin.query("INSERT INTO audit_control.checkpoint(tenant_id,sequence,event_hash) VALUES($1,$2,$3)", [a.tenantId, h.sequence, equal ? h.event_hash : "f".repeat(64)]);
+  if (!keepOther) await admin.query("INSERT INTO audit_control.checkpoint(tenant_id,sequence,event_hash) VALUES($1,$2,$3)", [b.tenantId, otherHead.sequence, otherHead.event_hash]);
+  const blocker = await admin.connect(), appender = await runtime.connect();
+  const lockId = 101001;
+  let pending: Promise<{ rows?: AuditCheckpoint[]; error?: unknown }> | undefined;
+  let statements = 0;
+  try {
+    await blocker.query("SELECT pg_advisory_lock($1)", [lockId]);
+    pending = restrictedExport(owner, async client => {
+      await client.query("SELECT pg_advisory_lock($1)", [lockId]);
+      await client.query("SELECT pg_advisory_unlock($1)", [lockId]);
+    }, () => { statements++; }).then(rows => ({ rows }), error => ({ error }));
+    const deadline = Date.now() + 3000;
+    let waiting = false;
+    while (Date.now() < deadline) {
+      waiting = Boolean((await blocker.query("SELECT 1 FROM pg_stat_activity WHERE usename='fixture_owner' AND wait_event='advisory' AND query LIKE 'SELECT pg_advisory_lock%'")).rowCount);
+      if (waiting) break;
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    expect(waiting).toBe(true);
+    const waiter = (await blocker.query<{ pid: number }>("SELECT pid FROM pg_stat_activity WHERE usename='fixture_owner' AND wait_event='advisory'")).rows[0]!;
+    const writer = (await appender.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0]!;
+    expect(writer.pid).not.toBe(waiter.pid);
+    await appender.query("BEGIN");
+    await appender.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
+    await appendAuditBatch({ $client: appender } as TenantTransaction, [{ id: randomUUID(), version: "audit.v1", actorRef: "test:runtime", eventType: "test.append", subjectType: "tenant", subjectRef: a.tenantId, payload: {} }]);
+    await appender.query("COMMIT");
+    expect(Number((await head(a.tenantId)).sequence)).toBe(Number(h.sequence) + 1);
+    await blocker.query("SELECT pg_advisory_unlock($1)", [lockId]);
+    const result = await pending;
+    if (equal) {
+      expect(result.error).toBeUndefined(); expect(result.rows).toEqual([]);
+    } else {
+      expect(result.error).toMatchObject({ code: "AUDIT_VERIFICATION_FAILED", message: expect.stringContaining(a.tenantId) });
+      expect((result.error as Error).message).toContain(`sequence ${h.sequence}`);
+    }
+    expect((await admin.query("SELECT sequence::text,event_hash FROM audit_control.checkpoint WHERE tenant_id=$1", [a.tenantId])).rows).toEqual([{ sequence: h.sequence, event_hash: equal ? h.event_hash : "f".repeat(64) }]);
+    expect((await admin.query("SELECT sequence::text,event_hash FROM audit_control.checkpoint WHERE tenant_id=$1", [b.tenantId])).rows).toEqual([{ sequence: otherHead.sequence, event_hash: otherHead.event_hash }]);
+    // All three cases also require the single candidate statement; the old implementation uses two.
+    expect(statements).toBe(1);
+  } finally {
+    await blocker.query("SELECT pg_advisory_unlock($1)", [lockId]);
+    await appender.query("ROLLBACK");
+    if (pending) await pending;
+    blocker.release(); appender.release();
+  }
+}
+it("[Round 1 F1a] candidate disagreement rejects naming company and sequence after an intervening append", () => interveningAppend(false, false));
+it("[Round 1 F1b] other-company checkpoint is committed and kept when the candidate disagrees after an append", () => interveningAppend(false, true));
+it("[Round 1 F1c] equal candidate hash skips without a duplicate after an intervening append", () => interveningAppend(true, false));
 it("[A5] [C-OPS-4] effective run followed by unchanged run has identical snapshots", async () => {
   const first = await run(); expect(first.outcomes).toHaveLength(2);
   expect(first.outcomes.map(o => o.tenantId).sort()).toEqual([a.tenantId, b.tenantId].sort());

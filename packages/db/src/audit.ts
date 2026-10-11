@@ -93,20 +93,28 @@ export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: Aud
   }
 }
 
-/** Migration/assurance credentials only. Returns only newly recorded checkpoints; idle heads are skipped.
- * A different stored hash at a newest sequence fails verification; true records inserted by this call remain. */
+/** Migration/assurance credentials only. Returns newly recorded checkpoints; equal hashes skip.
+ * Candidates are fixed in one statement snapshot. Valid inserts commit before a candidate
+ * disagreement is reported, naming its tenant and sequence; other companies' records remain. */
 export async function exportAuditCheckpoints(pool: Pool): Promise<AuditCheckpoint[]> {
-  const result = await pool.query<AuditCheckpoint>(`INSERT INTO audit_control.checkpoint
-    (tenant_id, sequence, event_hash)
+  const result = await pool.query<AuditCheckpoint & { disagreement: boolean }>(`WITH candidates AS MATERIALIZED (
     SELECT DISTINCT ON (tenant_id) tenant_id, sequence, event_hash FROM app.audit_event
     ORDER BY tenant_id, sequence DESC
-    ON CONFLICT (tenant_id, sequence) DO NOTHING RETURNING tenant_id AS "tenantId", sequence::int,
-    event_hash AS "eventHash", recorded_at AS "recordedAt"`);
-  const disagreement = await pool.query(`SELECT 1 FROM (
-    SELECT DISTINCT ON (tenant_id) tenant_id, sequence, event_hash FROM app.audit_event
-    ORDER BY tenant_id, sequence DESC
-  ) newest JOIN audit_control.checkpoint c ON (c.tenant_id,c.sequence)=(newest.tenant_id,newest.sequence)
-    WHERE c.event_hash <> newest.event_hash LIMIT 1`);
-  if (disagreement.rows.length) throw new AuditVerificationError("Stored checkpoint differs from the newest event");
-  return result.rows;
+  ), inserted AS (
+    INSERT INTO audit_control.checkpoint (tenant_id, sequence, event_hash)
+    SELECT tenant_id, sequence, event_hash FROM candidates ORDER BY tenant_id, sequence
+    ON CONFLICT (tenant_id, sequence) DO NOTHING
+    RETURNING tenant_id, sequence, event_hash, recorded_at
+  )
+  SELECT tenant_id AS "tenantId", sequence::int, event_hash AS "eventHash",
+    recorded_at AS "recordedAt", false AS disagreement FROM inserted
+  UNION ALL
+  SELECT c.tenant_id AS "tenantId", c.sequence::int, c.event_hash AS "eventHash",
+    c.recorded_at AS "recordedAt", true AS disagreement
+  FROM candidates newest JOIN audit_control.checkpoint c
+    ON (c.tenant_id,c.sequence)=(newest.tenant_id,newest.sequence)
+  WHERE c.event_hash <> newest.event_hash`);
+  const disagreement = result.rows.find(row => row.disagreement);
+  if (disagreement) throw new AuditVerificationError(`Stored checkpoint differs for tenant ${disagreement.tenantId} at sequence ${disagreement.sequence}`);
+  return result.rows.map(({ disagreement: _disagreement, ...checkpoint }) => checkpoint);
 }
