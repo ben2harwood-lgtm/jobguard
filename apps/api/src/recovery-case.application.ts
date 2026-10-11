@@ -1,8 +1,8 @@
 import { PracticeAccess } from "./practice-access.js";
 import { ZodError } from "zod";
 import type { Pool } from "pg";
-import { PracticeAccessError, RecoveryCaseRepository, RecoveryCommandOutcomeUnknownError, practiceMaterialPool } from "@jobguard/db";
-import { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryCommandRefusalRulesV1 } from "./recovery-case.contracts.js";
+import { PracticeAccessError, RecoveryCaseRepository, RecoveryEligibilityV3Repository, RecoveryCommandOutcomeUnknownError, practiceMaterialPool } from "@jobguard/db";
+import { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryEligibilityCommandV3, recoveryCommandRefusalRulesV1 } from "./recovery-case.contracts.js";
 
 type PracticePrincipal = Awaited<ReturnType<PracticeAccess["job"]>>;
 export class RecoveryCaseApplication {
@@ -37,8 +37,14 @@ export class RecoveryCaseApplication {
  async eligibility(jobId: string, raw: unknown, sessionId?: string) {
   if(process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
   const practice = await new PracticeAccess(this.pool, sessionId ?? this.sessionId).job(jobId);
-  const affected = await this.repository(practice).eligibilityCommand(practice.context, jobId, recoveryEligibilityCommandV1.parse(await recoveryInput(raw)),
-   {membershipId:practice.membershipId,identityUserId:practice.identityUserId});
+  const body = await recoveryInput(raw);
+  const reviewer = {membershipId:practice.membershipId,identityUserId:practice.identityUserId};
+  if (typeof body === "object" && body !== null && "version" in body && body.version === "recovery-eligibility-command.v3") {
+   const input = recoveryEligibilityCommandV3.parse(body);
+   const result = await new RecoveryEligibilityV3Repository(practiceMaterialPool(this.pool, practice.digest)).review(practice.context, jobId, input, reviewer, practice.digest);
+   return {...await this.committedView(jobId, practice, input.caseId.toLowerCase()), eligibilityV3CommandResult: result};
+  }
+  const affected = await this.repository(practice).eligibilityCommand(practice.context, jobId, recoveryEligibilityCommandV1.parse(body), reviewer);
   return this.committedView(jobId, practice, affected.id);
  }
 }
