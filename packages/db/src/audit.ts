@@ -93,12 +93,20 @@ export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: Aud
   }
 }
 
-/** Migration/assurance credentials only; runtime cannot access audit_control. */
+/** Migration/assurance credentials only. Returns only newly recorded checkpoints; idle heads are skipped.
+ * A different stored hash at a newest sequence fails verification; true records inserted by this call remain. */
 export async function exportAuditCheckpoints(pool: Pool): Promise<AuditCheckpoint[]> {
   const result = await pool.query<AuditCheckpoint>(`INSERT INTO audit_control.checkpoint
     (tenant_id, sequence, event_hash)
     SELECT DISTINCT ON (tenant_id) tenant_id, sequence, event_hash FROM app.audit_event
-    ORDER BY tenant_id, sequence DESC RETURNING tenant_id AS "tenantId", sequence::int,
+    ORDER BY tenant_id, sequence DESC
+    ON CONFLICT (tenant_id, sequence) DO NOTHING RETURNING tenant_id AS "tenantId", sequence::int,
     event_hash AS "eventHash", recorded_at AS "recordedAt"`);
+  const disagreement = await pool.query(`SELECT 1 FROM (
+    SELECT DISTINCT ON (tenant_id) tenant_id, sequence, event_hash FROM app.audit_event
+    ORDER BY tenant_id, sequence DESC
+  ) newest JOIN audit_control.checkpoint c ON (c.tenant_id,c.sequence)=(newest.tenant_id,newest.sequence)
+    WHERE c.event_hash <> newest.event_hash LIMIT 1`);
+  if (disagreement.rows.length) throw new AuditVerificationError("Stored checkpoint differs from the newest event");
   return result.rows;
 }
