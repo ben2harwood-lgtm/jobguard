@@ -234,3 +234,25 @@ Corrections made during self-review: kept shared append helper private; moved po
 Recorded the S10d single-connection concurrency evidence conflict instead of claiming a pass. Emergency use remains disabled pending the held decision. Build output, .pnpm-store and test-results are removed before handoff; preinstalled node_modules are retained. Intended commit message is written to `/private/tmp/jg-msg-ent-10d.txt` for the dispatcher.
 
 Builder receipt only — not independently verified, not accepted.
+
+## CI repair 1 — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+Repair builder only: this section does not review or accept anything.
+
+**Catch-up.** Merged origin/main 11f394b into the branch (merge commit e304824). Six files conflicted and both sides were kept: `apps/api/src/app.module.ts`, `apps/api/src/workspace/application.ts`, `apps/api/src/workspace/index.ts`, `config/agent-lane-assignments.json`, `packages/db/MIGRATIONS.md`, `packages/db/src/migrate.ts`. `apps/api/openapi.json` merged without a conflict.
+
+**Rename.** `packages/db/migrations/0126_sso_required.sql` became `0125_sso_required.sql` (`git mv`, SQL unchanged; commit bc969a3). Merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces. The runner lists it after 0121. The lane line, `migrate.ts`, both database test files, the contract, the data-flow note and `MIGRATIONS.md` now name 0125; `BUILD_PLAN.md` gained the section 12.2 ledger amendment and is on the ent-10d lane line. The historical wording "migration 0126" in the builder sections above is left as written; 0125 is the number that ships.
+
+**Migration scope.** Creates five new tables and new routines only. It does not alter any existing table and adds no column to any fingerprinted table.
+
+**Faults found and repaired** (both in `packages/db/test/sso-required.integration.test.ts`, kind (i), test set-up only; every expect and expected value is byte-identical):
+1. Line 182, test S6g: `new Pool({...admin.options, database})` drops the password, so the connection failed with "empty password returned by client". Added the same fixture password the admin pool already uses on line 30, explicitly.
+2. Line 236, test S12: `TypeError: r.proacl.join is not a function`, because node-pg returns an access-list column as a raw string. The query now selects `proacl::text[] proacl`; the assertion on the next line is untouched (a missing list would still fail it).
+
+**Browser spec, not a code fault.** First run used the Next development server (the repo config does that unless `CI` is set): the unsuccessful verify returned 503 instead of 400 because the development server loads two copies of the error class (`instanceof` fails across route bundles). Re-run against the production build, as CI does, passed on both projects. Nothing was changed for it. An earlier attempt accidentally ran the whole browser suite because a bare file-name filter was ignored; it was stopped after 63 tests, results discarded.
+
+**Commands (all `--maxWorkers=2`, inside heavy-slot, one at a time).** `pnpm install --frozen-lockfile` exit 0; embedded-postgres dylib symlinks hydrated; `turbo run build --filter=@jobguard/api...` exit 0; db own files: 21 tests, first run 2 failed (faults above), after repair sso-required 16/16 and sso-emergency 5/5; tenancy + demo-bootstrap 13/13; identity + enterprise-identity (unedited) 30/30; api own three files 33/33; `context-boundary.test.ts` 145/145; identity, auth, saml (unedited) 54/54; `ENT-10d.spec.ts` against the production build: 2 passed (mobile-360, desktop).
+
+**Secret-pattern grep over the whole branch: NOT clean.** Quoted literals of ten or more characters after a key/token/secret/password word, in the builder's commit: `apps/api/src/auth/sso/sso-required-paths.test.ts:20` (constant `secret`), `apps/api/src/auth/sso/sso-required.test.ts:67` (`sessionToken` fixture), `packages/db/test/sso-required.integration.test.ts:17` and `packages/db/test/sso-emergency.integration.test.ts:23` (constant `secret`). Their entropy is above 3.5, the usual scanner threshold. Not pushed; no history was rewritten. Needs a decision.
+
+**Stopped on:** the push and pull request (Part C), for the reason above. No assertion, expected value, timeout, grant, policy or security rule was changed or loosened.

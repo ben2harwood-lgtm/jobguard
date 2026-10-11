@@ -179,7 +179,7 @@ describe("ENT-10d PostgreSQL switch and session boundary",()=>{
  });
  it("[S6g] SQL refuses a differently named real database independently of server mode",async()=>{
   await admin.query("CREATE DATABASE jobguard_other");
-  const alternate=new Pool({...admin.options,database:"jobguard_other"});
+  const alternate=new Pool({...admin.options,password:"synthetic",database:"jobguard_other"});
   try {
    await migrate(alternate);
    for(const query of ["SELECT identity.sso_required_command($1,'{}'::jsonb)","SELECT identity.sso_required_view($1,NULL)"])await expect(alternate.query(query,["a".repeat(64)])).rejects.toMatchObject({code:"42501",message:"SSO_ROUTE_BLOCKED"});
@@ -233,7 +233,7 @@ describe("ENT-10d PostgreSQL switch and session boundary",()=>{
    expect((await admin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname='immutable'",[relation])).rows[0].n).toBe(1);
    for(const role of ["jobguard_runtime","jobguard_infrastructure"])for(const privilege of ["SELECT","INSERT","UPDATE","DELETE","TRUNCATE"])expect((await admin.query("SELECT has_table_privilege($1,$2,$3) allowed",[role,relation,privilege])).rows[0].allowed).toBe(false);
   }
-  const routines=(await admin.query("SELECT oid::regprocedure::text signature,proacl,prosecdef,proconfig,pg_get_userbyid(proowner) owner FROM pg_proc WHERE pronamespace='identity'::regnamespace AND proname IN('sso_session_memberships','sso_code_signin_allowed','sso_invitation_accept_allowed','sso_invite_member','sso_required_refusal_target','sso_required_command','sso_required_view','sso_emergency_use','sso_required_append')")).rows;
+  const routines=(await admin.query("SELECT oid::regprocedure::text signature,proacl::text[] proacl,prosecdef,proconfig,pg_get_userbyid(proowner) owner FROM pg_proc WHERE pronamespace='identity'::regnamespace AND proname IN('sso_session_memberships','sso_code_signin_allowed','sso_invitation_accept_allowed','sso_invite_member','sso_required_refusal_target','sso_required_command','sso_required_view','sso_emergency_use','sso_required_append')")).rows;
   expect(routines).toHaveLength(9);for(const r of routines) {
    expect(r.proacl.join(',')).not.toMatch(/(?:^|,)=[^,]*X/u);expect(r.prosecdef).toBe(true);expect(r.proconfig).toContain("search_path=pg_catalog");expect(r.owner).toBe("jobguard_migration");
    for(const role of ["jobguard_runtime","jobguard_infrastructure"])expect((await admin.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,r.signature])).rows[0].allowed).toBe(false);
