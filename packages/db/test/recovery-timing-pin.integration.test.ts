@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { practiceMovementCatalogueV1, recoveryFixtureDefinitionV3 } from "@jobguard/core";
 import {
@@ -45,7 +45,7 @@ beforeAll(async () => {
   await migrate(admin); await seed(admin);
   await admin.query("CREATE ROLE stored_times_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO stored_times_login");
   runtime = new Pool(connectionOptions("postgres", login));
-});
+}, 120_000);
 afterAll(async () => {
   if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment;
   await closeTestPools(runtime, admin); await postgres?.stop();
@@ -266,20 +266,50 @@ async function snapshot(db: Pool) {
     ORDER BY c.relname,t.tgname COLLATE "C"`, [tables])).rows;
   return { rows, catalog, columns, functions, triggers };
 }
-// Rows compared after ALL migrations are read by the column names that existed before 0127, so a later column cannot fail this proof.
-async function namedColumns(db: Pool) {
-  const named: Record<string, string[]> = {};
-  for (const table of rowTables) named[table] = (await db.query(`SELECT a.attname::text name FROM pg_attribute a
-    WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum`, [`app.${table}`])).rows.map(row => row.name as string);
-  return named;
+// What the proof compares AFTER all migrations: only the rows that existed before 0127 (found again by primary key), on the columns and types they had
+// before 0127, as canonical text from the database (never driver-parsed values, which round timestamps to the millisecond). Rows added later are ignored.
+type Queryable = Pick<Pool | PoolClient, "query">;
+type ProofTable = { names: string[]; typed: Record<string, string>; key: string[]; rows: Record<string, string> };
+const ident = (name: string) => `"${name.replaceAll('"', '""')}"`;
+async function proofRows(db: Queryable, table: string, names: string[], key: string[]) {
+  const found = (await db.query(`SELECT identity,bytes FROM (SELECT (SELECT row_to_json(k)::text FROM (SELECT ${key.map(name => `t.${ident(name)}`).join(",")}) k) AS identity,
+    (SELECT row_to_json(s)::text FROM (SELECT ${names.map(name => `t.${ident(name)}`).join(",")}) s) AS bytes FROM app.${table} t) x ORDER BY identity COLLATE "C"`)).rows;
+  return Object.fromEntries(found.map(row => [row.identity as string, row.bytes as string]));
 }
-async function namedRows(db: Pool, named: Record<string, string[]>) {
-  const rows: Record<string, unknown> = {};
+async function proofColumns(db: Queryable, table: string) {
+  return (await db.query(`SELECT a.attname::text AS name,format_type(a.atttypid,a.atttypmod) AS type FROM pg_attribute a
+    WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum`, [`app.${table}`])).rows as { name: string; type: string }[];
+}
+async function proofBefore(db: Queryable) {
+  const proof: Record<string, ProofTable> = {};
   for (const table of rowTables) {
-    const list = named[table]!.map(name => `t."${name.replaceAll('"', '""')}"`).join(",");
-    rows[table] = (await db.query(`SELECT row_to_json(s)::text bytes FROM (SELECT ${list} FROM app.${table} t) s ORDER BY row_to_json(s)::text COLLATE "C"`)).rows;
+    const columns = await proofColumns(db, table);
+    const key = (await db.query(`SELECT a.attname::text AS name FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey)
+      WHERE i.indrelid=$1::regclass AND i.indisprimary ORDER BY array_position(i.indkey::int2[],a.attnum)`, [`app.${table}`])).rows.map(row => row.name as string);
+    const names = columns.map(column => column.name);
+    proof[table] = { names, typed: Object.fromEntries(columns.map(column => [column.name, column.type])), key, rows: await proofRows(db, table, names, key) };
   }
-  return rows;
+  return proof;
+}
+// Every pre-existing column whose type moved ("table: name type -> new type", a dropped column reads "(gone)") and every pre-existing row that is
+// missing or whose named columns changed. A later column, or a later row, is not a difference.
+async function proofDifferences(db: Queryable, proof: Record<string, ProofTable>) {
+  const rows: string[] = [], types: string[] = [];
+  for (const [table, was] of Object.entries(proof)) {
+    const now = new Map((await proofColumns(db, table)).map(column => [column.name, column.type]));
+    for (const name of was.names) if (now.get(name) !== was.typed[name]) types.push(`${table}: ${name} ${was.typed[name]} -> ${now.get(name) ?? "(gone)"}`);
+    if (was.names.some(name => !now.has(name))) continue;
+    const live = await proofRows(db, table, was.names, was.key);
+    for (const [identity, bytes] of Object.entries(was.rows)) {
+      if (!(identity in live)) rows.push(`${table} ${identity}: missing`);
+      else if (live[identity] !== bytes) rows.push(`${table} ${identity}: changed`);
+    }
+  }
+  return { rows, types };
+}
+async function rolledBack<T>(db: Pool, work: (client: PoolClient) => Promise<T>) {
+  const client = await db.connect();
+  try { await client.query("BEGIN"); return await work(client); } finally { await client.query("ROLLBACK"); client.release(); }
 }
 it("[AC9] populated upgrade preserves every stored row, earlier routine and table shape; reapply is inert", async () => {
   const database = `stored_times_upgrade_${randomUUID().replaceAll("-", "")}`;
@@ -299,7 +329,8 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
     const before = await snapshot(upgradeAdmin);
     const functionCount = (await upgradeAdmin.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='app'::regnamespace")).rows[0]!.n;
     const triggerCount = (await upgradeAdmin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid=ANY($1::regclass[])", [tables.map(table => `app.${table}`)])).rows[0]!.n;
-    const named = await namedColumns(upgradeAdmin), beforeRows = await namedRows(upgradeAdmin, named);
+    const proof = await proofBefore(upgradeAdmin);
+    for (const [table, was] of Object.entries(proof)) expect(Object.keys(was.rows).length, `${table} has a pre-existing row to compare`).toBeGreaterThan(0);
     // Migration 0127 ALONE, the way the runner applies one file: run its SQL, then record it in the registry.
     await upgradeAdmin.query(await readFile(MIGRATION_URLS.find(url => basename(fileURLToPath(url)) === migrationName)!, "utf8"));
     await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [migrationName]);
@@ -308,7 +339,36 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
     expect((await upgradeAdmin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid=ANY($1::regclass[])", [tables.map(table => `app.${table}`)])).rows).toEqual([{ n: triggerCount + 2 }]);
     expect((await upgradeAdmin.query("SELECT c.relname,t.tgenabled FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=$1::regprocedure ORDER BY c.relname", [functionName])).rows).toEqual(tables.map(relname => ({ relname, tgenabled: "O" })));
     await migrate(upgradeAdmin); await migrate(upgradeAdmin);
-    expect(await namedRows(upgradeAdmin, named)).toEqual(beforeRows);
+    expect(await proofDifferences(upgradeAdmin, proof)).toEqual({ rows: [], types: [] });
+    // Controls: each runs the SAME comparison inside a transaction that is rolled back.
+    for (const table of tables) {
+      // (a) a one-microsecond change to a stored time, made by a superuser UPDATE the way the merged tests seed times, must fail the row comparison.
+      const moved = await rolledBack(upgradeAdmin, async client => {
+        await client.query("SET LOCAL session_replication_role=replica");
+        expect((await client.query(`UPDATE app.${table} SET created_at=created_at+interval '1 microsecond' WHERE tenant_id=$1 AND job_id=$2`, [T, f.jobId])).rowCount).toBeGreaterThan(0);
+        return proofDifferences(client, proof);
+      });
+      expect(moved.rows.some(line => line.startsWith(`${table} `)), `control (a) ${table}: ${JSON.stringify(moved)}`).toBe(true);
+      expect(moved.types).toEqual([]);
+    }
+    // (b) a retype that keeps every serialised value must still fail the type comparison.
+    const retyped = await rolledBack(upgradeAdmin, async client => {
+      await client.query("ALTER TABLE app.recovery_claim_line ALTER COLUMN net_pence TYPE numeric(20,0)");
+      return proofDifferences(client, proof);
+    });
+    expect(retyped).toEqual({ rows: [], types: ["recovery_claim_line: net_pence bigint -> numeric(20,0)"] });
+    // (c) a later nullable column, and a later row in a compared table, must leave the proof passing.
+    expect(await rolledBack(upgradeAdmin, async client => {
+      await client.query("ALTER TABLE app.recovery_case ADD COLUMN stored_times_control text");
+      expect((await proofColumns(client, "recovery_case")).map(column => column.name)).toContain("stored_times_control");
+      return proofDifferences(client, proof);
+    })).toEqual({ rows: [], types: [] });
+    expect(await rolledBack(upgradeAdmin, async client => {
+      expect((await client.query(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs)
+        VALUES($1,$2,$3,$4,'GBP','identified',0,true,'withheld_customer_payment','Fictional debtor','builder_customer','customer_invoice',$5)`,
+      [randomUUID(), T, f.jobId, receipt.grossPence, JSON.stringify(["Generated customer invoice INV-18800"])])).rowCount).toBe(1);
+      return proofDifferences(client, proof);
+    })).toEqual({ rows: [], types: [] });
     expect((await upgradeAdmin.query("SELECT created_at=$3::timestamptz kept_chosen FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [T, old.id, past])).rows).toEqual([{ kept_chosen: true }]);
     expect((await upgradeAdmin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [migrationName])).rows).toEqual([{ n: 1 }]);
     expect(await rawCase(f, future)).toMatchObject({ pinned: true, kept_chosen: false });
@@ -318,7 +378,7 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
     await closeTestPools(upgradeRuntime, upgradeAdmin);
     await admin.query(`DROP DATABASE ${database}`);
   }
-});
+}, 60_000);
 it("[AC10] registry is sorted, unique and places the pin after its two dependencies", () => {
   const names = MIGRATION_URLS.map(url => basename(fileURLToPath(url)));
   expect(names).toEqual([...names].sort()); expect(new Set(names).size).toBe(names.length);
