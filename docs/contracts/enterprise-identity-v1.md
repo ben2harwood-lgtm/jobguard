@@ -30,7 +30,7 @@ New sessions are inserted into the existing `identity.session` table with its ex
 
 ## Storage and audit
 
-Migration `0114_enterprise_identity.sql` adds identity-scoped `sso_connection`, `verified_domain`, `idp_group_role_mapping`, `sso_request`, `sso_assertion_use`, `sso_subject`, `sso_session_binding` and `sso_grant`. Each has tenant-qualified keys/relationships, FORCE RLS and migration ownership. Identity runtime can read only under the scoped policies; writes occur through narrow controlled routines. Business runtime and infrastructure receive neither identity schema usage nor new-table/routine privileges.
+Migration `0120_enterprise_identity.sql` adds identity-scoped `sso_connection`, `verified_domain`, `idp_group_role_mapping`, `sso_request`, `sso_assertion_use`, `sso_subject`, `sso_session_binding` and `sso_grant`. Each has tenant-qualified keys/relationships, FORCE RLS and migration ownership. Identity runtime can read only under the scoped policies; writes occur through narrow controlled routines. Business runtime and infrastructure receive neither identity schema usage nor new-table/routine privileges.
 
 Global `sso_refusal_event` is the reviewed identity-bootstrap exception for refusals whose connection cannot resolve a tenant. It contains only a route hash, typed code, UUID and server time; identity runtime has INSERT only. Known-connection refusals also append to the existing per-tenant audit chain through new narrow wrappers. No existing audit grant changes. Append-only tables deny update/delete; runtime cannot truncate. Logs/events exclude raw assertions, email, public keys and session/state tokens. Audit hash chaining retains the existing trusted-head/checkpoint limitations.
 

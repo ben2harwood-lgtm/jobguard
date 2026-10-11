@@ -33,7 +33,7 @@ beforeAll(async () => {
   await control.query("CREATE DATABASE jobguard_synthetic_demo"); await control.end();
   admin = new Pool({ ...base, user: "postgres", password: "synthetic" });
   const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!);
-  const index = names.indexOf("0114_enterprise_identity.sql");
+  const index = names.indexOf("0120_enterprise_identity.sql");
   const identityIndex = names.indexOf("0111_persisted_identity.sql"), previousIndex = names.indexOf("0112_recovery_follow_up.sql");
   expect(identityIndex).toBeGreaterThanOrEqual(0); expect(previousIndex).toBeGreaterThanOrEqual(0);
   expect(index).toBeGreaterThan(identityIndex); expect(index).toBeGreaterThan(previousIndex);
