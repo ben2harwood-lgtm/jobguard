@@ -64,6 +64,6 @@ export async function smallTrack(c: Cluster, f: Fixture) {
  });
 }
 export async function cancel(c: Cluster, f: Fixture) {
- await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional-cancel.csv", kind: "csv", csv: demoFile([demoRow(f.demo, 1, { expectedRevision: 1, status: "cancelled", lines: [] })]) });
+ await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional-cancel.csv", kind: "csv", csv: demoFile([demoRow(f.demo, 1, { expectedRevision: 1, status: "cancelled", lines: [], assignedMembershipIds: [] })]) });
 }
 export const direct = (f: Fixture, a: Actor, fields: Record<string, unknown> = {}) => ({ version: "raise-extra.v1", ...input(f), commandType: "LogSiteExtra", actorMembershipId: a.member.membershipId, grantId: a.grant, ...fields });

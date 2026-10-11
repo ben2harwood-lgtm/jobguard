@@ -525,3 +525,127 @@ this receipt makes no acceptance claim. Integrator must issue the scoped
 registration change and add real HTTP parser coverage before acceptance.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification and upgrade-proof reshape (rule 9)
+
+Run on the Mac by a repair helper (Claude Sonnet) for the JobGuard integrator, 12 October 2026 (the runs began late on 11 October).
+Local only: nothing pushed, no pull request. This section records what the helper changed and ran; it reviews and accepts nothing.
+
+**Merge commit (main caught up).** `git fetch origin`, then `git merge origin/main` in the worktree. Local merge commit
+`76076fd8d07da2905f6fee1e0bc1ce0d82870669` (parents `968ad93c409394e514379d93f81b5a388ec28e02` and main `8e91b2d2e28564b8a19aa5293041bfae1e551485`).
+No conflict. The only shared registration file touched by both sides was `config/agent-lane-assignments.json`; git merged it automatically and both sides are kept
+(`fixlater-3` added by main, `ent-3a` kept). `0126_site_extra_authority.sql` is still listed in `packages/db/src/migrate.ts` directly after `0122_extra_origin_persistence.sql`.
+
+**The standing rule (quoted).** "An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'." Here N is 0126.
+
+**What the upgrade test already did, and what was missing.** In `packages/db/test/site-extra-authority.integration.test.ts` (test `[A13] populated upgrade changes only two routines; ownership, specific grants and idempotent registration`), as committed at `968ad93` and unchanged by the merge, the test already:
+installed everything before 0126 by hand (`cluster(true)` for everything before 0122, then the loop over 0122 up to but not including 0126), took the catalogue and content snapshots, applied 0126 ALONE by hand
+(`readFile` then `up.admin.query`, then the plain `INSERT INTO public.jobguard_schema_migration`, the pattern of `packages/db/test/extra-fixtures.ts:35` and the runner at `packages/db/src/migrate.ts` lines 79-83),
+compared the catalogue (classes, columns, constraints, triggers, policies, roles, and every function not named `ent3a_*`) and the content hashes at full strength, and only then ran `migrate()` twice with the idempotence assertion (lines 126-127). So the whole-catalogue comparisons were already taken after 0126 alone, not after later migrations, and they are kept byte-identical.
+What was missing: nothing compared the pre-existing rows or the pre-existing columns after ALL migrations. The helper added exactly that, plus the controls the integrator asked for. No existing line was changed, moved or removed.
+
+**Added to that test (the only change to it); literal unified diff against `HEAD` (zero context lines, so nothing existing appears except as an anchor):**
+
+```diff
+diff --git a/packages/db/test/site-extra-authority.integration.test.ts b/packages/db/test/site-extra-authority.integration.test.ts
+--- a/packages/db/test/site-extra-authority.integration.test.ts
++++ b/packages/db/test/site-extra-authority.integration.test.ts
+@@ -112,0 +113,13 @@ describe("ENT-3a authority", () => {
++   // Upgrade-proof rule: pre-existing rows are compared by NAMED pre-existing columns, as canonical text from the database, together with each such column's
++   // name and full type, after every later migration has run. Columns added later are never listed; triggers, functions, policies and grants are not compared there.
++   const kept = ["extra_origin", "variation", "role_grant", "command_receipt", "audit_event"];
++   type Run = (sql: string, values?: unknown[]) => Promise<{ rows: any[]; rowCount?: number | null }>;
++   const viaAdmin: Run = (sql, values) => up.admin.query(sql, values);
++   const preColumns: Record<string, string[]> = {};
++   for (const t of kept) preColumns[t] = (await viaAdmin("SELECT a.attname::text AS name FROM pg_attribute a WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attname::text COLLATE \"C\"", [`app.${t}`])).rows.map(x => x.name as string);
++   const columnTypes = async (run: Run) => { const r: Record<string, string[]> = {}; for (const t of kept) r[t] = (await run("SELECT a.attname::text||' '||format_type(a.atttypid,a.atttypmod) AS column_type FROM pg_attribute a WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped AND a.attname::text=ANY($2::text[]) ORDER BY a.attname::text COLLATE \"C\"", [`app.${t}`, preColumns[t]])).rows.map(x => x.column_type as string); return r; };
++   const namedRows = async (run: Run) => { const r: Record<string, string[]> = {}; for (const t of kept) r[t] = (await run(`SELECT row_to_json(snap)::text AS bytes FROM (SELECT ${preColumns[t]!.map(n => `"${n}"`).join(",")} FROM app.${t}) snap ORDER BY row_to_json(snap)::text COLLATE "C"`)).rows.map(x => x.bytes as string); return r; };
++   const proof = async (run: Run) => ({ columnTypes: await columnTypes(run), rows: await namedRows(run) });
++   const baseline = await proof(viaAdmin);
++   for (const t of kept) expect(baseline.rows[t]!.length, `${t} holds at least one pre-existing row`).toBeGreaterThan(0);
++   const holds = async (run: Run) => { expect(await proof(run)).toEqual(baseline); };
+@@ -127,0 +141,21 @@ describe("ENT-3a authority", () => {
++   // Every migration after 0126 has now run twice: the pre-existing rows and the name-and-type list of the pre-existing columns still read as before 0126.
++   await holds(viaAdmin);
++   // Controls: each runs in a rolled-back transaction and uses the very same comparison (holds) as the proof above.
++   const rolledBack = async (change: (run: Run) => Promise<void>, then: (run: Run) => Promise<void>) => { const client = await up.admin.connect(); const run: Run = (sql, values) => client.query(sql, values); try { await client.query("BEGIN"); await change(run); await then(run); } finally { await client.query("ROLLBACK"); client.release(); } };
++   const fails = (run: Run) => expect(holds(run)).rejects.toMatchObject({ name: "AssertionError" });
++   // (a) One pre-existing value changed (a timestamp by ONE microsecond where the table has one) must fail the row comparison.
++   const edits: Record<string, string> = { extra_origin: "server_recorded_at=server_recorded_at+interval '1 microsecond'", variation: "created_at=created_at+interval '1 microsecond'", command_receipt: "created_at=created_at+interval '1 microsecond'", audit_event: "occurred_at=occurred_at+interval '1 microsecond'", role_grant: "scope_id=gen_random_uuid()" };
++   for (const t of kept) await rolledBack(async run => { await run("SET LOCAL session_replication_role=replica"); expect((await run(`UPDATE app.${t} SET ${edits[t]} WHERE ctid=(SELECT ctid FROM app.${t} LIMIT 1)`)).rowCount).toBe(1); }, async run => { const now = await proof(run); expect(now.columnTypes).toEqual(baseline.columnTypes); expect(now.rows[t]).not.toEqual(baseline.rows[t]); await fails(run); });
++   // (b) One pre-existing column given another type modifier must fail the name-and-type comparison while every row still reads the same.
++   await rolledBack(async run => { await run("ALTER TABLE app.variation ALTER COLUMN description TYPE varchar(501)"); }, async run => { const now = await proof(run); expect(now.rows).toEqual(baseline.rows); expect(now.columnTypes.variation).not.toEqual(baseline.columnTypes.variation); await fails(run); });
++   // (c) A nullable column added later and an existing function replaced after 0126's step must leave the proof passing.
++   const functionBody = "SELECT p.prosrc AS body FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname='contractor_member_active' ORDER BY p.oid LIMIT 1";
++   await rolledBack(async run => {
++    for (const t of kept) await run(`ALTER TABLE app.${t} ADD COLUMN ent3a_added_later text`);
++    const original = (await run("SELECT pg_get_functiondef(p.oid) AS definition FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname='contractor_member_active' ORDER BY p.oid LIMIT 1")).rows[0]!.definition as string;
++    const bodyBefore = (await run(functionBody)).rows[0]!.body as string;
++    const replaced = original.replace(/\$function\$\s*$/, () => "-- replaced after 0126 by the control\n$function$");
++    expect(replaced).not.toBe(original);
++    await run(replaced);
++    expect((await run(functionBody)).rows[0]!.body).not.toBe(bodyBefore);
++   }, holds);
+```
+
+Literal BEFORE lines at the two insertion points (unchanged, still present in the file as the lines directly above each insertion):
+
+```text
+   const before = await catalog(), data = await content();
+   await migrate(up.admin); expect(await catalog()).toEqual(once); expect(await content()).toEqual(onceContent);
+```
+
+What the added lines do. (1) `kept` is the five tables the test already snapshots (`extra_origin`, `variation`, `role_grant`, `command_receipt`, `audit_event`). Before 0126 the helper reads, from `pg_attribute`, the NAME of every non-dropped user column of each (`preColumns`), and the proof compares, after all migrations and as canonical text from the database, `row_to_json(snap)::text` over a sub-select of exactly those columns (never driver-parsed values; the driver rounds times to the millisecond), ordered by that text under collation `C`, together with each of those columns' `name || ' ' || format_type(atttypid, atttypmod)` (name and full type including modifiers), ordered by name. Columns added later are not listed and so are ignored. (2) A guard asserts every one of the five tables holds at least one pre-existing row in the fixture (it did: the guard passed, so the row comparison is not vacuous for any of the five). (3) The comparison itself is one function, `holds`, used by the proof and by every control. (4) Controls, each in a rolled-back transaction on its own connection through `holds`: (a) for each of the five tables one pre-existing value is changed (timestamp column plus ONE microsecond for `extra_origin.server_recorded_at`, `variation.created_at`, `command_receipt.created_at`, `audit_event.occurred_at`; `role_grant` has no timestamp column so `scope_id` is replaced), with `session_replication_role=replica` set inside that transaction only so the table's own guard triggers do not stop the control; the comparison must fail with an assertion error, the type list must be unchanged and that table's rows must differ; (b) `app.variation.description` is changed from `varchar(500)` to `varchar(501)`; the rows must still read the same, the type list must differ and the comparison must fail; (c) a nullable column is added to each of the five tables and the existing function `app.contractor_member_active` is replaced (its stored body is checked to have changed), after 0126's step, and the proof must still pass.
+Nothing asserts a trigger list, a function definition, a policy, a grant or a whole row after a LATER migration.
+
+## Mac set-up repair (one line this piece added; test set-up only)
+
+First real run of the piece's two database files (log `ent-3a-mac-db1.log`): 69 passed, 2 failed. Both failures were the `[A4]` cancelled-order case: after `cancel(c, f)` the decision routine still said `allowed` for the supervisor
+(`site-extra-authority.integration.test.ts:37`, and `unexpected success` at `site-extra.integration.test.ts:46`). The helper did not change the migration or any assertion. It probed (a throwaway test file, moved afterwards to
+`~/.local/share/full-steam/jg-runs/ent-3a-mac-scratch/ent-3a-mac-probe.integration.test.ts`, never committed) and found:
+- with no earlier `team.move`, the fixture's cancellation import is `revised` and the decision routine returns `not_found` / `job_out_of_scope` (the rule is right);
+- after `team.move` has taken the named operative off the job's team (as the `[A4]` cases do just before cancelling), the same import row is REJECTED by the merged importer with `ASSIGNMENT_INVALID` (the row still names the moved operative as assigned), so the order is never cancelled, the job stays live, and `allowed` is the correct answer for a live job.
+The importer reports a rejected row in its result instead of throwing, so the fixture's `cancel` helper failed silently. Repair (the cancellation row names nobody as assigned, as the fixture's other-branch order already does): in `packages/db/test/site-extra-fixtures.ts`, function `cancel`:
+
+```diff
+diff --git a/packages/db/test/site-extra-fixtures.ts b/packages/db/test/site-extra-fixtures.ts
+--- a/packages/db/test/site-extra-fixtures.ts
++++ b/packages/db/test/site-extra-fixtures.ts
+@@ -67 +67 @@ export async function cancel(c: Cluster, f: Fixture) {
+- await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional-cancel.csv", kind: "csv", csv: demoFile([demoRow(f.demo, 1, { expectedRevision: 1, status: "cancelled", lines: [] })]) });
++ await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional-cancel.csv", kind: "csv", csv: demoFile([demoRow(f.demo, 1, { expectedRevision: 1, status: "cancelled", lines: [], assignedMembershipIds: [] })]) });
+```
+
+No assertion, expected value, timeout, grant, policy, migration or route behaviour was touched. Hazard for the reviewers: `cancel` still does not check that the import was `revised`; a future change that makes the cancellation row invalid again would fail silently the same way.
+
+## Mac commands, exactly as run
+
+Common environment for every database, vitest, build and install command: `PLAYWRIGHT_SKIP_BROWSER_GC=1`; every vitest command also `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` and `--maxWorkers=2`. `memory_pressure | tail -1` printed 79% free before each heavy command. Every heavy command was run inside `~/.local/bin/heavy-slot <label> ...`. Logs are in `~/.local/share/full-steam/jg-runs/` named `ent-3a-mac-*`. Worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3a`; node v24.17.0, pnpm 10.28.1. No push, no pull request, no `playwright install`, no package `test` script, no `pnpm test`, `pnpm test:db` or `pnpm test:migrations`.
+
+| # | Working directory | Full command line | Exit | Result |
+|---|---|---|---|---|
+| 1 | worktree | `git fetch origin` then `git merge origin/main` | 0 | merge commit 76076fd, no conflict |
+| 2 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-install pnpm install --frozen-lockfile` | 0 | lockfile up to date |
+| 3 | `node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64` | `node scripts/hydrate-symlinks.js` | 0 | `native/bin` has initdb, pg_ctl, postgres |
+| 4 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-build pnpm exec turbo run build --filter=@jobguard/api... --concurrency=2` | 0 | 6 tasks successful |
+| 5 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-db1 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/site-extra-authority.integration.test.ts test/site-extra.integration.test.ts` | 1 | 2 files failed; 69 passed, 2 failed (both `[A4]`, the cancel set-up fault above) |
+| 6 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-probe pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/ent-3a-mac-probe.integration.test.ts` and the same with label `ent-3a-mac-probe2` (probe values surfaced through thrown errors because the runner hides console output) | 0 then 1 | throwaway probe, not part of the piece; findings above |
+| 7 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-db1b pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/site-extra-authority.integration.test.ts test/site-extra.integration.test.ts` (after the one-line fixture repair) | 0 | 2 files passed; 71 tests passed (authority file 50, governed-path file 21), including `[A13]` with the new proof and controls |
+| 8 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-db2 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/extra-origin.integration.test.ts test/extra-links.integration.test.ts test/extra-origin-upgrade.integration.test.ts` | 0 | 3 files passed; 48 tests passed (merged files, unedited) |
+| 9 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-db3 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/fingerprinted-row-shape.integration.test.ts test/tenancy.integration.test.ts test/demo-bootstrap.integration.test.ts` | 0 | 3 files passed; 26 tests passed |
+| 10 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-unit-core pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/site-extra.test.ts` | 0 | 1 file, 35 tests passed |
+| 11 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-unit-api pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/site-extra.application.test.ts` | 0 | 1 file, 33 tests passed |
+| 12 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-unit-web pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/contractor/jobs/[id]/site-extras/route.test.ts'` | 0 | 1 file, 27 tests passed (nothing beyond step 4 needed building) |
+| 13 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-boundary pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/context-boundary.test.ts src/audit-export/audit-export.application.test.ts`, then the same with `--reporter=json --outputFile=...ent-3a-mac-boundary2.json` (label `ent-3a-mac-boundary2`) for per-file counts | 0 and 0 | 2 files passed; 159 tests: `context-boundary.test.ts` 145 (file untouched), `audit-export.application.test.ts` 14 |
+| 14 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-typecheck pnpm exec turbo run typecheck --concurrency=2` | 0 | 7 tasks successful |
+| 15 | worktree | `LANE_BASE_REF=origin/main ~/.local/bin/heavy-slot ent-3a-mac-lint node tools/lint.mjs` | 0 | core purity, lane boundary and money-arithmetic checks passed |
+| 16 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-turbolint pnpm exec turbo run lint --concurrency=2` | 0 | 7 tasks successful |
+| 17 | worktree | `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 0 | lane `ent-3a` passed (base 8e91b2d) |
+| 18 | worktree | `~/.local/bin/heavy-slot ent-3a-mac-openapi pnpm --filter @jobguard/api openapi:check` | 0 | passed |
+
+Counts note: row 7 includes the `[A13]` test with the default test timeout (no explicit budget in the piece's file; it passed). Run 5's two failures were not timing failures, so no re-run for load was needed.
+The two credential greps from the order, run over `git diff origin/main...HEAD` before and after this section was added (builder commit, and the helper's own added lines), printed nothing.
+
+Lane line: `BUILD_PLAN.md` was added to this piece's OWN lane line only (`config/agent-lane-assignments.json`, key `ent-3a`, first entry of `allow`). The §12.2 ledger paragraph "Ledger amendment — ENT-3a, 11 October 2026 (merge-ahead ruling)" was added to `BUILD_PLAN.md` directly before `### 12.3 The graph`, modelled on the ENT-4b paragraph; it records that ENT-3a is the first part of plan leaf ENT-3 (split 3a-3e adopted 11 October; 3e parked), that it takes 0126, and the founder's ruling of 11 October ("Use that default") on who may record each kind of extra, which governs where §9.1.4's older "Who" column differs.
+
+Helper verification only; not independently reviewed, not accepted.
