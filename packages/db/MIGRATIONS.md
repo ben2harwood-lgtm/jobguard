@@ -764,3 +764,9 @@ request/assertion identities, links, revocations and audit records. Repair forwa
 with a separately numbered migration. Do not drop identity/audit history or rewrite
 an already applied migration. No real-provider rollout or D04/G5 approval follows
 from migration success.
+
+## 0121 — audit export (ENT-10b)
+
+Renumbered 0116 → 0121 on 11 October under the merge-ahead ruling.
+
+Adds `app.audit_export` and `app.audit_export_checkpoint`, tenant-qualified audit/membership/checkpoint FKs, FORCE RLS, migration ownership and append-only triggers. Runtime gets SELECT/INSERT on the new export table and SELECT only on the new checkpoint handoff; existing objects and privileges are unchanged. Existing restricted assurance credentials copy existing checkpoints; no runtime access to `audit_control` or new elevated routine. No backfill. Previous application remains compatible. Disable new routes and fix forward on failure; never rewrite/delete audit history or exports as rollback. Live signing/rotation remains HELD. Fresh install is covered by the existing migration/bootstrap suites; upgrade and catalogue/runtime attacks by `test/audit-export.integration.test.ts`. Database suites were NOT RUN in the builder sandbox.
