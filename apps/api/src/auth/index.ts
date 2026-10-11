@@ -6,3 +6,6 @@ export * from "./principal-bridge.js";
 export * from "./identity-email.js";
 export * from "./persisted-auth-provider.js";
 export * from "./synthetic-session.js";
+
+export * from "./sso/sso.application.js";
+export * from "./sso/sso.contracts.js";

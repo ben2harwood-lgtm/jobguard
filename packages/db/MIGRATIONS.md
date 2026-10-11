@@ -720,3 +720,24 @@ Case facts (Q3): dispute = `dispute`; settlement = `close_recovered`; cancel = `
 Existing objects it touches: the three M4-5-S guards (`guard_recovery_message`, `guard_recovery_message_approval`, `guard_recovery_message_sink`) are restated with `CREATE OR REPLACE`, bodies exactly as in 0107 plus one exception each. (1) The one-effect rule still stops any new preview or approval while a message effect stands, except while an open follow-up's reminder is due and every effect on the case is a DELIVERED message from before the follow-up was scheduled (`app.recovery_follow_up_reminder_window`). (2) The approval guard accepts the follow-up's own due Decision as the Decision of the first approval of its newest linked reminder, and nothing else. (3) The sink guard refuses to record a reminder whose follow-up has stopped. Without a follow-up row each guard behaves as before. No other object is altered.
 
 Expand-compatible: new tables, functions and one trigger; the preceding application ignores them. Corrections ship as a new migration: events, due rows and links are historical facts, so there is no destructive rollback. Proof: `packages/db/test/recovery-follow-up.integration.test.ts` (including the same-transaction proof by `xmin` and by injected failure).
+
+## 0114 — ENT-10a synthetic SAML identity
+
+Adds only new identity/control-plane tables and narrowly scoped routines. Eight
+scoped tables have tenant-qualified keys, enabled/FORCE RLS and migration ownership;
+`identity.sso_refusal_event` is an INSERT-only global identity-bootstrap exception.
+Business runtime/infrastructure gain no identity privileges. Existing schemas,
+tables, policies, roles, grants and auth/session routines are unchanged. Sessions
+and JIT memberships are inserted through the existing persisted mechanism, with
+an additional 900-second bound; SSO-derived grant/session revocations retain history.
+
+Upgrade is additive with no data backfill. `migrate` registers 0114 after the merged
+0112 (0113 reserved externally); tests compare migration names and increasing order.
+Fresh bootstrap and upgrade suites plus the new PostgreSQL identity tests are required
+in CI; they were NOT RUN in the socket-restricted builder sandbox.
+
+Rollback strategy: disable SSO and allow issued sessions to expire; preserve tables,
+request/assertion identities, links, revocations and audit records. Repair forward
+with a separately numbered migration. Do not drop identity/audit history or rewrite
+an already applied migration. No real-provider rollout or D04/G5 approval follows
+from migration success.
