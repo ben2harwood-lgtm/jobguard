@@ -83,10 +83,13 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
   try {
   const session=await issuePracticeSession(runtime),stranger=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session);
-  // SBOX's issuance routine creates the live home job with immutable ownership.
-  const job=(await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",[DEMO_TENANT_ID,auth.digest])).rows[0].id as string,scope=randomUUID();
-  // job_baseline_shape needs the full imported-baseline columns together; a lone pair of values is refused.
-  await admin.query("UPDATE app.job SET provenance='imported',accepted_net_value_pence=10000,fee_policy_version='reference_fee_policy_v1',recovery_cap_pence=150 WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,job]);
+  // 0110 makes job provenance immutable, so the imported job is created imported rather than updated from SBOX's
+  // issuance-routine home job: same practice session and scenario, live, with the full imported baseline columns together
+  // (job_baseline_shape refuses a lone pair of values).
+  const job=randomUUID(),scope=randomUUID();
+  await admin.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) SELECT $3,tenant_id,title,'live',practice_session_digest,practice_scenario,'imported',10000,'reference_fee_policy_v1',150 FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",[DEMO_TENANT_ID,auth.digest,job]);
+  // The legacy live-job trigger binds the small-builder track only for non-imported live inserts, so bind the same track it bound for the home job.
+  await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture',$2)",[DEMO_TENANT_ID,job]);
   await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
   const input={version:"variation-command.v1",action:"propose",proposalId:randomUUID(),scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:scope,description:"Synthetic tap",captureText:"Synthetic captured tap",price:{quantity:"1",unit:"item",unitRatePence:80000,direction:"addition"}};
   const application=new VariationApplication(runtime,session);
@@ -149,9 +152,9 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
    const session=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session),job=randomUUID(),scope=randomUUID();
    // The end state of a job started with the UI's default No charge scenario: owned by this practice session, bound pilot_no_charge.
    await asTenant(DEMO_TENANT_ID,async db=>{
-    await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional No charge practice job','draft',$3,'capture')",[job,DEMO_TENANT_ID,auth.digest]);
+    // 0110 makes job provenance immutable: the job is created imported (with its full baseline columns) rather than updated afterwards.
+    await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Fictional No charge practice job','live',$3,'capture','imported',10000,'reference_fee_policy_v1',150)",[job,DEMO_TENANT_ID,auth.digest]);
     await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[DEMO_TENANT_ID,job]);
-    await db.query("UPDATE app.job SET status='live',provenance='imported',accepted_net_value_pence=10000,fee_policy_version='reference_fee_policy_v1',recovery_cap_pence=150 WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,job]);
    });
    await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
    const input={version:"variation-command.v1",action:"propose",proposalId:randomUUID(),scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:scope,description:"Synthetic tap",captureText:"Synthetic captured tap",price:{quantity:"1",unit:"item",unitRatePence:80000,direction:"addition"}};
@@ -228,7 +231,8 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
    });
    const sboxBefore=await sboxCatalog();
    expect(sboxBefore.policies.filter(row=>row.policyname==='practice_material_isolation')).toHaveLength(5);
-   expect(sboxBefore.routines).toHaveLength(5);
+   // The exact SBOX routines on the predecessor, by name: the five SBOX-SESSION-1 routines plus 0106's guard_practice_feed, which now precedes 0118.
+   expect(sboxBefore.routines.map(row=>row.proname).sort()).toEqual(["authenticate_practice_session","guard_practice_feed","guard_practice_material_owner","guard_practice_material_requirement","guard_practice_owner","issue_practice_session"]);
    await upgrade.query(await readFile(migrationURL,"utf8"));
    const after=(await upgrade.query("SELECT * FROM app.extra_origin")).rows;
    expect(after).toEqual(before.map(row=>({...row,source_signal_id:null})));
