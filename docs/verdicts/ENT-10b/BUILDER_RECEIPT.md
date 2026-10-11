@@ -152,3 +152,34 @@ Cleanup removed the generated `.pnpm-store`, six package/API `dist` directories,
 Final post-cleanup checks: `git diff HEAD --check` exited 0; `LANE_BASE_REF=origin/main pnpm lint:lanes` exited 0 with the same exact 24-file lane; a read-only Python preservation/scope/artifact inspection exited 0 with 24 allowed changed files, one added lane line, four added catalogue rows, all 83 previous OpenAPI paths/components preserved, and zero generated artifacts outside installed dependencies. No product source changed after the final build/typecheck/test runs.
 
 Builder receipt only — not independently verified, not accepted.
+
+## CI repair 1 — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+Repair builder only; no review or acceptance. Branch `codex/sandbox/ent-10b`, started from local head 7ae55ec (one Codex builder commit on 530681c).
+
+**Catch-up.** `git merge origin/main` (4a70824, which gained migrations 0115 and 0119) conflicted in three files, each resolved by keeping both sides: `packages/db/MIGRATIONS.md` (0115 and 0119 sections kept, the ENT-10b section kept after them), `packages/db/src/index.ts` (both `export *` lines), `packages/db/src/migrate.ts` (0115 and 0119 kept plus the ENT-10b migration). Auto-merged without conflict: `apps/api/openapi.json`, `config/agent-lane-assignments.json`, `packages/db/test/tenancy.integration.test.ts`; `pnpm openapi:check` exits 0, so the openapi file needed no regeneration. Merge commit: `Merge origin/main (4a70824) into codex/sandbox/ent-10b — catch-up, both sides kept`.
+
+**Renumber.** `git mv packages/db/migrations/0116_audit_export.sql packages/db/migrations/0121_audit_export.sql` (SQL byte-identical; 0121 follows the merged 0115 and 0119, 0120 is ENT-10a). References changed: `migrate.ts` (registered in numeric order after 0119), ENT-10b's own lane line (migration path, and `BUILD_PLAN.md` added to its allow list), `packages/db/test/audit-export.integration.test.ts` (the two migration-name strings, lines 33 and 61; its position logic already works by name), `docs/contracts/audit-export-v1.md`, `packages/db/MIGRATIONS.md` (retitled `0121`, one sentence on the renumber), this receipt (two lines in the file list and migration section). `BUILD_PLAN.md` §12.2 gained one "Ledger amendment — ENT-10b" paragraph directly before `### 12.3`. Commit: `chore(ent-10b): renumber migration 0116 → 0121 and record the §12.2 ledger line`.
+
+**Setup.** `pnpm install --frozen-lockfile` exit 0 (nothing to change). The embedded-postgres short dylib names were missing, so the package's own `scripts/hydrate-symlinks.js` was run once inside node_modules; PostgreSQL then started. Playwright browsers: `chromium_headless_shell-1193` is not installed on this Mac and `playwright install` was not run, so the spec was run with `--headed` (full Chromium 1193, already installed). The first headless attempt failed only with `browserType.launch: Executable doesn't exist` (environment, not a code fault).
+
+**Pre-run migration check.** The migration has no PL/pgSQL, no CASE and no JSON operator expressions, so none of the three known fault classes could apply. The tenancy and bootstrap suites exercise it in a fresh install and in the real upgrade path.
+
+**Faults found (one).**
+- `apps/web/e2e/ENT-10b.spec.ts` lines 12 and 55 (both browser projects): `Error: expect.toContainText: strict mode violation: getByRole('alert') resolved to 2 elements` — the screen's own `<p role="alert">` and Next.js's built-in `<div role="alert" id="__next-route-announcer__">`. Kind (i), test set-up: the locator was ambiguous. Before: `page.getByRole("alert")` (four occurrences). After: `page.locator("p[role=alert]")` (the page's own alert; the same disambiguation CH-3a, M0-6L and M4-1-S use). The matchers and expected values (`toContainText("AUDIT_EXPORT_CHECKPOINT_REQUIRED")`, `toHaveText("AUDIT_EXPORT_FORBIDDEN")`, both `toBeFocused()`) are byte-identical; only which element they are applied to is now unambiguous. Flagged here so the reviewer can judge it.
+- No fault in the migration, repository, application, routes, verifier tool or screen; no fault in any merged test.
+
+**Commands and results (each in `heavy-slot`, one at a time, `--maxWorkers=2`, memory free 86–87%, 1-minute load under 13).**
+- `pnpm turbo run build --filter=@jobguard/api...` exit 0 (6 tasks).
+- db: `test/audit-export.integration.test.ts` + `test/verify-audit-export-cli.test.ts` exit 0, 2 files, 22 tests passed.
+- db: `test/tenancy.integration.test.ts` + `test/demo-bootstrap.integration.test.ts` exit 0, 2 files, 13 tests passed.
+- api: `src/audit-export` + `src/auth/context-boundary.test.ts` exit 0, 2 files, 154 tests passed (`context-boundary.test.ts` unedited and passing as it stands).
+- web e2e `ENT-10b.spec.ts`, `--project=mobile-360 --project=desktop --workers=1`: headless exit 1 (browser missing); `--headed` exit 1, 2 failed (the locator fault above); after the repair `--headed` exit 0, 2 passed (mobile-360 and desktop).
+- `LANE_BASE_REF=origin/main pnpm lint:lanes` exit 0; `pnpm typecheck` exit 0 (7 tasks); `LANE_BASE_REF=origin/main pnpm lint` exit 0; `pnpm openapi:check` exit 0.
+- Not run: `test/UIWIRE-12.integration.test.ts` (in the lane, not on the named list), whole-package and whole-repository suites.
+
+**Stopped on:** nothing. No test was skipped, retried or re-run to obtain a pass (there was no timing-only failure).
+
+No assertion, expected value, timeout, grant or runtime privilege was changed or loosened.
+
+Builder receipt only — not independently verified, not accepted.

@@ -9,7 +9,7 @@ test("signed one-tenant exports persist, download, survive two browsers and refu
   await page.goto("/admin/contractor/audit-exports"); await expect(page.getByRole("status")).toHaveText("Persisted exports loaded");
   await expect(page.getByRole("main").getByText("The signature proves export integrity only", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Create signed audit export", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("AUDIT_EXPORT_CHECKPOINT_REQUIRED"); await expect(page.getByRole("alert")).toBeFocused();
+  await expect(page.locator("p[role=alert]")).toContainText("AUDIT_EXPORT_CHECKPOINT_REQUIRED"); await expect(page.locator("p[role=alert]")).toBeFocused();
   // Test-only restricted assurance credentials produce and hand off ONE tenant's checkpoint.
   // There is no browser/runtime endpoint that produces or imports trusted checkpoints.
   const admin = assurance();
@@ -52,7 +52,7 @@ test("signed one-tenant exports persist, download, survive two browsers and refu
       await revocation.query("COMMIT");
     } catch (error) { await revocation.query("ROLLBACK"); throw error; }
     finally { revocation.release(); }
-    await page.reload(); await expect(page.getByRole("alert")).toHaveText("AUDIT_EXPORT_FORBIDDEN"); await expect(page.getByRole("alert")).toBeFocused(); await expect(button).toBeDisabled();
+    await page.reload(); await expect(page.locator("p[role=alert]")).toHaveText("AUDIT_EXPORT_FORBIDDEN"); await expect(page.locator("p[role=alert]")).toBeFocused(); await expect(button).toBeDisabled();
     expect((await page.request.post(endpoint, { headers: { origin: "http://127.0.0.1:3000" }, data: { version: "audit-export-request.v1", commandId: crypto.randomUUID() } })).status()).toBe(403);
     const refusals = (await admin.query("SELECT payload->'references'->>'action' action FROM app.audit_event WHERE tenant_id=$1 AND event_type='audit.export.refused'", [member.tenantId])).rows;
     expect(refusals.some(r => r.action === "list")).toBe(true); expect(refusals.some(r => r.action === "create")).toBe(true);
