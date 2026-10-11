@@ -1,6 +1,72 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/contractor/jobs/{id}/site-extras": {
+      "post": {
+        "operationId": "SiteExtraController_log",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "note",
+                  "description"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "log-site-extra.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5000,
+                    "pattern": "\\S"
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Log a note-only site extra in synthetic_demo; persisted session and database authority only",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
     "/auth/sso/{connectionId}/start": {
       "get": {
         "operationId": "SsoController_view",

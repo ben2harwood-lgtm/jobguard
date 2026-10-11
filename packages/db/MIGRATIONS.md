@@ -782,3 +782,27 @@ Existing objects extended by addition only: `app.extra_origin` (ten nullable pro
 References existing keys on command receipts, memberships, role grants, work orders/revisions/lines, visits, SoR items, evidence, variations and revisions without altering those objects. Fixture contractor origins retain all-NULL new columns and are exempt from the new audit/logged requirement. Work-order contractor origins require structural provenance and the exact raised audit plus logged event at commit. Prompt provenance and unlink command/authorization remain held.
 
 Forward fix: disable callers of this new repository, preserve all appended records and deploy an additive corrective migration after review. Do not drop populated history or rewrite origins. No destructive rollback SQL is supplied. Database fresh/upgrade/catalog checks were written; sandbox execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). Dispatcher/CI must execute them before acceptance.
+
+## 0126 — site extra authority (ENT-3a)
+
+Additive: only `app.ent3a_extra_authority(uuid,text,uuid)` (STABLE) and
+`app.ent3a_require_extra_authority(uuid,uuid)` (VOLATILE). Both PL/pgSQL,
+SECURITY INVOKER, `search_path=pg_catalog`, owned by `jobguard_migration`.
+PUBLIC and infrastructure EXECUTE revoked explicitly; runtime EXECUTE granted
+only on these two signatures. No merged migration object altered or restated;
+no table or column added, no row changed or backfilled. The founder's 11 October
+raising rule applies through SiteExtraRepository and the ENT-4b seam; ordinary
+ENT-4b writers remain structurally governed only (issued Q5).
+
+The read-only decision selects the lowest covering, unrevoked grant of the
+member's own role. The stored-origin guard holds the shared tenant administration
+lock until commit. Refusals roll back the attempted command; their coalesced audit
+record is appended separately. No business network action, price or fee.
+
+Upgrade/catalogue and governed-path tests: `site-extra-authority.integration.test.ts`
+and `site-extra.integration.test.ts`. NOT RUN in the builder sandbox (cannot start
+PostgreSQL). Integrator must execute before acceptance. Expand-compatible with
+prior clients. Forward fix preferred: stop this route and issue a reviewed
+additive correction; rollback of this leaf alone requires disabling the route
+and removing its two routines and migration registration under a separate
+operator change. No historical data rollback is needed.
