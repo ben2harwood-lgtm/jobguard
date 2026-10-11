@@ -67,3 +67,5 @@ export * from "../practice-feed.http.js";
 export * from "../practice-facts.contracts.js";
 export * from "../practice-facts.application.js";
 export * from "../practice-facts.http.js";
+export * from "../auth/sso/sso.application.js";
+export * from "../auth/sso/sso.contracts.js";

@@ -919,7 +919,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     await verifyChain();
   });
 
-  it.each(["active", "queued", "executing", "outcome_unknown"] as const)("R1: a later %s attempt still refuses the delivered source in the repository and raw SQL guard", async status => {
+  it.each(["active", "queued", "executing", "outcome_unknown", "succeeded", "retryable", "dead_letter"] as const)("R1: a later %s attempt still refuses the delivered source in the repository and raw SQL guard", async status => {
     const base = await previewed();
     if (status !== "active") {
       await repo.approveReminder(ctx, base.caseId, approveReminderCommand(base.followUp, base.reminder), actor);
@@ -928,6 +928,13 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
       } else if (status === "executing") {
         const queued = (await messages.read(ctx, base.caseId)).latest!;
         await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, queued.approval!.outboxActionId]);
+      } else if (status === "succeeded" || status === "retryable" || status === "dead_letter") {
+        // Migration-owner fixture path, as for executing above: an approved action with no recorded delivery.
+        const queued = (await messages.read(ctx, base.caseId)).latest!;
+        await admin.query("UPDATE app.action_outbox SET status=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, queued.approval!.outboxActionId, status]);
+        expect(await count("SELECT count(*) n FROM app.recovery_message_approval WHERE tenant_id=$1 AND message_id=$2", [DEMO_TENANT_ID, queued.id])).toBe(1);
+        expect(await count("SELECT count(*) n FROM app.recovery_message_sink WHERE tenant_id=$1 AND message_id=$2", [DEMO_TENANT_ID, queued.id])).toBe(0);
+        expect((await admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, queued.approval!.outboxActionId])).rows[0].status).toBe(status);
       }
     }
     await newRun();
@@ -1021,9 +1028,10 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
       // Handle failure while observing the backend; a retry that exits without waiting must fail this test promptly.
       let retryFinished = false;
       void retry.then(() => { retryFinished = true; }, () => { retryFinished = true; });
-      // Observe PostgreSQL's actual lock wait, not elapsed time. No sleeps, test retries or extra timeout.
+      // Observe PostgreSQL's actual lock wait, pausing briefly between polls; no test retries or extra timeout.
       let blocked = false;
       while (!blocked) {
+        await new Promise<void>(resolve => setTimeout(resolve, 25));
         const activity = (await admin.query(`SELECT wait_event_type,query,pg_blocking_pids(pid) AS blockers
           FROM pg_stat_activity WHERE pid=$1`, [pidB])).rows[0];
         blocked = activity?.wait_event_type === "Lock" && activity.blockers.includes(pidA);
