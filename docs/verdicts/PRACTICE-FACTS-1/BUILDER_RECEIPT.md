@@ -627,3 +627,37 @@ Builder repair record only — not independently verified, not accepted.
 +    for(const t of Object.keys(preColumns))expect(namedBefore[t]!.length).toBeGreaterThan(0);
 ```
 Command as run (cwd `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-facts-1/packages/db`, with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` exported): `~/.local/bin/heavy-slot practice-facts-1 pnpm exec vitest run --maxWorkers=2 test/practice-facts.integration.test.ts > $HOME/.local/share/full-steam/jg-runs/pf1-reshape2-db1.log 2>&1` exit 0; 1 file passed; 28 tests passed (the guard sits inside the existing upgrade test, so the count is unchanged). Also: `LANE_BASE_REF=origin/main pnpm lint:lanes` (cwd the worktree root) exit 0; the out-of-repository type check of the test file, `~/.local/bin/heavy-slot practice-facts-1 pnpm exec tsc -p $HOME/.local/share/full-steam/jg-runs/pf1-reshape-tsconfig-test.json` (cwd `packages/db`) exit 0.
+
+**Second follow-up (separate check of the earlier head).** Two more gaps were found. (1) The proof recorded the pre-0124 column names but not their types, so a later change of a pre-existing column's type (for example the source hash column from fixed-length character to text) would have passed. It now records, before 0124, each pre-0124 column of the three tables as table name, column name and `format_type(atttypid, atttypmod)` (the full type including modifiers) from `pg_attribute` for non-dropped user columns, ordered by table then column name; it requires the list to have one entry per recorded column and to be identical after all migrations. Columns added later are ignored. (2) Two more controls, rolled back, using the same comparison functions as the proof: a change of one existing event row's creation time by one microsecond fails the row comparison; a change of the source hash column's type to text fails the type comparison (the retype was accepted inside the transaction, so no substitute was needed). Both passed (the file now has 30 tests). Literal before and after (the whole diff of this follow-up):
+```diff
+-let preColumns:Record<string,string[]>, preIds:Record<string,string[]>, namedBefore:Record<string,unknown[]>;
++let preColumns:Record<string,string[]>, preIds:Record<string,string[]>, namedBefore:Record<string,unknown[]>, typesBefore:{t:string;name:string;type:string}[];
++// Name and full type (with modifiers) of each pre-0124 column, in a fixed order; columns added later are ignored.
++const namedTypes = async (db:Pick<Pool|PoolClient,"query">) => (await db.query("SELECT c.relname t,a.attname name,format_type(a.atttypid,a.atttypmod) type FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid WHERE a.attrelid=ANY($1::regclass[]) AND a.attnum>0 AND NOT a.attisdropped ORDER BY c.relname,a.attname",[Object.keys(preColumns).map(t=>`app.${t}`)])).rows
++  .filter(r=>preColumns[r.t as string]!.includes(r.name as string)).map(r=>({t:r.t as string,name:r.name as string,type:r.type as string}));
+-  namedBefore=await namedRows(admin);
++  namedBefore=await namedRows(admin);typesBefore=await namedTypes(admin);
++    expect(typesBefore).toHaveLength(Object.values(preColumns).flat().length);expect(await namedTypes(admin)).toEqual(typesBefore);
++  it("upgrade-proof control: a one-microsecond change to a pre-existing creation time fails the row comparison (rolled back)",async()=>{
++    const client=await admin.connect();
++    try{
++      await client.query("BEGIN");
++      expect(await namedRows(client)).toEqual(namedBefore);
++      const changed=await client.query("UPDATE app.practice_feed_event SET created_at=created_at+interval '1 microsecond' WHERE id=(SELECT id FROM app.practice_feed_event WHERE id=ANY($1::uuid[]) ORDER BY id LIMIT 1)",[preIds.practice_feed_event]);
++      expect(changed.rowCount).toBe(1);
++      expect(await namedRows(client)).not.toEqual(namedBefore);
++    }finally{await client.query("ROLLBACK");client.release();}
++    expect(await namedRows(admin)).toEqual(namedBefore);
++  });
++  it("upgrade-proof control: a type change of a pre-existing column fails the type comparison (rolled back)",async()=>{
++    const client=await admin.connect();
++    try{
++      await client.query("BEGIN");
++      expect(await namedTypes(client)).toEqual(typesBefore);
++      await client.query("ALTER TABLE app.practice_feed_event ALTER COLUMN source_hash TYPE text");
++      expect(await namedTypes(client)).not.toEqual(typesBefore);
++    }finally{await client.query("ROLLBACK");client.release();}
++    expect(await namedTypes(admin)).toEqual(typesBefore);
++  });
+```
+Commands as run (cwd `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-facts-1/packages/db`, with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` exported): `~/.local/bin/heavy-slot practice-facts-1 pnpm exec vitest run --maxWorkers=2 test/practice-facts.integration.test.ts > $HOME/.local/share/full-steam/jg-runs/pf1-reshape3-db1.log 2>&1` exit 0; 1 file passed; 30 tests passed. `LANE_BASE_REF=origin/main pnpm lint:lanes` (cwd the worktree root) exit 0. `~/.local/bin/heavy-slot practice-facts-1 pnpm exec tsc -p $HOME/.local/share/full-steam/jg-runs/pf1-reshape-tsconfig-test.json` (out-of-repository type check of the test file) exit 0.

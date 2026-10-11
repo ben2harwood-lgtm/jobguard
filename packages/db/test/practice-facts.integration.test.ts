@@ -94,8 +94,11 @@ let upgradeRows:unknown, upgradeCatalogs:Awaited<ReturnType<typeof catalogs>>, u
 // afterwards the pre-existing rows are compared by the names of the columns that existed before 0124.
 let alone:{rows:unknown;catalogs:Awaited<ReturnType<typeof catalogs>>;checks:Awaited<ReturnType<typeof catalogueChecks>>;perTable:{t:string;checks:{conname:string;def:string;convalidated:boolean}[]}[];view:PracticeFeedView};
 let runBetween:{first:unknown;second:unknown};
-let preColumns:Record<string,string[]>, preIds:Record<string,string[]>, namedBefore:Record<string,unknown[]>;
+let preColumns:Record<string,string[]>, preIds:Record<string,string[]>, namedBefore:Record<string,unknown[]>, typesBefore:{t:string;name:string;type:string}[];
 const namedRows = async (db:Pick<Pool|PoolClient,"query">) => Object.fromEntries(await Promise.all(Object.keys(preColumns).map(async(t)=>[t,(await db.query(`SELECT row_to_json(t)::text AS bytes FROM (SELECT ${preColumns[t]!.map(c=>`"${c}"`).join(",")} FROM app.${t} WHERE id=ANY($1::uuid[])) t ORDER BY t.id`,[preIds[t]])).rows.map(r=>r.bytes as string)] as const))) as Record<string,string[]>;
+// Name and full type (with modifiers) of each pre-0124 column, in a fixed order; columns added later are ignored.
+const namedTypes = async (db:Pick<Pool|PoolClient,"query">) => (await db.query("SELECT c.relname t,a.attname name,format_type(a.atttypid,a.atttypmod) type FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid WHERE a.attrelid=ANY($1::regclass[]) AND a.attnum>0 AND NOT a.attisdropped ORDER BY c.relname,a.attname",[Object.keys(preColumns).map(t=>`app.${t}`)])).rows
+  .filter(r=>preColumns[r.t as string]!.includes(r.name as string)).map(r=>({t:r.t as string,name:r.name as string,type:r.type as string}));
 beforeAll(async()=>{
   process.env.JOBGUARD_ENV="synthetic_demo";
   directory=await mkdtemp(join(tmpdir(),"jobguard-practice-facts-"));
@@ -122,7 +125,7 @@ beforeAll(async()=>{
   const columnRows=(await admin.query("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='app' AND table_name=ANY($1) ORDER BY table_name,ordinal_position",[tables.slice(2)])).rows;
   preColumns=Object.fromEntries(tables.slice(2).map(t=>[t,columnRows.filter(c=>c.table_name===t).map(c=>c.column_name as string)]));
   preIds=Object.fromEntries(await Promise.all(tables.slice(2).map(async t=>[t,(await admin.query(`SELECT id FROM app.${t} ORDER BY id`)).rows.map(r=>r.id as string)] as const)));
-  namedBefore=await namedRows(admin);
+  namedBefore=await namedRows(admin);typesBefore=await namedTypes(admin);
   // Apply 0124 ALONE, the way the runner applies one file (run its SQL, then record it), and capture what it did.
   const alonePath=fileURLToPath(MIGRATION_URLS[index]!);
   await admin.query(await readFile(alonePath,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[alonePath.split("/").at(-1)]);
@@ -159,6 +162,7 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
     // and the original allowed values are still allowed (tolerant: a later migration may add more).
     for(const t of Object.keys(preColumns))expect(namedBefore[t]!.length).toBeGreaterThan(0);
     expect(await namedRows(admin)).toEqual(namedBefore);
+    expect(typesBefore).toHaveLength(Object.values(preColumns).flat().length);expect(await namedTypes(admin)).toEqual(typesBefore);
     const laterChecks = await catalogueChecks();
     for (const previous of upgradeChecks) {
       const now = laterChecks.find(c => c.table_name === previous.table_name && c.conname === previous.conname)!;
@@ -192,6 +196,27 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
     }finally{await client.query("ROLLBACK");client.release();}
     expect(await catalogs()).toEqual(beforeCatalogs);
     expect(await namedRows(admin)).toEqual(namedBefore);
+  });
+  it("upgrade-proof control: a one-microsecond change to a pre-existing creation time fails the row comparison (rolled back)",async()=>{
+    const client=await admin.connect();
+    try{
+      await client.query("BEGIN");
+      expect(await namedRows(client)).toEqual(namedBefore);
+      const changed=await client.query("UPDATE app.practice_feed_event SET created_at=created_at+interval '1 microsecond' WHERE id=(SELECT id FROM app.practice_feed_event WHERE id=ANY($1::uuid[]) ORDER BY id LIMIT 1)",[preIds.practice_feed_event]);
+      expect(changed.rowCount).toBe(1);
+      expect(await namedRows(client)).not.toEqual(namedBefore);
+    }finally{await client.query("ROLLBACK");client.release();}
+    expect(await namedRows(admin)).toEqual(namedBefore);
+  });
+  it("upgrade-proof control: a type change of a pre-existing column fails the type comparison (rolled back)",async()=>{
+    const client=await admin.connect();
+    try{
+      await client.query("BEGIN");
+      expect(await namedTypes(client)).toEqual(typesBefore);
+      await client.query("ALTER TABLE app.practice_feed_event ALTER COLUMN source_hash TYPE text");
+      expect(await namedTypes(client)).not.toEqual(typesBefore);
+    }finally{await client.query("ROLLBACK");client.release();}
+    expect(await namedTypes(admin)).toEqual(typesBefore);
   });
   it("mixed seven old and six new facts preserve the merged movements, receipts and event count; revision alone follows all commands",async()=>{
     for(const e of practiceFactsCatalogueV1){const v=await factsView(upgraded);await factsCmd(upgraded,v.revision,{action:"advance",movement:e.movement,step:"settled"});}
