@@ -176,3 +176,40 @@ Generated artifacts were removed after all builds/generator checks: package/API 
 - F14 and F16 saved and on-screen positive path: HELD by the coordinator's ruling of 11 October — the practice feed has no 'supplier invoice paid' fact and none is invented inside CH-7; the pure-maths proof stands; a separate order adds that fact and then this persistence. Where the receipt above says BLOCKING for F14/F16, read HELD.
 
 CH-7 is not fully accepted while these parts are held.
+
+## CI repair 1 — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+First real run of the database and browser tests (the Codex sandbox could not start PostgreSQL or a browser). Base: d234315. Environment: macOS arm64, embedded PostgreSQL 16 (dylib symlinks hydrated with the package's `scripts/hydrate-symlinks.js`), every heavy run inside `heavy-slot ch-7`, one at a time. Browser runs: CI mode (`CI=1`, one worker, production `next start`) through an out-of-repo config (`/private/tmp/claude-501/ch7-catchup/playwright.local.config.ts`, not committed) that only points the unchanged `apps/web/playwright.config.ts` at the installed headless shell `chromium_headless_shell-1234`, because the pinned `-1193` shell is not installed on this Mac. The dev server (`pnpm dev`) is too slow on first compile for the 10 s expectations, so it was not used.
+
+### Faults found and repaired
+
+| # | Where | What PostgreSQL / the test said | Kind | Before → after |
+|---|---|---|---|---|
+| 1 | `packages/db/migrations/0119_recovery_eligibility_v3.sql` line 112 (`guard_recovery_eligibility_v3`) | `syntax error at end of input` when applying the migration (all of `test:migrations`, the tenancy suite, demo bootstrap and the CH-7 suite failed to start). PL/pgSQL cuts an `IF` condition at the first `THEN`, which was the `THEN` of a `CASE`. | CH-7 migration defect | `expected_q>c.claim_pence+CASE WHEN … END THEN` → `expected_q>c.claim_pence+(CASE WHEN … END) THEN`. Same meaning. |
+| 2 | same file, line 116 (inside the `IF` at 113-118) | same class | CH-7 migration defect | `IS DISTINCT FROM CASE WHEN expected_q>0 THEN 'eligible_for_review' ELSE 'excluded' END` → `IS DISTINCT FROM (CASE … END)`. |
+| 3 | same file, line 133 (`require_recovery_eligibility_v3_effect`) | same class | CH-7 migration defect | `<>CASE WHEN … END` → `<>(CASE WHEN … END)`. |
+| 4 | `packages/db/test/recovery-eligibility-v3.integration.test.ts:30` | `null value in column "currency" of relation "recovery_case" violates not-null constraint` in `beforeAll` | test set-up | Seed insert now supplies `currency,state,revision,synthetic` (`'GBP','identified',0,true`), as the merged `recovery-cases.workbench` suite seeds a previous-schema case. |
+| 5 | same test file, "catalogs and runtime enforce FORCE RLS…" (FK backstop block) | Expected `23503`, received `23505`: the inserted claim line repeated `(tenant, F18 review, 'principal')`, so `UNIQUE(tenant_id,review_id,kind)` fired before the foreign key could. | test set-up | The probe row now uses a one-line F20 review (`fixture("withheld_customer_payment",true)` + `review(…,"F20")`) and kind `statutory_interest`, so only the job mismatch can fail. The expectation `{code:"23503"}` is unchanged. |
+| 6 | `apps/web/app/ui/recovery-cases.tsx` | `Review v3 …` button: computed outline was `none` after the spec's scripted focus following a mouse click (Chrome does not apply `:focus-visible` then; the global rule is `:focus-visible` only). | CH-7 screen defect | Added a scoped rule inside the v3 section (`<style>` with `[data-v3-candidate] button:focus{outline:3px solid #bf7500;outline-offset:3px}`, the colour already used by the recovery-message panel). A CSS file would have been cleaner but is outside CH-7's lane; this can move to a stylesheet when the integrator amends the lane. |
+| 7 | `apps/web/e2e/CH-7.spec.ts` ("v3 refuses injected authority…") | `Cannot read properties of undefined (reading 'id')`: the test read the case list immediately after the click, before the open command finished. | test set-up | Added `await expect(page.getByRole("article",{name:"Selected recovery case"})).toBeVisible();` after the click, the same wait the other CH-7 test already uses. |
+| 8 | `apps/web/app/ui/recovery-cases.tsx` | Merged `M4-1-S.spec.ts` (unchanged) failed `toBeFocused` on "Open £320 withheld payment": CH-7 had put "Open duplicate supplier payment" between that button and "Open materials-320 overcharge", so one Tab landed on the new button. | CH-7 screen defect (broke a merged test) | Moved "Open duplicate supplier payment" to the end of the action row, after "Record prevention". Existing tab order is unchanged. |
+
+A scan of every `IF`/`ELSIF` condition in 0119 found no other `CASE … THEN` inside a condition; operator precedence of the `AND`/`OR`/`IS DISTINCT FROM`/`->>` expressions was read through and each mixed `AND`/`OR` is either parenthesised or has the intended precedence.
+
+### Commands and results (final head content)
+
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/recovery-eligibility-v3.integration.test.ts`: exit 0, 1 file, 17 of 17 passed (before: 0 of 17 ran).
+- `pnpm test:migrations`: exit 0, 2 files, 13 of 13 passed (before: 2 failed, 9 skipped).
+- Neighbour database suites (UIWIRE-12, practice-feed, recovery-cases, recovery-cases.workbench, recovery-follow-up-upgrade, recovery-follow-up, recovery-message-upgrade, recovery-messages, recovery, recovery-case-outcome, recovery-message-repository): exit 0, 11 files, 290 of 290 passed.
+- Core: `vitest run src/recovery-eligibility-v3.test.ts src/recovery-eligibility.test.ts src/recovery-case.test.ts`: exit 0, 3 files, 193 of 193.
+- API: `vitest run src/recovery-eligibility-v3.application.test.ts src/watchdog-registry.test.ts src/auth/context-boundary.test.ts`: exit 0, 3 files, 280 of 280.
+- Playwright, CI mode, both projects: `CH-7.spec.ts` + `M4-1-S.spec.ts`: exit 0, 32 of 32 passed; `M4-2-S.spec.ts` + `M4-5-S.spec.ts`: exit 0, 20 of 20 passed. (CH-7 alone, before fault 8: 16 of 16; M4-1-S failed 2 of its tests until fault 8 was repaired.)
+- Builds before the browser runs: `pnpm turbo run build --filter=@jobguard/api^...`, `--filter=@jobguard/api`, `pnpm --filter @jobguard/web build`: exit 0.
+
+### Stopped on
+
+Nothing. No expected money figure, reason string or outcome was changed to make a test pass.
+
+No assertion, expected value or timeout was changed. Three set-up edits touch test files (faults 4, 5, 7): fault 7 adds one wait for an element and removes or loosens nothing; fault 5 changes which rows the probe inserts, not what it expects.
+
+Still not run: `pnpm test:db` as a whole and the other Playwright specs outside the four named above. The held parts above are still held; the saved/on-screen F14 and F16 path is still unbuilt.

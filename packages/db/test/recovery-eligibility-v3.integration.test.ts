@@ -27,7 +27,7 @@ beforeAll(async()=>{
  for(const url of MIGRATION_URLS.slice(0,index)){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[basename(fileURLToPath(url))]);}
  await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[U]);await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'CH-7 synthetic')",[A,T]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')",[M,T,A,U]);
  await admin.query("INSERT INTO app.job(id,tenant_id,title)VALUES($1,$2,'Previous schema')",[oldJob,T]);
- await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence)VALUES($1,$2,$3,32000)",[oldCase,T,oldJob]);
+ await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)VALUES($1,$2,$3,32000,'GBP','identified',0,true)",[oldCase,T,oldJob]);
  await admin.query(`INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash)VALUES($1,$2,$3,$4,1,1,1,'reference-d03.v1',1,'pending_money','excluded',NULL,'GBP','Pending money cannot qualify','[]','reviewed','reviewer:previous',$5,$6)`,[randomUUID(),T,oldJob,oldCase,randomUUID(),"a".repeat(64)]);
  legacy=(await admin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_revision r")).rows;
  await migrate(admin);await migrate(admin);
@@ -85,10 +85,12 @@ it("catalogs and runtime enforce FORCE RLS, ownership, append-only and job/case-
  }
  const f=await fixture();await f.advance("receipt-3000");const r=await f.repo.review(ctx,f.jobId,review(f.c,"F18"),actor,f.auth.digest);
  // Real FK backstop (migration connection), with the case and review pointing at a different job.
+ // Set-up: a one-line (F20) review leaves the interest kind free, so UNIQUE(tenant,review,kind) cannot fire before the FK.
+ const g=await fixture("withheld_customer_payment",true);const gr=await g.repo.review(ctx,g.jobId,review(g.c,"F20"),actor,g.auth.digest);
  const connection=await admin.connect();
  try{
   await connection.query("BEGIN");await connection.query("ALTER TABLE app.recovery_claim_line DISABLE TRIGGER recovery_claim_line_guard");
-  await expect(connection.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'principal','business',250000)",[randomUUID(),T,oldJob,f.c.id,r.id])).rejects.toMatchObject({code:"23503"});
+  await expect(connection.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'statutory_interest','business',250000)",[randomUUID(),T,oldJob,g.c.id,gr.id])).rejects.toMatchObject({code:"23503"});
  }finally{await connection.query("ROLLBACK");connection.release();}
  const bytes=JSON.stringify(r.result);
  await expect(withTenant(runtime,ctx,db=>db.$client.query("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,99,2,'F18',$5,$6,$7,$8)",[randomUUID(),T,f.jobId,f.c.id,M,randomUUID(),createHash("sha256").update(bytes).digest("hex"),bytes]))).rejects.toThrow();

@@ -45,7 +45,7 @@ for(const [name,button,movement,q,reason] of [
 }
 test("v3 refuses injected authority, missing settlement, and changed replay payload",async({page})=>{
  await confirmCapturedScope(page);const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
- await page.getByRole("button",{name:"Open £2,500 withheld payment",exact:true}).click();const c=(await get(page,`/api/jobs/${jobId}/recovery-cases`)).cases.at(-1);
+ await page.getByRole("button",{name:"Open £2,500 withheld payment",exact:true}).click();await expect(page.getByRole("article",{name:"Selected recovery case"})).toBeVisible();const c=(await get(page,`/api/jobs/${jobId}/recovery-cases`)).cases.at(-1);
  const path=`/api/jobs/${jobId}/recovery-cases/eligibility`,raw={version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,expectedReviewRevision:0,fixture:"F18"};
  const missing=await page.request.post(path,{data:raw});expect(missing.status()).toBe(400);expect(await missing.json()).toMatchObject({code:"ELIGIBILITY_SOURCE_REQUIRED"});
  for(const fields of [{Q:262000},{debtorType:"business"},{settlement:"settled"},{termsStatus:"approved"}])expect((await page.request.post(path,{data:{...raw,...fields}})).status()).toBe(400);
