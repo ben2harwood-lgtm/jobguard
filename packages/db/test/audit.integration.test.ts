@@ -1,5 +1,5 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,7 +38,7 @@ async function readChain(): Promise<AuditEvent[]> {
 
 beforeAll(async () => {
   databaseDir = await mkdtemp(join(tmpdir(), "jobguard-audit-pg16-"));
-  port = 56000 + Math.floor(Math.random() * 500);
+  port = await freePort(56000, 500);
   postgres = new EmbeddedPostgres({ databaseDir, port,
     user: "postgres", password: "synthetic-test-only", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
