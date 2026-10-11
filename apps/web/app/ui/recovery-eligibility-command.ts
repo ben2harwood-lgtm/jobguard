@@ -21,3 +21,9 @@ export const approveEligibilityCommand = (c: CaseRef & { eligibility: Eligibilit
 export const supersedeEvidenceCommand = (c: CaseRef) => ({ ...command("supersede", c), expectedCaseRevision: c.revision, subject: "evidence" as const });
 /** The deliberate stale click: approve with the revisions of the review that was just superseded. */
 export const staleApprovalCommand = (c: CaseRef, prior: Eligibility) => approval(c, prior);
+
+/** The browser selects only a generated fixture and the revisions it actually read. */
+export const reviewEligibilityV3Command = (c: CaseRef & { eligibilityV3?: Case["eligibilityV3"] }, fixture: string) => ({
+ version: "recovery-eligibility-command.v3" as const, action: "review" as const, commandId: crypto.randomUUID(), caseId: c.id,
+ expectedCaseRevision: c.revision, expectedReviewRevision: c.eligibilityV3?.revision ?? 0, fixture,
+});
