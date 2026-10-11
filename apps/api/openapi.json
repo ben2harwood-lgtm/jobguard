@@ -1,6 +1,183 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/auth/sso/{connectionId}/start": {
+      "get": {
+        "operationId": "SsoController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "sso-admin-view.v1; tenant scoped; current admin and CSRF required"
+          }
+        },
+        "summary": "Read persisted synthetic contractor SAML administration",
+        "tags": [
+          "sso"
+        ]
+      },
+      "post": {
+        "operationId": "SsoController_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "action"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-admin.v1",
+                      "sso-start.v1"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "connection.create",
+                      "domain.verify",
+                      "mapping.set",
+                      "signin"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "connectionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "idpCert": {
+                    "type": "string"
+                  },
+                  "domain": {
+                    "type": "string"
+                  },
+                  "proof": {
+                    "type": "string"
+                  },
+                  "group": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "operative",
+                      "supervisor",
+                      "surveyor",
+                      "commercial_manager",
+                      "finance",
+                      "read_only"
+                    ]
+                  },
+                  "scope": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "tenant",
+                          "region",
+                          "branch",
+                          "team"
+                        ]
+                      },
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "linkExisting": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Persisted admin view or sso-started.v1 plus Secure HttpOnly browser-state cookie; no provider outbound"
+          }
+        },
+        "summary": "Administer a synthetic SAML connection or issue a database-backed sign-in request",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/auth/sso/{connectionId}/callback": {
+      "post": {
+        "operationId": "SsoController_callback",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "SAMLResponse",
+                  "relayState"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-callback.v1"
+                    ]
+                  },
+                  "SAMLResponse": {
+                    "type": "string",
+                    "maxLength": 262144
+                  },
+                  "relayState": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{43}$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "sso-signed-in.v1; opaque token only in Secure HttpOnly cookie; unsolicited Responses refused"
+          }
+        },
+        "summary": "Validate solicited double-signed SAML, consume assertion once and issue bounded persisted session",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
     "/recovery-cases/{id}/follow-ups": {
       "get": {
         "operationId": "RecoveryFollowUpController_get",
