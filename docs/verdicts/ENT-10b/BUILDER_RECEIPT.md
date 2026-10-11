@@ -40,7 +40,7 @@ The offline tests generate keys and fictional chains at test time. Mocked API se
 
 ## Migration and compatibility
 
-`0116_audit_export.sql`, registered after 0112 in numeric order; 0113/0114/0115 were reserved and absent on the issued base; 0115 merged into the moving remote ref during this run and must be preserved during integration. Adds only `app.audit_export`, `app.audit_export_checkpoint`, their tenant-qualified foreign keys, migration ownership, ENABLE/FORCE RLS, policies/grants on those new tables, and immutable triggers calling the already-existing rejection function. Export runtime grants: SELECT/INSERT; handoff runtime grant: SELECT. No new SQL routine, new credential, backfill or alteration of an existing object. The previous application ignores both tables. Disable new routes and fix forward on failure; never delete exports/checkpoints or rewrite audit history as rollback.
+`0116_audit_export.sql` as built (renumbered to `0121_audit_export.sql` by the integrator on 11 October 2026; see CI repair 1), registered after 0112 in numeric order on the issued base; 0113/0114/0115 were reserved and absent on the issued base; 0115 merged into the moving remote ref during this run and must be preserved during integration. Adds only `app.audit_export`, `app.audit_export_checkpoint`, their tenant-qualified foreign keys, migration ownership, ENABLE/FORCE RLS, policies/grants on those new tables, and immutable triggers calling the already-existing rejection function. Export runtime grants: SELECT/INSERT; handoff runtime grant: SELECT. No new SQL routine, new credential, backfill or alteration of an existing object. The previous application ignores both tables. Disable new routes and fix forward on failure; never delete exports/checkpoints or rewrite audit history as rollback.
 
 Upgrade/idempotence and unchanged security catalogs are authored in the new integration suite; fresh install and bootstrap remain covered by existing `test:migrations` suites. None was executed in this sandbox. PostgreSQL timestamp matching in handoff accounts for the existing JS Date millisecond precision and copies the original stored timestamp, with an exact stored-record join on replay.
 
@@ -119,7 +119,7 @@ Remaining BLOCKING items are verification/acceptance evidence listed above, not 
 - `docs/operations/audit-export-data-flow.md`
 - `docs/verdicts/ENT-10b/BUILDER_RECEIPT.md`
 - `packages/db/MIGRATIONS.md`
-- `packages/db/migrations/0116_audit_export.sql`
+- `packages/db/migrations/0121_audit_export.sql` (built as 0116; renumbered 11 October 2026)
 - `packages/db/src/audit-export-repository.ts`
 - `packages/db/src/index.ts`
 - `packages/db/src/migrate.ts`

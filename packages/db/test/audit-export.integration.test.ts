@@ -30,7 +30,7 @@ beforeAll(async () => {
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "jobguard_synthetic_demo" });
   // Real upgrade from the preceding supported schema, then idempotent migrator replay.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for (const url of MIGRATION_URLS.filter(u => !u.pathname.endsWith("/0116_audit_export.sql"))) {
+  for (const url of MIGRATION_URLS.filter(u => !u.pathname.endsWith("/0121_audit_export.sql"))) {
     await admin.query(await readFile(url, "utf8")); await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
   }
   priorSecurityCatalog = await securityCatalog();
@@ -58,7 +58,7 @@ async function invite(p: AuthenticatedMembership, role: string, scopeKind = "ten
 }
 describe("ENT-10b PostgreSQL audit exports", () => {
   it("leaves every existing table, policy, routine privilege and runtime role attribute unchanged on upgrade", async () => {
-    expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0116_audit_export.sql'")).rows).toEqual([{ migration_name: "0116_audit_export.sql" }]);
+    expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0121_audit_export.sql'")).rows).toEqual([{ migration_name: "0121_audit_export.sql" }]);
     expect(await securityCatalog()).toEqual(priorSecurityCatalog);
   });
   it("exports one tenant only, including shared-user tenants, with its own audit event and distinct public key", async () => {
