@@ -73,3 +73,4 @@ export * from "./work-order-repository.js";
 export * from "./sor-repository.js";
 export * from "./job-scheduling-repository.js";
 export * from "./work-order-fixtures.js";
+export * from "./extra-repository.js";
