@@ -447,3 +447,27 @@ Opus review plus fresh Sol check of these fixes only, and separate acceptance.
 No technical acceptance or production release is claimed. Part B, M4-8-S saved
 F5, founder F18 VAT treatment, D01 v3, D03 v3, the consumed-credit amendment and
 G4-S remain held as before.
+
+## Round 1 verification — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+Verification run only, on the Mac where PostgreSQL starts, of the Codex round-1 commit 0da5302 on top of c26e644. Not a review and not an acceptance. `origin/main` was not merged in this job.
+
+**Read checks (before running anything).**
+- Amount search in `packages/db/src/practice-feed-repository.ts` for the pence figures of the examples (1200000, 1464000, 12000, 7000, 60000, 84000): no hits. The read filter now builds the set of payment ids that are matched to a new fact (a matched row whose movement key parses as one of the new fact keys) and removes exactly those payments from the merged view. It works on identity, never on an amount.
+- `0124_practice_feed_facts.sql` finds each of the six catalogue CHECK constraints on the three practice-feed tables by what it checks, drops it and re-adds it under the same name it already had.
+
+**Constraint names, read from a real database** (migrated to 0123, then through 0124; throw-away script kept outside the repository). Before 0124 and after 0124 the six names are identical: `practice_feed_command_check`, `practice_feed_command_movement_key_check`, `practice_feed_event_check1`, `practice_feed_event_movement_key_check`, `practice_feed_receipt_match_check` and `practice_feed_receipt_match_movement_key_check`. The round-0 head (c26e644) added six differently named constraints instead; round 1 keeps the originals. The upgrade test also compares the table and name pairs before and after.
+
+**Faults.** None. No test failed on any run, so no repair was made and no file other than this receipt was changed in this job. Observation only: in the leaf's own test file the round-1 builder restructured one existing expectation of the F18 settled-event timing (movement names and amounts moved into two small arrays, then mapped back into the same three expected rows); the values compared are the same as before.
+
+**Commands and results** (every vitest call used `--maxWorkers=2` with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`, inside `heavy-slot`, one run at a time; load average under 24 and memory free at least 74 percent before each).
+- `pnpm install --frozen-lockfile` exit 0; `pnpm turbo run build --filter=@jobguard/api... --concurrency=2` exit 0 (6 of 6 tasks).
+- `packages/db` `test/practice-facts.integration.test.ts` 26 passed (22 before round 1; the four new read-filter tests and the constraint-name proof are included), exit 0. There is no separate upgrade test file.
+- `packages/db` merged `test/practice-feed.integration.test.ts` + `test/recovery-eligibility-v3.integration.test.ts`, unedited: 51 passed, exit 0.
+- `packages/db` `test/tenancy.integration.test.ts` + `test/demo-bootstrap.integration.test.ts`: 13 passed, exit 0. `test/fingerprinted-row-shape.integration.test.ts` does not exist on this branch.
+- `packages/core` `src/practice-facts.test.ts` + `src/practice-feed.test.ts`: 58 passed, exit 0. `apps/api` `src/practice-facts.application.test.ts` + `src/practice-facts.controller.test.ts`: 47 passed, exit 0.
+- No browser run in this job.
+
+**Stopped on:** nothing. No assertion, expected value, timeout, grant or policy was changed or loosened by this verification.
+
+Verification record only — not independently verified, not accepted.
