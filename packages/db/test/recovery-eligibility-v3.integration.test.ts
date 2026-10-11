@@ -13,6 +13,7 @@ import { appendAuditBatch } from "../src/audit.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import type { TenantTransaction } from "../src/tenant-context.js";
+import { evaluateRecoveryEligibilityV3 } from "@jobguard/core";
 const ctx=testTenantContext(T), actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 const previousEnvironment=process.env.JOBGUARD_ENV;
@@ -211,4 +212,96 @@ it.each([["F17","duplicate_supplier_payment","supplier-refund-540",45000,"result
  })).rejects.toThrow();
  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND case_id=$2",[T,f.c.id])).rows[0].n).toBe(0);
  expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3??null).toBeNull();
+});
+
+// CH-7-F17-BEFORE-OPEN: appended before the rule/migration implementation.
+it.each([
+ ["800 microseconds BEFORE","2026-10-11T12:00:00.000900Z","2026-10-11T12:00:00.000100Z",0,"Paid before you opened this case","before_opening"],
+ ["exactly AT","2026-10-11T12:00:00.000900Z","2026-10-11T12:00:00.000900Z",0,"Paid before you opened this case","before_opening"],
+ ["800 microseconds AFTER","2026-10-11T12:00:00.000100Z","2026-10-11T12:00:00.000900Z",45000,null,"after_opening"],
+] as const)("F17 refund settled %s opening: repository, saved result and core/SQL parity",async(_label,caseAt,eventAt,q,reason,paymentTiming)=>{
+ const f=await fixture("duplicate_supplier_payment");await f.advance("supplier-refund-540");
+ await stampTimes(f,"supplier-refund-540",caseAt,eventAt);
+ const command=review(f.c,"F17"),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
+ expect(r.result).toMatchObject({outcome:q===0?"excluded":"eligible_for_review",qualifyingPrincipal:{pence:q,currency:"GBP"},reason});
+ const stored=(await admin.query("SELECT result,source_event_id FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,r.id])).rows[0];
+ expect(stored).toEqual({result:r.result,source_event_id:r.sourceEventId});
+ expect(r.result).toEqual(evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",settlement:"settled",paymentTiming,sourceRef:r.sourceEventId}));
+ expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3).toEqual(r);
+ expect(await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest)).toEqual(r);
+});
+
+// Complete, otherwise-valid runtime transaction: the guard must reject the money,
+// rather than an absent claim line, audit event, source binding or session context.
+async function rawQualifyingF17(pool:Pool,f:{auth:{digest:string};jobId:string;c:{id:string;revision:number}}){
+ return withTenant(practiceMaterialPool(pool,f.auth.digest),ctx,async db=>{
+  await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
+  const sourceEventId=(await db.$client.query<{id:string}>("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='supplier-refund-540' AND event_kind='settled' AND identity='identified'",[T,f.jobId])).rows[0]!.id;
+  // Deliberately propose £450 irrespective of the stored timing, as a raw writer could.
+  const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+  const id=randomUUID(),commandId=randomUUID(),payloadHash=createHash("sha256").update(commandId).digest("hex");
+  const inserted=await db.$client.query<{h:string}>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F17',$6,$7,$8,$9,$10) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') h",[id,T,f.jobId,f.c.id,f.c.revision,sourceEventId,M,commandId,payloadHash,JSON.stringify(result)]);
+  await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'principal','business',45000)",[randomUUID(),T,f.jobId,f.c.id,id]);
+  await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${M}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:f.c.id,payload:{references:{jobId:f.jobId,reviewId:id,commandId,sourceEventId},hashes:{command:payloadHash,result:inserted.rows[0]!.h},classifications:{recovery:"financial"}}}]);
+  return id;
+ });
+}
+it.each([
+ ["before","2026-10-11T12:00:00.000100Z"],
+ ["equal","2026-10-11T12:00:00.000900Z"],
+] as const)("F17 runtime-role raw qualifying insert for a %s-opening refund cannot commit",async(_label,eventAt)=>{
+ const f=await fixture("duplicate_supplier_payment");await f.advance("supplier-refund-540");
+ await stampTimes(f,"supplier-refund-540","2026-10-11T12:00:00.000900Z",eventAt);
+ await expect(rawQualifyingF17(runtime,f)).rejects.toMatchObject({code:"23514",message:"ELIGIBILITY_FIXTURE_MISMATCH"});
+ for(const table of ["recovery_eligibility_v3_review","recovery_claim_line"])expect((await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND case_id=$2`,[T,f.c.id])).rows[0].n).toBe(0);
+ expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.eligibility.v3_reviewed'",[T,f.c.id])).rows[0].n).toBe(0);
+});
+it("F17 runtime-role raw qualifying insert after opening still commits with complete components and audit",async()=>{
+ const f=await fixture("duplicate_supplier_payment");await f.advance("supplier-refund-540");
+ await stampTimes(f,"supplier-refund-540","2026-10-11T12:00:00.000100Z","2026-10-11T12:00:00.000900Z");
+ const id=await rawQualifyingF17(runtime,f);
+ expect((await admin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,id])).rows[0].result).toMatchObject({outcome:"eligible_for_review",qualifyingPrincipal:{pence:45000,currency:"GBP"},reason:null});
+});
+
+it("0125 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
+ const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0125_recovery_eligibility_v3_f17_timing.sql");
+ expect(oldIndex).toBeGreaterThanOrEqual(0);expect(newIndex).toBeGreaterThan(oldIndex);expect(names).toEqual([...names].sort());
+ const database=`ch7_f17_upgrade_${randomUUID().replaceAll("-","")}`;
+ await admin.query(`CREATE DATABASE ${database}`);
+ const upgradeAdmin=new Pool({...admin.options,database}),upgradeRuntime=new Pool({...runtime.options,database});
+ try{
+  await upgradeAdmin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
+  for(const url of MIGRATION_URLS.slice(0,oldIndex+1)){
+   await upgradeAdmin.query(await readFile(url,"utf8"));
+   await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[basename(fileURLToPath(url))]);
+  }
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names.slice(0,oldIndex+1));
+  await upgradeAdmin.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[T]);await upgradeAdmin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[U]);
+  await upgradeAdmin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'F17 upgrade synthetic')",[A,T]);await upgradeAdmin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')",[M,T,A,U]);
+  const session=await issuePracticeSession(upgradeRuntime),auth=await authenticatePracticeSession(upgradeRuntime,session),jobId=randomUUID();
+  await upgradeAdmin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario)VALUES($1,$2,'F17 upgrade generated job',$3,'capture')",[jobId,T,auth.digest]);
+  const feed=new PracticeFeedRepository(upgradeRuntime,"synthetic_demo"),cases=new RecoveryCaseRepository(practiceMaterialPool(upgradeRuntime,auth.digest));
+  const connected=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
+  await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:connected.revision,action:"advance",movement:"supplier-refund-540",step:"settled"});
+  // The cash settles first. The 0119 guard accepts its qualifying candidate;
+  // 0125 must preserve that historical mistake rather than rewriting history.
+  const c=await cases.command(ctx,jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"open",caseType:"duplicate_supplier_payment",claimedNetPence:300000,counterparty:"Fictional supplier",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:["Supplier invoice INV-320"],expectedRevision:0},actor);
+  const f={auth,jobId,c},id=await rawQualifyingF17(upgradeRuntime,f);
+  const snapshot=async()=>({
+   reviews:(await upgradeAdmin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_v3_review r ORDER BY id")).rows,
+   lines:(await upgradeAdmin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_claim_line r ORDER BY id")).rows,
+   audit:(await upgradeAdmin.query("SELECT row_to_json(r)::text bytes FROM app.audit_event r ORDER BY sequence")).rows,
+  });
+  const before=await snapshot();expect(before.reviews).toHaveLength(1);
+  expect((await upgradeAdmin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE id=$1",[id])).rows[0].result).toMatchObject({qualifyingPrincipal:{pence:45000,currency:"GBP"},reason:null});
+  await migrate(upgradeAdmin);await migrate(upgradeAdmin);
+  expect(await snapshot()).toEqual(before);
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name=$1",[names[newIndex]])).rows).toEqual([{migration_name:"0125_recovery_eligibility_v3_f17_timing.sql"}]);
+  const repo=new RecoveryEligibilityV3Repository(practiceMaterialPool(upgradeRuntime,auth.digest),"synthetic_demo");
+  const corrected=await repo.review(ctx,jobId,review(c,"F17",1),actor,auth.digest);
+  expect(corrected.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"});
+  expect((await upgradeAdmin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_v3_review r WHERE id=$1",[id])).rows).toEqual(before.reviews);
+ }finally{
+  await closeTestPools(upgradeRuntime,upgradeAdmin);await admin.query(`DROP DATABASE ${database}`);
+ }
 });
