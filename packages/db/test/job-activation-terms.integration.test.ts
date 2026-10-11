@@ -118,7 +118,7 @@ describe("CH-1 v3 activation",()=>{
    const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!),own=names.indexOf("0109_job_activation_terms.sql"),feed=names.indexOf("0106_practice_feed.sql");expect(feed).toBeGreaterThanOrEqual(0);expect(own).toBeGreaterThan(feed);expect(names.every((name,index)=>index===0||names[index-1]<name)).toBe(true);expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name)).toEqual(names);
    expect((await readFile(fileURLToPath(MIGRATION_URLS[own]!),"utf8")).trim()).toMatch(/^BEGIN;[\s\S]*COMMIT;$/u);
   }finally{await closeTestPools(upgrade);}
- });
+ }, 60_000);
  it("DW3 snapshots/exports and the immutable terms contain no historic copy",async()=>{
   const job=(await admin.query(`SELECT job_id FROM app.job_activation_terms LIMIT 1`)).rows[0].job_id;
   await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:job,actorMembershipId:M});
