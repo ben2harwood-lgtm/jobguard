@@ -1,0 +1,8 @@
+VERDICT: PASS — bound to head ef14e352ca1064478c1208dd5ba9e55388311714
+Reviewer: fresh Claude Opus review agent spawned by the JobGuard integrator (10 Oct 2026); did not build, merge or order any commit in this PR. Catch-up delta check (fast-lane rule 4) of the main-merge cd55a84 (origin/main 74ef849: M0-6L #104, MIG-ORDER-1 #128) plus the receipt commit ef14e35.
+
+1. Both sides kept. M4-6-S's own diff (fd81315..544a9a6) equals `git diff 74ef849 cd55a84` (30 files, +3363/−2); main's diff (fd81315..74ef849) equals `git diff 544a9a6 cd55a84` (69 files, +4216/−14); the only difference is the expected app.module.ts @Module line. app.module.ts keeps IdentityController, IDENTITY_APPLICATION, APP_GUARD ApplicationAuthGuard and both APP_FILTERs, plus RecoveryFollowUpController. migrate.ts: …0109, 0110, 0111_persisted_identity, 0112_recovery_follow_up, increasing; all files exist. MIGRATIONS.md and BUILD_PLAN.md keep both sides' text.
+2. 0112 after 0111: no name clash; 0112's FKs to app.membership unaffected by 0111; no test asserts "0110/0111 is last". Guard: /recovery-cases/:id/follow-ups* reachable only with a jg_session cookie accepted under synthetic_demo, else 401/403; no bypass; Next routes go through workspaceApplication(), which throws outside synthetic_demo. Scanner: the repository takes VerifiedTenantContext whole per call and never stores it in a field; would not be flagged.
+3. No BLOCKING findings.
+- LATER: the `{ctx: auth.context}` wrapper in a plain object is outside the scanner's view only because it is untyped (pattern already on main).
+- LATER: the commands route's catch block calls workspaceApplication() again, which throws outside synthetic_demo (same as messages routes; fails closed).
