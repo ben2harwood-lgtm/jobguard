@@ -163,7 +163,7 @@ export class RecoveryFollowUpRepository {
           if (pg.code !== "23505") { if (pg.message === "ARCHIVED") fail("RECOVERY_FOLLOW_UP_RUN_ARCHIVED"); if (pg.message === "NOT_FOUND") fail("RECOVERY_FOLLOW_UP_NOT_FOUND"); throw error; }
         }
       }
-      // 3. Record the command and settle the audit of whatever became due, in one transaction.
+      // 3. Record the command; the clock already saved the due audit in its own transaction.
       await guarded(() => withTenant(this.pool, ctx, async db => {
         await this.lockCommand(db, ctx.tenantId, input.commandId);
         const recorded = await this.recordedAdvance(db, ctx.tenantId, input.commandId);
@@ -177,7 +177,13 @@ export class RecoveryFollowUpRepository {
         await db.$client.query(
           `INSERT INTO app.recovery_follow_up_advance(tenant_id,command_id,run_id,follow_up_id,request_hash,tick_before,tick_after,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'synthetic_demo')`,
           [ctx.tenantId, input.commandId, row.run_id, followUpId, requestHash, tickBefore, tickAfter, actor.membershipId]);
-        await this.settleDueAudits(db, ctx.tenantId, [this.auditInput(actor.actorRef, followUpId, "time_advanced", { caseId, jobId: row.job_id, commandId: input.commandId, runId: row.run_id }, requestHash)]);
+        // Domain locks/writes are complete. Serialize with the due signal before reading/building the optional clock audit.
+        await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext('recovery-follow-up-audit'))", [ctx.tenantId]);
+        const clockAudited = (await db.$client.query(
+          `SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_type='recovery_follow_up' AND subject_ref=$2
+           AND event_type='recovery.follow_up.time_advanced' AND payload->'references'->>'commandId'=$3`,
+          [ctx.tenantId, followUpId, input.commandId])).rowCount !== 0;
+        await this.settleDueAudits(db, ctx.tenantId, clockAudited ? [] : [this.auditInput(actor.actorRef, followUpId, "time_advanced", { caseId, jobId: row.job_id, commandId: input.commandId, runId: row.run_id }, requestHash)]);
       }));
     }
     return this.read(ctx, caseId);
@@ -417,8 +423,8 @@ export class RecoveryFollowUpRepository {
   }
 
   /**
-   * The due transition is written by the clock's own database trigger, which cannot append to the audit chain. Whichever command observes it
-   * appends its audit event here, once, under an id the due row carries, so a retry or a second observer cannot duplicate or drop it.
+   * Migration 0115 appends new due audits atomically with the clock transition. Keep catch-up for pre-repair due rows:
+   * its shared serialization key and persisted audit id make it a no-op for transitions the clock already audited.
    */
   private async settleDueAudits(db: TenantTransaction, tenantId: string, withEvents: readonly AuditEventInput[] = []) {
     await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext('recovery-follow-up-audit'))", [tenantId]);
@@ -441,14 +447,16 @@ export class RecoveryFollowUpRepository {
        ORDER BY r.created_at DESC,r.id LIMIT 1`, [tenantId, jobId])).rows[0];
     return row ? { id: row.id, tick: Number(row.tick) } : null;
   }
-  /** The newest APPROVED message of the case, and whether the practice provider has recorded it. */
+  /** The newest delivered message is eligible only when every later approved attempt is definitively cancelled; unapproved previews are ignored. */
   private async sourceMessage(db: TenantTransaction, tenantId: string, caseId: string) {
     const row = (await db.$client.query<{ id: string; case_sequence: number; delivered: boolean }>(
-      `SELECT m.id,m.case_sequence,
-        EXISTS (SELECT 1 FROM app.recovery_message_sink k JOIN app.recovery_message_approval a ON a.tenant_id=k.tenant_id AND a.message_id=k.message_id
-          JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id WHERE k.tenant_id=m.tenant_id AND k.message_id=m.id AND o.status='succeeded') AS delivered
+      `SELECT m.id,m.case_sequence,true AS delivered
        FROM app.recovery_message m WHERE m.tenant_id=$1 AND m.case_id=$2
-        AND EXISTS (SELECT 1 FROM app.recovery_message_approval a WHERE a.tenant_id=m.tenant_id AND a.message_id=m.id)
+        AND EXISTS (SELECT 1 FROM app.recovery_message_sink k JOIN app.recovery_message_approval a ON a.tenant_id=k.tenant_id AND a.message_id=k.message_id
+          JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id WHERE k.tenant_id=m.tenant_id AND k.message_id=m.id AND o.status='succeeded')
+        AND NOT EXISTS (SELECT 1 FROM app.recovery_message later WHERE later.tenant_id=m.tenant_id AND later.case_id=m.case_id AND later.case_sequence>m.case_sequence
+          AND EXISTS (SELECT 1 FROM app.recovery_message_approval a JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id
+            WHERE a.tenant_id=later.tenant_id AND a.message_id=later.id AND o.status<>'cancelled'))
        ORDER BY m.case_sequence DESC LIMIT 1`, [tenantId, caseId])).rows[0];
     return row ? { id: row.id, sequence: Number(row.case_sequence), delivered: row.delivered } : null;
   }
