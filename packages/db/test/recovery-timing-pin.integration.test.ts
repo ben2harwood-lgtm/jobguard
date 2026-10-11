@@ -129,7 +129,7 @@ async function assertReview(f: Fixture, caseId: string, name: "F18" | "F19", bef
 
 it("[AC1] ordinary insert triggers and invoker function have the exact catalog shape", async () => {
   const triggers = (await admin.query(`SELECT c.relname,pg_get_triggerdef(t.oid) definition,t.tgenabled FROM pg_trigger t
-    JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=$1::regprocedure ORDER BY c.relname`, [functionName])).rows;
+    JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=$1::regprocedure AND t.tgname='a_recovery_timing_pin' AND c.relname=ANY($2::text[]) ORDER BY c.relname`, [functionName, tables])).rows;
   expect(triggers).toEqual(tables.map(table => ({ relname: table, definition: `CREATE TRIGGER a_recovery_timing_pin BEFORE INSERT ON app.${table} FOR EACH ROW EXECUTE FUNCTION app.pin_recovery_timing_created_at()`, tgenabled: "O" })));
   expect((await admin.query(`SELECT pg_get_userbyid(proowner) owner,prosecdef,proconfig,
     has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime_exec,
@@ -249,7 +249,6 @@ it("[AC8] merged superuser UPDATE time-seeding pattern still works unaltered (co
 });
 
 const rowTables = ["recovery_case", "practice_feed_event", "practice_feed_command", "recovery_claim_revision", "recovery_case_event", "recovery_eligibility_v3_review", "recovery_claim_line", "audit_event"];
-const fingerprinted = ["quote_document_version", "quote_acceptance", "evidence_object", "variation_revision", "variation_approval", "recovery_claim_revision", "recovery_case_event", "material_rate_revision", "supplier_document_version", "supplier_document", "customer_invoice", "discrepancy_review_outcome"];
 async function snapshot(db: Pool) {
   const rows: Record<string, unknown> = {};
   for (const table of rowTables) rows[table] = (await db.query(`SELECT row_to_json(t)::text bytes FROM app.${table} t ORDER BY row_to_json(t)::text COLLATE "C"`)).rows;
@@ -259,13 +258,28 @@ async function snapshot(db: Pool) {
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname`, [tables])).rows;
   const columns = (await db.query(`SELECT c.relname,array_agg(a.attname::text ORDER BY a.attnum) columns FROM pg_class c
     JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
-    WHERE n.nspname='app' AND c.relname=ANY($1::text[]) GROUP BY c.relname ORDER BY c.relname`, [[...tables, ...fingerprinted]])).rows;
+    WHERE n.nspname='app' AND c.relname=ANY($1::text[]) GROUP BY c.relname ORDER BY c.relname`, [tables])).rows;
   const functions = (await db.query(`SELECT p.oid::regprocedure::text name,pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='app' AND p.oid::regprocedure::text<>$1 ORDER BY p.oid::regprocedure::text COLLATE "C"`, [functionName])).rows;
   const triggers = (await db.query(`SELECT c.relname,t.tgname,pg_get_triggerdef(t.oid) definition,t.tgenabled FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
     JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1::text[]) AND t.tgname<>'a_recovery_timing_pin'
     ORDER BY c.relname,t.tgname COLLATE "C"`, [tables])).rows;
   return { rows, catalog, columns, functions, triggers };
+}
+// Rows compared after ALL migrations are read by the column names that existed before 0127, so a later column cannot fail this proof.
+async function namedColumns(db: Pool) {
+  const named: Record<string, string[]> = {};
+  for (const table of rowTables) named[table] = (await db.query(`SELECT a.attname::text name FROM pg_attribute a
+    WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum`, [`app.${table}`])).rows.map(row => row.name as string);
+  return named;
+}
+async function namedRows(db: Pool, named: Record<string, string[]>) {
+  const rows: Record<string, unknown> = {};
+  for (const table of rowTables) {
+    const list = named[table]!.map(name => `t."${name.replaceAll('"', '""')}"`).join(",");
+    rows[table] = (await db.query(`SELECT row_to_json(s)::text bytes FROM (SELECT ${list} FROM app.${table} t) s ORDER BY row_to_json(s)::text COLLATE "C"`)).rows;
+  }
+  return rows;
 }
 it("[AC9] populated upgrade preserves every stored row, earlier routine and table shape; reapply is inert", async () => {
   const database = `stored_times_upgrade_${randomUUID().replaceAll("-", "")}`;
@@ -285,13 +299,18 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
     const before = await snapshot(upgradeAdmin);
     const functionCount = (await upgradeAdmin.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='app'::regnamespace")).rows[0]!.n;
     const triggerCount = (await upgradeAdmin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid=ANY($1::regclass[])", [tables.map(table => `app.${table}`)])).rows[0]!.n;
-    await migrate(upgradeAdmin); await migrate(upgradeAdmin);
+    const named = await namedColumns(upgradeAdmin), beforeRows = await namedRows(upgradeAdmin, named);
+    // Migration 0127 ALONE, the way the runner applies one file: run its SQL, then record it in the registry.
+    await upgradeAdmin.query(await readFile(MIGRATION_URLS.find(url => basename(fileURLToPath(url)) === migrationName)!, "utf8"));
+    await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [migrationName]);
     expect(await snapshot(upgradeAdmin)).toEqual(before);
-    expect((await upgradeAdmin.query("SELECT created_at=$3::timestamptz kept_chosen FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [T, old.id, past])).rows).toEqual([{ kept_chosen: true }]);
-    expect((await upgradeAdmin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [migrationName])).rows).toEqual([{ n: 1 }]);
     expect((await upgradeAdmin.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='app'::regnamespace")).rows).toEqual([{ n: functionCount + 1 }]);
     expect((await upgradeAdmin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid=ANY($1::regclass[])", [tables.map(table => `app.${table}`)])).rows).toEqual([{ n: triggerCount + 2 }]);
     expect((await upgradeAdmin.query("SELECT c.relname,t.tgenabled FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=$1::regprocedure ORDER BY c.relname", [functionName])).rows).toEqual(tables.map(relname => ({ relname, tgenabled: "O" })));
+    await migrate(upgradeAdmin); await migrate(upgradeAdmin);
+    expect(await namedRows(upgradeAdmin, named)).toEqual(beforeRows);
+    expect((await upgradeAdmin.query("SELECT created_at=$3::timestamptz kept_chosen FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [T, old.id, past])).rows).toEqual([{ kept_chosen: true }]);
+    expect((await upgradeAdmin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [migrationName])).rows).toEqual([{ n: 1 }]);
     expect(await rawCase(f, future)).toMatchObject({ pinned: true, kept_chosen: false });
     expect(await rawAdvance(await fixture(upgradeAdmin, upgradeRuntime), past)).toMatchObject({ pinned: true, kept_chosen: false });
     expect((await f.cases.listForMember(ctx, f.jobId, actor)).find(row => row.id === c.id)?.eligibilityV3).toEqual(review);

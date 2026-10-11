@@ -3362,6 +3362,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — ENT-4b, 11 October 2026 (merge-ahead ruling).** ENT-4b (pre-allocated 0062 in §12.3; built with 0117) takes **0122** (`extra_origin_persistence`) on 11 October 2026, the next number neither merged nor reserved (merged through 0115, 0119 and 0120; 0121 ENT-10b), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0120; the SQL is unchanged and the lane path was swapped with the renumber. A piece that lands after a higher number has merged renumbers again.
 
+**Ledger amendment — STORED-TIMES-1, 11 October 2026 (merge-ahead ruling).** STORED-TIMES-1 is a fix-forward of merged CH-7 (migration 0119), found by a read-only investigation on 11 October 2026; it was not pre-allocated in §12.3. It takes **0127** (`recovery_timing_pin`) because 0123–0126 are held by open pieces (0123 #138, 0124 #139, 0125 ENT-10d, 0126 ENT-3a) and it merges ahead of them (merged through 0115 and 0119–0122), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0122; those four numbers stay reserved for their pieces. It adds no column and changes no grant: one new function and one BEFORE INSERT trigger on each of `app.recovery_case` and `app.practice_feed_event` pin `created_at` to the transaction's time, so nobody with raw database access can choose the two stored times the "paid before the case opened" rule compares. The residual, in plain words: a raw writer can still back-date by as long as it keeps its own transaction open, because the stored time is the transaction's start.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
