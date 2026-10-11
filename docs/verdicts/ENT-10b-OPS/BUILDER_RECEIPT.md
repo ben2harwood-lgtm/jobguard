@@ -412,3 +412,42 @@ new operator feature or later-list item was added. Intended conventional commit
 subject/body written to `/private/tmp/jg-msg-ent-10b-ops.txt` for the dispatcher.
 Fresh Opus review and fresh Sol re-check bound to the dispatcher's repaired commit,
 plus separate acceptance, remain required; builder does not accept this work.
+
+## Round 1 verification (test helper, Claude Sonnet, 12 October 2026)
+
+Run record only. The helper changed no product code, no test and no document other than this section; no set-up repair was needed. This is not a review and not an acceptance. Everything here is local: nothing was pushed and no GitHub call was made.
+
+Code under test: branch `codex/sandbox/ent-10b-ops`, head `6f77dfb` (clean tree when the runs began), on top of `1be22ba`; `origin/main` was still `8e91b2d`. Environment: Mac, Node v24.17.0, pnpm 10.28.1, embedded PostgreSQL 16.10.0-beta.15, Chromium 1193 (installed full build, not the headless shell). Every command ran inside `~/.local/bin/heavy-slot`, with at least 78% memory free beforehand, `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`, one command at a time. Logs: `~/.local/share/full-steam/jg-runs/ent-10b-ops-r1-mac-*`. Where a command needed a temporary folder (restore rehearsal, browser global set-up, scratch command run) `TMPDIR` pointed at a folder under that runs directory, not at `/private/tmp`.
+
+| # | Working directory | Command (exact) | Exit | Result |
+| --- | --- | --- | --- | --- |
+| 1 | worktree root | `pnpm turbo run build --filter=@jobguard/api... --concurrency=2` | 0 | 6 tasks successful, 4 cached |
+| 2 | `packages/db` | `pnpm exec vitest run test/audit-checkpoint-handoff.integration.test.ts --maxWorkers=2 --reporter=verbose` | 0 | 1 file, 20 passed (new database test, run first and alone) |
+| 3 | `packages/db` | `pnpm exec vitest run test/audit-export.integration.test.ts test/audit.integration.test.ts test/tenancy.integration.test.ts --maxWorkers=2` | 0 | 3 files, 25 passed, merged files unedited |
+| 4 | `packages/db` | `pnpm exec vitest run test/demo-bootstrap.integration.test.ts --maxWorkers=2` | 0 | 1 file, 4 passed, unedited |
+| 5 | worktree root | `TMPDIR=<runs folder>/ent-10b-ops-mac-tmp node packages/db/tools/synthetic-restore.mjs` | 0 | third caller of `exportAuditCheckpoints`; 12 PASS, 0 FAIL, including `audit-checkpoint-restored` |
+| 6 | `packages/db` | `pnpm exec vitest run src/audit-checkpoint-handoff.test.ts test/verify-audit-export-cli.test.ts --maxWorkers=2 --reporter=verbose` | 0 | 2 files, 40 passed (26 unit + 14 merged verifier) |
+| 7 | `apps/api` | `pnpm exec vitest run src/audit-export/audit-export.application.test.ts src/auth/context-boundary.test.ts --maxWorkers=2` | 0 | 2 files, 159 passed (14 + context boundary 145), unedited |
+| 8 | worktree root | `pnpm turbo run build --filter=@jobguard/web... --concurrency=2` | 0 | production build; 7 tasks successful, 6 cached |
+| 9 | `apps/web` | `CI=1 pnpm exec playwright test --config <runs folder>/pw-local-channel-ent-10b-ops.config.ts --project=mobile-360 --project=desktop --workers=1 --list ENT-10b.spec.ts` | 0 | filter selects 2 tests in 1 file (`ENT-10b.spec.ts`), nothing else |
+| 10 | `apps/web` | `CI=1 TMPDIR=<runs folder>/ent-10b-ops-mac-tmp pnpm exec playwright test --config <runs folder>/pw-local-channel-ent-10b-ops.config.ts --project=mobile-360 --project=desktop --workers=1 --reporter=list ENT-10b.spec.ts` | 0 | 2 passed (mobile-360 and desktop), spec unedited, production server (`next start`) |
+| 11 | worktree root | `pnpm turbo run typecheck --concurrency=2` | 0 | 7 tasks successful, 4 cached |
+| 12 | worktree root | `LANE_BASE_REF=origin/main sh -c 'node tools/lint.mjs && pnpm turbo run lint --concurrency=2'` | 0 | 7 tasks successful, 4 cached |
+| 13 | worktree root | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane boundary passed, the eleven files |
+| 14 | worktree root | `TMPDIR=<runs folder>/ent-10b-ops-mac-tmp node <runs folder>/ent-10b-ops-mac-cli-e2e.mjs` (scratch script kept outside the repository) | 0 | see below |
+
+The playwright wrapper config sits outside the repository: it imports this worktree's `apps/web/playwright.config.ts` and only sets `channel: "chromium"` for the projects, as the earlier local wrappers do.
+
+The three checkpoint regression cases (run 2; each holds the first connection just after its checkpoint statement commits, using an advisory lock rather than a sleep, with a real second connection appending event N+1 for the company and committing):
+- `[Round 1 F1a]` different stored hash at sequence N, intervening append: the function REJECTED with `AUDIT_VERIFICATION_FAILED`, the message naming the company and `sequence N`; the stored checkpoint stayed the different hash; the other company's checkpoint was unchanged; the function issued exactly one statement. Passed.
+- `[Round 1 F1b]` the same, with a second company that has no checkpoint yet: REJECTED as in F1a, and the second company's valid checkpoint (its head) was inserted and kept. Passed.
+- `[Round 1 F1c]` equal hash at N, intervening append: no error, an empty result, one checkpoint for the company, no duplicate. Passed.
+Not done: the three cases were not run against the old code (`1be22ba`); that "each fails at the old commit" claim from the round 1 order is therefore not verified here.
+
+The nineteen-file comparison is gone from `packages/db/src/audit-checkpoint-handoff.test.ts` (no hash, git-show or fixed-commit reference remains in that file). The reachability guard (`assertOperatorUnreachable`) passes on the real tree (`[C-OPS-1]`) and, on small in-memory workspace fixtures, the same function stays quiet for an unrelated graph and for an emitted module outside the source roots, and throws "Operator reachable" for: a direct import from request code; an indirect alias through a second workspace package (three forms: `export { x as renamed } from`, `export * from`, import then `export { local as renamed }`); an `exports`-map target that exposes the module; a `main` target that exposes the module.
+
+Run 14, the built command `node packages/db/dist/audit-checkpoint-handoff-cli.js` started as a separate process against a scratch embedded database (owner login, `bootstrapSyntheticDemo`, two practice companies): with `--operator mac.check`, exit 0, one JSON line, both companies `handed_off` at sequence 2 (events 2 to 4, checkpoints 0 to 2, hand-off rows 0 to 2); a second run, exit 0, both `unchanged` with `nothing to do`, counts unchanged; missing or invalid operator, exit 1, `AUDIT_CHECKPOINT_INVALID_INPUT`; the runtime login as the owner login, exit 1, `AUDIT_CHECKPOINT_FORBIDDEN` naming the role found and the role needed, counts unchanged; `JOBGUARD_ENV=pilot_no_charge`, exit 1, `AUDIT_CHECKPOINT_MODE_HELD`. No output contained the password, host or port (the refusal message names the owner login role, as C-OPS-2 asks).
+
+Not run: `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, any package `test` script, `pnpm openapi:check` (no route or schema changed), the web unit file. No browser was installed.
+
+Mac run record only — not a review, not an acceptance.
