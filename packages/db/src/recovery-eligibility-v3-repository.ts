@@ -1,0 +1,68 @@
+import { createHash, randomUUID } from "node:crypto";
+import type { Pool } from "pg";
+import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, recoveryFixtureDefinitionV3, RecoveryEligibilityV3Error, type RecoveryEligibilityViewV3 } from "@jobguard/core";
+import { appendAuditBatch } from "./audit.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+export type RecoveryEligibilityV3Review = Readonly<{id:string;revision:number;caseRevision:number;sourceEventId:string|null;result:RecoveryEligibilityViewV3}>;
+export async function readRecoveryEligibilityV3(db:TenantTransaction,tenantId:string,caseId:string):Promise<RecoveryEligibilityV3Review|null> {
+ const r=(await db.$client.query<{id:string;revision:number;case_revision:number;source_event_id:string|null;result:unknown}>("SELECT id,revision,case_revision,source_event_id,result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND case_id=$2 ORDER BY revision DESC LIMIT 1",[tenantId,caseId])).rows[0];
+ return r?{id:r.id,revision:r.revision,caseRevision:r.case_revision,sourceEventId:r.source_event_id,result:recoveryEligibilityViewV3.parse(r.result)}:null;
+}
+const hash=(value:unknown)=>createHash("sha256").update(JSON.stringify(value)).digest("hex");
+export class RecoveryEligibilityV3Repository {
+ constructor(private readonly pool:Pool,private readonly environment=process.env.JOBGUARD_ENV??"unconfigured"){}
+ async review(context:VerifiedTenantContext,jobId:string,raw:unknown,actor:Readonly<{membershipId:string;identityUserId:string}>,sessionDigest:string):Promise<RecoveryEligibilityV3Review> {
+  if(this.environment!=="synthetic_demo")throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
+  const parsed=recoveryEligibilityCommandV3.safeParse(raw);if(!parsed.success)throw new RecoveryEligibilityV3Error("INVALID_COMMAND");
+  const input={...parsed.data,commandId:parsed.data.commandId.toLowerCase(),caseId:parsed.data.caseId.toLowerCase()},job=jobId.toLowerCase();
+  const payloadHash=hash({jobId:job,...input});
+  return withTenant(this.pool,context,async db=>{
+   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
+   const member=await db.$client.query(`SELECT 1 FROM app.membership m JOIN app.authenticate_practice_session($4) p
+    ON p.tenant_id=m.tenant_id AND p.membership_id=m.id AND p.identity_user_id=m.identity_user_id
+    WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3 AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()) FOR SHARE OF m`,[context.tenantId,actor.membershipId,actor.identityUserId,sessionDigest]);
+   if(member.rowCount!==1)throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
+   if(!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3",[context.tenantId,job,sessionDigest])).rowCount)throw new Error("RECOVERY_JOB_NOT_FOUND");
+   // Command identity then the shared case advisory key; every business lock precedes audit.
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,`eligibility-v3:${input.commandId}`]);
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,input.caseId]);
+   const replay=(await db.$client.query<{id:string;payload_hash:string;revision:number;case_revision:number;source_event_id:string|null;result:unknown;job_id:string}>("SELECT * FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId])).rows[0];
+   if(replay){if(replay.payload_hash.trim()!==payloadHash||replay.job_id!==job)throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");return {id:replay.id,revision:replay.revision,caseRevision:replay.case_revision,sourceEventId:replay.source_event_id,result:recoveryEligibilityViewV3.parse(replay.result)};}
+   const c=(await db.$client.query<{case_type:string;revision:number;created_at:Date;claim_pence:string}>("SELECT case_type,revision,created_at,claim_pence FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND claim_revision IS NOT NULL",[context.tenantId,job,input.caseId])).rows[0];
+   if(!c)throw new Error("RECOVERY_CASE_NOT_FOUND");
+   const latest=await readRecoveryEligibilityV3(db,context.tenantId,input.caseId);
+   if(c.revision!==input.expectedCaseRevision||(latest?.revision??0)!==input.expectedReviewRevision)throw new Error("ELIGIBILITY_STALE_REVISION");
+   const definition=recoveryFixtureDefinitionV3(input.fixture);
+   if(definition.category!==c.case_type||latest&&latest.result.fixture!==input.fixture)throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
+   if(definition.credit&&input.fixture!=="F15")throw new RecoveryEligibilityV3Error("ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE");
+   // Fixed M4-7-S facts only; prefer the ORIGINAL settled event, never a statement replay.
+   const event= ["F15","F21","F22"].includes(input.fixture)?undefined:(await db.$client.query<{id:string;state:string;created_at:Date;duplicate_held:boolean}>(`SELECT e.id,e.state,e.created_at,
+    EXISTS(SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=e.tenant_id AND u.account_id=e.account_id AND u.movement_key=e.movement_key AND u.identity='unidentified'
+      AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate')) duplicate_held
+    FROM app.practice_feed_event e WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.movement_key=$3 AND e.identity='identified' AND e.event_kind IN('settled','pending')
+    ORDER BY (e.event_kind='settled') DESC,e.created_at,e.id LIMIT 1`,[context.tenantId,job,definition.movement])).rows[0];
+   if(!event&&!["F15","F21","F22"].includes(input.fixture))throw new RecoveryEligibilityV3Error("ELIGIBILITY_SOURCE_REQUIRED");
+   const before=event?.state==="settled"&&event.created_at<=c.created_at;
+   if(input.fixture==="F20"&&!before)throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
+   const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
+    settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});
+   if(definition.lines[0]!.netPence>Number(c.claim_pence))throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
+   const id=randomUUID(),revision=(latest?.revision??0)+1;
+   const inserted=await db.$client.query<{result_hash:string}>(`INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') result_hash`,[id,context.tenantId,job,input.caseId,revision,c.revision,input.fixture,event?.id??null,actor.membershipId,input.commandId,payloadHash,JSON.stringify(result)]);
+   for(const line of result.lines)await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),context.tenantId,job,input.caseId,id,line.kind,line.debtorType,line.netPence]);
+   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.membershipId}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:input.caseId,
+    payload:{references:{jobId:job,reviewId:id,commandId:input.commandId,...(event?{sourceEventId:event.id}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.result_hash},classifications:{recovery:"financial"}}}]);
+   return {id,revision,caseRevision:c.revision,sourceEventId:event?.id??null,result};
+  }).catch((error: unknown) => {
+   // Known database pre-commit guards use the same typed refusal contract as the service.
+   // Transport/commit ambiguity and deferred completeness defects retain the unknown outcome.
+   const failure = error as { code?: unknown; message?: unknown } | null;
+   const guards = ["ELIGIBILITY_REVIEWER_FORBIDDEN", "RECOVERY_JOB_NOT_FOUND", "RECOVERY_CASE_NOT_FOUND", "ELIGIBILITY_STALE_REVISION", "ELIGIBILITY_SOURCE_REQUIRED", "ELIGIBILITY_FIXTURE_MISMATCH", "ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE"];
+   if (typeof failure?.code === "string" && typeof failure.message === "string" && guards.includes(failure.message)) {
+    throw Object.assign(new Error(failure.message), { code: failure.message });
+   }
+   throw error;
+  });
+ }
+}

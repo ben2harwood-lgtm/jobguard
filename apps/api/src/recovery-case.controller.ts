@@ -21,7 +21,7 @@ export class RecoveryCaseController {
   catch(error) { const failure = recoveryCommandFailure(error); throw new HttpException(failure.body, failure.status); }
  }
  @Post("eligibility")
- @ApiOperation({ summary: "Review or approve synthetic reference D03 eligibility" })
+ @ApiOperation({ summary: "Review v1/v3 synthetic D03 candidates or approve a v1 review" })
  async eligibility(@Param("id") id: string, @Body() body: unknown, @Req() request: { headers: { cookie?: string } }, @Headers("cookie") _cookie?: string) {
   const sessionId = practiceCookie(request.headers.cookie);
   try { return await new RecoveryCaseApplication(this.pool, sessionId).eligibility(id, body, sessionId); }

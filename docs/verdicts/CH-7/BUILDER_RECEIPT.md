@@ -1,0 +1,169 @@
+# CH-7 builder receipt — 11 October 2026
+
+Builder: **Codex GPT-6.1 Sol**. Check lane: **RED**.
+
+Issued base and current HEAD: `ff072c70d577c47847de56c8b30e708bee4267dd`. `origin/main` initially matched; it advanced externally during checks to `530681c030a2333ec8f27f4d1a2cf4803a833465` (FIXLATER-1). No git write was performed by this builder. Direct current-origin diffs include reverse differences for that unrelated merged work; working-tree status and the issued-base diff contain only CH-7 changes. The diff is uncommitted on `codex/sandbox/ch-7`; `.git` is read-only. The dispatcher must supply the final exact commit. No git write, push, merge, PR, deployment, approval or acceptance was performed.
+
+**Partial build, BLOCKING completion.** The merged M4-7-S catalogue has customer receipts and a supplier refund, but no supplier-invoice payment. Full payment of a later supplier invoice cannot be established from those facts. F14/F16 therefore have pure synthetic reference tests and a fail-closed persistence refusal, not a completed positive database/browser path. A coordinator clarification was requested; no answer has been received. This is a discovered dependency blocker, not a newly approved hold. Database/browser suites remain unexecuted and API unit failures are reported below.
+
+Builder receipt only — not independently verified, not accepted.
+
+## Issued scope and acceptance mapping
+
+| Item | Status and evidence |
+| --- | --- |
+| B1 duplicate_supplier_payment | BUILT: additive core enum/source split, expanded SQL category, stored v3 candidate and workbench control. Core `B1 accepts the additive supplier case category and source split`; DB `DW1 F17 uses M4-7-S facts and persists exact Q/reason`; browser `F17 persists candidate Q, exact available reason and source across contexts`. DB/browser NOT RUN. |
+| B2 supplier_credit_consumption / £250 minimum | BUILT IN PART, BLOCKING: tenant/job/case/review-qualified credit-note, later invoice and settled-event table; delegated pure F14/F15/F16 predicates; persisted F15 zero exclusion. Core `DW1 F14/F15/F16-partial/F16-full exact candidate Q and available reason`; DB `B2 refuses customer receipts as supplier-invoice settlement without writing credit/review rows`. Positive F14/F16 storage/browser path is not built because the required supplier payment fact is absent. No alternate settlement source is invented. |
+| B3 claim lines / debtor | BUILT: immutable principal/statutory_interest/fixed_compensation rows and generated business/individual fixture identity. Core `B3 F18/F19 compensation never contributes and debtor is server fixture data`; DB F18/F19 exact header/component assertions; browser F18/F19 Q and individual interest zero. Compensation never enters Q. |
+| B4 fee terms approval and pursuit guard | HELD, Q6: D01 v3 remains proposed. No terms table, command, route, Decision approval or pursuit guard. M4-5-S/0112 pursuit routines are unchanged. |
+| B5 insurer proceeds and exact insurer reason | HELD, Q7: job paying-party type exists but is not attached to the receipt/movement fact; file:line evidence below. No insurer receipt fact, exclusion route or insurer reason is built. |
+| DW1 F14–F22 reasons/outcomes/Q | BUILT IN PART: core coverage for all rows, persisted/browser test definitions for F15 and F17–F22. F14/F16 positive persistence/browser remains BLOCKING. F19 interest reason and F21 reason HELD under Q4. F22 uses existing verbatim copy. No F display or fee derivation (Q3). |
+| DW2 pursuit without approved terms | HELD, Q6; scope would be withheld-payment only (Q5). No terms-guard integration test is invented. |
+| DW3 later approval never qualifies an earlier receipt | HELD, Q6. The separately built F20 opening-time exclusion uses original M4-7-S server time; it does not implement a terms-time rule. |
+| DW4 v1 reviews keep version/outcome | BUILT: separate v3 storage and additive response field; old v1 code/history preserved. DB `DW4 migration preserves previous reviews byte-for-byte and version` seeds the previous schema before 0113, migrates twice, and compares stored JSON text bytes. NOT RUN. Existing v1 core/API assertions are unchanged. |
+
+### F14–F22 exact reference results
+
+Q is qualifying net principal including eligible statutory interest, in GBP pence. No new illustrative fee (F) or posting delta is displayed or derived; existing posted-fact projections remain in the workbench.
+
+| Fixture | Outcome | Q pence | Exact available reason | Coverage / limits |
+| --- | --- | ---: | --- | --- |
+| F14 | eligible_for_review | 30000 | null | Core only; full supplier-invoice payment source absent. |
+| F15 | excluded | 0 | Credit note below the £250 minimum | Core, DB and browser definitions. No settled invoice is claimed. |
+| F16 partial | excluded | 0 | Credit note used against an invoice not yet paid in full | Core only; persisted partial/full transition owed. |
+| F16 full | eligible_for_review | 30000 | null | Core only; positive persistence/browser BLOCKING. |
+| F17 | eligible_for_review | 45000 | null | Original supplier-refund-540: 54000p gross; generated net claim 45000p. |
+| F18 | eligible_for_review | 262000 | Fixed statutory compensation is not part of the fee base | 250000p principal + 12000p interest; 7000p compensation contributes zero. |
+| F19 | eligible_for_review | 250000 | Fixed statutory compensation is not part of the fee base | Same compensation reason; individual interest contributes zero with its specific reason null/HELD. |
+| F20 | excluded | 0 | Paid before you opened this case | Original receipt-384 settled timestamp is before opening. |
+| F21 | excluded | 0 | null — HELD | Unpaid-bill reduction; no substituted pending-money explanation. |
+| F22 | excluded, terminal | 0 | Prevented spending is not recovered cash | Existing verbatim reason; no money posting. |
+
+F17–F22 have core, database and browser definitions. Database/browser outcomes are **not verified**. Browser definitions assert two-decimal pounds, exact reason, outcome, keyboard activation, focus, touch target, banner, overflow, reload, and a cookie-only second context. As in merged M4-2-S, captured jobs are deliberately absent from the Jobs home list: the test visits Jobs then navigates to the saved job URL. It does **not** prove clicking a captured-job card from Jobs.
+
+## Q4, Q7 and source-gap evidence
+
+Read-only original-base search (new CH-7 copy excluded):
+
+```sh
+git grep -n -i -E '(interest.*individual|individual.*interest|unpaid supplier bill|Prevented spending is not recovered cash)' origin/main -- packages/core/src packages/db/src apps/api/src apps/web/app
+```
+
+F19 matches are predicate/schema/test identifiers in `packages/core/src/shadow-domain/eligibility.ts:13`, `eligibility.test.ts:47`, and `success-fee.test.ts:72`; none supplies verbatim reason copy. No applicable F21 reason copy was found. F19 interest reason and F21 wording are HELD. F22 exact copy exists at `packages/core/src/recovery-eligibility.ts:13` and its unchanged test at `recovery-eligibility.test.ts:5`.
+
+Q7 evidence: `packages/db/migrations/0095_job_parties.sql:28` permits customer type `insurer`; lines 76–86 attach paying-party revisions to a **job**. `packages/db/migrations/0106_practice_feed.sql:56–81` defines the immutable movement without a paying-party type/revision. Its receipt match at lines 83–103 links a payment and settled event, not a payer. `packages/db/migrations/0029_uiwire12_customer_receipts.sql:19` records a receipt without a paying-party parameter. A job payer must not be inferred as the payer of every receipt. B5 and “Insurer proceeds never qualify” remain HELD.
+
+B2 blocker evidence: `packages/core/src/practice-feed.ts:20` is exactly `customer_receipt | supplier_refund`; catalogue lines 27–35 contain six incoming customer receipts and one supplier refund. `0106_practice_feed.sql:59–60,73–76` constrains the same movement catalogue. There is no outgoing supplier-invoice payment. The new table's insertion guard and F14/F16 command path refuse `ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE`. F15 can exclude a generated below-minimum example without asserting full payment.
+
+## Implementation and invariants
+
+The existing `RecoveryCaseApplication.eligibility` service dispatches strict v1/v3 commands after authenticating and before reading deferred JSON. Existing Nest/Next transports and workspace composition already reach this service, so no extra route, service registration or job mutation registry entry is introduced. OpenAPI is regenerated; only the existing endpoint summary changes.
+
+The v3 command accepts only immutable generated fixture selection and expected revisions, never client tenant, category, debtor, settlement, Q or terms status. Contexts use the merged stamped helpers. The repository rechecks issued session, immutable job owner and current owner membership inside the transaction, including replay. Command identity and the shared case lock precede business writes and the final audit lock. Same command/different payload conflicts; same command/same payload returns the original review in `eligibilityV3CommandResult`, separately from current workbench views; expected revisions serialize races.
+
+SV-1 owns category/component eligibility predicates; SH-1 owns exact-pence addition. No kernels are copied, no success fee is calculated, and no commercial authorization is created. Existing synthetic prerequisite assumptions supplied to the pure SV-1 predicate are fixture assumptions, including its terms prerequisite, not a terms approval record or a pursuit guard. Production/pilot mode refuses v3 processing and every candidate records `productionEnabled: false`.
+
+Migration `0113_recovery_eligibility_v3.sql` is appended after 0112 in increasing order. Position tests assert names/order, never “last migration”. It expands the category check, adds a tenant/job-qualified feed identity key, and creates `recovery_eligibility_v3_review`, `recovery_claim_line`, `supplier_credit_consumption`. Every new table has non-null tenant, tenant/job/case/review-qualified FKs, ENABLE/FORCE RLS, migration ownership, runtime SELECT/INSERT only, and append-only triggers. Invoker guards validate source, fixture, exact Q and rendered components. A deferred constraint requires the exact command/result audit hash and complete claim lines. No earlier guard is restated, including the three 0112 message guards.
+
+Existing v1 rows/version/outcome are not backfilled or changed. Forward fix with a new migration is the default; any application rollback must retain readers compatible with the new case category after such cases exist. Do not drop populated history or narrow a category after new-category rows exist. No new provider, secret, external action, charge, allocator, ledger posting, alert or production capability is introduced. RLS guarantees remain bounded by correctly authenticated context and uncompromised runtime credentials; synthetic deployment isolation remains necessary.
+
+## Tests first and checks actually observed
+
+Dependencies were supplied installed. No package download or `pnpm install --frozen-lockfile` was attempted, as the dispatcher explicitly prohibited downloads. Node `v24.17.0`; cached pinned pnpm `10.28.1` was invoked with `PATH=/private/tmp/jg-fixlater-1-bin:$PATH`. The initial default pnpm launcher tried manager resolution; the existing cached binary was used instead.
+
+Core v3 tests were written before the implementation: the targeted three-file run exited 1 because the v3 module did not exist (the two existing files/171 tests passed). The initial API routing tests, after dependency build, exited 1 with 5 failed/8 passed; v3 routing/refusal implementation fixed those failures. Database and browser tests were written before their initial persistence/UI implementation and are **NOT RUN**, not failed-first evidence. Additional self-review regression tests were written and failed before their fixes: API immutable replay result (1 failed/13 passed, then exit 0/14 passed); F21 pending settlement substituted held copy (1 failed/18 passed), and non-strict stored result accepted an extra field (1 failed/19 passed).
+
+| Command | Observed exit/result |
+| --- | --- |
+| `pnpm --filter @jobguard/core exec vitest run src/recovery-eligibility-v3.test.ts src/recovery-eligibility.test.ts src/recovery-case.test.ts` | Final exit 0: 3 files, 193 tests (22 CH-7 tests). |
+| `pnpm --filter @jobguard/core test` | Exit 0: 126 files, 3578 tests before the four final self-review tests; targeted v3 run covers the additions. |
+| API unit run, 36 explicit socket-free files (full command below) | Final completed run with `--maxWorkers=4`: exit 1, 33 passed/3 failed files, 953 passed/5 failed tests (958 total); all five are unchanged 5000ms timeouts. CH-7's 14 tests passed. Earlier completed normal-worker run: exit 1, 35 passed/1 failed files, 956 passed/1 failed tests; unchanged 5000ms source-scan timeout. Serial `--maxWorkers=1` rerun: interrupted exit 130 after nine observed timeout failures and prolonged lack of new output; no completed count is claimed. No timeout/retry/skip/config modification. |
+| `pnpm --filter @jobguard/web test` | Final exit 0: 21 files, 448 tests on the final UI/contract. |
+| `node --test tools/*.test.mjs` | Exit 0: 42 tests. |
+| `pnpm typecheck`; final `pnpm typecheck --concurrency=1` | Earlier exact command exit 0 (7 packages); final serialized run exit 0, all 7 packages successful, 10m47.562s. The intervening interrupted run is described below. The response-only replay addition followed; final build and affected API/web no-emit lint checks validate those final types. |
+| `pnpm build` | Final exact command exit 0, all 7 packages successful, 6m49.246s, after the replay fix. Existing Next workspace/CSS warnings and global-cache `Operation not permitted` warnings did not fail the build. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Initial exit 1: self-comparison refusal. Final exact command exit 0 after the external origin/main advance: all boundary tools and 7 package lint tasks pass, 9m37.84s. This full run precedes the final response-only replay fix; affected API/web checks follow below. |
+| `pnpm lint:lanes` | Initial exit 1: self-comparison refusal. Final exit 0 after origin/main advanced externally to 530681c; all 23 paths passed the unchanged checker. No checker/base-ref workaround. |
+| Supplemental working-tree lane audit | Exit 0 before receipt: 22 changed/untracked paths all matched the existing lane matcher. A current-origin supplemental audit exited 1 on eight reversed FIXLATER-1 baseline paths (none was edited). Issued-base/HEAD working-tree audit: exit 0, 23 paths allowed, including this receipt. This is not the mandatory committed-range lane check. |
+| `node tools/core-purity-lint.mjs`; `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Each observed exit 0 on final source; core purity (127 files), exact money and commercial boundaries passed. |
+| `pnpm openapi:check` | Exit 1: tsx CLI attempts an IPC listener, `listen EPERM ... /T/tsx-501/69187.pipe`; sandbox cannot bind sockets. |
+| `pnpm --filter @jobguard/api openapi:generate` | Exit 1: same tsx IPC restriction. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts` | Exit 0: regenerated actual document without the CLI's IPC listener. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Final exit 0: actual generator says document matches. This does not relabel the required command as passed. |
+| `git diff --check` | Exit 0 after the final code changes. |
+
+The final concurrent typecheck rerun was interrupted after 11m7.699s without new progress: the tool observed exit 0 during Turborepo shutdown, but its receipt shows only 4 successful/5 started tasks, not all seven; this is explicitly **not a pass**. A serial-package rerun uses `pnpm typecheck --concurrency=1`.
+
+Affected final-source `pnpm --filter @jobguard/api lint` and `pnpm --filter @jobguard/web lint` each exited 0 after the replay fix; both run the same unchanged no-emit TypeScript checks as root lint/typecheck. No check script is altered.
+
+Earlier typecheck/build failures were real and fixed: optional Playwright context properties violated exact optional typing; a static API import of the DB test helper pulled source outside the API compiler root (TS6059), producing nine stray JS/declaration/map artifacts. The test now dynamically loads the existing stamped helper. All nine artifacts were removed; existing authorization assertions were retained. One overlapping build recreated them before it finished; cleanup was repeated after that build ended. Initial core expected F18/F19 header reasons were corrected to assert the exact compensation reason, strengthening the assertions. An early API run before building dependencies could not import the unbuilt v3 repository; that is an environment/build-order failure, not meaningful failing-first evidence.
+
+Exact serial API unit command (same 36 files as the completed normal-worker run; that run omitted `--maxWorkers=1`):
+
+```sh
+/private/tmp/jg-fixlater-1-bin/pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/auth/auth.test.ts src/auth/context-boundary.test.ts src/auth/identity.test.ts src/capture/capture-state.test.ts src/commercial-integrity.application.test.ts src/contractor/contractor-parties.application.test.ts src/contractor/contractor-parties.controller.test.ts src/contractor/contractor-parties.privacy.test.ts src/contractor/contractor.application.test.ts src/contractor/contractor.projection.test.ts src/contractor/work-order.application.test.ts src/customer-receipt-input.test.ts src/effects/policy-gates.test.ts src/evidence-pack.application.test.ts src/evidence-pack.controller.test.ts src/evidence-pack.errors.test.ts src/final-account.application.test.ts src/job-parties.application.test.ts src/practice-feed.application.test.ts src/practice-feed.controller.test.ts src/practice-session.test.ts src/practice-transports.test.ts src/prevention-check.application.test.ts src/proof/proof.application.test.ts src/recovery-case.application.test.ts src/recovery-case.command.application.test.ts src/recovery-case.controller.test.ts src/recovery-eligibility-v3.application.test.ts src/recovery-follow-up.application.test.ts src/recovery-follow-up.controller.test.ts src/recovery-message.application.test.ts src/recovery-message.controller.test.ts src/recovery-message.errors.test.ts src/watchdog-registry.test.ts src/workspace/fee-illustration.application.test.ts src/workspace/workspace.service.test.ts
+```
+
+The final four-worker API run used the same explicit 36-file list above with `--maxWorkers=4`. Timeout failures: context-boundary's real-source scan and exact reviewed-source identity check; identity's practice-guard ordering check; recovery-message controller's Next read/list adapter and read/list watchdog-refusal checks. Every failure reports `Test timed out in 5000ms`. No final API pass is claimed. A focused follow-up with `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/auth/context-boundary.test.ts src/auth/identity.test.ts src/recovery-message.controller.test.ts` exited 1: 176 passed/1 failed (177 tests, 2 passed/1 failed files). The unchanged real-source context scan still timed out at 5000ms; the other four prior timeout checks passed in this focused run. The broad suite remains blocking.
+
+### NOT RUN
+
+- Every PostgreSQL integration test, including new `packages/db/test/recovery-eligibility-v3.integration.test.ts` (17 cases), changed catalog expectations in `tenancy.integration.test.ts`, unchanged recovery-cases/messages/follow-up/feed suites and UIWIRE-12/demo bootstrap: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- `pnpm test:db`: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- `pnpm test:migrations` (fresh install, upgrade, privileges/RLS): **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- Requested DB Vitest command: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. `test/recovery-terms-guard.integration.test.ts` is intentionally absent because B4/DW2/DW3 are HELD.
+- Every Playwright test, including CH-7 (8 definitions, both `mobile-360` and `desktop`) and unchanged M4-1-S/M4-2-S/M4-5-S: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- Requested `pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop CH-7.spec.ts M4-1-S.spec.ts M4-2-S.spec.ts M4-5-S.spec.ts`: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- Aggregate `pnpm test`: NOT RUN; it starts mandatory PostgreSQL and socket-based tests. Core/web/tools and the API unit file set were run directly; this is not an aggregate pass.
+- API `src/health.test.ts`: NOT RUN (sandbox cannot bind sockets); it is an HTTP/supertest integration test, not part of the 36 socket-free unit files. No exclusion/config is committed.
+- No live-provider evaluation, professional/commercial approval, screenshot or independent model verdict is claimed. AI/model/prompts are unchanged; native subsystem is untouched.
+
+Syntax-only `TypeScript.transpileModule` inspection of the new DB and Playwright files exited 0 with zero syntax diagnostics. This did not execute/typecheck those suites or verify SQL.
+
+## Self-review
+
+Re-read the entire tracked diff with read-only `git diff origin/main` and the fixed issued-base comparison after the remote ref advanced and read every new implementation/test/SQL file. Checked each built acceptance row against a test, exact pence/reason strings, delegated arithmetic, tenant-qualified keys, FORCE RLS, grants/owner, append-only history, membership/session guards, replay/races, original settled timestamps, atomic audit completeness, v1 preservation, increasing migration names, lane boundaries and held exclusions. No existing assertion was weakened/deleted and no timeout/retry was introduced.
+
+Fixed: added an immutable v3 command-result field so an old command replay reports its original review even when the workbench contains a newer candidate (observed failing-first API test, then 14 passed). F21's held wording was being replaced by a pending-money reason; added an observed-failing regression and kept its reason null. Made all stored-result/line/money schemas strict after an observed-failing test. Added SQL validation of the complete rendered component array and unknown header keys; protected exact zero compensation/individual-interest components. Added direct runtime money/component tampering and pending/unverified credit-proof tests; these test the implemented guards/delegated proof predicate and are not claimed as failing-first runs. Added known SQL-guard-to-typed-refusal translation while retaining unknown outcomes for transport/commit ambiguity. Kept supplier-invoice payment unavailable rather than mislabelling incoming customer cash. Added persisted F15 zero coverage without claiming settled invoice proof. Removed the new DB setup timeout override so defaults remain in force. Corrected static test-helper imports and cleaned compiler artifacts. Revoked PUBLIC/runtime direct execution of new trigger functions and added catalog coverage. Clarified that older closed-enum clients need a compatible reader after new-category cases are created; forward fix is preferred.
+
+This is builder self-review only, not an independent verdict or acceptance. PostgreSQL behavior remains source-inspected/test-written, not test-executed.
+
+## Changed files and shared ownership
+
+- `apps/api/openapi.json`
+- `apps/api/src/recovery-case.application.ts`
+- `apps/api/src/recovery-case.contracts.ts`
+- `apps/api/src/recovery-case.controller.ts`
+- `apps/api/src/recovery-eligibility-v3.application.test.ts`
+- `apps/web/app/ui/recovery-cases.tsx`
+- `apps/web/app/ui/recovery-eligibility-command.ts`
+- `apps/web/e2e/CH-7.spec.ts`
+- `config/agent-lane-assignments.json`
+- `docs/contracts/recovery-eligibility-v3.md`
+- `docs/verdicts/CH-7/BUILDER_RECEIPT.md`
+- `packages/core/src/index.ts`
+- `packages/core/src/recovery-case.ts`
+- `packages/core/src/recovery-eligibility-v3.test.ts`
+- `packages/core/src/recovery-eligibility-v3.ts`
+- `packages/db/MIGRATIONS.md`
+- `packages/db/migrations/0113_recovery_eligibility_v3.sql`
+- `packages/db/src/index.ts`
+- `packages/db/src/migrate.ts`
+- `packages/db/src/recovery-case-repository.ts`
+- `packages/db/src/recovery-eligibility-v3-repository.ts`
+- `packages/db/test/recovery-eligibility-v3.integration.test.ts`
+- `packages/db/test/tenancy.integration.test.ts`
+
+Shared-file overlaps are additive and serialized with the integrator: M4-1-S-R recovery case/category/application/view; M4-2-S-R existing eligibility transport (v1 branch unchanged); M4-7-S only a qualified feed identity key in 0113, with settled-movement implementation untouched; shared core/DB exports, migration registry, catalog rows and OpenAPI. M4-5-S and the 0112 M4-6-S message/pursuit guards are untouched. Externally merged FIXLATER-1 also touches `recovery-cases.tsx` (delivery lookup lifecycle, separate lines); its commit is outside this issued-base working tree and must be preserved by integration. No reversed current-origin baseline difference is a builder edit. Existing dependency-owned tests remain unchanged except the issued lane's catalog rows.
+
+Generated artifacts were removed after all builds/generator checks: package/API `dist`, web `.next`, `.turbo`, tsbuildinfo and test/build result directories. Installed dependencies are retained; no `.pnpm-store`, build output or `test-results` is left in this working tree.
+
+## Outstanding gates / owed work
+
+- BLOCKING: a coordinator source/dependency ruling and real synthetic supplier-invoice settled-payment fact for positive persisted F14/F16, plus their database/browser transition tests. No new hold has been approved by the builder.
+- BLOCKING: mandatory API timeout failures need a clean completed run. Mandatory PostgreSQL/browser verification and a committed-range CI lane check remain outstanding; local lint:lanes now passes after the external remote-ref advance.
+- Q6 HELD: B4/DW2/DW3; when released, exact terms approval and both synthetic/live M4-5 guard wiring remain owed. No terms-time fee entitlement is implemented.
+- Q7 HELD: B5 insurer fact/rule/reason; Q4 HELD: individual-interest and unpaid-bill copy. F22 copy was found and built.
+- D01 v3 and D03 v3 remain proposed; §5.5's signed consumed-credit production amendment and G4-S remain release gates. Production fee issuance/collection stays disabled.
+- Existing pursuit templates remain limited to merchant_overcharge / withheld_customer_payment (`packages/core/src/recovery-message.ts:25`); no duplicate-payment pursuit support is claimed or added outside the issued lane. CH-7 builds its capture/eligibility view; any new template/support requires a separate owner/lane ruling.
+- Fresh independent Claude Opus review and a separate Sol check after CI, each bound to the dispatcher's exact commit, followed by separate technical acceptance. The builder neither reviews independently nor accepts its own work.
