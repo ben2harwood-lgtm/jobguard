@@ -174,7 +174,9 @@ describe("ENT-10b PostgreSQL audit exports", () => {
   it("serializes distinct concurrent export commands on two connections into consistent verifiable snapshots", async () => {
     const { p } = await setup(), cp = await checkpoint(p), commands = [request(), request()];
     const before = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [p.tenantId])).rows[0]!.n as number;
-    const firstPool = new Pool({ ...runtime.options, max: 1 }), secondPool = new Pool({ ...runtime.options, max: 1 });
+    // pg-pool keeps `password` non-enumerable, so a plain spread of `runtime.options` would drop it; copy it explicitly.
+    const poolOptions = { ...runtime.options, password: runtime.options.password, max: 1 };
+    const firstPool = new Pool(poolOptions), secondPool = new Pool(poolOptions);
     try {
       const clients = await Promise.all([firstPool.connect(), secondPool.connect()]);
       try {

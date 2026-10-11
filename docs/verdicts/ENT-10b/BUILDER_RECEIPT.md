@@ -259,3 +259,31 @@ Final handoff inspection: removed 17 generated paths (workspace `dist`, `.next`,
 Round-one files: `apps/api/src/audit-export/audit-export.application.ts`, `apps/api/src/audit-export/audit-export.application.test.ts`, `apps/web/app/admin/contractor/audit-exports/page.tsx`, new `apps/web/app/admin/contractor/audit-exports/page.test.tsx`, `packages/db/src/audit-export-repository.ts`, `packages/db/test/audit-export.integration.test.ts`, `config/agent-lane-assignments.json` (own line only), `docs/contracts/audit-export-v1.md`, and this receipt. Intended commit message written to `/private/tmp/jg-msg-ent-10b.txt`.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Round 1 verification and catch-up — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+Repair builder only; no review or acceptance. Starting head 80b2fd5 (Codex round-1 commit on 129e19b); ENT-10a had merged, origin/main = bbca5ca (added `0120_enterprise_identity.sql`).
+
+**Catch-up.** `git merge origin/main` conflicted in seven files; each resolved by keeping both sides. `packages/db/src/migrate.ts`: 0119, 0120, then ENT-10b's 0121 (strictly increasing; ENT-10b keeps 0121). `packages/db/MIGRATIONS.md`: 0120 section, then ours. `apps/api/src/app.module.ts`: both controller imports and `SsoController,AuditExportController,` in the controller list, SSO provider kept. `apps/api/src/workspace/application.ts`: both imports, `createWorkspaceApplication` keeps the `identity?` dependency and both `sso` and `auditExports`, and the returned object carries `sso` and `auditExports`. `apps/api/src/workspace/index.ts`: both export groups. `config/agent-lane-assignments.json`: `ent-10a` line then `ent-10b` line (name order). `apps/api/openapi.json`: took origin/main's file and regenerated with `pnpm --filter @jobguard/api openapi:generate`; `pnpm openapi:check` exit 0 (differs from origin/main only by the audit-export paths). `packages/db/src/index.ts` auto-merged. Commit: `Merge origin/main (bbca5ca: ENT-10a #131) into codex/sandbox/ent-10b — catch-up, both sides kept`.
+
+**Fault found (one; test set-up, kind i).** `packages/db/test/audit-export.integration.test.ts:179` in the new concurrency test: `error: empty password returned by client`. The test built its two single-connection pools with `{ ...runtime.options, max: 1 }`, but pg-pool stores `password` as a non-enumerable property, so the spread dropped it. Before: `new Pool({ ...runtime.options, max: 1 })` twice. After: `const poolOptions = { ...runtime.options, password: runtime.options.password, max: 1 }` and both pools use it. No `expect` or expected value changed. After the repair the test passed on the first re-run: two pools, `pg_backend_pid` asserted different, the two creates issued with `Promise.all`; two rows, two `audit.export.created` events, contiguous unique sequences, chain verified against the checkpoint, audit head equals last event, snapshots `[before+1, before+2]`, both files verified in-process and by the verifier tool. No fork, deadlock or error from the code under test.
+
+**Round-1 fixes on a real database.** Fix 1 (refused revoked member audited for list and create): the two new `it.each` cases passed with no repair. Fix 2 (retry id kept after unavailable/network/unknown): web unit test `page.test.tsx` 11 passed with no repair; the browser spec also passed. Fix 3 (concurrent distinct commands): passed after the set-up repair above.
+
+**Spec locator (agreed small change).** The page's alert is inside the `main` landmark, so the four `page.locator("p[role=alert]")` in `apps/web/e2e/ENT-10b.spec.ts` became `page.getByRole("main").getByRole("alert")`; the spec still passes in both projects. Matchers and expected values unchanged.
+
+**Commands and results (each in `heavy-slot`, one at a time, `--maxWorkers=2`, memory free 83%, 1-minute load about 14).**
+- `pnpm install --frozen-lockfile` exit 0; `pnpm turbo run build --filter=@jobguard/api...` exit 0 (6 tasks).
+- db `test/audit-export.integration.test.ts` + `test/verify-audit-export-cli.test.ts`: first run exit 1 (1 failed, 24 passed: the fault above); after the repair exit 0, 2 files, 25 tests passed.
+- db `test/tenancy.integration.test.ts` + `test/demo-bootstrap.integration.test.ts`: exit 0, 2 files, 13 passed.
+- api `src/audit-export` + `src/auth/context-boundary.test.ts`: exit 0, 2 files, 159 passed (context-boundary unedited).
+- web `app/admin/contractor/audit-exports/page.test.tsx`: exit 0, 1 file, 11 passed.
+- web e2e `ENT-10b.spec.ts`, mobile-360 and desktop, one worker, `--headed` (headless shell not installed; `playwright install` not run): exit 0, 2 passed.
+- Final lane lint, typecheck, lint and openapi check: see the commit message of the push (all run after this section was written).
+- Not run: `test/UIWIRE-12.integration.test.ts`, whole-package and whole-repository suites.
+
+**Stopped on:** nothing. No timing-only failure; nothing was re-run to obtain a pass other than after the set-up repair.
+
+No assertion, expected value, timeout, grant or runtime privilege was changed or loosened.
+
+Builder receipt only — not independently verified, not accepted.
