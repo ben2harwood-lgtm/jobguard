@@ -37,11 +37,16 @@ test("both F5 receipts match on screen only after settlement and are absent from
   await recordThroughUi(page,"14640.00");await expect(page.getByTestId("uiwire12-receipt-history").filter({hasText:"GBP 14,640.00"})).toHaveCount(1);
   const connected=await page.request.post(`/api/jobs/${f.jobId}/practice-feed`,{data:{version:"practice-feed-command.v1",commandId:crypto.randomUUID(),expectedRevision:0,action:"connect"}});expect(connected.status()).toBe(200);
   await page.reload();const panel=page.locator("#practice-facts");await expect(panel).toHaveAttribute("aria-busy","false");
+  // Before any match, the merged panel (loaded on mount only) lists exactly the two unmatched receipts.
+  const merged=page.locator("#practice-receipts").getByTestId("attested-receipt");
+  await expect(merged).toHaveCount(2);await expect(merged.filter({hasText:"£12,000.00"})).toHaveCount(1);await expect(merged.filter({hasText:"£14,640.00"})).toHaveCount(1);
   for(const [key,amount] of amounts.slice(0,2)){
     const match=panel.getByRole("button",{name:`Match ${amount} extra receipt`,exact:true});await expect(match).toBeDisabled();
     await panel.getByLabel("Extra generated movement").selectOption(key);await panel.getByLabel("Extra generated event").selectOption("settled");await panel.getByRole("button",{name:"Advance extra movement",exact:true}).click();await expect(match).toBeEnabled();await match.click();
     await expect(panel.getByTestId("extra-attested-receipt").filter({hasText:amount})).toContainText("Qualifies — verified by a simulated settled movement");
   }
-  await expect(panel.getByTestId("extra-attested-receipt")).toHaveCount(2);await expect(page.locator("#practice-receipts").getByTestId("attested-receipt")).toHaveCount(0);
+  await expect(panel.getByTestId("extra-attested-receipt")).toHaveCount(2);
+  // The merged panel does not refresh itself; after a reload it must list zero attested receipts and the new panel both as matched.
   await page.reload();await expect(panel.getByTestId("extra-attested-receipt").filter({hasText:"Qualifies"})).toHaveCount(2);
+  await expect(page.locator("#practice-receipts").getByText("No builder-attested receipts are recorded on this job yet.")).toBeVisible();await expect(page.locator("#practice-receipts").getByTestId("attested-receipt")).toHaveCount(0);
 });
