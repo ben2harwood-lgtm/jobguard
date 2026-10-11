@@ -127,3 +127,33 @@ All earlier-function comparisons sit between applying 0122 alone and the unchang
 New SQL brackets combined predicates. Added text uses the issued scratch/negative-control/later-migration wording and introduces no scanner-sensitive credential assignment. No migration, product code, other test, fixture, timeout, or `BUILD_PLAN.md` changed. No Git write or package download was requested. Required checks and any limitations are recorded above from observed output; there is no acceptance claim.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification
+
+Run by the Mac test helper (Claude Sonnet 5.5) on 11 Oct 2026, about 23:50. It is a test set-up and execution record only: nothing here reviews or accepts the piece. No set-up repair was needed; no assertion, value or timeout was touched.
+
+**Catch-up with main.** Starting head `07e8119`, clean. Worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mig-order-3`: `git fetch origin` (origin/main `8e91b2d`), then `git merge origin/main`, exit 0, no conflict (automatic merge by the `ort` strategy). Merge commit `e1ced8cbbeda54ebaf01cf6213069cc5ca59b82a`. Main's FIXLATER-3 change to this file was one line, the S8 closing line, now `}, 120_000);`; it merged cleanly beside the reshaped body, and the lane file keeps both new lines. Scope read of `git diff origin/main`: exactly three paths (`config/agent-lane-assignments.json`, `docs/verdicts/MIG-ORDER-3/BUILDER_RECEIPT.md`, `packages/db/test/extra-origin-upgrade.integration.test.ts`); in the test file exactly two existing lines are removed (the old row comparison and the old function comparison, both replaced as the order names); nothing in `migrate.ts`, `extra-fixtures.ts`, any migration or any other test changed.
+
+**Commands exactly as run.** Logs are in `~/.local/share/full-steam/jg-runs/mig-order-3-mac-*.log`. Every database or build command ran inside `~/.local/bin/heavy-slot <label> ...` with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` exported, after a `memory_pressure` reading of 79% free.
+
+| # | Working directory (under the worktree root `W`) | Command | Exit | Result |
+|---|---|---|---|---|
+| 1 | `W` | `PLAYWRIGHT_SKIP_BROWSER_GC=1 pnpm install --frozen-lockfile` (output piped to `tail`, so the exit is the pipeline's) | 0 | "Lockfile is up to date ... Already up to date ... Done in 441ms" |
+| 2 | `W/node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64` | `node scripts/hydrate-symlinks.js` | 0 | native libraries present |
+| 3 | `W` | `pnpm exec turbo run build --filter=@jobguard/db... --concurrency=2` | 0 | 3 tasks successful (core and storage from turbo cache, db built) |
+| 4 | `W/packages/db` | `pnpm exec vitest run test/extra-origin-upgrade.integration.test.ts --maxWorkers=2` | 0 | **1 file, 1 test passed** (S8 on merged main; includes every committed in-test control) |
+| 5 | `W/packages/db` | `pnpm exec vitest run test/fingerprinted-row-shape.integration.test.ts test/recovery-follow-up-upgrade.integration.test.ts test/extra-origin.integration.test.ts --maxWorkers=2` | 0 | 3 files, 48 tests passed |
+| 6 | `W/packages/db` | `pnpm exec vitest run test/extra-links.integration.test.ts --maxWorkers=2` | 0 | 1 file, 15 tests passed |
+| 7 | `W` | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | "Lane boundary passed", three files listed |
+| 8 | `W` | `pnpm --filter @jobguard/db run typecheck` (`tsc -p tsconfig.json --noEmit`) | 0 | clean |
+| 9 | `W/packages/db` | `pnpm exec tsc -p <scratch tsconfig outside the repository>`, which extends the package config and includes only the S8 test file (the package's own typecheck covers `src/` only, not `test/`) | 0 | no errors |
+
+The full `LANE_BASE_REF=origin/main pnpm lint` and the whole-repository `pnpm typecheck` were not run on the Mac (the order's lane lint and the `packages/db` typecheck were).
+
+**The three controls.** The builder's committed in-test controls already do all three things (controls (i), (ii), (iv) in the table above), each as a rolled-back transaction evaluated by the same helpers, and they all ran and passed inside command 4: a later nullable column stays green, a later function replacement stays green with no function comparison after step 2, a changed existing value or retype goes red. As the order directs, only the first scratch variant was also done by hand as a cross-check on the real assertion line; the other two were not repeated by hand.
+
+1. Control RED, by hand, uncommitted. Inserted one block in the S8 body after the post-migration registry check and before the `for (const table of tables)` comparison loop, then restored with `git checkout -- packages/db/test/extra-origin-upgrade.integration.test.ts` (`git status --porcelain` empty afterwards). The block, on one client taken from `c.admin`: `BEGIN`; `SET LOCAL session_replication_role=replica`; `UPDATE app.variation SET description='scratch changed value' WHERE ctid=(SELECT ctid FROM app.variation ORDER BY tenant_id,id LIMIT 1)` (1 row changed, printed as `SCRATCH_UPDATE_ROWS 1`); `COMMIT`. Expected: S8 fails at the named-column comparison. Actual: exit 1, 1 test failed, `AssertionError` at `extra-origin-upgrade.integration.test.ts:104`, the named-column row comparison (`expect(await namedColumnRows(c.admin, table, after)).toEqual(before[table])`), with the only difference `variation.description` "Fictional pre-SH-1 extra" against "scratch changed value". Log: `mig-order-3-mac-control-red.log`.
+2. Control GREEN (a), later nullable column: `ALTER TABLE app.extra_origin ADD COLUMN mo3_scratch text` inside a rolled-back transaction, committed control (i). Expected pass, actual pass (command 4). Not repeated by hand.
+3. Control GREEN (b), later function replacement: the recorded `app.half_even_ratio(bigint,bigint,bigint)` re-created with `/* mo3 scratch */` after its first body delimiter, inside a rolled-back transaction after step 2, committed control (ii). Expected pass, actual pass (command 4). Not repeated by hand. The same replacement at 0122's own step (committed control (iii)) reported exactly that one function and also behaved as asserted.
+
+Set-up repairs: none. Anything refused or not run: nothing refused; the by-hand repeats of controls 2 and 3 were deliberately not run, as stated above.
