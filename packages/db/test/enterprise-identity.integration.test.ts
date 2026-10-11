@@ -7,6 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ActionExecutor, appendOutboundAction, ContractorRepository, EnterpriseIdentityRepository, IdentityRepository, MIGRATION_URLS, migrate, withTenant, verifyAuditChain, type OutboundAction, type OutboundAdapter, type AuditEvent, type AuthenticatedMembership } from "../src/index.js";
+import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/principal-bridge.js";
 import { SsoApplication } from "../../../apps/api/src/auth/sso/sso.application.js";
@@ -407,5 +408,49 @@ describe("ENT-10a / actual PostgreSQL identity trust boundary", () => {
     expect(data).not.toContain(f.address); expect(data).not.toContain(f.credentials.sessionToken); expect(data).not.toContain(f.idp.idpCert);
     const events = (await admin.query<AuditEvent>(`SELECT id,tenant_id AS "tenantId",sequence::int,version,actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",occurred_at AS "occurredAt",payload,payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash" FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [f.principal.tenantId])).rows;
     expect(() => verifyAuditChain(events)).not.toThrow();
+  });
+});
+
+// Round 1: written before the shared-provider repair. NOT RUN: sandbox cannot start PostgreSQL.
+describe("ENT-10a / explicitly linked multi-tenant identity regression", () => {
+  it("binds listing, ordinary context and identity writes to A while ordinary sessions still act in both tenants", async () => {
+    const a = await fixture(), b = await fixture();
+    // The suite also tests global domain uniqueness; give this account its own fixture domain.
+    const linkedAddress = `${randomUUID()}@${a.domain}`;
+    await admin.query("UPDATE identity.user_email SET email=$1 WHERE user_id=$2",[linkedAddress,a.principal.identityUserId]);
+    const memberB = randomUUID();
+    const accountB = (await admin.query("SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [b.principal.tenantId, b.principal.membershipId])).rows[0].account_id;
+    await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [memberB,b.principal.tenantId,accountB,a.principal.identityUserId]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [a.principal.identityUserId,b.principal.tenantId,memberB]);
+    const identityApp = new IdentityApplication(a.auth, origin);
+    const ordinary = a.credentials;
+    expect((await identityApp.session(ordinary.sessionToken)).memberships.map(m => m.tenantId).sort()).toEqual([a.principal.tenantId,b.principal.tenantId].sort());
+    for (const tenantId of [a.principal.tenantId,b.principal.tenantId]) {
+      expect((await identityApp.context({...ordinary,tenantHeader:tenantId})).tenantId).toBe(tenantId);
+    }
+    const invite = (tenantId:string,credentials:Parameters<IdentityApplication["invite"]>[1]) => identityApp.invite({version:"identity-invitation.v1",requested_tenant_id:tenantId,email:`${randomUUID()}@synthetic.invalid`,role:"finance"},credentials);
+    await expect(invite(b.principal.tenantId,{...ordinary,tenantHeader:b.principal.tenantId})).resolves.toHaveProperty("id");
+    await a.verify(); await a.mapping();
+    const r = await a.response({email:linkedAddress},true);
+    const session = await a.app.callback(a.connectionId,r.payload,r.request.relayState);
+    const bound = {...ordinary,sessionToken:session.sessionToken,csrfToken:session.csrfToken};
+    const principal = (await a.auth.authenticate(bound.sessionToken))!;
+    expect(principal.identityUserId).toBe(a.principal.identityUserId);
+    const scope = (await identity.query("SELECT identity.sso_session_scope($1) scope",[principal.sessionId])).rows[0].scope;
+    expect(scope).toMatchObject({tenantId:a.principal.tenantId,membershipId:a.principal.membershipId});
+    expect((await identityApp.session(bound.sessionToken)).memberships.map(m => m.tenantId)).toEqual([a.principal.tenantId]);
+    expect((await identityApp.context(bound)).tenantId).toBe(a.principal.tenantId);
+    await expect(invite(a.principal.tenantId,bound)).resolves.toHaveProperty("id");
+    const before = await count("identity.invitation",b.principal.tenantId);
+    const auditBefore = await count("app.audit_event",a.principal.tenantId);
+    await expect(identityApp.context({...bound,tenantHeader:b.principal.tenantId})).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});
+    await expect(invite(b.principal.tenantId,{...bound,tenantHeader:b.principal.tenantId})).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});
+    expect(await count("identity.invitation",b.principal.tenantId)).toBe(before);
+    expect(await count("app.audit_event",a.principal.tenantId)).toBe(auditBefore+2);
+    const events = (await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='sso.refused' AND ((payload->'references')->>'code')='TENANT_FORBIDDEN'",[a.principal.tenantId])).rows;
+    expect(events).toHaveLength(2);
+    // Linking did not restrict the separately issued entered-code session.
+    expect((await identityApp.session(ordinary.sessionToken)).memberships).toHaveLength(2);
+    await expect(invite(b.principal.tenantId,{...ordinary,tenantHeader:b.principal.tenantId})).resolves.toHaveProperty("id");
   });
 });

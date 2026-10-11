@@ -2,9 +2,9 @@ BEGIN;
 -- ENT-10a: additive, synthetic identity/control-plane objects only. No existing DDL or grants change.
 CREATE TABLE identity.sso_connection (
  tenant_id uuid NOT NULL REFERENCES control_plane.tenant(id), id uuid NOT NULL UNIQUE,
- metadata jsonb NOT NULL CHECK(metadata->>'version'='sso-metadata.v1' AND metadata->>'protocol'='saml2' AND metadata->>'provider'='in-process-test-idp'),
+ metadata jsonb NOT NULL CHECK((metadata->>'version')='sso-metadata.v1' AND (metadata->>'protocol')='saml2' AND (metadata->>'provider')='in-process-test-idp'),
  environment text NOT NULL DEFAULT 'synthetic_demo' CHECK(environment='synthetic_demo'), created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- PRIMARY KEY(tenant_id,id), CHECK(metadata->>'id'=id::text AND metadata->>'tenantId'=tenant_id::text)
+ PRIMARY KEY(tenant_id,id), CHECK((metadata->>'id')=id::text AND (metadata->>'tenantId')=tenant_id::text)
 );
 CREATE TABLE identity.verified_domain (
  tenant_id uuid NOT NULL, connection_id uuid NOT NULL, domain text NOT NULL UNIQUE CHECK(domain=lower(domain) AND domain ~ '^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+invalid$'),
@@ -96,26 +96,26 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; c uuid; 
  -- Same tenant lock as ENT-1: admin/revocation/mapping/sign-in serialize before the audit head.
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
  actor:=identity.sso_require_admin(s,t);
- IF p->>'version'<>'sso-admin.v1' OR p->>'requested_tenant_id' IS DISTINCT FROM t::text THEN RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
- IF p->>'action'='connection.create' THEN
-  IF p->'metadata'->>'tenantId' IS DISTINCT FROM t::text OR p->'metadata'->>'id' IS DISTINCT FROM p->>'id' THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
-  INSERT INTO identity.sso_connection(tenant_id,id,metadata) VALUES(t,(p->>'id')::uuid,p->'metadata'); RETURN actor;
+ IF (p->>'version')<>'sso-admin.v1' OR (p->>'requested_tenant_id') IS DISTINCT FROM t::text THEN RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
+ IF (p->>'action')='connection.create' THEN
+  IF ((p->'metadata')->>'tenantId') IS DISTINCT FROM t::text OR ((p->'metadata')->>'id') IS DISTINCT FROM (p->>'id') THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  INSERT INTO identity.sso_connection(tenant_id,id,metadata) VALUES(t,(p->>'id')::uuid,(p->'metadata')); RETURN actor;
  END IF;
  c:=(p->>'connectionId')::uuid;
  PERFORM 1 FROM identity.sso_connection WHERE tenant_id=t AND id=c;
  IF NOT FOUND THEN RAISE EXCEPTION 'SSO_NOT_FOUND' USING ERRCODE='P0002'; END IF;
- IF p->>'action'='domain.verify' THEN
-  IF p->>'proof' IS DISTINCT FROM 'synthetic-domain:'||c::text||':'||(p->>'domain') THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
-  INSERT INTO identity.verified_domain(tenant_id,connection_id,domain) VALUES(t,c,p->>'domain');
- ELSIF p->>'action'='mapping.set' THEN
-  SELECT coalesce(max(x.revision),0) INTO revision FROM identity.idp_group_role_mapping x WHERE tenant_id=t AND connection_id=c AND idp_group=p->>'group';
+ IF (p->>'action')='domain.verify' THEN
+  IF (p->>'proof') IS DISTINCT FROM ('synthetic-domain:'||c::text||':'||(p->>'domain')) THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
+  INSERT INTO identity.verified_domain(tenant_id,connection_id,domain) VALUES(t,c,(p->>'domain'));
+ ELSIF (p->>'action')='mapping.set' THEN
+  SELECT coalesce(max(x.revision),0) INTO revision FROM identity.idp_group_role_mapping x WHERE tenant_id=t AND connection_id=c AND idp_group=(p->>'group');
   IF revision<>(p->>'expectedRevision')::integer THEN RAISE EXCEPTION 'STALE_MAPPING' USING ERRCODE='40001'; END IF;
-  IF (p->'scope'->>'kind'='tenant' AND p->'scope'->>'id' IS DISTINCT FROM t::text)
-   OR (p->'scope'->>'kind' IN('region','branch') AND NOT EXISTS(SELECT 1 FROM app.org_unit WHERE tenant_id=t AND id=(p->'scope'->>'id')::uuid AND kind=p->'scope'->>'kind'))
-   OR (p->'scope'->>'kind'='team' AND NOT EXISTS(SELECT 1 FROM app.team WHERE tenant_id=t AND id=(p->'scope'->>'id')::uuid))
+  IF (((p->'scope')->>'kind')='tenant' AND ((p->'scope')->>'id') IS DISTINCT FROM t::text)
+   OR (((p->'scope')->>'kind') IN('region','branch') AND NOT EXISTS(SELECT 1 FROM app.org_unit WHERE tenant_id=t AND id=((p->'scope')->>'id')::uuid AND kind=((p->'scope')->>'kind')))
+   OR (((p->'scope')->>'kind')='team' AND NOT EXISTS(SELECT 1 FROM app.team WHERE tenant_id=t AND id=((p->'scope')->>'id')::uuid))
   THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
   INSERT INTO identity.idp_group_role_mapping(tenant_id,id,connection_id,idp_group,revision,role,scope_kind,scope_id,enabled)
-   VALUES(t,gen_random_uuid(),c,p->>'group',revision+1,p->>'role',p->'scope'->>'kind',(p->'scope'->>'id')::uuid,(p->>'enabled')::boolean);
+   VALUES(t,gen_random_uuid(),c,(p->>'group'),revision+1,(p->>'role'),((p->'scope')->>'kind'),((p->'scope')->>'id')::uuid,(p->>'enabled')::boolean);
  ELSE RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
  RETURN actor;
 END $$;
@@ -132,17 +132,17 @@ DECLARE t uuid; result text; BEGIN
 END $$;
 -- The identity credential is the SAML validator trust boundary; business/worker roles cannot execute this routine.
 CREATE FUNCTION identity.sso_complete(c uuid,claims jsonb,state char(64),new_session uuid,token char(64),csrf text,expires timestamptz) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member uuid; account uuid; address text:=claims->>'email'; email_domain text; group_row record; grant_id uuid; grants_count integer:=0; sh char(64):=claims->>'subjectHash'; eh char(64):=claims->>'emailHash'; link identity.session; BEGIN
+DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member uuid; account uuid; address text:=(claims->>'email'); email_domain text; group_row record; grant_id uuid; grants_count integer:=0; sh char(64):=(claims->>'subjectHash'); eh char(64):=(claims->>'emailHash'); link identity.session; BEGIN
  PERFORM identity.sso_load_connection(c); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
  -- Match email-code serialization order and lock globally shared email before identity creation/linking.
  PERFORM pg_advisory_xact_lock(hashtextextended('identity-email:'||address,0));
- SELECT * INTO r FROM identity.sso_request WHERE tenant_id=t AND connection_id=c AND request_id=claims->>'requestId' FOR UPDATE;
+ SELECT * INTO r FROM identity.sso_request WHERE tenant_id=t AND connection_id=c AND request_id=(claims->>'requestId') FOR UPDATE;
  IF r.request_id IS NULL OR r.state_digest<>state OR r.expires_at<=clock_timestamp() OR r.consumed_at IS NULL THEN RAISE EXCEPTION 'REQUEST_REFUSED' USING ERRCODE='22023'; END IF;
  IF address IS NULL OR address<>lower(address) OR address NOT LIKE '%.invalid' OR length(address)>320 THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
  email_domain:=split_part(address,'@',2);
  IF NOT EXISTS(SELECT 1 FROM identity.verified_domain WHERE tenant_id=t AND connection_id=c AND verified_domain.domain=email_domain) THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
- IF EXISTS(SELECT 1 FROM identity.sso_assertion_use WHERE assertion_id=claims->>'assertionId') THEN RAISE EXCEPTION 'ASSERTION_REPLAY' USING ERRCODE='23505'; END IF;
+ IF EXISTS(SELECT 1 FROM identity.sso_assertion_use WHERE assertion_id=(claims->>'assertionId')) THEN RAISE EXCEPTION 'ASSERTION_REPLAY' USING ERRCODE='23505'; END IF;
  SELECT * INTO sub FROM identity.sso_subject WHERE tenant_id=t AND connection_id=c AND subject_hash=sh;
  IF sub.user_id IS NOT NULL THEN
   IF sub.email_hash<>eh THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -170,12 +170,12 @@ DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member
    WHERE tenant_id=t AND connection_id=c AND subject_hash=sh AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation v WHERE v.tenant_id=t AND v.grant_id=g.grant_id);
  END IF;
  IF grants_count=0 THEN
-  INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,claims->>'assertionId',r.request_id);
+  INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
   RETURN jsonb_build_object('code','NO_MAPPED_GRANTS');
  END IF;
  IF expires<=clock_timestamp() OR expires>clock_timestamp()+interval '15 minutes' THEN RAISE EXCEPTION 'REQUEST_REFUSED' USING ERRCODE='22023'; END IF;
  -- DB uniqueness is inside the same transaction as identity, membership, grants and session.
- INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,claims->>'assertionId',r.request_id);
+ INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
  IF member IS NULL THEN
   u:=gen_random_uuid(); member:=gen_random_uuid();
   SELECT id INTO account FROM app.account WHERE tenant_id=t ORDER BY created_at,id LIMIT 1;
@@ -209,7 +209,7 @@ DECLARE result jsonb; binding record; BEGIN
  PERFORM set_config('app.sso_session_id','',true);
  IF binding.session_id IS NOT NULL THEN PERFORM set_config('app.tenant_id',binding.tenant_id::text,true); END IF;
  IF binding.session_id IS NULL THEN RETURN NULL; END IF;
- SELECT jsonb_build_object('tenantId',b.tenant_id,'membershipId',sub.membership_id) INTO result FROM identity.sso_session_binding b
+ SELECT jsonb_build_object('tenantId',b.tenant_id,'membershipId',sub.membership_id,'connectionId',b.connection_id) INTO result FROM identity.sso_session_binding b
   JOIN identity.sso_subject sub ON(sub.tenant_id,sub.connection_id,sub.subject_hash)=(b.tenant_id,b.connection_id,b.subject_hash)
   WHERE b.session_id=s AND app.contractor_member_active(sub.membership_id)
   AND EXISTS(SELECT 1 FROM identity.session se WHERE se.id=s AND se.revoked_at IS NULL AND se.expires_at>clock_timestamp() AND se.environment='synthetic_demo');
@@ -237,10 +237,10 @@ BEGIN
 END $$;
 CREATE FUNCTION identity.sso_audit_append(c uuid,e jsonb) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; BEGIN
- IF e->>'tenantId' IS DISTINCT FROM t::text OR e->>'subjectRef' IS DISTINCT FROM c::text OR e->>'eventType' NOT LIKE 'sso.%' OR e->>'version'<>'audit.v1'
-  OR (e->'payload')-ARRAY['references','hashes','classifications']<>'{}'::jsonb THEN RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
+ IF (e->>'tenantId') IS DISTINCT FROM t::text OR (e->>'subjectRef') IS DISTINCT FROM c::text OR (e->>'eventType') NOT LIKE 'sso.%' OR (e->>'version')<>'audit.v1'
+  OR ((e->'payload') - ARRAY['references','hashes','classifications'])<>'{}'::jsonb THEN RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
  INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash)
- VALUES((e->>'id')::uuid,t,(e->>'sequence')::bigint,'audit.v1',e->>'actorRef',e->>'eventType','sso-connection',c::text,(e->>'occurredAt')::timestamptz,e->'payload',e->>'payloadHash',e->>'previousHash',e->>'eventHash');
+ VALUES((e->>'id')::uuid,t,(e->>'sequence')::bigint,'audit.v1',(e->>'actorRef'),(e->>'eventType'),'sso-connection',c::text,(e->>'occurredAt')::timestamptz,(e->'payload'),(e->>'payloadHash'),(e->>'previousHash'),(e->>'eventHash'));
  PERFORM app.advance_audit_head((e->>'sequence')::bigint,(e->>'eventHash')::char(64));
 END $$;
 DO $$ DECLARE f regprocedure; BEGIN

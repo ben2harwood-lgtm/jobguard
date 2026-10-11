@@ -231,3 +231,100 @@ Final sequential outcomes are included above. Removed generated `dist`, `.next`,
 Self-review: re-read the issued header, all leaf-owned diff/source paths against `origin/main`, repair diff against HEAD, integration paths and applicable contracts. Checked in-scope DW/security coverage and all existing holds: OIDC/emergency/native/founder evidence HELD; SCIM/audit export/assurance pack remain later sub-leaves. No held capability, dependency, live route, extra migration, existing-table DDL, policy/grant change or protected-file edit. The one SQL edit preserves tenant and audit enforcement. Standard causes remain server-side and refusal audits contain only typed codes. Existing assertions/timeouts were preserved and verified by ordered-line inspection; no expectation weakened. Different-model RED-lane verdicts and separate acceptance remain outstanding after dispatcher commit and CI. Source inspection and unit diagnostics are not PostgreSQL verification or independent review.
 
 Builder receipt only — not independently verified, not accepted.
+
+
+## Round 1
+
+11 October 2026. Same leaf, PR #131, `codex/sandbox/ent-10a`. Starting HEAD **5ddcf561c9f01d3c75766934bca2e7e5aefd2c8a**, the CI repair 1 commit after 8d208db. Re-read the issued header, its dependency receipt, CI repair 1, the Sol verdict/reproductions and applicable AGENTS/build-plan/authentication contracts before editing. The dispatcher supplies the repaired commit: these are working-tree changes only. No git write, package download, founder approval or independent verdict.
+
+### Fix status and tests first
+
+**Fix 1 — DONE in source; PostgreSQL/browser verification remains NOT RUN.** The shared `PersistedAuthProvider` now checks the persisted SSO binding during authentication and membership lookup. A bound session lists only its exact tenant/membership; no membership in B is returned even if the account owns B. The unchanged principal bridge therefore returns its existing `TENANT_FORBIDDEN`, with the existing HTTP 403 mapping, before invitation SQL runs. Bound-session membership refusals use the existing SSO refusal logger (bootstrap event and, for an active persisted connection, the bound tenant's audit chain). No new refusal code or HTTP success path. Session/membership revocation fails closed. Ordinary sessions receive a NULL binding and retain the same ordered membership projection, origin/CSRF rules and command behavior. Code request/verification and invitation acceptance code are unchanged.
+
+Nest `AppModule`'s lazy `IDENTITY_APPLICATION` factory and Next `identity-server.ts` both use `createIdentityApplication` and hence this same provider. Neither needs a composition-specific patch. The new factory regression executes the actual factory and the Next server adapter in a VM, with database facts stubbed. Enforcement works before creating an SSO service. The existing SSO facade still checks scope too; it delegates to the now-restricted shared provider.
+
+Ported independent reproduction cases 1–3 into `sso/action-paths.test.ts`, preserving their real-service/stubbed-database approach. Wrote the real-PostgreSQL multi-tenant regression first, before provider edits, and recorded it **NOT RUN (sandbox cannot start PostgreSQL)**. The DB case seeds a second owner membership for one account, explicitly links that account to A through the real SAML start/callback, checks the persisted binding, A-only listing, B context/invitation refusal, unchanged B invitation count and two committed A refusal audits. It also checks A context/invitation success and the separate ordinary session before/after linking. During source review, gave this NEW fixture a unique verified email domain to avoid colliding with the existing global-domain test; no old fixture/assertion changed. This is the 18th authored PostgreSQL case, including CI repair 1's audit-payload regression.
+
+The targeted diagnostic command, from `apps/api`, was `./node_modules/.bin/vitest run src/auth/sso/action-paths.test.ts -t 'Round 1 / checker reproductions'`:
+
+| Phase | Exit and exact counts |
+| --- | --- |
+| RED, before provider repair | 1; **3 failed, 0 passed, 7 excluded by the name filter (10 collected)**. B context and invitation resolved, and the listing contained B. |
+| GREEN, after provider repair | 0; **3 passed, 0 failed, 11 excluded by the name filter (14 collected at that point)**. |
+
+No test uses `.skip`, retries or an increased timeout. Name filtering above isolates the required three reproductions only; the full auth diagnostic below runs every case. Added eight auth cases in total: the three ports; ordinary two-tenant behavior with exact response objects; normal bound-tenant A behavior; HTTP session-controller/tenant-guard/invitation-controller outcomes with 403 bodies and no write; exact membership-ID binding/revocation and persisted-connection audit routing; and shared Nest/Next factory behavior. HTTP coverage invokes the real controller and guard without a listening socket; it is transport-level unit coverage, not a live HTTP-server/browser run.
+
+**Fix 2 — DONE in source; actual PostgreSQL verification remains NOT RUN.** Confirmed CI repair 1 already corrected `(e->'payload') - ARRAY[...]` and preserved unrecognized database errors through `ErrorOptions.cause` and the SSO translator. Kept both fixes. Reviewed every JSON operator expression in 0114 and all repository SQL. Made both extraction levels explicit in metadata/scope chains, parenthesized extracted values in comparisons/casts/values and the complete subtraction/concatenation expressions. No `#>`, `#>>` or `@>` expression occurs in these files; the repository has no mixed JSON SQL operator expression. Underlying error causes still stay server-side, as the existing raw/wrapped controller tests assert.
+
+Migration **0114 only**, corrected in place. The new `connectionId` property on its session-scope JSON is internal and comes from the immutable binding; it lets ordinary identity refusals audit the actual connection. No new table, column, migration, grant, policy, role or edit to any merged migration. No data backfill. Unmerged migration rollout remains fresh/upgrade testing in CI; do not apply this file over an already-installed 0114 without an explicit forward-fix plan. No assertion about actual catalog/upgrade verification is made here.
+
+### Every session-to-context path traced
+
+- **Shared ordinary bridge:** `IdentityApplication.context` → `resolveVerifiedTenantContext` → shared provider `authenticate/findMembership` → stamped constructor. Its selector/header conflict, origin and CSRF logic are unchanged.
+- **Nest ordinary identity:** `GET /auth/session` → `IdentityController.session` → `IdentityApplication.session/principal/memberships`; `POST /auth/invitations` → `IdentityController.invite` → `IdentityApplication.invite/context` before `identity.invite_member`. `ApplicationAuthGuard` resolves ordinary-cookie context on every non-health/non-auth route, using the same application; its commercial synthetic-only refusal remains unchanged. `TenantAuthGuard` is the provider-neutral bridge consumer (no separate production instantiation currently exists).
+- **Next ordinary identity:** `GET /api/auth/session` and `POST /api/auth/invitations` call that same factory/application through `identity-server.ts`; session listing and invitation context therefore cannot bypass the binding. The factory regression executes this adapter. No other Next path resolves a `jobguard_session` into tenant context.
+- **SSO paths on both transports:** Nest `GET /auth/sso/:connectionId/start` and Next `GET /api/auth/sso/[connectionId]/start` → `SsoApplication.view`; corresponding POST start routes dispatch admin commands → `admin`, or an explicitly requested link → `start(linkExisting)`. All three call `resolveVerifiedTenantContext` through the SSO facade over the same restricted base. SAML callback routes issue a server-bound session and do not construct a tenant context from an existing session; SQL linking rechecks the already-authorized connection/session/membership. Non-link start uses no authenticated session authority.
+- **Identity writes inventory:** invitation creation is the only merged identity write that consumes an existing session. Invitation acceptance is `POST /auth/verify` / `/api/auth/verify`, using a verified email-code challenge, its immutable invitation and that invitation's account; it switches to a newly issued ordinary session independently of an existing browser session. Request/verify/signup consume no existing session authority. No invitation revoke or other session-authorized membership/identity command is merged. SSO connection/domain/mapping writes are covered by `admin` above.
+- **Workers:** no merged worker resolves tenant context from an identity-session cookie/token. Graphile `discover_outbox` reads infrastructure signals; `execute_outbox` stamps the signal's tenant through `verifiedTenantContextForQueuedJob`, then `ActionExecutor` rechecks immutable exact authorization/current actor membership. This is queued authorization, not session authentication. The exposed `SsoApplication.checkWorkerAction` helper takes an already-stamped context, never mints one, and its existing SQL `sso_action_allowed` checks binding tenant/connection/session/membership/expiry/revocation/permission per execution. No new worker is registered. Its existing PostgreSQL cases remain authored, NOT RUN.
+- **Separate practice paths:** `jg_session`/`PracticeAccess`, contractor practice commands, and `authenticatePracticeSession` use their independent synthetic registry/digest and never accept a `jobguard_session` bearer as practice authority. No SAML session can select either practice membership through that cookie path; ordinary-cookie guards remain ahead of synthetic-only actions. No change to these retained/pinned paths.
+
+Repository-wide searches for authentication, `resolveVerifiedTenantContext`, ordinary identity factory/context consumers and session-bound worker routines informed this list. No existing path was silently moved to a new bridge.
+
+### Lane amendment and changed files
+
+ONLY the `ent-10a` line in `config/agent-lane-assignments.json` changes. The sole newly allowed file is **`apps/api/src/auth/persisted-auth-provider.ts`**, because all shared identity consumers already go through it and it must enforce session authority before returning memberships. No other file from the widened set needed an edit; no other lane line changed.
+
+Other round-1 files were already in the issued lane: `sso/action-paths.test.ts` (ports/HTTP/factory/ordinary/A regressions); `enterprise-identity.integration.test.ts` (appended real-DB regression plus import only); `enterprise-identity-repository.ts` (internal scope-result type); `0114_enterprise_identity.sql` (connection reference and explicit JSON grouping); `docs/contracts/enterprise-identity-v1.md` (shared binding behavior); this appended receipt. The integrator's BUILD_PLAN ledger and all dependency/pin files are unchanged.
+
+### Commands and actual results
+
+Node **24.17.0**; supplied dependencies only. Required workspace build attempt was made before the unit reproductions. Its launcher, like all six subsequent prescribed pnpm checks, refused before executing any task:
+
+> [ERROR] Refusing to run pnpm@10.28.1: its npm registry signature could not be verified (@pnpm/exe@10.28.1: fetch failed; @pnpm/macos-arm64@10.28.1: fetch failed; pnpm@10.28.1: fetch failed). The bytes selected by this project's lockfile/registry do not match a published, signed pnpm release.
+
+No `pmOnFail=ignore`, package-manager change or signature-check bypass.
+
+| Prescribed command | Actual exit / result |
+| --- | --- |
+| `pnpm turbo run build --filter=@jobguard/api...` | 1; launcher refused; zero builds executed. |
+| `pnpm typecheck` | 1; launcher refused; zero checks executed. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1; launcher refused; zero checks executed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1; launcher refused; zero checks executed. |
+| `pnpm --filter @jobguard/api exec vitest run src/auth` | 1; launcher refused; zero tests executed. |
+| `pnpm build` | 1; launcher refused; zero builds executed. |
+| `pnpm openapi:check` | 1; launcher refused; zero checks executed. |
+| `node tools/dependency-audit.mjs` | 2; `Dependency scan did not complete. This is not a clean scan.` Registry audit NOT RUN successfully. |
+
+Installed-tool diagnostics are separate evidence:
+
+| Diagnostic command | Exit / observed result |
+| --- | --- |
+| `./node_modules/.bin/tsc -p packages/core/tsconfig.json`, likewise config/storage/ai/db | Each 0; emitted imported workspace dependencies before tests. DB build repeated after its scope-type edit, exit 0. |
+| API `./node_modules/.bin/vitest run src/auth/sso/action-paths.test.ts -t 'Round 1 / checker reproductions'` | RED 1 (0 passed / 3 failed / 7 name-filtered); GREEN 0 (3 passed / 0 failed / 11 name-filtered), as above. |
+| Root `./node_modules/.bin/vitest run src/auth/sso/action-paths.test.ts -t 'Round 1 / checker reproductions'` | 127; wrong directory, no root Vitest binary; zero tests. Correct API-directory invocation above supplied GREEN evidence. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0; core purity (125 files), lane, money and commercial-boundary checks. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 0; ENT-10a lane, including its sole new shared-provider allowance. |
+| API `./node_modules/.bin/vitest run src/auth`, first full diagnostic | 1; **215 passed / 3 failed (218)**, **5 files passed / 2 failed (7)**. Two unchanged scanner cases (lines 742 and 1210) and the new factory test timed out at 5000ms. No assertion failure. Moved the NEW test's imports out of its timed body; no scanner edit/timeout change. |
+| `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` | 0; no diagnostics, including new auth cases. |
+| API `./node_modules/.bin/nest build` | 0; no diagnostics. |
+| `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` | 0; no diagnostics. |
+| `node node_modules/typescript/bin/tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck --esModuleInterop --experimentalDecorators --emitDecoratorMetadata packages/db/test/enterprise-identity.integration.test.ts` | First 2; NEW helper inferred UUID-template types from ordinary fixture credentials and refused opaque SAML strings. Changed ONLY that helper to use `IdentityApplication.invite`'s credentials type. Final 0; no diagnostics; zero PostgreSQL tests executed. |
+| API `node --import tsx src/generate-openapi.ts --check` | 0; generated contract still matches; no OpenAPI edit. |
+| Web `../../node_modules/.bin/next build` | 0; compiled/typechecked, generated 25/25 static pages and completed build traces, including ordinary and SSO identity routes. Existing workspace-root, CSS/autoprefixer and warning-cache warnings; no browser execution. |
+| API `./node_modules/.bin/vitest run src/auth --maxWorkers=1`, final diagnostic after builds stopped | **0; 218 passed / 0 failed / 0 skipped (218), 7 files passed (7)**, including all 145 unchanged scanner cases and all 15 action-path cases. Complete auth set, serialized workers, original timeouts. This is installed-tool evidence, not a prescribed pnpm/CI pass. |
+| `git diff --check`; read-only byte/test-body/lane inspection | 0; no whitespace error; protected originals unchanged, pre-existing ENT-10a bodies preserved, exactly one lane line changed. |
+
+### NOT RUN and strict self-review
+
+- All 18 cases in `enterprise-identity.integration.test.ts`, M0-6L identity PostgreSQL tests, other database suites, `pnpm test:db` and `pnpm test:migrations`: **NOT RUN (sandbox cannot start PostgreSQL)**. New test authored first; no claimed red/green PostgreSQL execution.
+- `ENT-10a.spec.ts` in both projects and all browser suites: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. HTTP controller/guard unit coverage and Next build are not browser journeys.
+- Clean pinned install: NOT RUN; supplied dependencies/download prohibition. Full `pnpm test`: NOT RUN; includes unavailable database suites. Registry audit unsuccessful as above. Live IdP/real-user/D04/G5 founder evidence NOT RUN / HELD. Native HELD until M3.
+- Finding 3, malformed route handling: **LATER, deliberately unchanged**. OIDC and emergency-access administration HELD; SCIM ENT-10a2, audit export ENT-10b, assurance pack ENT-10c remain LATER SUB-LEAF. Nothing in any held lane built.
+
+Self-review re-read the round-1 diff against HEAD and the leaf diff against origin/main. Traced every session consumer listed above; ordinary sessions' response projections and code/invitation verification paths remain unchanged. No lower-level business/context constructor, commercial permission, Decision, financial or worker scheduling boundary was amended. Bound B writes return before repository SQL, and refused lookups audit the persisted connection without leaking tokens/addresses. The new DB fixture's unique domain fix avoids global-domain interference; fixture account linking is explicit.
+
+Byte comparisons against HEAD and origin/main prove `identity.test.ts`, `auth.test.ts`, `identity.integration.test.ts`, the scanner and its seven pins are unchanged. The required `git diff origin/main -- apps/api/src/auth/identity.test.ts apps/api/src/auth/auth.test.ts packages/db/test/identity.integration.test.ts` is empty. Existing ENT-10a unit/integration bodies remain byte-identical, with only new cases/imports appended. Other lanes, merged 0111, packages/lockfile/workspace settings and BUILD_PLAN are unchanged. No existing assertion was relaxed/deleted/repointed/skipped and no timeout increased. No out-of-lane fix was needed; no founder typed yes was inferred.
+
+Final serialized auth diagnostic passed all 218 cases, including the original scanner, without any scanner/pin/assertion/timeout edit. Initial timeout outcomes remain recorded above. Removed generated dist/.next/.pnpm-store/build-cache artifacts; supplied node_modules retained. Final installed lint/lane and whitespace checks are recorded as exit 0 after cleanup. Intended conventional subject/body written to `/private/tmp/jg-msg-ent-10a.txt`; no git commit/add/checkout/push. Dispatcher owns the repaired head. Source and installed-tool results are not PostgreSQL verification or independent review.
+
+Builder receipt only — not independently verified, not accepted. Fresh Opus/Sol exact-head reviews, CI database/browser results and separate technical acceptance remain outstanding after dispatcher commit.

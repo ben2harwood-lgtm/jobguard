@@ -84,8 +84,8 @@ export class EnterpriseIdentityRepository {
       return {version:"sso-admin-view.v1",environment:"synthetic_demo",tenantId:context.tenantId,connections,domains,mappings,events};
     });
   }
-  async sessionScope(sessionId:string):Promise<{tenantId:string;membershipId:string;revoked?:boolean}|null> {
-    return (await this.pool.query<{scope:{tenantId:string;membershipId:string;revoked?:boolean}|null}>("SELECT identity.sso_session_scope($1) scope",[sessionId])).rows[0]!.scope;
+  async sessionScope(sessionId:string):Promise<{tenantId:string;membershipId:string;connectionId?:string;revoked?:boolean}|null> {
+    return (await this.pool.query<{scope:{tenantId:string;membershipId:string;connectionId?:string;revoked?:boolean}|null}>("SELECT identity.sso_session_scope($1) scope",[sessionId])).rows[0]!.scope;
   }
   async allowed(context:VerifiedTenantContext,connectionId:string,sessionId:string,membershipId:string,permission:string,targetId:string):Promise<boolean> {
     return withTenant(this.pool,context,async(db:TenantTransaction)=> (await db.$client.query<{allowed:boolean}>("SELECT identity.sso_action_allowed($1,$2,$3,$4,$5) allowed",[connectionId,sessionId,membershipId,permission,targetId])).rows[0]!.allowed);
