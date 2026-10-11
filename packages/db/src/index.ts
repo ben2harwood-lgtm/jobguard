@@ -78,3 +78,4 @@ export * from "./audit-export-repository.js";
 export * from "./recovery-eligibility-v3-repository.js";
 export * from "./enterprise-identity-repository.js";
 export * from "./sso-required-repository.js";
+export * from "./extra-repository.js";

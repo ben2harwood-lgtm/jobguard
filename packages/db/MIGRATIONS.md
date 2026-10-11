@@ -771,6 +771,18 @@ Renumbered 0116 → 0121 on 11 October under the merge-ahead ruling.
 
 Adds `app.audit_export` and `app.audit_export_checkpoint`, tenant-qualified audit/membership/checkpoint FKs, FORCE RLS, migration ownership and append-only triggers. Runtime gets SELECT/INSERT on the new export table and SELECT only on the new checkpoint handoff; existing objects and privileges are unchanged. Existing restricted assurance credentials copy existing checkpoints; no runtime access to `audit_control` or new elevated routine. No backfill. Previous application remains compatible. Disable new routes and fix forward on failure; never rewrite/delete audit history or exports as rollback. Live signing/rotation remains HELD. Fresh install is covered by the existing migration/bootstrap suites; upgrade and catalogue/runtime attacks by `test/audit-export.integration.test.ts`. Database suites were NOT RUN in the builder sandbox.
 
+## 0122 — ENT-4b origin persistence and audit
+
+Renumbered 0117 → 0122 on 11 October 2026 under the merge-ahead ruling.
+
+Adds `app.extra_event`, `app.extra_duplicate_link` and `app.extra_order_line_link`, owned by `jobguard_migration`, with enabled/FORCE RLS, tenant policy, SELECT/INSERT-only runtime grants and immutable UPDATE/DELETE guards. Adds four SECURITY INVOKER trigger functions, all revoked from PUBLIC/runtime; no callable helper or SECURITY DEFINER routine.
+
+Existing objects extended by addition only: `app.extra_origin` (ten nullable provenance columns, six composite FKs, two CHECKs, partial capture-ID unique index, insert provenance trigger and deferred audit trigger); `app.variation` (four nullable reference columns, two FKs, one CHECK). B5 pricing basis is HELD: a column on a fingerprinted table would change approved evidence packs and needs its own decision. No fingerprinted table is extended. SH-1's command-receipt FK, command map, immutability and `variation_requires_origin` are reused unchanged. Every pre-existing row retains its old values; no backfill, defaults, policy/grant changes or routine replacement.
+
+References existing keys on command receipts, memberships, role grants, work orders/revisions/lines, visits, SoR items, evidence, variations and revisions without altering those objects. Fixture contractor origins retain all-NULL new columns and are exempt from the new audit/logged requirement. Work-order contractor origins require structural provenance and the exact raised audit plus logged event at commit. Prompt provenance and unlink command/authorization remain held.
+
+Forward fix: disable callers of this new repository, preserve all appended records and deploy an additive corrective migration after review. Do not drop populated history or rewrite origins. No destructive rollback SQL is supplied. Database fresh/upgrade/catalog checks were written; sandbox execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). Dispatcher/CI must execute them before acceptance.
+
 ## 0125 — Single sign-on required (ENT-10d)
 
 Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces).
