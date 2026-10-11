@@ -113,3 +113,77 @@ Re-read the entire `git diff origin/main` and each new untracked file against th
 Dispatcher commit and push; exact-head CI including required lint, PostgreSQL/migrations and both browser projects; fresh Claude Opus review and a separate Sol check after CI; separate acceptance. 0115 applies no data backfill/rewrite. Forward fix is another reviewed routine-only migration preserving immutable history; application rollback is schema-compatible but the older application can append an extra clock audit, so it does not restore this repair's duplicate-clock suppression. No production activation or release approval is implied.
 
 **Builder receipt only — not independently verified, not accepted.**
+
+
+## Round 1 — 11 October 2026
+
+Re-read the original issued order before changing code. This is the in-place repair of PR #130 on `codex/sandbox/m4-6-s-r1`, starting at `c88c5548b377f030639d0a98f15079db923d9c36` (reviewed `fae8695` plus the integrator's merge of `origin/main` `530681c`). The integrator's ruling defines an attempt as a later message **with an approval**. Round-0 prose above describing unapproved previews as refusing was incorrect and is superseded by this section. No Git write, package installation, provider call or database/browser startup was performed.
+
+Round-1 files: `packages/db/migrations/0115_recovery_follow_up_repair.sql`, `packages/db/src/recovery-follow-up-repository.ts`, `packages/db/test/recovery-follow-up.integration.test.ts`, `packages/db/MIGRATIONS.md`, and this receipt. The migration is edited in place; no second migration, new operational alert, data backfill or compatibility change. The inherited lane entry, migration registration, upgrade proof and integrator's BUILD_PLAN ledger line are unchanged by this round.
+
+### Fix A — DONE (source and regression tests; PostgreSQL execution pending)
+
+Both boundaries retain sink + succeeded outbox as the delivered-source condition and newest delivered ordering. Before, each later message was tested with `NOT EXISTS (approval JOIN outbox WHERE status='cancelled')`, so a preview without approval incorrectly blocked. After, a later message blocks only with `EXISTS (approval JOIN outbox WHERE status<>'cancelled')`. The surrounding `NOT EXISTS (later blocking message)` is retained. No approval means no blocking attempt. Approved queued, executing, unknown, retryable, failed and succeeded-without-recorded-delivery actions still block. A newer delivered message becomes the source itself.
+
+Corrected only this leaf's round-0 `active` table row to expect `RECOVERY_FOLLOW_UP_ALREADY_ACTIVE` in both repository and raw SQL. Queued/executing/outcome_unknown rows still expect `RECOVERY_FOLLOW_UP_MESSAGE_NOT_DELIVERED`. Corrected the 0115 MIGRATIONS sentence about unapproved previews.
+
+Appended PostgreSQL test names:
+
+- `Round 1 A: cancelling a follow-up with an unapproved reminder permits scheduling from delivered message 1`.
+- `Round 1 A: an unapproved reminder survives close and reopen without blocking a fresh run through exact reminder delivery` (preview sends nothing; exact approval and delivery succeed; delivered reminder becomes the next scheduling source).
+- `Round 1 A: a live follow-up with an unapproved preview retains ALREADY_ACTIVE and its delivered scheduling source`.
+
+### Fix B — DONE (source and deterministic regression test; PostgreSQL execution pending)
+
+Before, retry finalization read `clockAudited` and constructed its optional clock event before `settleDueAudits` took the shared key. After, finalization takes `recovery-follow-up-audit` **after its command/business locks and domain writes**, then reads `clockAudited` and constructs the optional event under the lock. `settleDueAudits` reacquires that same transaction lock before the audit head; no new business lock follows it. The 0115 atomic audit block and populated upgrade test are byte-identical to the round-0 base.
+
+Appended PostgreSQL test: `Round 1 B: an interrupted 0112 advance retry waits for due-signal audit serialization before checking the clock fact`.
+
+Fixture construction uses the existing upgrade test's migration-owner path (`SET ROLE jobguard_migration`) to install the actual 0112 evaluator body, then runs real SBOX-2 `sandbox.advance` through the runtime role and restores 0115. This creates committed clock/due/Decision/event records with no follow-up finalization or clock/due audit, without hand-writing a business row or modifying SBOX-2. Connection A holds the intent business key before the shared audit key; connection B retries the interrupted command. A separate admin observer queries `pg_stat_activity` / `pg_blocking_pids` until B is actually waiting on A's audit key. A then calls the repaired evaluator to append clock/due entries and commits; B completes. Assertions require exactly one `time_advanced` entry naming the command, one due audit entry and a chain verified by `verifyAuditChain`. No sleep, timing guess, test retry, skip or new/longer timeout was added.
+
+The four new PostgreSQL cases were written before the implementation repairs. They are **NOT RUN**, including red-before-fix: failure on `fae8695` is source reasoning, not executed evidence. At that head the A fixtures lose their eligible source, while B reads the missing clock fact before waiting and appends a second clock entry after A commits.
+
+### Round-1 commands actually run
+
+Existing installed dependencies; Node `v24.17.0`, pinned cached pnpm `10.28.1` through the same task-local `/private/tmp/jg-m4-6-s-r1-bin/pnpm` wrapper. No download or clean-install claim. Turbo's shared-cache permission warnings and replayed cached logs are not fresh execution evidence.
+
+| Command | Exit | Actual result/count |
+|---|---:|---|
+| `pnpm typecheck` | 0 | 7 successful tasks; 4 cached, 3 executed |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | Core purity 125 TS files; lane and money guards passed; 7 successful package tasks, 4 cached, 3 executed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Lane `m4-6-s-r1`; base `530681c`, head `c88c554`; 9 inherited comparison paths including the integrator's ledger line |
+| `pnpm --filter @jobguard/core exec vitest run src/recovery-follow-up.test.ts` | 0 | 1 file, 20 tests passed |
+| `pnpm --filter @jobguard/api exec vitest run src/recovery-follow-up.application.test.ts` | 0 | 1 file, 38 tests passed |
+| `pnpm build` | 0 | 7 successful tasks; 4 cached, 3 executed; Next generated 24/24 static pages |
+| `pnpm openapi:check` | 1 | `tsx` CLI failed binding its IPC socket with EPERM; 0 snapshot checks completed |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Same OpenAPI snapshot check through direct Node entrypoint; no diff/diagnostic output |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop test/recovery-follow-up.integration.test.ts test/recovery-follow-up-upgrade.integration.test.ts` | 0 | Both database test files statically checked, initial and final runs; no database test execution |
+| `git diff --check`; `git diff origin/main --check` | 0 | Read-only whitespace checks |
+| Explicit Python routine/predicate/assertion/allowlist comparisons | 0 | Source checks described below; not a model verdict or PostgreSQL proof |
+
+Actual logs: `/private/tmp/jg-m4-6-s-r1-round1-*.log`. Root lint/lane commands now pass with the dispatcher's non-self comparison range. The OpenAPI CLI failure remains recorded separately from its successful direct generator check.
+
+### Round-1 NOT RUN
+
+- `pnpm test:db`: **NOT RUN (sandbox cannot start PostgreSQL)**, including every existing database integration suite, the four new cases, round-0 regressions and populated upgrade proof.
+- `pnpm test:migrations`: **NOT RUN (sandbox cannot start PostgreSQL)**, including tenancy and demo-bootstrap fresh/upgrade/catalog checks.
+- `pnpm test:e2e` and every Playwright test: **NOT RUN (sandbox cannot start a browser)**, including M4-6-S/M4-5-S/SBOX-2 in both projects.
+- Full `pnpm test`: **NOT RUN (includes the prohibited PostgreSQL suites)**. No fixture or mock pass substitutes for them.
+- Fresh install, live provider/model evaluation, real data, professional approval and release checks were not exercised; no AI/model change in this round.
+
+### Round-1 self-review
+
+Builder source inspection only. Re-read the full working-tree diff, the inherited diff against `origin/main`, and both replaced routines against 0112.
+
+- SQL guard equals 0112 except its stated source query/comment and `CREATE OR REPLACE` declaration; every other refusal/body segment is byte-identical, and all `RAISE EXCEPTION` codes retain order.
+- Evaluator preserves 0112's complete domain loop and return unchanged; only round-0 audit declarations/block are added. It is byte-identical to the base `c88c554` evaluator. Repair 1 and repair 3 are unchanged.
+- Delivered and later-blocking predicates in SQL/repository match after whitespace normalization. Unapproved previews are ignored; only approval + non-cancelled outbox blocks. Other scheduling and exact authorization checks remain intact.
+- Clock existence check and optional event construction follow the shared key, which follows all finalization domain writes. Due signal's original intent locks precede its shared key/head. Under either winner, the waiting path reads audit state only after acquiring the key. Reentrant acquisition in catch-up introduces no later business lock.
+- The pre-leaf main integration test remains a byte-identical prefix after normalizing the extended `readFile` import. Only the explicitly authorized round-0 active row expectation changed. Four cases are appended; no existing main assertion, timeout, skip or retry changed.
+- The test uses the actual 0112 evaluator restored by its owner and real SBOX-2 runtime writes. Backend PID/blocker observation controls the interleaving. Self-review fixed the extraction to recognize 0112's `CREATE FUNCTION` spelling and added prompt failure if B exits instead of waiting; no handwritten immutable history.
+- Working-tree delta is confined to these five lane files. No earlier migration, BUILD_PLAN, lane registry, migration runner, SBOX-2, upgrade test, UI, core or API source changed this round. No second migration or table/policy/grant/role/trigger mutation in 0115.
+- Intended conventional commit subject/body written to `/private/tmp/jg-msg-m4-6-s-r1.txt`; dispatcher owns commit/push. Generated dist, Next, Turbo and TypeScript build-info artifacts removed after successful build; no staging, commit or push.
+
+Remaining evidence: dispatcher exact commit, CI database/migration/browser runs, the same independent Opus and Sol re-checks and separate acceptance. No task acceptance, merge or release is asserted.
+
+**Builder receipt only — not independently verified, not accepted.**

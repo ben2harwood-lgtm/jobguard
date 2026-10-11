@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
@@ -931,12 +931,118 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
       }
     }
     await newRun();
-    expect(await code(() => repo.schedule(ctx, base.caseId, scheduleCommand(base.message, base.caseRevision), actor))).toBe("RECOVERY_FOLLOW_UP_MESSAGE_NOT_DELIVERED");
+    const refusal = status === "active" ? "RECOVERY_FOLLOW_UP_ALREADY_ACTIVE" : "RECOVERY_FOLLOW_UP_MESSAGE_NOT_DELIVERED";
+    expect(await code(() => repo.schedule(ctx, base.caseId, scheduleCommand(base.message, base.caseRevision), actor))).toBe(refusal);
     const runId = (await repo.read(ctx, base.caseId)).run!.id;
     const events = Number((await admin.query("SELECT max(sequence)::int n FROM app.recovery_case_event WHERE tenant_id=$1 AND case_id=$2", [DEMO_TENANT_ID, base.caseId])).rows[0].n);
     await expect(withTenant(runtime, ctx, db => db.$client.query(`INSERT INTO app.recovery_follow_up
       (id,tenant_id,job_id,case_id,run_id,source_message_id,source_message_sequence,case_revision,case_event_sequence,created_tick,due_tick,due_after_ticks,fixture_version,command_id,request_hash,actor_membership_id,environment)
       VALUES($1,$2,$3,$4,$5,$6,1,$7,$8,0,1,1,'recovery-follow-up-fixture.v1',$9,$10,$11,'synthetic_demo')`,
-    [randomUUID(), DEMO_TENANT_ID, fixture.jobId, base.caseId, runId, base.message.id, base.caseRevision, events, randomUUID(), "a".repeat(64), DEMO_MEMBERSHIP_ID]))).rejects.toThrow("RECOVERY_FOLLOW_UP_MESSAGE_NOT_DELIVERED");
+    [randomUUID(), DEMO_TENANT_ID, fixture.jobId, base.caseId, runId, base.message.id, base.caseRevision, events, randomUUID(), "a".repeat(64), DEMO_MEMBERSHIP_ID]))).rejects.toThrow(refusal);
+  });
+
+  it("Round 1 A: cancelling a follow-up with an unapproved reminder permits scheduling from delivered message 1", async () => {
+    const base = await previewed();
+    expect(base.reminder).toMatchObject({ sequence: 2, status: "previewed", approval: null });
+    await repo.cancel(ctx, base.caseId, { version: V, action: "cancel", commandId: randomUUID(), followUpId: base.followUp.id, expectedRevision: base.followUp.revision }, actor);
+    const fresh = await repo.schedule(ctx, base.caseId, scheduleCommand(base.message, base.caseRevision), actor);
+    expect(fresh.latest).toMatchObject({ sourceMessageId: base.message.id, state: "waiting" });
+    expect(fresh.latest!.id).not.toBe(base.followUp.id);
+    expect(await sinkCount(base.caseId)).toBe(1);
+    await verifyChain();
+  });
+
+  it("Round 1 A: an unapproved reminder survives close and reopen without blocking a fresh run through exact reminder delivery", async () => {
+    const base = await previewed();
+    expect(base.reminder).toMatchObject({ sequence: 2, status: "previewed", approval: null });
+    await caseEvent(base.caseId, "close_no_recovery");
+    await caseEvent(base.caseId, "dispute");
+    await caseEvent(base.caseId, "resume_pursuit");
+    const runId = await newRun();
+    await buildPack(base.caseId);
+    const current = await messages.read(ctx, base.caseId);
+    const fresh = await repo.schedule(ctx, base.caseId, scheduleCommand(base.message, current.readiness.caseRevision), actor);
+    expect(fresh.latest).toMatchObject({ sourceMessageId: base.message.id, state: "waiting", owner: { runId } });
+    expect(fresh.followUps[0]).toMatchObject({ id: base.followUp.id, state: "stopped" });
+    const moved = await advance(base.caseId, fresh.latest!.id, runId);
+    const reviewed = await repo.openReview(ctx, base.caseId, reviewCommand(moved.state.latest!, await messages.read(ctx, base.caseId)), actor);
+    const reminder = (await messages.read(ctx, base.caseId)).latest!;
+    expect(reminder).toMatchObject({ sequence: 3, status: "previewed", approval: null });
+    expect(await sinkCount(base.caseId)).toBe(1);
+    await repo.approveReminder(ctx, base.caseId, approveReminderCommand(reviewed.latest!, reminder), actor);
+    await messages.command(ctx, base.caseId, messageCommand("advance", (await messages.read(ctx, base.caseId)).latest!), actor);
+    expect(await sinkCount(base.caseId)).toBe(2);
+    const delivered = await repo.read(ctx, base.caseId);
+    expect(delivered.latest).toMatchObject({ state: "delivered", newSimulatedMessages: 1 });
+    expect(delivered.scheduling.sourceMessageId).toBe(reminder.id);
+    await verifyChain();
+  });
+
+  it("Round 1 A: a live follow-up with an unapproved preview retains ALREADY_ACTIVE and its delivered scheduling source", async () => {
+    const base = await previewed();
+    const state = await repo.read(ctx, base.caseId);
+    expect(state.scheduling).toMatchObject({ eligible: false, reason: "ALREADY_ACTIVE", sourceMessageId: base.message.id });
+    expect(await code(() => repo.schedule(ctx, base.caseId, scheduleCommand(base.message, base.caseRevision), actor))).toBe("RECOVERY_FOLLOW_UP_ALREADY_ACTIVE");
+  });
+
+  it("Round 1 B: an interrupted 0112 advance retry waits for due-signal audit serialization before checking the clock fact", async () => {
+    const base = await scheduled(), commandId = randomUUID();
+    const original = await readFile(new URL("../migrations/0112_recovery_follow_up.sql", import.meta.url), "utf8");
+    const evaluator = original.match(/CREATE FUNCTION app\.evaluate_recovery_follow_ups[\s\S]*?END \$\$;/u)![0].replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
+    const repair = await readFile(new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url), "utf8");
+    const owner = await admin.connect();
+    try {
+      // The migration-owner fixture path used by the populated upgrade test restores the actual 0112 evaluator.
+      // SBOX-2 then creates the interrupted starting state through its real runtime path; no hand-written business row.
+      await owner.query("SET ROLE jobguard_migration");
+      await owner.query(evaluator);
+      await sandbox.advance(token, base.runId, commandId);
+    } finally {
+      try { await owner.query(repair); } finally { await owner.query("RESET ROLE"); owner.release(); }
+    }
+    expect(await dueDecisions(base.followUp.id)).toBe(1);
+    expect(await count("SELECT count(*) n FROM app.recovery_follow_up_advance WHERE tenant_id=$1 AND command_id=$2", [DEMO_TENANT_ID, commandId])).toBe(0);
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type IN ('recovery.follow_up.time_advanced','recovery.follow_up.became_due')", [DEMO_TENANT_ID, base.followUp.id])).toBe(0);
+
+    const connectionA = await runtime.connect();
+    const connectionB = new Pool({ host: "127.0.0.1", port, user: "jobguard_runtime", password, database: "jobguard_synthetic_demo", max: 1 });
+    let retry: Promise<RecoveryFollowUpState> | undefined;
+    try {
+      const pidA = Number((await connectionA.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+      await connectionA.query("BEGIN");
+      await connectionA.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      // Signal's lock order: its intent business lock first, shared audit key next, audit head last.
+      await connectionA.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [DEMO_TENANT_ID, `recovery-follow-up:${base.followUp.id}`]);
+      await connectionA.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext('recovery-follow-up-audit'))", [DEMO_TENANT_ID]);
+      const pidB = Number((await connectionB.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+      retry = new RecoveryFollowUpRepository(connectionB).advanceTime(ctx, base.caseId,
+        { version: V, action: "advance_time", commandId, followUpId: base.followUp.id }, actor,
+        async () => { throw new Error("interrupted clock command must not advance again"); });
+      // Handle failure while observing the backend; a retry that exits without waiting must fail this test promptly.
+      let retryFinished = false;
+      void retry.then(() => { retryFinished = true; }, () => { retryFinished = true; });
+      // Observe PostgreSQL's actual lock wait, not elapsed time. No sleeps, test retries or extra timeout.
+      let blocked = false;
+      while (!blocked) {
+        const activity = (await admin.query(`SELECT wait_event_type,query,pg_blocking_pids(pid) AS blockers
+          FROM pg_stat_activity WHERE pid=$1`, [pidB])).rows[0];
+        blocked = activity?.wait_event_type === "Lock" && activity.blockers.includes(pidA);
+        if (blocked) expect(activity.query).toContain("recovery-follow-up-audit");
+        else if (retryFinished) { await retry; throw new Error("retry finished without waiting on the audit key"); }
+      }
+      expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.follow_up.time_advanced'", [DEMO_TENANT_ID, base.followUp.id])).toBe(0);
+      // A now performs the repaired due signal, reusing its held intent/key and appending both facts before commit.
+      expect(Number((await connectionA.query("SELECT app.evaluate_recovery_follow_ups($1,$2) AS n", [DEMO_TENANT_ID, base.runId])).rows[0].n)).toBe(0);
+      await connectionA.query("COMMIT");
+      expect((await retry).latest!.state).toBe("review_reminder");
+      expect(await count(`SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2
+        AND event_type='recovery.follow_up.time_advanced' AND payload->'references'->>'commandId'=$3`, [DEMO_TENANT_ID, base.followUp.id, commandId])).toBe(1);
+      expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.follow_up.became_due'", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
+      await verifyChain();
+    } finally {
+      await connectionA.query("ROLLBACK"); connectionA.release();
+      if (retry) await retry.catch(() => undefined);
+      await connectionB.end();
+    }
   });
 });

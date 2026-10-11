@@ -177,6 +177,8 @@ export class RecoveryFollowUpRepository {
         await db.$client.query(
           `INSERT INTO app.recovery_follow_up_advance(tenant_id,command_id,run_id,follow_up_id,request_hash,tick_before,tick_after,actor_membership_id,environment) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'synthetic_demo')`,
           [ctx.tenantId, input.commandId, row.run_id, followUpId, requestHash, tickBefore, tickAfter, actor.membershipId]);
+        // Domain locks/writes are complete. Serialize with the due signal before reading/building the optional clock audit.
+        await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext('recovery-follow-up-audit'))", [ctx.tenantId]);
         const clockAudited = (await db.$client.query(
           `SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_type='recovery_follow_up' AND subject_ref=$2
            AND event_type='recovery.follow_up.time_advanced' AND payload->'references'->>'commandId'=$3`,
@@ -445,7 +447,7 @@ export class RecoveryFollowUpRepository {
        ORDER BY r.created_at DESC,r.id LIMIT 1`, [tenantId, jobId])).rows[0];
     return row ? { id: row.id, tick: Number(row.tick) } : null;
   }
-  /** The newest delivered message is eligible only when every later attempt is definitively cancelled. */
+  /** The newest delivered message is eligible only when every later approved attempt is definitively cancelled; unapproved previews are ignored. */
   private async sourceMessage(db: TenantTransaction, tenantId: string, caseId: string) {
     const row = (await db.$client.query<{ id: string; case_sequence: number; delivered: boolean }>(
       `SELECT m.id,m.case_sequence,true AS delivered
@@ -453,8 +455,8 @@ export class RecoveryFollowUpRepository {
         AND EXISTS (SELECT 1 FROM app.recovery_message_sink k JOIN app.recovery_message_approval a ON a.tenant_id=k.tenant_id AND a.message_id=k.message_id
           JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id WHERE k.tenant_id=m.tenant_id AND k.message_id=m.id AND o.status='succeeded')
         AND NOT EXISTS (SELECT 1 FROM app.recovery_message later WHERE later.tenant_id=m.tenant_id AND later.case_id=m.case_id AND later.case_sequence>m.case_sequence
-          AND NOT EXISTS (SELECT 1 FROM app.recovery_message_approval a JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id
-            WHERE a.tenant_id=later.tenant_id AND a.message_id=later.id AND o.status='cancelled'))
+          AND EXISTS (SELECT 1 FROM app.recovery_message_approval a JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id
+            WHERE a.tenant_id=later.tenant_id AND a.message_id=later.id AND o.status<>'cancelled'))
        ORDER BY m.case_sequence DESC LIMIT 1`, [tenantId, caseId])).rows[0];
     return row ? { id: row.id, sequence: Number(row.case_sequence), delivered: row.delivered } : null;
   }

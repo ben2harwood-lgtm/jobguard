@@ -2,7 +2,8 @@ BEGIN;
 -- M4-6-S-R1 fix-forward only: no table, column, policy, grant, role or stored-row changes.
 -- Existing invoker ownership/ACLs and triggers are retained by CREATE OR REPLACE FUNCTION.
 
--- Changed from 0112: select the newest delivered source only when every later attempt is cancelled;
+-- Changed from 0112: select the newest delivered source only when every later approved attempt is cancelled;
+-- ignore later previews with no approval, as 0112 did.
 -- retain the delivered-source check and every run, clock, case, revision, active-intent and owner refusal verbatim.
 CREATE OR REPLACE FUNCTION app.guard_recovery_follow_up() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE r record; s record; sm record; tick integer;
@@ -19,15 +20,15 @@ BEGIN
   RAISE EXCEPTION 'RECOVERY_FOLLOW_UP_RUN_INVALID' USING ERRCODE='23514'; END IF;
  tick:=app.recovery_follow_up_run_tick(NEW.tenant_id,NEW.run_id);
  IF NEW.created_tick<>tick THEN RAISE EXCEPTION 'RECOVERY_FOLLOW_UP_CLOCK_INVALID' USING ERRCODE='23514'; END IF;
- -- The source is the newest DELIVERED message, provided every later attempt is revoked/cancelled.
+ -- The source is the newest DELIVERED message, provided every later approved attempt is revoked/cancelled.
  SELECT m.id, m.case_sequence INTO sm FROM app.recovery_message m
   WHERE m.tenant_id=NEW.tenant_id AND m.case_id=NEW.case_id
    AND EXISTS (SELECT 1 FROM app.recovery_message_sink k JOIN app.recovery_message_approval a ON a.tenant_id=k.tenant_id AND a.message_id=k.message_id
      JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id
      WHERE k.tenant_id=m.tenant_id AND k.message_id=m.id AND o.status='succeeded')
    AND NOT EXISTS (SELECT 1 FROM app.recovery_message later WHERE later.tenant_id=m.tenant_id AND later.case_id=m.case_id AND later.case_sequence>m.case_sequence
-     AND NOT EXISTS (SELECT 1 FROM app.recovery_message_approval a JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id
-       WHERE a.tenant_id=later.tenant_id AND a.message_id=later.id AND o.status='cancelled'))
+     AND EXISTS (SELECT 1 FROM app.recovery_message_approval a JOIN app.action_outbox o ON o.tenant_id=a.tenant_id AND o.id=a.outbox_action_id
+       WHERE a.tenant_id=later.tenant_id AND a.message_id=later.id AND o.status<>'cancelled'))
   ORDER BY m.case_sequence DESC LIMIT 1;
  IF NOT FOUND OR sm.id<>NEW.source_message_id OR sm.case_sequence<>NEW.source_message_sequence
     OR NOT EXISTS (SELECT 1 FROM app.recovery_message_sink k JOIN app.recovery_message_approval a ON a.tenant_id=k.tenant_id AND a.message_id=k.message_id
