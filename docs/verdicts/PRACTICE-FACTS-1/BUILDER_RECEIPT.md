@@ -471,3 +471,31 @@ Verification run only, on the Mac where PostgreSQL starts, of the Codex round-1 
 **Stopped on:** nothing. No assertion, expected value, timeout, grant or policy was changed or loosened by this verification.
 
 Verification record only — not independently verified, not accepted.
+
+## Round 2 — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+Last allowed repair round. Authority: `PRACTICE-FACTS-1-r2-repair.txt`. Starting head 4c46815, clean tree. Builder repair record only; not a review and not an acceptance.
+
+**R2-1 (the red test): DONE.** Only this piece's own `apps/web/e2e/PRACTICE-FACTS-1.spec.ts`, second test; no product code changed. The failing line (line 45 at 4c46815) asserted that the merged "Practice receipts" panel lists zero attested receipts straight after the two matches; the panel loads on mount only, so it still listed both unmatched receipts.
+- Before (at 4c46815, line 45): one line with two assertions, the extra panel showing 2 receipts, then the merged panel showing 0 attested receipts. The next line reloaded the page and checked the extra panel showed 2 qualifying receipts.
+- After: (a) directly after the reload that follows the practice-feed connect command, and before any match, a new `merged` locator for the merged panel's attested receipts must have count 2, with exactly one row containing the £12,000.00 amount and exactly one containing the £14,640.00 amount. (b) The extra-panel count of 2 stays where it was. After the existing reload the extra panel must still show 2 qualifying receipts, and then the merged panel must show its empty-state sentence and an attested-receipt count of 0. The count-zero assertion is the same assertion, moved after the reload. No assertion was removed or weakened. The empty-state sentence check was added only so the zero count cannot pass before the merged panel has loaded.
+
+**R2-2 (records): DONE.** `BUILD_PLAN.md` §12.2, this piece's ledger paragraph only: "four new keys" now says six movement keys (named as `packages/db/MIGRATIONS.md` names them) on the command and event checks and four receipt keys on the receipt-only checks. Nothing else in that file was changed by this round.
+
+**R2-3 (evidence): DONE.** `origin/main` 4564e88 merged by merge commit 4b284fa (this branch's repair commit before the merge: d579689). Conflicts, all resolved by keeping both sides and nothing more: `BUILD_PLAN.md` (the ENT-10b and ENT-4b ledger paragraphs first, then this piece's), `apps/api/src/app.module.ts` (imports both; controller list has the audit export controller after the sign-in controller and the practice facts controller last), `apps/api/src/workspace/application.ts` (imports both; the returned object carries `sso`, `auditExports` and `practiceFacts`), `packages/core/src/index.ts` (both export lines), `packages/db/src/migrate.ts` (0121, 0122, then 0124) and `packages/db/MIGRATIONS.md` (0121 and 0122 sections, then 0124). The migration stays 0124 and is registered after 0122. Note: this piece's ledger paragraph still says 0121 and 0122 were "held by open pull requests"; that was true at dispatch and was left alone under the R2-2 limit.
+
+Commands (every vitest call used `--maxWorkers=2` with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`, inside `heavy-slot`, one at a time, memory free 76 to 80 percent, load average under 14):
+- `pnpm install --frozen-lockfile` exit 0. `pnpm turbo run build --filter=@jobguard/api... --concurrency=2` exit 0 (6 of 6 tasks).
+- `packages/db` `test/practice-facts.integration.test.ts`: exit 0, 26 passed.
+- `packages/db` merged `test/practice-feed.integration.test.ts` + `test/recovery-eligibility-v3.integration.test.ts`, unedited: exit 0, 51 passed.
+- `packages/db` MIG-ORDER-2 `test/fingerprinted-row-shape.integration.test.ts` + `test/recovery-follow-up-upgrade.integration.test.ts`: exit 0, 16 passed.
+- `packages/core` `src/practice-facts.test.ts` + `src/practice-feed.test.ts`: exit 0, 58 passed. `apps/api` `src/practice-facts.application.test.ts` + `src/practice-facts.controller.test.ts`: exit 0, 47 passed.
+- `pnpm turbo run build --filter=@jobguard/web... --concurrency=2` exit 0 (production build; the web build was a cache miss, so it was rebuilt from the merged source).
+- `CI=true playwright test e2e/PRACTICE-FACTS-1.spec.ts --workers=1` through an out-of-repo wrapper config that only sets the browser channel to the installed full chromium (`playwright install` was not run), against the production build (`next start`): exit 0, 4 passed (both tests on mobile-360 and desktop). At 4c46815 the same run gave 2 passed, 2 failed.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes` exit 0; `pnpm turbo run typecheck` exit 0; `pnpm turbo run lint` exit 0 and `node tools/lint.mjs` exit 0 (the two halves of `pnpm lint`); `pnpm openapi:check` exit 0.
+
+**R2-4 (this receipt): DONE.** The GitHub run id will be added by the integrator once the run starts; it was not known when this section was written.
+
+**Stopped on:** nothing. No merged test file was edited. No assertion, expected value, timeout, grant or policy was changed or loosened.
+
+Builder repair record only — not independently verified, not accepted.
