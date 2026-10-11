@@ -10,7 +10,7 @@ import {
   EvidencePackRepository, MIGRATION_URLS, RecoveryMessageRepository, migrate, verifyAuditChain,
   type RecoveryMessageActor, type RecoveryMessageState, type VerifiedTenantContext,
 } from "../src/index.js";
-import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
@@ -81,7 +81,7 @@ async function privileges() {
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "jg-follow-up-upgrade-"));
-  const port = 61400 + Math.floor(Math.random() * 200);
+  const port = await freePort(61400, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"] });
   await postgres.initialise(); await postgres.start();
