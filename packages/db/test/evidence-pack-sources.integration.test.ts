@@ -9,13 +9,13 @@ import { loadEvidencePackSources } from "../src/evidence-pack-sources.js";
 import { migrate } from "../src/migrate.js";
 import { withTenant} from "../src/tenant-context.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
-import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let pg: EmbeddedPostgres | undefined, admin: Pool | undefined, runtime: Pool, dir: string;
 let fixture: Awaited<ReturnType<typeof seedEvidencePackFixture>>;
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "jg-evidence-sources-"));
-  const port = 58750 + Math.floor(Math.random() * 100);
+  const port = await freePort(58750, 100);
   const postgresLog: string[] = [];
   pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: message => { postgresLog.push(message); } });
   try { await pg.initialise(); await pg.start(); }

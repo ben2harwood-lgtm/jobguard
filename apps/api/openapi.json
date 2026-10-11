@@ -329,6 +329,61 @@
         ]
       }
     },
+    "/contractor/audit-exports": {
+      "get": {
+        "operationId": "AuditExportController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List persisted single-tenant signed audit exports; current tenant-wide owner/admin only",
+        "tags": [
+          "audit-exports"
+        ]
+      },
+      "post": {
+        "operationId": "AuditExportController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "audit-export-request.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Create audit-export-request.v1 in synthetic_demo with restricted checkpoint handoff. The signature proves export integrity only",
+        "tags": [
+          "audit-exports"
+        ]
+      }
+    },
     "/recovery-cases/{id}/follow-ups": {
       "get": {
         "operationId": "RecoveryFollowUpController_get",

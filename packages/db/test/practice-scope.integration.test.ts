@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import { EvidenceService, ProofCommandService, migrate, withTenant } from "../src/index.js";
 import { listConfirmedPracticeScopes } from "../src/practice-scope.js";
-import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenant="a1000000-0000-4000-8000-000000000001", otherTenant="a1000000-0000-4000-8000-000000000002";
 const job="a2000000-0000-4000-8000-000000000001",otherJob="a2000000-0000-4000-8000-000000000002",emptyJob="a2000000-0000-4000-8000-000000000003",foreignJob="a2000000-0000-4000-8000-000000000004";
@@ -19,7 +19,7 @@ const member="a3000000-0000-4000-8000-000000000001",retired="00000000-0000-4000-
 const context=testTenantContext(tenant),foreignContext=testTenantContext(otherTenant);
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 beforeAll(async()=>{
- directory=await mkdtemp(join(tmpdir(),"jobguard-practice-scope-"));const port=59000+Math.floor(Math.random()*300);
+ directory=await mkdtemp(join(tmpdir(),"jobguard-practice-scope-"));const port=await freePort(59000,300);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
  admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id) VALUES('${tenant}'),('${otherTenant}');
