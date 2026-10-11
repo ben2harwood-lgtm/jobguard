@@ -75,3 +75,4 @@ export * from "./job-scheduling-repository.js";
 export * from "./work-order-fixtures.js";
 
 export * from "./audit-export-repository.js";
+export * from "./recovery-eligibility-v3-repository.js";
