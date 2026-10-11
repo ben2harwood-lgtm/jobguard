@@ -130,10 +130,11 @@ export class PracticeFeedRepository {
   private project(snapshot: Snapshot, jobId: string, query: PracticeFeedQuery): PracticeFeedView {
     // The issued read filter: new facts have their own versioned projection. Keep ALL command revisions;
     // disguise only new-key reconciliation actions so the merged key parser never sees them.
+    const factReceiptIds = new Set(snapshot.matches.filter(m => practiceFactKeyV1.safeParse(m.movement_key).success).map(m => m.payment_id));
     snapshot = { ...snapshot,
       events: snapshot.events.filter(e => practiceMovementKeyV1.safeParse(e.movement_key).success),
       matches: snapshot.matches.filter(m => practiceMovementKeyV1.safeParse(m.movement_key).success),
-      payments: snapshot.payments.filter(p => !practiceFactsCatalogueV1.some(e => e.kind === "customer_receipt" && e.grossPence === Number(p.amount_pence))),
+      payments: snapshot.payments.filter(p => !factReceiptIds.has(p.id)),
       commands: snapshot.commands.map(c => c.action === "reconcile_duplicate" && practiceFactKeyV1.safeParse(c.movement_key).success ? { ...c, action: "practice_facts_reconciled" } : c),
     };
     const account = snapshot.account;

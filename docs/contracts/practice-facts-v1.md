@@ -49,10 +49,14 @@ primitives sum the two supplier payments; settlement, reconciliation or matching
 never creates an allocation, landing, journal, fee, statement or collection.
 `allocatedEligibleNetPence` remains literal zero.
 
-The merged projection filters new keys and rehomes the new exact-amount
-customer receipts into the new panel. Its movements, event count and merged
-receipts remain unchanged for the mixed-catalogue upgrade control; its revision
-tracks all commands. The new section is outside `#practice-receipts`, uses
+The merged projection filters new movement identities. It excludes a customer
+payment only when its payment ID is linked by a stored receipt match to a key
+in the new catalogue. Amount alone never excludes a receipt; unmatched ordinary
+receipts retain the merged view even when they equal a new fixture amount.
+The new section continues to offer exact-amount candidates for explicit matching.
+Its movements, event count and merged receipts remain unchanged for the
+mixed-catalogue upgrade control; its revision tracks all commands.
+The new section is outside `#practice-receipts`, uses
 `practice-fact`, and adds no sandbox banner. Unknown transport outcomes pause
 writes until a successful saved-state read; no blind write retry occurs.
 
@@ -66,8 +70,15 @@ triggers enforce that same write contract. Existing FORCE RLS, owner and grants
 are retained. As in the merged feed, database environment settings are supplied
 by the server; physical separation from pilot/production remains the boundary.
 
-Migration 0124 only widens the six existing catalogue checks. It creates no
-schema object and changes no existing row. Its upgrade tests compare populated
+Migration 0124 widens the six existing catalogue checks under their original,
+discovered names, validated in the same transaction. The command/event movement
+checks add **six movement keys**: `receipt-12000`, `receipt-14640`,
+`supplier-payment-600`, `supplier-payment-840`, `receipt-interest-120` and
+`receipt-compensation-70`. The receipt-only checks (command match action and
+receipt-match keys/amounts) add **four receipt keys**: `receipt-12000`,
+`receipt-14640`, `receipt-interest-120` and `receipt-compensation-70`.
+It creates no schema object and changes no existing row. Its upgrade tests
+compare all six names, validation flags and old allowed literals, populated
 row JSON text and full security/routine catalogues before and after. Restore or
 forward-fix the application while keeping the widened checks; do not narrow
 checks or rewrite append-only rows after new keys have been stored.

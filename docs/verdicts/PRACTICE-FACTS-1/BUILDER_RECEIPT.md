@@ -260,3 +260,190 @@ Repair builder only. Not a review and not an acceptance. Run on the Mac where Po
 **Stopped on:** nothing. The INTERIM amounts (£1,440.00 due, paid £600.00 then £840.00) and the F18 receipts (£120.00 and £70.00) are unchanged and remain labelled synthetic fixture amounts, not product figures. No assertion, expected value, timeout, grant or policy was changed or loosened.
 
 Builder repair record only — not independently verified, not accepted.
+
+
+## Round 1 — 11 October 2026
+
+Builder: Codex GPT-6.1 Sol. Repair only, on the same leaf and working tree at
+`c26e644499536c2bb800f512c9ef349c90114d27`; no git write, package download,
+PostgreSQL start, browser start, remote action or approval. Reread the issued
+header and both reviews of c26e644; this round's coordinator rulings govern the
+three fixes below and supersede conflicting historical statements above.
+Check lane remains RED. Builder receipt only — not independently verified,
+not accepted.
+
+### Fixes
+
+**Fix 1 — DONE (implementation and authored coverage; PostgreSQL NOT RUN).**
+Before: the merged receipt projection discarded payments by equality with new
+customer-receipt amounts, even on old-only jobs. After: it collects payment IDs
+from stored receipt matches whose movement identity belongs to the new
+`practiceFactKeyV1` catalogue, then excludes only those payment IDs. This uses
+existing match identity; no column is added. Unmatched ordinary payments remain
+in the merged view, whatever their amount. New matched payments appear in the
+new section; that section still offers exact-amount candidates for explicit
+matching. The merged event/match/reconciliation filters and shared revision
+behavior are retained. No amount comparison remains in the authorized merged
+read-filter block.
+
+Four PostgreSQL regressions were written before the implementation edit, in
+`packages/db/test/practice-facts.integration.test.ts`:
+
+- `old-only job keeps all ordinary £120, £70 and £384 receipts in the merged view`
+- `old-only job keeps every new example amount at once with main's receipt count and total`
+- `ordinary £120 receipt stays merged beside the separate matched F18 £120 interest receipt`
+- `new facts and their matched receipts leave every merged total and count unchanged`
+
+Each is **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. Source
+inspection predicts failure at c26e644: respectively one receipt instead of
+three; two instead of six (144000p instead of 2827000p); zero merged receipts
+instead of the ordinary £120 receipt; and one ordinary receipt instead of two
+(38400p instead of 50400p). These are source-inspected expectations, not observed
+red test runs. The six-at-once fixture includes £12,000, £14,640, £120, £70,
+£600 and £840. The fourth case also compares the entire merged view except the
+shared revision, preserving movements, event count and assessments.
+
+**Fix 2 — DONE (implementation and authored coverage; PostgreSQL NOT RUN).**
+Before: 0124 replaced all six discovered CHECK names with new names. After:
+0124 discovers exactly two catalogue CHECKs per table, classifies each existing
+expression, and drops/re-adds its widened expression under its original name.
+Default ADD CHECK validates existing rows; all changes remain in the same
+access-exclusive transaction. All six widened expressions are preserved
+verbatim from c26e644 (the command/event movement expression is shared).
+No second migration, table, column, role, grant, policy, trigger or routine;
+no existing row updated, rewritten or deleted. Expand-compatible; retain
+expanded checks and disable the new surface on forward-fix rather than narrow
+checks or rewrite immutable rows. No backfill.
+
+The existing leaf test `populated upgrade preserves every old row byte-for-byte,
+checks all rows, and leaves all security and routine catalogs identical;
+remigrate no-op` now captures all six names and definitions before 0124, compares
+the same six table/name pairs after it, requires `convalidated` on every
+replacement, and checks every old allowed string/numeric literal remains.
+Assertions were written before editing 0124. **NOT RUN (sandbox cannot start
+PostgreSQL / a browser)**; at c26e644 all six name comparisons would fail.
+Earlier row-byte, grants/RLS/owners/policies/triggers/routine comparisons and
+rerun assertions remain intact. These are not claimed as database verification.
+
+**Fix 3 — DONE (records).** The 0124 migration note and contract now explicitly
+state **six movement keys** on the command/event movement checks:
+`receipt-12000`, `receipt-14640`, `supplier-payment-600`, `supplier-payment-840`,
+`receipt-interest-120`, `receipt-compensation-70`; and **four receipt keys** on
+the receipt-only checks (command match action and receipt-match keys/amounts):
+`receipt-12000`, `receipt-14640`, `receipt-interest-120`,
+`receipt-compensation-70`. The six widened CHECKs keep every old allowed value.
+BUILD_PLAN.md is untouched in this round; its ledger paragraph belongs to the
+integrator.
+
+Ledger paragraph says four keys; correct figure is six movement keys and four receipt keys (integrator to correct).
+
+**Scanner working-tree repair — DONE; historical scan resolution HELD.** The
+formerly flagged line 255 now derives expected movement fields from a named
+list, without a quoted literal beside the field. Identical expected rows,
+amounts and after-open flags are preserved. No history rewrite or scanner
+exception was attempted. The old commit remains flagged; the founder decides
+how that is cleared. A deterministic inspection of added lines checks the
+binding scanner-shaped literal rule; this is not a GitHub secrets-scan pass.
+
+Supplier amounts remain £1,440 due, paid £600 then £840: **INTERIM synthetic
+fixture amounts (coordinator ruling 11 Oct); not product figures**. F18 £120
+interest and £70 compensation remain outside-VAT synthetic fixtures; VAT
+treatment HELD for the founder. No fee is shown, derived, stored or posted.
+
+### Round 1 commands and results
+
+Installed dependencies only. Node `v24.17.0`, installed pinned pnpm `10.28.1`;
+commands use `export PATH=/private/tmp/jg-pf-bin:$PATH` to avoid the launcher's
+package-version download. Only the leaf's required unit files ran, one test run
+at a time, each with `--maxWorkers=2` and at most two files. No whole package or
+repository test suite ran. Root typecheck, lint and build each run once.
+
+| Actual command | Exit / result |
+|---|---|
+| `pnpm --version` | 0; 10.28.1 |
+| `pnpm turbo run build --filter=@jobguard/api...` before unit tests | 0; 6/6 tasks successful, 4 cached |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/practice-facts.test.ts` | 0; 1 file, 22/22 passed |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/practice-facts.application.test.ts src/practice-facts.controller.test.ts` | 0; 2 files, 47/47 passed |
+| `pnpm typecheck` | 0; 7/7 tasks successful, 4 cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; purity, lane and money checks passed; 7/7 package tasks successful, 4 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; committed-range lane boundary passed |
+| `pnpm build` | 0; 7/7 tasks successful, 4 cached; Next generated 25 static pages; existing CSS/workspace-root/cache warnings only |
+| `pnpm openapi:check` | 1; unchanged tsx launcher cannot bind its IPC socket (EPERM) |
+| From apps/api: `node --import tsx src/generate-openapi.ts --check` | 0; same unchanged checker without CLI IPC; artifact matches |
+| Syntax-only TypeScript transpilation of the changed PostgreSQL test | 0; no test execution |
+| Working-tree path inspection using unchanged lane helper | 0; all 6 changed files allowed; supplements committed-range lane check |
+| `ps -axo pid,ppid,%cpu,%mem,etime,comm` diagnostic | 127; sandbox refuses process inspection; no process data returned |
+| `git diff --check` | 0 |
+| Read-only Python preservation inspection, first attempt using moving origin/main | 1; newer audit-export test absent from this leaf; stopped before claiming preservation |
+| Read-only Python inspection against fixed reviewed base `dc16fd683e6ab8b319c5b2f555708bc2c7254be2` | 0; all 269 merged test files and 22 protected files byte-identical; BUILD_PLAN and parked UI unchanged from HEAD; 127 added lines had no binding-rule scanner pattern; all six widened expressions preserved verbatim and migration ALTER-only |
+| `git grep -n -E "(1200000\|1464000\|12000\|7000\|60000\|84000)" -- packages/db/src/practice-feed-repository.ts` | 1; no matches (expected); no example amount controls merged inclusion/exclusion |
+
+Every PostgreSQL and browser suite is **NOT RUN (sandbox cannot start PostgreSQL /
+a browser)**, including the new/extended integration cases, fresh install,
+upgrade, merged database regressions and all browser journeys. No M4 device,
+AI model/prompt/evaluation or live integration changed. CI must verify actual
+PostgreSQL and browser guarantees; earlier CI evidence above predates this
+repair and is not a result for the repaired working tree.
+
+### Round 1 self-review
+
+Re-read the complete Round 1 diff as a strict reviewer. This is builder
+self-review, not a fresh Sol check or an Opus verdict.
+
+- The merged read-filter excludes payments solely by stored match payment ID
+  plus new-catalogue membership. Ordinary equal-amount receipts survive with or
+  without an account; a new match excludes only its own payment. The four
+  written-first regressions expose c26e644's failures; they are not claimed run.
+- Six original constraint names survive discovery/drop/add. Each replacement
+  is validated in the same transaction. All six widened expressions are
+  byte-identical to the earlier leaf; the upgrade test now verifies names,
+  `convalidated` and every old literal in addition to existing row-byte and
+  security/routine checks. Actual PostgreSQL catalog verification remains owed.
+- Records agree on six movement keys and four receipt keys. The ledger correction
+  is explicitly handed to the integrator; BUILD_PLAN was not edited this round.
+- All 269 merged test files and the 22 protected files compared to the fixed
+  reviewed base are byte-identical. The only edited test is this leaf's new
+  integration file. No assertion, expected result, skip or timeout was weakened;
+  the scanner repair constructs exactly the former expected rows from lists.
+- The grep specified by the repair order returns no example-amount literals in
+  the repository. New-view exact-amount candidate selection is unchanged; it
+  does not remove an ordinary payment from the merged view.
+- No new identity/authorization path, column, financial derivation, posting,
+  external action or provider route. Existing tenant/job-qualified matches,
+  RLS/grants, actor/session verification, locks and audit are reused unchanged.
+- Only six files changed: this receipt, the contract, MIGRATIONS, 0124, the
+  authorized read-filter and this leaf's integration test. Each is in the
+  existing lane. No shared registrations need changing; migration/repository
+  overlap remains serialized by the dispatcher/integrator.
+- No UI, CH-7 routine, M4-8-S, part B, source-pinned auth file, model/prompt,
+  decision policy, manifest, lockfile or tool changed. All listed fix-later
+  issues remain parked. No security or commercial approval inferred.
+
+`origin/main` advanced externally to
+`11f394b7cd41645ef268d99fcb3ad33be408661b` during this round; HEAD remains
+c26e644. The original base for both supplied reviews and this preservation
+inspection is `dc16fd683e6ab8b319c5b2f555708bc2c7254be2`. No checkout,
+merge, rebase, commit, add, push or history write was attempted. Lane checks
+use origin/main's merge base; the dispatcher owns any later integration.
+
+Final added-line and intended-message inspection exited 0: no binding-rule
+scanner-shaped literal; this does not clear the historical scanner finding.
+Generated outputs and caches were removed after the successful build; no
+package store, build output or test-results is retained in the worktree.
+Final whitespace/path/HEAD inspection is recorded below. The intended
+conventional commit subject and body are written to
+`/private/tmp/jg-msg-practice-facts-1.txt`; the dispatcher commits the working
+tree. No git write occurred.
+
+Final inspection: generated-output cleanup exited 0 (16 local paths removed);
+added-line/message scan exited 0; `git diff --check` exited 0; `git status`
+shows exactly the six files above; HEAD remains c26e644. The final amount grep
+again exited 1 with no matches, as expected. No pending check placeholder
+remains in this Round 1 record.
+
+Owed: CI PostgreSQL/browser guarantees on the repaired head, historical secret
+scan resolution by the founder, the integrator's ledger correction, the same
+Opus review plus fresh Sol check of these fixes only, and separate acceptance.
+No technical acceptance or production release is claimed. Part B, M4-8-S saved
+F5, founder F18 VAT treatment, D01 v3, D03 v3, the consumed-credit amendment and
+G4-S remain held as before.

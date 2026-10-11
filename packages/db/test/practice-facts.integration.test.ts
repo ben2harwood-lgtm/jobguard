@@ -84,6 +84,11 @@ const catalogs = async () => ({
   triggers:(await admin.query("SELECT tgrelid::regclass::text t,tgname,pg_get_triggerdef(oid) def FROM pg_trigger WHERE tgrelid=ANY($1::regclass[]) ORDER BY 1,2",[tables.map(t=>`app.${t}`)])).rows,
   functions:(await admin.query("SELECT proname,pg_get_functiondef(p.oid) def,proacl::text,prosecdef,pg_get_userbyid(proowner) owner,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime_exec FROM pg_proc p WHERE p.oid IN('app.guard_practice_feed()'::regprocedure,'app.require_practice_feed_effect()'::regprocedure) ORDER BY proname")).rows,
 });
+const catalogueChecks = async () => (await admin.query<{ table_name: string; conname: string; def: string; convalidated: boolean }>(
+  "SELECT conrelid::regclass::text table_name,conname,pg_get_constraintdef(oid) def,convalidated FROM pg_constraint WHERE conrelid=ANY($1::regclass[]) AND contype='c' AND position('receipt-384' in pg_get_constraintdef(oid))>0 ORDER BY 1,2",
+  [tables.slice(2).map(t => `app.${t}`)],
+)).rows;
+let upgradeChecks: Awaited<ReturnType<typeof catalogueChecks>>;
 let upgradeRows:unknown, upgradeCatalogs:Awaited<ReturnType<typeof catalogs>>, upgraded:{jobId:string;sessionId:string}, mergedBefore:PracticeFeedView;
 beforeAll(async()=>{
   process.env.JOBGUARD_ENV="synthetic_demo";
@@ -107,7 +112,7 @@ beforeAll(async()=>{
   for(const entry of practiceMovementCatalogueV1)v=await cmd(repo(),upgraded,advance(v.revision,entry.movement,"settled"));
   const inv=await invoice(upgraded.jobId), paymentId=await receipt(upgraded,inv,38400);
   mergedBefore=await cmd(repo(),upgraded,command(v.revision,{action:"match_receipt",movement:"receipt-384",paymentId}));
-  upgradeRows=await rows();upgradeCatalogs=await catalogs();
+  upgradeRows=await rows();upgradeCatalogs=await catalogs();upgradeChecks=await catalogueChecks();
   await migrate(admin);await migrate(admin);
 },90000);
 afterAll(async()=>{if(priorEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=priorEnvironment;await closeTestPools(runtime,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});});
@@ -123,12 +128,73 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
       const checks=(await admin.query("SELECT conname,pg_get_constraintdef(oid) def,convalidated FROM pg_constraint WHERE conrelid=$1::regclass AND contype='c' AND position('receipt-384' in pg_get_constraintdef(oid))>0",[`app.${t}`])).rows;
       expect(checks).toHaveLength(2);expect(checks.every(c=>c.convalidated)).toBe(true);
     }
+    const afterChecks = await catalogueChecks();
+    expect(upgradeChecks).toHaveLength(6);
+    expect(afterChecks.map(c => [c.table_name, c.conname])).toEqual(upgradeChecks.map(c => [c.table_name, c.conname]));
+    for (const previous of upgradeChecks) {
+      const replacement = afterChecks.find(c => c.table_name === previous.table_name && c.conname === previous.conname)!;
+      expect(replacement.convalidated).toBe(true);
+      const oldValues = previous.def.match(/'[^']*'|\b\d+\b/gu) ?? [];
+      const widenedValues = new Set(replacement.def.match(/'[^']*'|\b\d+\b/gu) ?? []);
+      expect(oldValues.every(value => widenedValues.has(value))).toBe(true);
+    }
     const before=await rows();await migrate(admin);expect(await rows()).toEqual(before);
   });
   it("mixed seven old and six new facts preserve the merged movements, receipts and event count; revision alone follows all commands",async()=>{
     for(const e of practiceFactsCatalogueV1){const v=await factsView(upgraded);await factsCmd(upgraded,v.revision,{action:"advance",movement:e.movement,step:"settled"});}
     const after=await view(upgraded);expect({...after,revision:mergedBefore.revision}).toEqual(mergedBefore);expect(after.movementCount).toBe(7);expect(after.eventCount).toBe(7);
     expect((await factsView(upgraded)).movementCount).toBe(6);
+  });
+  it("old-only job keeps all ordinary £120, £70 and £384 receipts in the merged view", async () => {
+    const f = await fixture(), inv = await invoice(f.jobId);
+    const amounts = [12000, 7000, 38400], ids = [];
+    for (const amount of amounts) ids.push(await receipt(f, inv, amount));
+    const merged = await view(f);
+    expect(merged.receipts.map(r => r.paymentId).sort()).toEqual(ids.sort());
+    expect(merged.receipts.map(r => r.amountPence).sort((a, b) => a - b)).toEqual([...amounts].sort((a, b) => a - b));
+    expect(merged.receipts).toHaveLength(3);
+  });
+  it("old-only job keeps every new example amount at once with main's receipt count and total", async () => {
+    const f = await connected(), inv = await invoice(f.jobId);
+    const amounts = practiceFactsCatalogueV1.map(e => e.grossPence), ids = [];
+    for (const amount of amounts) ids.push(await receipt(f, inv, amount));
+    const merged = await view(f);
+    // The merged reader on main includes every builder-attested payment, irrespective of its amount.
+    expect(merged.receipts.map(r => r.paymentId).sort()).toEqual(ids.sort());
+    expect(merged.receipts).toHaveLength(6);
+    expect(merged.receipts.reduce((total, r) => total + BigInt(r.amountPence), 0n)).toBe(2827000n);
+    expect(merged.movements).toEqual([]);expect(merged.eventCount).toBe(0);
+  });
+  it("ordinary £120 receipt stays merged beside the separate matched F18 £120 interest receipt", async () => {
+    const f = await connected(), inv = await invoice(f.jobId);
+    const ordinaryId = await receipt(f, inv, 12000), interestId = await receipt(f, inv, 12000);
+    const interest = practiceFactsCatalogueV1.find(e => e.fixture === "F18-outside-vat" && e.grossPence === 12000)!;
+    let facts = await factsCmd(f, 1, { action: "advance", movement: interest.movement, step: "settled" });
+    facts = await factsCmd(f, facts.revision, { action: "match_receipt", movement: interest.movement, paymentId: interestId });
+    const merged = await view(f);
+    expect(merged.receipts.map(r => r.paymentId)).toEqual([ordinaryId]);
+    expect(merged.receipts[0]?.amountPence).toBe(12000);
+    expect(facts.receipts.find(r => r.paymentId === interestId)?.assessment).toMatchObject({ status: "qualifies", reason: "matched" });
+    expect(merged.movements).toEqual([]);expect(merged.eventCount).toBe(0);
+  });
+  it("new facts and their matched receipts leave every merged total and count unchanged", async () => {
+    const f = await connected(), inv = await invoice(f.jobId);
+    const ordinaryIds = [await receipt(f, inv, 12000), await receipt(f, inv, 38400)];
+    const before = await cmd(repo(), f, advance(1, "receipt-384", "settled"));
+    for (const e of practiceFactsCatalogueV1) {
+      let facts = await factsView(f);
+      facts = await factsCmd(f, facts.revision, { action: "advance", movement: e.movement, step: "settled" });
+      if (e.kind === "customer_receipt") {
+        const paymentId = await receipt(f, inv, e.grossPence);
+        await factsCmd(f, facts.revision, { action: "match_receipt", movement: e.movement, paymentId });
+      }
+    }
+    const after = await view(f);
+    expect(after.receipts.map(r => r.paymentId).sort()).toEqual(ordinaryIds.sort());
+    expect(after.receipts).toHaveLength(2);
+    expect(after.receipts.reduce((total, r) => total + BigInt(r.amountPence), 0n)).toBe(50400n);
+    expect(after.movementCount).toBe(1);expect(after.eventCount).toBe(1);
+    expect({ ...after, revision: before.revision }).toEqual(before);
   });
   it.each(practiceFactsCatalogueV1)("$movement goes pending → settled; replay, overlap, alternate representation and duplicates keep one identity and allocate zero",async e=>{
     const f=await connected(),before=await moneyTables(); let v=await factsCmd(f,1,{action:"advance",movement:e.movement,step:"pending"});
@@ -252,7 +318,9 @@ it("F18 extra receipts settle after a real case opens, retaining original £3,00
   let merged=await cmd(repo(),f,advance(1,"receipt-3000","settled"));
   let facts=await factsCmd(f,merged.revision,{action:"advance",movement:"receipt-interest-120",step:"settled"});facts=await factsCmd(f,facts.revision,{action:"advance",movement:"receipt-compensation-70",step:"settled"});
   const timing=(await admin.query("SELECT e.movement_key,e.gross_pence,e.created_at>c.created_at after_open FROM app.practice_feed_event e JOIN app.recovery_case c ON c.tenant_id=e.tenant_id AND c.job_id=e.job_id WHERE c.id=$1 AND e.event_kind='settled' ORDER BY movement_key",[c.id])).rows;
-  expect(timing).toEqual([{movement_key:"receipt-3000",gross_pence:"300000",after_open:true},{movement_key:"receipt-compensation-70",gross_pence:"7000",after_open:true},{movement_key:"receipt-interest-120",gross_pence:"12000",after_open:true}]);
+  const expectedMovements = ["receipt-3000", "receipt-compensation-70", "receipt-interest-120"];
+  const expectedAmounts = ["300000", "7000", "12000"];
+  expect(timing).toEqual(expectedMovements.map((movement, index) => ({ movement_key: movement, gross_pence: expectedAmounts[index], after_open: true })));
   const review=await new RecoveryEligibilityV3Repository(practiceMaterialPool(runtime,auth.digest),"synthetic_demo").review(context,f.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,expectedReviewRevision:0,fixture:"F18"},actor,auth.digest);
   expect(review.result).toMatchObject({qualifyingPrincipal:{pence:262000,currency:"GBP"},reason:"Fixed statutory compensation is not part of the fee base",productionEnabled:false});
 });

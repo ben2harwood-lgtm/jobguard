@@ -769,11 +769,19 @@ from migration success.
 
 `0124_practice_feed_facts.sql` replaces exactly six catalogue CHECK constraints on
 `practice_feed_command`, `practice_feed_event` and `practice_feed_receipt_match`.
-It retains every existing allowed value and adds the four part-A movements plus
-Ben's two F18 receipts, from the separate `practiceFactsCatalogueV1`. Supplier
-payments cannot match customer receipts. Constraint discovery uses table identity
+It retains every existing allowed value and adds **six movement keys** from
+`practiceFactsCatalogueV1` to the command/event movement checks:
+`receipt-12000`, `receipt-14640`, `supplier-payment-600`, `supplier-payment-840`,
+`receipt-interest-120` and `receipt-compensation-70`.
+The receipt-only checks (command match action and receipt-match keys/amounts)
+add **four receipt keys**: `receipt-12000`, `receipt-14640`,
+`receipt-interest-120` and `receipt-compensation-70`.
+Supplier payments cannot match customer receipts. Constraint discovery uses table identity
 and `pg_get_constraintdef` containing `receipt-384`, requiring exactly two matches
-per table; any mismatch aborts the transaction.
+per table; any mismatch aborts the transaction. Each widened replacement keeps
+its discovered original constraint name and validates existing rows, in the
+same transaction. The upgrade test compares all six names, validation flags
+and every old allowed literal before and after 0124.
 
 Creates NO table, column, role, grant, policy, trigger or function. Updates,
 rewrites and deletes NO existing row. Both feed routines remain unchanged.
