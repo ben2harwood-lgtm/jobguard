@@ -20,7 +20,7 @@ Builder receipt only — not independently verified, not accepted.
 | DW1 F14–F22 reasons/outcomes/Q | BUILT IN PART: core coverage for all rows, persisted/browser test definitions for F15 and F17–F22. F14/F16 positive persistence/browser remains BLOCKING. F19 interest reason and F21 reason HELD under Q4. F22 uses existing verbatim copy. No F display or fee derivation (Q3). |
 | DW2 pursuit without approved terms | HELD, Q6; scope would be withheld-payment only (Q5). No terms-guard integration test is invented. |
 | DW3 later approval never qualifies an earlier receipt | HELD, Q6. The separately built F20 opening-time exclusion uses original M4-7-S server time; it does not implement a terms-time rule. |
-| DW4 v1 reviews keep version/outcome | BUILT: separate v3 storage and additive response field; old v1 code/history preserved. DB `DW4 migration preserves previous reviews byte-for-byte and version` seeds the previous schema before 0113, migrates twice, and compares stored JSON text bytes. NOT RUN. Existing v1 core/API assertions are unchanged. |
+| DW4 v1 reviews keep version/outcome | BUILT: separate v3 storage and additive response field; old v1 code/history preserved. DB `DW4 migration preserves previous reviews byte-for-byte and version` seeds the previous schema before 0119, migrates twice, and compares stored JSON text bytes. NOT RUN. Existing v1 core/API assertions are unchanged. |
 
 ### F14–F22 exact reference results
 
@@ -63,7 +63,7 @@ The v3 command accepts only immutable generated fixture selection and expected r
 
 SV-1 owns category/component eligibility predicates; SH-1 owns exact-pence addition. No kernels are copied, no success fee is calculated, and no commercial authorization is created. Existing synthetic prerequisite assumptions supplied to the pure SV-1 predicate are fixture assumptions, including its terms prerequisite, not a terms approval record or a pursuit guard. Production/pilot mode refuses v3 processing and every candidate records `productionEnabled: false`.
 
-Migration `0113_recovery_eligibility_v3.sql` is appended after 0112 in increasing order. Position tests assert names/order, never “last migration”. It expands the category check, adds a tenant/job-qualified feed identity key, and creates `recovery_eligibility_v3_review`, `recovery_claim_line`, `supplier_credit_consumption`. Every new table has non-null tenant, tenant/job/case/review-qualified FKs, ENABLE/FORCE RLS, migration ownership, runtime SELECT/INSERT only, and append-only triggers. Invoker guards validate source, fixture, exact Q and rendered components. A deferred constraint requires the exact command/result audit hash and complete claim lines. No earlier guard is restated, including the three 0112 message guards.
+Migration `0119_recovery_eligibility_v3.sql` is appended after 0112 in increasing order. Position tests assert names/order, never “last migration”. It expands the category check, adds a tenant/job-qualified feed identity key, and creates `recovery_eligibility_v3_review`, `recovery_claim_line`, `supplier_credit_consumption`. Every new table has non-null tenant, tenant/job/case/review-qualified FKs, ENABLE/FORCE RLS, migration ownership, runtime SELECT/INSERT only, and append-only triggers. Invoker guards validate source, fixture, exact Q and rendered components. A deferred constraint requires the exact command/result audit hash and complete claim lines. No earlier guard is restated, including the three 0112 message guards.
 
 Existing v1 rows/version/outcome are not backfilled or changed. Forward fix with a new migration is the default; any application rollback must retain readers compatible with the new case category after such cases exist. Do not drop populated history or narrow a category after new-category rows exist. No new provider, secret, external action, charge, allocator, ledger posting, alert or production capability is introduced. RLS guarantees remain bounded by correctly authenticated context and uncompromised runtime credentials; synthetic deployment isolation remains necessary.
 
@@ -146,7 +146,7 @@ This is builder self-review only, not an independent verdict or acceptance. Post
 - `packages/core/src/recovery-eligibility-v3.test.ts`
 - `packages/core/src/recovery-eligibility-v3.ts`
 - `packages/db/MIGRATIONS.md`
-- `packages/db/migrations/0113_recovery_eligibility_v3.sql`
+- `packages/db/migrations/0119_recovery_eligibility_v3.sql`
 - `packages/db/src/index.ts`
 - `packages/db/src/migrate.ts`
 - `packages/db/src/recovery-case-repository.ts`
@@ -154,7 +154,7 @@ This is builder self-review only, not an independent verdict or acceptance. Post
 - `packages/db/test/recovery-eligibility-v3.integration.test.ts`
 - `packages/db/test/tenancy.integration.test.ts`
 
-Shared-file overlaps are additive and serialized with the integrator: M4-1-S-R recovery case/category/application/view; M4-2-S-R existing eligibility transport (v1 branch unchanged); M4-7-S only a qualified feed identity key in 0113, with settled-movement implementation untouched; shared core/DB exports, migration registry, catalog rows and OpenAPI. M4-5-S and the 0112 M4-6-S message/pursuit guards are untouched. Externally merged FIXLATER-1 also touches `recovery-cases.tsx` (delivery lookup lifecycle, separate lines); its commit is outside this issued-base working tree and must be preserved by integration. No reversed current-origin baseline difference is a builder edit. Existing dependency-owned tests remain unchanged except the issued lane's catalog rows.
+Shared-file overlaps are additive and serialized with the integrator: M4-1-S-R recovery case/category/application/view; M4-2-S-R existing eligibility transport (v1 branch unchanged); M4-7-S only a qualified feed identity key in 0119, with settled-movement implementation untouched; shared core/DB exports, migration registry, catalog rows and OpenAPI. M4-5-S and the 0112 M4-6-S message/pursuit guards are untouched. Externally merged FIXLATER-1 also touches `recovery-cases.tsx` (delivery lookup lifecycle, separate lines); its commit is outside this issued-base working tree and must be preserved by integration. No reversed current-origin baseline difference is a builder edit. Existing dependency-owned tests remain unchanged except the issued lane's catalog rows.
 
 Generated artifacts were removed after all builds/generator checks: package/API `dist`, web `.next`, `.turbo`, tsbuildinfo and test/build result directories. Installed dependencies are retained; no `.pnpm-store`, build output or `test-results` is left in this working tree.
 
@@ -167,3 +167,12 @@ Generated artifacts were removed after all builds/generator checks: package/API 
 - D01 v3 and D03 v3 remain proposed; §5.5's signed consumed-credit production amendment and G4-S remain release gates. Production fee issuance/collection stays disabled.
 - Existing pursuit templates remain limited to merchant_overcharge / withheld_customer_payment (`packages/core/src/recovery-message.ts:25`); no duplicate-payment pursuit support is claimed or added outside the issued lane. CH-7 builds its capture/eligibility view; any new template/support requires a separate owner/lane ruling.
 - Fresh independent Claude Opus review and a separate Sol check after CI, each bound to the dispatcher's exact commit, followed by separate technical acceptance. The builder neither reviews independently nor accepts its own work.
+
+## Integrator record, 11 October 2026 — held parts (coordinator rulings)
+
+- B4, DW2, DW3 (fee-terms approval and the pursuit guard): HELD — D01 v3 is a founder pricing decision still at proposed (round-5 ruling Q6).
+- B5 and the reason 'Insurer proceeds never qualify': HELD — the insurer paying-party type is attached to the job, not to the receipt fact (round-5 ruling Q7).
+- Reason wording for F19's individual-debtor interest and for F21: HELD — no existing wording found in the repository; none invented (round-5 ruling Q4).
+- F14 and F16 saved and on-screen positive path: HELD by the coordinator's ruling of 11 October — the practice feed has no 'supplier invoice paid' fact and none is invented inside CH-7; the pure-maths proof stands; a separate order adds that fact and then this persistence. Where the receipt above says BLOCKING for F14/F16, read HELD.
+
+CH-7 is not fully accepted while these parts are held.

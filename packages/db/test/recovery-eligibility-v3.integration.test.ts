@@ -22,7 +22,7 @@ beforeAll(async()=>{
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
  admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic"});
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- const index=MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0113_recovery_eligibility_v3.sql");expect(index).toBeGreaterThan(MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0112_recovery_follow_up.sql"));
+ const index=MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0119_recovery_eligibility_v3.sql");expect(index).toBeGreaterThan(MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0112_recovery_follow_up.sql"));
  const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u)));expect(names).toEqual([...names].sort());
  for(const url of MIGRATION_URLS.slice(0,index)){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[basename(fileURLToPath(url))]);}
  await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[U]);await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'CH-7 synthetic')",[A,T]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')",[M,T,A,U]);

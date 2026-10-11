@@ -733,6 +733,8 @@ Upgrade coverage: `test/recovery-follow-up-upgrade.integration.test.ts` installs
 
 Forward fix: preserve immutable history and replace only the affected routines in another reviewed migration. Application rollback remains schema-compatible, but must not be treated as a rollback of the atomic audit guarantee; the old application may still append its additional clock audit. Do not revert to 0112's delayed due-audit routine, drop history, or rewrite audit rows. Release/acceptance requires green database/migration/browser suites, fresh Claude Opus review and a separate Sol check on the exact dispatcher commit.
 
-## 0113 — CH-7 recovery eligibility v3
+## 0119 — CH-7 recovery eligibility v3
+
+Renumbered from 0113 to 0119 on 11 October 2026 under the merge-ahead ruling because 0115 merged first.
 
 Expand-only synthetic candidate reviews, tenant/job/case-qualified claim components and a typed supplier-credit link; adds `duplicate_supplier_payment` without changing old cases/reviews. Runtime tables are FORCE RLS, owned by `jobguard_migration`, SELECT/INSERT only, with invoker write guards and deferred audit/component completeness. No fee/posting, terms or pursuit routine changes. The consumed-credit positive path fails closed because merged 0106 has no supplier-invoice payment movement; see `docs/contracts/recovery-eligibility-v3.md`. Keep v1 data byte-for-byte. Forward fix with a new migration; any application rollback must retain a reader compatible with the new category after such cases exist. Never drop populated history or narrow a used category. PostgreSQL fresh/upgrade/catalog tests are written but NOT RUN in the builder sandbox.

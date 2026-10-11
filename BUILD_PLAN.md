@@ -3353,6 +3353,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — M4-6-S-R1, 11 October 2026 (merge-ahead ruling).** M4-6-S-R1, a fix-forward repair of merged M4-6-S (#127, 0112), was issued on 11 October with **0115** (`recovery_follow_up_repair`), the next number neither merged nor held at dispatch (merged through 0112; 0113 held by CH-7 and 0114 by ENT-10a, both in build), under Ben's 5 October merge-ahead ruling. It only replaces routines that 0112 created or restated; no table, policy, grant or row changes. The runner lists it in numeric order. A piece that lands after a higher number has merged renumbers; SV-2 (#119) takes the next free number at its own merge.
 
+**Ledger amendment — CH-7, 11 October 2026 (merge-ahead ruling).** CH-7 (pre-allocated 0060 in the in-flight table; issued with 0113 on 9–11 October) takes **0119** (`recovery_eligibility_v3`) on 11 October 2026, the next number neither merged nor reserved (merged through 0115; 0116 ENT-10b, 0117 ENT-4b and 0118 SV-2 reserved), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0115; the SQL is unchanged and the lane path was swapped with the renumber. A piece that lands after a higher number has merged renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
