@@ -15,6 +15,7 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  await page.getByRole("button",{name:"Confirm scope",exact:true}).click();
  const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
  // C7 keyboard path: Tab/Shift+Tab between the first actions (keyboard modality, so :focus-visible applies) and require a visible focus ring on each.
+ await expect(button(page,"Open materials-320 overcharge")).toBeEnabled();
  await button(page,"Open materials-320 overcharge").focus();
  await page.keyboard.press("Tab");await expectVisibleKeyboardFocus(page,"Open £320 withheld payment");
  await page.keyboard.press("Shift+Tab");await expectVisibleKeyboardFocus(page,"Open materials-320 overcharge");
