@@ -331,3 +331,24 @@ One fix, from the fresh Sol check of round 1: the commit-time guard compared the
 **Stopped on.** Nothing.
 
 No assertion, expected value, timeout, grant or policy was changed or loosened.
+
+## Final catch-up — 11 October 2026
+
+Final refresh before merge (Claude Sonnet, run on the Mac). `origin/main` is 11f394b (ENT-10b #133, migration 0121; MIG-ORDER-2 #137). Merge commit aad1458 on top of head 1648035. ENT-4b keeps 0122. Nothing but the merge was changed.
+
+**Conflicted files and how each was resolved (both sides kept, nothing else touched).**
+- `packages/db/src/migrate.ts`: main's `0121_audit_export.sql` entry, then this leaf's `0122_extra_origin_persistence.sql`; the order is 0119, 0120, 0121, 0122 (strictly increasing).
+- `packages/db/MIGRATIONS.md`: main's `## 0121 — audit export (ENT-10b)` section, then this leaf's `## 0122` section.
+- `BUILD_PLAN.md` §12.2: main's ENT-10b ledger paragraph, then this leaf's ENT-4b paragraph, before `### 12.3`; every earlier paragraph kept.
+- Merged without conflict and checked: `packages/core/src/index.ts`, `packages/db/src/index.ts`, `config/agent-lane-assignments.json` (parses as JSON; `ent-4b` and `ent-10b` lines both present) and `packages/db/test/tenancy.integration.test.ts` (ENT-10b's `audit_export` and `audit_export_checkpoint` rows and this leaf's three rows, all in name order).
+- No conflict markers remain. `git diff origin/main --stat` lists exactly the same 17 files as before (1540 insertions, no deletions), with nothing of ENT-10b's or MIG-ORDER-2's inside it. `git diff 1648035 HEAD --stat` is what main brought (92 files) plus the three resolutions.
+
+**Checks and counts.**
+- `pnpm install --frozen-lockfile`: ok. `pnpm typecheck`: exit 0, 7 tasks. `pnpm turbo run build --filter=@jobguard/db...`: exit 0, 3 tasks.
+- db `test/recovery-follow-up-upgrade.integration.test.ts test/fingerprinted-row-shape.integration.test.ts test/recovery-message-upgrade.integration.test.ts` (unedited): 3 files, 19 tests passed. All three pass with 0122 present, including the fingerprint guard and the upgrade proof.
+- db `test/extra-origin.integration.test.ts test/extra-links.integration.test.ts test/extra-origin-upgrade.integration.test.ts`: 3 files, 48 tests passed.
+- db `test/tenancy.integration.test.ts test/demo-bootstrap.integration.test.ts test/shared-money-origin.integration.test.ts`: 3 files, 25 tests passed.
+- `pnpm turbo run build --filter=@jobguard/api...`: exit 0. `pnpm openapi:check`: exit 0.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes` and `pnpm lint`: exit 0 on the committed merge. (A first `pnpm lint` run, made while the merge was staged but not yet committed, failed its lane boundary step because the lane tool then saw main's files as this branch's edits; it passed once the merge was committed.)
+
+**Stopped on.** Nothing. No assertion, expected value, timeout, grant or policy was changed or loosened.
