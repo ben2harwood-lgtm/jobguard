@@ -95,7 +95,7 @@ let upgradeRows:unknown, upgradeCatalogs:Awaited<ReturnType<typeof catalogs>>, u
 let alone:{rows:unknown;catalogs:Awaited<ReturnType<typeof catalogs>>;checks:Awaited<ReturnType<typeof catalogueChecks>>;perTable:{t:string;checks:{conname:string;def:string;convalidated:boolean}[]}[];view:PracticeFeedView};
 let runBetween:{first:unknown;second:unknown};
 let preColumns:Record<string,string[]>, preIds:Record<string,string[]>, namedBefore:Record<string,unknown[]>;
-const namedRows = async (db:Pick<Pool|PoolClient,"query">) => Object.fromEntries(await Promise.all(Object.keys(preColumns).map(async(t)=>[t,(await db.query(`SELECT ${preColumns[t]!.map(c=>`"${c}"`).join(",")} FROM app.${t} WHERE id=ANY($1::uuid[]) ORDER BY id`,[preIds[t]])).rows] as const))) as Record<string,unknown[]>;
+const namedRows = async (db:Pick<Pool|PoolClient,"query">) => Object.fromEntries(await Promise.all(Object.keys(preColumns).map(async(t)=>[t,(await db.query(`SELECT row_to_json(t)::text AS bytes FROM (SELECT ${preColumns[t]!.map(c=>`"${c}"`).join(",")} FROM app.${t} WHERE id=ANY($1::uuid[])) t ORDER BY t.id`,[preIds[t]])).rows.map(r=>r.bytes as string)] as const))) as Record<string,string[]>;
 beforeAll(async()=>{
   process.env.JOBGUARD_ENV="synthetic_demo";
   directory=await mkdtemp(join(tmpdir(),"jobguard-practice-facts-"));
@@ -157,6 +157,7 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
     expect(runBetween.second).toEqual(runBetween.first);
     // After ALL migrations: the pre-existing rows keep identical values in the columns that existed before 0124 (compared by name),
     // and the original allowed values are still allowed (tolerant: a later migration may add more).
+    for(const t of Object.keys(preColumns))expect(namedBefore[t]!.length).toBeGreaterThan(0);
     expect(await namedRows(admin)).toEqual(namedBefore);
     const laterChecks = await catalogueChecks();
     for (const previous of upgradeChecks) {
