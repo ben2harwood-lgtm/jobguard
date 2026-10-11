@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorRoles } from "@jobguard/core";
-import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type AuditCheckpoint } from "../src/index.js";
+import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
+import { AuditExportApplication, auditExportHttpFailure } from "../../../apps/api/src/audit-export/audit-export.application.js";
 import { closeTestPools } from "./pool-test-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractor: ContractorRepository, repo: AuditExportRepository;
 const context = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
@@ -153,4 +156,62 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     try { await expect(repo.create(context(p), actor(p), request())).rejects.toMatchObject({ code: "AUDIT_EXPORT_MODE_HELD" }); }
     finally { process.env.JOBGUARD_ENV = "synthetic_demo"; }
   });
+
+  it.each(["list", "create"] as const)("audits the revoked session member's %s refusal through the application boundary", async action => {
+    const { p, session } = await setup(), other = await setup();
+    const otherCount = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [other.p.tenantId])).rows[0]!.n;
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [p.tenantId, p.membershipId]);
+    const application = new AuditExportApplication(runtime);
+    const response = await (action === "list" ? application.list(session) : application.create(session, request()))
+      .then(() => undefined, error => auditExportHttpFailure(error));
+    expect(response).toEqual({ status: 403, body: { version: "audit-export-error.v1", code: "AUDIT_EXPORT_FORBIDDEN" } });
+    expect((await admin.query("SELECT tenant_id,actor_ref,payload->'references'->>'action' action FROM app.audit_event WHERE tenant_id=$1 AND event_type='audit.export.refused'", [p.tenantId])).rows)
+      .toEqual([{ tenant_id: p.tenantId, actor_ref: `membership:${p.membershipId}`, action }]);
+    expect((await admin.query("SELECT id FROM app.audit_export WHERE tenant_id=$1", [p.tenantId])).rows).toEqual([]);
+    expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [other.p.tenantId])).rows[0]!.n).toBe(otherCount);
+  });
+
+  it("serializes distinct concurrent export commands on two connections into consistent verifiable snapshots", async () => {
+    const { p } = await setup(), cp = await checkpoint(p), commands = [request(), request()];
+    const before = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [p.tenantId])).rows[0]!.n as number;
+    const firstPool = new Pool({ ...runtime.options, max: 1 }), secondPool = new Pool({ ...runtime.options, max: 1 });
+    try {
+      const clients = await Promise.all([firstPool.connect(), secondPool.connect()]);
+      try {
+        const pids = await Promise.all(clients.map(client => client.query("SELECT pg_backend_pid() pid")));
+        expect(pids[0]!.rows[0]!.pid).not.toBe(pids[1]!.rows[0]!.pid);
+      } finally { clients.forEach(client => client.release()); }
+      const [first, second] = await Promise.all([
+        new AuditExportRepository(firstPool).create(context(p), actor(p), commands[0]),
+        new AuditExportRepository(secondPool).create(context(p), actor(p), commands[1]),
+      ]);
+      expect(new Set([first.id, second.id])).toEqual(new Set(commands.map(command => command.commandId)));
+      const rows = await repo.list(context(p), actor(p)); expect(rows).toHaveLength(2);
+      const events = (await admin.query<AuditEvent>(`SELECT id,version,actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",payload,tenant_id AS "tenantId",sequence::int,occurred_at AS "occurredAt",payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash" FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [p.tenantId])).rows;
+      expect(events).toHaveLength(before + 2);
+      expect(events.map(event => event.sequence)).toEqual(Array.from({ length: events.length }, (_, i) => i + 1));
+      expect(new Set(events.map(event => event.sequence)).size).toBe(events.length);
+      expect(events.filter(event => event.eventType === "audit.export.created")).toHaveLength(2);
+      expect(new Set(events.filter(event => event.eventType === "audit.export.created").map(event => event.id))).toEqual(new Set([first.id, second.id]));
+      expect(() => verifyAuditChain(events, cp)).not.toThrow();
+      expect((await admin.query("SELECT sequence::int,event_hash FROM audit_control.audit_head WHERE tenant_id=$1", [p.tenantId])).rows)
+        .toEqual([{ sequence: events.length, event_hash: events.at(-1)!.eventHash }]);
+      expect([first.entryCount, second.entryCount].sort((a, b) => a - b)).toEqual([before + 1, before + 2]);
+      for (const exported of [first, second]) {
+        const persisted = rows.find(row => row.id === exported.id)!;
+        expect(persisted.file).toEqual(exported.file); expect(persisted.entryCount).toBe(exported.entryCount); expect(persisted.headHash).toBe(exported.headHash);
+        const payload = verifySignedAuditExport(persisted.file, persisted.file.publicKeyPem).payload;
+        expect(payload.entryCount).toBe(persisted.entryCount); expect(payload.headHash).toBe(persisted.headHash);
+        expect(payload.createdAt).toBe(new Date(persisted.createdAt).toISOString());
+        expect(payload.entries).toEqual(events.slice(0, persisted.entryCount).map(event => ({ ...event, occurredAt: event.occurredAt.toISOString() })));
+        expect(payload.entries.at(-1)).toMatchObject({ id: persisted.id, eventType: "audit.export.created", eventHash: persisted.headHash });
+        const file = join(dir, `${persisted.id}.json`), publicKey = join(dir, `${persisted.id}.pem`);
+        await writeFile(file, JSON.stringify(persisted.file)); await writeFile(publicKey, persisted.file.publicKeyPem);
+        const result = spawnSync(process.execPath, [fileURLToPath(new URL("../tools/verify-audit-export.mjs", import.meta.url)), file, "--trusted-public-key", publicKey], { encoding: "utf8" });
+        expect(result.error).toBeUndefined(); expect(result.status).toBe(0);
+        expect(JSON.parse(result.stdout)).toMatchObject({ integrityValid: true, complete: true, signerTrusted: true, tenantId: p.tenantId, exportId: persisted.id, entryCount: persisted.entryCount });
+      }
+    } finally { await closeTestPools(firstPool, secondPool); }
+  });
+
 });

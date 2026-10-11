@@ -14,15 +14,25 @@ export class AuditExportApplication {
   private readonly repository: AuditExportRepository;
   constructor(private readonly pool: Pool) { this.repository = new AuditExportRepository(pool); }
   private mode() { assertAuditExportMode(); }
-  private async member(sessionId: string | undefined) {
+  private async member(sessionId: string | undefined, action: "create" | "list") {
     this.mode();
     const session = auditExportSessionV1.safeParse(sessionId);
     if (!session.success) throw new AuditExportError("AUDIT_EXPORT_UNAUTHENTICATED");
     try {
       const repository = new ContractorRepository(this.pool), member = await repository.resolveSession(session.data);
-      // ENT-1's reviewed query verifies active membership before the existing bridge is used.
+      // ENT-1's reviewed query verifies active membership before export access.
       // Its tenant-scoped projection is discarded; it supplies no export authority.
-      await repository.query(member, { version: "contractor-query.v1", tenantId: member.tenantId, resource: "contracts" });
+      try {
+        await repository.query(member, { version: "contractor-query.v1", tenantId: member.tenantId, resource: "contracts" });
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        if (code !== "FORBIDDEN" && code !== "NOT_FOUND") throw error;
+        // A persisted session still attributes a revoked membership to its tenant.
+        // This context is used ONLY to record refusal, never to read/create an export.
+        const context = await this.resolveContext(session.data, member);
+        await this.repository.refuse(context, { membershipId: member.membershipId, identityUserId: member.identityUserId }, action);
+        throw new AuditExportError("AUDIT_EXPORT_FORBIDDEN");
+      }
       return member;
     } catch (error) {
       const code = (error as { code?: string }).code;
@@ -44,7 +54,7 @@ export class AuditExportApplication {
     return resolveVerifiedTenantContext(provider, { sessionToken: sessionId, requestedTenantId: member.tenantId, csrfToken: "audit-export-internal-bridge-token", origin: "https://audit-export.fictional.invalid" }, "https://audit-export.fictional.invalid");
   }
   async list(sessionId: string | undefined) {
-    const member = await this.member(sessionId);
+    const member = await this.member(sessionId, "list");
     const context = await this.resolveContext(sessionId!, member);
     const exports = await this.repository.list(context, { membershipId: member.membershipId, identityUserId: member.identityUserId });
     return { version: "audit-export-list.v1", environment: "synthetic_demo", notice: AUDIT_EXPORT_NOTICE, sandbox: AUDIT_EXPORT_SANDBOX, exports };
@@ -53,7 +63,7 @@ export class AuditExportApplication {
     this.mode();
     const request = auditExportRequestV1.safeParse(raw);
     if (!request.success) throw new AuditExportError("AUDIT_EXPORT_INVALID_INPUT");
-    const member = await this.member(sessionId), context = await this.resolveContext(sessionId!, member);
+    const member = await this.member(sessionId, "create"), context = await this.resolveContext(sessionId!, member);
     return this.repository.create(context, { membershipId: member.membershipId, identityUserId: member.identityUserId }, request.data);
   }
 }

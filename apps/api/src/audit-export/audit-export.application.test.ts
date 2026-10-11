@@ -50,15 +50,61 @@ describe("ENT-10b application boundary", () => {
     await pool.end();
   });
 
-  it("refuses inactive membership before the export repository is reached", async () => {
+  it("refuses inactive membership before exports are read", async () => {
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     const pool = new Pool(), sessionId = crypto.randomUUID();
     const membership = { tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), identityUserId: crypto.randomUUID() } as AuthenticatedMembership;
     vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(membership);
     vi.spyOn(ContractorRepository.prototype, "query").mockRejectedValue({ code: "FORBIDDEN" });
+    const refuse = vi.spyOn(AuditExportRepository.prototype, "refuse").mockResolvedValue(undefined);
     const list = vi.spyOn(AuditExportRepository.prototype, "list");
     await expect(new AuditExportApplication(pool).list(sessionId)).rejects.toMatchObject({ code: "AUDIT_EXPORT_FORBIDDEN" });
+    expect(refuse).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ tenantId: membership.tenantId }), { membershipId: membership.membershipId, identityUserId: membership.identityUserId }, "list");
     expect(list).not.toHaveBeenCalled(); await pool.end();
+  });
+
+  it.each(["list", "create"] as const)("awaits the revoked member's durable %s refusal before returning 403", async action => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+    const pool = new Pool(), sessionId = crypto.randomUUID();
+    const membership = { tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), identityUserId: crypto.randomUUID() } as AuthenticatedMembership;
+    vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(membership);
+    vi.spyOn(ContractorRepository.prototype, "query").mockRejectedValue({ code: "FORBIDDEN" });
+    let commit!: () => void;
+    const refuse = vi.spyOn(AuditExportRepository.prototype, "refuse").mockImplementation(() => new Promise<void>(resolve => { commit = resolve; }));
+    const list = vi.spyOn(AuditExportRepository.prototype, "list"), create = vi.spyOn(AuditExportRepository.prototype, "create");
+    const application = new AuditExportApplication(pool);
+    let returned = false;
+    const response = (action === "list" ? application.list(sessionId) : application.create(sessionId, { version: "audit-export-request.v1", commandId: crypto.randomUUID() }))
+      .then(() => { returned = true; return undefined; }, error => { returned = true; return auditExportHttpFailure(error); });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(refuse).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ tenantId: membership.tenantId }), { membershipId: membership.membershipId, identityUserId: membership.identityUserId }, action);
+    expect(Object.isFrozen(refuse.mock.calls[0]![0])).toBe(true);
+    expect(returned).toBe(false); expect(list).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
+    commit();
+    expect(await response).toEqual({ status: 403, body: { version: "audit-export-error.v1", code: "AUDIT_EXPORT_FORBIDDEN" } });
+    await pool.end();
+  });
+
+  it("does not write a refusal when the session cannot be attributed to a tenant", async () => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+    const pool = new Pool();
+    vi.spyOn(ContractorRepository.prototype, "resolveSession").mockRejectedValue({ code: "UNAUTHENTICATED" });
+    const refuse = vi.spyOn(AuditExportRepository.prototype, "refuse");
+    await expect(new AuditExportApplication(pool).list(crypto.randomUUID())).rejects.toMatchObject({ code: "AUDIT_EXPORT_UNAUTHENTICATED" });
+    expect(refuse).not.toHaveBeenCalled(); await pool.end();
+  });
+
+  it.each(["list", "create"] as const)("returns unavailable if the attributable %s refusal cannot be committed", async action => {
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+    const pool = new Pool(), sessionId = crypto.randomUUID();
+    vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue({ tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), identityUserId: crypto.randomUUID() } as AuthenticatedMembership);
+    vi.spyOn(ContractorRepository.prototype, "query").mockRejectedValue({ code: "FORBIDDEN" });
+    vi.spyOn(AuditExportRepository.prototype, "refuse").mockRejectedValue(new Error("refusal persistence unavailable"));
+    const application = new AuditExportApplication(pool);
+    const response = await (action === "list" ? application.list(sessionId) : application.create(sessionId, { version: "audit-export-request.v1", commandId: crypto.randomUUID() }))
+      .then(() => undefined, error => auditExportHttpFailure(error));
+    expect(response).toEqual({ status: 503, body: { version: "audit-export-error.v1", code: "AUDIT_EXPORT_UNAVAILABLE" } });
+    await pool.end();
   });
 
 });

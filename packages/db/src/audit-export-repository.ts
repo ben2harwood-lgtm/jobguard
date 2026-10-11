@@ -77,6 +77,18 @@ const actorV1 = z.object({ membershipId: uuid, identityUserId: uuid }).strict();
 const eventColumns = `id,version,actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",payload,tenant_id AS "tenantId",sequence::int,occurred_at AS "occurredAt",payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash"`;
 export class AuditExportRepository {
   constructor(private readonly pool: Pool) {}
+  /** Refusal only: the session identifies historical membership, not current export authority. */
+  async refuse(context: VerifiedTenantContext, rawActor: AuditExportActor, action: "create" | "list"): Promise<void> {
+    const { withTenant } = await import("./tenant-context.js");
+    const actor = actorV1.parse(rawActor);
+    await withTenant(this.pool, context, async db => {
+      await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [context.tenantId]);
+      const member = await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3", [context.tenantId, actor.membershipId, actor.identityUserId]);
+      // The verified session supplies the tenant even if its historical actor no longer matches.
+      // As in the authorization refusal path, never copy an unknown/foreign actor into the chain.
+      await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: member.rowCount ? `membership:${actor.membershipId}` : "security:unverified-member", eventType: "audit.export.refused", subjectType: "audit-export", subjectRef: context.tenantId, payload: { references: { action }, classifications: { action: "security" } } }]);
+    });
+  }
   private async authorized(db: TenantTransaction, context: VerifiedTenantContext, actor: AuditExportActor, action: "create" | "list"): Promise<boolean> {
     const allowed = (await db.$client.query<{ allowed: boolean; knownMember: boolean }>(`SELECT EXISTS(SELECT 1 FROM app.membership m JOIN app.role_grant g ON (g.tenant_id,g.membership_id)=(m.tenant_id,m.id)
       WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3 AND app.contractor_member_active(m.id)

@@ -183,3 +183,79 @@ Repair builder only; no review or acceptance. Branch `codex/sandbox/ent-10b`, st
 No assertion, expected value, timeout, grant or runtime privilege was changed or loosened.
 
 Builder receipt only — not independently verified, not accepted.
+
+
+## Round 1 — 11 October 2026
+
+Builder receipt only — not independently verified, not accepted.
+
+Repair base/unchanged Git HEAD: `129e19b524e5f7080888566714f9e8e4809b7a0b`, PR #133, branch `codex/sandbox/ent-10b`. Read the issued-order header again and the independent Sol findings 1–3 before editing. This is a working-tree repair only; no Git write, dependency download, provider call, push or merge was performed. The dispatcher supplies the new committed head and binds the RED-lane rechecks to it. The preceding Opus PASS does not verify this repair.
+
+### Fix results and before/after
+
+- **Fix 1: DONE (implementation and regression cases; PostgreSQL execution pending).** Before: the reviewed contractor membership query refused revoked members before export refusal auditing. After: a query refusal with a server-resolved persisted session awaits a separate refusal-only tenant transaction before returning the typed 403, for both list and create. Tenant and actor come only from that persisted session and the existing principal bridge. The repository rechecks historical membership/identity under the tenant business lock, then appends exactly one refusal using the existing final audit-head lock. An unmatched historical actor uses the existing generic `security:unverified-member` convention; no foreign identity is copied. The path never reads an export, checkpoint or another tenant's rows, and cannot create an export. Missing/unattributable sessions still have no audit row. A failed refusal write returns unavailable instead of a definitive 403.
+- **Fix 2: DONE.** Before: every unsuccessful HTTP response discarded the pending command ID. After: unavailable, network, unreadable, unknown and unconfirmed-success responses retain the ID, including across persisted-list reloads. Only a versioned 4xx forbidden/invalid-input/checkpoint-required/mode-held refusal or a successful response identifying the pending command clears it. A successful create still clears it if the following authoritative list refresh fails. Added `page.test.tsx` to ENT-10b's own lane line only.
+- **Fix 3: DONE (authored PostgreSQL coverage; execution pending).** Before: only the same-command race had an explicit case. After: two distinct commands are issued concurrently through two independently established runtime PostgreSQL connections. The case asserts two persisted exports, two created events, contiguous unique chain sequences with verified links and persisted head, snapshot equality against each corresponding persisted-chain prefix, and successful verification of both files through the verifier CLI. Inspection found no defect in the existing export lock/snapshot implementation, so that code and the same-command race test remain unchanged.
+
+Affected invariants: AGENTS §§5.1, 5.4, 5.7 and inherited C5/C6. Contract text now describes the narrow refusal transaction and retry-ID lifecycle. No migration, backfill, privilege, role, grant, policy, routine, signing or verifier change; `0121_audit_export.sql` is unchanged and no second migration exists. No change to authentication grants, accepted commercial authority, signing-key policy, provider/data flow or operational alerts. Existing authorized export behavior is compatible; attributable refusal persistence failures now surface as unavailable.
+
+### Tests and executable evidence
+
+Tests were written before repair implementation. PostgreSQL cases were authored first and recorded **NOT RUN (sandbox cannot start PostgreSQL / a browser)**, without a database-start attempt. The failed-first application test run failed because the new refusal seam was absent; it is not PostgreSQL evidence. The failed-first page run reproduced changed IDs for unavailable and unknown responses.
+
+Executed API unit file: `apps/api/src/audit-export/audit-export.application.test.ts`, final **14 passed**. New assertions cover `awaits the revoked member's durable list/create refusal before returning 403`, `does not write a refusal when the session cannot be attributed to a tenant`, and `returns unavailable if the attributable list/create refusal cannot be committed`. The existing inactive-membership case retains both original assertions, adds the refusal call assertion, and has its name clarified to `refuses inactive membership before exports are read`.
+
+Executed web unit file: `apps/web/app/admin/contractor/audit-exports/page.test.tsx`, **11 passed**, using the existing contractor-admin scripted hook-harness pattern and actual page handlers, without a DOM or listening server. Six uncertain-outcome variants retain the same ID; four definitive typed refusals permit a new ID; confirmed success clears the ID despite a failed list refresh. These doubles do not prove browser geometry or PostgreSQL persistence.
+
+New PostgreSQL cases in `packages/db/test/audit-export.integration.test.ts` — **NOT RUN (sandbox cannot start PostgreSQL / a browser)**:
+
+- `audits the revoked session member's list refusal through the application boundary`: typed 403, exactly one refusal with the session tenant/membership actor and action, no export row, other tenant audit count unchanged.
+- `audits the revoked session member's create refusal through the application boundary`: the same assertions for create.
+- `serializes distinct concurrent export commands on two connections into consistent verifiable snapshots`: two artifacts/events, no fork, consistent snapshots, persisted-chain verification and both verifier CLI calls. The two CLI invocations inside this database case were also **NOT RUN**.
+
+All eight preceding database cases remain byte-identical; the file now defines eleven cases. Every database/migration suite and Playwright journey remains **NOT RUN (sandbox cannot start PostgreSQL / a browser)** in this round, including `pnpm test:db`, `pnpm test:migrations` and both projects of `ENT-10b.spec.ts`. No browser locator changed, screenshot was taken or browser success claimed. Unchanged verifier/context-scanner and other regression test files were not run under the binding changed-files-only memory rule; CI must preserve and run them. No whole-package or repository test suite ran. Every Vitest invocation names one changed file and uses `--maxWorkers=2`; runs were sequential.
+
+### Commands actually run
+
+The global launcher is pnpm 11 and stalled while resolving the repository's pinned manager. Stopped it, then used the already cached **pnpm 10.28.1** through `/private/tmp/jg-ent-10b-bin/pnpm` (a shim to `/usr/local/bin/corepack pnpm`) with `PATH=/private/tmp/jg-ent-10b-bin:$PATH` and `COREPACK_ENABLE_NETWORK=0` for every subsequent pnpm command. Node is `v24.17.0`. No install/download was attempted by the replacement launcher. Existing Turbo cache logs from other worktree paths are replayed logs, not tests executed there in this round. Turbo emitted nonfatal cache IO warnings; Next emitted existing workspace-root/CSS warnings. No check was weakened to handle them.
+
+| Command | Exit | Actual result |
+|---|---:|---|
+| Initial global `pnpm turbo run build --filter=@jobguard/api...` | 130 | Interrupted stalled launcher; no build-task result |
+| Global `pnpm --version`; `env npm_config_manage_package_manager_versions=false pnpm --version` | 130 / 130 | Interrupted the same launcher stall |
+| `COREPACK_ENABLE_NETWORK=0 corepack pnpm --version` | 0 | Cached 10.28.1 |
+| Pinned `pnpm turbo run build --filter=@jobguard/api...` — tests first | 1 | 5 successful / 6 tasks, 4 cached; API build reports 6 TypeScript errors because `refuse` is not yet implemented |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/audit-export/audit-export.application.test.ts` — tests first | 1 | 1 file; 4 failed / 8 passed (12), missing refusal seam |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/admin/contractor/audit-exports/page.test.tsx` — tests first | 1 | 1 file; 4 failed / 7 passed (11), retry-ID failures |
+| `pnpm turbo run build --filter=@jobguard/api...` — implementation and after self-review refinement | 0 / 0 | Each: 6 successful tasks / 4 cached |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/audit-export/audit-export.application.test.ts` — implementation and final source | 0 / 0 | Each: 1 file / 14 passed |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/admin/contractor/audit-exports/page.test.tsx` — repair | 0 | 1 file / 11 passed |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck packages/db/test/audit-export.integration.test.ts` | 1 | Incorrect package-relative path; inner tsc exit 2, no source check |
+| Same tsc command with corrected `test/audit-export.integration.test.ts` | 0 | Authored integration test/application source compiles; no database execution |
+| `pnpm typecheck` | 0 | 7 successful tasks / 4 cached; run once at end |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | Purity, lane, money/commercial boundary checks; 7 successful lint tasks / 4 cached; run once at end |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | ENT-10b; 26 total PR paths including the new test, merge-base comparison |
+| `pnpm build` | 0 | 7 successful tasks / 4 cached, Next production build completed; run once at end |
+| `pnpm openapi:check` | 1 | Sandbox denies tsx IPC `listen` with EPERM before the comparison |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | 0 | Same source OpenAPI comparison passes using the loader without CLI IPC; the standard wrapper result above remains failed |
+| Read-only Python lane/preservation inspection | 0 | 8 repair paths before receipt append in lane; only own registry line changed, one exact test path added; original PostgreSQL cases and inspected protected files unchanged |
+| `git diff HEAD --check` — repeated inspections | 0 | No whitespace errors |
+
+### Round 1 self-review
+
+Re-read the complete round-one diff against HEAD plus the new untracked page test as a strict builder reviewer. Also inspected the full-PR comparison; `origin/main` has advanced independently, so its two-endpoint diff includes upstream-only ENT-10a differences. The ordinary lane checker correctly used merge-base `bbca5ca5ee55a6a4d7fcdf89de426195d28c3e27`. No such upstream file was edited by this repair.
+
+Checked that active membership remains mandatory for export access, while session attribution permits only the narrow refusal write. The refusal path takes the business lock before the final audit lock, awaits commit, has no later business lock, never checks artifact existence and uses no runtime privilege beyond the existing tenant-scoped SELECT/audit append path. Self-review removed an initial silent return for an unmatched historical actor: a known session tenant must still get a refusal event with the safe generic actor reference.
+
+Checked that the page treats HTTP 503 with a refusal-looking code as unknown, validates the error version/4xx status before clearing, and does not call an empty 200 body confirmed success. No unknown-outcome path clears the ID. Checked both pool identities and complete-chain/snapshot/CLI assertions in the new race; no lock repair was needed. Preserved every preceding PostgreSQL test body, including the same-command race, with no assertion or timeout weakening.
+
+Inspected protected authentication/context files, migration 0121, exact-byte signing/verifier code, browser spec, dependencies and lockfile against HEAD: unchanged. Only the ENT-10b lane line gains the authorized exact test path; no broad grant or other lane edit. Deferred signing canonicalization, browser-locator/accessibility work and all Opus later items remain untouched. No SSO, SCIM, emergency access, assurance pack, checkpoint operator command or key rotation was built.
+
+Final release/acceptance holds: CI PostgreSQL/browser/migration and unchanged regression suites on the dispatcher commit; the standard OpenAPI wrapper in an IPC-capable environment; same Opus reviewer and fresh Sol rechecks of these fixes, recorded against the exact new head; separate acceptance. Production key/residency and other existing release gates remain held. This receipt is source inspection and recorded local execution, not an independent verdict or acceptance.
+
+
+Final handoff inspection: removed 17 generated paths (workspace `dist`, `.next`, local `.turbo` logs, tsbuildinfo, existing test-results and `.pnpm-store`); cleanup exited 0. Post-cleanup `LANE_BASE_REF=origin/main pnpm lint:lanes` exited 0 with the same 26 PR paths. Placed the three new PostgreSQL cases after all original cases to honor the appended-cases rule; this changed their position only, with all test bodies unchanged. Final read-only scope/preservation/artifact inspection exited 0: nine round-one files in lane, original PostgreSQL cases unchanged before the appended cases, zero generated outputs and the dispatcher message present. Final `git diff HEAD --check` exited 0. No implementation source changed after the final unit/typecheck/lint/build/OpenAPI checks.
+
+Round-one files: `apps/api/src/audit-export/audit-export.application.ts`, `apps/api/src/audit-export/audit-export.application.test.ts`, `apps/web/app/admin/contractor/audit-exports/page.tsx`, new `apps/web/app/admin/contractor/audit-exports/page.test.tsx`, `packages/db/src/audit-export-repository.ts`, `packages/db/test/audit-export.integration.test.ts`, `config/agent-lane-assignments.json` (own line only), `docs/contracts/audit-export-v1.md`, and this receipt. Intended commit message written to `/private/tmp/jg-msg-ent-10b.txt`.
+
+Builder receipt only — not independently verified, not accepted.

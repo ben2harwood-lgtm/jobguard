@@ -22,7 +22,12 @@ export default function Page() {
     command.current ??= crypto.randomUUID();
     try {
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "audit-export-request.v1", commandId: command.current }) }), data = await response.json();
-      if (!response.ok) { command.current = undefined; throw new Error(data.code); }
+      if (!response.ok) {
+        // Only a typed definitive 4xx refusal proves this attempt did not create an export.
+        if (response.status >= 400 && response.status < 500 && data?.version === "audit-export-error.v1" && ["AUDIT_EXPORT_FORBIDDEN", "AUDIT_EXPORT_INVALID_INPUT", "AUDIT_EXPORT_CHECKPOINT_REQUIRED", "AUDIT_EXPORT_MODE_HELD"].includes(data.code)) command.current = undefined;
+        throw new Error(data?.code ?? "AUDIT_EXPORT_UNAVAILABLE");
+      }
+      if (data?.id !== command.current) throw new Error("AUDIT_EXPORT_UNAVAILABLE");
       command.current = undefined;
       // The creation response is not a substitute for the authoritative persisted list.
       await load();
