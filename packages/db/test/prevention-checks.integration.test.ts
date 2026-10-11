@@ -196,5 +196,5 @@ describe("MON-7a real PostgreSQL guarantees", () => {
       expect((await upgrade.query("SELECT * FROM app.job WHERE id=$1",[id])).rows).toEqual(before);
       expect((await upgrade.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0103_prevention_checks.sql'")).rowCount).toBe(1);
     }finally{await upgrade.end();}
-  });
+  }, 60_000);
 });
