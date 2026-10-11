@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { practiceFactsCatalogueV1, practiceMovementCatalogueV1, type PracticeFactsView, type PracticeFeedView } from "@jobguard/core";
 import {
@@ -90,6 +90,12 @@ const catalogueChecks = async () => (await admin.query<{ table_name: string; con
 )).rows;
 let upgradeChecks: Awaited<ReturnType<typeof catalogueChecks>>;
 let upgradeRows:unknown, upgradeCatalogs:Awaited<ReturnType<typeof catalogs>>, upgraded:{jobId:string;sessionId:string}, mergedBefore:PracticeFeedView;
+// Upgrade-proof reshape (coordinator rule 9): 0124 is applied ALONE and compared at full strength; every later migration then runs twice;
+// afterwards the pre-existing rows are compared by the names of the columns that existed before 0124.
+let alone:{rows:unknown;catalogs:Awaited<ReturnType<typeof catalogs>>;checks:Awaited<ReturnType<typeof catalogueChecks>>;perTable:{t:string;checks:{conname:string;def:string;convalidated:boolean}[]}[];view:PracticeFeedView};
+let runBetween:{first:unknown;second:unknown};
+let preColumns:Record<string,string[]>, preIds:Record<string,string[]>, namedBefore:Record<string,unknown[]>;
+const namedRows = async (db:Pick<Pool|PoolClient,"query">) => Object.fromEntries(await Promise.all(Object.keys(preColumns).map(async(t)=>[t,(await db.query(`SELECT ${preColumns[t]!.map(c=>`"${c}"`).join(",")} FROM app.${t} WHERE id=ANY($1::uuid[]) ORDER BY id`,[preIds[t]])).rows] as const))) as Record<string,unknown[]>;
 beforeAll(async()=>{
   process.env.JOBGUARD_ENV="synthetic_demo";
   directory=await mkdtemp(join(tmpdir(),"jobguard-practice-facts-"));
@@ -113,22 +119,28 @@ beforeAll(async()=>{
   const inv=await invoice(upgraded.jobId), paymentId=await receipt(upgraded,inv,38400);
   mergedBefore=await cmd(repo(),upgraded,command(v.revision,{action:"match_receipt",movement:"receipt-384",paymentId}));
   upgradeRows=await rows();upgradeCatalogs=await catalogs();upgradeChecks=await catalogueChecks();
-  await migrate(admin);await migrate(admin);
+  const columnRows=(await admin.query("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='app' AND table_name=ANY($1) ORDER BY table_name,ordinal_position",[tables.slice(2)])).rows;
+  preColumns=Object.fromEntries(tables.slice(2).map(t=>[t,columnRows.filter(c=>c.table_name===t).map(c=>c.column_name as string)]));
+  preIds=Object.fromEntries(await Promise.all(tables.slice(2).map(async t=>[t,(await admin.query(`SELECT id FROM app.${t} ORDER BY id`)).rows.map(r=>r.id as string)] as const)));
+  namedBefore=await namedRows(admin);
+  // Apply 0124 ALONE, the way the runner applies one file (run its SQL, then record it), and capture what it did.
+  const alonePath=fileURLToPath(MIGRATION_URLS[index]!);
+  await admin.query(await readFile(alonePath,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[alonePath.split("/").at(-1)]);
+  alone={rows:await rows(),catalogs:await catalogs(),checks:await catalogueChecks(),perTable:await Promise.all(tables.slice(2).map(async t=>({t,checks:(await admin.query("SELECT conname,pg_get_constraintdef(oid) def,convalidated FROM pg_constraint WHERE conrelid=$1::regclass AND contype='c' AND position('receipt-384' in pg_get_constraintdef(oid))>0",[`app.${t}`])).rows}))),view:await view(upgraded)};
+  // Then every later migration, twice; the second run must change nothing.
+  await migrate(admin);runBetween={first:await rows(),second:null};await migrate(admin);runBetween.second=await rows();
 },90000);
 afterAll(async()=>{if(priorEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=priorEnvironment;await closeTestPools(runtime,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});});
 
 describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox)",()=>{
   it("populated upgrade preserves every old row byte-for-byte, checks all rows, and leaves all security and routine catalogs identical; remigrate no-op",async()=>{
-    expect(await rows()).toEqual(upgradeRows);expect(await catalogs()).toEqual(upgradeCatalogs);
-    expect(await view(upgraded)).toEqual(mergedBefore);
-    const applied=(await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name);
-    expect(applied.filter(n=>n==="0124_practice_feed_facts.sql")).toHaveLength(1);
-    expect(applied.indexOf("0119_recovery_eligibility_v3.sql")).toBeLessThan(applied.indexOf("0124_practice_feed_facts.sql"));
-    for(const t of tables.slice(2)){
-      const checks=(await admin.query("SELECT conname,pg_get_constraintdef(oid) def,convalidated FROM pg_constraint WHERE conrelid=$1::regclass AND contype='c' AND position('receipt-384' in pg_get_constraintdef(oid))>0",[`app.${t}`])).rows;
+    // 0124 applied alone: everything it did, at full strength.
+    expect(alone.rows).toEqual(upgradeRows);expect(alone.catalogs).toEqual(upgradeCatalogs);
+    expect(alone.view).toEqual(mergedBefore);
+    for(const {checks} of alone.perTable){
       expect(checks).toHaveLength(2);expect(checks.every(c=>c.convalidated)).toBe(true);
     }
-    const afterChecks = await catalogueChecks();
+    const afterChecks = alone.checks;
     expect(upgradeChecks).toHaveLength(6);
     expect(afterChecks.map(c => [c.table_name, c.conname])).toEqual(upgradeChecks.map(c => [c.table_name, c.conname]));
     for (const previous of upgradeChecks) {
@@ -138,7 +150,47 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
       const widenedValues = new Set(replacement.def.match(/'[^']*'|\b\d+\b/gu) ?? []);
       expect(oldValues.every(value => widenedValues.has(value))).toBe(true);
     }
+    // After every later migration, run twice: 0124 recorded once and in order, the second run changed nothing.
+    const applied=(await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name);
+    expect(applied.filter(n=>n==="0124_practice_feed_facts.sql")).toHaveLength(1);
+    expect(applied.indexOf("0119_recovery_eligibility_v3.sql")).toBeLessThan(applied.indexOf("0124_practice_feed_facts.sql"));
+    expect(runBetween.second).toEqual(runBetween.first);
+    // After ALL migrations: the pre-existing rows keep identical values in the columns that existed before 0124 (compared by name),
+    // and the original allowed values are still allowed (tolerant: a later migration may add more).
+    expect(await namedRows(admin)).toEqual(namedBefore);
+    const laterChecks = await catalogueChecks();
+    for (const previous of upgradeChecks) {
+      const now = laterChecks.find(c => c.table_name === previous.table_name && c.conname === previous.conname)!;
+      const nowValues = new Set(now.def.match(/'[^']*'|\b\d+\b/gu) ?? []);
+      expect((previous.def.match(/'[^']*'|\b\d+\b/gu) ?? []).every(value => nowValues.has(value))).toBe(true);
+    }
     const before=await rows();await migrate(admin);expect(await rows()).toEqual(before);
+  });
+  it("upgrade-proof control: a changed value in a pre-existing column of a pre-existing row fails the named-column comparison (rolled back)",async()=>{
+    const client=await admin.connect();
+    try{
+      await client.query("BEGIN");
+      expect(await namedRows(client)).toEqual(namedBefore);
+      const changed=await client.query("UPDATE app.practice_feed_event SET source_hash=repeat('0',64) WHERE id=(SELECT id FROM app.practice_feed_event WHERE id=ANY($1::uuid[]) ORDER BY id LIMIT 1)",[preIds.practice_feed_event]);
+      expect(changed.rowCount).toBe(1);
+      expect(await namedRows(client)).not.toEqual(namedBefore);
+    }finally{await client.query("ROLLBACK");client.release();}
+    expect(await namedRows(admin)).toEqual(namedBefore);
+  });
+  it("upgrade-proof control: an added nullable column or an added trigger on a pre-existing table leaves the named-column comparison green (rolled back)",async()=>{
+    const beforeCatalogs=await catalogs();
+    const client=await admin.connect();
+    try{
+      await client.query("BEGIN");
+      await client.query("ALTER TABLE app.practice_feed_event ADD COLUMN scratch_note text");
+      await client.query("CREATE FUNCTION app.scratch_noop_trigger() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$");
+      await client.query("CREATE TRIGGER scratch_noop_trigger BEFORE INSERT ON app.practice_feed_event FOR EACH ROW EXECUTE FUNCTION app.scratch_noop_trigger()");
+      expect((await client.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid='app.practice_feed_event'::regclass AND tgname='scratch_noop_trigger'")).rows[0].n).toBe(1);
+      expect((await client.query("SELECT count(*)::int n FROM information_schema.columns WHERE table_schema='app' AND table_name='practice_feed_event' AND column_name='scratch_note'")).rows[0].n).toBe(1);
+      expect(await namedRows(client)).toEqual(namedBefore);
+    }finally{await client.query("ROLLBACK");client.release();}
+    expect(await catalogs()).toEqual(beforeCatalogs);
+    expect(await namedRows(admin)).toEqual(namedBefore);
   });
   it("mixed seven old and six new facts preserve the merged movements, receipts and event count; revision alone follows all commands",async()=>{
     for(const e of practiceFactsCatalogueV1){const v=await factsView(upgraded);await factsCmd(upgraded,v.revision,{action:"advance",movement:e.movement,step:"settled"});}

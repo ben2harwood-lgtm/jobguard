@@ -499,3 +499,123 @@ Commands (every vitest call used `--maxWorkers=2` with `VITEST_MAX_THREADS=2 VIT
 **Stopped on:** nothing. No merged test file was edited. No assertion, expected value, timeout, grant or policy was changed or loosened.
 
 Builder repair record only — not independently verified, not accepted.
+
+
+## Upgrade-proof reshape (coordinator rule 9) — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+Test-only change to this piece's own upgrade proof, ordered by `PRACTICE-FACTS-1-proof-reshape.txt`. Starting head 51f24b9, clean tree. Only `packages/db/test/practice-facts.integration.test.ts` changed (plus this section). No product code, migration, merged test, fixture file or `migrate.ts` was touched. Builder repair record; not a review and not an acceptance.
+
+**The rule the proof must satisfy (quoted from the order):** "An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'."
+
+**What the old proof did wrong.** It installed everything before 0124, snapshotted whole rows, privileges, policies, triggers, two function definitions and the CHECK constraints, then ran `migrate()` to the head and required every snapshot unchanged. Any later migration that adds a column, trigger, policy or grant to a practice-feed table would have failed it.
+
+**What it does now.**
+1. The "before" state and its snapshot are unchanged.
+2. 0124 is applied ALONE, as the runner applies one file: its SQL is run, then recorded in `public.jobguard_schema_migration` so a later `migrate()` skips it.
+3. At that point every old comparison runs at full strength on the state after 0124 alone: rows byte for byte, privileges, policies, triggers, the two function definitions, the merged view equal to its earlier value, two catalogue CHECKs per table each validated, the six constraint names equal before and after and validated, and every old allowed value still present.
+4. `migrate()` then runs twice (set-up); both succeed. 0124 is recorded once and after 0119; the row snapshot taken between the two runs is identical to the one taken after.
+5. After all migrations the pre-existing rows of the three tables (found by their ids) are compared on the columns that existed before 0124, listed by name from the "before" catalogue; a column added later is ignored and a changed value fails. The tolerant check that every old allowed value is still allowed is repeated against the final catalogue. The trigger, policy, grant, function and constraint snapshots are NOT re-asserted after later migrations. The old closing line (a further `migrate()` leaves the rows unchanged) is kept.
+6. Two controls were added as tests that run inside rolled-back transactions and leave the database as they found it.
+
+**Where each old assertion now lives.** Rows, catalogues, merged view, two checks per table and validated, names, validated, old values subset: step 3 (unchanged strictness, taken on the state after 0124 alone). Applied once and in order, and the no-op re-migrate: step 4 and the kept closing line. New: named-column row comparison and the tolerant subset check after all migrations (step 5).
+
+**Literal change (the whole diff of the file; `-` lines are before, `+` lines are after):**
+```diff
+@@ -7 +7 @@ import EmbeddedPostgres from "embedded-postgres";
+-import { Pool } from "pg";
++import { Pool, type PoolClient } from "pg";
+@@ -92,0 +93,6 @@ let upgradeRows:unknown, upgradeCatalogs:Awaited<ReturnType<typeof catalogs>>, u
++// Upgrade-proof reshape (coordinator rule 9): 0124 is applied ALONE and compared at full strength; every later migration then runs twice;
++// afterwards the pre-existing rows are compared by the names of the columns that existed before 0124.
++let alone:{rows:unknown;catalogs:Awaited<ReturnType<typeof catalogs>>;checks:Awaited<ReturnType<typeof catalogueChecks>>;perTable:{t:string;checks:{conname:string;def:string;convalidated:boolean}[]}[];view:PracticeFeedView};
++let runBetween:{first:unknown;second:unknown};
++let preColumns:Record<string,string[]>, preIds:Record<string,string[]>, namedBefore:Record<string,unknown[]>;
++const namedRows = async (db:Pick<Pool|PoolClient,"query">) => Object.fromEntries(await Promise.all(Object.keys(preColumns).map(async(t)=>[t,(await db.query(`SELECT ${preColumns[t]!.map(c=>`"${c}"`).join(",")} FROM app.${t} WHERE id=ANY($1::uuid[]) ORDER BY id`,[preIds[t]])).rows] as const))) as Record<string,unknown[]>;
+@@ -116 +122,10 @@ beforeAll(async()=>{
+-  await migrate(admin);await migrate(admin);
++  const columnRows=(await admin.query("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='app' AND table_name=ANY($1) ORDER BY table_name,ordinal_position",[tables.slice(2)])).rows;
++  preColumns=Object.fromEntries(tables.slice(2).map(t=>[t,columnRows.filter(c=>c.table_name===t).map(c=>c.column_name as string)]));
++  preIds=Object.fromEntries(await Promise.all(tables.slice(2).map(async t=>[t,(await admin.query(`SELECT id FROM app.${t} ORDER BY id`)).rows.map(r=>r.id as string)] as const)));
++  namedBefore=await namedRows(admin);
++  // Apply 0124 ALONE, the way the runner applies one file (run its SQL, then record it), and capture what it did.
++  const alonePath=fileURLToPath(MIGRATION_URLS[index]!);
++  await admin.query(await readFile(alonePath,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[alonePath.split("/").at(-1)]);
++  alone={rows:await rows(),catalogs:await catalogs(),checks:await catalogueChecks(),perTable:await Promise.all(tables.slice(2).map(async t=>({t,checks:(await admin.query("SELECT conname,pg_get_constraintdef(oid) def,convalidated FROM pg_constraint WHERE conrelid=$1::regclass AND contype='c' AND position('receipt-384' in pg_get_constraintdef(oid))>0",[`app.${t}`])).rows}))),view:await view(upgraded)};
++  // Then every later migration, twice; the second run must change nothing.
++  await migrate(admin);runBetween={first:await rows(),second:null};await migrate(admin);runBetween.second=await rows();
+@@ -122,7 +137,4 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
+-    expect(await rows()).toEqual(upgradeRows);expect(await catalogs()).toEqual(upgradeCatalogs);
+-    expect(await view(upgraded)).toEqual(mergedBefore);
+-    const applied=(await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name);
+-    expect(applied.filter(n=>n==="0124_practice_feed_facts.sql")).toHaveLength(1);
+-    expect(applied.indexOf("0119_recovery_eligibility_v3.sql")).toBeLessThan(applied.indexOf("0124_practice_feed_facts.sql"));
+-    for(const t of tables.slice(2)){
+-      const checks=(await admin.query("SELECT conname,pg_get_constraintdef(oid) def,convalidated FROM pg_constraint WHERE conrelid=$1::regclass AND contype='c' AND position('receipt-384' in pg_get_constraintdef(oid))>0",[`app.${t}`])).rows;
++    // 0124 applied alone: everything it did, at full strength.
++    expect(alone.rows).toEqual(upgradeRows);expect(alone.catalogs).toEqual(upgradeCatalogs);
++    expect(alone.view).toEqual(mergedBefore);
++    for(const {checks} of alone.perTable){
+@@ -131 +143 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
+-    const afterChecks = await catalogueChecks();
++    const afterChecks = alone.checks;
+@@ -140,0 +153,14 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
++    // After every later migration, run twice: 0124 recorded once and in order, the second run changed nothing.
++    const applied=(await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name);
++    expect(applied.filter(n=>n==="0124_practice_feed_facts.sql")).toHaveLength(1);
++    expect(applied.indexOf("0119_recovery_eligibility_v3.sql")).toBeLessThan(applied.indexOf("0124_practice_feed_facts.sql"));
++    expect(runBetween.second).toEqual(runBetween.first);
++    // After ALL migrations: the pre-existing rows keep identical values in the columns that existed before 0124 (compared by name),
++    // and the original allowed values are still allowed (tolerant: a later migration may add more).
++    expect(await namedRows(admin)).toEqual(namedBefore);
++    const laterChecks = await catalogueChecks();
++    for (const previous of upgradeChecks) {
++      const now = laterChecks.find(c => c.table_name === previous.table_name && c.conname === previous.conname)!;
++      const nowValues = new Set(now.def.match(/'[^']*'|\b\d+\b/gu) ?? []);
++      expect((previous.def.match(/'[^']*'|\b\d+\b/gu) ?? []).every(value => nowValues.has(value))).toBe(true);
++    }
+@@ -142,0 +169,26 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
++  it("upgrade-proof control: a changed value in a pre-existing column of a pre-existing row fails the named-column comparison (rolled back)",async()=>{
++    const client=await admin.connect();
++    try{
++      await client.query("BEGIN");
++      expect(await namedRows(client)).toEqual(namedBefore);
++      const changed=await client.query("UPDATE app.practice_feed_event SET source_hash=repeat('0',64) WHERE id=(SELECT id FROM app.practice_feed_event WHERE id=ANY($1::uuid[]) ORDER BY id LIMIT 1)",[preIds.practice_feed_event]);
++      expect(changed.rowCount).toBe(1);
++      expect(await namedRows(client)).not.toEqual(namedBefore);
++    }finally{await client.query("ROLLBACK");client.release();}
++    expect(await namedRows(admin)).toEqual(namedBefore);
++  });
++  it("upgrade-proof control: an added nullable column or an added trigger on a pre-existing table leaves the named-column comparison green (rolled back)",async()=>{
++    const beforeCatalogs=await catalogs();
++    const client=await admin.connect();
++    try{
++      await client.query("BEGIN");
++      await client.query("ALTER TABLE app.practice_feed_event ADD COLUMN scratch_note text");
++      await client.query("CREATE FUNCTION app.scratch_noop_trigger() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$");
++      await client.query("CREATE TRIGGER scratch_noop_trigger BEFORE INSERT ON app.practice_feed_event FOR EACH ROW EXECUTE FUNCTION app.scratch_noop_trigger()");
++      expect((await client.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid='app.practice_feed_event'::regclass AND tgname='scratch_noop_trigger'")).rows[0].n).toBe(1);
++      expect((await client.query("SELECT count(*)::int n FROM information_schema.columns WHERE table_schema='app' AND table_name='practice_feed_event' AND column_name='scratch_note'")).rows[0].n).toBe(1);
++      expect(await namedRows(client)).toEqual(namedBefore);
++    }finally{await client.query("ROLLBACK");client.release();}
++    expect(await catalogs()).toEqual(beforeCatalogs);
++    expect(await namedRows(admin)).toEqual(namedBefore);
++  });
+```
+
+**Controls (both are in the file and passed).**
+- Control (i), "a changed value in a pre-existing column of a pre-existing row fails the named-column comparison": inside a transaction the comparison first holds, then one pre-existing event row has its source hash column set to all zeros (one row changed), the comparison then differs (`not.toEqual`), and the transaction is rolled back; after the rollback the comparison holds again. Result: PASSED.
+- Control (ii), "an added nullable column or an added trigger leaves the named-column comparison green": inside a transaction a nullable column and a no-op trigger (with its function) are added to the event table, both are confirmed present, and the named-column comparison is still equal; after the rollback the catalogue snapshot equals the one taken before. Result: PASSED. (A later migration that adds a column or trigger to a practice-feed table therefore no longer fails this proof.)
+
+**Commands exactly as run this time.** Every shell call began with `export PATH="$HOME/Library/pnpm/bin:$PATH" VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` and set `L=$HOME/.local/share/full-steam/jg-runs`. Worktree `W=/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-facts-1`. Before each heavy command: `memory_pressure | tail -1` (79 percent free each time) and `sysctl -n vm.loadavg`; `heavy-slot` itself waits while load is above 24.
+1. cwd `W`: `git rev-parse HEAD` printed 51f24b909811868d46bf14e13ccf7ce65e5ad02c; `git status --porcelain` printed nothing.
+2. cwd `W/packages/db`: `cp test/practice-facts.integration.test.ts $HOME/.local/share/full-steam/jg-runs/practice-facts-1-proof-before-51f24b9.test.ts.txt` (a reference copy of the old file, outside the repository).
+3. cwd `W/packages/db`: `~/.local/bin/heavy-slot practice-facts-1 pnpm exec vitest run --maxWorkers=2 test/practice-facts.integration.test.ts > $L/pf1-reshape-db1.log 2>&1` exit 0; 1 file passed; 28 tests passed (26 before plus the 2 controls).
+4. cwd `W/packages/db`: `~/.local/bin/heavy-slot practice-facts-1 pnpm exec vitest run --maxWorkers=2 test/practice-feed.integration.test.ts test/recovery-eligibility-v3.integration.test.ts test/fingerprinted-row-shape.integration.test.ts > $L/pf1-reshape-db2.log 2>&1` exit 0; 3 files passed; 64 tests passed (merged files unedited; `git diff --name-only` listed only the leaf test file).
+5. cwd `W`: `LANE_BASE_REF=origin/main pnpm lint:lanes > $L/pf1-reshape-lanes.log 2>&1` exit 0 ("Lane boundary passed").
+6. cwd `W`: `~/.local/bin/heavy-slot practice-facts-1 pnpm --filter @jobguard/db typecheck > $L/pf1-reshape-typecheck.log 2>&1` exit 0. That script checks only `packages/db/src` (the db tsconfig includes `src/**/*.ts`), so it does not cover the test file.
+7. cwd `W/packages/db`: an extra type check of the test file with an out-of-repository tsconfig (`$L/pf1-reshape-tsconfig-test.json`, extending the db tsconfig and including only this test file): `~/.local/bin/heavy-slot practice-facts-1 pnpm exec tsc -p $L/pf1-reshape-tsconfig-test.json > $L/pf1-reshape-testtypes.log 2>&1` exit 2, two errors in my new lines ("possibly undefined" at the column list lookup and at the migration list lookup). Fixed with two non-null assertions (included in the diff above). Re-run: `... > $L/pf1-reshape-testtypes2.log 2>&1` exit 0.
+8. cwd `W/packages/db`: after those two fixes, `~/.local/bin/heavy-slot practice-facts-1 pnpm exec vitest run --maxWorkers=2 test/practice-facts.integration.test.ts > $L/pf1-reshape-db3.log 2>&1` exit 0; 1 file passed; 28 tests passed.
+
+**Stopped on:** nothing. Applying 0124 alone needed no change outside the test file; no merged test failed; every existing assertion is kept at step 3 or step 5. No assertion, expected value, timeout, grant or policy was changed or loosened.
+
+Builder repair record only — not independently verified, not accepted.
