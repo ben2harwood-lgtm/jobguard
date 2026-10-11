@@ -54,7 +54,7 @@ export async function ownerTx<T>(c: Cluster, tenantId: string, work: (db: Tenant
  return withTenant(c.admin, testTenantContext(tenantId), async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return work(db); });
 }
 export async function receipt(db: TenantTransaction, tenantId: string, jobId: string, variationId: string, actor: string, type = "LogSiteExtra", commandId = randomUUID(), fields: { status?: string; semanticKey?: string } = {}) {
- await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,$3,$4,$5,$6,$7,CASE WHEN $6='succeeded' THEN '{}'::jsonb ELSE NULL END,CASE WHEN $6='succeeded' THEN clock_timestamp() ELSE NULL END)", [tenantId, commandId, type, fields.semanticKey ?? `extra-origin:${jobId}:${variationId}`, "a".repeat(64), fields.status ?? "processing", actor]); return commandId;
+ await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,$3,$4,$5,$6::text,$7,CASE WHEN $6::text='succeeded' THEN '{}'::jsonb ELSE NULL END,CASE WHEN $6::text='succeeded' THEN clock_timestamp() ELSE NULL END)", [tenantId, commandId, type, fields.semanticKey ?? `extra-origin:${jobId}:${variationId}`, "a".repeat(64), fields.status ?? "processing", actor]); return commandId;
 }
 export async function rawVariation(db: TenantTransaction, tenant: string, job: string, variation = randomUUID(), kind = "site_user", track = "contractor") {
  const scope = randomUUID();
