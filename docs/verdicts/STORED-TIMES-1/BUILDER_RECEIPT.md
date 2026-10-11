@@ -163,3 +163,110 @@ Re-read the entire tracked diff with `git diff origin/main` and the complete new
 The test was written first and inspected with the strict TypeScript compiler (zero diagnostics). Self-review corrected the alphabetical expectation for trigger catalog rows and used the full function-identity expression for SQL ordering. All eleven AC IDs have written coverage, with existing behavior labelled as controls; timestamp truth is compared inside PostgreSQL. AC8's actual regression execution remains pending. No merged test or fingerprinted table changed. Shared registrations are one added line each, and the migration note is appended without touching earlier bytes. Added wording uses raw writer, back-dating attempt and chosen time; no rejected wording is added. No new dependency, timeout, retry, skip, provider or UI change. No build or test output remains in the working tree. Final source-only scope inspection passed (exit 0, seven allowed files, merged tests unchanged, commit message present). Its first invocation exited 1 because the wording search incorrectly included pre-existing migration-note text; the corrected invocation inspects only added text and passed. This was a checker-scope correction, not a source change or database test. `git diff origin/main --check` exited 0; the only ignored paths left are installed dependency directories.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification and upgrade-proof reshape (rule 9)
+
+Repair builder: Claude Sonnet 5.5 (Mac helper for the JobGuard integrator), 11 October 2026, evening. This section is an addendum by a repair builder for the items named below only. It is not a review and not an acceptance. Nothing above this heading was rewritten; where the table row for AC9 above describes the old shape of that test, this section supersedes it.
+
+**Catch-up with main.** `git fetch origin`, then `git merge origin/main` (8e91b2d, the tests-only FIXLATER-3 merge). Merge commit `8675b34`, no conflicts (only `config/agent-lane-assignments.json` auto-merged: one line added each side). Before the merge head was `a8c8ad1`, clean. 0127 is still listed after 0122 in `packages/db/src/migrate.ts`.
+
+**The standing rule (quoted).** "An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'." Here N is 0127. It was made after the order was written, so the order's AC9 wording is superseded on this point.
+
+### What changed in the test (and nothing else)
+
+File `packages/db/test/recovery-timing-pin.integration.test.ts`, commit `4634cde`. AC9 now: installs everything before 0127 and snapshots (unchanged); applies 0127 ALONE the way the runner applies one file (reads the SQL from `MIGRATION_URLS`, runs it, records it in `public.jobguard_schema_migration`); compares the full-strength snapshot, the function and trigger counts (+1 function, +2 triggers) and the "exactly these two triggers call the function, enabled O" query on that 0127-alone state; then runs `migrate()` twice (success required, the second run is the "reapply is inert" check); then compares every pre-existing row of the eight tables by the column names they had before 0127 (a later column cannot fail it), keeps the chosen-time row check, the "registry holds 0127 exactly once" check, and the behavioural checks (a new raw insert is pinned on both tables; the saved review reads back unchanged).
+
+Removed, because the rule forbids it: the `fingerprinted` list and its use in the column snapshot (the fingerprinted-row-shape guard owns "may never gain a column"); the comparison of the whole snapshot (triggers, functions, policies, ACLs, constraints, whole rows) taken after the later migrations; the function and trigger count assertions and the trigger-by-function assertion after the later migrations (they now sit on the 0127-alone state, byte-identical). I kept the two tables' own column lists in the snapshot, on the 0127-alone state only. At that state, whole-row text of `recovery_claim_revision` and `recovery_case_event` (both fingerprinted) is still compared byte for byte, so a column added to those rows by 0127 would still show.
+
+AC1: the "exactly two callers of the function" query was asserted on the final database. It is now limited to the trigger `a_recovery_timing_pin` on the two tables (the exact definition and `tgenabled='O'` are still asserted for both); the exactly-two-callers statement lives on the 0127-alone state in AC9 (the moved `tgfoid` query). AC1's function-own checks (owner, SECURITY INVOKER, `proconfig`, no EXECUTE for the three roles and PUBLIC) are left as they were: they describe the function 0127 created, and a later grant on a trigger function should fail them. AC2 already asserts only "first" and "present" (not a full list); AC10 asserts only names, uniqueness and order. Neither has the fault, so both are unchanged. The AC7 privilege checks on the final database are left as they were for the same reason as AC1's: a later UPDATE grant on either table is exactly what they exist to catch.
+
+No set-up repair was needed. No assertion's meaning, expected value, timeout, grant, policy or the migration's behaviour was touched, and no merged test file was changed.
+
+**Literal before/after of every changed test line** (`git diff -U0 a8c8ad1 4634cde -- packages/db/test/recovery-timing-pin.integration.test.ts`; `-` is before, `+` is after):
+
+```diff
+@@ -132 +132 @@ it("[AC1] ordinary insert triggers and invoker function have the exact catalog s
+-    JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=$1::regprocedure ORDER BY c.relname`, [functionName])).rows;
++    JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=$1::regprocedure AND t.tgname='a_recovery_timing_pin' AND c.relname=ANY($2::text[]) ORDER BY c.relname`, [functionName, tables])).rows;
+@@ -252 +251,0 @@ const rowTables = ["recovery_case", "practice_feed_event", "practice_feed_comman
+-const fingerprinted = ["quote_document_version", "quote_acceptance", "evidence_object", "variation_revision", "variation_approval", "recovery_claim_revision", "recovery_case_event", "material_rate_revision", "supplier_document_version", "supplier_document", "customer_invoice", "discrepancy_review_outcome"];
+@@ -262 +261 @@ async function snapshot(db: Pool) {
+-    WHERE n.nspname='app' AND c.relname=ANY($1::text[]) GROUP BY c.relname ORDER BY c.relname`, [[...tables, ...fingerprinted]])).rows;
++    WHERE n.nspname='app' AND c.relname=ANY($1::text[]) GROUP BY c.relname ORDER BY c.relname`, [tables])).rows;
+@@ -269,0 +269,15 @@ async function snapshot(db: Pool) {
++// Rows compared after ALL migrations are read by the column names that existed before 0127, so a later column cannot fail this proof.
++async function namedColumns(db: Pool) {
++  const named: Record<string, string[]> = {};
++  for (const table of rowTables) named[table] = (await db.query(`SELECT a.attname::text name FROM pg_attribute a
++    WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum`, [`app.${table}`])).rows.map(row => row.name as string);
++  return named;
++}
++async function namedRows(db: Pool, named: Record<string, string[]>) {
++  const rows: Record<string, unknown> = {};
++  for (const table of rowTables) {
++    const list = named[table]!.map(name => `t."${name.replaceAll('"', '""')}"`).join(",");
++    rows[table] = (await db.query(`SELECT row_to_json(s)::text bytes FROM (SELECT ${list} FROM app.${table} t) s ORDER BY row_to_json(s)::text COLLATE "C"`)).rows;
++  }
++  return rows;
++}
+@@ -288 +302,4 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
+-    await migrate(upgradeAdmin); await migrate(upgradeAdmin);
++    const named = await namedColumns(upgradeAdmin), beforeRows = await namedRows(upgradeAdmin, named);
++    // Migration 0127 ALONE, the way the runner applies one file: run its SQL, then record it in the registry.
++    await upgradeAdmin.query(await readFile(MIGRATION_URLS.find(url => basename(fileURLToPath(url)) === migrationName)!, "utf8"));
++    await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [migrationName]);
+@@ -290,2 +306,0 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
+-    expect((await upgradeAdmin.query("SELECT created_at=$3::timestamptz kept_chosen FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [T, old.id, past])).rows).toEqual([{ kept_chosen: true }]);
+-    expect((await upgradeAdmin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [migrationName])).rows).toEqual([{ n: 1 }]);
+@@ -294,0 +310,4 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
++    await migrate(upgradeAdmin); await migrate(upgradeAdmin);
++    expect(await namedRows(upgradeAdmin, named)).toEqual(beforeRows);
++    expect((await upgradeAdmin.query("SELECT created_at=$3::timestamptz kept_chosen FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [T, old.id, past])).rows).toEqual([{ kept_chosen: true }]);
++    expect((await upgradeAdmin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [migrationName])).rows).toEqual([{ n: 1 }]);
+```
+
+### AC7 as observed: can any role change either stored time after insert?
+
+Observed on the Mac, real embedded PostgreSQL 16.10 (all 27 cases of the file passed; names below are the verbose run). In every refused case the test also re-read the stored `created_at` inside the tenant and found it unchanged.
+
+| Role | Table | What the test did | What it showed |
+| --- | --- | --- | --- |
+| `jobguard_runtime` | `app.recovery_case` | `UPDATE ... SET created_at`, then `DELETE`, on a visible row | both refused, SQLSTATE 42501 (no privilege); time unchanged |
+| `jobguard_runtime` | `app.practice_feed_event` | same two statements on a visible row | both refused, 42501 (no privilege); time unchanged |
+| owner `jobguard_migration` | `app.recovery_case` | `UPDATE ... SET created_at` on a row it can see | refused by the merged append-only trigger, 55000, message `recovery history is append-only`; time unchanged |
+| owner `jobguard_migration` | `app.practice_feed_event` | `UPDATE ... SET created_at` (control) | NOT refused: the owner can change a feed time. Privilege-only guard, as the builder statement above says |
+| `jobguard_infrastructure`, `jobguard_identity` | both tables | `SELECT`, `INSERT`, `UPDATE` each | all refused, 42501; neither role has USAGE on schema `app`; times unchanged |
+| catalog check | both tables | `has_table_privilege` / column privileges | runtime, infrastructure, identity and the test login hold no UPDATE, DELETE, TRUNCATE, TRIGGER and no column UPDATE; runtime has INSERT and SELECT; none is superuser, create-role, bypass-RLS or a member of `jobguard_migration` |
+
+Pin itself, as observed: a chosen past (2000-01-01) and a chosen future (2099-01-01) time were both replaced by the transaction's time on `app.recovery_case` (as `jobguard_runtime`; as owner `jobguard_migration`; as superuser in ordinary mode) and on `app.practice_feed_event` (as `jobguard_runtime`, inside a complete valid advance transaction): `pinned` true, `kept_chosen` false in every case. The pre-pin control inside AC9 (the database before 0127) stored the chosen past time on `app.recovery_case` (`pinned` false, `kept_chosen` true, observed); there is no equivalent observed pre-pin run for `app.practice_feed_event`, so for the feed table "fails without 0127" is still source reasoning. The money answers for F18 and F19 held in all five chosen-time scenarios and the four product-only controls.
+
+### Commands, exactly as run
+
+`WT` = `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/stored-times-1`. Node v24.17.0, pnpm 10.28.1, vitest v4.1.11, embedded-postgres 16.10.0-beta.15 (darwin-arm64). Environment for every heavy command: `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2 PLAYWRIGHT_SKIP_BROWSER_GC=1`; `memory_pressure | tail -1` showed 78 to 79 percent free before each. Every heavy command ran inside `~/.local/bin/heavy-slot <label> <command>`. Logs: `~/.local/share/full-steam/jg-runs/stored-times-1-mac-*`.
+
+| # | Working directory | Command | Exit | Result |
+| --- | --- | --- | --- | --- |
+| 1 | `WT` | `git fetch origin` | 0 | origin/main = 8e91b2d |
+| 2 | `WT` | `git merge origin/main` | 0 | merge commit 8675b34, no conflicts |
+| 3 | `WT` | `heavy-slot stored-times-1-install pnpm install --frozen-lockfile` | 0 | "Already up to date" |
+| 4 | `WT/node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64` | `node scripts/hydrate-symlinks.js` | 0 | `native/bin` has initdb, pg_ctl, postgres |
+| 5 | `WT` | `heavy-slot stored-times-1-build pnpm turbo run build --filter=@jobguard/db... --concurrency=2` | 0 | 3 tasks, 3 successful (2 cached) |
+| 6 | `WT/packages/db` | `heavy-slot stored-times-1-own pnpm exec vitest run --maxWorkers=2 test/recovery-timing-pin.integration.test.ts` | 0 | 1 file, 27 of 27 passed |
+| 7 | `WT/packages/db` | same with `--reporter=verbose` (re-run of a passing run, only to list test names; not a retry) | 0 | 1 file, 27 of 27 passed |
+| 8 | `WT/packages/db` | `heavy-slot stored-times-1-merged1 pnpm exec vitest run --maxWorkers=2 test/recovery-eligibility-v3.integration.test.ts test/practice-feed.integration.test.ts test/recovery-cases.integration.test.ts` | 0 | 3 files, 63 passed |
+| 9 | `WT/packages/db` | `heavy-slot stored-times-1-merged2 pnpm exec vitest run --maxWorkers=2 test/recovery-cases.workbench.integration.test.ts test/recovery.integration.test.ts test/recovery-messages.integration.test.ts` | 0 | 3 files, 154 passed |
+| 10 | `WT/packages/db` | `heavy-slot stored-times-1-upgrade pnpm exec vitest run --maxWorkers=2 test/extra-origin-upgrade.integration.test.ts test/fingerprinted-row-shape.integration.test.ts test/recovery-follow-up-upgrade.integration.test.ts` | 0 | 3 files, 17 passed |
+| 11 | `WT/packages/db` | `heavy-slot stored-times-1-tenancy pnpm exec vitest run --maxWorkers=2 test/tenancy.integration.test.ts test/demo-bootstrap.integration.test.ts test/recovery-follow-up.integration.test.ts` | 0 | 3 files, 73 passed |
+| 12 | `WT/packages/db` | `heavy-slot stored-times-1-audit pnpm exec vitest run --maxWorkers=2 test/audit-export.integration.test.ts` | 0 | 1 file, 11 passed |
+| 13 | `WT` | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | "Lane boundary passed", lane `stored-times-1`, 8 files, head 4634cde |
+| 14 | `WT` | `heavy-slot stored-times-1-typecheck pnpm --filter @jobguard/db typecheck` | 0 | no diagnostics |
+| 15 | `WT` | `heavy-slot stored-times-1-lint pnpm --filter @jobguard/db lint` | 0 | no diagnostics (the package lint is `tsc -p tsconfig.json --noEmit`) |
+| 16 | `WT` | `git diff origin/main...HEAD \| grep -nE "^\+.*(key\|token\|secret\|password)[A-Za-z_]*[\"']?\s*[:=]\s*[\"'][^\"']{10,}"` (before this section was added) | 1 | no match |
+
+Runs 6 to 12 executed the test file content that is committed in `4634cde` (the later edits to `BUILD_PLAN.md` and the lane line do not affect any test). Runs 8 to 12 cover the 11 merged files named in the order's AC8 list that are database tests, plus `tenancy` and `demo-bootstrap`: 13 merged test files, 318 tests, all passed, none edited. No fault, no failure and no timing re-run occurred. Run 6 is the only run counted for the 27; run 7 is the same file again with a verbose reporter.
+
+Not run, on purpose: `pnpm test:migrations`, `pnpm test`, `pnpm test:db` and any package `test` script (machine rules); the repository-wide `pnpm lint` (only the lane check and the `packages/db` typecheck and lint were run); `pnpm openapi:check`; any other package's tests; the "fails without 0127" red run of AC3/AC4 (not required).
+
+Push and pull request were run after this section was committed: `git push -u origin codex/sandbox/stored-times-1` (no force) and `gh pr create --base main`; the pull request carries their result. A second run of the added-lines scan over the final diff, including this section, is the gate before the push.
+
+Repair-builder addendum only — not an independent review and not an acceptance. The fresh Claude Opus review and the separate Sol check (check lane RED) are still to come.
