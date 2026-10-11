@@ -10,7 +10,7 @@ import { evaluateBillDiscrepancy } from "@jobguard/core";
 import { DiscrepancyRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository } from "../src/index.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 // Things to check: a replay of evaluate, review or bill supersession returns what that command first returned,
 // not the job's current findings, outcomes or bill reduction, and the command id is bound to its job and payload.
@@ -33,7 +33,7 @@ const stored = async (commandId: string) => Number((await admin.query("SELECT co
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "jg-things-replay-"));
-  const port = 60900 + Math.floor(Math.random() * 90);
+  const port = await freePort(60900, 90);
   pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await pg.initialise(); await pg.start();
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic" });

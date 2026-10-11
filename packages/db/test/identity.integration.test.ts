@@ -10,7 +10,7 @@ import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth
 import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/principal-bridge.js";
 import { FixtureIdentityEmail } from "../../../apps/api/src/auth/identity-email.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres:EmbeddedPostgres, admin:Pool, identity:Pool, runtime:Pool, directory:string;
 let now=Date.now();
 const secret="synthetic-identity-key-longer-than-32-characters",origin="https://jobguard.invalid";
@@ -23,7 +23,7 @@ async function signup(address=email()) {
  return {provider,session,principal,membership,address};
 }
 beforeAll(async()=>{
- directory=await mkdtemp(join(tmpdir(),"jobguard-identity-pg16-"));const port=57000+Math.floor(Math.random()*500);
+ directory=await mkdtemp(join(tmpdir(),"jobguard-identity-pg16-"));const port=await freePort(57000,500);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"fixture-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
  await postgres.initialise();await postgres.start();
  const base={host:"127.0.0.1",port,database:"postgres"};admin=new Pool({...base,user:"postgres",password:"fixture-only"});

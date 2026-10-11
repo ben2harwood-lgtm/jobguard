@@ -1,5 +1,5 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +14,7 @@ const USER="83000000-0000-4000-8000-000000000001", MEMBER="84000000-0000-4000-80
 const JOB="85000000-0000-4000-8000-000000000001", QUOTE="86000000-0000-4000-8000-000000000001";
 const HASH="a".repeat(64), context=testTenantContext(TENANT);
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;
-beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-commands-"));const port=57000+Math.floor(Math.random()*500);postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"test-only"});admin.on("error",()=>undefined);await migrate(admin);await installLegacySyntheticPartyFixtures(admin);await admin.query(`
+beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jobguard-commands-"));const port=await freePort(57000,500);postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"test-only",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"test-only"});admin.on("error",()=>undefined);await migrate(admin);await installLegacySyntheticPartyFixtures(admin);await admin.query(`
  INSERT INTO control_plane.tenant(id) VALUES('${TENANT}'); INSERT INTO identity.identity_user(id) VALUES('${USER}');
  INSERT INTO app.account(id,tenant_id,name) VALUES('${ACCOUNT}','${TENANT}','Synthetic');
  INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES('${MEMBER}','${TENANT}','${ACCOUNT}','${USER}','owner');
