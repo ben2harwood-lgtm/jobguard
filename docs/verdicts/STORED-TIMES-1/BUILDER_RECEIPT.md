@@ -240,7 +240,17 @@ Observed on the Mac, real embedded PostgreSQL 16.10 (all 27 cases of the file pa
 | `jobguard_infrastructure`, `jobguard_identity` | both tables | `SELECT`, `INSERT`, `UPDATE` each | all refused, 42501; neither role has USAGE on schema `app`; times unchanged |
 | catalog check | both tables | `has_table_privilege` / column privileges | runtime, infrastructure, identity and the test login hold no UPDATE, DELETE, TRUNCATE, TRIGGER and no column UPDATE; runtime has INSERT and SELECT; none is superuser, create-role, bypass-RLS or a member of `jobguard_migration` |
 
-Pin itself, as observed: a chosen past (2000-01-01) and a chosen future (2099-01-01) time were both replaced by the transaction's time on `app.recovery_case` (as `jobguard_runtime`; as owner `jobguard_migration`; as superuser in ordinary mode) and on `app.practice_feed_event` (as `jobguard_runtime`, inside a complete valid advance transaction): `pinned` true, `kept_chosen` false in every case. The pre-pin control inside AC9 (the database before 0127) stored the chosen past time on `app.recovery_case` (`pinned` false, `kept_chosen` true, observed); there is no equivalent observed pre-pin run for `app.practice_feed_event`, so for the feed table "fails without 0127" is still source reasoning. The money answers for F18 and F19 held in all five chosen-time scenarios and the four product-only controls.
+Pin itself, as observed, by role and time (chosen past time 2000-01-01, chosen future time 2099-01-01; each case `pinned` true, `kept_chosen` false):
+
+| Table | Role | Past time | Future time |
+| --- | --- | --- | --- |
+| `app.recovery_case` | `jobguard_runtime` | tested | tested |
+| `app.recovery_case` | owner `jobguard_migration` | tested | not tested |
+| `app.recovery_case` | superuser `postgres`, ordinary mode | tested | not tested |
+| `app.practice_feed_event` | `jobguard_runtime`, inside a complete valid advance transaction | tested | tested |
+| `app.practice_feed_event` | owner or superuser | not tested | not tested |
+
+Titles: `[AC3]` (runtime, both tables, both times), `[AC4]` (owner and superuser, `app.recovery_case`, past time only). The pre-pin control inside AC9 (the database before 0127) stored the chosen past time on `app.recovery_case` (`pinned` false, `kept_chosen` true, observed); there is no equivalent observed pre-pin run for `app.practice_feed_event`, so for the feed table "fails without 0127" is still source reasoning. The money answers for F18 and F19 held in all five chosen-time scenarios and the four product-only controls.
 
 ### Commands, exactly as run
 
@@ -272,3 +282,149 @@ Not run, on purpose: `pnpm test:migrations`, `pnpm test`, `pnpm test:db` and any
 Push and pull request were run after this section was committed: `git push -u origin codex/sandbox/stored-times-1` (no force) and `gh pr create --base main`; the pull request carries their result. A second run of the added-lines scan over the final diff, including this section, is the gate before the push.
 
 Repair-builder addendum only — not an independent review and not an acceptance. The fresh Claude Opus review and the separate Sol check (check lane RED) are still to come.
+
+## Round 1 (repair round 1 of at most 2: test and records only)
+
+Requested by the integrator after the Opus review (passed) and the separate Codex check, which found one real gap in the reshaped upgrade proof. Repair builder: Claude Sonnet 5.5. Not a review and not an acceptance. `git fetch origin` showed `origin/main` still at 8e91b2d, already in this branch, so no merge was needed. Commit `260b963` holds the test and `BUILD_PLAN.md` change; this section follows it.
+
+| Item | Status | What was done |
+| --- | --- | --- |
+| R1-1 AC9 still restricted later migrations (BLOCKING) | DONE | The complete snapshot comparison right after 0127 ALONE is untouched. After all later migrations the proof now captures the primary-key identity of every pre-0127 row (primary key columns read from `pg_index`), finds each of those rows again by identity, and compares it on its pre-0127 columns by name as database text: `SELECT row_to_json(s)::text` over a sub-select of exactly the named columns, with the identity as `row_to_json` text of the key columns, ordered by identity under `COLLATE "C"`. Every original row must still be present and unchanged; rows added later are ignored. No driver-parsed values anywhere. |
+| R1-2 type snapshot and controls | DONE | Before 0127 the proof also records, for each of the eight compared tables, every non-dropped user column's name with its full type (`format_type(a.atttypid, a.atttypmod)` from `pg_attribute`, in column order). After all migrations every one of those columns must have the same type (a dropped column reads "(gone)"); later columns are ignored. A guard requires at least one pre-existing row in every compared table. Four kinds of rolled-back control run the SAME `proofDifferences` code as the proof (see results below). |
+| R1-3 records and budgets | DONE | `BUILD_PLAN.md` ledger paragraph: "nobody with raw database access" became "no role other than the owner (or a superuser)", nothing else on the line. This receipt: the role/time matrix is now stated exactly (section "Mac verification", paragraph "Pin itself, as observed": runtime on both tables with past and future times; owner and superuser on `app.recovery_case` with the past time only; no owner or superuser feed-table insert test). Explicit budgets in the file's own style: the cluster-starting hook `}, 120_000);` and the AC9 test (the only test that replays the migration list) `}, 60_000);`. |
+
+**Control results (all as specified, none the wrong way round).** The guard held: all eight compared tables (`recovery_case`, `practice_feed_event`, `practice_feed_command`, `recovery_claim_revision`, `recovery_case_event`, `recovery_eligibility_v3_review`, `recovery_claim_line`, `audit_event`) had at least one pre-existing row.
+- (a) One-microsecond change: for each of `app.recovery_case` and `app.practice_feed_event`, a superuser `UPDATE ... SET created_at=created_at+interval '1 microsecond'` in `session_replication_role=replica` (the way the merged tests seed times), rolled back, changed at least one row and made the row comparison report at least one changed pre-existing row of that table, with no type difference. Both tables: comparison FAILED, as it must.
+- (b) Retype: `ALTER TABLE app.recovery_claim_line ALTER COLUMN net_pence TYPE numeric(20,0)`, rolled back, gave exactly `{ rows: [], types: ["recovery_claim_line: net_pence bigint -> numeric(20,0)"] }`: no row difference (the serialised values do not move) and one type difference. The type comparison FAILED, as it must, and is the only thing that catches it.
+- (c) A later nullable column (`ALTER TABLE app.recovery_case ADD COLUMN ...`, confirmed present in the live column list) gave `{ rows: [], types: [] }`; a later row (an `INSERT` of one new `app.recovery_case` row, one row inserted) gave `{ rows: [], types: [] }`. The proof PASSED in both, as it must.
+
+**Literal before/after of the changed lines.** Test file (`git diff -U0 0442abf 260b963 -- packages/db/test/recovery-timing-pin.integration.test.ts`; `-` before, `+` after). The helpers `namedColumns` and `namedRows` are replaced by the identity-based helpers; the import gains `type PoolClient`; nothing else in the file changed:
+
+```diff
+@@ -8 +8 @@ import EmbeddedPostgres from "embedded-postgres";
+-import { Pool } from "pg";
++import { Pool, type PoolClient } from "pg";
+@@ -48 +48 @@ beforeAll(async () => {
+-});
++}, 120_000);
+@@ -269,6 +269,9 @@ async function snapshot(db: Pool) {
+-// Rows compared after ALL migrations are read by the column names that existed before 0127, so a later column cannot fail this proof.
+-async function namedColumns(db: Pool) {
+-  const named: Record<string, string[]> = {};
+-  for (const table of rowTables) named[table] = (await db.query(`SELECT a.attname::text name FROM pg_attribute a
+-    WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum`, [`app.${table}`])).rows.map(row => row.name as string);
+-  return named;
++// What the proof compares AFTER all migrations: only the rows that existed before 0127 (found again by primary key), on the columns and types they had
++// before 0127, as canonical text from the database (never driver-parsed values, which round timestamps to the millisecond). Rows added later are ignored.
++type Queryable = Pick<Pool | PoolClient, "query">;
++type ProofTable = { names: string[]; typed: Record<string, string>; key: string[]; rows: Record<string, string> };
++const ident = (name: string) => `"${name.replaceAll('"', '""')}"`;
++async function proofRows(db: Queryable, table: string, names: string[], key: string[]) {
++  const found = (await db.query(`SELECT identity,bytes FROM (SELECT (SELECT row_to_json(k)::text FROM (SELECT ${key.map(name => `t.${ident(name)}`).join(",")}) k) AS identity,
++    (SELECT row_to_json(s)::text FROM (SELECT ${names.map(name => `t.${ident(name)}`).join(",")}) s) AS bytes FROM app.${table} t) x ORDER BY identity COLLATE "C"`)).rows;
++  return Object.fromEntries(found.map(row => [row.identity as string, row.bytes as string]));
+@@ -276,2 +279,6 @@ async function namedColumns(db: Pool) {
+-async function namedRows(db: Pool, named: Record<string, string[]>) {
+-  const rows: Record<string, unknown> = {};
++async function proofColumns(db: Queryable, table: string) {
++  return (await db.query(`SELECT a.attname::text AS name,format_type(a.atttypid,a.atttypmod) AS type FROM pg_attribute a
++    WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum`, [`app.${table}`])).rows as { name: string; type: string }[];
++}
++async function proofBefore(db: Queryable) {
++  const proof: Record<string, ProofTable> = {};
+@@ -279,2 +286,5 @@ async function namedRows(db: Pool, named: Record<string, string[]>) {
+-    const list = named[table]!.map(name => `t."${name.replaceAll('"', '""')}"`).join(",");
+-    rows[table] = (await db.query(`SELECT row_to_json(s)::text bytes FROM (SELECT ${list} FROM app.${table} t) s ORDER BY row_to_json(s)::text COLLATE "C"`)).rows;
++    const columns = await proofColumns(db, table);
++    const key = (await db.query(`SELECT a.attname::text AS name FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey)
++      WHERE i.indrelid=$1::regclass AND i.indisprimary ORDER BY array_position(i.indkey::int2[],a.attnum)`, [`app.${table}`])).rows.map(row => row.name as string);
++    const names = columns.map(column => column.name);
++    proof[table] = { names, typed: Object.fromEntries(columns.map(column => [column.name, column.type])), key, rows: await proofRows(db, table, names, key) };
+@@ -282 +292,21 @@ async function namedRows(db: Pool, named: Record<string, string[]>) {
+-  return rows;
++  return proof;
++}
++// Every pre-existing column whose type moved ("table: name type -> new type", a dropped column reads "(gone)") and every pre-existing row that is
++// missing or whose named columns changed. A later column, or a later row, is not a difference.
++async function proofDifferences(db: Queryable, proof: Record<string, ProofTable>) {
++  const rows: string[] = [], types: string[] = [];
++  for (const [table, was] of Object.entries(proof)) {
++    const now = new Map((await proofColumns(db, table)).map(column => [column.name, column.type]));
++    for (const name of was.names) if (now.get(name) !== was.typed[name]) types.push(`${table}: ${name} ${was.typed[name]} -> ${now.get(name) ?? "(gone)"}`);
++    if (was.names.some(name => !now.has(name))) continue;
++    const live = await proofRows(db, table, was.names, was.key);
++    for (const [identity, bytes] of Object.entries(was.rows)) {
++      if (!(identity in live)) rows.push(`${table} ${identity}: missing`);
++      else if (live[identity] !== bytes) rows.push(`${table} ${identity}: changed`);
++    }
++  }
++  return { rows, types };
++}
++async function rolledBack<T>(db: Pool, work: (client: PoolClient) => Promise<T>) {
++  const client = await db.connect();
++  try { await client.query("BEGIN"); return await work(client); } finally { await client.query("ROLLBACK"); client.release(); }
+@@ -302 +332,2 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
+-    const named = await namedColumns(upgradeAdmin), beforeRows = await namedRows(upgradeAdmin, named);
++    const proof = await proofBefore(upgradeAdmin);
++    for (const [table, was] of Object.entries(proof)) expect(Object.keys(was.rows).length, `${table} has a pre-existing row to compare`).toBeGreaterThan(0);
+@@ -311 +342,30 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
+-    expect(await namedRows(upgradeAdmin, named)).toEqual(beforeRows);
++    expect(await proofDifferences(upgradeAdmin, proof)).toEqual({ rows: [], types: [] });
++    // Controls: each runs the SAME comparison inside a transaction that is rolled back.
++    for (const table of tables) {
++      // (a) a one-microsecond change to a stored time, made by a superuser UPDATE the way the merged tests seed times, must fail the row comparison.
++      const moved = await rolledBack(upgradeAdmin, async client => {
++        await client.query("SET LOCAL session_replication_role=replica");
++        expect((await client.query(`UPDATE app.${table} SET created_at=created_at+interval '1 microsecond' WHERE tenant_id=$1 AND job_id=$2`, [T, f.jobId])).rowCount).toBeGreaterThan(0);
++        return proofDifferences(client, proof);
++      });
++      expect(moved.rows.some(line => line.startsWith(`${table} `)), `control (a) ${table}: ${JSON.stringify(moved)}`).toBe(true);
++      expect(moved.types).toEqual([]);
++    }
++    // (b) a retype that keeps every serialised value must still fail the type comparison.
++    const retyped = await rolledBack(upgradeAdmin, async client => {
++      await client.query("ALTER TABLE app.recovery_claim_line ALTER COLUMN net_pence TYPE numeric(20,0)");
++      return proofDifferences(client, proof);
++    });
++    expect(retyped).toEqual({ rows: [], types: ["recovery_claim_line: net_pence bigint -> numeric(20,0)"] });
++    // (c) a later nullable column, and a later row in a compared table, must leave the proof passing.
++    expect(await rolledBack(upgradeAdmin, async client => {
++      await client.query("ALTER TABLE app.recovery_case ADD COLUMN stored_times_control text");
++      expect((await proofColumns(client, "recovery_case")).map(column => column.name)).toContain("stored_times_control");
++      return proofDifferences(client, proof);
++    })).toEqual({ rows: [], types: [] });
++    expect(await rolledBack(upgradeAdmin, async client => {
++      expect((await client.query(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs)
++        VALUES($1,$2,$3,$4,'GBP','identified',0,true,'withheld_customer_payment','Fictional debtor','builder_customer','customer_invoice',$5)`,
++      [randomUUID(), T, f.jobId, receipt.grossPence, JSON.stringify(["Generated customer invoice INV-18800"])])).rowCount).toBe(1);
++      return proofDifferences(client, proof);
++    })).toEqual({ rows: [], types: [] });
+@@ -321 +381 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
+-});
++}, 60_000);
+```
+
+`BUILD_PLAN.md` (`git diff -U0 0442abf 260b963 -- BUILD_PLAN.md`); only the phrase changed, the rest of the line is byte-identical:
+
+```diff
+@@ -3365 +3365 @@ Each repair's specification is its verdict file: every finding is fixed or expli
+-**Ledger amendment — STORED-TIMES-1, 11 October 2026 (merge-ahead ruling).** STORED-TIMES-1 is a fix-forward of merged CH-7 (migration 0119), found by a read-only investigation on 11 October 2026; it was not pre-allocated in §12.3. It takes **0127** (`recovery_timing_pin`) because 0123–0126 are held by open pieces (0123 #138, 0124 #139, 0125 ENT-10d, 0126 ENT-3a) and it merges ahead of them (merged through 0115 and 0119–0122), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0122; those four numbers stay reserved for their pieces. It adds no column and changes no grant: one new function and one BEFORE INSERT trigger on each of `app.recovery_case` and `app.practice_feed_event` pin `created_at` to the transaction's time, so nobody with raw database access can choose the two stored times the "paid before the case opened" rule compares. The residual, in plain words: a raw writer can still back-date by as long as it keeps its own transaction open, because the stored time is the transaction's start.
++**Ledger amendment — STORED-TIMES-1, 11 October 2026 (merge-ahead ruling).** STORED-TIMES-1 is a fix-forward of merged CH-7 (migration 0119), found by a read-only investigation on 11 October 2026; it was not pre-allocated in §12.3. It takes **0127** (`recovery_timing_pin`) because 0123–0126 are held by open pieces (0123 #138, 0124 #139, 0125 ENT-10d, 0126 ENT-3a) and it merges ahead of them (merged through 0115 and 0119–0122), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0122; those four numbers stay reserved for their pieces. It adds no column and changes no grant: one new function and one BEFORE INSERT trigger on each of `app.recovery_case` and `app.practice_feed_event` pin `created_at` to the transaction's time, so no role other than the owner (or a superuser) can choose the two stored times the "paid before the case opened" rule compares. The residual, in plain words: a raw writer can still back-date by as long as it keeps its own transaction open, because the stored time is the transaction's start.
+```
+
+### Round 1 commands, exactly as run
+
+`WT` = `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/stored-times-1`. Same environment and machine rules as above (`VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`; 79 percent memory free before each heavy command; each heavy command inside `heavy-slot`). Logs: `~/.local/share/full-steam/jg-runs/stored-times-1-mac-round1-*`.
+
+| # | Working directory | Command | Exit | Result |
+| --- | --- | --- | --- | --- |
+| 1 | `WT` | `git fetch origin` | 0 | origin/main still 8e91b2d; no merge needed |
+| 2 | `WT/packages/db` | `heavy-slot stored-times-1-r1-own pnpm exec vitest run --maxWorkers=2 --reporter=verbose test/recovery-timing-pin.integration.test.ts` | 0 | 1 file, 27 of 27 passed (AC9 including guard and controls) |
+| 3 | `WT` | `node ~/.local/share/full-steam/jg-runs/stored-times-1-mac-r1-typecheck.mjs "$PWD"` (TypeScript compiler API over the test file with the package's compiler options, no emit) | 0 | 0 diagnostics in the test file |
+| 4 | `WT/packages/db` | `heavy-slot stored-times-1-r1-merged pnpm exec vitest run --maxWorkers=2 test/recovery-eligibility-v3.integration.test.ts test/practice-feed.integration.test.ts test/recovery-cases.integration.test.ts` | 0 | 3 files, 63 passed, unedited |
+| 5 | `WT` | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | "Lane boundary passed", lane `stored-times-1`, head 260b963 |
+| 6 | `WT` | `heavy-slot stored-times-1-r1-typecheck pnpm --filter @jobguard/db typecheck` | 0 | no diagnostics |
+
+Runs 2 and 4 ran the test content committed in `260b963`. No fault, no failure, no re-run. Not run in this round: the other merged files (unchanged this round; run in the first Mac verification), `pnpm test:migrations`, repository-wide lint, openapi check. The migration, triggers, every other assertion and every merged file are unchanged. The ordinary push of this section follows the commit that holds it, with the added-lines scan as the gate.
+
+Round 1 repair-builder addendum only — not an independent review and not an acceptance.
