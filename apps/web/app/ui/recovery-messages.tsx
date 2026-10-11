@@ -93,6 +93,7 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
   const generation = useRef(0), locked = useRef(false), errorRef = useRef<HTMLParagraphElement>(null);
   const endpoint = `/api/recovery-cases/${caseId}/messages`;
   const view = state?.latest ?? null;
+  const replacedPreviews = state?.messages.filter(message => message.superseded && message.status === "previewed").length ?? 0;
 
   const adopt = useCallback((next: State) => { setState(next); setDraft(next.latest ? draftOf(next.latest) : null); }, []);
   const load = useCallback(async () => {
@@ -218,7 +219,7 @@ export function RecoveryMessages({ caseId, caseRevision, evidenceTick = 0 }: { c
       <section className={styles.history} aria-label="Delivery and checking history">
         <h5>Delivery and checking history</h5>
         <ol data-testid="pursuit-history">{view.history.map(event => <li key={event.revision}>{RECOVERY_MESSAGE_EVENT_LABELS[event.kind]}</li>)}</ol>
-        {state!.messages.length > 1 && <p>{state!.messages.length - 1} earlier preview{state!.messages.length === 2 ? "" : "s"} replaced by this one.</p>}
+        {replacedPreviews > 0 && <p>{replacedPreviews} earlier preview{replacedPreviews === 1 ? "" : "s"} replaced by this one.</p>}
       </section>
     </>}
     <RecoveryFollowUps caseId={caseId} caseRevision={caseRevision} evidenceTick={evidenceTick} />
