@@ -178,9 +178,15 @@ BEGIN
 END $$;
 
 CREATE FUNCTION app.ent4b_require_origin_audit() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
-DECLARE o app.extra_origin; origin_xid xid;
+DECLARE o app.extra_origin; origin_xid xid; setting_tenant uuid;
 BEGIN
- IF nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM NEW.tenant_id::text THEN
+ -- Compare uuid VALUES, never spellings: the stamped context may carry an upper-case id, PostgreSQL prints lower case.
+ BEGIN
+  setting_tenant:=nullif(current_setting('app.tenant_id',true),'')::uuid;
+ EXCEPTION WHEN invalid_text_representation THEN
+  RAISE EXCEPTION 'INVALID_ORIGIN' USING ERRCODE='23514';
+ END;
+ IF setting_tenant IS DISTINCT FROM NEW.tenant_id THEN
   RAISE EXCEPTION 'INVALID_ORIGIN' USING ERRCODE='23514';
  END IF;
  SELECT * INTO o FROM app.extra_origin WHERE (tenant_id,job_id,variation_id)=(NEW.tenant_id,NEW.job_id,NEW.variation_id);

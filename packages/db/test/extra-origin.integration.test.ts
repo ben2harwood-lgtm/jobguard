@@ -258,6 +258,51 @@ describe("ENT-4b origin persistence", () => {
   expect((await c.admin.query("SELECT environment FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [f.p.tenantId, f.jobId])).rows[0].environment).toBe("synthetic_demo");
   expect((await c.admin.query("SELECT scope_item_id,existing_scope_item_id FROM app.variation WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, e.variationId])).rows[0].existing_scope_item_id).toBeNull();
  });
+ // Round 2: the commit-time guard must compare uuid VALUES, never spellings. Written before the repair.
+ const countRows = async (f: Fixture, id: string, commandId: string) => Object.fromEntries(await Promise.all([["command_receipt", "command_id", commandId], ["variation", "id", id], ["extra_origin", "variation_id", id], ["extra_event", "variation_id", id], ["audit_event", "subject_ref", id]].map(async ([table, column, value]) => [table, (await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND ${column}=$2`, [f.p.tenantId, value])).rows[0].n])));
+ async function tenantSettingChangedBeforeCommit(pick: (f: Fixture) => Promise<string | null>) {
+  const f = await fixture(c), id = randomUUID(), commandId = randomUUID(), value = await pick(f);
+  let refusal: any;
+  await withTenant(c.runtime, f.ctx, async db => {
+   await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, "LogSiteExtra", commandId); await rawVariation(db, f.p.tenantId, f.jobId, id);
+   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash);
+   await db.$client.query("SELECT set_config('app.tenant_id',$1,true)", [value]);
+  }).catch(error => { refusal = error; });
+  expect(refusal).toBeDefined();
+  expect(await countRows(f, id, commandId)).toEqual({ command_receipt: 0, variation: 0, extra_origin: 0, extra_event: 0, audit_event: 0 });
+  await checkChain(f);
+  return refusal;
+ }
+ it("[S4] a stamped context with an UPPER-CASE tenant id commits a valid extra", async () => {
+  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase());
+  expect(upper.tenantId).not.toBe(f.p.tenantId); expect(upper.tenantId.toLowerCase()).toBe(f.p.tenantId);
+  const input = raise(f), e = await repo.raiseExtra(upper, input);
+  expect(await countRows(f, e.variationId, input.commandId)).toEqual({ command_receipt: 1, variation: 1, extra_origin: 1, extra_event: 1, audit_event: 1 });
+  expect(await repo.readExtra(upper, f.jobId, e.variationId)).toEqual(await repo.readExtra(f.ctx, f.jobId, e.variationId));
+  await checkChain(f);
+ });
+ it("[S4] both spellings of one tenant identify one extra for one client capture ID", async () => {
+  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase()), original = raise(f, { clientCaptureId: randomUUID() });
+  const a = await repo.raiseExtra(upper, original), retry = { ...original, commandId: randomUUID() };
+  expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a);
+  expect(await repo.raiseExtra(upper, { ...original, commandId: randomUUID() })).toEqual(a);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.variation WHERE tenant_id=$1 AND job_id=$2", [f.p.tenantId, f.jobId])).rows[0].n).toBe(1);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2", [f.p.tenantId, f.jobId])).rows[0].n).toBe(1);
+  await checkChain(f);
+ });
+ it("[S4] an absent tenant setting at commit is refused and nothing is written", async () => {
+  expect(await tenantSettingChangedBeforeCommit(async () => null)).toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+ });
+ it("[S4] an empty tenant setting at commit is refused and nothing is written", async () => {
+  expect(await tenantSettingChangedBeforeCommit(async () => "")).toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+ });
+ it("[S4] a different tenant's id in the setting at commit is refused, in either letter case", async () => {
+  expect(await tenantSettingChangedBeforeCommit(async () => randomUUID())).toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+  expect(await tenantSettingChangedBeforeCommit(async () => randomUUID().toUpperCase())).toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+ });
+ it("[S4] a non-uuid tenant setting at commit is refused and nothing is written", async () => {
+  expect((await tenantSettingChangedBeforeCommit(async () => "not-a-uuid")).message).toMatch(/^(INVALID_ORIGIN|invalid input syntax for type uuid.*)$/);
+ });
 });
 async function smallFixture(f: Fixture) {
  return ownerTx(c, f.p.tenantId, async db => { const id = randomUUID(); await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional earlier small-builder job','live')", [f.p.tenantId, id]); return id; });

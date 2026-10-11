@@ -305,3 +305,29 @@ First real database run of Codex repair round 1 (commit a134925, on top of be7c8
 **Stopped on.** Nothing.
 
 No assertion, expected value, timeout, grant or policy was changed or loosened.
+
+## Round 2 — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+One fix, from the fresh Sol check of round 1: the commit-time guard compared the tenant setting as text, so an upper-case but valid tenant id (which `verifiedTenantContextFromMembership` accepts and `withTenant` passes through to `set_config` unchanged, while PostgreSQL prints uuids in lower case) made a legitimate commit fail with `INVALID_ORIGIN`. `origin/main` was NOT merged. `tenant-context.ts` and every merged migration were not touched.
+
+**Comparisons changed (before / after).**
+1. `packages/db/migrations/0122_extra_origin_persistence.sql`, `app.ent4b_require_origin_audit()` (about line 183), the only text comparison of the setting in the migration. Before: `IF nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM NEW.tenant_id::text THEN RAISE EXCEPTION 'INVALID_ORIGIN'`. After: the setting is cast to `uuid` inside an inner `BEGIN ... EXCEPTION WHEN invalid_text_representation` block that raises the typed `INVALID_ORIGIN` (23514), then `IF setting_tenant IS DISTINCT FROM NEW.tenant_id THEN RAISE EXCEPTION 'INVALID_ORIGIN'`. The guard therefore refuses when the setting is absent, empty, not a uuid or a different tenant, and accepts the same tenant in any letter case. Nothing else in 0122 changed; the row-security policy text added there already cast the setting to `uuid`.
+2. `packages/db/src/extra-repository.ts`, same class (tenant spelling used as text). `lockJob`: the advisory-lock key was `hashtextextended($1||':'||$2,417)` over the caller's spelling, so an upper-case caller took a different key from the lower-case key the table trigger uses; now `hashtextextended($1::uuid::text||':'||$2::uuid::text,417)`. The four `const tenant = context.tenantId` and the one `context.tenantId` handed to `readInTransaction` now use `context.tenantId.toLowerCase()`, so the derived extra id, the ordering facts and every SQL parameter use one spelling. No test was red for change 2 before it (all behaviour already matched), so it is covered by the green tests only, not by a red-then-green proof.
+
+**Tests added** (appended to this leaf's own `test/extra-origin.integration.test.ts`; all existing assertions untouched).
+- (1) `[S4] a stamped context with an UPPER-CASE tenant id commits a valid extra`: RED before the fix (`ExtraPersistenceError: INVALID_ORIGIN`, seen in the run before the migration change), green after. It checks one row each in receipt, variation, origin, event and audit, an identical read under both spellings, and the audit chain.
+- (1b) `[S4] both spellings of one tenant identify one extra for one client capture ID`: also red before (same cause), green after.
+- (2) absent setting (set to NULL before commit) refused, nothing written (the existing `[S4] clearing tenant context...` test is unchanged).
+- (3) empty setting refused, nothing written. (4) another tenant's id, lower and upper case, refused. (5) a non-uuid setting refused. Each checks zero rows in all five tables and the audit chain. (2)-(5) were green before the fix too (the old text compare also refused them); they now pin the new comparison.
+
+**Commands and results.**
+- `pnpm turbo run build --filter=@jobguard/db...`: exit 0, 3 tasks.
+- Before the fix, `test/extra-origin.integration.test.ts`: 32 tests, 2 failed (1 and 1b), 30 passed. After the migration fix alone: 32 passed.
+- After both changes: db `test/extra-origin.integration.test.ts test/extra-links.integration.test.ts test/extra-origin-upgrade.integration.test.ts`: 3 files, 48 tests passed.
+- db `test/shared-money-origin.integration.test.ts test/work-order-import.integration.test.ts test/tenancy.integration.test.ts` (unedited): 3 files, 70 tests passed.
+
+**Not changed, noted.** The repository still derives the extra id from the caller's spelling of the job and capture ids (`derivedUuid(...)`); that is outside the tenant-setting scope of this fix and was not touched.
+
+**Stopped on.** Nothing.
+
+No assertion, expected value, timeout, grant or policy was changed or loosened.

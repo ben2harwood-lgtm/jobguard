@@ -38,7 +38,7 @@ function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T 
  const parsed = schema.safeParse(raw); if (!parsed.success) throw new ExtraPersistenceError("INVALID_COMMAND"); return parsed.data;
 }
 async function lockJob(db: TenantTransaction, tenant: string, job: string): Promise<void> {
- await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1||':'||$2,417))", [tenant, job]);
+ await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, job]);
  if (!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rowCount) throw new ExtraPersistenceError("NOT_FOUND");
 }
 async function claim<T>(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, hash: string, actor: string): Promise<T | null> {
@@ -62,7 +62,7 @@ export class ExtraRepository {
   const input = parse(raiseExtraV1, raw), { commandId: _commandId, ...content } = input;
   const requestHash = sha256Hex(canonicalJson(content));
   try { return await withTenant(this.pool, context, async db => {
-   const tenant = context.tenantId;
+   const tenant = context.tenantId.toLowerCase();
    await lockJob(db, tenant, input.jobId);
    const binding = (await db.$client.query("SELECT j.provenance,t.job_track,t.environment FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2", [tenant, input.jobId])).rows[0];
    if (!binding || binding.job_track !== "contractor" || binding.provenance !== "work_order" || binding.environment !== "synthetic_demo") throw new ExtraPersistenceError("NOT_FOUND");
@@ -106,7 +106,7 @@ export class ExtraRepository {
  async linkDuplicate(context: VerifiedTenantContext, raw: unknown, seam?: ExtraTransactionSeam): Promise<ExtraLinkResult> {
   const input = parse(extraDuplicateLinkV1, raw), { commandId: _commandId, ...content } = input;
   try { return await withTenant(this.pool, context, async db => {
-   const tenant = context.tenantId; await lockJob(db, tenant, input.jobId);
+   const tenant = context.tenantId.toLowerCase(); await lockJob(db, tenant, input.jobId);
    for (const id of [input.duplicateId, input.canonicalId]) await this.readInTransaction(db, tenant, input.jobId, id);
    const replay = await claim<ExtraLinkResult>(db, tenant, input.commandId, "MarkDuplicate", `extra-duplicate:${input.jobId}:${input.duplicateId}:${input.canonicalId}:${input.commandId}`, sha256Hex(canonicalJson(content)), input.actorMembershipId); if (replay) return replay;
    const linkId = randomUUID();
@@ -119,7 +119,7 @@ export class ExtraRepository {
  async linkOrderLine(context: VerifiedTenantContext, raw: unknown, seam?: ExtraTransactionSeam): Promise<ExtraLinkResult> {
   const input = parse(extraOrderLineLinkV1, raw), { commandId: _commandId, ...content } = input;
   try { return await withTenant(this.pool, context, async db => {
-   const tenant = context.tenantId; await lockJob(db, tenant, input.jobId); await this.readInTransaction(db, tenant, input.jobId, input.variationId);
+   const tenant = context.tenantId.toLowerCase(); await lockJob(db, tenant, input.jobId); await this.readInTransaction(db, tenant, input.jobId, input.variationId);
    const replay = await claim<ExtraLinkResult>(db, tenant, input.commandId, "RecordClientInstruction", `extra-order-line:${input.jobId}:${input.variationId}`, sha256Hex(canonicalJson(content)), input.actorMembershipId); if (replay) return replay;
    const linkId = randomUUID();
    await db.$client.query("INSERT INTO app.extra_order_line_link(tenant_id,id,job_id,variation_id,work_order_id,revision_id,scope_item_id,command_id,actor_membership_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)", [tenant, linkId, input.jobId, input.variationId, input.workOrderId, input.revisionId, input.scopeItemId, input.commandId, input.actorMembershipId]);
@@ -134,12 +134,12 @@ export class ExtraRepository {
  }
  async readExtra(context: VerifiedTenantContext, jobId: string, variationId: string): Promise<ExtraReadRecord> {
   parse(uuid, jobId); parse(uuid, variationId);
-  try { return await withTenant(this.pool, context, db => this.readInTransaction(db, context.tenantId, jobId, variationId)); } catch (error) { failure(error); }
+  try { return await withTenant(this.pool, context, db => this.readInTransaction(db, context.tenantId.toLowerCase(), jobId, variationId)); } catch (error) { failure(error); }
  }
  async readDuplicateGroup(context: VerifiedTenantContext, jobId: string, variationId: string): Promise<{ canonicalId: string; members: ExtraRecord[]; effectiveOrigin: ExtraRecord }> {
   parse(uuid, jobId); parse(uuid, variationId);
   try { return await withTenant(this.pool, context, async db => {
-   const tenant = context.tenantId; await this.readInTransaction(db, tenant, jobId, variationId);
+   const tenant = context.tenantId.toLowerCase(); await this.readInTransaction(db, tenant, jobId, variationId);
    // One statement reads a coherent active graph; no ordering/fee rule is implemented in SQL.
    const rows = (await db.$client.query(`WITH active AS (
     SELECT l.* FROM app.extra_duplicate_link l WHERE l.tenant_id=$1 AND l.job_id=$2 AND l.kind='link'
