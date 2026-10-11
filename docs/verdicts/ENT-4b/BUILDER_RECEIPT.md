@@ -271,3 +271,37 @@ R4's existing assertions remain; S9 loses only the seven merged-test pins author
 `recovery-follow-up-upgrade.integration.test.ts` is intentionally untouched: MIG-ORDER-2 (#137) owns its separate compatibility repair. At be7c87b the supplied reviews reported CI red (973/976 database tests passed; three failures in two merged upgrade suites). This round does not claim those suites green. CI must execute the new PostgreSQL proofs and all merged regressions on the dispatcher's exact commit; the same Opus reviewer and a fresh Sol check must record the requested repair verdicts, followed by separate acceptance. Role-per-command, unlink function/type, prompt provenance, routes/screens and existing production/release gates remain held. Intended conventional commit text is `/private/tmp/jg-msg-ent-4b.txt`; dispatcher owns commit/push.
 
 Round 1 handoff cleanup removed only generated output in this working tree (`.turbo`, local package/application `dist`, `.next`, local tsconfig build info). Installed dependencies and shared external worktree symlinks were left intact. No database/browser artifacts were produced. Final whitespace/source checks passed and the intended commit-message file was written; no commit or push performed.
+
+## Round 1 verification — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+First real database run of Codex repair round 1 (commit a134925, on top of be7c87b). Embedded PostgreSQL 16.10; one vitest run at a time inside `heavy-slot`, `--maxWorkers=2`; free memory 70% or more before every run. `origin/main` was NOT merged in this job.
+
+**Grep confirmations (HEAD a134925, before any change in this job).**
+- `pricing_basis` / `pricingBasis` appears nowhere in this leaf's files (`0122_extra_origin_persistence.sql`, `extra-repository.ts`, `extra-persistence.ts` and its test, the three `extra-*.integration.test.ts` files, `extra-fixtures.ts`, `extra-origin-persistence-v1.md`, `MIGRATIONS.md`, this receipt) and nowhere in the repository (`git grep -l pricing_basis` returns nothing).
+- Migration 0122 now has `ALTER TABLE` on exactly two existing tables, `app.extra_origin` and `app.variation`, plus the loop that sets owner and row security on its own three new tables. It adds no column to `app.variation_revision`, `quote_document_version`, `quote_acceptance`, `evidence_object`, `variation_approval`, `recovery_claim_revision`, `recovery_case_event`, `material_rate_revision`, `supplier_document_version`, `supplier_document`, `customer_invoice` or `discrepancy_review_outcome`.
+- Migration 0122 contains no `CREATE OR REPLACE`, no `DROP` and no `SECURITY DEFINER`.
+
+**Faults found.** None. Round 1's migration change (fix A: the `pricing_basis` column and its CHECK removed; fix E: the commit-time origin/audit check raises `INVALID_ORIGIN` when `app.tenant_id` is absent or different) applied cleanly on a fresh database and on the upgrade path, and no test needed any set-up change. No file was edited in this job except this receipt.
+
+**Do the six fixes work on a real database?** Each has a test that ran and passed:
+- A: the upgrade test no longer lists `pricing_basis` among added columns; the two merged tests that had been red because of the column (`recovery-message-upgrade`, `evidence-pack-sources`) pass unedited.
+- B: A/X, B/X, B/Y capture-retry sequence rejects with `COMMAND_CONFLICT` and leaves the bound receipt hash and all row counts unchanged.
+- C: `readExtra` returns `extra-record-legacy.v1` / `extra-origin-legacy.v1` with explicit nulls for merged small-builder and backfilled legacy origins, while command origins stay strict.
+- D: the audit chain verifies (`verifyAuditChain`) and the head is unchanged after each failed link operation.
+- E: with `app.tenant_id` set empty the commit fails closed and leaves no receipt, variation, origin, event or audit row.
+- F: `[S9]` now pins only the scanner and the seven bridges, with no whole-file hash of a merged test file.
+
+**Commands and results.**
+- `pnpm install --frozen-lockfile`: ok. `pnpm turbo run build --filter=@jobguard/db...`: exit 0, 3 tasks.
+- core `src/extra-persistence.test.ts src/extra-origin.test.ts`: 2 files, 10 tests passed.
+- db `test/extra-origin.integration.test.ts test/extra-links.integration.test.ts test/extra-origin-upgrade.integration.test.ts`: 3 files, 42 tests passed.
+- db `test/shared-money-origin.integration.test.ts test/work-order-import.integration.test.ts` (unedited): 2 files, 61 tests passed.
+- db `test/tenancy.integration.test.ts test/demo-bootstrap.integration.test.ts`: 2 files, 13 tests passed.
+- db `test/recovery-message-upgrade.integration.test.ts test/evidence-pack-sources.integration.test.ts` (unedited): 2 files, 9 tests passed.
+- `pnpm turbo run build --filter=@jobguard/api...`: exit 0, 6 tasks. api `src/auth/context-boundary.test.ts` (unedited): 1 file, 145 tests passed.
+
+**Not run, on purpose.** `packages/db/test/recovery-follow-up-upgrade.integration.test.ts` was neither run nor edited. It is expected to stay red on this branch until the separate piece MIGRATION-ORDER-2 (MIG-ORDER-2, PR #137) merges; that is outside this leaf.
+
+**Stopped on.** Nothing.
+
+No assertion, expected value, timeout, grant or policy was changed or loosened.
