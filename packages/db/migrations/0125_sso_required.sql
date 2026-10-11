@@ -202,9 +202,19 @@ DECLARE t uuid; member record; actor uuid; event identity.sso_required_event; ap
  PERFORM set_config('app.tenant_id',t::text,true);
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
  -- Recheck under the tenant lock, using the existing permission/active-member contract.
- IF NOT app.contractor_allowed(actor,'organisation.manage',t) THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_PERMISSION_REFUSED'); END IF;
+ IF (app.contractor_allowed(actor,'organisation.manage',t)) IS NOT TRUE THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_PERMISSION_REFUSED'); END IF;
  SELECT * INTO event FROM identity.sso_required_event e WHERE e.tenant_id=t ORDER BY e.revision DESC LIMIT 1;
- IF event.id IS NULL OR NOT event.required THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_SWITCH_OFF'); END IF;
+ IF event.id IS NULL OR event.required IS NOT TRUE THEN
+  -- A competing use sees the committed OFF revision under the same tenant lock.
+  IF EXISTS(SELECT 1 FROM identity.sso_emergency_use used JOIN identity.sso_emergency_approval a
+    ON(a.tenant_id,a.id)=(used.tenant_id,used.approval_id)
+    WHERE used.tenant_id=t AND used.event_id=event.id AND a.membership_id=actor) THEN
+   INSERT INTO identity.sso_emergency_event(tenant_id,id,membership_id,outcome,cause_code,reason)
+    VALUES(t,gen_random_uuid(),actor,'refused','EMERGENCY_ALREADY_USED',p->>'reason');
+   RETURN jsonb_build_object('used',false,'cause','EMERGENCY_ALREADY_USED','connectionId',event.connection_id,'actorMembershipId',actor);
+  END IF;
+  RETURN jsonb_build_object('used',false,'cause','EMERGENCY_SWITCH_OFF');
+ END IF;
  IF NOT EXISTS(SELECT 1 FROM identity.sso_emergency_approver_rule) THEN cause:='EMERGENCY_APPROVER_RULE_UNSET';
  ELSE
   SELECT * INTO approval FROM identity.sso_emergency_approval a

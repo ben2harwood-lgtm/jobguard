@@ -119,7 +119,7 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
   const sql=await readFile(new URL("../migrations/0125_sso_required.sql",import.meta.url),"utf8");
   expect(sql).not.toMatch(/INSERT INTO identity\.sso_emergency_(?:approver_rule|approval)\b/iu);
  });
- it("[S10d] one owner-run rolled-back fixture proves bounded single use, expiry, wrong member and tenant",async()=>{
+ it("[S10d] one owner-run rolled-back fixture proves sequential single use, expiry, wrong member and tenant",async()=>{
   const f=await fixture(),other=await fixture();await f.enable();await other.enable();
   const client=await admin.connect(),rule=randomUUID(),approval=randomUUID();
   const use=(u:string,t=f.principal.tenantId)=>client.query("SELECT identity.sso_emergency_use($1,$2::jsonb) result",[u,JSON.stringify({version:"sso-emergency.v1",requested_tenant_id:t,email:f.email,code:"12345678",reason:"Synthetic owner-only emergency fixture reason"})]);
@@ -131,8 +131,7 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
    await client.query("INSERT INTO identity.sso_emergency_approval(tenant_id,id,membership_id,rule_id,approver_ref,reason_hash,approved_at,expires_at) VALUES($1,$2,$3,$4,'owner-fixture',$5,clock_timestamp(),clock_timestamp()+interval '20 minutes')",[f.principal.tenantId,approval,f.principal.membershipId,rule,"a".repeat(64)]);
    expect((await use(other.principal.identityUserId)).rows[0].result.used).toBe(false);
    expect((await use(f.principal.identityUserId,other.principal.tenantId)).rows[0].result.used).toBe(false);
-   // Two overlapping submissions on the mandated ONE connection; the pg driver serializes statements.
-   // This is not proof of competing independent transactions; that evidence remains a held scope conflict.
+   // One connection proves sequential single use; the separate disposable fixture tests concurrency.
    const submissions=await Promise.all([use(f.principal.identityUserId),use(f.principal.identityUserId)]);
    expect(submissions.filter(r=>r.rows[0].result.used)).toHaveLength(1);
    expect(submissions.filter(r=>!r.rows[0].result.used)).toHaveLength(1);

@@ -36,7 +36,8 @@ export class SsoRequiredRepository {
   }
   async emergency(userId:string,input:Record<string,unknown>):Promise<SsoEmergencyOutcome> {
     return this.enterprise.transaction(async client=>{
-      const result=emergencyResult.parse((await client.query<{result:unknown}>("SELECT identity.sso_emergency_use($1,$2::jsonb) result",[userId,JSON.stringify(input)])).rows[0]?.result);
+      const payload={version:input.version,requested_tenant_id:input.requested_tenant_id,reason:input.reason};
+      const result=emergencyResult.parse((await client.query<{result:unknown}>("SELECT identity.sso_emergency_use($1,$2::jsonb) result",[userId,JSON.stringify(payload)])).rows[0]?.result);
       if(result.connectionId && result.actorMembershipId) {
         await this.enterprise.audit(client,result.connectionId,result.used?"sso.emergency.used":"sso.emergency.refused",`membership:${result.actorMembershipId}`,result.cause,hash(input.reason));
       }

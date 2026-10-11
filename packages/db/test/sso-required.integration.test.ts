@@ -243,4 +243,20 @@ describe("ENT-10d PostgreSQL switch and session boundary",()=>{
    const client=await identity.connect();try {await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[setting]);expect((await client.query(`SELECT * FROM identity.${table}`)).rows).toEqual([]);}finally{await client.query("ROLLBACK");client.release();}
   }
  });
+ it("[S4] SQL alone keeps bound A and excludes required B for the same active person",async()=>{
+  const a=await fixture(),b=await fixture();
+  const membershipB=await memberIn(a.principal.identityUserId,b.principal.tenantId);
+  // Link the second active membership so both tenants can pass the strict ON guard.
+  await admin.query("INSERT INTO identity.sso_subject(tenant_id,connection_id,subject_hash,email_hash,user_id,membership_id) VALUES($1,$2,$3,$4,$5,$6)",[
+   b.principal.tenantId,b.connectionId,"b".repeat(64),"e".repeat(64),a.principal.identityUserId,membershipB,
+  ]);
+  await a.enable();await b.enable();
+  const principal=(await a.provider.authenticate(a.bound!.sessionToken))!;
+  expect((await identity.query("SELECT tenant_id FROM identity.current_memberships($1)",[a.principal.identityUserId])).rows.map(r=>r.tenant_id).sort()).toEqual([a.principal.tenantId,b.principal.tenantId].sort());
+  expect((await admin.query("SELECT required FROM identity.sso_required_event WHERE tenant_id=ANY($1::uuid[])",[[a.principal.tenantId,b.principal.tenantId]])).rows).toEqual([{required:true},{required:true}]);
+  // Restricted identity credential calls SQL directly; no provider filter can conceal a wrong result.
+  const rows=(await identity.query("SELECT * FROM identity.sso_session_memberships($1,$2)",[a.principal.identityUserId,principal.sessionId])).rows;
+  expect(rows.map(r=>({id:r.id,tenant_id:r.tenant_id}))).toEqual([{id:a.principal.membershipId,tenant_id:a.principal.tenantId}]);
+  expect(rows.some(r=>r.tenant_id===b.principal.tenantId)).toBe(false);
+ });
 });

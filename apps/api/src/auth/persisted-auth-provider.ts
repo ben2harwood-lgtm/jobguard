@@ -81,8 +81,15 @@ export class PersistedAuthProvider implements AuthProvider {
       await client.query("INSERT INTO identity.security_event(id,event_type,subject_id) VALUES($1,'session.issued',$2)", [randomUUID(),sessionId]);
       return { sessionToken, csrfToken };
     });
-    for (const refusal of refusals) await this.enterpriseIdentity.refusal(refusal.connectionId,refusal.code);
-    if (!result) throw new AuthError("INVALID_CODE");
+    const invalidCode = new AuthError("INVALID_CODE");
+    for (const refusal of refusals) {
+      try { await this.enterpriseIdentity.refusal(refusal.connectionId,refusal.code); }
+      catch (error) {
+        // Preserve the server error without allowing refusal auditing to disclose the tenant's gate.
+        Object.defineProperty(invalidCode,"cause",{value:error,configurable:true});
+      }
+    }
+    if (!result) throw invalidCode;
     return result;
   }
   async authenticate(sessionToken: string): Promise<AuthPrincipal | undefined> {

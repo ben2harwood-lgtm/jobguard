@@ -45,7 +45,12 @@ export class IdentityApplication {
     this.provider.assertRecipient(email);
     const result=(await this.provider.repository.pool.query<{id:string|null;connection_id?:string|null}>("SELECT * FROM identity.sso_invite_member($1,$2,$3,$4)",[this.provider.digest(`session:${credentials.sessionToken}`),input.requested_tenant_id,email,input.role])).rows[0];
     const id=result?.id;
-    if(typeof id!=="string" || !z.string().uuid().safeParse(id).success) { await this.provider.recordInvitationRefusal(result?.connection_id); throw new AuthError("TENANT_FORBIDDEN"); }
+    if(typeof id!=="string" || !z.string().uuid().safeParse(id).success) {
+      const forbidden = new AuthError("TENANT_FORBIDDEN");
+      try { await this.provider.recordInvitationRefusal(result?.connection_id); }
+      catch (error) { Object.defineProperty(forbidden,"cause",{value:error}); }
+      throw forbidden;
+    }
     return {version:"identity-invitation-response.v1",id,environment:"synthetic_demo"};
   }
 }
