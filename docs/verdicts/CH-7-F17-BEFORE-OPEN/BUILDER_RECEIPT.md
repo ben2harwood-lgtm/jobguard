@@ -130,6 +130,8 @@ Repair builder only. Not a review and not an acceptance. Run on the Mac where Po
 - `apps/web`: `e2e/CH-7.spec.ts`, `--workers=1`, both projects: 19 passed, 1 timeout (fault 3); the failed test re-run alone passed. The new test "F17 refund settled before opening shows the existing timing exclusion through Review v3 F17" passed on mobile-360 and desktop.
 - Every vitest run used `--maxWorkers=2` inside `heavy-slot`, one run at a time, memory free 73 to 80 percent.
 
+**Second catch-up.** After the push, `origin/main` moved to dc16fd6 (FIXLATER-2, #135, which appended cases to the same integration test file). Merged cleanly with no conflicts (merge commit 67a9035). Re-run after that merge: `test/recovery-eligibility-v3.integration.test.ts` 31 passed and `test/recovery-message-upgrade.integration.test.ts` 3 passed (2 files, 34 tests), exit 0.
+
 **Stopped on:** nothing. No assertion, expected value, timeout, grant or policy was changed or loosened.
 
 Builder repair record only — not independently verified, not accepted.
