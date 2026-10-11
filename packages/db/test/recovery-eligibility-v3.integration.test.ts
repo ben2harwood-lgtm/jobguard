@@ -1,4 +1,4 @@
-// Written before migration/repository implementation. NOT RUN in the builder sandbox.
+// Real PostgreSQL integration coverage, run in CI with the merged migrations and repositories.
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -89,13 +89,20 @@ it("catalogs and runtime enforce FORCE RLS, ownership, append-only and job/case-
  // Real FK backstop (migration connection), with the case and review pointing at a different job.
  // Set-up: a one-line (F20) review leaves the interest kind free, so UNIQUE(tenant,review,kind) cannot fire before the FK.
  const g=await fixture("withheld_customer_payment",true);const gr=await g.repo.review(ctx,g.jobId,review(g.c,"F20"),actor,g.auth.digest);
+ const otherCase=randomUUID();
+ await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)VALUES($1,$2,$3,32000,'GBP','identified',0,true)",[otherCase,T,g.jobId]);
  const connection=await admin.connect();
  try{
   await connection.query("BEGIN");await connection.query("ALTER TABLE app.recovery_claim_line DISABLE TRIGGER recovery_claim_line_guard");
+  await connection.query("SAVEPOINT wrong_job");
   await expect(connection.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'statutory_interest','business',250000)",[randomUUID(),T,oldJob,g.c.id,gr.id])).rejects.toMatchObject({code:"23503"});
+  await connection.query("ROLLBACK TO SAVEPOINT wrong_job");
+  // Same tenant and job, but this review belongs to g.c, not otherCase.
+  await expect(connection.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'statutory_interest','business',250000)",[randomUUID(),T,g.jobId,otherCase,gr.id])).rejects.toMatchObject({code:"23503"});
  }finally{await connection.query("ROLLBACK");connection.release();}
  const bytes=JSON.stringify(r.result);
  await expect(withTenant(runtime,ctx,db=>db.$client.query("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,99,2,'F18',$5,$6,$7,$8)",[randomUUID(),T,f.jobId,f.c.id,M,randomUUID(),createHash("sha256").update(bytes).digest("hex"),bytes]))).rejects.toThrow();
+ await expect(withTenant(runtime,ctx,db=>db.$client.query("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,99,2,'F18',$5,$6,$7,$8)",[randomUUID(),T,f.jobId,f.c.id,M,randomUUID(),createHash("sha256").update(bytes).digest("hex"),bytes]))).rejects.toMatchObject({code:"42501"});
 });
 
 it("B2 refuses customer receipts as supplier-invoice settlement without writing credit/review rows",async()=>{
@@ -151,8 +158,18 @@ it("runtime cannot put compensation into Q or alter a generated component's exac
   throw rollback;
  })).rejects.toBe(rollback);
  await expect(withTenant(practiceMaterialPool(runtime,f.auth.digest),ctx,async db=>{
+  await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
+  await expect(insert(db,{...saved.result,qualifyingPrincipal:{pence:269000,currency:"GBP"}})).rejects.toMatchObject({code:"23514"});
+  throw rollback;
+ })).rejects.toBe(rollback);
+ await expect(withTenant(practiceMaterialPool(runtime,f.auth.digest),ctx,async db=>{
   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");const id=await insert(db,saved.result);
   await expect(db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'fixed_compensation','business',7100)",[randomUUID(),T,f.jobId,f.c.id,id])).rejects.toMatchObject({message:"ELIGIBILITY_FIXTURE_MISMATCH"});
+  throw rollback;
+ })).rejects.toBe(rollback);
+ await expect(withTenant(practiceMaterialPool(runtime,f.auth.digest),ctx,async db=>{
+  await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");const id=await insert(db,saved.result);
+  await expect(db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'fixed_compensation','business',7100)",[randomUUID(),T,f.jobId,f.c.id,id])).rejects.toMatchObject({code:"23514"});
   throw rollback;
  })).rejects.toBe(rollback);
  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND case_id=$2",[T,f.c.id])).rows[0].n).toBe(1);
@@ -166,6 +183,7 @@ it("a duplicate-payment case is refused any new v1 review or approval, by the ap
  await expect(f.cases.eligibilityCommand(ctx,f.jobId,v1(f.c.id,{action:"approve",expectedCaseRevision:f.c.revision,expectedEvidenceRevision:1,expectedPolicyRevision:1,expectedReviewRevision:1}),actor)).rejects.toThrow("ELIGIBILITY_FIXTURE_MISMATCH");
  const rawRow=(status:string)=>withTenant(practiceMaterialPool(runtime,f.auth.digest),ctx,db=>db.$client.query("INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash)VALUES($1,$2,$3,$4,1,$5,1,'reference-d03.v1',1,'evidence_backed_withheld_payment','eligible_for_review',45000,'GBP','Reviewed','[]',$6,$7,$8,$9)",[randomUUID(),T,f.jobId,f.c.id,f.c.revision,status,`membership:${M}`,randomUUID(),createHash("sha256").update(randomUUID()).digest("hex")]));
  for(const status of ["reviewed","approved"])await expect(rawRow(status)).rejects.toMatchObject({message:"ELIGIBILITY_FIXTURE_MISMATCH"});
+ for(const status of ["reviewed","approved"])await expect(rawRow(status)).rejects.toMatchObject({code:"23514"});
  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_revision WHERE tenant_id=$1 AND case_id=$2",[T,f.c.id])).rows[0].n).toBe(0);
  expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type LIKE 'recovery.eligibility.%'",[T,f.c.id])).rows[0].n).toBe(0);
  // Control: the v1 path of another category still reviews exactly as before.
@@ -185,6 +203,14 @@ const stampTimes=async(f:{c:{id:string};jobId:string},movement:string,caseAt:str
 it("settled-before-opening is decided in PostgreSQL on microsecond timestamps: settlement 800 microseconds BEFORE opening in the same millisecond is F20",async()=>{
  const f=await fixture("withheld_customer_payment",true);
  await stampTimes(f,"receipt-384","2026-10-11T12:00:00.000900Z","2026-10-11T12:00:00.000100Z");
+ const r=await f.repo.review(ctx,f.jobId,review(f.c,"F20"),actor,f.auth.digest);
+ expect(r.result).toMatchObject({qualifyingPrincipal:{pence:0,currency:"GBP"},outcome:"excluded",reason:"Paid before you opened this case"});
+});
+it("settlement at exactly the case opening instant is excluded with zero Q",async()=>{
+ const f=await fixture("withheld_customer_payment",true);
+ const instant="2026-10-11T12:00:00.000900Z";
+ await stampTimes(f,"receipt-384",instant,instant);
+ expect((await admin.query("SELECT e.created_at=c.created_at same_instant FROM app.practice_feed_event e JOIN app.recovery_case c ON c.tenant_id=e.tenant_id AND c.job_id=e.job_id WHERE e.tenant_id=$1 AND e.job_id=$2 AND c.id=$3 AND e.movement_key='receipt-384' AND e.event_kind='settled'",[T,f.jobId,f.c.id])).rows).toEqual([{same_instant:true}]);
  const r=await f.repo.review(ctx,f.jobId,review(f.c,"F20"),actor,f.auth.digest);
  expect(r.result).toMatchObject({qualifyingPrincipal:{pence:0,currency:"GBP"},outcome:"excluded",reason:"Paid before you opened this case"});
 });
@@ -210,6 +236,12 @@ it.each([["F17","duplicate_supplier_payment","supplier-refund-540",45000,"result
   await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'principal','business',$6)",[randomUUID(),T,f.jobId,f.c.id,id,net]);
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${M}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:f.c.id,payload:{references:{jobId:f.jobId,reviewId:id,commandId,...(sourceEventId?{sourceEventId}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.h},classifications:{recovery:"financial"}}}]);
  })).rejects.toThrow();
+ await expect(withTenant(practiceMaterialPool(runtime,f.auth.digest),ctx,async db=>{
+  await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
+  const inserted=await db.$client.query<{h:string}>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9,$10,$11) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') h",[id,T,f.jobId,f.c.id,f.c.revision,name,sourceEventId,M,commandId,payloadHash,body]);
+  await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'principal','business',$6)",[randomUUID(),T,f.jobId,f.c.id,id,net]);
+  await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${M}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:f.c.id,payload:{references:{jobId:f.jobId,reviewId:id,commandId,...(sourceEventId?{sourceEventId}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.h},classifications:{recovery:"financial"}}}]);
+ })).rejects.toMatchObject({code:"23514"});
  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND case_id=$2",[T,f.c.id])).rows[0].n).toBe(0);
  expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3??null).toBeNull();
 });

@@ -22,6 +22,8 @@ B5 and insurer wording are HELD under Q7: CH-3a binds a paying party to the job,
 
 ## Migration and recovery
 
+The new `recovery_eligibility_v1_duplicate_payment_refusal` trigger on `app.recovery_eligibility_revision`, using `app.refuse_v1_eligibility_for_duplicate_payment()`, refuses any new v1 review or approval row for a `duplicate_supplier_payment` case.
+
 0119 expands the case-type check, adds a tenant/job-qualified identity key to feed events, and adds the separate v3 reviews, claim lines and credit-consumption tables, guards and audit-completeness constraint. No earlier routine (including the 0112 pursuit/message guards), v1 row or stored version is replaced. Existing v1 records remain readable; an older client with the original closed case-type enum may reject a list containing a newly created duplicate-payment case. Roll out compatible readers before creating that category. Migration positions are checked by names and strict increasing order.
 
 0123 restates only 0119's `app.guard_recovery_eligibility_v3`, extending the existing before-opening exclusion to F17. It changes no table, column, policy, grant, trigger or existing row. Saved F17 candidates, their claim lines and audit history remain byte-for-byte; only new reviews use the corrected rule. A later review does not rewrite an earlier candidate. Preserve this history and ship any further correction through a reviewed forward-fix migration.
