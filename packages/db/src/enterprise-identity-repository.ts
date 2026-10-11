@@ -4,15 +4,15 @@ import { withTenant, type VerifiedTenantContext, type TenantTransaction } from "
 import { auditEventInputV1Schema, canonicalAuditHash } from "./audit.js";
 
 export class SsoRepositoryError extends Error {
-  constructor(readonly code:string) { super(code); this.name="SsoRepositoryError"; }
+  constructor(readonly code:string, options?:ErrorOptions) { super(code,options); this.name="SsoRepositoryError"; }
 }
 const knownErrors = new Set(["SSO_ROUTE_BLOCKED","SSO_NOT_FOUND","SSO_FORBIDDEN","INVALID_SSO_INPUT","DOMAIN_UNVERIFIED","DOMAIN_CLAIMED","ASSERTION_REPLAY","REQUEST_REFUSED","LINK_REQUIRED","LINK_FORBIDDEN","MEMBERSHIP_REVOKED","NO_MAPPED_GRANTS","STALE_MAPPING"]);
 export function ssoRepositoryError(error:unknown):SsoRepositoryError {
   if(error instanceof SsoRepositoryError)return error;
-  const e=error as {code?:string;message?:string;constraint?:string};
+  const e=(error??{}) as {code?:string;message?:string;constraint?:string};
   if(e.message && knownErrors.has(e.message))return new SsoRepositoryError(e.message);
   if(e.code==="23505")return new SsoRepositoryError(e.constraint?.includes("verified_domain")?"DOMAIN_CLAIMED":e.constraint?.includes("sso_assertion_use")?"ASSERTION_REPLAY":"INVALID_SSO_INPUT");
-  return new SsoRepositoryError("SSO_UNAVAILABLE");
+  return new SsoRepositoryError("SSO_UNAVAILABLE",{cause:error});
 }
 export interface SsoClaims {assertionId:string;requestId:string;subject:string;email:string;groups:string[]}
 export interface SsoSession {id:string;tokenDigest:string;csrfToken:string;expiresAt:Date}

@@ -30,8 +30,9 @@ function typed(error:unknown):SsoError {
   if(error instanceof SamlValidationError)return new SsoError("SAML_REFUSED");
   if(error instanceof z.ZodError || error instanceof SyntaxError)return new SsoError("INVALID_SSO_INPUT");
   if(error instanceof AuthError)return new SsoError("SSO_FORBIDDEN");
-  const translated=ssoRepositoryError(error).code;
-  return new SsoError(ssoErrorCodes.includes(translated as SsoError['code'])?translated as SsoError['code']:"SSO_UNAVAILABLE");
+  const translated=ssoRepositoryError(error);
+  const code=ssoErrorCodes.includes(translated.code as SsoError['code'])?translated.code as SsoError['code']:"SSO_UNAVAILABLE";
+  return new SsoError(code,code==="SSO_UNAVAILABLE"?{cause:Object.hasOwn(translated,"cause")?translated.cause:error}:undefined);
 }
 export class SsoApplication {
   readonly provider:SsoAuthProvider;

@@ -3,7 +3,7 @@ import { proposedDecisionRecords, requireApprovedDecision, type DeploymentMode }
 
 export const ssoErrorCodes = ["INVALID_SSO_INPUT", "SSO_ROUTE_BLOCKED", "SSO_NOT_FOUND", "SSO_FORBIDDEN", "SAML_REFUSED", "ASSERTION_REPLAY", "REQUEST_REFUSED", "DOMAIN_UNVERIFIED", "DOMAIN_CLAIMED", "LINK_REQUIRED", "LINK_FORBIDDEN", "MEMBERSHIP_REVOKED", "NO_MAPPED_GRANTS", "STALE_MAPPING", "SSO_UNAVAILABLE"] as const;
 export class SsoError extends Error {
-  constructor(readonly code: typeof ssoErrorCodes[number]) { super(code); this.name = "SsoError"; }
+  constructor(readonly code: typeof ssoErrorCodes[number], options?:ErrorOptions) { super(code,options); this.name = "SsoError"; }
 }
 const nonempty = z.string().min(1).max(200);
 const domain = z.string().max(253).regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+invalid$/u);

@@ -136,3 +136,98 @@ Outstanding: prescribed pnpm/CI command replay (installed full auth/scanner now 
 - After artifact removal, `LANE_BASE_REF=origin/main node tools/lint.mjs` and `git diff --check` both exited 0. Final ignored-file inspection contains installed `node_modules` directories only.
 
 Builder receipt only — not independently verified, not accepted.
+
+## CI repair 1
+
+11 October 2026. Pre-review repair of PR #131 on the same `codex/sandbox/ent-10a` leaf. Starting HEAD remains **8d208db71cce8e6b5790c0316ed354ff4194c881** (builder a5a396b plus the integrator's record). Working-tree edits only; the dispatcher owns the next commit. The integrator's BUILD_PLAN ledger paragraph and lane addition are byte-identical to HEAD. No git write command, package download, second migration or independent-review claim.
+
+### Cause and before/after
+
+Source diagnosis: `packages/db/migrations/0114_enterprise_identity.sql:241`, the `IF` statement in `identity.sso_audit_append`. Before:
+
+```sql
+OR e->'payload'-ARRAY['references','hashes','classifications']<>'{}'::jsonb
+```
+
+PostgreSQL 16 gives binary `-` higher precedence than `->` ([official operator-precedence table](https://www.postgresql.org/docs/16/sql-syntax-lexical.html#SQL-PRECEDENCE)). Consequently the parser groups the subtraction as `'payload' - ARRAY[...]`, rather than extracting the payload first. The JSONB/text-array subtraction overload requires that literal to be JSONB, but the bare text `payload` is not valid JSON. Preparing this PL/pgSQL statement therefore fails at execution, before the audit INSERT; migration installation alone does not execute it. This is a source-derived diagnosis, **not an observed PostgreSQL message or a reproduced database run** in this sandbox.
+
+After:
+
+```sql
+OR (e->'payload')-ARRAY['references','hashes','classifications']<>'{}'::jsonb
+```
+
+Only the extraction is parenthesized. The payload allowlist, tenant check, audit insert/head advancement, all constraints, policies and grants remain intact. Corrected the unmerged 0114 in place, as instructed.
+
+The original fixture's first application call (`enterprise-identity.integration.test.ts:65` at starting HEAD) is `app.admin(connection.create)`. Its path is `SsoApplication.admin` → principal bridge → `EnterpriseIdentityRepository.admin` → audit → view:
+
+1. Persisted authentication SELECTs the active synthetic session by keyed digest. `sso_session_scope` performs its session-bound lookup; the fixture's email-code session has no SSO binding. Membership lookup calls `identity.current_memberships`, resolves the locator, sets its tenant locally, and SELECTs membership/account/email under the existing policies.
+2. `withTenant` begins a transaction and sets `app.tenant_id`. `SELECT identity.sso_admin_command($1,$2::jsonb)` locks the tenant, calls `sso_require_admin` (active-session and contractor-permission/membership SELECTs), validates metadata/tenant binding and INSERTs the new `identity.sso_connection`.
+3. Repository audit calls `SELECT * FROM identity.sso_audit_head($1)`. `sso_load_connection` binds the connection lookup selector, SELECTs this exact connection and binds its persisted tenant. Existing `app.lock_audit_head()` inserts the missing head with `ON CONFLICT DO NOTHING` against its tenant PK, then SELECTs/locks it. Repository canonical hashing produces the existing audit arguments.
+4. `SELECT identity.sso_audit_append($1,$2::jsonb)` reaches the faulty expression above. With the fix, the wrapper INSERTs the audit row and calls existing `app.advance_audit_head(bigint,char(64))`; repository commits. Without it, the transaction rolls back and the original error was discarded by repository translation, then by `typed`.
+5. After commit, admin view begins another tenant transaction, checks the admin, SELECTs connections/domains/latest mappings and calls `sso_admin_events` for the permitted audit projection. The guarded failure path records the bootstrap refusal with INSERT into `sso_refusal_event`; `connection.create` uses route `admin`, so it does not attempt a second tenant audit.
+
+Runtime credentials are distinguished: fixtures use `ent10a_runtime` for contractor setup and `ent10a_identity` for SSO. Business runtime has no new identity access; the identity credential has schema USAGE and narrow EXECUTE inherited from the merged/new grants. New wrappers execute as `jobguard_migration`, without BYPASSRLS. Existing 0111 account/membership policies and 0054 contractor/audit INSERT policies permit only the bound tenant. No new privilege was necessary.
+
+`ssoRepositoryError` now retains an unrecognized error through standard `ErrorOptions.cause`; `typed` preserves that original cause through `SsoError`. Recognized refusals retain their prior codes/statuses without a cause. Null/undefined unknown errors no longer throw during property inspection. HTTP transports still select only code/status; the new controller unit cases assert status 503, exact body `{code:'SSO_UNAVAILABLE'}`, and absence of private diagnostic/detail text for both a raw error and a repository-wrapped error. No transport/OpenAPI contract changed.
+
+### Remaining statement review and coverage
+
+Re-read every original integration case and its application/repository/routine path: catalogs/RLS, malformed and cross-tenant contexts/FKs, input/worker refusals, browser state, assertion races, signature/issuer/audience/expiry attacks, callback connection binding, domain takeover/explicit linking, mappings/revisions/downgrades, membership/session expiry and revocation, worker permissions, actual executor revocation, no-group committed revocation, session-PK rollback and audit verification.
+
+Checked schema-qualified references, parameter counts/casts, row/return types, PL/pgSQL variable/column collisions, all new and referenced NOT NULL/default/check values, tenant-qualified FKs, global identity exceptions, request/assertion uniqueness, grants/schema/routine access, FORCE RLS SELECT/INSERT/UPDATE behavior, `app.tenant_id` and scoped bootstrap selectors, and both existing audit helpers against 0000/0001/0005/0054/0111 and the merged migration sequence. The positional contractor-member, locator and role-grant INSERTs match their current column order. No further same-class defect was found or unrelated statement changed. No existing test expectation was wrong or corrected.
+
+Added one real-PostgreSQL regression case: the audit wrapper accepts allowed keys, rejects an extra payload key with `22023 / INVALID_SSO_INPUT`, and inserts no event on that refusal. It fails on the old precedence expression. **Authored only; NOT RUN (sandbox cannot start PostgreSQL).** Existing 16 integration cases and all their assertions remain unchanged; now 17 cases are authored. Added three executable unit cases (one translation case plus two raw/wrapped HTTP cases). Existing test bodies, timeouts and assertions are preserved; no skips, retry wrappers or timeout changes.
+
+Repair files: `apps/api/src/auth/sso/action-paths.test.ts`, `sso.application.ts`, `sso.contracts.ts`; `packages/db/migrations/0114_enterprise_identity.sql`; `packages/db/src/enterprise-identity-repository.ts`; `packages/db/test/enterprise-identity.integration.test.ts`; this receipt.
+
+### Commands actually run for this repair
+
+Node observed: 24.17.0. Supplied dependencies used; no install or signature-check bypass.
+
+| Required command | Exit / observed result |
+| --- | --- |
+| `pnpm typecheck` | 1; launcher refused, no task ran. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1; launcher refused, no task ran. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1; launcher refused, no task ran. |
+| `pnpm --filter @jobguard/api exec vitest run src/auth` | 1; launcher refused, zero tests executed through this command. |
+| `pnpm build` | 1; launcher refused, no build task ran. |
+| `pnpm openapi:check` | 1; launcher refused, no check ran. |
+| `node tools/dependency-audit.mjs` | 2; `Dependency scan did not complete. This is not a clean scan.` Registry scan NOT RUN successfully. |
+
+Exact common launcher error:
+
+> [ERROR] Refusing to run pnpm@10.28.1: its npm registry signature could not be verified (@pnpm/exe@10.28.1: fetch failed; @pnpm/macos-arm64@10.28.1: fetch failed; pnpm@10.28.1: fetch failed). The bytes selected by this project's lockfile/registry do not match a published, signed pnpm release.
+
+Installed-tool diagnostics are separate evidence, not prescribed pnpm/CI passes. Paths below are relative to root except commands marked API/web:
+
+| Diagnostic command | Exit / observed result |
+| --- | --- |
+| `./node_modules/.bin/tsc -p packages/core/tsconfig.json`, likewise `packages/config/tsconfig.json`, `packages/db/tsconfig.json`, `packages/ai/tsconfig.json`, `packages/storage/tsconfig.json` | Each 0; emitted dependencies for diagnostics. |
+| `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` | 0; no diagnostics. |
+| `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` | 0; no diagnostics. |
+| `node node_modules/typescript/bin/tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck --esModuleInterop --experimentalDecorators --emitDecoratorMetadata packages/db/test/enterprise-identity.integration.test.ts` | 0; no diagnostics, zero PostgreSQL cases executed. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0; purity (125 files), lane, money and commercial-boundary checks passed. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 0; assigned leaf passed. |
+| API `./node_modules/.bin/vitest run src/auth`, initial concurrent build attempt | 1; 209 passed / 1 failed (210), 6 files passed / 1 failed (7). Unchanged `context-boundary.test.ts:742` timed out at its existing 5000ms; all three added cases passed. |
+| API same command, final sequential run after builds stopped | 1; 209 passed / 1 failed (210), 6 files passed / 1 failed (7). The same unchanged scanner case timed out; all three added cases passed again. No assertion, scanner or timeout edited and no further full-auth rerun. |
+| API `./node_modules/.bin/nest build` | 0; no diagnostics. |
+| API `node --import tsx src/generate-openapi.ts --check` | 0; unchanged generated document matches. |
+| Web `../../node_modules/.bin/next build`, initial concurrent API-build attempt | 1; API dist exports were not ready when webpack resolved them. This was builder check ordering, not a source change. |
+| Web same command, sequential after API build | 0; compiled, typechecked, generated 25/25 static pages and completed build traces, including SSO routes/admin page. Existing CSS/autoprefixer, webpack warning-cache and workspace-root warnings observed. No browser execution. |
+| `git diff --check` | 0. |
+| Read-only byte/subsequence inspection against HEAD | 0; BUILD_PLAN, lane, scanner, seven pinned files, package/lock files identical; every original test-body line remains in order. |
+| Read-only Python subprocess inspection of web-build processes (`ps`) | 1; sandbox denied `ps` with `PermissionError: [Errno 1] Operation not permitted: 'ps'`. No escalation or process mutation. |
+
+Final sequential outcomes are included above. Removed generated `dist`, `.next`, `.pnpm-store` and TypeScript build-cache output before handoff; supplied dependencies remain. Both installed lint commands and `git diff --check` repeated after cleanup exited 0; ignored-file inspection contains installed `node_modules` directories only. Intended conventional commit subject/body written to `/private/tmp/jg-msg-ent-10a.txt`. The dispatcher supplies the next commit hash; the builder has not committed, accepted or independently verified this repair.
+
+### NOT RUN and self-review
+
+- `enterprise-identity.integration.test.ts`, all other PostgreSQL integration suites, `pnpm test:db`, `pnpm test:migrations`: **NOT RUN (sandbox cannot start PostgreSQL)**. Neither the reported CI failure nor this fix has been reproduced locally against PostgreSQL.
+- `ENT-10a.spec.ts` in both projects and every browser suite: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. Builds are not browser tests.
+- Clean pinned install: NOT RUN; dependencies supplied, downloads prohibited. Full `pnpm test`: NOT RUN; includes unavailable PostgreSQL suites. Live IdP/real-data/D04/G5 founder evidence: NOT RUN / HELD. Native: HELD at M3.
+- Registry vulnerability audit: NOT RUN successfully, exit 2 and exact error above; no clean-audit claim.
+
+Self-review: re-read the issued header, all leaf-owned diff/source paths against `origin/main`, repair diff against HEAD, integration paths and applicable contracts. Checked in-scope DW/security coverage and all existing holds: OIDC/emergency/native/founder evidence HELD; SCIM/audit export/assurance pack remain later sub-leaves. No held capability, dependency, live route, extra migration, existing-table DDL, policy/grant change or protected-file edit. The one SQL edit preserves tenant and audit enforcement. Standard causes remain server-side and refusal audits contain only typed codes. Existing assertions/timeouts were preserved and verified by ordered-line inspection; no expectation weakened. Different-model RED-lane verdicts and separate acceptance remain outstanding after dispatcher commit and CI. Source inspection and unit diagnostics are not PostgreSQL verification or independent review.
+
+Builder receipt only — not independently verified, not accepted.

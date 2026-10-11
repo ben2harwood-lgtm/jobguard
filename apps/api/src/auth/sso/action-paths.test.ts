@@ -1,6 +1,9 @@
 import { describe,expect,it,vi } from "vitest";
-import { EnterpriseIdentityRepository } from "@jobguard/db";
-import { SsoAuthProvider } from "./sso.application.js";
+import { EnterpriseIdentityRepository, ssoRepositoryError } from "@jobguard/db";
+import { HttpException } from "@nestjs/common";
+import { SsoApplication, SsoAuthProvider } from "./sso.application.js";
+import { SsoController } from "./sso.controller.js";
+import { ssoStatus } from "./sso.contracts.js";
 import type { PersistedAuthProvider } from "../persisted-auth-provider.js";
 import type { IdentityApplication } from "../identity.application.js";
 import { createWorkspaceApplication } from "../../workspace/application.js";
@@ -13,6 +16,37 @@ function fixture() {
  return {provider:new SsoAuthProvider(base,repository),base,repository};
 }
 describe("ENT-10a AuthProvider web and worker session boundary",()=>{
+ it("preserves unknown repository errors as causes without adding causes to recognised refusals",()=>{
+  const databaseError=Object.assign(new Error('private PostgreSQL diagnostic'),{code:'42883'});
+  const failure=ssoRepositoryError(databaseError);
+  expect(failure.code).toBe('SSO_UNAVAILABLE');expect(failure.cause).toBe(databaseError);
+  expect(ssoRepositoryError(failure)).toBe(failure);
+  expect(ssoRepositoryError(null)).toMatchObject({code:'SSO_UNAVAILABLE',cause:null});
+  for(const error of [new Error('DOMAIN_UNVERIFIED'),{code:'23505',constraint:'verified_domain_domain_key'}]) {
+   expect(ssoRepositoryError(error).code).toMatch(/^DOMAIN_/u);
+   expect(ssoRepositoryError(error)).not.toHaveProperty('cause');
+  }
+ });
+ it.each(['raw','repository'] as const)("retains the original %s error through the application while HTTP exposes only code and status",async(kind)=>{
+  const databaseError=Object.assign(new Error('private PostgreSQL diagnostic'),{code:'42883',detail:'private table details'});
+  const client={query:vi.fn(async()=>({rows:[]})),release:vi.fn()};
+  const repository=new EnterpriseIdentityRepository({connect:async()=>client} as unknown as Pool);
+  vi.spyOn(repository,'connection').mockRejectedValue(kind==='raw'?databaseError:ssoRepositoryError(databaseError));
+  const refusal=vi.spyOn(repository,'refusal').mockResolvedValue(undefined);
+  const app=new SsoApplication({} as PersistedAuthProvider,repository,'https://jobguard.invalid');
+  const id='60000000-0000-4000-8000-000000000006',body={version:'sso-start.v1',action:'signin'};
+  const failure=await app.start(id,body,{origin:app.allowedOrigin}).catch(error=>error);
+  expect(failure).toMatchObject({code:'SSO_UNAVAILABLE',cause:databaseError});
+  expect(failure.cause).toBe(databaseError);
+  expect(ssoStatus(failure)).toEqual({code:'SSO_UNAVAILABLE',status:503});
+  expect(refusal).toHaveBeenCalledWith(id,'SSO_UNAVAILABLE');
+  const controller=new SsoController(()=>app);
+  const http=await controller.start(id,body,{headers:{origin:app.allowedOrigin}},{cookie:vi.fn(),clearCookie:vi.fn()}).catch(error=>error);
+  expect(http).toBeInstanceOf(HttpException);
+  expect(http.getStatus()).toBe(503);expect(http.getResponse()).toEqual({code:'SSO_UNAVAILABLE'});
+  expect(JSON.stringify(http.getResponse())).not.toContain(databaseError.message);
+  expect(JSON.stringify(http.getResponse())).not.toContain(databaseError.detail);
+ });
  it("the real composition seam refuses pilot, production and missing mode before authentication",async()=>{
   const saved=process.env.JOBGUARD_ENV;
   try {

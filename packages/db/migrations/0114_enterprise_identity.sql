@@ -238,7 +238,7 @@ END $$;
 CREATE FUNCTION identity.sso_audit_append(c uuid,e jsonb) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; BEGIN
  IF e->>'tenantId' IS DISTINCT FROM t::text OR e->>'subjectRef' IS DISTINCT FROM c::text OR e->>'eventType' NOT LIKE 'sso.%' OR e->>'version'<>'audit.v1'
-  OR e->'payload'-ARRAY['references','hashes','classifications']<>'{}'::jsonb THEN RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
+  OR (e->'payload')-ARRAY['references','hashes','classifications']<>'{}'::jsonb THEN RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
  INSERT INTO app.audit_event(id,tenant_id,sequence,version,actor_ref,event_type,subject_type,subject_ref,occurred_at,payload,payload_hash,previous_hash,event_hash)
  VALUES((e->>'id')::uuid,t,(e->>'sequence')::bigint,'audit.v1',e->>'actorRef',e->>'eventType','sso-connection',c::text,(e->>'occurredAt')::timestamptz,e->'payload',e->>'payloadHash',e->>'previousHash',e->>'eventHash');
  PERFORM app.advance_audit_head((e->>'sequence')::bigint,(e->>'eventHash')::char(64));

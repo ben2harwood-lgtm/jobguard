@@ -89,6 +89,23 @@ async function permitted(member: AuthenticatedMembership, permission: string) {
 }
 
 describe("ENT-10a / actual PostgreSQL identity trust boundary", () => {
+  it("the audit wrapper accepts permitted payload keys and refuses extra keys before inserting", async () => {
+    const f = await fixture();
+    const before = await count("app.audit_event", f.principal.tenantId);
+    await f.app.repository.transaction(async client => {
+      await f.app.repository.connection(client, f.connectionId);
+      await f.app.repository.audit(client, f.connectionId, "sso.payload.checked");
+    });
+    expect(await count("app.audit_event", f.principal.tenantId)).toBe(before + 1);
+    await expect(f.app.repository.transaction(async client => {
+      await f.app.repository.connection(client, f.connectionId);
+      await client.query("SELECT identity.sso_audit_append($1,$2::jsonb)", [f.connectionId, JSON.stringify({
+        tenantId: f.principal.tenantId, subjectRef: f.connectionId, eventType: "sso.payload.refused", version: "audit.v1",
+        payload: { references: { environment: "synthetic_demo" }, unexpected: "forbidden" },
+      })]);
+    })).rejects.toMatchObject({ code: "22023", message: "INVALID_SSO_INPUT" });
+    expect(await count("app.audit_event", f.principal.tenantId)).toBe(before + 1);
+  });
   it("catalogs every new tenant key, FORCE RLS, owner and narrow runtime grant", async () => {
     const rows = (await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='identity' AND c.relname=ANY($1::text[])", [tables])).rows;
     expect(rows).toHaveLength(tables.length);
