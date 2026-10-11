@@ -1,6 +1,7 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import{createHash,randomUUID}from"node:crypto";import{mkdtemp,rm,readFile}from"node:fs/promises";import{tmpdir}from"node:os";import{join}from"node:path";import EmbeddedPostgres from"embedded-postgres";import{Pool}from"pg";import{afterAll,beforeAll,describe,expect,it,vi}from"vitest";import{migrate,MIGRATION_URLS,RecoveryCaseRepository,withTenant,type VerifiedTenantContext}from"../src/index.js";import{closeTestPools}from"./pool-test-utils.js";import{recoveryCaseCommandV1,recoveryEligibilityCommandV1}from"@jobguard/core";
 const member=()=>({membershipId:randomUUID(),identityUserId:randomUUID()}),owner=member(),owner2=member(),owner3=member(),ref=(m:{membershipId:string})=>`membership:${m.membershipId}`;
-let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx={tenantId:tenant}as VerifiedTenantContext;const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
+let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx=testTenantContext(tenant);const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jg-recovery-cases-"));const port=60000+Math.floor(Math.random()*200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic"});// Install the preceding schema, seed its immutable history, then upgrade in place.
 await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
 for(const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("0097_recovery_case_current.sql")))){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[url.pathname.split("/").at(-1)]);}
@@ -29,7 +30,7 @@ describe("M4-1-S HOLD regressions", () => {
   const base = await admin.query("SELECT state,claim_pence,revision FROM app.recovery_case WHERE id=$1",[x.id]);
   expect(base.rows).toEqual([{state:"identified",claim_pence:"250000",revision:0}]);
   await expect(withTenant(runtime,ctx,db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[{version:"recovery.landing.approve.v1",policyVersion:"reference_fee_policy_v1",jobId:job,caseId:x.id,expectedCaseRevision:0}]))).rejects.toThrow("eligible current synthetic case required");
-  expect((await withTenant(runtime,{tenantId:other} as VerifiedTenantContext,db => db.$client.query("SELECT * FROM app.recovery_case_current WHERE id=$1",[x.id]))).rows).toEqual([]);
+  expect((await withTenant(runtime,testTenantContext(other),db => db.$client.query("SELECT * FROM app.recovery_case_current WHERE id=$1",[x.id]))).rows).toEqual([]);
   // The projection is a read-only contract: it is not an auto-updatable view (PostgreSQL 55000) and
   // the runtime role holds no write privilege on it at all.
   await expect(withTenant(runtime,ctx,db=>db.$client.query("UPDATE app.recovery_case_current SET state='landed'"))).rejects.toMatchObject({code:"55000"});
@@ -184,7 +185,7 @@ describe("M4-1-S HOLD regressions", () => {
    for (const change of ["role='viewer'","expires_at=now()-interval '1 second'"]) await expect(repo.command(ctx,job,openCase(),await seed(change))).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");
    const active = await seed();
    await expect(repo.command(ctx,job,openCase(),{...active,identityUserId:randomUUID()})).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");
-   await expect(repo.command({tenantId:other} as VerifiedTenantContext,job,openCase(),active)).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");
+   await expect(repo.command(testTenantContext(other),job,openCase(),active)).rejects.toThrow("RECOVERY_REVIEWER_FORBIDDEN");
    expect(await counts()).toEqual(before);
   });
   it("catches a revocation that is still in flight: the command waits on the membership lock and is then refused", async () => {

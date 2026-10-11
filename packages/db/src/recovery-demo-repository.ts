@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { DEMO_TENANT_ID } from "./demo-seed.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "./demo-seed.js";
+import { withTenant, verifiedTenantContextFromMembership } from "./tenant-context.js";
 
 export type RecoveryDemoScenario="missing_evidence"|"pending_money"|"manual_receipt"|"unapproved_eligibility"|"prevented"|"eligible";
 export type RecoveryGuardView={jobId:string;scenario:RecoveryDemoScenario|null;reason:string;qualifies:boolean;additionalFeePence:number;approved:boolean;caseId:string|null;receiptId:string|null;evidenceId:string|null;allocationId:string|null;policyVersion:"reference_fee_policy_v1";environment:"synthetic_demo"};
-const context={tenantId:DEMO_TENANT_ID} as VerifiedTenantContext;
+const context=verifiedTenantContextFromMembership({identityUserId:DEMO_IDENTITY_USER_ID,membershipId:DEMO_MEMBERSHIP_ID,tenantId:DEMO_TENANT_ID} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 const reasons:Record<RecoveryDemoScenario,string>={missing_evidence:"Finalized evidence is missing",pending_money:"The generated money event is still pending",manual_receipt:"A manual receipt is not bank-confirmed landing",unapproved_eligibility:"Eligibility has not been approved",prevented:"Prevented cases never generate a positive recovery fee",eligible:"All structural guards passed — inspect the authorized synthetic landing"};
 export class RecoveryDemoRepository{
  constructor(private pool:Pool){}

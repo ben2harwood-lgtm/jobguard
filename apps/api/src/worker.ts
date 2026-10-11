@@ -1,4 +1,4 @@
-import { ActionExecutor, type OutboundAdapter, type SafeTelemetry, type VerifiedTenantContext } from "@jobguard/db";
+import { ActionExecutor, type OutboundAdapter, type SafeTelemetry, verifiedTenantContextForQueuedJob } from "@jobguard/db";
 import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -11,7 +11,7 @@ const telemetry:SafeTelemetry={emit(name,fields){console.info(JSON.stringify({co
 const executor=new ActionExecutor(runtimePool,new Map([[fakeAdapter.name,fakeAdapter]]),telemetry);
 const tasks:TaskList={
  async discover_outbox(_payload,helpers){const rows=await helpers.withPgClient(client=>client.query<{action_id:string;tenant_id:string}>(`SELECT action_id,tenant_id FROM infrastructure.outbox_signal ORDER BY created_at LIMIT 100 FOR UPDATE SKIP LOCKED`));for(const row of rows.rows){await helpers.addJob("execute_outbox",{actionId:row.action_id,tenantId:row.tenant_id},{jobKey:`outbox:${row.action_id}`,jobKeyMode:"preserve_run_at"});}},
- async execute_outbox(payload){const parsed=z.object({actionId:z.string().uuid(),tenantId:z.string().uuid()}).strict().parse(payload);await executor.execute({tenantId:parsed.tenantId} as VerifiedTenantContext,parsed.actionId);},
+ async execute_outbox(payload){const parsed=z.object({actionId:z.string().uuid(),tenantId:z.string().uuid()}).strict().parse(payload);await executor.execute(verifiedTenantContextForQueuedJob(parsed.tenantId),parsed.actionId);},
 };
 const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,taskList:tasks,crontab:"*/1 * * * * discover_outbox"});
 for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,async()=>{await runner.stop();await runtimePool.end();});

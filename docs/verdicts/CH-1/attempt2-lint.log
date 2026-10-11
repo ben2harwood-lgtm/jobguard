@@ -1,0 +1,58 @@
+
+> jobguard@ lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1
+> node tools/lint.mjs && turbo run lint
+
+Core purity passed (111 TypeScript files).
+Lane boundary passed: {"lane":"ch-1","branch":"codex/sandbox/ch-1","event":"local","base":"b552bdc8ec0091fd4bc0f4d1911f496a7418b790","head":"92c4a406b1765f077cc12c977101d4b065c914cd","comparison":"merge-base","files":["apps/api/src/quote/contracts.ts","apps/api/src/workspace/fee-illustration.application.ts","apps/web/app/ui/commercial-integrity.tsx","apps/web/app/ui/fee-statement.tsx","apps/web/app/ui/job-variations.tsx","apps/web/app/ui/quote-editor.tsx","apps/web/e2e/CH-1.spec.ts","apps/web/e2e/UIWIRE-13.spec.ts","apps/web/e2e/UIWIRE-14.spec.ts","apps/web/e2e/UIWIRE-5.spec.ts","apps/web/e2e/fee-statement.spec.ts","apps/web/e2e/helpers/v1-sample-job.ts","apps/web/e2e/switch-live.spec.ts","config/agent-lane-assignments.json","docs/contracts/job-activation-terms-v1.md","docs/verdicts/CH-1/BUILDER_RECEIPT.md","docs/verdicts/CH-1/attempt2-lanes.log","docs/verdicts/CH-1/attempt2-lint.log","docs/verdicts/CH-1/attempt2-tests-first.log","docs/verdicts/CH-1/core-green.log","docs/verdicts/CH-1/core-red.log","docs/verdicts/CH-1/unchanged-v1-hashes.json","packages/core/src/activation-v3.test.ts","packages/core/src/activation-v3.ts","packages/core/src/index.ts","packages/db/migrations/0104_job_activation_terms.sql","packages/db/src/activation-repository.ts","packages/db/src/demo-seed.ts","packages/db/src/migrate.ts","packages/db/test/job-activation-terms.integration.test.ts","packages/db/test/tenancy.integration.test.ts"]}
+Money arithmetic boundary check passed.
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running lint in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:lint: cache miss, executing 8652938049ef6358
+@jobguard/config:lint: cache hit, replaying logs e29a313c8c8f648b
+@jobguard/config:lint: 
+@jobguard/config:lint: > @jobguard/config@0.0.0 lint /private/tmp/opus-mon-7a-c956760-0810/packages/config
+@jobguard/config:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/config:lint: 
+@jobguard/storage:lint: cache hit, replaying logs dfd13d7730ab88cd
+@jobguard/storage:lint: 
+@jobguard/storage:lint: > @jobguard/storage@0.0.0 lint /private/tmp/opus-mon-7a-c956760-0810/packages/storage
+@jobguard/storage:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/storage:lint: 
+@jobguard/core:lint: 
+@jobguard/core:lint: > @jobguard/core@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core
+@jobguard/core:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/core:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/ai:lint: cache miss, executing ae8420e069ea19de
+@jobguard/db:lint: cache miss, executing 54896570e1241df1
+@jobguard/db:lint: 
+@jobguard/db:lint: > @jobguard/db@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/db
+@jobguard/db:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/db:lint: 
+@jobguard/ai:lint: 
+@jobguard/ai:lint: > @jobguard/ai@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/ai
+@jobguard/ai:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/ai:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:lint: cache miss, executing cbe443b1c0b67e51
+@jobguard/api:lint: 
+@jobguard/api:lint: > @jobguard/api@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api
+@jobguard/api:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/api:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/web:lint: cache miss, executing 45d9f5ce8cc70c3f
+@jobguard/web:lint: 
+@jobguard/web:lint: > @jobguard/web@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/web
+@jobguard/web:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/web:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+
+ Tasks:    7 successful, 7 total
+Cached:    2 cached, 7 total
+  Time:    3m55.735s 
+

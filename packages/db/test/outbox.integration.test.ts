@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools } from "./pool-test-utils.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -16,15 +17,13 @@ import {
   withTenant,
   type OutboundAction,
   type OutboundAdapter,
-  type SafeTelemetry,
-  type VerifiedTenantContext,
-} from "../src/index.js";
+  type SafeTelemetry} from "../src/index.js";
 
 const TENANT = "91000000-0000-4000-8000-000000000001";
 const ACCOUNT = "92000000-0000-4000-8000-000000000001";
 const USER = "93000000-0000-4000-8000-000000000001";
 const MEMBER = "94000000-0000-4000-8000-000000000001";
-const context = { tenantId: TENANT } as VerifiedTenantContext;
+const context = testTenantContext(TENANT);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 let postgres: EmbeddedPostgres;
@@ -138,7 +137,7 @@ describe("transactional outbox and fake worker execution", () => {
       "SELECT action_id,tenant_id FROM infrastructure.outbox_signal WHERE action_id=$1", [action.id],
     )).rows[0];
     expect(signal).toEqual({ action_id: action.id, tenant_id: TENANT });
-    const signalledContext = { tenantId: signal!.tenant_id } as VerifiedTenantContext;
+    const signalledContext = testTenantContext(signal!.tenant_id);
     const snapshot = () => withTenant(runtime, context, async (db) => ({
       outbox: (await db.$client.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows,
       attempts: (await db.$client.query("SELECT * FROM app.action_attempt WHERE action_id=$1 ORDER BY attempt_number", [action.id])).rows,

@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,7 +25,7 @@ beforeAll(async () => {
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedEvidencePackFixture(admin);
   await admin.query("CREATE ROLE evidence_pack_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO evidence_pack_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'evidence_pack_login', password: 'synthetic', database: 'postgres' });
-  context = { tenantId: fixture.tenantId } as VerifiedTenantContext;
+  context = testTenantContext(fixture.tenantId);
   repo = new EvidencePackRepository(runtime);
 }, 60_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
@@ -82,8 +83,9 @@ describe('immutable evidence pack commands on PostgreSQL', () => {
   it('authorizes lookup by tenant and case and reports real server/standalone inspection findings', async () => {
     const pack = await repo.generate(context, fixture.caseId, { commandId: randomUUID() }, actor);
     await expect(repo.download(context, fixture.customerCaseId, pack.id)).rejects.toThrow('EVIDENCE_PACK_NOT_FOUND');
-    await expect(repo.download({ tenantId: fixture.otherTenantId } as VerifiedTenantContext, fixture.caseId, pack.id)).rejects.toThrow('EVIDENCE_PACK_NOT_FOUND');
+    await expect(repo.download(testTenantContext(fixture.otherTenantId), fixture.caseId, pack.id)).rejects.toThrow('EVIDENCE_PACK_NOT_FOUND');
     await expect(repo.generate(context, randomUUID(), { commandId: randomUUID() }, actor)).rejects.toThrow('EVIDENCE_PACK_CASE_NOT_FOUND');
+    // Deliberately unstamped: an empty context must be refused with INVALID_TENANT_CONTEXT.
     await expect(repo.list({} as VerifiedTenantContext, fixture.caseId)).rejects.toThrow('A verified tenant context');
     const intact = await repo.inspect(context, fixture.caseId, pack.id, 'intact');
     expect(intact).toMatchObject({ contentMatches: true, complete: false });

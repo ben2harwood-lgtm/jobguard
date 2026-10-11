@@ -1,0 +1,23 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core
+
+ ❯ src/activation-v3.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/activation-v3.test.ts [ src/activation-v3.test.ts ]
+Error: Cannot find module './activation-v3.js' imported from /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core/src/activation-v3.test.ts
+ ❯ src/activation-v3.test.ts:2:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  12 passed (12)
+   Start at  03:52:04
+   Duration  3.89s (transform 2.23s, setup 0ms, import 2.55s, tests 959ms, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/activation-v3.test.ts src/activation.test.ts src/fee.test.ts

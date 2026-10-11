@@ -59,7 +59,7 @@ function routeKeys(files: ReadonlyMap<string, string>): string[] {
   for (const file of files.keys()) {
     if (!/(?:^|\/)app\/api\/.*\/route\.ts$/u.test(file)) continue;
     const route = "/api/" + file.split("/app/api/")[1]!.replace(/\/route\.ts$/u, "");
-    if (!/^\/api\/(?:jobs|decisions|recovery-cases)(?:\/|$)/u.test(route)) continue;
+    if (!/^\/api\/(?:jobs|decisions|recovery-cases|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)) continue;
     for (const verb of routeVerbs(file, read)) keys.push(routeKey(verb, route));
   }
   return keys.sort();
@@ -202,7 +202,7 @@ function nestKeys(file: string, text: string): string[] {
   visit(tree);
   return keys;
 }
-const inJobScope = (key: string) => { const route = key.replace(/^nest:(?:[A-Z]+ )?/u, ""); return route.includes("jobs") || route.startsWith("/decisions") || route.startsWith("/recovery-cases"); };
+const inJobScope = (key: string) => { const route = key.replace(/^nest:(?:[A-Z]+ )?/u, ""); return route.includes("jobs") || route.startsWith("/decisions") || route.startsWith("/recovery-cases") || /^\/contractor\/(?:work-order-imports|work-orders)(?:\/|$)/u.test(route); };
 async function readTree(url: URL, accept: (name: string) => boolean): Promise<Map<string, string>> {
   const files = new Map<string, string>();
   for (const entry of await readdir(url, { withFileTypes: true })) {
@@ -213,6 +213,27 @@ async function readTree(url: URL, accept: (name: string) => boolean): Promise<Ma
   return files;
 }
 describe("CH-2 command coverage and lock order", () => {
+  it("ENT-2 refuses an unclassified contractor import through both transport scans, excluding tenant administration and SoR imports", () => {
+    const files = new Map([
+      ["/x/app/api/contractor/work-order-imports/route.ts", "export async function POST() {}"],
+      ["/x/app/api/contractor/work-orders/[workOrderId]/revisions/route.ts", "export async function PUT() {}"],
+      ["/x/app/api/contractor/jobs/[id]/unclassified/route.ts", "export async function PATCH() {}"],
+      ["/x/app/api/contractor/sor-versions/route.ts", "export async function POST() {}"],
+      ["/x/app/api/contractor/commands/route.ts", "export async function POST() {}"],
+    ]);
+    const next = routeKeys(files);
+    expect(next).toEqual(["/api/contractor/work-order-imports", "PATCH /api/contractor/jobs/[id]/unclassified", "PUT /api/contractor/work-orders/[workOrderId]/revisions"]);
+    // The real registry now classifies the import (below); to prove the scans still refuse an unclassified one, take that entry away.
+    const unclassified = Object.fromEntries(Object.entries(jobMutationRegistry).filter(([key]) => !key.includes("contractor/work-order-imports")));
+    expect(jobMutationRegistry["/api/contractor/work-order-imports"]).toBe("pre_live_allowed");
+    expect(jobMutationRegistry["nest:/contractor/work-order-imports"]).toBe("pre_live_allowed");
+    expect(() => assertClassified(next, unclassified)).toThrow("Unclassified job mutation");
+    const nest = nestKeys("contractor-import.ts", 'import { Controller, Post } from "@nestjs/common"; @Controller("contractor") class C { @Post("work-order-imports") importOrders() {} @Post("sor-versions") importRates() {} @Post("commands") administer() {} }').filter(inJobScope);
+    expect(nest).toEqual(["nest:/contractor/work-order-imports"]);
+    expect(() => assertClassified(nest, unclassified)).toThrow("Unclassified job mutation: nest:/contractor/work-order-imports");
+    expect(() => assertClassified(next, { ...unclassified, "/api/contractor/work-order-imports": "pre_live_allowed", "PATCH /api/contractor/jobs/[id]/unclassified": "watchdog_live_only", "PUT /api/contractor/work-orders/[workOrderId]/revisions": "watchdog_live_only" })).not.toThrow();
+    expect(() => assertClassified(nest, { ...unclassified, "nest:/contractor/work-order-imports": "pre_live_allowed" })).not.toThrow();
+  });
   it("fails when any job mutation route is unclassified", async () => {
     const found = routeKeys(await readTree(new URL("apps/web/app/api/", root), name => name === "route.ts"));
     expect(found.length).toBeGreaterThan(30);

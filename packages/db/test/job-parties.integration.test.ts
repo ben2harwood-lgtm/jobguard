@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,13 +6,13 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { AdoptInFlightJobMutation, appendAuditBatch, authenticatePracticeSession, authorizePracticeJob, issuePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { AdoptInFlightJobMutation, appendAuditBatch, authenticatePracticeSession, authorizePracticeJob, issuePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant } from "../src/index.js";
 import { closeTestPools } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0095_job_parties.sql"))!;
-const context = { tenantId: tenant } as VerifiedTenantContext;
-const foreignContext = { tenantId: foreignTenant } as VerifiedTenantContext;
+const context = testTenantContext(tenant);
+const foreignContext = testTenantContext(foreignTenant);
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, repository: JobPartiesRepository, dir: string;
 let legacyInvoice: Record<string,unknown>;
 const legacyJobs: string[] = [], legacySnapshot = JSON.stringify({ name: "Earlier synthetic customer", address: ["Earlier address"] });
@@ -646,7 +647,7 @@ describe("CH-3a round 13 generated practice entry", () => {
   async function session() {
     const digest = createHash("sha256").update(randomUUID()).digest("hex");
     await runtime.query("SELECT app.issue_practice_session($1)", [digest]);
-    return { digest, context: { tenantId: DEMO_TENANT_ID } as VerifiedTenantContext };
+    return { digest, context: testTenantContext(DEMO_TENANT_ID) };
   }
   it("issues the unchanged three home scenarios with a bound live example, empty quoting suggestions and isolated reusable identities", async () => {
     const owner = await session(), stranger = await session();

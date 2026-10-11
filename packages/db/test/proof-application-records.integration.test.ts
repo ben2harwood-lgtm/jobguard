@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ProofApplicationRecords, withTenant } from "../src/index.js";
@@ -102,7 +103,7 @@ describe("proof application records", () => {
     await records.record(h.ctx, { commandId, jobId: job, action: "complete", requestHash: hashOf("a"), response: { ok: true } });
     for (const sql of ["UPDATE app.proof_application_response SET response='{}'::jsonb", "DELETE FROM app.proof_application_response", "TRUNCATE app.proof_application_response"])
       await expect(withTenant(h.runtime, h.ctx, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
-    const stranger = { tenantId: randomUUID() } as typeof h.ctx;
+    const stranger = testTenantContext(randomUUID());
     expect((await withTenant(h.runtime, stranger, db => db.$client.query("SELECT 1 FROM app.proof_application_response"))).rowCount).toBe(0);
   });
 

@@ -1,0 +1,31 @@
+{
+  "pr": "https://github.com/ben2harwood-lgtm/jobguard/pull/108",
+  "head": "c8e7957c9e3cc5b139a8df6f3e36f7da213e5fb7",
+  "run": "https://github.com/ben2harwood-lgtm/jobguard/actions/runs/37232278283",
+  "exportedBy": "OpenAI GPT-6.1 Sol via Codex (repair builder)",
+  "exportDate": "2026-10-05",
+  "appliesToNewRepairHead": false,
+  "browserProjects": [
+    "mobile-360",
+    "desktop"
+  ],
+  "browserEvidence": "CI runs unfiltered pnpm test:e2e with both projects in apps/web/playwright.config.ts; log reports 174 passed; dot output does not identify individual cases.",
+  "artifacts": {
+    "pr": {
+      "path": "/private/tmp/jg-m4-7-s-r3-pr108.json",
+      "sha256": "e73ef77d4e5ef1d7f23ba85fa4146f16bd6d7600d9f977471b9b84943ceb019e",
+      "bytes": 14328
+    },
+    "run": {
+      "path": "/private/tmp/jg-m4-7-s-r3-ci37232278283.json",
+      "sha256": "9039dd75a5d2090bf37ca82dbbd3adb8d36051e9ec941ebd65d25f6101b51cd9",
+      "bytes": 6152
+    },
+    "log": {
+      "path": "/private/tmp/jg-m4-7-s-r3-ci37232278283.log",
+      "sha256": "3a63a8ec2affca4b7d2a7b4380916901acdd5f4b6f9a34a76feb0f1b33045c98",
+      "bytes": 194232
+    }
+  },
+  "independentVerdict": "Not independently verified, not accepted; source CI records only."
+}

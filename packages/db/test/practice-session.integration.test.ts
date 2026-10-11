@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -181,7 +182,7 @@ it("the non-practice material path retains tenant-wide revisions and description
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[tenant]);
  await admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional real-tenant path')",[jobId,tenant]);
  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeItemId,tenant,jobId]);
- const context={tenantId:tenant} as import("../src/tenant-context.js").VerifiedTenantContext;
+ const context=testTenantContext(tenant);
  const repo=new MaterialRepository(runtime);
  const input={merchantName:"M",sku:"S",description:"Original tenant description",pricePence:2000,priceUnit:"each" as const,taxBasis:"net" as const,effectiveFrom:"2026-10-01",sourceLabel:"synthetic fixture",expectedVersion:0};
  const first=await repo.addRate(context,input);

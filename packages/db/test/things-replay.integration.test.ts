@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { evaluateBillDiscrepancy } from "@jobguard/core";
-import { DiscrepancyRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository, type VerifiedTenantContext } from "../src/index.js";
+import { DiscrepancyRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository } from "../src/index.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools } from "./pool-test-utils.js";
@@ -14,7 +15,7 @@ import { closeTestPools } from "./pool-test-utils.js";
 // Things to check: a replay of evaluate, review or bill supersession returns what that command first returned,
 // not the job's current findings, outcomes or bill reduction, and the command id is bound to its job and payload.
 const tenant = randomUUID(), job = randomUUID(), otherJob = randomUUID(), scope = randomUUID();
-const ctx = { tenantId: tenant } as VerifiedTenantContext;
+const ctx = testTenantContext(tenant);
 const RULE = "supplier-overcharge.v1";
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, repo: DiscrepancyRepository, matches: SupplierMatchRepository;
 let originalFactId = "", replacementFactId = "", secondReplacementFactId = "";

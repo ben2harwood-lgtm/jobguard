@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,7 +9,7 @@ import { Pool } from "pg";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import {
   DiscrepancyRepository, EvidenceService, InboxRelevanceRepository, MaterialRepository, ProofCommandService, PurchaseOrderRepository, ReadinessRepository,
-  SupplierDocumentRepository, SupplierMatchRepository, migrate, type VerifiedTenantContext,
+  SupplierDocumentRepository, SupplierMatchRepository, migrate,
 } from "../src/index.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools } from "./pool-test-utils.js";
@@ -19,7 +20,7 @@ import { ObservedPool } from "./lock-observer.js";
 // the registry fails each of them, not just one.
 export function createWatchdogHarness(label: string, portBase: number) {
 const tenant = randomUUID(), member = randomUUID(), otherMember = randomUUID();
-const ctx = { tenantId: tenant } as VerifiedTenantContext;
+const ctx = testTenantContext(tenant);
 const RULE = "supplier-overcharge.v1", DAY = "2026-03-27T09:00:00.000Z", NEXT = "2026-03-30T08:00:00.000Z";
 const CONFLICT = /IDEMPOTENCY_CONFLICT|COMMAND_CONFLICT/u;
 const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");

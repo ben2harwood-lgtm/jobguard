@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,7 +6,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { InboxRelevanceRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository, type VerifiedTenantContext } from "../src/index.js";
+import { InboxRelevanceRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository } from "../src/index.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools } from "./pool-test-utils.js";
@@ -13,7 +14,7 @@ import { closeTestPools } from "./pool-test-utils.js";
 // Supplier-match create and correction, and inbox dismissal: a replay returns what the command first returned, a
 // successful no-op keeps its command identity, and the id is bound to its job and payload.
 const tenant = randomUUID(), job = randomUUID(), otherJob = randomUUID(), scope = randomUUID(), member = randomUUID();
-const ctx = { tenantId: tenant } as VerifiedTenantContext;
+const ctx = testTenantContext(tenant);
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, match: SupplierMatchRepository, inbox: InboxRelevanceRepository;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const count = async (table: string, jobId: string) => Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE job_id=$1`, [jobId])).rows[0].n);

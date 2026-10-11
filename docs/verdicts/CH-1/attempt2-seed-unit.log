@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/db
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  06:48:17
+   Duration  2.87s (transform 1.06s, setup 0ms, import 2.70s, tests 5ms, environment 0ms)
+

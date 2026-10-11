@@ -8,10 +8,12 @@ import { Pool } from "pg";
 import type { JobSummary } from "./contracts";
 
 export const SYNTHETIC_SESSION = WORKSPACE_SYNTHETIC_SESSION;
+/** Cookie shape only; mode and persisted membership are enforced by syntheticPool/workspace and PracticeAccess. */
 export function hasSyntheticSession(value: string | undefined) { return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value); }
 
 const poolRegistry = globalThis as typeof globalThis & { __jobguardSyntheticPool?: Pool };
 export function syntheticPool() {
+  if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw Object.assign(new Error("Synthetic workflow is unavailable"), {code:"UNAUTHENTICATED"});
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw Object.assign(new Error("Database configuration is unavailable"), { code: "DATABASE_UNAVAILABLE" });
   poolRegistry.__jobguardSyntheticPool ??= new Pool({ connectionString, max: 12, application_name: "jobguard-vercel-synthetic-demo" });
@@ -26,6 +28,7 @@ export async function closeSyntheticPool() {
 
 /** There is deliberately no static/no-database success path. */
 export async function syntheticWorkspace() {
+  if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw Object.assign(new Error("Synthetic session is unavailable"), {code:"UNAUTHENTICATED"});
   const token=(await cookies()).get("jg_session")?.value;
   const auth=await authenticatePracticeSession(syntheticPool(),token);
   const seeded = await readSyntheticDemo(syntheticPool());

@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -9,12 +10,12 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
-import { EvidenceError, EvidenceService, ProofCommandService, migrate, type VerifiedTenantContext, withTenant } from "../src/index.js";
+import { EvidenceError, EvidenceService, ProofCommandService, migrate, withTenant } from "../src/index.js";
 
 const TENANT="71000000-0000-4000-8000-000000000001", OTHER="71000000-0000-4000-8000-000000000002";
 const MEMBER="74000000-0000-4000-8000-000000000001";
 const JOB="72000000-0000-4000-8000-000000000001", SCOPE="73000000-0000-4000-8000-000000000001";
-const context={tenantId:TENANT} as VerifiedTenantContext, otherContext={tenantId:OTHER} as VerifiedTenantContext;
+const context=testTenantContext(TENANT), otherContext=testTenantContext(OTHER);
 const hash=(bytes:Uint8Array)=>createHash("sha256").update(bytes).digest("hex");
 function validPng(){const crc=(bytes:Buffer)=>{let value=0xffffffff;for(const byte of bytes){value^=byte;for(let i=0;i<8;i++)value=(value>>>1)^((value&1)?0xedb88320:0)}return(value^0xffffffff)>>>0};const chunk=(type:string,data:Buffer)=>{const name=Buffer.from(type),out=Buffer.alloc(data.length+12);out.writeUInt32BE(data.length);name.copy(out,4);data.copy(out,8);out.writeUInt32BE(crc(Buffer.concat([name,data])),8+data.length);return out};const header=Buffer.alloc(13);header.writeUInt32BE(1,0);header.writeUInt32BE(1,4);header[8]=8;header[9]=2;return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk("IHDR",header),chunk("IDAT",deflateSync(Buffer.from([0,20,30,40]))),chunk("IEND",Buffer.alloc(0))])}
 

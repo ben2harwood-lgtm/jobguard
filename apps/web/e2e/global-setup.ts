@@ -19,6 +19,9 @@ export default async function setup() {
   await control.query(`CREATE DATABASE ${SYNTHETIC_DATABASE_NAME} OWNER neondb_owner`); await control.end();
   process.env.JOBGUARD_ENV = "synthetic_demo";
   await bootstrapSyntheticDemo({ ownerUrl: `postgresql://neondb_owner:${password}@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`, runtimeUrl: E2E_RUNTIME_URL });
+  const identityAdmin = new Pool({ host:"127.0.0.1", port, user:"postgres", password, database:SYNTHETIC_DATABASE_NAME });
+  await identityAdmin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'sbox-e2e-identity'");
+  await identityAdmin.end();
   return async () => {
     await fetch("http://127.0.0.1:3000/api/test-support/drain", { method: "POST", headers: { authorization: `Bearer ${shutdownToken}` } });
     await postgres.stop();

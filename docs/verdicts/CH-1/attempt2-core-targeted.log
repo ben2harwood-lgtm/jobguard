@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core
+
+
+ Test Files  3 passed (3)
+      Tests  25 passed (25)
+   Start at  06:31:09
+   Duration  2.04s (transform 1.55s, setup 0ms, import 2.42s, tests 261ms, environment 0ms)
+

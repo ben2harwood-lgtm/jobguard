@@ -28,6 +28,9 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // Party setup/corrections and adoption are operational prerequisites, never watchdog inputs.
   "/api/jobs/[id]/parties": "pre_live_allowed",
   "/api/jobs/[id]/parties/import": "pre_live_allowed",
+  // M4-7-S: the synthetic practice feed is session-owned practice data that no watchdog table records, usable at any job stage.
+  "/api/jobs/[id]/practice-feed": "pre_live_allowed",
+  "/api/jobs/[id]/prevention-checks/[action]": "pre_live_allowed",
   "/api/jobs/[id]/proof": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
@@ -54,10 +57,18 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/things-to-check/[action]": "watchdog_live_only",
   "/api/jobs/[id]/variations": "post_live_billing",
   "/api/jobs/capture": "pre_live_allowed",
+  // ENT-2: the work-order import creates each job, binds its parties and enters live in one transaction; tenant administration and SoR imports are outside this registry.
+  "/api/contractor/work-order-imports": "pre_live_allowed",
   "/api/decisions#evaluate": "pre_live_allowed",
   "/api/decisions#resolve": "pre_live_allowed",
   "/api/recovery-cases/[id]/evidence-packs": "post_live_billing",
   "/api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval": "post_live_billing",
+  // A recovery message belongs to a recovery case on an invoiced job: billing recovery, never a watchdog input.
+  "/api/recovery-cases/[id]/messages": "post_live_billing",
+  "/api/recovery-cases/[id]/messages/[messageId]/commands": "post_live_billing",
+  // M4-6-S: a follow-up reminder is a recovery message on the same invoiced job's case: billing recovery, never a watchdog input.
+  "/api/recovery-cases/[id]/follow-ups": "post_live_billing",
+  "/api/recovery-cases/[id]/follow-ups/[followUpId]/commands": "post_live_billing",
   "/api/jobs/[id]/proof#select_generated": "watchdog_live_only",
   "/api/jobs/[id]/proof#finalize": "watchdog_live_only",
   "/api/jobs/[id]/proof#complete": "watchdog_live_only",
@@ -76,6 +87,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:job.switch_live": "pre_live_allowed",
   "command:proof.complete": "watchdog_live_only",
   "command:purchase_order.simulate": "watchdog_live_only",
+  "command:recovery.message.approve": "post_live_billing",
+  "command:recovery.follow_up.approve_reminder": "post_live_billing",
   "command:quote.acceptance.attest": "pre_live_allowed",
   "command:quote.send": "pre_live_allowed",
   "nest:/decisions/evaluate": "pre_live_allowed",
@@ -92,6 +105,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/materials": "pre_live_allowed",
   "nest:/jobs/:id/parties": "pre_live_allowed",
   "nest:/jobs/:id/parties/import": "pre_live_allowed",
+  "nest:/jobs/:id/practice-feed": "pre_live_allowed",
+  "nest:/jobs/:id/prevention-checks/:action": "pre_live_allowed",
   "nest:/jobs/:id/proof": "watchdog_live_only",
   "nest:/jobs/:id/purchase-orders/placement": "watchdog_live_only",
   "nest:/jobs/:id/purchase-orders/revisions": "watchdog_live_only",
@@ -117,8 +132,13 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/things-to-check/supersede-bill": "watchdog_live_only",
   "nest:/jobs/:id/variations": "post_live_billing",
   "nest:/jobs/capture": "pre_live_allowed",
+  "nest:/contractor/work-order-imports": "pre_live_allowed",
   "nest:/recovery-cases/:id/evidence-packs": "post_live_billing",
   "nest:/recovery-cases/:id/evidence-packs/:packId/attachment-approval": "post_live_billing",
+  "nest:/recovery-cases/:id/messages": "post_live_billing",
+  "nest:/recovery-cases/:id/messages/:messageId/commands": "post_live_billing",
+  "nest:/recovery-cases/:id/follow-ups": "post_live_billing",
+  "nest:/recovery-cases/:id/follow-ups/:followUpId/commands": "post_live_billing",
 };
 
 

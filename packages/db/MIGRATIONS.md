@@ -491,7 +491,7 @@ job, scope, key, hash, type or size columns, and the suite proves it. Removing t
 grant would first need that upsert rewritten, which is outside CH-2.
 
 Expand-compatible upgrade from the immediately preceding registered schema (through 0053); no backfill.
-0096 is registered last, after 0053. The file count remains 45. Unmerged synthetic CH-2 installs previously
+0096 is registered after 0095 and before 0097; `packages/db/src/migrate.ts` is the authority for order and count, and the suites compare against `MIGRATION_URLS.length`. Unmerged synthetic CH-2 installs previously
 labelled 0050 must be rebuilt from synthetic fixtures; renaming is not a deployed-database upgrade or a second
 application of the same DDL. No production schema-migration receipt should be relabelled by this repair.
 
@@ -567,6 +567,159 @@ reservation; no deployed database is altered here. An environment already tracki
 0043 needs a separately reviewed forward fix before reusing it with 0097; historical
 receipts retain their original migration names. Merge after
 any lower-numbered PR that lands first, or renumber again. Forward-fix only as above.
+
+## 0107_recovery_messages.sql
+
+M4-5-S (renumbered from reserved 0045 under Ben’s merge-ahead ruling, 5 October; integrator assigned 0099 on 7 October and renumbered it to 0107 on 8 October after 0102 (CH-3b), 0103 (MON-7a) and 0106 (M4-7-S) merged first; CH-1 and ENT-2 later merged as 0109 and 0110. 0053, 0054, 0094, 0095 (CH-3a), 0096 (CH-2) and 0097 (M4-1-S-R) have merged and 0107 is registered after 0106). Adds four append-only, forced-RLS, `jobguard_migration`-owned tables with runtime SELECT/INSERT only: immutable canonical `recovery_message`, exact Decision/outbox `recovery_message_approval`, fact-bound gap-free `recovery_message_event`, and unique practice-provider `recovery_message_sink`. Invoker-only guards enforce canonical bytes/hash, current case and attachment, one outstanding approval, valid history transitions backed by authorization/attempt/outcome, and live authority at the effect boundary. No SECURITY DEFINER function or runtime grant elevation is introduced.
+
+The case figures a message states and every guard compares come from one place: `app.recovery_message_case_snapshot` is a thin invoker reading of `app.recovery_case_current` (0097, M4-1-S-R), the single contract for a case's live revision, claim and received money. Revision is the latest claim revision plus the event count; outstanding is claim − landed − written off, where landed is the larger of the hand-recorded landings (net of reversals) and the landings approved through `app.approve_synthetic_landing`, never their sum. A message therefore states exactly what the workbench shows, and the sink guard refuses a message that was previewed before an approved landing moved the outstanding amount (an approved landing does not move the case revision, only the money outstanding). A case with no claim revision (a legacy 0018 creation snapshot) has no snapshot row and so cannot be previewed, approved or delivered; a partly written history is not returned by the view either. The approved-landing routine takes `pg_advisory_xact_lock(hashtext(tenant),hashtext(case))`, the same key every message guard takes, so a landing and a delivery for one case serialize and the second sees the first (proved in both orders in `recovery-messages.integration.test.ts`).
+
+The sink serializes with all case/pack/source writes through a tenant-scoped advisory lock, including raw runtime SQL. Migration 0107 adds BEFORE write triggers to the 19 source tables read by the evidence-pack mapper. Existing records, table grants and RLS policies remain unchanged. Source writes take the source lock before audit; delivery takes case → source → authorization/membership/outbox row locks, rebuilds the pack, then inserts the sink. Its SQL guard independently compares the complete saved source set and JSON records to current database facts, including proof invalidation, original-byte hashes, supplier readiness and quote identity. This prevents direct-executor and validation/insertion races without pretending the repository's earlier check is sufficient.
+
+An exhausted fifth retryable delivery is backed by `action_attempt.outcome=failed` and `action_outbox.status=dead_letter`; the history guard accepts that terminal failed fact and the panel displays “Delivery failed repeatedly — nothing sent”.
+
+Outbox attempt facts and original message intents durably reconstruct interrupted terminal history and its audit atomically on reads/replays. A stale executing claim projects uncertainty; the authorized checking command records that uncertainty before reconciliation and never resends it. A check that began more than five minutes ago (the same window as an abandoned executing claim) and never recorded the provider's answer is likewise abandoned: a fresh authorized check records the answer as still unknown and starts the next check in one transaction, with no resend and no migration change, so a failed check never jams the message; a check inside the window is still refused as in progress, and the original command id still resumes its own check. Historical source projections use the saved pack's content and hashes even after rebuilding or invalidation.
+
+Forward-fix only. Nothing is deleted or updated: a wrong preview is superseded by a new one, a wrong approval is revoked (an authorization revocation plus a cancelled outbox action), and history, sink and audit are kept. No backfill: cases that existed before the upgrade have no message until someone previews one, and an older evidence-pack approval does not carry across a rebuilt pack. Proof: `packages/db/test/recovery-message-upgrade.integration.test.ts` (real database at the previous schema, through 0106, holding approved packs, 0107 applied as `jobguard_migration`, existing records and the `recovery_case_current` projection byte-identical afterwards) and `packages/db/test/recovery-messages.integration.test.ts`. The migration list has numbering gaps; the runner applies by list order and records names, so the gaps are harmless.
+
+## 0102 — contractor parties (CH-3b)
+
+Expand-only, after 0095 and 0054. Adds immutable `contractor_client_customer`,
+`contractor_party_binding` and restricted `contractor_resident_contact`, all
+migration-owned with tenant-qualified FKs and FORCE RLS. Adds a composite unique
+key to the existing client-contract-version table without changing its rows.
+A client links only to its customer's latest revision, and every import re-resolves and
+re-checks that latest revision's type against the client kind. Named synthetic
+controlled routines link a client, bind an import inside its caller transaction,
+and read resident contact through persisted job scope. No runtime direct writes;
+resident payload columns have no runtime SELECT grant. Deferred guards require
+matching succeeded receipts and audit records before commit. No data backfill,
+provider action, retention period or production enablement.
+
+ENT-1 cannot yet resolve job IDs; reads deny until ENT-2 supplies authoritative
+job assignment scope and proves held positive cases. ENT-2 must call the binding
+routine before live entry and append audit after all domain writes. Migration
+0102 is issued by the integrator; BUILD_PLAN §12.2 amendment is integrator-owned.
+
+Validation: new PostgreSQL suite runs fresh preceding-schema install plus tracked
+upgrade/idempotence; global tenancy/bootstrap suites exercise fresh install,
+privilege/catalog inspection and preceding demo compatibility. Exact observed
+results, including sandbox restrictions, are in the CH-3b receipt. Roll forward
+for deployed repair; no rollback destroys resident/binding/audit history. Before
+any destructive rollback, stop callers and obtain the approved retention/export
+plan. Previous application code remains compatible with the additive tables.
+
+### 0103 — MON-7a synthetic prevention facts
+
+Additive `property_constraint_fact` and `counterparty_check`, tenant/job/binding-qualified
+FKs and invoker subject guards, strict cited result validation, reference-only
+staleness, indexes, immutable triggers, ENABLE/FORCE RLS, migration ownership and
+runtime SELECT/INSERT only. Watches append explicit start/stop commands and
+revision-scoped feed evaluations; no default watch, provider route, scheduling,
+Decision, outbox or financial effect. No data backfill. The prior application
+remains compatible. Audit FKs are deferred; audit head is the final command lock.
+The counterparty guard fails closed on the customer's LATEST revision: the binding's
+pinned revision must still be the latest and the latest must be a business with a
+valid company number, else `NOT_REGISTERED_COMPANY` (23514). 0103 is unmerged, so
+this is part of the same migration, not a new one.
+
+Fresh install and upgrade are covered by the PostgreSQL tests; the upgrade test
+applies every registered migration before 0103 (now including 0096 and 0097),
+seeds a quoting job, then applies 0103. They need embedded PostgreSQL or CI.
+0103 writes no table that 0096 guards, so 0096's live-only guards neither block
+nor are blocked by it. After application, use a reviewed
+forward-fix migration and retain historical facts/audit; disable affected commands
+while fixing a validator or projection rather than rewriting history. No schema
+rollback with data deletion is proposed. See `docs/contracts/prevention-checks-v1.md`.
+B4 is parked as MON-7b; MON-7 is not fully accepted while it is parked.
+
+## 0106_practice_feed.sql (M4-7-S)
+
+Adds the provider-neutral synthetic practice feed: `practice_feed_job_owner` (the session that owns a job for this feed), `practice_feed_account` (fake account and its read-only consent), `practice_feed_command` (append-only commands, one revision each), `practice_feed_event` (validated generated adapter events) and `practice_feed_receipt_match` (a builder-attested customer receipt matched to one settled movement). Number history: reserved as 0046, renumbered to 0101 under Ben's 5 October merge-ahead ruling (merged main then ended at 0094, 0095–0099 were held by open PRs and 0100 by SV-2), then renumbered again to 0106 on 8 October because CH-3b's 0102 merged first (0103 is allocated to MON-7a, 0104 to CH-1 and 0105 to ENT-2). The file is `0106_practice_feed.sql`; its SQL is byte-identical to the 0101 version. The registry is in filename order and grows as later migrations merge; nothing in this section or in the feed suite depends on 0106 being the last entry.
+
+All five tables are tenant-owned: non-null `tenant_id`, tenant/job-qualified foreign keys (the match's payment FK is `(tenant_id, job_id, payment_id)`, so a receipt from another job cannot be linked; an account's session FK points at the job's owner row), `jobguard_migration` ownership, ENABLE + FORCE RLS with a policy for both roles, and runtime SELECT/INSERT only. There is no SECURITY DEFINER function and no routine grant: two SECURITY INVOKER trigger functions (`guard_practice_feed`, `require_practice_feed_effect`) have EXECUTE revoked from the runtime role. The catalogue amounts (£384, £3,000, £41,280, £24,000, £17,280, £960 and the £540 supplier refund) are also table CHECK constraints, so no runtime SQL can insert another amount for a movement, a state that does not match its event kind, or a non-synthetic `environment` value.
+
+What the database does and does not enforce, stated exactly:
+- **Ownership.** The application uses SBOX's `PracticeAccess` before any repository call: missing/unissued/expired sessions receive 401; another creator's job, a nonexistent job and an old unbound job receive the same 404. The repository rechecks the immutable `app.job.practice_session_digest` and live server-issued session before snapshot, registration or connect. The SQL trigger checks that binding and authenticates the session before every feed insert, including direct owner/account insertion. `practice_feed_job_owner` and its claim audit register existing creation-time ownership only; insertion order cannot select an owner. No legacy backfill or first-touch assignment is permitted. The `jg_session` cookie is a 7-day bearer token, so the feed never stores it: `session_digest` on the owner and account rows, the transaction setting `app.practice_feed_session_digest` and the `sessionDigest` audit references all carry only SBOX's sha256 digest (the same value as `app.job.practice_session_digest`); the repository takes the digest from `PracticeAccess` and never receives the token.
+- **Environment.** The application and the repository refuse every `JOBGUARD_ENV` other than `synthetic_demo`. The trigger additionally requires the transaction setting `app.practice_feed_environment = 'synthetic_demo'` and the session-digest setting. Those settings are written by the repository, so the database alone cannot tell a pilot deployment from a synthetic one; physical separation of pilot and production databases (BUILD_PLAN §3) is the real boundary. The trigger does **not** look at a job's activation mode: the practice sandbox starts jobs as `pilot_no_charge` in its no-charge scenario, so that mode cannot be the discriminator.
+- **Effects.** Events must belong to the account's latest, matching `advance` command (exact kind, movement and an integrity hash that is not a signature); receipt matches must belong to a matching `match_receipt` command with a builder-attested, unreversed payment of exactly the movement amount, a settled identified movement and no unreconciled duplicate. Deferred constraint triggers require the claim and connect commands' audit events, the match row for a match command, and every event identity an advance step generates (an identity stored by an earlier command satisfies a replay), so a half-written effect cannot commit.
+- A movement never touches allocation, landing, fee, journal or ledger tables, and a match never sets `qualifying_recovery_proof`. A matched receipt qualifies only while its movement is currently settled and unheld, and stops qualifying if the receipt is reversed; the saved match is history and is never edited. One movement verifies one receipt for life: a reversed receipt's match keeps its movement used (the UI says so); a correction path belongs with M4-8-S's reversal work.
+
+Expand-compatible: new tables only; the preceding application ignores them. The integration suite exercises upgrade from the schema just before 0106 (currently through 0102) on a database carrying an unbound prior job, as well as fresh install in demo-bootstrap; execution is required in CI. Roll forward to correct: movement facts, commands, matches, ownership and audit are history and are never rolled back destructively. Disconnect appends a command and keeps every fact.
+
+The feed is deliberately unavailable for CH-3a-adopted (imported) jobs and for SBOX-2 generated jobs without a capture record: they have no customer payments and no receipts screen, so there is nothing for the feed to match. Extending it to them would be a separately reviewed change (Opus P2-1/P2-2, rated P3 at e8892c1).
+
+## 0109 — CH-1 job activation terms
+
+Expand-compatible v3 synthetic activation: immutable tenant/job terms with FORCE RLS, qualified quote/document/track keys and controlled inserts, no historic financial effects, existing parties/track/watchdog transition guards. Existing v1 rows and activation routines are untouched. The job baseline shape additionally permits v3 with a null recovery cap. A new session-owned saved v1 sample supports historic regressions; its marker cannot be selected or changed by runtime SQL. No data backfill is required.
+
+Upgrade from the schema just before this migration (every earlier registered migration, including 0102, 0103 and 0106) applies only additive objects and expanded checks; re-running the migration runner is idempotent. Forward-fix is preferred. Rollback requires disabling v3 entry first and confirming there are no v3 activations or saved v1 samples before removing new triggers/functions/table/columns and restoring the previous checks. Never delete activated commercial history to roll back. No production fees are enabled.
+
+## 0110_work_orders.sql (ENT-2)
+
+Registered after `0109_job_activation_terms.sql`. The merged registration order is `0106_practice_feed.sql`, `0107_recovery_messages.sql`, `0109_job_activation_terms.sql`, `0110_work_orders.sql`, `0111_persisted_identity.sql`, then `0112_recovery_follow_up.sql`; 0108 is not registered. The 0110 number was assigned under Ben's 5 October merge-ahead ruling. Adds `schedule_of_rates`, immutable `sor_version` and `sor_item`, `import_batch`, `import_row_receipt`, `work_order`, immutable `work_order_revision` and `work_order_line`, the `work_order_current` pointer, `job_assignment` and `site_visit`. Every table is tenant-owned (non-null `tenant_id`, tenant-qualified composite keys), owned by `jobguard_migration`, FORCE RLS, runtime `SELECT` only. All writes go through five controlled `SECURITY DEFINER` routines (begin, commit, batch record, SoR import and party comparison) with a pinned `search_path`; revisions, lines, batches, receipts and SoR rows are immutable by trigger even for the owner.
+
+Existing objects it touches, each based on its current definition: `job_provenance_check` (0020) keeps `system_generated_quote` and `imported` and adds `work_order`; `app.read_contractor_resident` (0102) is identical except that job scope is resolved by `app.contractor_job_allowed`. Nothing else an earlier migration defines is altered, and no merged migration file is edited. New job-level guards: a `work_order` job can only be inserted by the migration role as a draft, its provenance is immutable, and it can only enter `live` through the import routine.
+
+Expand-compatible: new tables and a widened CHECK only; the preceding application ignores them. Corrections ship as a new migration: revisions, lines and audit are historical facts, so there is no destructive rollback. Authority for the two imports follows the 9 October "Existing roles" answer; see `docs/contracts/work-order-import-v1.md`.
+
+## 0111 — persisted entered-code identity (M0-6L)
+
+Expands the existing restricted `identity` control plane with keyed challenge/session
+hashes, rate windows, immutable invitation grants, a membership discovery index and
+append-only security events. `jobguard_identity` is a separate NOLOGIN group/credential
+boundary: no business table access, owner status, superuser, BYPASSRLS, role inheritance,
+role creation, DDL or truncate permission. Business/worker roles cannot read these tables
+or execute the three narrow identity routines. Identity updates are column-scoped to
+challenge counters/consumption/delivery and session revocation; issued token/user bindings
+and challenge email/digest cannot be rewritten by the identity credential. The operator provisions a separate login;
+Neon bootstrap creates the group before switching to `jobguard_migration` (which cannot
+create roles). The fixture browser harness enables LOGIN only in its disposable database.
+
+Provisioning takes a verified, consumed challenge, never arbitrary tenant/role parameters.
+Signup always creates a new tenant and owner. Acceptance uses the invitation's immutable
+email/tenant/account/role, with tenant-qualified account/membership FKs. The membership locator outlives
+revocation and expiry, so it never blocks acceptance by itself: under row locks on the locator
+and its membership, only a currently active membership refuses a fresh invitation (which then
+stays unused). For a revoked or expired one, acceptance inserts a new invitation-bound membership
+and repoints the locator in the same transaction; the old membership row is kept as history. FORCE RLS remains
+on `app.account`/`app.membership`; additional migration-owner policies retain the same
+transaction-local tenant predicate. The discovery routine visits only the identity's
+locator rows and rechecks canonical membership revocation/expiry. Identity credentials
+are part of the authentication trust boundary; possession of them is not protected by
+business RLS. SQL privileges and migration-owner-only routines require independent review.
+
+Existing users need no backfill: legacy synthetic users stay in their existing demo path.
+Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
+0111 replaces this PR’s earlier reservations (0052, then 0098, then 0108): 0102, 0103, 0106, 0107
+(M4-5-S, `recovery_messages`), 0109 (CH-1) and 0110 (ENT-2) merged ahead of this PR, so 0111 is the next
+free number at merge. 0112 (M4-6-S) and 0113 (CH-7) are allocated after it, and 0100 (SV-2) takes the
+next free number at its own merge. The runner places 0111 after 0110_work_orders.sql (currently last);
+0102_contractor_parties.sql, 0103_prevention_checks.sql, 0106_practice_feed.sql,
+0107_recovery_messages.sql, 0109_job_activation_terms.sql and 0110_work_orders.sql therefore apply before
+0111. The SQL bytes are unchanged by the renumber (SHA-256 9779d3f6…59e0).
+Fresh-install coverage remains in the tenancy/Neon suites; `identity.integration.test.ts`
+executes upgrade from the state immediately before 0111 (everything listed ahead of it, merged through 0110),
+checks the complete applied list against MIGRATION_URLS, and covers repeat migration,
+races, privilege/catalog checks and rollback.
+These are PostgreSQL tests, not claimed executed in the restricted builder sandbox.
+
+Forward fix: disable identity endpoints/credential, preserve existing tables and add a
+reviewed corrective migration. Rollback of application code is expand compatible: the
+preceding demo ignores these tables. Never drop enrolled identities or tenants to roll
+back; restore rehearsal and real-data retention remain separate release gates.
+
+## 0112_recovery_follow_up.sql (M4-6-S)
+
+Registered after `0110_work_orders.sql`: it takes the number the integrator allocated on 9 October (0111 is M0-6L's at its renumber). Adds the persisted practice recovery follow-up: `recovery_follow_up` (the intent), `recovery_follow_up_owner` (exactly one persisted scheduling owner per intent, required at commit), append-only `recovery_follow_up_event`, `recovery_follow_up_due` (one due Decision per intent and period, unique), `recovery_follow_up_reminder` (the M4-5-S messages previewed as the reminder) and `recovery_follow_up_advance` (the ledger of `Advance practice time` commands). All six are tenant-owned with a non-null tenant id, tenant/job/case-qualified foreign keys, ENABLE and FORCE row security, migration ownership, and runtime SELECT and INSERT only. Every row carries `environment='synthetic_demo'`; the one owner kind is `practice_fake_clock` (a workflow engine is a later owner and cannot be represented).
+
+The clock is SBOX-2's own per-run fake clock (the number of `sandbox_adapter_receipt` rows, its `fakeClockTick`), never wall time. An `AFTER INSERT` trigger on `app.sandbox_run_event` (kind `advanced`) calls `app.evaluate_recovery_follow_ups`, which runs inside the very transaction of SBOX-2's advance: the due Decision commits with the advance or rolls back with it (SBOX-2's code, tables and behaviour are untouched, and a run with no follow-up does what it did before). The evaluation writes a PENDING Decision (no resolution, authorization or outbox row), the due row and an event, at most once per intent and period; it is idempotent, takes the intent's lock, and `signalDue` can call it any number of times. The due interval is the versioned fixture `recovery-follow-up-fixture.v1`: one practice tick after scheduling (a follow-up whose due tick the bounded clock, 0 to 3, can never reach is refused).
+
+Case facts (Q3): dispute = `dispute`; settlement = `close_recovered`; cancel = `close_no_recovery`, `write_off`, `prevent`; reopened = `resume_pursuit` or `reverse_landing` after one of those. `app.recovery_follow_up_case_facts` mirrors `followUpCaseFacts` in packages/core, and a test runs both on every event type at every review point.
+
+Existing objects it touches: the three M4-5-S guards (`guard_recovery_message`, `guard_recovery_message_approval`, `guard_recovery_message_sink`) are restated with `CREATE OR REPLACE`, bodies exactly as in 0107 plus one exception each. (1) The one-effect rule still stops any new preview or approval while a message effect stands, except while an open follow-up's reminder is due and every effect on the case is a DELIVERED message from before the follow-up was scheduled (`app.recovery_follow_up_reminder_window`). (2) The approval guard accepts the follow-up's own due Decision as the Decision of the first approval of its newest linked reminder, and nothing else. (3) The sink guard refuses to record a reminder whose follow-up has stopped. Without a follow-up row each guard behaves as before. No other object is altered.
+
+Expand-compatible: new tables, functions and one trigger; the preceding application ignores them. Corrections ship as a new migration: events, due rows and links are historical facts, so there is no destructive rollback. Proof: `packages/db/test/recovery-follow-up.integration.test.ts` (including the same-transaction proof by `xmin` and by injected failure).
 
 ### 0100 — SV-2 shadow persistence and isolation
 

@@ -1,6 +1,191 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/recovery-cases/{id}/follow-ups": {
+      "get": {
+        "operationId": "RecoveryFollowUpController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the saved practice follow-ups, their displayed state and the run's fake clock for a recovery case",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryFollowUpController_schedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Schedule a practice follow-up for the delivered message and case revision the builder reviewed; exact replays return the current state",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/follow-ups/{followUpId}/commands": {
+      "post": {
+        "operationId": "RecoveryFollowUpController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Advance practice time, open the reminder review, approve the exact reminder or cancel a follow-up by an exact versioned command; exact replays return the current state",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/messages": {
+      "get": {
+        "operationId": "RecoveryMessageController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the saved practice messages, delivery state and practice sink for a recovery case",
+        "tags": [
+          "recovery-messages"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryMessageController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview the exact factual practice message bound to the attachment-approved evidence pack; exact replays return current case/message state",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/messages/{messageId}/commands": {
+      "post": {
+        "operationId": "RecoveryMessageController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve, revoke, advance or reconcile a practice message by an exact versioned command; exact replays return current case/message state",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
+    },
+    "/jobs/{id}/prevention-checks": {
+      "get": {
+        "operationId": "PreventionCheckController_view",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "Missing or invalid practice session"
+          },
+          "404": {
+            "description": "Job absent or owned by another practice session"
+          }
+        },
+        "summary": "Read persisted cited prevention checks and the saved paying party; synthetic only",
+        "tags": [
+          "prevention-checks"
+        ]
+      }
+    },
+    "/jobs/{id}/prevention-checks/{action}": {
+      "post": {
+        "operationId": "PreventionCheckController_command",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "action",
+                  "expectedBindingId",
+                  "scenarioNow",
+                  "fixture"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "prevention-command.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "property",
+                      "company",
+                      "start_watch",
+                      "stop_watch",
+                      "evaluate_watch"
+                    ]
+                  },
+                  "expectedBindingId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scenarioNow": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "fixture": {
+                    "type": "string",
+                    "enum": [
+                      "mixed",
+                      "fresh",
+                      "stale",
+                      "missing"
+                    ]
+                  },
+                  "expectedWatchRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Required for watch commands"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid strict command or not a registered company"
+          },
+          "409": {
+            "description": "Command, binding or watch revision conflict"
+          }
+        },
+        "summary": "Explicit synthetic property/company check or start, stop, evaluate a customer watch; no sends, Decisions or fees",
+        "tags": [
+          "prevention-checks"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_health",
@@ -1464,6 +1649,212 @@
         ]
       }
     },
+    "/contractor/clients/{clientId}/customer-link": {
+      "post": {
+        "operationId": "ContractorPartiesController_link",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append an audited synthetic client to customer link; organisation.manage required",
+        "tags": [
+          "contractor-parties"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/resident-contact": {
+      "get": {
+        "operationId": "ContractorPartiesController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read resident contact only through persisted contractor job scope; unknown scope returns 404",
+        "tags": [
+          "contractor-parties"
+        ]
+      }
+    },
+    "/contractor/work-order-imports": {
+      "get": {
+        "operationId": "WorkOrderController_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Office register of work-order import batches and orders, with the selectable generated files; organisation.manage or data.import required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      },
+      "post": {
+        "operationId": "WorkOrderController_import",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import a generated synthetic work-order file (work-order-import.v1); organisation.manage or data.import required, no arbitrary upload",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/work-order-imports/{batchId}": {
+      "get": {
+        "operationId": "WorkOrderController_batch",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "One import batch with its per-row receipts and typed errors",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/work-orders/{workOrderId}/revisions": {
+      "get": {
+        "operationId": "WorkOrderController_revisions",
+        "parameters": [
+          {
+            "name": "workOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Immutable revisions of one work order with diffs and stable line identities; resident contact is never included",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/sor-versions": {
+      "get": {
+        "operationId": "WorkOrderController_sorVersions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Immutable schedule-of-rates versions; contract.read required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      },
+      "post": {
+        "operationId": "WorkOrderController_importSor",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import an immutable schedule-of-rates version (sor-version-import.v1); contract.manage required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/assignments": {
+      "get": {
+        "operationId": "SchedulingController_assignments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The team and operatives assigned to a work-order job; job.read through the job's own scope, else the same 404 as an unknown job",
+        "tags": [
+          "contractor-scheduling"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/site-visits": {
+      "get": {
+        "operationId": "SchedulingController_siteVisits",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Recorded site visits (server times) of a work-order job; empty until ENT-3 records visits",
+        "tags": [
+          "contractor-scheduling"
+        ]
+      }
+    },
     "/jobs/{id}/parties": {
       "get": {
         "operationId": "JobPartiesController_view",
@@ -1546,6 +1937,509 @@
         "summary": "Read job-parties-list.v1 including captured jobs and saved customer/site labels",
         "tags": [
           "job-parties"
+        ]
+      }
+    },
+    "/jobs/{id}/practice-feed": {
+      "get": {
+        "operationId": "PracticeFeedController_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted practice-feed-view.v1; synthetic movement facts only, never an allocation"
+          },
+          "401": {
+            "description": "No practice session"
+          },
+          "403": {
+            "description": "Synthetic environment or client-selected tenant forbidden"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
+          }
+        },
+        "summary": "Read session-owned synthetic settled movement facts without connecting any provider",
+        "tags": [
+          "practice-feed"
+        ]
+      },
+      "post": {
+        "operationId": "PracticeFeedController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "connect"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "disconnect"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "step"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "advance"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960",
+                          "supplier-refund-540"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "settled",
+                          "replay",
+                          "page_overlap",
+                          "alternate_representation",
+                          "unknown_duplicate"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reconcile_duplicate"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960",
+                          "supplier-refund-540"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "paymentId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "match_receipt"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960"
+                        ]
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Persisted practice-feed-view.v1; settlement never allocates money"
+          },
+          "400": {
+            "description": "Invalid or forged command"
+          },
+          "401": {
+            "description": "No authenticated practice session"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
+          },
+          "409": {
+            "description": "Stale revision, conflicting replay, unsettled or mismatched receipt, or disconnected feed"
+          }
+        },
+        "summary": "Connect, advance a generated movement, reconcile a duplicate, match a builder-attested receipt, or disconnect the practice feed",
+        "tags": [
+          "practice-feed"
+        ]
+      }
+    },
+    "/auth/request": {
+      "post": {
+        "operationId": "IdentityController_request",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "email",
+                  "purpose"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-request.v1"
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "signup",
+                      "signin",
+                      "invitation"
+                    ]
+                  },
+                  "invitationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Non-enumerating acknowledgement; synthetic code shown only for .invalid fixtures"
+          }
+        },
+        "summary": "Request an entered identity code; fixture transport only until D04",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "operationId": "IdentityController_verify",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "email",
+                  "purpose",
+                  "code"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-verify.v1"
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "signup",
+                      "signin",
+                      "invitation"
+                    ]
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{8}$"
+                  },
+                  "invitationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Opaque HttpOnly Secure SameSite=strict cookie; no token in JSON"
+          }
+        },
+        "summary": "Consume an entered code atomically and set a secure session cookie",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "operationId": "IdentityController_session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "identity-session.v1; never honours a synthetic cookie"
+          }
+        },
+        "summary": "Read persisted session and current memberships",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/invitations": {
+      "post": {
+        "operationId": "IdentityController_invite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "email",
+                  "role"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-invitation.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "estimator",
+                      "foreman",
+                      "operative",
+                      "finance",
+                      "read_only"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable invitation; no real email dispatch"
+          }
+        },
+        "summary": "Owner-authorized invitation binds email, tenant and role",
+        "tags": [
+          "identity"
         ]
       }
     }

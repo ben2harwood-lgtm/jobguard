@@ -1,0 +1,60 @@
+
+> jobguard@ typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1
+> turbo run typecheck
+
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running typecheck in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:typecheck: cache miss, executing f7bc9b8118191b69
+@jobguard/config:typecheck: cache hit, replaying logs e509523b47d5413f
+@jobguard/config:typecheck: 
+@jobguard/config:typecheck: > @jobguard/config@0.0.0 typecheck /private/tmp/opus-tenant-stamp-1-22d56b7-0810/packages/config
+@jobguard/config:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/config:typecheck: 
+@jobguard/storage:typecheck: cache hit, replaying logs 3abc7c01a1728bbe
+@jobguard/storage:typecheck: 
+@jobguard/storage:typecheck: > @jobguard/storage@0.0.0 typecheck /private/tmp/opus-tenant-stamp-1-22d56b7-0810/packages/storage
+@jobguard/storage:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/storage:typecheck: 
+@jobguard/core:typecheck: 
+@jobguard/core:typecheck: > @jobguard/core@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core
+@jobguard/core:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/core:typecheck: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/ai:typecheck: cache miss, executing b23bba0d474950c9
+@jobguard/db:typecheck: cache miss, executing b5b5bc3e4d5cd91a
+@jobguard/db:typecheck: 
+@jobguard/db:typecheck: > @jobguard/db@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/db
+@jobguard/db:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/db:typecheck: 
+@jobguard/ai:typecheck: 
+@jobguard/ai:typecheck: > @jobguard/ai@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/ai
+@jobguard/ai:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/ai:typecheck: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:typecheck: cache miss, executing 73df7dea30d30e4d
+@jobguard/api:typecheck: 
+@jobguard/api:typecheck: > @jobguard/api@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api
+@jobguard/api:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/api:typecheck: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/web:typecheck: cache miss, executing c6623426a3520389
+@jobguard/web:typecheck: 
+@jobguard/web:typecheck: > @jobguard/web@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/web
+@jobguard/web:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/web:typecheck: 
+@jobguard/web:typecheck: e2e/CH-1.spec.ts(27,36): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './helpers/customer-invoice-journey.js'?
+@jobguard/web:typecheck:  ELIFECYCLE  Command failed with exit code 2.
+@jobguard/web#typecheck:  ERROR  command (/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/web) /private/tmp/ch-1-bin/pnpm run typecheck exited (2)
+
+ Tasks:    6 successful, 7 total
+Cached:    2 cached, 7 total
+  Time:    56.409s 
+Failed:    @jobguard/web#typecheck
+
+ ERROR  run failed: command  exited (2)
+ ELIFECYCLE  Command failed with exit code 2.

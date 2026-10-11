@@ -155,6 +155,40 @@ function start(jobId = JOB_A) {
 
 const OPEN_BUTTONS = ["Open materials-320 overcharge", "Open £320 withheld payment", "Open £2,500 withheld payment", "Record prevention"];
 
+describe("FIXLATER-1: delivery lookups belong to the job whose register is ready", () => {
+  it("waits for the new job's register and ignores an earlier job's late picker answer", async () => {
+    const w = start();
+    await w.settle();
+    const oldDelivery = { id: CASE_A, document_type: "delivery", status: "ready", document_number: "DN-JOB-A" };
+    const newDelivery = { id: CASE_B, document_type: "delivery", status: "ready", document_number: "DN-JOB-B" };
+    lookups["supplier-documents"] = { status: 200, body: { state: { documents: [oldDelivery] } } };
+    const oldLookup = holdLookups();
+    reads()[0]!.json(answerBody([]));
+    await w.settle();
+    expect(lookupRequests).toEqual([`/api/jobs/${JOB_A}/supplier-documents`]);
+
+    lookupGate = undefined;
+    lookups["supplier-documents"] = { status: 200, body: { state: { documents: [newDelivery] } } };
+    w.rerender(JOB_B);
+    await w.settle();
+    expect(reads()).toHaveLength(2);
+    expect(reads()[1]!.url).toBe(`/api/jobs/${JOB_B}/recovery-cases`);
+    expect(lookupRequests).toEqual([`/api/jobs/${JOB_A}/supplier-documents`]);
+    expect(w.screen().text()).not.toContain("DN-JOB-A");
+    expect(w.screen().text()).not.toContain("DN-JOB-B");
+
+    reads()[1]!.json(answerBody([]));
+    await w.settle();
+    expect(lookupRequests).toEqual([`/api/jobs/${JOB_A}/supplier-documents`, `/api/jobs/${JOB_B}/supplier-documents`]);
+    expect(w.screen().text()).toContain("DN-JOB-B");
+    oldLookup.release();
+    await w.settle();
+    expect(w.screen().text()).toContain("DN-JOB-B");
+    expect(w.screen().text()).not.toContain("DN-JOB-A");
+    expect(writes()).toHaveLength(0);
+  });
+});
+
 describe("M4-1-S-R repair 12, Sol P2-1: a late read can never erase a command result", () => {
   it("keeps every way of opening a case disabled until the first read has settled", async () => {
     const w = start();
