@@ -63,3 +63,7 @@ export * from "../prevention-check.contracts.js";
 export * from "../practice-feed.contracts.js";
 export * from "../practice-feed.application.js";
 export * from "../practice-feed.http.js";
+
+export * from "../practice-facts.contracts.js";
+export * from "../practice-facts.application.js";
+export * from "../practice-facts.http.js";

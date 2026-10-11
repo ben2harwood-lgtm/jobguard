@@ -1,3 +1,8 @@
+import {
+  assessPracticeFactsReceipt, generatedPracticeFactsEvents, practiceFactDefinition, practiceFactKeyV1, practiceFactsAdapterEventV1,
+  practiceFactsCatalogueV1, practiceFactsCommandV1, practiceFactsLaterInvoice, practiceFactsQueryV1, projectPracticeFactsMovements,
+  type HashedPracticeFactEvent, type PracticeFactsCommand, type PracticeFactsQuery, type PracticeFactsView,
+} from "@jobguard/core";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -123,6 +128,14 @@ export class PracticeFeedRepository {
   }
 
   private project(snapshot: Snapshot, jobId: string, query: PracticeFeedQuery): PracticeFeedView {
+    // The issued read filter: new facts have their own versioned projection. Keep ALL command revisions;
+    // disguise only new-key reconciliation actions so the merged key parser never sees them.
+    snapshot = { ...snapshot,
+      events: snapshot.events.filter(e => practiceMovementKeyV1.safeParse(e.movement_key).success),
+      matches: snapshot.matches.filter(m => practiceMovementKeyV1.safeParse(m.movement_key).success),
+      payments: snapshot.payments.filter(p => !practiceFactsCatalogueV1.some(e => e.kind === "customer_receipt" && e.grossPence === Number(p.amount_pence))),
+      commands: snapshot.commands.map(c => c.action === "reconcile_duplicate" && practiceFactKeyV1.safeParse(c.movement_key).success ? { ...c, action: "practice_facts_reconciled" } : c),
+    };
     const account = snapshot.account;
     const base = { version: "practice-feed-view.v1", environment: "synthetic_demo", realExternalActions: 0, jobId, catalogue: practiceMovementCatalogueV1, allocatedEligibleNetPence: 0 } as const;
     const attested = (payments: Snapshot["payments"], movements: PracticeFeedView["movements"]) => payments.map((payment) => ({
@@ -251,6 +264,89 @@ export class PracticeFeedRepository {
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(tenant_id,account_id,event_id) DO NOTHING`,
     [randomUUID(), context.tenantId, jobId, accountId, commandId, e.eventKind, e.movementKey, e.eventId, e.identity, e.representationId, e.grossPence, e.currency, e.state, e.environment, e.version, sourceHash]);
   }
+  /** Separate versioned reader, over the SAME session-bound account and immutable feed tables. */
+  private projectFacts(snapshot: Snapshot, jobId: string, query: PracticeFactsQuery): PracticeFactsView {
+    const account = snapshot.account;
+    const events: HashedPracticeFactEvent[] = snapshot.events.filter(e => practiceFactKeyV1.safeParse(e.movement_key).success).map(e => ({
+      ...practiceFactsAdapterEventV1.parse({version:e.version,environment:e.environment,eventId:e.event_id,eventKind:e.event_kind,movementKey:e.movement_key,
+        identity:e.identity,representationId:e.representation_id,grossPence:Number(e.gross_pence),currency:e.currency,state:e.state}),sourceHash:String(e.source_hash).trim(),
+    }));
+    const reconciled = snapshot.commands.filter(c => c.action === "reconcile_duplicate" && practiceFactKeyV1.safeParse(c.movement_key).success).map(c => practiceFactKeyV1.parse(c.movement_key));
+    const all = account ? projectPracticeFactsMovements(account.id,events,reconciled) : [];
+    const matches = snapshot.matches.filter(m => practiceFactKeyV1.safeParse(m.movement_key).success).map(m => ({paymentId:m.payment_id,movementKey:practiceFactKeyV1.parse(m.movement_key),paymentReversed:m.reversed}));
+    const receipts = snapshot.payments.filter(p => practiceFactsCatalogueV1.some(e => e.kind === "customer_receipt" && e.grossPence === Number(p.amount_pence))).map(p => ({
+      paymentId:p.id,invoiceId:p.invoice_id,paidOn:p.paid_on,reference:p.reference,amountPence:Number(p.amount_pence),currency:p.currency,reversed:p.reversed,
+      assessment:assessPracticeFactsReceipt({paymentId:p.id,amountPence:Number(p.amount_pence),currency:p.currency,reversed:p.reversed},all,matches),
+    }));
+    const offset = Number(query.cursor ?? 0), disconnect = snapshot.commands.find(c => c.action === "disconnect");
+    return {version:"practice-facts-view.v1",environment:"synthetic_demo",realExternalActions:0,jobId,accountId:account?.id ?? null,
+      feedState:!account?"not_connected":disconnect?"disconnected":"connected",
+      consent:!account?null:{version:"practice-feed-consent.v1",scope:"read_generated_movements",provider:"none",grantedAtRevision:1,revokedAtRevision:disconnect?.revision ?? null},
+      revision:snapshot.commands.at(-1)?.revision ?? 0,catalogue:practiceFactsCatalogueV1,movementCount:all.length,movements:all.slice(offset,offset+query.limit),
+      receipts,allocatedEligibleNetPence:0,eventCount:events.length,nextCursor:offset+query.limit<all.length?String(offset+query.limit):null,laterInvoice:practiceFactsLaterInvoice(all)};
+  }
+
+  async factsView(context: VerifiedTenantContext, actor: PracticeFeedActor, sessionDigest: string, jobId: string, rawQuery: unknown = {version:"practice-facts-query.v1"}): Promise<PracticeFactsView> {
+    this.guard(sessionDigest,jobId);
+    const query = practiceFactsQueryV1.safeParse(rawQuery); if(!query.success)fail("INVALID_QUERY");
+    return withTenant(this.pool,context,async db => {
+      await this.authorize(db,context,actor,sessionDigest,jobId,null);
+      return this.projectFacts(await this.snapshot(db,context,sessionDigest,jobId),jobId,query.data!);
+    });
+  }
+
+  /** Uses the merged authorization, lock order, snapshot and transactional audit; guards/completeness are unchanged. */
+  async factsCommand(context: VerifiedTenantContext, actor: PracticeFeedActor, sessionDigest: string, jobId: string, raw: unknown): Promise<PracticeFactsView> {
+    this.guard(sessionDigest,jobId);
+    const parsed = practiceFactsCommandV1.safeParse(raw); if(!parsed.success)fail("INVALID_COMMAND");
+    const input = parsed.data!, payloadHash = sha256(canonical({jobId,...input}));
+    const query = practiceFactsQueryV1.parse({version:"practice-facts-query.v1",limit:50});
+    try {
+      return await withTenant(this.pool,context,async db => {
+        await this.authorize(db,context,actor,sessionDigest,jobId,input.commandId);
+        const before = await this.snapshot(db,context,sessionDigest,jobId);
+        const replay = (await db.$client.query<{payload_hash:string}>("SELECT payload_hash FROM app.practice_feed_command WHERE tenant_id=$1 AND id=$2",[context.tenantId,input.commandId])).rows[0];
+        if(replay){if(replay.payload_hash.trim()!==payloadHash)fail("IDEMPOTENCY_PAYLOAD_CONFLICT");return this.projectFacts(before,jobId,query);}
+        const current = this.projectFacts(before,jobId,query);
+        if(current.revision!==input.expectedRevision)fail("PRACTICE_FEED_STALE_REVISION");
+        if(current.feedState==="disconnected")fail("PRACTICE_FEED_DISCONNECTED");
+        if(!before.account)fail("PRACTICE_FEED_NOT_CONNECTED");
+        const settledEventId = this.factsPreconditions(input,before);
+        const accountId = before.account!.id;
+        await db.$client.query(`INSERT INTO app.practice_feed_command(id,tenant_id,job_id,account_id,revision,action,movement_key,step,payment_id,actor_membership_id,payload_hash,environment)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'synthetic_demo')`,
+          [input.commandId,context.tenantId,jobId,accountId,current.revision+1,input.action,input.movement,input.action==="advance"?input.step:null,input.action==="match_receipt"?input.paymentId:null,actor.membershipId,payloadHash]);
+        if(input.action==="advance")for(const e of generatedPracticeFactsEvents(input.movement,input.step)){
+          const sourceHash = sha256([e.version,e.environment,context.tenantId,jobId,accountId,e.eventId,e.eventKind,e.movementKey,e.identity,e.representationId,e.grossPence,e.currency,e.state].join("|"));
+          await db.$client.query(`INSERT INTO app.practice_feed_event(id,tenant_id,job_id,account_id,command_id,event_kind,movement_key,event_id,identity,representation_id,gross_pence,currency,state,environment,version,source_hash)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(tenant_id,account_id,event_id) DO NOTHING`,
+            [randomUUID(),context.tenantId,jobId,accountId,input.commandId,e.eventKind,e.movementKey,e.eventId,e.identity,e.representationId,e.grossPence,e.currency,e.state,e.environment,e.version,sourceHash]);
+        }
+        if(input.action==="match_receipt")await db.$client.query(`INSERT INTO app.practice_feed_receipt_match(id,tenant_id,job_id,account_id,command_id,payment_id,movement_key,settled_event_id,matched_pence,currency,environment)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'GBP','synthetic_demo')`,
+          [randomUUID(),context.tenantId,jobId,accountId,input.commandId,input.paymentId,input.movement,settledEventId,practiceFactDefinition(input.movement).grossPence]);
+        await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.membershipId}`,eventType:`practice_feed.${input.action}`,subjectType:"job",subjectRef:jobId,
+          payload:{references:{commandId:input.commandId,accountId,sessionDigest,movement:input.movement,...(input.action==="match_receipt"?{paymentId:input.paymentId}:{})},hashes:{command:payloadHash},classifications:{practiceFeed:"financial"}}}]);
+        return this.projectFacts(await this.snapshot(db,context,sessionDigest,jobId),jobId,query);
+      });
+    } catch(error){throw translate(error);}
+  }
+
+  private factsPreconditions(input: PracticeFactsCommand, snapshot: Snapshot): string {
+    const settled = snapshot.events.find(e => e.movement_key===input.movement && e.state==="settled" && e.identity==="identified");
+    const held = snapshot.events.some(e => e.movement_key===input.movement && e.identity==="unidentified") && !snapshot.commands.some(c=>c.action==="reconcile_duplicate"&&c.movement_key===input.movement);
+    if(input.action==="advance" && ["replay","alternate_representation","unknown_duplicate"].includes(input.step) && !settled)fail("PRACTICE_FEED_SETTLEMENT_REQUIRED");
+    if(input.action==="reconcile_duplicate" && (!held||!settled))fail("PRACTICE_FEED_DUPLICATE_NOT_FOUND");
+    if(input.action==="match_receipt"){
+      const pay = snapshot.payments.find(p=>p.id===input.paymentId);
+      if(!pay||pay.reversed||pay.currency!=="GBP"||Number(pay.amount_pence)!==practiceFactDefinition(input.movement).grossPence)fail("PRACTICE_FEED_RECEIPT_MISMATCH");
+      if(!settled)fail("PRACTICE_FEED_MOVEMENT_NOT_SETTLED");
+      if(held)fail("PRACTICE_FEED_DUPLICATE_HELD");
+      if(snapshot.matches.some(m=>m.payment_id===input.paymentId||String(m.movement_key)===input.movement))fail("PRACTICE_FEED_RECEIPT_ALREADY_MATCHED");
+    }
+    return String(settled?.event_id ?? "");
+  }
+
 }
 
 /** Database guard messages and constraint races become the same typed codes the preconditions use. */
