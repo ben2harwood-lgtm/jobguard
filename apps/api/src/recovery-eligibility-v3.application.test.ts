@@ -51,3 +51,6 @@ it("replays the immutable v3 command result when the workbench has a newer candi
 it.each(["ELIGIBILITY_SOURCE_REQUIRED","ELIGIBILITY_FIXTURE_MISMATCH","ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE"])("%s is a typed pre-effect refusal",code=>{
  expect(recoveryCommandFailure(Object.assign(new Error(code),{code}))).toMatchObject({status:400,body:{code}});
 });
+it("the v1 repository's plain ELIGIBILITY_FIXTURE_MISMATCH for a duplicate-payment case is the same typed pre-effect refusal",()=>{
+ expect(recoveryCommandFailure(new Error("ELIGIBILITY_FIXTURE_MISMATCH"))).toMatchObject({status:400,body:{code:"ELIGIBILITY_FIXTURE_MISMATCH"}});
+});

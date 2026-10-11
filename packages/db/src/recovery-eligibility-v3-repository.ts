@@ -28,7 +28,7 @@ export class RecoveryEligibilityV3Repository {
    await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,input.caseId]);
    const replay=(await db.$client.query<{id:string;payload_hash:string;revision:number;case_revision:number;source_event_id:string|null;result:unknown;job_id:string}>("SELECT * FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId])).rows[0];
    if(replay){if(replay.payload_hash.trim()!==payloadHash||replay.job_id!==job)throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");return {id:replay.id,revision:replay.revision,caseRevision:replay.case_revision,sourceEventId:replay.source_event_id,result:recoveryEligibilityViewV3.parse(replay.result)};}
-   const c=(await db.$client.query<{case_type:string;revision:number;created_at:Date;claim_pence:string}>("SELECT case_type,revision,created_at,claim_pence FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND claim_revision IS NOT NULL",[context.tenantId,job,input.caseId])).rows[0];
+   const c=(await db.$client.query<{case_type:string;revision:number;claim_pence:string}>("SELECT case_type,revision,claim_pence FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND claim_revision IS NOT NULL",[context.tenantId,job,input.caseId])).rows[0];
    if(!c)throw new Error("RECOVERY_CASE_NOT_FOUND");
    const latest=await readRecoveryEligibilityV3(db,context.tenantId,input.caseId);
    if(c.revision!==input.expectedCaseRevision||(latest?.revision??0)!==input.expectedReviewRevision)throw new Error("ELIGIBILITY_STALE_REVISION");
@@ -36,13 +36,15 @@ export class RecoveryEligibilityV3Repository {
    if(definition.category!==c.case_type||latest&&latest.result.fixture!==input.fixture)throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
    if(definition.credit&&input.fixture!=="F15")throw new RecoveryEligibilityV3Error("ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE");
    // Fixed M4-7-S facts only; prefer the ORIGINAL settled event, never a statement replay.
-   const event= ["F15","F21","F22"].includes(input.fixture)?undefined:(await db.$client.query<{id:string;state:string;created_at:Date;duplicate_held:boolean}>(`SELECT e.id,e.state,e.created_at,
+   const event= ["F15","F21","F22"].includes(input.fixture)?undefined:(await db.$client.query<{id:string;state:string;settled_before_opening:boolean;duplicate_held:boolean}>(`SELECT e.id,e.state,
+    -- Decided once, here, on the original timestamptz values (microseconds); the 0119 guard makes the same comparison.
+    (e.state='settled' AND e.created_at<=(SELECT k.created_at FROM app.recovery_case_current k WHERE k.tenant_id=e.tenant_id AND k.job_id=e.job_id AND k.id=$4)) settled_before_opening,
     EXISTS(SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=e.tenant_id AND u.account_id=e.account_id AND u.movement_key=e.movement_key AND u.identity='unidentified'
       AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate')) duplicate_held
     FROM app.practice_feed_event e WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.movement_key=$3 AND e.identity='identified' AND e.event_kind IN('settled','pending')
-    ORDER BY (e.event_kind='settled') DESC,e.created_at,e.id LIMIT 1`,[context.tenantId,job,definition.movement])).rows[0];
+    ORDER BY (e.event_kind='settled') DESC,e.created_at,e.id LIMIT 1`,[context.tenantId,job,definition.movement,input.caseId])).rows[0];
    if(!event&&!["F15","F21","F22"].includes(input.fixture))throw new RecoveryEligibilityV3Error("ELIGIBILITY_SOURCE_REQUIRED");
-   const before=event?.state==="settled"&&event.created_at<=c.created_at;
+   const before=event?.settled_before_opening===true;
    if(input.fixture==="F20"&&!before)throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
    const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
     settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});

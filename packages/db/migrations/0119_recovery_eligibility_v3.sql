@@ -111,6 +111,12 @@ BEGIN
  END IF;
  IF expected_q>c.claim_pence+(CASE WHEN NEW.fixture='F18' THEN 12000 ELSE 0 END) THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
  IF NEW.result - ARRAY['version','policyVersion','fixture','outcome','qualifyingPrincipal','reason','reasonHeld','terminal','productionEnabled','lines'] IS DISTINCT FROM '{}'::jsonb
+ OR NOT (NEW.result ?& ARRAY['version','policyVersion','fixture','outcome','qualifyingPrincipal','reason','reasonHeld','terminal','productionEnabled','lines'])
+ OR coalesce(jsonb_typeof(NEW.result->'version'),'absent')<>'string' OR coalesce(jsonb_typeof(NEW.result->'policyVersion'),'absent')<>'string'
+ OR coalesce(jsonb_typeof(NEW.result->'fixture'),'absent')<>'string' OR coalesce(jsonb_typeof(NEW.result->'outcome'),'absent')<>'string'
+ OR coalesce(jsonb_typeof(NEW.result->'qualifyingPrincipal'),'absent')<>'object' OR coalesce(jsonb_typeof(NEW.result->'lines'),'absent')<>'array'
+ OR coalesce(jsonb_typeof(NEW.result->'reason'),'absent') NOT IN('string','null')
+ OR coalesce(jsonb_typeof(NEW.result->'reasonHeld'),'absent')<>'boolean' OR coalesce(jsonb_typeof(NEW.result->'terminal'),'absent')<>'boolean' OR coalesce(jsonb_typeof(NEW.result->'productionEnabled'),'absent')<>'boolean'
  OR NEW.result->>'version' IS DISTINCT FROM 'recovery-eligibility-review.v3' OR NEW.result->>'policyVersion' IS DISTINCT FROM NEW.policy_version
  OR NEW.result->>'fixture' IS DISTINCT FROM NEW.fixture OR NEW.result->'qualifyingPrincipal' IS DISTINCT FROM jsonb_build_object('pence',expected_q,'currency','GBP')
  OR NEW.result->>'reason' IS DISTINCT FROM expected_reason OR NEW.result->>'outcome' IS DISTINCT FROM (CASE WHEN expected_q>0 THEN 'eligible_for_review' ELSE 'excluded' END)
@@ -154,5 +160,15 @@ ALTER FUNCTION app.prevent_recovery_eligibility_v3_mutation() OWNER TO jobguard_
 CREATE TRIGGER recovery_eligibility_v3_immutable BEFORE UPDATE OR DELETE ON app.recovery_eligibility_v3_review FOR EACH ROW EXECUTE FUNCTION app.prevent_recovery_eligibility_v3_mutation();
 CREATE TRIGGER recovery_claim_line_immutable BEFORE UPDATE OR DELETE ON app.recovery_claim_line FOR EACH ROW EXECUTE FUNCTION app.prevent_recovery_eligibility_v3_mutation();
 CREATE TRIGGER supplier_credit_consumption_immutable BEFORE UPDATE OR DELETE ON app.supplier_credit_consumption FOR EACH ROW EXECUTE FUNCTION app.prevent_recovery_eligibility_v3_mutation();
-REVOKE ALL ON FUNCTION app.guard_recovery_eligibility_v3(),app.require_recovery_eligibility_v3_effect(),app.prevent_recovery_eligibility_v3_mutation() FROM PUBLIC,jobguard_runtime;
+-- A duplicate supplier payment is reviewed only under v3. This NEW trigger (no merged routine is replaced, no v1 column, policy or grant changes)
+-- stops any new v1 review or approval row for that category, whoever inserts it; existing v1 rows and other categories are untouched.
+CREATE FUNCTION app.refuse_v1_eligibility_for_duplicate_payment() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM app.recovery_case c WHERE c.tenant_id=NEW.tenant_id AND c.job_id=NEW.job_id AND c.id=NEW.case_id AND c.case_type='duplicate_supplier_payment')
+ THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.refuse_v1_eligibility_for_duplicate_payment() OWNER TO jobguard_migration;
+CREATE TRIGGER recovery_eligibility_v1_duplicate_payment_refusal BEFORE INSERT ON app.recovery_eligibility_revision FOR EACH ROW EXECUTE FUNCTION app.refuse_v1_eligibility_for_duplicate_payment();
+REVOKE ALL ON FUNCTION app.guard_recovery_eligibility_v3(),app.require_recovery_eligibility_v3_effect(),app.prevent_recovery_eligibility_v3_mutation(),app.refuse_v1_eligibility_for_duplicate_payment() FROM PUBLIC,jobguard_runtime;
 COMMIT;

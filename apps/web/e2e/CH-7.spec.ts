@@ -56,3 +56,16 @@ test("v3 refuses injected authority, missing settlement, and changed replay payl
  const saved=await post(page,path,raw),replay=await post(page,path,raw);expect(replay.cases.find((x:{id:string})=>x.id===c.id).eligibilityV3).toEqual(saved.cases.find((x:{id:string})=>x.id===c.id).eligibilityV3);expect(replay.eligibilityV3CommandResult).toEqual(saved.eligibilityV3CommandResult);expect(saved.eligibilityV3CommandResult.id).toBe(saved.cases.find((x:{id:string})=>x.id===c.id).eligibilityV3.id);
  const conflict=await page.request.post(path,{data:{...raw,fixture:"F19"}});expect(conflict.status()).toBe(409);expect(await conflict.json()).toMatchObject({code:"IDEMPOTENCY_PAYLOAD_CONFLICT"});
 });
+test("a duplicate-payment case offers no v1 review controls and refuses a v1 command",async({page})=>{
+ await confirmCapturedScope(page);const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
+ await page.getByRole("button",{name:"Open duplicate supplier payment",exact:true}).click();
+ await expect(page.getByRole("article",{name:"Selected recovery case"})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Review v3 F17",exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Review evidence-backed claim",exact:true})).toHaveCount(0);
+ await expect(page.getByRole("button",{name:/^Review: /})).toHaveCount(0);
+ await expect(page.getByRole("button",{name:"Approve this eligibility review",exact:true})).toHaveCount(0);
+ const c=(await get(page,`/api/jobs/${jobId}/recovery-cases`)).cases.at(-1);
+ const refused=await page.request.post(`/api/jobs/${jobId}/recovery-cases/eligibility`,{data:{version:"recovery-eligibility-command.v1",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,scenario:"evidence_backed_withheld_payment",evidenceRevision:1,policyVersion:"reference-d03.v1",policyRevision:1}});
+ expect(refused.status()).toBe(400);expect(await refused.json()).toMatchObject({code:"ELIGIBILITY_FIXTURE_MISMATCH"});
+ expect((await get(page,`/api/jobs/${jobId}/recovery-cases`)).cases.at(-1).eligibility).toBeNull();
+});
