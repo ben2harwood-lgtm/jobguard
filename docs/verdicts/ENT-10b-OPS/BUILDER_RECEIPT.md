@@ -249,4 +249,6 @@ Command line, run 11: the built command `node packages/db/dist/audit-checkpoint-
 
 Not run: `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, any package `test` script, the web unit file, the browser (Playwright) spec, `pnpm openapi:check` (no API route or schema changed). No browser was installed.
 
+Merge of `origin/main` `8e91b2d` (FIXLATER-3) into the branch at `30c30f4`, merge only, no conflicts and no edits (the diff against main is still the eleven paths). Re-run on the merged state, in `packages/db`: `pnpm exec vitest run test/audit-checkpoint-handoff.integration.test.ts --maxWorkers=2`, exit 0, 1 file, 17 passed; at the worktree root `LANE_BASE_REF=origin/main pnpm lint:lanes`, exit 0, lane boundary passed. A unit test builds a made-up database URL with a random run-time value on a `.invalid` host (`packages/db/src/audit-checkpoint-handoff.test.ts` line 11); it contains no secret.
+
 Mac run record only — not a review, not an acceptance.
