@@ -341,3 +341,29 @@ Remaining gates: Mac/CI PostgreSQL and transport/browser evidence, migrations an
 Builder receipt only — not independently verified, not accepted.
 
 Final local inspection: added-line secret-pattern scan covered 458 added/new/message lines, zero matches (a local pattern check, not GitHub scanner evidence). Generated package/API/Next outputs removed after checks; no `.pnpm-store` or `test-results` remain.
+
+## Round 1 verification — 11 October 2026 (Claude Sonnet, run on the Mac, local only)
+
+Verification helper only: this section does not review or accept anything. Nothing here contacted GitHub; no push, fetch or pull request was attempted.
+
+**Catch-up.** Merged the local ref `origin/main` (4564e88) into Codex's round 1 head 03134fc: merge commit **d87a27c**. Four files conflicted and both sides were kept, with no judgement needed: `BUILD_PLAN.md` (the ENT-4b and ENT-10d ledger paragraphs, ENT-4b first), `packages/db/MIGRATIONS.md` (0122 section, then 0125), `packages/db/src/index.ts` (both exports), `packages/db/src/migrate.ts` (0122 listed, then 0125 last). The lane registry merged without a conflict. Migration stays 0125. The ENT-10d ledger paragraph still says 0122 is "taken by an open piece"; 0122 has since merged, and that wording was left as written.
+
+**Runs.** Every vitest call used `--maxWorkers=2` with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`, at most three files, one heavy command at a time inside heavy-slot, with 79% memory free before each. Logs are `~/.local/share/full-steam/jg-runs/ent-10d-r1-mac-*`.
+- `pnpm install --frozen-lockfile` exit 0; embedded-PostgreSQL links hydrated; `pnpm turbo run build --concurrency=2 --filter=@jobguard/api...` exit 0.
+- Database, in `packages/db` (`pnpm exec vitest run --maxWorkers=2 <files>`):
+  - `sso-required.integration.test.ts` (17), `sso-emergency.integration.test.ts` (5), `sso-emergency-concurrency.integration.test.ts` (1): exit 0, 23 passed.
+  - merged `identity.integration.test.ts`, `enterprise-identity.integration.test.ts`, `fingerprinted-row-shape.integration.test.ts`, unedited: exit 0, 43 passed.
+  - `tenancy.integration.test.ts`, `demo-bootstrap.integration.test.ts`, `watchdog-migration-owner.integration.test.ts`: exit 0, 16 passed.
+- Concurrency test: its one test ran 5 races, each with two separate connections held on a lock until both were waiting, then released together. Every race gave exactly one use and one "already used" refusal, one new revision, one use row, a verifying audit chain, and unchanged other tables. No failure and no re-run.
+- API, `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 <files>`:
+  - `sso-required-disclosure.test.ts` (5), `sso-required.test.ts`, `sso-required-paths.test.ts`: exit 0, 41 passed.
+  - `sso-emergency.test.ts`: exit 0, 9 passed.
+  - merged `action-paths.test.ts` (binds a socket), `linking.test.ts`, `role-mapping.test.ts`: exit 0, 27 passed.
+  - `context-boundary.test.ts`: exit 0, 145 passed.
+  - merged `identity.test.ts`, `auth.test.ts`, `sso/saml.test.ts`, unedited: exit 0, 54 passed.
+- `turbo run typecheck --concurrency=2` exit 0 (7 tasks, 4 from cache); `LANE_BASE_REF=origin/main` repository lint plus `turbo run lint --concurrency=2` exit 0; `LANE_BASE_REF=origin/main pnpm lint:lanes` exit 0; `pnpm openapi:check` exit 0.
+- Browser, against the production build (`next build` first, then Playwright with `CI=1`, the wrapper config using the full Chromium channel, `--workers=1`, filter checked with `--list` to be exactly 12 tests in 3 files): `ENT-10d.spec.ts`, `ENT-10a.spec.ts`, `M0-6L.spec.ts`, both projects: exit 0, 12 passed.
+
+**Set-up repairs.** None; no file other than this receipt was changed apart from the merge resolution. No assertion, expected value, timeout, grant, policy or security rule was changed.
+
+**Not run.** The branch was not pushed and no pull request or CI job exists, so no hosted check ran. `watchdog-migration-owner.integration.test.ts` was added to the third database run by the helper, as the only other migration-ownership file; the earlier helper run had not used it. No whole-package or whole-repository suite was run.
