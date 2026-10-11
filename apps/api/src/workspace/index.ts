@@ -69,3 +69,4 @@ export * from "../practice-facts.application.js";
 export * from "../practice-facts.http.js";
 export * from "../auth/sso/sso.application.js";
 export * from "../auth/sso/sso.contracts.js";
+export { AuditExportApplication, auditExportHttpFailure, assertAuditExportMode } from "../audit-export/audit-export.application.js";

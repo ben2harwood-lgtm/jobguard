@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorRoles, customerTypes, referenceApprovalRulesV1, jobPartiesCommandResultV1, type ContractorPartyImport } from "@jobguard/core";
 import { ContractorRepository, ContractorPartyRepository, assertContractorPartiesRequired, JobRepository, JobPartiesRepository, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type TenantTransaction } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository;
 const tables = ["contractor_client_customer", "contractor_party_binding", "contractor_resident_contact"];
 const document = { version: "client-contract.v1", reference: "FICTIONAL", startsOn: "2026-10-01", endsOn: null, sorVersionIds: [], tenderedAdjustment: { numerator: "0", denominator: "1" }, photoRule: "required", vatCode: "synthetic-unreviewed", exportedNotBilledAlertDays: 30 };
@@ -28,7 +28,7 @@ async function setup(type = "insurer") {
   return { session, p, v, job, jp, customer, site, client, contract, input };
 }
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), "jg-ch3b-")); const port = 58500 + Math.floor(Math.random() * 300);
+  dir = await mkdtemp(join(tmpdir(), "jg-ch3b-")); const port = await freePort(58500, 300);
   postgres = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" }); await control.query("CREATE DATABASE jobguard_synthetic_demo"); await control.end();

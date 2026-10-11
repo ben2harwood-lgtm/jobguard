@@ -13,7 +13,7 @@ import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/princip
 import { SsoApplication } from "../../../apps/api/src/auth/sso/sso.application.js";
 import { generateTestIdentityProvider, type TestResponseOptions } from "../../../apps/api/src/auth/sso/test-identity-provider.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, identity: Pool, directory: string;
 let now = Date.now();
@@ -25,7 +25,7 @@ const count = async (table: string, tenantId: string) => (await admin.query<{ n:
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "jg-ent10a-pg16-"));
-  const port = 59000 + Math.floor(Math.random() * 500);
+  const port = await freePort(59000, 500);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   const base = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo" };

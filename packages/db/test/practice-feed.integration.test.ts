@@ -11,7 +11,7 @@ import {
   CaptureRepository, SandboxRepository, issuePracticeSession, authenticatePracticeSession, appendAuditBatch, migrate, MIGRATION_URLS, PracticeFeedRepository, PracticeInvoiceRepository, verifiedTenantContextFromMembership, withTenant,
 } from "../src/index.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
-import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const priorEnvironment = process.env.JOBGUARD_ENV;
@@ -77,7 +77,7 @@ const hashOf = (f: { jobId: string }, accountId: string, e: { kind: string; key:
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   directory = await mkdtemp(join(tmpdir(), "jobguard-practice-feed-"));
-  const port = 60300 + Math.floor(Math.random() * 200);
+  const port = await freePort(60300, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password,
     persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();

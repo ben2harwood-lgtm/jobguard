@@ -74,5 +74,7 @@ export * from "./sor-repository.js";
 export * from "./job-scheduling-repository.js";
 export * from "./work-order-fixtures.js";
 
+export * from "./audit-export-repository.js";
 export * from "./recovery-eligibility-v3-repository.js";
 export * from "./enterprise-identity-repository.js";
+export * from "./extra-repository.js";

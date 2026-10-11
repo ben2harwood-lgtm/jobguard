@@ -8,7 +8,7 @@ import EmbeddedPostgres from 'embedded-postgres';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EvidencePackRepository, MIGRATION_URLS, RecoveryMessageRepository, migrate, type VerifiedTenantContext } from '../src/index.js';
-import { closeTestPools, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
 
 // Upgrade path for 0107 on a database that is at the previous supported schema (through 0106) and already holds recovery cases and evidence packs,
@@ -28,7 +28,7 @@ const history = async () => (await admin.query(`SELECT
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'jg-message-upgrade-'));
-  const port = 61200 + Math.floor(Math.random() * 200);
+  const port = await freePort(61200, 200);
   const postgresLog: string[] = [];
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C', '--encoding=UTF8'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
