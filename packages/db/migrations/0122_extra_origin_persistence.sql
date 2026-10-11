@@ -30,8 +30,6 @@ ALTER TABLE app.variation
   AND (sor_version_id IS NULL)=(sor_code IS NULL) AND (excess_of_revision_id IS NULL)=(excess_of_scope_item_id IS NULL)),
  ADD CONSTRAINT variation_sor_item_fk FOREIGN KEY(tenant_id,sor_version_id,sor_code) REFERENCES app.sor_item(tenant_id,version_id,code),
  ADD CONSTRAINT variation_excess_line_fk FOREIGN KEY(tenant_id,excess_of_revision_id,excess_of_scope_item_id) REFERENCES app.work_order_line(tenant_id,revision_id,scope_item_id);
-ALTER TABLE app.variation_revision ADD COLUMN pricing_basis text,
- ADD CONSTRAINT variation_revision_pricing_basis CHECK(pricing_basis IN('server_sor','surveyor_quoted','unpriced'));
 
 CREATE FUNCTION app.ent4b_origin_provenance() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE command app.command_receipt; grant_row app.role_grant; team_row app.team; branch_row app.org_unit;
@@ -182,6 +180,9 @@ END $$;
 CREATE FUNCTION app.ent4b_require_origin_audit() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE o app.extra_origin; origin_xid xid;
 BEGIN
+ IF nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM NEW.tenant_id::text THEN
+  RAISE EXCEPTION 'INVALID_ORIGIN' USING ERRCODE='23514';
+ END IF;
  SELECT * INTO o FROM app.extra_origin WHERE (tenant_id,job_id,variation_id)=(NEW.tenant_id,NEW.job_id,NEW.variation_id);
  SELECT xmin INTO origin_xid FROM app.extra_origin WHERE (tenant_id,job_id,variation_id)=(NEW.tenant_id,NEW.job_id,NEW.variation_id);
  IF o.job_track IS DISTINCT FROM 'contractor' OR NOT EXISTS(SELECT 1 FROM app.job WHERE (tenant_id,id)=(o.tenant_id,o.job_id) AND provenance='work_order') THEN RETURN NULL; END IF;

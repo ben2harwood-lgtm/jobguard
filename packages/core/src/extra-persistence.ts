@@ -15,6 +15,16 @@ export type RaiseExtra = z.infer<typeof raiseExtraV1>;
 export const contractorProvenanceV1 = z.object({ commandType: raiseExtraV1.shape.commandType.nullable(), raisingGrantId: uuid.nullable(), raiserAssigned: z.boolean().nullable(), workOrderId: uuid.nullable(), workOrderRevisionId: uuid.nullable(), siteVisitId: uuid.nullable(), evidenceId: uuid.nullable(), residentConfirmationEvidenceId: uuid.nullable(), clientCaptureId: uuid.nullable(), originHash: hash.nullable() }).strict();
 export const extraRecordV1 = z.object({ version: z.literal("extra-record.v1"), origin: extraOriginV1, contractorProvenance: contractorProvenanceV1, latestEventKind: z.enum(enterpriseStates).nullable() }).strict();
 export type ExtraRecord = z.infer<typeof extraRecordV1>;
+/** Leaf-owned legacy read contract; SH-1's command-origin schema remains strict. */
+export const extraOriginLegacyV1 = extraOriginV1.extend({
+ version: z.literal("extra-origin-legacy.v1"), legacy: z.literal(true),
+ provenance: z.enum(["legacy_synthetic_capture", "backfilled_synthetic_fixture"]),
+ origin: z.object({ version: z.literal("variation-origin.v1"), jobTrack: z.literal("small_builder"), kind: z.literal("builder_logged") }).strict(),
+ commandId: z.null(), raisingMembershipId: uuid.nullable(), raisingRole: z.literal("legacy_unrecorded"),
+}).strict();
+export const extraRecordLegacyV1 = extraRecordV1.extend({ version: z.literal("extra-record-legacy.v1"), origin: extraOriginLegacyV1 }).strict();
+export type ExtraLegacyRecord = z.infer<typeof extraRecordLegacyV1>;
+export type ExtraReadRecord = ExtraRecord | ExtraLegacyRecord;
 export const extraDuplicateLinkV1 = z.object({ version: z.literal("extra-duplicate-link.v1"), commandId: uuid, jobId: uuid, actorMembershipId: uuid, duplicateId: uuid, canonicalId: uuid }).strict();
 export const extraOrderLineLinkV1 = z.object({ version: z.literal("extra-order-line-link.v1"), commandId: uuid, jobId: uuid, actorMembershipId: uuid, variationId: uuid, workOrderId: uuid, revisionId: uuid, scopeItemId: uuid }).strict();
 export const extraPersistenceErrorCodes = ["NOT_FOUND", "INVALID_COMMAND", "COMMAND_CONFLICT", "INVALID_ORIGIN", "STALE_REVISION", "PROMPT_ORIGIN_HELD", "DUPLICATE_LINK_REFUSED", "EXTRA_EXPORTED", "ORDER_LINE_LINK_REFUSED", "DATABASE_UNAVAILABLE"] as const;

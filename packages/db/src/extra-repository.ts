@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
 import {
- ExtraPersistenceError, extraPersistenceErrorCodes, raiseExtraV1, extraRecordV1, extraDuplicateLinkV1, extraOrderLineLinkV1,
- originForCommand, effectiveOrigin, type ExtraRecord, type RaiseExtra, type EnterpriseGroup, type ExtraPersistenceErrorCode,
+ ExtraPersistenceError, extraPersistenceErrorCodes, raiseExtraV1, extraRecordV1, extraRecordLegacyV1, extraDuplicateLinkV1, extraOrderLineLinkV1,
+ originForCommand, effectiveOrigin, type ExtraRecord, type ExtraReadRecord, type RaiseExtra, type EnterpriseGroup, type ExtraPersistenceErrorCode,
 } from "@jobguard/core";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { canonicalJson, sha256Hex, derivedUuid } from "./work-order-repository.js";
@@ -18,8 +18,9 @@ const originColumns = `o.*,to_char(o.server_recorded_at AT TIME ZONE 'UTC','YYYY
  to_char(o.device_captured_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') device_text,
  (SELECT kind FROM app.extra_event e WHERE (e.tenant_id,e.job_id,e.variation_id)=(o.tenant_id,o.job_id,o.variation_id) ORDER BY sequence DESC LIMIT 1) latest_kind`;
 type OriginRow = Record<string, any>;
-function record(row: OriginRow): ExtraRecord {
- const value = extraRecordV1.safeParse({ version: "extra-record.v1", origin: { version: "extra-origin.v1", tenantId: row.tenant_id, jobId: row.job_id, variationId: row.variation_id, origin: { version: "variation-origin.v1", jobTrack: row.job_track, kind: row.kind }, commandId: row.command_id, raisingMembershipId: row.raising_membership_id, raisingRole: row.raising_role, serverRecordedAt: row.server_text, deviceId: row.device_id, deviceCapturedAt: row.device_text, evidenceHash: row.evidence_hash }, contractorProvenance: { commandType: row.command_type, raisingGrantId: row.raising_grant_id, raiserAssigned: row.raiser_assigned, workOrderId: row.work_order_id, workOrderRevisionId: row.work_order_revision_id, siteVisitId: row.site_visit_id, evidenceId: row.evidence_id, residentConfirmationEvidenceId: row.resident_confirmation_evidence_id, clientCaptureId: row.client_capture_id, originHash: row.origin_hash }, latestEventKind: row.latest_kind });
+function record(row: OriginRow): ExtraReadRecord {
+ const input = { version: "extra-record.v1", origin: { version: "extra-origin.v1", tenantId: row.tenant_id, jobId: row.job_id, variationId: row.variation_id, origin: { version: "variation-origin.v1", jobTrack: row.job_track, kind: row.kind }, commandId: row.command_id, raisingMembershipId: row.raising_membership_id, raisingRole: row.raising_role, serverRecordedAt: row.server_text, deviceId: row.device_id, deviceCapturedAt: row.device_text, evidenceHash: row.evidence_hash }, contractorProvenance: { commandType: row.command_type, raisingGrantId: row.raising_grant_id, raiserAssigned: row.raiser_assigned, workOrderId: row.work_order_id, workOrderRevisionId: row.work_order_revision_id, siteVisitId: row.site_visit_id, evidenceId: row.evidence_id, residentConfirmationEvidenceId: row.resident_confirmation_evidence_id, clientCaptureId: row.client_capture_id, originHash: row.origin_hash }, latestEventKind: row.latest_kind };
+ const value = row.provenance === "command" ? extraRecordV1.safeParse(input) : extraRecordLegacyV1.safeParse({ ...input, version: "extra-record-legacy.v1", origin: { ...input.origin, version: "extra-origin-legacy.v1", legacy: true, provenance: row.provenance } });
  if (!value.success) throw new ExtraPersistenceError("INVALID_ORIGIN"); return value.data;
 }
 function failure(error: unknown, fallback: ExtraPersistenceErrorCode = "INVALID_ORIGIN"): never {
@@ -66,13 +67,17 @@ export class ExtraRepository {
    const binding = (await db.$client.query("SELECT j.provenance,t.job_track,t.environment FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2", [tenant, input.jobId])).rows[0];
    if (!binding || binding.job_track !== "contractor" || binding.provenance !== "work_order" || binding.environment !== "synthetic_demo") throw new ExtraPersistenceError("NOT_FOUND");
    const variationId = derivedUuid(`extra:${tenant}:${input.jobId}:${input.clientCaptureId ?? input.commandId}`);
-   // Capture retries are independent of command type. Check before claiming a second receipt.
+   // Capture retries bind their own command receipt without creating another origin.
    if (input.clientCaptureId) {
     const prior = (await db.$client.query("SELECT c.request_hash,c.status,c.result FROM app.extra_origin o JOIN app.command_receipt c ON(c.tenant_id,c.command_id)=(o.tenant_id,o.command_id) WHERE o.tenant_id=$1 AND o.job_id=$2 AND o.client_capture_id=$3", [tenant, input.jobId, input.clientCaptureId])).rows[0];
     if (prior) {
-     // A reused command ID must still be bound to the same original payload.
-     const sameId = (await db.$client.query("SELECT request_hash FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, input.commandId])).rows[0];
-     if (prior.request_hash !== requestHash || prior.status !== "succeeded" || (sameId && sameId.request_hash !== requestHash)) throw new ExtraPersistenceError("COMMAND_CONFLICT"); return prior.result as RaisedExtra;
+     if (prior.request_hash !== requestHash || prior.status !== "succeeded") throw new ExtraPersistenceError("COMMAND_CONFLICT");
+     // The original semantic key is unique. A retry uses the same receipt type,
+     // with a command-specific key, and permanently binds this ID/hash/result.
+     const replay = await claim<RaisedExtra>(db, tenant, input.commandId, input.commandType, `extra-origin-retry:${input.jobId}:${variationId}:${input.commandId}`, requestHash, input.actorMembershipId);
+     if (replay) return replay;
+     const result = prior.result as RaisedExtra;
+     await complete(db, tenant, input.commandId, result); return result;
     }
    }
    const replay = await claim<RaisedExtra>(db, tenant, input.commandId, input.commandType, `extra-origin:${input.jobId}:${variationId}`, requestHash, input.actorMembershipId);
@@ -123,11 +128,11 @@ export class ExtraRepository {
    const result = { linkId, variationId: input.variationId }; await complete(db, tenant, input.commandId, result); return result;
   }); } catch (error) { failure(error, "ORDER_LINE_LINK_REFUSED"); }
  }
- private async readInTransaction(db: TenantTransaction, tenant: string, job: string, extra: string): Promise<ExtraRecord> {
+ private async readInTransaction(db: TenantTransaction, tenant: string, job: string, extra: string): Promise<ExtraReadRecord> {
   const row = (await db.$client.query(`SELECT ${originColumns} FROM app.extra_origin o WHERE o.tenant_id=$1 AND o.job_id=$2 AND o.variation_id=$3`, [tenant, job, extra])).rows[0];
   if (!row) throw new ExtraPersistenceError("NOT_FOUND"); return record(row);
  }
- async readExtra(context: VerifiedTenantContext, jobId: string, variationId: string): Promise<ExtraRecord> {
+ async readExtra(context: VerifiedTenantContext, jobId: string, variationId: string): Promise<ExtraReadRecord> {
   parse(uuid, jobId); parse(uuid, variationId);
   try { return await withTenant(this.pool, context, db => this.readInTransaction(db, context.tenantId, jobId, variationId)); } catch (error) { failure(error); }
  }
@@ -145,7 +150,7 @@ export class ExtraRepository {
    JOIN app.variation v ON(v.tenant_id,v.job_id,v.id)=(o.tenant_id,o.job_id,o.variation_id)
    LEFT JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(o.tenant_id,o.work_order_id,o.work_order_revision_id)`, [tenant, jobId, variationId])).rows;
    if (!rows.length) throw new ExtraPersistenceError("NOT_FOUND");
-   const members = rows.map(record), canonicalId = rows[0]!.canonical_id as string;
+   const members = rows.map(row => { const member = record(row); if (member.version !== "extra-record.v1") throw new ExtraPersistenceError("INVALID_ORIGIN"); return member; }), canonicalId = rows[0]!.canonical_id as string;
    // ENT-4a accepts the full enterprise facts schema. The ordering adapter supplies
    // only persisted origins, IDs and structural grants; unrelated commercial fields
    // are neutral (unknown/unpriced, no approvals, no billing facts). Never expose it.

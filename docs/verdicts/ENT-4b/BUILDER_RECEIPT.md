@@ -12,7 +12,7 @@ Builder receipt only — not independently verified, not accepted.
 | B2 Trigger | ALREADY MERGED command map/actor/track: 0053:136–161, CHECKs at 28–29 and 70–71. New work-order provenance guard BUILT after extra_origin_validate; existing function untouched. |
 | B3 Deferred origin | ALREADY MERGED variation_requires_origin: 0053:77–78; primary key at 24 prevents a second origin. Tests/catalog assertions added, no second constraint. |
 | B4 Event/link tables | BUILT extra_event, extra_duplicate_link, extra_order_line_link, composite keys, sequencing, graph guards, later-instruction links. Unlink rows/guards BUILT; unlink repository/receipt type HELD (Q9, plan names no command). |
-| B5 Variation columns | BUILT four nullable SoR/excess reference columns and nullable revision pricing_basis. No feature revision/pricing write. variation.state and its grant/CHECK untouched (Q5). |
+| B5 Variation columns | BUILT four nullable SoR/excess reference columns. Revision pricing basis removed in Round 1 under the coordinator ruling; HELD pending its own decision. No feature revision/pricing write. variation.state and its grant/CHECK untouched (Q5). |
 | B6 Repository/audit/immutability | BUILT raiseExtra, linkDuplicate, linkOrderLine, readExtra, readDuplicateGroup; same-transaction seam before audit. Existing origin immutability retained; new tables append-only, deferred exact audit checks include xmin equality. |
 
 Tests were written before feature implementation. Subsequent self-review strengthened the written tests. Every database result below is **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. Test-source compilation is not PostgreSQL execution, migration validation or a model verdict.
@@ -132,7 +132,7 @@ Existing objects extended, by addition only:
 
 - app.extra_origin: ten nullable/no-default contractor columns; grant/order/revision/visit/two evidence composite FKs (six new FKs); contractor-column and hash CHECKs; partial capture-ID unique index; one BEFORE INSERT provenance trigger after SH-1's validator; one deferred raised-audit trigger.
 - app.variation: four nullable/no-default SoR/excess columns; two existing-key FKs; one paired-reference/track CHECK.
-- app.variation_revision: nullable/no-default pricing_basis and value CHECK.
+- app.variation_revision: no change after Round 1; pricing basis HELD to preserve approved evidence packs.
 
 New tables: app.extra_event, app.extra_duplicate_link, app.extra_order_line_link; policies, ownership, minimal grants and immutability only for these tables. New functions: app.ent4b_origin_provenance, app.ent4b_fact_guard, app.ent4b_require_origin_audit, app.ent4b_require_link_audit; all SECURITY INVOKER, migration-owned and revoked from PUBLIC/runtime. No new callable helper. New operational alerts: none; this leaf adds no executor or external action. Existing command-receipt FK/map/deferred origin constraint reused. No existing row UPDATE/backfill/default/type/constraint/policy/grant or routine replacement; no SECURITY DEFINER added. Forward fix is additive corrective migration with callers disabled; retain history, do not drop populated rows.
 
@@ -215,3 +215,59 @@ First real database run of this leaf (the Codex sandbox could not start PostgreS
 **Stopped on.** Nothing. No item needed a change of expected value, a loosened assertion, a longer timeout, a wider grant or policy, a restated merged routine, an altered existing row or a forbidden file.
 
 No assertion, expected value, timeout, grant or policy was changed or loosened. (The one edit that touched an expected list is fault 2: the position of this leaf's own appended rows only, stated above.)
+
+
+## Round 1 — 11 October 2026 (Codex repair of be7c87b)
+
+Builder: Codex. Working tree revised in place on `codex/sandbox/ent-4b`, starting at `be7c87b11ce54aaf55334d49179e1f317c4372de`. `.git` remained read-only; no commit, add, checkout, push or merge. The dispatcher owns the next commit. Re-read the issued header and applicable AGENTS/build-plan contracts, and source-inspected the Opus and Sol reviews supplied with the repair order. This receipt records implementation and local checks, not independent verification or technical acceptance.
+
+Each fix below is **DONE in source**. Database proofs are written for real PostgreSQL and **NOT RUN (sandbox cannot start PostgreSQL)**. Tests for B, C and E were written before their implementation repairs; D adds assertions to the existing injected-failure test. The original R4 assertions remain and only new cases/assertions were added. No merged test or routine was edited.
+
+| Fix | Before | After and evidence |
+|---|---|---|
+| A — DONE | A nullable revision column changed the whole-row evidence-pack serialization even for approved revisions. | Removed that column and its CHECK from unmerged 0122 and all leaf uses. `app.variation_revision` and every other fingerprinted table receive no column. S8 now compares complete unchanged revision rows (no excluded revision columns). Contract and migration notes record the hold; no side table or 0107 replacement. Database S8 and merged evidence-pack regressions: NOT RUN. |
+| B — DONE | A successful second command for one capture returned the first result without binding the second ID. | A capture retry claims/completes the merged `command_receipt` in the same transaction with the same raising type and a command-specific retry semantic key. It binds hash/status/result and writes no second variation/origin/logged event/raised audit. New O `[DW5b] a successful capture retry durably binds its command ID before any reuse`: A/X, B/X, B/Y conflict with unchanged counts, B/X replay; exact one-effect counts and chain verification. NOT RUN. |
+| C — DONE | `readExtra` rejected legitimate NULL legacy command/member IDs through the strict SH-1 schema. | Leaf-owned strict `extra-origin-legacy.v1` / `extra-record-legacy.v1` retain NULLs and stored provenance with `legacy: true`. Command-backed reads keep strict SH-1 shape. O adds two R4 cases using the unchanged merged `insertVariationProposal` path and `record_legacy_builder_origin` trigger, verifies stored rows unchanged, and keeps command-backed assertions. U S8 reads the actual SH-1 backfill. These PostgreSQL cases: NOT RUN. Core `[R4] versioned legacy reads preserve NULL identities without weakening command origins`: RUN, passed. The earlier receipt's held-read note is historical and superseded by this issued ruling. |
+| D — DONE | Link/unlink/order fault injection asserted row counts alone. | The existing L `[DW5a] link, raw unlink and order writes roll back at receipt, fact, audit and commit failures` now verifies the full tenant chain and compares the actual audit-control head's sequence/hash before and after each of its 12 injected failures. All row-count assertions remain. NOT RUN. |
+| E — DONE | Clearing tenant context before commit hid the origin from the deferred check and permitted an early return. | The deferred origin/audit function checks the transaction setting against the inserted fact's tenant before querying protected rows; absent, empty or mismatched context raises `INVALID_ORIGIN` / 23514. O adds `[S4] clearing tenant context after valid origin/event/audit writes refuses commit`, with valid logged/audit facts followed by an empty setting, rollback counts and chain verification. NOT RUN. |
+| F — DONE | S9 pinned hashes of seven merged database test files, conflicting with other authorized pieces. | Removed exactly those seven test-file pins. S9 retains the scanner and seven pinned bridges; this leaf's own database/source assertions remain. No pinned source or merged test file was edited. S9: NOT RUN. |
+
+B5 pricing basis: HELD — a column on a fingerprinted table would change approved evidence packs; it needs its own decision.
+
+Migration 0122 was corrected in place; no second migration or existing-data update. The remaining nullable SoR/excess columns stay on `app.variation`, and provenance stays on `app.extra_origin`. Schema grants, policies, keys and existing routine bodies are unchanged in this round. No new provider/data flow, credentials, operational alert, money path, route or screen. The read method's return type now explicitly includes its versioned legacy branch; no deployed transport contract changes in this leaf.
+
+### Round 1 commands and results
+
+Dependencies were already installed; nothing was downloaded and no manifest/lockfile was changed. Used Node v24.17.0 and the cached pinned pnpm 10.28.1 through `/private/tmp/jg-ent4b-round1-bin/pnpm` (PATH prefix). Commands ran sequentially, one check at a time. Only the changed core test file was executed; no whole-package/repository test suite or database/browser startup was attempted. Typecheck, lint and root build each ran once.
+
+| Command | Exit | Observed result |
+|---|---:|---|
+| `pnpm turbo run build --filter=@jobguard/core...` | 0 | 1/1 task successful, 0 cached; 3.332s, before the unit run. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/extra-persistence.test.ts` | 0 | 1 file; 4 passed, 0 failed/skipped; 1.27s. |
+| Strict source compilation of the three changed DB test files (command below) | 2, then 0 | First found one TS7006 in the added backfill filter. Annotated that callback; corrected compilation passed. This proves TypeScript compilation only, not PostgreSQL behavior. |
+| `pnpm typecheck` | 0 | 7/7 tasks successful, 2 cached; 29.196s. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7/7 tasks successful, 2 cached; 25.615s; purity, lane, money and commercial boundary checks passed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | ent-4b lane passed over 17 paths, including the 10 changed paths in this round; base bbca5ca, checkout be7c87b. |
+| `pnpm build` | 0 | 7/7 tasks successful, 2 cached; 1m14.991s. Next compiled/generated routes with existing CSS/workspace-root/cache warnings; Turbo reported sandbox cache IO warnings. |
+| `pnpm openapi:check` | 1 | Failed before generation: tsx IPC `listen EPERM`, errno -1, pipe `/var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/43752.pipe`. Sandbox restriction; no workaround or check weakening. |
+| Read-only source-preservation checks | 0 | 60 merged migrations and 9 explicitly checked forbidden files byte-identical to starting HEAD. 0122 extends only extra_origin/variation; no CREATE OR REPLACE/DROP. |
+| `git grep -n 'pricing[_]basis' -- <all 17 leaf paths>` | 1 (expected) | No matches. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Supplemental source compilation, run sequentially twice with the stated exits:
+
+```sh
+node node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --exactOptionalPropertyTypes --noUncheckedIndexedAccess --module NodeNext --moduleResolution NodeNext --target ES2023 packages/db/test/extra-origin.integration.test.ts packages/db/test/extra-links.integration.test.ts packages/db/test/extra-origin-upgrade.integration.test.ts
+```
+
+All three changed PostgreSQL files (`extra-origin.integration.test.ts`: 26 tests; `extra-links.integration.test.ts`: 15 tests; `extra-origin-upgrade.integration.test.ts`: 1 test), all merged PostgreSQL regressions, migration/catalog checks and browser suites are **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. Counts here describe authored tests, not passes. OpenAPI generation remains unverified in this sandbox (the command failed before generation); the API snapshot is unchanged. No AI/model/prompt change or live integration.
+
+### Round 1 self-review and outstanding evidence
+
+Re-read the repair diff as a strict reviewer: retry receipt uniqueness and hash/status/replay paths, typed strict-vs-legacy reads, unchanged stored legacy rows, SQL guard ordering, every new test, documentation and migration compatibility. `git grep -n 'pricing[_]basis'` across the 17 leaf paths returned no matches. 0122 adds no column to variation_revision or any other fingerprinted table, adds no pricing side table, and replaces no merged routine. No `app.validate_extra_origin()` restatement. All 60 merged migration files and the forbidden SH-1 schema, scanner, variation repository, tenant context, commands, audit, shared-money-origin/work-order-import tests and recovery-follow-up upgrade test are unchanged against the starting HEAD. The seven scanner-pinned bridges are outside this round's changed paths.
+
+R4's existing assertions remain; S9 loses only the seven merged-test pins authorized by Fix F. Existing link fault/count assertions remain and now carry chain/head checks. No test was skipped, timeout lengthened, assertion relaxed beyond the explicit removal of the held column/pins, or grant/policy widened. PL/pgSQL has no new CASE expression inside an IF condition. The xmin comparisons and other Opus LATER findings remain fix-later; no scope expansion.
+
+`recovery-follow-up-upgrade.integration.test.ts` is intentionally untouched: MIG-ORDER-2 (#137) owns its separate compatibility repair. At be7c87b the supplied reviews reported CI red (973/976 database tests passed; three failures in two merged upgrade suites). This round does not claim those suites green. CI must execute the new PostgreSQL proofs and all merged regressions on the dispatcher's exact commit; the same Opus reviewer and a fresh Sol check must record the requested repair verdicts, followed by separate acceptance. Role-per-command, unlink function/type, prompt provenance, routes/screens and existing production/release gates remain held. Intended conventional commit text is `/private/tmp/jg-msg-ent-4b.txt`; dispatcher owns commit/push.
+
+Round 1 handoff cleanup removed only generated output in this working tree (`.turbo`, local package/application `dist`, `.next`, local tsconfig build info). Installed dependencies and shared external worktree symlinks were left intact. No database/browser artifacts were produced. Final whitespace/source checks passed and the intended commit-message file was written; no commit or push performed.

@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { sha256Hex } from "../src/work-order-repository.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { extraOriginHashV1, ExtraPersistenceError } from "@jobguard/core";
-import { ExtraRepository, withTenant, auditPayloadV1Schema, verifyAuditChain, appendAuditBatch, type AuditEvent, type TenantTransaction } from "../src/index.js";
+import { extraOriginHashV1, ExtraPersistenceError, extraOriginV1 } from "@jobguard/core";
+import { ExtraRepository, insertVariationProposal, withTenant, auditPayloadV1Schema, verifyAuditChain, appendAuditBatch, type AuditEvent, type TenantTransaction } from "../src/index.js";
 import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 let c: Cluster, repo: ExtraRepository;
@@ -85,6 +85,22 @@ describe("ENT-4b origin persistence", () => {
   for (const changed of [{ ...raw, note: "different" }, { ...raw, commandId: randomUUID(), description: "different" }, { ...raw, commandId: randomUUID(), commandType: "RecordOfficeExtra" }]) await expect(repo.raiseExtra(f.ctx, changed)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   for (const [table, column] of [["variation", "id"], ["extra_origin", "variation_id"], ["extra_event", "variation_id"], ["audit_event", "subject_ref"]]) expect((await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND ${column}=$2`, [f.p.tenantId, a.variationId])).rows[0].n).toBe(1);
  });
+ // Round 1 regression written before the retry implementation; NOT RUN (sandbox cannot start PostgreSQL).
+ it("[DW5b] a successful capture retry durably binds its command ID before any reuse", async () => {
+  const f = await fixture(c), original = raise(f, { clientCaptureId: randomUUID() });
+  const a = await repo.raiseExtra(f.ctx, original), retry = { ...original, commandId: randomUUID() };
+  expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a);
+  const bound = (await c.admin.query("SELECT * FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, retry.commandId])).rows;
+  expect(bound).toHaveLength(1); expect(bound[0]).toMatchObject({ status: "succeeded", result: a, command_type: original.commandType });
+  expect(bound[0].request_hash).toBe((await c.admin.query("SELECT request_hash FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, original.commandId])).rows[0].request_hash);
+  const counts = async () => Object.fromEntries(await Promise.all(["command_receipt", "scope_identity", "variation", "extra_origin", "extra_event", "audit_event"].map(async table => [table, (await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [f.p.tenantId])).rows[0].n])));
+  const before = await counts(), changed = { ...retry, clientCaptureId: randomUUID(), note: "Fictional different capture" };
+  await expect(repo.raiseExtra(f.ctx, changed)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+  expect(await counts()).toEqual(before);
+  expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a); expect(await counts()).toEqual(before);
+  for (const [table, column] of [["variation", "id"], ["extra_origin", "variation_id"], ["extra_event", "variation_id"], ["audit_event", "subject_ref"]]) expect((await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND ${column}=$2`, [f.p.tenantId, a.variationId])).rows[0].n).toBe(1);
+  await checkChain(f);
+ });
  it("[DW6] audit uses closed ID/hash keys; capture metadata never appears in audit or errors", async () => {
   const f = await fixture(c), raw = raise(f, { deviceId: "fictional-device-canary", deviceCapturedAt: "2026-10-01T01:02:03.000001Z" }); await repo.raiseExtra(f.ctx, raw);
   const events = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND event_type='contractor.extra.raised'", [f.p.tenantId])).rows;
@@ -106,6 +122,39 @@ describe("ENT-4b origin persistence", () => {
   expect((await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0]).toEqual(old);
   await expect(withTenant(c.runtime, f.ctx, db => rawVariation(db, f.p.tenantId, jobId))).rejects.toMatchObject({ code: "23503" });
   expect((await repo.readExtra(f.ctx, jobId, id)).origin.origin.jobTrack).toBe("small_builder");
+  expect(extraOriginV1.safeParse((await repo.readExtra(f.ctx, jobId, id)).origin).success).toBe(true);
+ });
+ // Round 1 legacy read regressions written before the read implementation; NOT RUN (sandbox cannot start PostgreSQL).
+ it("[R4] merged small-builder capture reads as versioned legacy with unknown identities preserved", async () => {
+  const f = await fixture(c); await assignTrack(f, "small_builder"); const jobId = await smallFixture(f), id = randomUUID();
+  await withTenant(c.runtime, f.ctx, db => insertVariationProposal(db, f.p.tenantId, { version: "variation-proposal.v1", id, jobId, scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null, captureKind: "text", captureText: "Fictional merged builder capture", description: "Fictional merged builder extra", suggestion: null }));
+  const before = (await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0];
+  expect(before).toMatchObject({ provenance: "legacy_synthetic_capture", command_id: null, raising_membership_id: null });
+  await assignTrack(f, "contractor");
+  const read = await repo.readExtra(f.ctx, jobId, id);
+  expect(read).toMatchObject({ version: "extra-record-legacy.v1", origin: { version: "extra-origin-legacy.v1", legacy: true, provenance: "legacy_synthetic_capture", commandId: null, raisingMembershipId: null, raisingRole: "legacy_unrecorded", origin: { jobTrack: "small_builder", kind: "builder_logged" } }, latestEventKind: null });
+  expect((await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0]).toEqual(before);
+ });
+ it("[R4] merged legacy origin trigger reads truthfully while command origins stay strict", async () => {
+  const f = await fixture(c); await assignTrack(f, "small_builder"); const jobId = await smallFixture(f), id = randomUUID();
+  await withTenant(c.runtime, f.ctx, db => rawVariation(db, f.p.tenantId, jobId, id, "builder_logged", "small_builder"));
+  const before = (await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0];
+  expect(before).toMatchObject({ provenance: "legacy_synthetic_capture", command_id: null, raising_membership_id: null });
+  expect(await repo.readExtra(f.ctx, jobId, id)).toMatchObject({ version: "extra-record-legacy.v1", origin: { version: "extra-origin-legacy.v1", legacy: true, provenance: before.provenance, commandId: null, raisingMembershipId: null } });
+  expect((await c.admin.query("SELECT * FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, id])).rows[0]).toEqual(before);
+  await assignTrack(f, "contractor"); const extra = await repo.raiseExtra(f.ctx, raise(f)), strict = await repo.readExtra(f.ctx, f.jobId, extra.variationId);
+  expect(strict.version).toBe("extra-record.v1"); expect(extraOriginV1.safeParse(strict.origin).success).toBe(true);
+ });
+ // Round 1 commit regression written before the deferred guard repair; NOT RUN (sandbox cannot start PostgreSQL).
+ it("[S4] clearing tenant context after valid origin/event/audit writes refuses commit", async () => {
+  const f = await fixture(c), id = randomUUID(), commandId = randomUUID();
+  await expect(withTenant(c.runtime, f.ctx, async db => {
+   await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, "LogSiteExtra", commandId); await rawVariation(db, f.p.tenantId, f.jobId, id);
+   const row = await rawOrigin(db, f, id, commandId); await finishRaw(db, f, id, commandId, row.origin_hash);
+   await db.$client.query("SELECT set_config('app.tenant_id','',true)");
+  })).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+  for (const [table, column, value] of [["command_receipt", "command_id", commandId], ["variation", "id", id], ["extra_origin", "variation_id", id], ["extra_event", "variation_id", id], ["audit_event", "subject_ref", id]]) expect((await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND ${column}=$2`, [f.p.tenantId, value])).rows[0].n).toBe(0);
+  await checkChain(f);
  });
  it("[S1] stamped per-call contexts fail closed; other tenant/job reads are NOT_FOUND", async () => {
   const a = await fixture(c), b = await fixture(c), e = await repo.raiseExtra(a.ctx, raise(a));
@@ -191,15 +240,8 @@ describe("ENT-4b origin persistence", () => {
   const f = await fixture(c); await repo.raiseExtra(f.ctx, raise(f, { deviceId: "fictional-device", deviceCapturedAt: "2026-10-01T01:02:03.123456Z" }));
   for (const row of (await c.admin.query(`${originSql} WHERE origin_hash IS NOT NULL`)).rows) { expect(row.server_text).toMatch(/\.\d{6}Z$/u); expect(extraOriginHashV1(originHashInput(row))).toBe(row.origin_hash); }
  });
- it("[S9] merged regression suites, scanner and seven pinned bridges stay byte-identical", async () => {
+ it("[S9] scanner and seven pinned bridges stay byte-identical", async () => {
   const hashes = {
-   "packages/db/test/shared-money-origin.integration.test.ts": "8095d33c25a5ea8ebf78a90fb0df926e958105df97a8901b109ee89fee1c1b56",
-   "packages/db/test/work-order-import.integration.test.ts": "d2d9448e46c79fcba822fb8d3b0276e4b07df20309d53c2d31e3aba733324db4",
-   "packages/db/test/work-order-concurrency.integration.test.ts": "c63bfde5e49701b698edb0b0d408390aaf5c93a6903cf0ee43a6ccd42fd7cf8e",
-   "packages/db/test/job-scheduling.integration.test.ts": "f72ed51fa0cfd0f7241956ba593665992c0a963157c9cad482dfa11b1acd22b5",
-   "packages/db/test/contractor.integration.test.ts": "6a024fb3e46e3db8b954c69838bddd22cc440c03bc68bcf29312c5a5f3f21ce9",
-   "packages/db/test/variation.integration.test.ts": "c12456ca23db777f8deededc72ba1cc23a149fc00ef7764a48f8349a45998369",
-   "packages/db/test/demo-bootstrap.integration.test.ts": "9105566ea61864253a0ee7de158dbe6b076b5538457b454e75d97f33ce684b8f",
    "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
    "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
    "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",

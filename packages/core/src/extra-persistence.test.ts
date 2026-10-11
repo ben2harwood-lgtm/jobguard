@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { raiseExtraV1, extraRecordV1, extraDuplicateLinkV1, extraOrderLineLinkV1, extraOriginHashV1, extraOriginHashFields, type ExtraOriginHashInput } from "./extra-persistence.js";
+import { raiseExtraV1, extraRecordV1, extraOriginLegacyV1, extraRecordLegacyV1, extraDuplicateLinkV1, extraOrderLineLinkV1, extraOriginHashV1, extraOriginHashFields, type ExtraOriginHashInput } from "./extra-persistence.js";
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const minimal = { version: "raise-extra.v1", commandId: id(1), commandType: "LogSiteExtra", jobId: id(2), actorMembershipId: id(3), grantId: id(4), note: "Fictional capture", description: "Fictional additional repair" };
 export const hashVector: ExtraOriginHashInput = {
@@ -25,6 +25,17 @@ describe("extra persistence boundaries", () => {
    expect(schema.safeParse(input).success).toBe(true);
    for (const key of ["kind", "track", "serverRecordedAt", "role", "tenantId", "originHash", "workOrderRevisionId", "assignment", "state", "price"]) expect(schema.safeParse({ ...input, [key]: "tampered" }).success).toBe(false);
   }
+ });
+ it("[R4] versioned legacy reads preserve NULL identities without weakening command origins", () => {
+  const origin = { version: "extra-origin-legacy.v1", legacy: true, provenance: "legacy_synthetic_capture", tenantId: id(1), jobId: id(2), variationId: id(3), origin: { version: "variation-origin.v1", jobTrack: "small_builder", kind: "builder_logged" }, commandId: null, raisingMembershipId: null, raisingRole: "legacy_unrecorded", serverRecordedAt: hashVector.serverRecordedAt, deviceId: null, deviceCapturedAt: null, evidenceHash: null };
+  const record = { version: "extra-record-legacy.v1", origin, contractorProvenance: { commandType: null, raisingGrantId: null, raiserAssigned: null, workOrderId: null, workOrderRevisionId: null, siteVisitId: null, evidenceId: null, residentConfirmationEvidenceId: null, clientCaptureId: null, originHash: null }, latestEventKind: null };
+  for (const provenance of ["legacy_synthetic_capture", "backfilled_synthetic_fixture"]) {
+   const read = extraRecordLegacyV1.parse({ ...record, origin: { ...origin, provenance } });
+   expect(read.origin.commandId).toBeNull(); expect(read.origin.raisingMembershipId).toBeNull();
+  }
+  for (const changed of [{ ...origin, commandId: id(4) }, { ...origin, provenance: "command" }, { ...origin, legacy: false }, { ...origin, origin: { ...origin.origin, jobTrack: "contractor", kind: "site_user" } }, { ...origin, raisingRole: "owner" }, { ...origin, invented: id(4) }, { ...origin, commandId: undefined }, { ...origin, raisingMembershipId: undefined }]) expect(extraOriginLegacyV1.safeParse(changed).success).toBe(false);
+  expect(extraRecordV1.safeParse({ ...record, version: "extra-record.v1", origin: { ...origin, version: "extra-origin.v1" } }).success).toBe(false);
+  expect(extraRecordLegacyV1.safeParse({ ...record, invented: id(4) }).success).toBe(false);
  });
  it("[S6] fixed hash vector binds every field and distinguishes NULL from empty text", () => {
   expect(extraOriginHashV1(hashVector)).toBe(hashVectorDigest);

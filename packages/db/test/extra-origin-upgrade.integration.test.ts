@@ -2,8 +2,9 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MIGRATION_URLS, migrate, withTenant } from "../src/index.js";
+import { ExtraRepository, MIGRATION_URLS, migrate, withTenant } from "../src/index.js";
 import { cluster, fixture, rawVariation, rawOrigin, receipt, ownerTx, newOriginColumns, newTables, type Cluster } from "./extra-fixtures.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
 let c: Cluster;
 beforeAll(async () => { c = await cluster(true); }, 60_000);
 afterAll(async () => { await c?.close(); });
@@ -28,10 +29,14 @@ describe("ENT-4b additive upgrade", () => {
   const existingFunctions = (await c.admin.query("SELECT oid,pg_get_functiondef(oid) definition FROM pg_proc WHERE pronamespace='app'::regnamespace ORDER BY oid")).rows;
   await migrate(c.admin); await migrate(c.admin);
   for (const table of tables) {
-   const added = table === "extra_origin" ? newOriginColumns : table === "variation" ? ["sor_version_id", "sor_code", "excess_of_revision_id", "excess_of_scope_item_id"] : ["pricing_basis"];
+   const added = table === "extra_origin" ? newOriginColumns : table === "variation" ? ["sor_version_id", "sor_code", "excess_of_revision_id", "excess_of_scope_item_id"] : [];
    const after = (await c.admin.query(`SELECT * FROM app.${table} ORDER BY tenant_id,${table === "extra_origin" ? "variation_id" : "id"}`)).rows;
    expect(after.map(row => Object.fromEntries(Object.entries(row).filter(([k]) => !added.includes(k))))).toEqual(before[table]);
    for (const row of after) for (const col of added) expect(row[col]).toBeNull();
+  }
+  // Round 1: read the actual SH-1 backfill, preserving its unknown identities (written first, NOT RUN).
+  for (const old of before.extra_origin!.filter((row: Record<string, any>) => row.provenance === "backfilled_synthetic_fixture")) {
+   expect(await new ExtraRepository(c.runtime).readExtra(testTenantContext(old.tenant_id), old.job_id, old.variation_id)).toMatchObject({ version: "extra-record-legacy.v1", origin: { version: "extra-origin-legacy.v1", legacy: true, provenance: old.provenance, commandId: null, raisingMembershipId: null } });
   }
   for (const row of existingFunctions) expect((await c.admin.query("SELECT pg_get_functiondef($1::oid) definition", [row.oid])).rows[0].definition).toBe(row.definition);
   expect((await c.admin.query("SELECT * FROM public.jobguard_schema_migration WHERE migration_name='0122_extra_origin_persistence.sql'")).rowCount).toBe(1);
