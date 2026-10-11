@@ -1,0 +1,30 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core
+
+ ❯ src/receipt-allocation.test.ts (34 tests | 1 failed) 16761ms
+     × the working size is bounded: more distinct denominators than the documented limit fail closed 7409ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/receipt-allocation.test.ts > balances whose exact total reduces to a short value > the working size is bounded: more distinct denominators than the documented limit fail closed
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/receipt-allocation.test.ts:212:2
+    210|   return Array.from({length:count},()=>{let digits=String(1+next()%9);…
+    211|  };
+    212|  it("the working size is bounded: more distinct denominators than the …
+       |  ^
+    213|   const lines=hundredDigits(1_600).map((d,i)=>withBalance(`w${i}`,frac…
+    214|   for(const gross of [0n,1n]) expect(()=>allocateReceiptToLines(raw(gr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 54 passed (55)
+      Tests  1 failed | 1606 passed (1607)
+   Start at  06:32:14
+   Duration  150.71s (transform 3.15s, setup 0ms, import 15.23s, tests 88.85s, environment 25ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src --maxWorkers=1

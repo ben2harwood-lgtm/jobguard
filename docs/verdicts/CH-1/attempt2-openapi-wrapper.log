@@ -1,0 +1,32 @@
+
+> jobguard@ openapi:check /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1
+> pnpm --filter @jobguard/api openapi:check
+
+
+> @jobguard/api@0.0.0 openapi:check /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api
+> tsx src/generate-openapi.ts --check
+
+node:net:1987
+      const error = new UVExceptionWithHostPort(rval, 'listen', address, port);
+                    ^
+
+Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/96017.pipe
+    at Server.setupListenHandle [as _listen2] (node:net:1987:21)
+    at listenInCluster (node:net:2066:12)
+    at Server.listen (node:net:2188:5)
+    at file:///Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/node_modules/.pnpm/tsx@4.20.3/node_modules/tsx/dist/cli.mjs:53:31537
+    at new Promise (<anonymous>)
+    at createIpcServer (file:///Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/node_modules/.pnpm/tsx@4.20.3/node_modules/tsx/dist/cli.mjs:53:31515)
+    at async file:///Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/node_modules/.pnpm/tsx@4.20.3/node_modules/tsx/dist/cli.mjs:55:459 {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '/var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/96017.pipe',
+  port: -1
+}
+
+Node.js v24.17.0
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @jobguard/api@0.0.0 openapi:check: `tsx src/generate-openapi.ts --check`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.

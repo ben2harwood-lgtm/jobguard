@@ -1,13 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PracticeAccess } from "../practice-access.js";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { DEMO_JOB_ID, DEMO_SCOPE_ITEM_ID, DEMO_TENANT_ID, SyntheticDemoReadError } from "@jobguard/db";
 import { WorkspaceService, WorkspaceServiceError } from "./workspace.service.js";
 
 const read = vi.hoisted(() => vi.fn());
 vi.mock("@jobguard/db", async (original) => ({ ...(await original<typeof import("@jobguard/db")>()), readSyntheticDemoJob: read }));
+afterEach(()=>vi.restoreAllMocks());
 const principal = { sessionId: "opaque" };
 describe("workspace application service", () => {
-  beforeEach(() => read.mockReset());
+  beforeEach(() => { read.mockReset();vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue({context:{tenantId:DEMO_TENANT_ID}} as never); });
   it("maps the authoritative database projection to the versioned contract", async () => {
     read.mockResolvedValue({ job: { id: DEMO_JOB_ID, title: "Practice kitchen", status: "quoting", revision: 7, scopeIdentityIds: [DEMO_SCOPE_ITEM_ID], updatedAt: new Date("2026-09-15T10:00:00.000Z") } });
     await expect(new WorkspaceService({} as Pool).getJob(principal, DEMO_JOB_ID)).resolves.toEqual({ version: 1, environment: "synthetic_demo", job: { id: DEMO_JOB_ID, tenantId: DEMO_TENANT_ID, title: "Practice kitchen", status: "quoting", revision: 7, scopeIdentityIds: [DEMO_SCOPE_ITEM_ID], updatedAt: "2026-09-15T10:00:00.000Z" } });

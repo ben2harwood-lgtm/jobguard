@@ -16,7 +16,7 @@ test("persistent workspace survives reload and a second authorized context", asy
   const id = await page.getByTestId("job-id").textContent(), revision = await page.getByTestId("job-revision").textContent(), url = page.url();
   expect(id).toBeTruthy(); await page.reload(); await expect(page.getByTestId("job-id")).toHaveText(id!); await expect(page.getByTestId("job-revision")).toHaveText(revision!);
   await expect(page.getByText("Illustration — not yet connected to this job", { exact: true })).toHaveCount(4); await noOverflow(page);
-  const second = await browser.newContext(); const secondPage = await second.newPage(); await signIn(secondPage); await secondPage.goto(url); await expect(secondPage.getByTestId("job-id")).toHaveText(id!); await expect(secondPage.getByTestId("job-revision")).toHaveText(revision!); await second.close();
+  const second = await browser.newContext({ storageState: await page.context().storageState() }); const secondPage = await second.newPage(); await secondPage.goto(url); await expect(secondPage.getByTestId("job-id")).toHaveText(id!); await expect(secondPage.getByTestId("job-revision")).toHaveText(revision!); await second.close();
 });
 
 test("tenant selection and foreign jobs fail closed without disclosure", async ({ page, request }) => {

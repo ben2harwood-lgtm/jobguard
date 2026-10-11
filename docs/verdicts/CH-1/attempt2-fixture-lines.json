@@ -1,0 +1,32 @@
+[
+  {
+    "path": "apps/web/e2e/UIWIRE-5.spec.ts",
+    "line": 1,
+    "before": "import{expect,test,type Page}from\"@playwright/test\";import{openReview}from\"./helpers/capture-journey\";",
+    "after": "import{expect,test,type Page}from\"@playwright/test\";import{openReview}from\"./helpers/v1-sample-job\";"
+  },
+  {
+    "path": "apps/web/e2e/UIWIRE-14.spec.ts",
+    "line": 1,
+    "before": "import{expect,test,type Page}from\"@playwright/test\";import{openQuote}from\"./helpers/capture-journey\";",
+    "after": "import{expect,test,type Page}from\"@playwright/test\";import{openQuote}from\"./helpers/v1-sample-job\";"
+  },
+  {
+    "path": "apps/web/e2e/switch-live.spec.ts",
+    "line": 3,
+    "before": "import{openQuote}from\"./helpers/capture-journey\";",
+    "after": "import{openQuote}from\"./helpers/v1-sample-job\";"
+  },
+  {
+    "path": "apps/web/e2e/fee-statement.spec.ts",
+    "line": 1,
+    "before": "import{expect,test}from\"@playwright/test\";import{openQuote}from\"./helpers/capture-journey\";",
+    "after": "import{expect,test}from\"@playwright/test\";import{openQuote}from\"./helpers/v1-sample-job\";"
+  },
+  {
+    "path": "apps/web/e2e/UIWIRE-13.spec.ts",
+    "line": 1,
+    "before": "import{expect,test,type Page}from\"@playwright/test\";import{openQuote}from\"./helpers/capture-journey\";",
+    "after": "import{expect,test,type Page}from\"@playwright/test\";import{openQuote}from\"./helpers/v1-sample-job\";"
+  }
+]

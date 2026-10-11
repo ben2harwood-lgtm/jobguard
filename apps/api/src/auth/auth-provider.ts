@@ -35,18 +35,18 @@ export interface ActiveMembership {
   readonly revokedAt?: number;
 }
 
-export interface ChallengeRequest { readonly email: string; readonly purpose: "signup" | "signin" | "invitation"; readonly ip: string }
+export interface ChallengeRequest { readonly email: string; readonly purpose: "signup" | "signin" | "invitation"; readonly ip: string; readonly invitationId?: string | undefined }
 export interface ChallengeResponse { readonly accepted: true }
 export interface VerificationResult { readonly sessionToken: string; readonly csrfToken: string }
 export interface AuthProvider {
   requestCode(input: ChallengeRequest): Promise<ChallengeResponse>;
-  verifyCode(email: string, purpose: ChallengeRequest["purpose"], code: string): Promise<VerificationResult>;
+  verifyCode(email: string, purpose: ChallengeRequest["purpose"], code: string, invitationId?: string): Promise<VerificationResult>;
   authenticate(sessionToken: string): Promise<AuthPrincipal | undefined>;
   findMembership(principal: AuthPrincipal, tenantId: string): Promise<ActiveMembership | undefined>;
 }
 
 export class AuthError extends Error {
-  constructor(readonly code: "INVALID_CODE" | "RATE_LIMITED" | "UNAUTHENTICATED" | "TENANT_FORBIDDEN" | "ORIGIN_FORBIDDEN") {
+  constructor(readonly code: "INVALID_CODE" | "RATE_LIMITED" | "UNAUTHENTICATED" | "TENANT_FORBIDDEN" | "ORIGIN_FORBIDDEN" | "DELIVERY_UNAVAILABLE") {
     super(code);
     this.name = "AuthError";
   }

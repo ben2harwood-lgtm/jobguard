@@ -25,7 +25,7 @@
     "test:restore": "pnpm turbo run build --filter=@jobguard/db... && node packages/db/tools/synthetic-restore.mjs"
   },
   "devDependencies": {
-    "next": "15.5.25",
+    "next": "15.5.27",
     "turbo": "2.10.12",
     "typescript": "5.8.3"
   },

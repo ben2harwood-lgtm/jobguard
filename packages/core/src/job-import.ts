@@ -10,6 +10,7 @@ export const PRODUCTION_IMPORT_ENABLED = false as const;
 const uuid = z.string().uuid();
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 export const adoptJobV1 = z.object({
+  parties: z.object({customerRevisionId: uuid, siteRevisionId: uuid, payingPartyRevisionId: uuid.optional()}).optional(),
   version: z.literal("adopt-job.v1"), jobId: uuid, baselineId: uuid,
   title: z.string().trim().min(1).max(200), lifecyclePoint: z.enum(["live", "invoiced"]),
   provenance: z.literal("imported"), lineageStrength: z.literal("builder_attested_weaker"),

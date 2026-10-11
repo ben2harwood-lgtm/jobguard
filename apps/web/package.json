@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "next": "15.5.25",
+    "next": "15.5.27",
     "react": "19.1.9",
     "react-dom": "19.1.9",
     "zod": "3.25.67",

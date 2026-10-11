@@ -1,67 +1,50 @@
+import { PracticeAccess } from "./practice-access.js";
 import type { Pool } from "pg";
+import { EvidencePackRepository, practiceMaterialPool } from "@jobguard/db";
 import {
-  DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, EvidencePackRepository,
-  verifiedTenantContextFromMembership, withTenant,
-} from "@jobguard/db";
-import {
-  evidencePackApprovalCommandV1, evidencePackCommandV1, evidencePackIdV1, evidencePackInspectionQueryV1,
-} from "./evidence-pack.contracts.js";
-
-const context = () => verifiedTenantContextFromMembership({
-  identityUserId: DEMO_IDENTITY_USER_ID, membershipId: DEMO_MEMBERSHIP_ID, tenantId: DEMO_TENANT_ID,
-} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+  evidencePackApprovalCommandV1, evidencePackCommandV1, evidencePackIdV1, evidencePackInspectionQueryV1} from "./evidence-pack.contracts.js";
 
 export class EvidencePackApplication {
-  private readonly repo: EvidencePackRepository;
-  constructor(private readonly pool: Pool) { this.repo = new EvidencePackRepository(pool); }
+  constructor(private readonly pool: Pool) {}
 
-  private async authorize(sessionId: string | undefined) {
-    if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("SYNTHETIC_MODE_REQUIRED");
-    if (!evidencePackIdV1.safeParse(sessionId).success) throw new Error("UNAUTHENTICATED");
-    const ctx = context();
-    const member = await withTenant(this.pool, ctx, async db => (await db.$client.query<{ id: string }>(
-      `SELECT id FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3
-       AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,
-      [DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID],
-    )).rows[0]);
-    if (!member) throw new Error("FORBIDDEN");
-    return { ctx, actorRef: `membership:${member.id}` };
+  private async authorize(sessionId: string | undefined, caseId: string) {
+    const auth = await new PracticeAccess(this.pool, sessionId).case(caseId);
+    return {ctx:auth.context, actorRef:`membership:${auth.membershipId}`,
+      repo:new EvidencePackRepository(practiceMaterialPool(this.pool,auth.digest))};
   }
 
   async list(sessionId: string | undefined, caseId: string) {
-    const { ctx } = await this.authorize(sessionId);
+    const { ctx, repo } = await this.authorize(sessionId, caseId);
     return {
       version: "evidence-pack-response.v1" as const, environment: "synthetic_demo" as const,
       realExternalActions: 0 as const, claim: "mapped, inspectable" as const,
-      packs: await this.repo.list(ctx, evidencePackIdV1.parse(caseId)),
-    };
+      packs: await repo.list(ctx, evidencePackIdV1.parse(caseId))};
   }
 
   async generate(sessionId: string | undefined, caseId: string, raw: unknown) {
-    const { ctx, actorRef } = await this.authorize(sessionId);
+    const { ctx, actorRef, repo } = await this.authorize(sessionId, caseId);
     const { version: _version, ...command } = evidencePackCommandV1.parse(raw);
-    await this.repo.generate(ctx, evidencePackIdV1.parse(caseId), command, actorRef);
+    await repo.generate(ctx, evidencePackIdV1.parse(caseId), command, actorRef);
     return this.list(sessionId, caseId);
   }
 
   async approveAttachment(sessionId: string | undefined, caseId: string, packId: string, raw: unknown) {
-    const { ctx, actorRef } = await this.authorize(sessionId);
+    const { ctx, actorRef, repo } = await this.authorize(sessionId, caseId);
     const { version: _version, ...command } = evidencePackApprovalCommandV1.parse(raw);
-    await this.repo.approveAttachment(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId), command, actorRef);
+    await repo.approveAttachment(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId), command, actorRef);
     return this.list(sessionId, caseId);
   }
 
   async inspect(sessionId: string | undefined, caseId: string, packId: string, raw: unknown = {}) {
-    const { ctx } = await this.authorize(sessionId);
+    const { ctx, repo } = await this.authorize(sessionId, caseId);
     const { scenario } = evidencePackInspectionQueryV1.parse(raw);
     return {
-      ...(await this.repo.inspect(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId), scenario)),
-      version: "evidence-pack-inspection.v1" as const, environment: "synthetic_demo" as const, scenario,
-    };
+      ...(await repo.inspect(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId), scenario)),
+      version: "evidence-pack-inspection.v1" as const, environment: "synthetic_demo" as const, scenario};
   }
 
   async download(sessionId: string | undefined, caseId: string, packId: string) {
-    const { ctx } = await this.authorize(sessionId);
-    return this.repo.download(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId));
+    const { ctx, repo } = await this.authorize(sessionId, caseId);
+    return repo.download(ctx, evidencePackIdV1.parse(caseId), evidencePackIdV1.parse(packId));
   }
 }

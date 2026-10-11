@@ -1,3 +1,7 @@
+import { PreventionCheckController } from "./prevention-check.controller.js";
+import { APP_FILTER } from "@nestjs/core";
+import { WatchdogExceptionFilter } from "./watchdog.filter.js";
+import { PracticeErrorsFilter } from "./practice-errors.filter.js";
 import { Module } from "@nestjs/common";
 import { HealthController } from "./health.controller.js";
 import { Pool } from "pg";
@@ -28,8 +32,24 @@ import { InboxRelevanceController } from "./inbox-relevance.controller.js";
 import { CommercialIntegrityController } from "./commercial-integrity.controller.js";
 import { CommercialIntegrityApplication } from "./commercial-integrity.application.js";
 import { EvidencePackController } from "./evidence-pack.controller.js";
+import { RecoveryMessageController } from "./recovery-message.controller.js";
+import { RecoveryFollowUpController } from "./recovery-follow-up.controller.js";
+import { PracticeFeedController } from "./practice-feed.controller.js";
 
+import { ContractorPartiesController } from "./contractor/contractor-parties.controller.js";
 import { ContractorController } from "./contractor/contractor.controller.js";
+import { JobPartiesController,JobPartiesListController } from "./job-parties.controller.js";
+import { WorkOrderController } from "./contractor/work-order.controller.js";
+import { SchedulingController } from "./contractor/scheduling.controller.js";
+import { APP_GUARD } from "@nestjs/core";
+import { IdentityController } from "./auth/identity.controller.js";
+import { IDENTITY_APPLICATION } from "./auth/identity-http.js";
+import { ApplicationAuthGuard } from "./auth/application-auth.guard.js";
+import { createIdentityApplication, type IdentityApplication } from "./auth/identity.application.js";
+import { Inject } from "@nestjs/common";
+// The compiled graph must boot before its global authentication guard can protect routes.
+// DecisionsController's type-only Pool import otherwise emits Function as its DI token.
+Inject(Pool)(DecisionsController, undefined, 0);
 
-@Module({ controllers: [HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController,ContractorController], providers:[{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,CommercialIntegrityApplication] })
+@Module({ controllers: [RecoveryFollowUpController,RecoveryMessageController,PreventionCheckController,HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController,ContractorController,ContractorPartiesController,WorkOrderController,SchedulingController,JobPartiesController,JobPartiesListController,PracticeFeedController,IdentityController], providers:[{provide:APP_FILTER,useClass:WatchdogExceptionFilter},{provide:APP_FILTER,useClass:PracticeErrorsFilter},{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,{provide:IDENTITY_APPLICATION,useFactory:()=>{let application:IdentityApplication|undefined;return ()=>application??=createIdentityApplication(process.env)}},{provide:APP_GUARD,useClass:ApplicationAuthGuard}] })
 export class AppModule {}

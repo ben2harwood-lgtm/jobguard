@@ -4,7 +4,7 @@ import { jobRecordProposalV1, type JobRecordProposal } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 export class CaptureConflictError extends Error { readonly code = "CAPTURE_ID_REUSED"; }
-export type PersistCapture = { captureId: string; text: string; sourceKind?: "text"|"browser_local_transcript"; acquisition?: Record<string,unknown>|null; proposal: JobRecordProposal; promptVersion: string; schemaVersion: string; model: string };
+export type PersistCapture = { practiceSessionDigest?: string; captureId: string; text: string; sourceKind?: "text"|"browser_local_transcript"; acquisition?: Record<string,unknown>|null; proposal: JobRecordProposal; promptVersion: string; schemaVersion: string; model: string };
 
 export class CaptureRepository {
   constructor(private readonly pool: Pool) {}
@@ -14,14 +14,22 @@ export class CaptureRepository {
     const hash = createHash("sha256").update(bytes).digest("hex");
     validateProposalReferences(proposal, input.captureId, input.text);
     return withTenant(this.pool, context, async (db) => {
+      if (input.practiceSessionDigest) {
+        const auth = (await db.$client.query("SELECT * FROM app.authenticate_practice_session($1)", [input.practiceSessionDigest])).rows[0];
+        if (!auth || auth.tenant_id !== context.tenantId) throw new Error("UNAUTHENTICATED");
+      }
       const existing = (await db.$client.query(`SELECT p.*,s.content_text FROM app.job_record_proposal p JOIN app.capture_source s ON (s.tenant_id,s.id)=(p.tenant_id,p.source_id) WHERE p.tenant_id=$1 AND p.capture_id=$2`, [context.tenantId,input.captureId])).rows[0];
       if (existing) {
+        if (input.practiceSessionDigest) {
+          const owner = (await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3", [context.tenantId,existing.job_id,input.practiceSessionDigest])).rows[0];
+          if (!owner) throw new Error("NOT_FOUND");
+        }
         if (existing.source_sha256 !== hash) throw new CaptureConflictError("A capture id cannot be reused for different source data");
         return existing;
       }
       const jobId=randomUUID(), proposalId=randomUUID();
       await db.$client.query(`INSERT INTO app.capture_source(id,tenant_id,kind,content_bytes,content_text,sha256,acquisition_metadata,audio_byte_length) VALUES($1,$2,$3,$4,$5,$6,$7,0)`,[input.captureId,context.tenantId,input.sourceKind??"text",bytes,input.text,hash,input.acquisition??null]);
-      await db.$client.query(`INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,$3)`,[jobId,context.tenantId,proposal.title.value]);
+      await db.$client.query(`INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,$3,$4,$5)`,[jobId,context.tenantId,proposal.title.value,input.practiceSessionDigest??null,input.practiceSessionDigest?"capture":null]);
       await db.$client.query(`INSERT INTO app.job_record_proposal(id,tenant_id,capture_id,job_id,source_id,source_version,source_sha256,prompt_version,schema_version,model,proposal) VALUES($1,$2,$3,$4,$3,1,$5,$6,$7,$8,$9)`,[proposalId,context.tenantId,input.captureId,jobId,hash,input.promptVersion,input.schemaVersion,input.model,proposal]);
       for (const [index,line] of proposal.lines.entries()) {
         const scopeId=randomUUID();

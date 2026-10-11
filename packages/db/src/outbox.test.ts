@@ -1,7 +1,12 @@
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { ActionExecutor, type OutboundAdapter } from "./outbox.js";
-import type { VerifiedTenantContext } from "./tenant-context.js";
+import { verifiedTenantContextFromMembership } from "./tenant-context.js";
+
+const testTenantContext = (tenantId: string) => verifiedTenantContextFromMembership({
+  identityUserId: "30000000-0000-4000-8000-000000000003",
+  membershipId: "40000000-0000-4000-8000-000000000004", tenantId,
+} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 
 describe("ActionExecutor adapter ownership", () => {
   it.each([
@@ -11,7 +16,7 @@ describe("ActionExecutor adapter ownership", () => {
     { status: "executing", claimed_at: "2000-01-01T00:00:00Z" },
   ])("leaves unsupported work untouched: $status / $authorization_expires_at", async (state) => {
     const id = "98000000-0000-4000-8000-000000000001";
-    const context = { tenantId: "91000000-0000-4000-8000-000000000001" } as VerifiedTenantContext;
+    const context = testTenantContext("91000000-0000-4000-8000-000000000001");
     const row = {
       id,
       adapter: "fake_quote_delivery",
@@ -66,7 +71,7 @@ describe("ActionExecutor adapter ownership", () => {
 describe("ActionExecutor retry exhaustion", () => {
   it("records a failed attempt with the adapter error code on the fifth retryable result", async () => {
     const id = "98000000-0000-4000-8000-000000000002";
-    const context = { tenantId: "91000000-0000-4000-8000-000000000001" } as VerifiedTenantContext;
+    const context = testTenantContext("91000000-0000-4000-8000-000000000001");
     const row = {
       id,
       adapter: "fake_capture",

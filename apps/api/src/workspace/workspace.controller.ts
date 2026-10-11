@@ -14,7 +14,7 @@ export class WorkspaceController {
   @ApiResponse({ status: 503, description: "Typed recoverable database failure" })
   async get(@Req() request: { headers: { cookie?: string } }, @Param("id") id: string, @Query("requested_tenant_id") requestedTenantId?: string) {
     const cookie = request.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("jg_session="))?.slice(11);
-    const principal = cookie === SYNTHETIC_SESSION ? { sessionId: cookie, ...(requestedTenantId ? { requestedTenantId } : {}) } : null;
+    const principal = !!cookie ? { sessionId: cookie, ...(requestedTenantId ? { requestedTenantId } : {}) } : null;
     try { return await this.service.getJob(principal, id); }
     catch (error) { if (!(error instanceof WorkspaceServiceError)) throw error; if (error.code === "UNAUTHENTICATED") throw new UnauthorizedException({ code: error.code }); if (error.code === "TENANT_FORBIDDEN") throw new ForbiddenException({ code: error.code }); if (error.code === "NOT_FOUND") throw new NotFoundException({ code: error.code }); throw new ServiceUnavailableException({ code: error.code, recoverable: true }); }
   }

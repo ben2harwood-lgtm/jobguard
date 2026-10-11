@@ -1,3 +1,5 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
+import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,24 +9,26 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
-import { EvidenceService, ProofCommandService, migrate, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { EvidenceService, ProofCommandService, migrate, withTenant } from "../src/index.js";
 import { listConfirmedPracticeScopes } from "../src/practice-scope.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenant="a1000000-0000-4000-8000-000000000001", otherTenant="a1000000-0000-4000-8000-000000000002";
 const job="a2000000-0000-4000-8000-000000000001",otherJob="a2000000-0000-4000-8000-000000000002",emptyJob="a2000000-0000-4000-8000-000000000003",foreignJob="a2000000-0000-4000-8000-000000000004";
 const member="a3000000-0000-4000-8000-000000000001",retired="00000000-0000-4000-8000-000000000001",reserved="00000000-0000-4000-8000-000000000002",first="b0000000-0000-4000-8000-000000000001",second="b0000000-0000-4000-8000-000000000002";
-const context={tenantId:tenant} as VerifiedTenantContext,foreignContext={tenantId:otherTenant} as VerifiedTenantContext;
+const context=testTenantContext(tenant),foreignContext=testTenantContext(otherTenant);
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 beforeAll(async()=>{
  directory=await mkdtemp(join(tmpdir(),"jobguard-practice-scope-"));const port=59000+Math.floor(Math.random()*300);
- postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
- admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);
+ postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
+ admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"postgres"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query(`INSERT INTO control_plane.tenant(id) VALUES('${tenant}'),('${otherTenant}');
  INSERT INTO identity.identity_user(id) VALUES('a4000000-0000-4000-8000-000000000001');
  INSERT INTO app.account(id,tenant_id,name) VALUES('a5000000-0000-4000-8000-000000000001','${tenant}','Synthetic proof regression');
  INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES('${member}','${tenant}','a5000000-0000-4000-8000-000000000001','a4000000-0000-4000-8000-000000000001','owner');
- INSERT INTO app.job(id,tenant_id,title,status) VALUES('${job}','${tenant}','Synthetic dismissed-first regression','live'),('${otherJob}','${tenant}','Other synthetic job','live'),('${emptyJob}','${tenant}','No confirmed scope','live'),('${foreignJob}','${otherTenant}','Foreign synthetic job','live');
+`);
+ for(const [t,j] of [[tenant,job],[tenant,otherJob],[tenant,emptyJob],[otherTenant,foreignJob]]) await importWatchdogFixtureJob(admin,t!,j!);
+ await admin.query(`
  INSERT INTO app.scope_identity(id,tenant_id,job_id,state,created_at) VALUES
  ('${retired}','${tenant}','${job}','retired','2026-01-01T00:00:00Z'),('${reserved}','${tenant}','${job}','reserved','2026-01-01T00:00:00Z'),
  ('${first}','${tenant}','${job}','confirmed','2026-01-02T00:00:00Z'),('${second}','${tenant}','${job}','confirmed','2026-01-02T00:00:00Z'),

@@ -1,0 +1,305 @@
+import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { appendAuditBatch, claimCommandIdentity, withTenant, type TenantTransaction, type WatchdogCommandType } from "../src/index.js";
+import { createWatchdogHarness } from "./watchdog-command-harness.js";
+
+// CH-2 upgrade rule for command ids: an id that the previous schema persisted belongs to the command that persisted it, so no OTHER
+// kind of watchdog command may claim it, before or after that command's own first replay. The previous schema is reproduced exactly:
+// run the real command, then remove the two bookkeeping tables migration 0096 added (identity, stored result), leaving only the
+// stores that existed before it. Where an id persisted is found by looking at every uuid column in the app schema, not by trusting
+// a list in the code under test. The commands are the registry's 17.
+const h = createWatchdogHarness("legacy-ids", 63000);
+const { cases, live, norm, CONFLICT } = h;
+beforeAll(() => h.boot(), 120000);
+afterAll(() => h.stop());
+
+const BOOKKEEPING = new Set(["watchdog_command_identity", "watchdog_command_result", "proof_application_response"]);
+let probe: string | undefined;
+/** Every table.column in the app schema holding this uuid, bookkeeping aside. */
+async function persistedIn(id: string): Promise<string[]> {
+  if (!probe) {
+    const columns = (await h.admin.query<{ t: string; c: string }>("SELECT table_name t, column_name c FROM information_schema.columns WHERE table_schema='app' AND data_type='uuid' ORDER BY 1,2")).rows.filter(row => !BOOKKEEPING.has(row.t));
+    probe = columns.map(({ t, c }) => `SELECT '${t}.${c}' AS found FROM app."${t}" WHERE "${c}"=$1`).join(" UNION ALL ");
+  }
+  return (await h.admin.query<{ found: string }>(probe, [id])).rows.map(row => row.found);
+}
+const previousSchema = async (id: string) => {
+  await h.admin.query("DELETE FROM app.watchdog_command_result WHERE command_id=$1", [id]);
+  await h.admin.query("DELETE FROM app.proof_application_response WHERE command_id=$1", [id]).catch(() => undefined);
+  await h.admin.query("DELETE FROM app.watchdog_command_identity WHERE command_id=$1", [id]);
+};
+const identityRows = async (id: string) => Number((await h.admin.query("SELECT count(*) n FROM app.watchdog_command_identity WHERE command_id=$1", [id])).rows[0].n);
+
+// The commands whose id the previous schema persisted. The other four (order revision, document intake, goods receipt, finalisation)
+// had no command id before migration 0096, so there is nothing to protect.
+const PERSISTED_BEFORE = [
+  "discrepancy-repository.ts#evaluate", "discrepancy-repository.ts#review", "discrepancy-repository.ts#supersede", "evidence.ts#beginUpload",
+  "inbox-relevance-repository.ts#dismiss", "inbox-relevance-repository.ts#seed", "proof-repository.ts#complete", "purchase-order-repository.ts#place",
+  "readiness-repository.ts#advance", "readiness-repository.ts#record", "supplier-document-repository.ts#confirm", "supplier-match-repository.ts#correct", "supplier-match-repository.ts#create",
+];
+
+describe("previous-schema command ids cannot be claimed by another kind of command", () => {
+  it("names the commands whose ids the previous schema persisted, found by looking in the database", async () => {
+    const found: string[] = [];
+    for (const c of cases) {
+      const job = await live(); await c.prepare(job);
+      const id = randomUUID(); await c.run(job, id, "base"); await previousSchema(id);
+      if ((await persistedIn(id)).length) found.push(c.key);
+    }
+    expect(found.sort()).toEqual([...PERSISTED_BEFORE].sort());
+  }, 300000);
+
+  it.each(cases.filter(c => PERSISTED_BEFORE.includes(c.key)).map(c => [c.key, c] as const))("%s: every other kind is refused the id before the first original replay, and the original still replays", async (_key, c) => {
+    const job = await live(); await c.prepare(job);
+    const id = randomUUID(), first = norm(await c.run(job, id, "base"));
+    await c.later(job);
+    await previousSchema(id);
+    expect((await persistedIn(id)).length, "the id must still be persisted by the previous-schema stores").toBeGreaterThan(0);
+    for (const other of cases) {
+      if (other === c) continue;
+      const foreign = await h.probeJob(other);
+      await expect(other.run(foreign, id, "base"), `${other.key} must not claim ${c.key}'s previous-schema id`).rejects.toThrow(CONFLICT);
+      expect(await identityRows(id), `${other.key} must not have claimed the id`).toBe(0);
+    }
+    // Nothing else changed: the original command's replay still returns what it first returned...
+    expect(norm(await c.run(job, id, "base"))).toEqual(first);
+    // ...and after that replay every other kind is still refused the id.
+    for (const other of cases) {
+      if (other === c) continue;
+      await expect(other.run(await h.probeJob(other), id, "base"), `${other.key} must still not claim ${c.key}'s id after its replay`).rejects.toThrow(CONFLICT);
+    }
+    // And a changed payload or another job still conflicts after that replay.
+    await expect(c.run(job, id, "changed")).rejects.toThrow(CONFLICT);
+  }, 300000);
+
+  it("an id persisted by two kinds in the previous schema is refused to both: no winner is picked", async () => {
+    const review = cases.find(c => c.key === "discrepancy-repository.ts#review")!, supersede = cases.find(c => c.key === "discrepancy-repository.ts#supersede")!;
+    const jobA = await live(), jobB = await live(); await review.prepare(jobA); await supersede.prepare(jobB);
+    const a = randomUUID(), b = randomUUID(), shared = randomUUID();
+    await review.run(jobA, a, "base"); await supersede.run(jobB, b, "base");
+    // The collision the old schema allowed: one id in the review store and in the supersession store.
+    await h.admin.query("UPDATE app.discrepancy_review_outcome SET command_id=$2 WHERE command_id=$1", [a, shared]);
+    await h.admin.query("UPDATE app.supplier_bill_supersession SET command_id=$2 WHERE command_id=$1", [b, shared]);
+    await previousSchema(a); await previousSchema(b);
+    expect((await persistedIn(shared)).sort()).toEqual(["discrepancy_review_outcome.command_id", "supplier_bill_supersession.command_id"]);
+    // The documented pre-deploy check (MIGRATIONS.md) names exactly this id.
+    const docs = await readFile(new URL("../MIGRATIONS.md", import.meta.url), "utf8");
+    const check = docs.match(/```sql\n(-- 0096 pre-deploy collision check[\s\S]*?)```/u)?.[1];
+    expect(check, "MIGRATIONS.md must contain the 0096 pre-deploy collision check").toBeTruthy();
+    expect((await h.admin.query<{ command_id: string; kinds: string; jobs: string }>(check!)).rows.map(row => [row.command_id, Number(row.kinds), Number(row.jobs)])).toEqual([[shared, 2, 2]]);
+    await expect(review.run(jobA, shared, "base")).rejects.toThrow(CONFLICT);
+    await expect(supersede.run(jobB, shared, "base")).rejects.toThrow(CONFLICT);
+    expect(await identityRows(shared)).toBe(0);
+    // A third kind is refused as well.
+    const third = cases.find(c => c.key === "readiness-repository.ts#record")!;
+    await expect(third.run(await h.probeJob(third), shared, "base")).rejects.toThrow(CONFLICT);
+  }, 120000);
+
+  it("an id the previous schema never persisted is still granted to the first kind that claims it", async () => {
+    for (const c of cases) {
+      const job = await live(); await c.prepare(job);
+      await expect(c.run(job, randomUUID(), "base")).resolves.toBeDefined();
+    }
+  }, 300000);
+});
+
+// Codex P2 4197534379: the previous application never claims, so during a mixed-version rollout or after the documented application
+// rollback it can write an id the new schema has claimed, or write one between a claim's reservation check and its insert. Every
+// previous-schema store therefore takes the claim's per-id lock and refuses an id claimed for another kind or job.
+describe("previous-schema writers and claimed ids", () => {
+  const hash = "a".repeat(64);
+  /** What the previous application writes for an inbox seed: a dispatcher receipt keyed by the job. */
+  const legacySeed = (db: { query: (sql: string, values: unknown[]) => Promise<unknown> }, commandId: string, job: string) =>
+    db.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)VALUES($1,$2,'inbox.seed',$3,$4,'processing',$5)",
+      [commandId, h.tenant, `inbox:${job}`, hash, h.member]);
+  /** Opens a transaction holding a claim of `commandId`; on refusal it rolls back, releases and rethrows. */
+  async function claimOpen(commandId: string, job: string, kind: WatchdogCommandType) {
+    const client = await h.admin.connect();
+    try {
+      await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+      await claimCommandIdentity({ $client: client } as unknown as TenantTransaction, { tenantId: h.tenant, commandId, jobId: job, kind, requestHash: hash });
+      return client;
+    } catch (error) { await client.query("ROLLBACK"); client.release(); throw error; }
+  }
+  const claim = async (commandId: string, job: string, kind: WatchdogCommandType) => { const client = await claimOpen(commandId, job, kind); await client.query("COMMIT"); client.release(); };
+  const settle = (work: Promise<unknown>) => work.then(() => "committed", (error: { code?: string; message?: string }) => error.code === "23505" || error.message === "IDEMPOTENCY_CONFLICT" ? "conflict" : error);
+  const stillWaiting = async (state: { done: boolean }) => { await new Promise(resolve => setTimeout(resolve, 400)); return !state.done; };
+
+  it("refuses a previous-schema write of an id claimed for another kind, another job or by another transaction, and admits the claiming transaction's own", async () => {
+    const job = await live(), other = await live();
+    const otherKind = randomUUID(); await claim(otherKind, job, "readiness.record");
+    await expect(legacySeed(h.admin, otherKind, job)).rejects.toMatchObject({ code: "23505" });
+    const otherJob = randomUUID(); await claim(otherJob, other, "inbox.seed");
+    await expect(legacySeed(h.admin, otherJob, job)).rejects.toMatchObject({ code: "23505" });
+    // Its own kind on its own job is admitted only from the claiming transaction; afterwards it would be a second effect of a
+    // command that already completed (Codex P2 4199348149).
+    const own = randomUUID(), claiming = await claimOpen(own, job, "inbox.seed");
+    try { await expect(legacySeed(claiming, own, job)).resolves.toBeDefined(); await claiming.query("COMMIT"); } finally { claiming.release(); }
+    const laterJob = await live(), completed = randomUUID(); await claim(completed, laterJob, "inbox.seed");
+    await expect(legacySeed(h.admin, completed, laterJob)).rejects.toMatchObject({ code: "23505" });
+    // Claim ownership comes from the database, not from anything a session can set (Codex P2 4199535957): neither a forged
+    // setting nor re-claiming the same id (a replay, which inserts no identity) makes this transaction the claimant.
+    for (const pretend of [
+      (client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }) => client.query("SELECT set_config('app.watchdog_claims',$1,true)", [`${completed},`]),
+      (client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }) => claimCommandIdentity({ $client: client } as unknown as TenantTransaction, { tenantId: h.tenant, commandId: completed, jobId: laterJob, kind: "inbox.seed", requestHash: hash }),
+    ]) {
+      const client = await h.admin.connect();
+      try {
+        await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+        await pretend(client);
+        await expect(legacySeed(client, completed, laterJob)).rejects.toMatchObject({ code: "23505" });
+      } finally { await client.query("ROLLBACK"); client.release(); }
+    }
+    expect((await h.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completed])).rows[0].n).toBe(0);
+  });
+
+  it("stamps every claim with the transaction that made it, whatever the insert supplies (Codex P2 4199817679)", async () => {
+    const job = await live(), commandId = randomUUID(), client = await h.admin.connect();
+    try {
+      await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+      const now = (await client.query("SELECT pg_current_xact_id()::text x")).rows[0].x as string;
+      const forged = (BigInt(now) + 1000n).toString();
+      await client.query("INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash,claimed_xact)VALUES($1,$2,$3,'inbox.seed',$4,$5::xid8)", [h.tenant, commandId, job, hash, forged]);
+      expect((await client.query("SELECT claimed_xact::text x FROM app.watchdog_command_identity WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows[0].x).toBe(now);
+    } finally { await client.query("ROLLBACK"); client.release(); }
+  });
+
+  it("serialises a claim and a previous-schema write of one id, in either order", async () => {
+    const job = await live();
+    // The claim holds the id: the previous-schema write must conflict immediately, without waiting for commit.
+    const first = randomUUID(), holder = await claimOpen(first, job, "readiness.record"), legacy = { done: false };
+    const write = settle(legacySeed(h.admin, first, job)).finally(() => { legacy.done = true; });
+    expect(await stillWaiting(legacy)).toBe(false);
+    await holder.query("COMMIT"); holder.release();
+    expect(await write).toBe("conflict");
+    // The previous-schema write holds the id: the claim waits for it, then finds the id owned and conflicts.
+    const second = randomUUID(), writer = await h.admin.connect(), claimed = { done: false };
+    await writer.query("BEGIN"); await legacySeed(writer, second, job);
+    const claiming = settle(claim(second, job, "readiness.record")).finally(() => { claimed.done = true; });
+    expect(await stillWaiting(claimed)).toBe(true);
+    await writer.query("COMMIT"); writer.release();
+    expect(await claiming).toBe("conflict");
+  });
+
+  // Replay the preceding ReadinessRepository.record statement order, as the real runtime role:
+  // count, receipt lookup, audit append, planned-work insert. Pause at its actual contention points.
+  it.each(["claim-first", "legacy-first"] as const)("audit-first previous writer vs real current writer: %s never deadlocks", async schedule => {
+    const job = await live(), currentJob = schedule === "legacy-first" ? await live() : job;
+    const commandId = randomUUID(), input = { commandId, scenarioNow: h.DAY };
+    let reached!: () => void, resume!: () => void;
+    const paused = new Promise<void>(resolve => { reached = resolve; });
+    const gate = new Promise<void>(resolve => { resume = resolve; });
+    let oldPid = 0;
+    const old = withTenant(h.runtime, h.ctx, async db => {
+      oldPid = Number((await db.$client.query("SELECT pg_backend_pid() pid")).rows[0].pid);
+      const revision = Number((await db.$client.query("SELECT count(*) n FROM app.planned_work_revision WHERE tenant_id=$1 AND job_id=$2 AND task_key='paint-walls'", [h.tenant, job])).rows[0].n) + 1;
+      expect((await db.$client.query("SELECT payload_hash FROM app.planned_work_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows).toHaveLength(0);
+      const payloadHash = createHash("sha256").update(JSON.stringify({ ...input, revision })).digest("hex");
+      const audit = (await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType: "readiness.plan_confirmed", subjectType: "job", subjectRef: job, payload: { references: { commandId }, hashes: { payloadHash }, classifications: { action: "operational" } } }]))[0]!;
+      const insert = () => db.$client.query("INSERT INTO app.planned_work_revision(id,tenant_id,job_id,command_id,task_key,revision,plan_date,predecessor_complete,required_units,landed_units,access_ready,crew_ready,actor_ref,subject_ref,payload_hash,audit_event_id)VALUES($1,$2,$3,$4,'paint-walls',$5,$6::timestamptz::date,false,10,8,true,false,'member:synthetic-builder',$3,$7,$8)", [randomUUID(), h.tenant, job, commandId, revision, h.DAY, payloadHash, audit.id]);
+      if (schedule === "legacy-first") await insert();
+      reached(); await gate;
+      if (schedule === "claim-first") await insert();
+    }).then(() => ({ outcome: "committed" }), error => ({ outcome: "error", code: error.code, message: error.message }));
+    await Promise.race([paused, old.then(outcome => { throw new Error(`Previous writer failed before pause: ${JSON.stringify(outcome)}`); })]);
+    const state = { done: false };
+    const current = h.repos.readiness.record(h.ctx, currentJob, input).then(() => ({ outcome: "committed" }), error => ({ outcome: "error", code: error.code, message: error.message })).finally(() => { state.done = true; });
+    try {
+      expect(await stillWaiting(state)).toBe(true);
+      // Prove the intended interleaving with real PostgreSQL wait information, not just a sleeping promise.
+      const blocked = (await h.admin.query<{ query: string }>("SELECT query FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))", [oldPid])).rows;
+      expect(blocked).toHaveLength(1);
+      expect(blocked[0]!.query).toMatch(schedule === "claim-first" ? /lock_audit_head/u : /pg_advisory_xact_lock/u);
+    } finally { resume(); await Promise.all([old, current]); }
+    const outcomes = await Promise.all([old, current]);
+    expect(outcomes.map(outcome => outcome.outcome).sort()).toEqual(["committed", "error"]);
+    expect(outcomes).not.toContainEqual(expect.objectContaining({ code: "40P01" }));
+    if (schedule === "claim-first") {
+      expect(outcomes[0]).toEqual({ outcome: "error", code: "23505", message: "IDEMPOTENCY_CONFLICT" });
+      expect(outcomes[1]).toEqual({ outcome: "committed" });
+    } else {
+      expect(outcomes[0]).toEqual({ outcome: "committed" });
+      expect(outcomes[1]).toEqual({ outcome: "error", code: "IDEMPOTENCY_CONFLICT", message: "IDEMPOTENCY_CONFLICT" });
+    }
+    expect((await h.admin.query("SELECT count(*)::int n FROM app.planned_work_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows[0].n).toBe(1);
+    expect(await identityRows(commandId)).toBe(schedule === "claim-first" ? 1 : 0);
+  });
+
+  it("tells a supplier-match correction from a creation by its audit event, at commit (Codex P2 4197723875)", async () => {
+    const correct = cases.find(c => c.key === "supplier-match-repository.ts#correct")!;
+    const job = await live(); await correct.prepare(job);
+    const original = randomUUID(); await correct.run(job, original, "base");
+    /** What the previous application would write for a correction under `commandId`: a revision bound to a "corrected" audit event. */
+    let copies = 0;
+    const proposalOf = async (commandId: string) => (await h.admin.query("SELECT proposal_id FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows[0]!.proposal_id as string;
+    /** A fresh audit event of `eventType` about `proposalId`, as a previous-schema writer would append for its own revision. */
+    const payloadOf = async (commandId: string) => ((await h.admin.query("SELECT payload_hash FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2", [h.tenant, commandId])).rows[0]!.payload_hash as string).trim();
+    /** A fresh audit event of `eventType` about `proposalId`, as a previous-schema writer would append for its own revision: by
+     * default a correction's event attesting the copied revision's payload hash. */
+    const freshEvent = async (proposalId: string, payloadHash: string, eventType = "supplier_match.corrected") => (await withTenant(h.runtime, h.ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType, subjectType: "supplier_match", subjectRef: proposalId, payload: { references: { proposalId }, hashes: { payloadHash }, classifications: { action: "operational" } } }])))[0]!.id;
+    /** A correction revision under `commandId`; with `claimKind`, written by the transaction that claims the id as that kind. */
+    const legacyCorrection = async (commandId: string, auditEventId?: string, claimKind?: WatchdogCommandType) => {
+      const client = await h.admin.connect();
+      try {
+        await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+        if (claimKind) await claimCommandIdentity({ $client: client } as unknown as TenantTransaction, { tenantId: h.tenant, commandId, jobId: job, kind: claimKind, requestHash: hash });
+        await client.query(`INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id,invalidates_unresolved_findings)
+          SELECT gen_random_uuid(),tenant_id,job_id,proposal_id,$2,revision+$5,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,coalesce($4::uuid,audit_event_id),invalidates_unresolved_findings
+          FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$3`, [h.tenant, commandId, original, auditEventId ?? null, 1000 + (++copies)]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; } finally { client.release(); }
+    };
+    const proposal = await proposalOf(original), payload = await payloadOf(original);
+    await expect(legacyCorrection(randomUUID(), await freshEvent(proposal, payload), "supplier_match.create")).rejects.toMatchObject({ code: "23505" });
+    await expect(legacyCorrection(randomUUID(), await freshEvent(proposal, payload), "supplier_match.correct")).resolves.toBeUndefined();
+    // A write from any later transaction under a completed claim is a second effect, even of the claimed kind (Codex P2 4199348149).
+    // Here: a create claimed and completed with no revision, then a previous-schema create retry citing a fresh "confirmed" event.
+    const completed = randomUUID(); await claim(completed, job, "supplier_match.create");
+    await expect(legacyCorrection(completed, await freshEvent(proposal, payload, "supplier_match.confirmed"))).rejects.toMatchObject({ code: "23505" });
+    // A fresh correction event attesting some other payload does not stand behind this revision (Codex P2 4199236808).
+    await expect(legacyCorrection(randomUUID(), await freshEvent(proposal, "b".repeat(64)), "supplier_match.correct")).rejects.toMatchObject({ code: "23514" });
+    // An earlier event of the same proposal already stands behind its own revision and cannot be borrowed (Codex P2 4199159015).
+    await expect(legacyCorrection(randomUUID(), undefined, "supplier_match.correct")).rejects.toMatchObject({ code: "23505", constraint: "supplier_match_revision_audit_event_uq" });
+    // A revision citing any other event (here the proposal's "proposed" event) is refused, claimed or not (Codex P2 4197809983).
+    const proposed = (await h.admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='supplier_match.proposed' AND subject_ref=$2 LIMIT 1", [h.tenant, job])).rows[0]!.id as string;
+    await expect(legacyCorrection(randomUUID(), proposed, "supplier_match.correct")).rejects.toMatchObject({ code: "23514" });
+    await expect(legacyCorrection(randomUUID(), proposed)).rejects.toMatchObject({ code: "23514" });
+    // So is a valid "corrected" event that belongs to another proposal (Codex P2 4199041823).
+    const elsewhere = await live(); await correct.prepare(elsewhere);
+    const foreignCommand = randomUUID(); await correct.run(elsewhere, foreignCommand, "base");
+    const foreignEvent = await freshEvent(await proposalOf(foreignCommand), payload);
+    await expect(legacyCorrection(randomUUID(), foreignEvent, "supplier_match.correct")).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("finds an existing revision that does not cite its own event, both in the pre-deploy query and in 0096's upgrade check (Codex P2 4199041831)", async () => {
+    const correct = cases.find(c => c.key === "supplier-match-repository.ts#correct")!;
+    const job = await live(); await correct.prepare(job);
+    const original = randomUUID(); await correct.run(job, original, "base");
+    const docs = await readFile(new URL("../MIGRATIONS.md", import.meta.url), "utf8");
+    const listed = docs.match(/```sql\n(-- 0096 pre-deploy supplier-match revision check[\s\S]*?)```/u)?.[1];
+    const migration = await readFile(new URL("../migrations/0096_watchdog_live.sql", import.meta.url), "utf8");
+    const upgradeCheck = migration.match(/(-- 0096 supplier-match revision check[\s\S]*?ALTER TABLE app\.audit_event FORCE ROW LEVEL SECURITY;)/u)?.[1];
+    expect(listed, "MIGRATIONS.md must contain the supplier-match revision check").toBeTruthy();
+    expect(upgradeCheck, "0096 must contain the supplier-match revision check").toBeTruthy();
+    const client = await h.admin.connect();
+    try {
+      await client.query("BEGIN");
+      // What a previous-schema writer could have left behind: a revision citing its proposal's "proposed" event (no trigger then).
+      await client.query("SET LOCAL session_replication_role = replica");
+      const planted = randomUUID();
+      await client.query(`INSERT INTO app.supplier_match_revision(id,tenant_id,job_id,proposal_id,command_id,revision,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,audit_event_id,invalidates_unresolved_findings)
+        SELECT $4,tenant_id,job_id,proposal_id,gen_random_uuid(),revision+5000,order_revision_id,receipt_version_ids,bill_revision_id,actor_ref,subject_ref,payload_hash,
+          (SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='supplier_match.proposed' AND subject_ref=$3 LIMIT 1),invalidates_unresolved_findings
+        FROM app.supplier_match_revision WHERE tenant_id=$1 AND command_id=$2`, [h.tenant, original, job, planted]);
+      await client.query("SET LOCAL session_replication_role = origin");
+      expect((await client.query(listed!)).rows.map(row => row.id)).toEqual([planted]);
+      await client.query("SAVEPOINT upgrade");
+      await expect(client.query(upgradeCheck!)).rejects.toMatchObject({ code: "23514" });
+      await client.query("ROLLBACK TO SAVEPOINT upgrade");
+    } finally { await client.query("ROLLBACK"); client.release(); }
+    // With only well-formed revisions the same upgrade check passes and leaves FORCE in place.
+    await h.admin.query(upgradeCheck!);
+    expect((await h.admin.query("SELECT bool_and(relforcerowsecurity) f FROM pg_class WHERE relname IN ('supplier_match_revision','audit_event') AND relnamespace='app'::regnamespace")).rows[0].f).toBe(true);
+  });
+});

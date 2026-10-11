@@ -1,3 +1,5 @@
+import { PracticeAccess } from "../practice-access.js";
+import { PracticeAccessError } from "@jobguard/db";
 import { DEMO_TENANT_ID, readSyntheticDemoJob, SyntheticDemoReadError } from "@jobguard/db";
 import { Pool } from "pg";
 import { jobWorkspaceResponseV1, workspaceJobIdV1, type JobWorkspaceResponse } from "./contracts.js";
@@ -15,9 +17,11 @@ export class WorkspaceService {
     if (!parsed.success) throw new WorkspaceServiceError("NOT_FOUND");
     if (principal.requestedTenantId && principal.requestedTenantId !== DEMO_TENANT_ID) throw new WorkspaceServiceError("TENANT_FORBIDDEN");
     try {
+      await new PracticeAccess(this.pool,principal.sessionId).job(parsed.data);
       const { job } = await readSyntheticDemoJob(this.pool, parsed.data);
       return jobWorkspaceResponseV1.parse({ version: 1, environment: "synthetic_demo", job: { id: job.id, tenantId: DEMO_TENANT_ID, title: job.title, status: job.status, revision: job.revision, updatedAt: job.updatedAt.toISOString(), scopeIdentityIds: job.scopeIdentityIds } });
     } catch (error) {
+      if(error instanceof PracticeAccessError && (error.code==="UNAUTHENTICATED"||error.code==="NOT_FOUND"))throw new WorkspaceServiceError(error.code);
       if (error instanceof SyntheticDemoReadError && error.code === "JOB_NOT_FOUND") throw new WorkspaceServiceError("NOT_FOUND");
       if (error instanceof SyntheticDemoReadError && error.code === "MEMBERSHIP_FORBIDDEN") throw new WorkspaceServiceError("TENANT_FORBIDDEN");
       throw new WorkspaceServiceError("DATABASE_UNAVAILABLE", { cause: error });

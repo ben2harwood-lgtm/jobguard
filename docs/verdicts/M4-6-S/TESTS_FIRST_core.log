@@ -1,0 +1,18 @@
+# M4-6-S core tests-first run (before packages/core/src/recovery-follow-up.ts existed)
+# command: pnpm --filter @jobguard/core exec vitest run src/recovery-follow-up.test.ts   -> exit 1 (20 failed: exports undefined)
+
+       |                                    ^
+    183|     expect(recoveryFollowUpStateV1.safeParse({ ...state, realExternalA…
+    184|     expect(recoveryFollowUpStateV1.safeParse({ ...state, environment: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/20]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  20 failed (20)
+   Start at  19:04:39
+   Duration  555ms (transform 411ms, setup 0ms, import 463ms, tests 7ms, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/m4-6-s/packages/core:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/recovery-follow-up.test.ts
