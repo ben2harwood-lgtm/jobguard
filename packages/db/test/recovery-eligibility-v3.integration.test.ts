@@ -263,8 +263,8 @@ it("F17 runtime-role raw qualifying insert after opening still commits with comp
  expect((await admin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,id])).rows[0].result).toMatchObject({outcome:"eligible_for_review",qualifyingPrincipal:{pence:45000,currency:"GBP"},reason:null});
 });
 
-it("0125 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
- const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0125_recovery_eligibility_v3_f17_timing.sql");
+it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
+ const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0123_recovery_eligibility_v3_f17_timing.sql");
  expect(oldIndex).toBeGreaterThanOrEqual(0);expect(newIndex).toBeGreaterThan(oldIndex);expect(names).toEqual([...names].sort());
  const database=`ch7_f17_upgrade_${randomUUID().replaceAll("-","")}`;
  await admin.query(`CREATE DATABASE ${database}`);
@@ -284,7 +284,7 @@ it("0125 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
   const connected=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
   await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:connected.revision,action:"advance",movement:"supplier-refund-540",step:"settled"});
   // The cash settles first. The 0119 guard accepts its qualifying candidate;
-  // 0125 must preserve that historical mistake rather than rewriting history.
+  // 0123 must preserve that historical mistake rather than rewriting history.
   const c=await cases.command(ctx,jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"open",caseType:"duplicate_supplier_payment",claimedNetPence:300000,counterparty:"Fictional supplier",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:["Supplier invoice INV-320"],expectedRevision:0},actor);
   const f={auth,jobId,c},id=await rawQualifyingF17(upgradeRuntime,f);
   const snapshot=async()=>({
@@ -296,7 +296,7 @@ it("0125 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
   expect((await upgradeAdmin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE id=$1",[id])).rows[0].result).toMatchObject({qualifyingPrincipal:{pence:45000,currency:"GBP"},reason:null});
   await migrate(upgradeAdmin);await migrate(upgradeAdmin);
   expect(await snapshot()).toEqual(before);
-  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name=$1",[names[newIndex]])).rows).toEqual([{migration_name:"0125_recovery_eligibility_v3_f17_timing.sql"}]);
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name=$1",[names[newIndex]])).rows).toEqual([{migration_name:"0123_recovery_eligibility_v3_f17_timing.sql"}]);
   const repo=new RecoveryEligibilityV3Repository(practiceMaterialPool(upgradeRuntime,auth.digest),"synthetic_demo");
   const corrected=await repo.review(ctx,jobId,review(c,"F17",1),actor,auth.digest);
   expect(corrected.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"});

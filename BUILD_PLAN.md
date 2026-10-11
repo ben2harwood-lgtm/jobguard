@@ -3358,6 +3358,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — CH-7, 11 October 2026 (merge-ahead ruling).** CH-7 (pre-allocated 0060 in the in-flight table; issued with 0113 on 9–11 October) takes **0119** (`recovery_eligibility_v3`) on 11 October 2026, the next number neither merged nor reserved (merged through 0115; 0116 ENT-10b, 0117 ENT-4b and 0118 SV-2 reserved), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0115; the SQL is unchanged and the lane path was swapped with the renumber. A piece that lands after a higher number has merged renumbers again.
 
+**Ledger amendment — CH-7-F17-BEFORE-OPEN, 11 October 2026 (merge-ahead ruling).** CH-7-F17-BEFORE-OPEN, a fix-forward repair of merged CH-7 (#132, 0119) that follows Ben's 11 October answer (a duplicate supplier payment refunded at or before the case was opened does not count), was built with 0125 and takes **0123** (`recovery_eligibility_v3_f17_timing`) on 11 October 2026, the next number neither merged nor reserved at this merge (merged through 0120; 0121 ENT-10b and 0122 ENT-4b held by open pull requests; 0124 reserved by PRACTICE-FACTS-1), under Ben's 5 October merge-ahead ruling. It only restates the CH-7 guard routine that 0119 created; no table, column, policy, grant or row changes. The runner lists it in numeric order after 0120. A piece that lands after a higher number has merged renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |

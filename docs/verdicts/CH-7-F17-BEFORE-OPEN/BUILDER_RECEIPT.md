@@ -22,8 +22,8 @@ Synthetic only. No fee derivation, posting, statement, pursuit, fee-terms approv
 - `packages/core/src/recovery-eligibility-v3.ts`: CH-7-only F17 timing override using the existing typed timing input; imports SV-1 and SH-1 unchanged.
 - `packages/core/src/recovery-eligibility-v3.test.ts`: two appended failing-first core cases.
 - `packages/db/src/recovery-eligibility-v3-repository.ts`: comment documents the shared F17 decision; executable SQL and boolean mapping are unchanged and the core fix supplies the application behavior.
-- `packages/db/migrations/0125_recovery_eligibility_v3_f17_timing.sql`: restates only 0119's CH-7 insert guard.
-- `packages/db/src/migrate.ts`: 0125 registered in numeric order, preserving reserved 0120–0124.
+- `packages/db/migrations/0123_recovery_eligibility_v3_f17_timing.sql`: restates only 0119's CH-7 insert guard.
+- `packages/db/src/migrate.ts`: 0123 registered in numeric order, registered after the merged 0120 (0121 and 0122 taken by open pull requests, 0124 reserved by PRACTICE-FACTS-1).
 - `packages/db/test/recovery-eligibility-v3.integration.test.ts`: import plus seven appended PostgreSQL cases and raw-write helper; no existing test body changes.
 - `apps/web/e2e/CH-7.spec.ts`: one appended test with one screen assertion through existing `Open duplicate supplier payment` / `Review v3 F17` controls; refund settles before opening.
 - `packages/db/MIGRATIONS.md` and `docs/contracts/recovery-eligibility-v3.md`: timing, history preservation and forward-fix documentation.
@@ -40,7 +40,7 @@ The entire routine is copied from the merged `0119_recovery_eligibility_v3.sql`,
 + ELSIF coalesce(paid_before,false) AND c.case_type IN('withheld_customer_payment','duplicate_supplier_payment') THEN expected_reason:='Paid before you opened this case';
 ```
 
-The rest of the signature/body is byte-identical, including `paid_before:=e.state='settled' AND e.created_at<=c.created_at;`, the 45,000p after-opening branch, and the parenthesized CASE expressions in IF conditions. The existing `require_recovery_eligibility_v3_effect` routine already enforces the zero claim line and verbatim reason; it needs no replacement. 0119 is unchanged. 0125 contains only BEGIN, comments, this one CREATE OR REPLACE and COMMIT: no table, column, policy, grant, trigger or row mutation, and no routine from another migration.
+The rest of the signature/body is byte-identical, including `paid_before:=e.state='settled' AND e.created_at<=c.created_at;`, the 45,000p after-opening branch, and the parenthesized CASE expressions in IF conditions. The existing `require_recovery_eligibility_v3_effect` routine already enforces the zero claim line and verbatim reason; it needs no replacement. 0119 is unchanged. 0123 contains only BEGIN, comments, this one CREATE OR REPLACE and COMMIT: no table, column, policy, grant, trigger or row mutation, and no routine from another migration.
 
 Forward fix: retain immutable history and issue a reviewed later migration if another correction is needed. Application rollback must preserve the rule or fail closed against the corrected guard. Never revert to 0119's permissive guard or rewrite saved qualifying money.
 
@@ -58,7 +58,7 @@ Tests were written before the rule and new migration. Database and browser tests
 | DB: `F17 runtime-role raw qualifying insert for a before-opening refund cannot commit` | Complete otherwise-valid candidate/claim/audit transaction; exact SQLSTATE 23514 and `ELIGIBILITY_FIXTURE_MISMATCH`; zero committed review/claim/audit effects. NOT RUN. |
 | DB: `F17 runtime-role raw qualifying insert for a equal-opening refund cannot commit` | Same complete refusal proof at equality. NOT RUN. |
 | DB: `F17 runtime-role raw qualifying insert after opening still commits with complete components and audit` | Passing twin proves the raw route is valid and the refusal is timing-specific. NOT RUN. |
-| DB: `0125 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill` | Separate database installs/records through 0119, saves a qualifying F17 before-opening candidate through runtime SQL, applies migration runner twice, compares complete textual review/claim/audit rows byte-for-byte, then appends a 0p review and checks the old row again. Positions checked by name/increasing order only. NOT RUN. |
+| DB: `0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill` | Separate database installs/records through 0119, saves a qualifying F17 before-opening candidate through runtime SQL, applies migration runner twice, compares complete textual review/claim/audit rows byte-for-byte, then appends a 0p review and checks the old row again. Positions checked by name/increasing order only. NOT RUN. |
 | Browser: `F17 refund settled before opening shows the existing timing exclusion through Review v3 F17` | One appended assertion for verbatim reason on the existing screen/control. NOT RUN. |
 
 All 22 earlier core tests pass unchanged, including the 45,000p F17 expectation and every other F14–F22 fixture. The DB file has seven added case instances (30 total definitions); browser has one added definition. Those counts are source counts, not executed results.
@@ -100,7 +100,7 @@ After the dispatcher commits/pushes, CI must execute the PostgreSQL/migration/br
 
 Re-read the whole working-tree diff against `origin/main`, including the untracked migration, against the issued order. A read-only mechanical comparison confirms that the restated routine equals 0119 plus only the stated category extension and CREATE OR REPLACE; comments identify the change. All CASE expressions in IF conditions retain their existing parentheses. The original settlement comparison is unchanged in both database locations; F17 consumes the existing boolean rather than adding a timing query or JavaScript comparison.
 
-Checked the repository's source selection still prefers the original identified settled movement, source/tenant/job/case binding remains intact, raw-write tests include the claim and exact audit hash, and the positive twin uses the same raw route. The isolated upgrade database genuinely stops at 0119, stores the old before-opening candidate, then applies 0125 without rewriting history and appends a corrected review. Saved Q is preserved, not reinterpreted on read.
+Checked the repository's source selection still prefers the original identified settled movement, source/tenant/job/case binding remains intact, raw-write tests include the claim and exact audit hash, and the positive twin uses the same raw route. The isolated upgrade database genuinely stops at 0119, stores the old before-opening candidate, then applies 0123 without rewriting history and appends a corrected review. Saved Q is preserved, not reinterpreted on read.
 
 All pre-existing core/browser test contents are exact prefixes of the final files. The DB file is also an exact prefix after removing only the new import; every existing expect, expected value and test body stays byte-identical. SV-1, SH-1, M4-7-S and its tests, all held CH-7 areas, pinned auth files and BUILD_PLAN.md are untouched. The lane registry minus the single new line exactly equals base. Every changed/untracked path is inside this leaf's allowlist. No implementation defect found during this pass; lint's self-comparison refusal is recorded as a failure, not worked around or claimed passed.
 
