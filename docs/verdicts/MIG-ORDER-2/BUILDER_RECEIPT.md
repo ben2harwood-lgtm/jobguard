@@ -142,6 +142,6 @@ No other whole-row durable record turned up beyond the 11 pack tables and the di
 ### Is anything that used to fail for a real reason now passing?
 No. Round 1 only adds checks: types are now compared (a retype used to pass, now fails) and one more table is guarded. Compared with aa3541f nothing is relaxed. Compared with the original file on main, the two relaxations in the section above are unchanged (xmin/ctid in the head step only; a column added to a guarded table is now caught by the guard instead of the upgrade test).
 
-Checks after Round 1: `LANE_BASE_REF=origin/main pnpm lint:lanes`, `pnpm typecheck`, `LANE_BASE_REF=origin/main pnpm lint` and the ad hoc strict `tsc` of both test files: results recorded in the PR comment and the final report of this round.
+Checks after Round 1 (at 3d5b8bf): `LANE_BASE_REF=origin/main pnpm lint:lanes` exit 0; `pnpm typecheck` exit 0 (7 tasks); `LANE_BASE_REF=origin/main pnpm lint` exit 0; strict ad hoc `tsc` of both test files: no errors in them.
 
 Builder receipt only — not independently verified, not accepted.
