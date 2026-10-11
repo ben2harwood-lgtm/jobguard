@@ -279,7 +279,7 @@ Repair builder only; no review or acceptance. Starting head 80b2fd5 (Codex round
 - api `src/audit-export` + `src/auth/context-boundary.test.ts`: exit 0, 2 files, 159 passed (context-boundary unedited).
 - web `app/admin/contractor/audit-exports/page.test.tsx`: exit 0, 1 file, 11 passed.
 - web e2e `ENT-10b.spec.ts`, mobile-360 and desktop, one worker, `--headed` (headless shell not installed; `playwright install` not run): exit 0, 2 passed.
-- Final lane lint, typecheck, lint and openapi check: see the commit message of the push (all run after this section was written).
+- `LANE_BASE_REF=origin/main pnpm lint:lanes` exit 0; `pnpm typecheck` exit 0; `LANE_BASE_REF=origin/main pnpm lint` exit 0; `pnpm openapi:check` exit 0 (run at head 4331ab8, after the spec, test and receipt edits).
 - Not run: `test/UIWIRE-12.integration.test.ts`, whole-package and whole-repository suites.
 
 **Stopped on:** nothing. No timing-only failure; nothing was re-run to obtain a pass other than after the set-up repair.
