@@ -215,3 +215,38 @@ Remaining gates: actual PostgreSQL 16 owner/copy and concurrency proof; mandator
 No push, merge or PR opening was performed. No commit was made. Generated build output, local store and test-result directories are removed from the working tree before hand-off.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (test helper, Claude Sonnet, 11 October 2026)
+
+Run record only. The helper changed no product code, no test and no document other than this section; no set-up repair was needed. This is not a review and not an acceptance.
+
+Code under test: branch `codex/sandbox/ent-10b-ops`, head `b45deb1`, clean tree, cut from `origin/main` `4564e88`. When the runs finished, `origin/main` had moved to `8e91b2d` (FIXLATER-3, #140; test files and one lane line only, no file of this piece except the lane file). A trial merge of the two heads (`git merge-tree --write-tree origin/main HEAD`) is clean. All runs below are on the `4564e88` base; no catch-up was done.
+
+Environment: Mac, Node v24.17.0, pnpm 10.28.1, embedded PostgreSQL 16.10.0-beta.15 (library links made by the package's own `scripts/hydrate-symlinks.js`). Every command ran inside `~/.local/bin/heavy-slot`, with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`, memory at least 78% free beforehand, one command at a time. Logs: `~/.local/share/full-steam/jg-runs/ent-10b-ops-mac-*`.
+
+Scope check: `git diff --stat origin/main...HEAD` shows exactly the eleven registered paths (822 insertions, 5 deletions); `package.json` has one added `scripts` line; no migration, lockfile or `apps/api/src/auth/context-boundary.test.ts` change.
+
+The named risk (Q3), run first and alone: the new database test ran as the NOSUPERUSER, NOBYPASSRLS, NOINHERIT owner login. It passed; the hand-off copy as the owner login acting as `jobguard_migration` was NOT refused. No grant was added and no superuser was used.
+
+| # | Working directory | Command (exact) | Exit | Result |
+| --- | --- | --- | --- | --- |
+| 1 | worktree root | `PLAYWRIGHT_SKIP_BROWSER_GC=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm install --frozen-lockfile` | 0 | Already up to date; tree still clean |
+| 2 | `node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64` | `node scripts/hydrate-symlinks.js` | 0 | library links present |
+| 3 | worktree root | `pnpm turbo run build --filter=@jobguard/db... --concurrency=2` | 0 | 3 tasks successful, 2 cached |
+| 4 | `packages/db` | `pnpm exec vitest run test/audit-checkpoint-handoff.integration.test.ts --maxWorkers=2` | 0 | 1 file, 17 passed (new database test) |
+| 5 | `packages/db` | `pnpm exec vitest run src/audit-checkpoint-handoff.test.ts test/verify-audit-export-cli.test.ts --maxWorkers=2` | 0 | 2 files, 29 passed (15 new unit + 14 merged verifier) |
+| 6 | `packages/db` | `pnpm exec vitest run test/audit-export.integration.test.ts test/tenancy.integration.test.ts test/demo-bootstrap.integration.test.ts --maxWorkers=2` | 0 | 3 files, 24 passed, merged files unedited |
+| 7 | `packages/db` | `pnpm exec vitest run test/audit.integration.test.ts --maxWorkers=2` | 0 | 1 file, 5 passed (second caller of `exportAuditCheckpoints`) |
+| 8 | worktree root | `pnpm turbo run build --filter=@jobguard/api... --concurrency=2` | 0 | 6 tasks successful, 5 cached |
+| 9 | `apps/api` | `pnpm exec vitest run src/audit-export/audit-export.application.test.ts src/auth/context-boundary.test.ts --maxWorkers=2` | 0 | 2 files, 159 passed (14 + context boundary 145), unedited |
+| 10 | worktree root | `TMPDIR=<runs folder>/ent-10b-ops-mac-tmp node packages/db/tools/synthetic-restore.mjs` | 0 | third caller of `exportAuditCheckpoints`; 12 PASS, 0 FAIL, including `audit-checkpoint-restored` |
+| 11 | worktree root | `node <runs folder>/ent-10b-ops-mac-cli-e2e.mjs` (scratch script kept outside the repository) | 0 | see below |
+| 12 | worktree root | `pnpm turbo run typecheck --filter=@jobguard/db --filter=@jobguard/api --concurrency=2` | 0 | 6 tasks successful |
+| 13 | worktree root | `LANE_BASE_REF=origin/main sh -c 'node tools/lint.mjs && pnpm turbo run lint --concurrency=2'` | 0 | 7 tasks successful |
+| 14 | worktree root | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane boundary passed, the eleven files |
+
+Command line, run 11: the built command `node packages/db/dist/audit-checkpoint-handoff-cli.js` was started as a separate process (the database test calls the function and the exported CLI function directly, not the built file) against a scratch embedded database set up like the database test (owner login, then `bootstrapSyntheticDemo`, two practice companies). Results: with `--operator mac.check`, exit 0, one JSON line, both companies `handed_off` at sequence 2 (events 2 to 4, checkpoints 0 to 2, hand-off rows 0 to 2); a second run, exit 0, both `unchanged` with `nothing to do`, counts unchanged; missing `--operator` and an invalid operator name, exit 1, `AUDIT_CHECKPOINT_INVALID_INPUT`; `MIGRATION_DATABASE_URL` set to the runtime login, exit 1, `AUDIT_CHECKPOINT_FORBIDDEN` naming the role found and the role needed, counts unchanged; `JOBGUARD_ENV=pilot_no_charge`, exit 1, `AUDIT_CHECKPOINT_MODE_HELD`. The two stored hand-off events carry `references.operator` `mac.check`, `references.sessionUser` the owner login, and the stored `occurred_at`. No output contained the password, host or port. (Observation: the `AUDIT_CHECKPOINT_FORBIDDEN` message names the owner login role, as C-OPS-2 asks it to name the role needed; it is a role name, not a secret.)
+
+Not run: `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, any package `test` script, the web unit file, the browser (Playwright) spec, `pnpm openapi:check` (no API route or schema changed). No browser was installed.
+
+Mac run record only — not a review, not an acceptance.
