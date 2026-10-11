@@ -52,7 +52,7 @@ test("SAML admin persists explicit domain and role mapping across reload and ano
   await page.getByLabel("Test identity provider public key").fill(idp.idpCert);
   await page.getByRole("button", { name: "Create test SAML connection", exact: true }).click();
   await expect(page.getByTestId("sso-connection")).toHaveCount(1);
-  const connectionId = await page.getByLabel("SAML connection").inputValue();
+  const connectionId = await page.getByLabel("SAML connection", { exact: true }).inputValue();
   const domain = `site-${randomUUID()}.invalid`;
   await page.getByLabel("Fictional verified domain").fill(domain);
   await page.getByRole("button", { name: "Verify test domain", exact: true }).click();
