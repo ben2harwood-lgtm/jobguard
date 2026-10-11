@@ -3358,6 +3358,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — CH-7, 11 October 2026 (merge-ahead ruling).** CH-7 (pre-allocated 0060 in the in-flight table; issued with 0113 on 9–11 October) takes **0119** (`recovery_eligibility_v3`) on 11 October 2026, the next number neither merged nor reserved (merged through 0115; 0116 ENT-10b, 0117 ENT-4b and 0118 SV-2 reserved), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order after 0115; the SQL is unchanged and the lane path was swapped with the renumber. A piece that lands after a higher number has merged renumbers again.
 
+**Ledger amendment — PRACTICE-FACTS-1, 11 October 2026 (merge-ahead ruling).** PRACTICE-FACTS-1 (part A: synthetic practice-feed facts for F5, F14/F16 and F18, issued on the coordinator's and Ben's 11 October rulings) takes **0124** (`practice_feed_facts`) on 11 October 2026, the next number neither merged nor held at dispatch (merged through 0120; 0121 ENT-10b and 0122 ENT-4b held by open pull requests; 0123 CH-7-F17-BEFORE-OPEN), under Ben's 5 October merge-ahead ruling. The migration only widens the six catalogue CHECK constraints of the merged practice-feed tables by four new keys, keeping every existing allowed value; it adds no table, column, grant, policy or routine and changes no row. The runner lists it in numeric order after 0120. A piece that lands after a higher number has merged renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
