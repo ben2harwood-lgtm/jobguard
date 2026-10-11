@@ -259,7 +259,7 @@ it("F18 extra receipts settle after a real case opens, retaining original £3,00
 it("fresh migration installs 0124 once without introducing business objects or changing grants",async()=>{
   const database=`practice_facts_fresh_${randomUUID().replaceAll("-","")}`;
   await admin.query(`CREATE DATABASE ${database}`);
-  const fresh=new Pool({...admin.options,database});
+  const fresh=new Pool({...admin.options,password,database});
   try{
     await migrate(fresh);await migrate(fresh);
     expect((await fresh.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0124_practice_feed_facts.sql'")).rows[0].n).toBe(1);
