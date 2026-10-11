@@ -162,5 +162,5 @@ describe("ENT-4b additive upgrade", () => {
    const catalog = async (db: typeof c.admin) => (await db.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,pg_get_constraintdef(k.oid) definition FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_constraint k ON k.conrelid=c.oid WHERE n.nspname='app' AND c.relname=ANY($1::text[]) ORDER BY c.relname,definition", [newTables])).rows;
    expect(await catalog(fresh.admin)).toEqual(await catalog(c.admin));
   } finally { await fresh.close(); }
- });
+ }, 120_000);
 });

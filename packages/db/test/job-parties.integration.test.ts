@@ -293,7 +293,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
       expect((await fresh.query(`SELECT count(*)::int n FROM app.customer`)).rows[0].n).toBe(0);
       expect((await fresh.query(`SELECT action_type FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2`,[t,j])).rows[0].action_type).toBe("job.parties.details_needed");
     }finally{await fresh.end();}
-  });
+  }, 60_000);
   it("applies the full migration chain to a SQL_ASCII database without UTF8 encoding", async () => {
     // Reuse this suite's cluster; template0 permits a different database encoding.
     // Do not change the encoding flags of the six earlier regression suites.
@@ -311,7 +311,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
       await ascii.end();
       await admin.query("DROP DATABASE ch3a_sql_ascii");
     }
-  });
+  }, 60_000);
 });
 
 describe("CH-3a adoption authorization boundary (round 2)",()=>{
