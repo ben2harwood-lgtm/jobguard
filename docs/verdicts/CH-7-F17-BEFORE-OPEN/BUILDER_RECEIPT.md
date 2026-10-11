@@ -105,3 +105,31 @@ Checked the repository's source selection still prefers the original identified 
 All pre-existing core/browser test contents are exact prefixes of the final files. The DB file is also an exact prefix after removing only the new import; every existing expect, expected value and test body stays byte-identical. SV-1, SH-1, M4-7-S and its tests, all held CH-7 areas, pinned auth files and BUILD_PLAN.md are untouched. The lane registry minus the single new line exactly equals base. Every changed/untracked path is inside this leaf's allowlist. No implementation defect found during this pass; lint's self-comparison refusal is recorded as a failure, not worked around or claimed passed.
 
 Builder receipt only — not independently verified, not accepted.
+
+## CI repair 1 — 11 October 2026 (Claude Sonnet, run on the Mac)
+
+Repair builder only. Not a review and not an acceptance. Run on the Mac where PostgreSQL starts; every number below is from a real run.
+
+**Catch-up.** `origin/main` bbca5ca merged into the branch (merge commit 9ac01ef). Conflicts: `packages/db/src/migrate.ts` and `packages/db/MIGRATIONS.md` (both sides kept; 0120 listed first, then this piece). Lane registry merged automatically.
+
+**Renumber.** `0125_recovery_eligibility_v3_f17_timing.sql` became `0123_recovery_eligibility_v3_f17_timing.sql` (`git mv`; SQL byte-identical). 0120 merged first; 0121 (ENT-10b) and 0122 (ENT-4b) are taken by open pull requests; 0124 is reserved by PRACTICE-FACTS-1. Registered in `migrate.ts` after 0120. Updated: own lane line (path, and `BUILD_PLAN.md` added to its allow list), `packages/db/MIGRATIONS.md` (one sentence on the renumber), `docs/contracts/recovery-eligibility-v3.md`, this receipt's earlier text, the repository comment, and the test name and expected migration name in `packages/db/test/recovery-eligibility-v3.integration.test.ts` (lines 266, 267, 287, 299; the expected string changes only because the file was renamed). `BUILD_PLAN.md` §12.2 gained one "Ledger amendment — CH-7-F17-BEFORE-OPEN" paragraph before §12.3 (the earlier statement above that `BUILD_PLAN.md` is untouched is superseded by this).
+
+**Routine diff against 0119 as merged on origin/main.** The restated `app.guard_recovery_eligibility_v3` was compared with 0119 lines 55 to 127 (same `CREATE FUNCTION` header and body, with `OR REPLACE` ignored). Exactly one line differs: the `paid_before` exclusion now reads `c.case_type IN('withheld_customer_payment','duplicate_supplier_payment')` instead of `c.case_type='withheld_customer_payment'`. That is the whole of the order's change. No other difference, so CH-7's round-1 changes are preserved.
+
+**Faults.**
+1. PostgreSQL would not start: `Postgres init script exited with code null` (dylib symlinks not created because pnpm skips the package's install script). Fix: ran the package's own `scripts/hydrate-symlinks.js` inside `node_modules` (no repository file changed). Kind: environment.
+2. `packages/db/test/recovery-eligibility-v3.integration.test.ts:271` (test at line 266, failing line 273): `error: empty password returned by client`. Cause: `new Pool({...admin.options, database})` drops the pool's non-enumerable password. Before: `new Pool({...admin.options,database}),upgradeRuntime=new Pool({...runtime.options,database})`. After: the same with `password:"synthetic"` added to each. Same method other tests in this package use. Kind (i), test set-up only; no `expect` or expected value touched.
+3. Browser: `chromium_headless_shell-1193` is not installed (`playwright install` is forbidden). Ran the spec with a throw-away config kept outside the repository (`$HOME/.local/share/full-steam/jg-runs/pw-local-channel.config.ts`) that only sets `channel: "chromium"` to use the installed full chromium-1193. Kind: environment. In that run the first test (F15, mobile-360) hit the 30 s test timeout on the cold `next dev` compile; the same test passed on desktop in the same run and passed on re-run (35.5 s). Kind: environment (cold dev server), not a code fault; no timeout was changed.
+
+**Commands and results.**
+- `pnpm install --frozen-lockfile` exit 0; `pnpm turbo run build --filter=@jobguard/db...` exit 0 (3 of 3 tasks).
+- `packages/core`: `src/recovery-eligibility-v3.test.ts` 24 passed (1 file), exit 0.
+- `packages/db`: `test/recovery-eligibility-v3.integration.test.ts` 30 passed after fault 2 (before: 29 passed, 1 failed), exit 0.
+- `test/tenancy.integration.test.ts` + `test/demo-bootstrap.integration.test.ts` 13 passed (2 files), exit 0.
+- `test/recovery-message-upgrade.integration.test.ts` 3 passed, exit 0. (`test/recovery-eligibility.integration.test.ts` does not exist. `recovery-follow-up-upgrade.integration.test.ts` was not run, as instructed.)
+- `apps/web`: `e2e/CH-7.spec.ts`, `--workers=1`, both projects: 19 passed, 1 timeout (fault 3); the failed test re-run alone passed. The new test "F17 refund settled before opening shows the existing timing exclusion through Review v3 F17" passed on mobile-360 and desktop.
+- Every vitest run used `--maxWorkers=2` inside `heavy-slot`, one run at a time, memory free 73 to 80 percent.
+
+**Stopped on:** nothing. No assertion, expected value, timeout, grant or policy was changed or loosened.
+
+Builder repair record only — not independently verified, not accepted.

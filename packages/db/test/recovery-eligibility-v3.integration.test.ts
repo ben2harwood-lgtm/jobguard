@@ -268,7 +268,7 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
  expect(oldIndex).toBeGreaterThanOrEqual(0);expect(newIndex).toBeGreaterThan(oldIndex);expect(names).toEqual([...names].sort());
  const database=`ch7_f17_upgrade_${randomUUID().replaceAll("-","")}`;
  await admin.query(`CREATE DATABASE ${database}`);
- const upgradeAdmin=new Pool({...admin.options,database}),upgradeRuntime=new Pool({...runtime.options,database});
+ const upgradeAdmin=new Pool({...admin.options,password:"synthetic",database}),upgradeRuntime=new Pool({...runtime.options,password:"synthetic",database});
  try{
   await upgradeAdmin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS.slice(0,oldIndex+1)){
