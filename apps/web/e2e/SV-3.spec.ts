@@ -84,16 +84,25 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    return {at,text:text.split(needle).join(`"retrievedAt":"${clockPlaceholder}"`)};
   }
   async function replay(){
-   const responses=new Map<string,{status:number;body:string;headers:Record<string,string>}>(),pending:Promise<void>[]=[];
+   const responses=new Map<string,{status:number;body:string;headers:Record<string,string>}>();
+   const captures=new Map<import('@playwright/test').Request,{response:import('@playwright/test').Response;read:Promise<void>;done:boolean}>();
+   const inFlight=new Set<import('@playwright/test').Request>(),failures:Error[]=[];
    const starts=new Map<import('@playwright/test').Request,number>(),retrievals:Array<{at:string;before:number;after:number}>=[];
-   let visibleClocks=0;
-   const requestListener=(request:import('@playwright/test').Request)=>{starts.set(request,Date.now())};
+   let visibleClocks=0,lastActivity=Date.now();
+   const requestListener=(request:import('@playwright/test').Request)=>{starts.set(request,Date.now());inFlight.add(request);lastActivity=Date.now()};
+   const finishedListener=(request:import('@playwright/test').Request)=>{inFlight.delete(request);lastActivity=Date.now()};
+   const failedListener=(request:import('@playwright/test').Request)=>{
+    finishedListener(request);failures.push(new Error(`Q request failed: ${request.method()} ${request.url()}: ${request.failure()?.errorText}`));
+   };
    const listener=(response:import('@playwright/test').Response)=>{
     const dateAfter=Date.now();
     const url=new URL(response.url());
-    if(url.pathname.startsWith('/api/'))pending.push((async()=>{
+    if(url.pathname.startsWith('/api/')){
+     const capture={response,read:Promise.resolve(),done:false};captures.set(response.request(),capture);
+     capture.read=(async()=>{
      const dateBefore=starts.get(response.request());expect(dateBefore,'date clock reading before this request').toBeDefined();
-     const headers=await response.allHeaders(),bytes=await response.body(),after=Date.now();let body=bytes.toString('base64');
+     const finished=await response.finished();if(finished)throw finished;
+     const [headers,bytes]=await Promise.all([response.allHeaders(),response.body()]);const after=Date.now();let body=bytes.toString('base64');
      checkHttpDate(headers.date,dateBefore!,dateAfter);
      if(url.pathname===retrievalRoute){
       expect(response.status()).toBe(200);expect(headers.etag,'Next prevention-checks response has no etag').toBeUndefined();
@@ -102,14 +111,27 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
       retrievals.push({at:checked.at,before:before!,after});body=Buffer.from(checked.text).toString('base64');
      }
      responses.set(url.pathname+url.search,{status:response.status(),body,headers:Object.fromEntries(Object.entries(headers).filter(([name])=>name!=='date').sort(([a],[b])=>a.localeCompare(b)))});
-    })());
+     })().then(()=>{capture.done=true;lastActivity=Date.now()},cause=>{
+      // Retain every read failure for the navigation barrier; never skip a response.
+      failures.push(new Error(`Q response capture failed: ${response.request().method()} ${response.url()}: ${String(cause)}`,{cause}));capture.done=true;lastActivity=Date.now();
+     });
+    }
    };
-   page.on('request',requestListener);page.on('response',listener);
+   page.on('request',requestListener);page.on('requestfinished',finishedListener);page.on('requestfailed',failedListener);page.on('response',listener);
+   async function drain(){
+    // Recheck the live sets: requests/responses arriving during the wait extend it.
+    await expect.poll(()=>{
+     if(failures.length)throw failures[0];
+     return {inFlight:[...inFlight].map(r=>`${r.method()} ${r.url()}`),bodyReads:[...captures.values()].filter(c=>!c.done).map(c=>c.response.url()),quiet:Date.now()-lastActivity>=500};
+    },{message:'Q must finish every page request and read every API response body before leaving the page',timeout:10_000,intervals:[25,50,100]}).toEqual({inFlight:[],bodyReads:[],quiet:true});
+    await Promise.all([...captures.values()].map(c=>c.read));
+    if(failures.length)throw failures[0];
+   }
    const views:Array<{responseShape:string;counts:(string|null)[];badges:(string|null)[];errors:(string|null)[];cacheKeys:string[];notifications:unknown[];analytics:unknown[];storage:Array<Array<Array<string|null>>>}>=[];
-   try{for(const route of ['/',`/jobs/${jobId}`]){
+   try{await drain();for(const route of ['/',`/jobs/${jobId}`]){
     await page.goto(route);if(route==='/'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
     else{const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();await price.click();await expect(page.locator('.quote-editor')).toBeVisible()} // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
-    await page.waitForLoadState('networkidle');await Promise.all(pending);
+    await drain();
     const view=await page.evaluate(()=>{
      const read=(selector:string)=>[...document.querySelectorAll(selector)].map(n=>n.textContent);
      const storage=(s:Storage)=>Object.keys(s).sort().map(key=>[key,s.getItem(key)]);
@@ -121,8 +143,8 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
      checkClock(value,retrieval!.before,retrieval!.after);visibleClocks++;
      return clockPlaceholder;
     });
-    views.push(view);
-   }}finally{page.off('request',requestListener);page.off('response',listener)}
+    views.push(view);await drain();
+   }}finally{page.off('request',requestListener);page.off('requestfinished',finishedListener);page.off('requestfailed',failedListener);page.off('response',listener)}
    expect(retrievals.length,'prevention-checks response was checked').toBeGreaterThan(0);
    expect(visibleClocks,'visible Retrieved: value was checked').toBeGreaterThan(0);
    expect(responses.size).toBeGreaterThan(0);

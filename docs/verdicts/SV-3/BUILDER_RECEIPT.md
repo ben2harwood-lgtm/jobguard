@@ -738,3 +738,64 @@ Run by the JobGuard dispatcher's Mac helper (Claude Sonnet 5.5), 12 October 2026
 `pnpm test:db`, `pnpm test:migrations`, any whole-package suite (memory rule), the other retained browser specs, any live-model run, the `core`/`ai` unit files re-run (unchanged by this round). The scratch negative controls for Q (changed other header; far-out date) were done by the builder and are not repeated here.
 
 **Not pushed. No pull request opened.** Local head after this record is the commit that adds it.
+
+## Repair round 4 (late responses, 12 Oct)
+
+Issued 12 October 2026 at approximately 23:05 by the JobGuard dispatcher after the Mac helper's round-3 rerun. Base: clean local `2658f9f`, branch `codex/sandbox/sv-3`, worktree `.worktrees/sv-3`; main `a54d46f` is already merged. Read AGENTS.md, BUILD_PLAN.md SV-3/DW3/Test Q and the prior repairs/Mac record before editing. Earlier coordinator rulings and rounds 1–3 remain in force.
+
+**Reported failure:** `response.body: Protocol error (Network.getResponseBody): No resource with given identifier found` at `apps/web/e2e/SV-3.spec.ts:96:69`, approximately 2.7 seconds into the first job-page load on mobile-360 after each of two cold server starts. `page.waitForLoadState: Test ended` around old line 112 is a consequence. The helper's trace suggests late materials, things-to-check, readiness, job and purchase-orders responses crossed the old idle/snapshot barrier; that cause was trace-inferred, not independently proven here. The round-3 `date` assertions work and are retained.
+
+**Approach and justification (two sentences):** Q now registers request/response listeners before replay navigation, records each API response with its request and body-read promise, awaits `response.finished()` and starts its body read alongside the header read while the page remains open. Before initial replay navigation, each view capture and each step's exit (including the next navigation and final replay return), a bounded barrier requires all page requests and API body reads to finish plus 500 ms without request/body activity, so late arrivals extend the live wait rather than escaping a single `networkidle`/promise-array snapshot.
+
+A request failure or any response-finish/header/body/assertion failure is retained and thrown by that barrier with method, URL and original error/cause. The rejection handler prevents an unattached asynchronous rejection; it does not ignore a failure or skip a response. A request that never completes or a body read that never settles fails within the new 10-second barrier with outstanding URLs. This is a new bounded wait, not an increase to an existing test timeout or a retry. Listener cleanup is symmetrical in `finally`.
+
+### Lines changed, before/after (relative to round base)
+
+- Old **87–110** -> new **87–129**: the `pending: Promise<void>[]` snapshot becomes a request-keyed capture map plus live outstanding-request and failure tracking; add `requestfinished`/`requestfailed` listeners, `response.finished()`, concurrent header/body reading and `drain()`.
+- Old **111–125** -> new **130–147**: attach/detach all four listeners, drain before the first `goto`, replace `waitForLoadState('networkidle'); Promise.all(pending)` with the live drain, and drain again after storing each view before leaving its page.
+- Exactly **+33/-11** lines in the spec. All **41** previous simple `expect` calls, the nine channels, response URL/status/body/header projections, final exact comparator, visible/browser instrumentation, fixtures and named clock checks are unchanged. One new `expect.poll(...).toEqual(...)` assertion enforces the barrier. Test I and everything outside Q's response-capture lifecycle are unchanged. Only this spec and this receipt changed in the repository.
+
+**NAMED LIMIT unchanged:** only the ruled exact `Retrieved:`/`retrievedAt`, Nest `etag` where present and Next `date` exclusions, with their existing positive assertions, remain authorized. This repair adds no exclusion, body substitution, filtered response or reduced channel/header list; Q's existing absent-Next-etag assertion remains intact.
+
+### Scratch controls (uncommitted, no browser or database)
+
+`/private/tmp/jg-sv3-r4-control.cjs` extracts/transpiles Q's actual clock helpers, request/capture listeners, drain, snapshot projection and final comparator, then executes them with the installed Playwright assertions and a synthetic event-emitting page. A scratch capture regression ran RED before implementation; the initial log is `/private/tmp/jg-sv3-r4-control-before.log` (the shell wrapper printed that log after Node's failure, so its aggregate exit was 0). A final baseline control against the archived HEAD spec explicitly models the old first idle point at 500 ms: only the early body has been read when its snapshot barrier returns, and the three-body assertion fails, exit **1 EXPECTED**. The repaired control holds an already-started request until its response arrives at 650 ms, includes a new request at 800 ms during the drain, and waits for that request's body read for another 800 ms even though `requestfinished` has fired; all three bodies are captured before exit, **PASS**.
+
+- **Changed body RED:** change just one captured base64 body in the second replay snapshot. Q's actual final `responseShape` `toBe` comparison fails on the original body versus `{"fixture":"CHANGED"}`, exit **1 EXPECTED**. The same projection/comparator passes with no body change.
+- **Missing response RED:** emit `GET https://fixture.invalid/api/never-completes` without a response or finish event. Q's actual drain fails after **10000 ms**, showing that URL in `inFlight` even though `quiet` is true, exit **1 EXPECTED**. Quiet time cannot excuse an outstanding request.
+- **Unreadable body RED:** a synthetic response rejects `body()`; the actual capture/barrier fails with `Q response capture failed: GET https://fixture.invalid/api/unreadable: Error: fixture body unavailable`, exit **1 EXPECTED**. No response is silently dropped.
+
+These are execution of extracted Q capture/assertion code against synthetic events, **not browser Q passes or proof of the cold Chromium behavior**. Scratch scripts/spec/logs remain outside the repository.
+
+### Commands and actual outcomes
+
+Installed dependencies reused; no clean-install claim. Node **v24.17.0**. Plain `pnpm --version` stalled on the installed launcher's self-selection and was interrupted (exit 130); all subsequent pnpm commands used the already-existing `/private/tmp/jg-sv3-bin` shim for cached **10.28.1**, without installing/downloading. Below `P` means `PATH=/private/tmp/jg-sv3-bin:$PATH`; logs are `/private/tmp/jg-sv3-r4-*.log`. Heavy repository checks were serialized.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `SV3_CONTROL_SOURCE=/private/tmp/jg-sv3-r4-before.ts node /private/tmp/jg-sv3-r4-control.cjs` | 1 EXPECTED RED | Archived base capture returns with only the early body, missing both late bodies. |
+| `node /private/tmp/jg-sv3-r4-control.cjs` | 0 | Late response/new request/slow body captured; actual snapshot and all nine channel comparators pass. |
+| Same scratch command with `changed-body`, `missing`, `unreadable` | 1 each EXPECTED RED | Body difference, never-completed request and body-read rejection fail loudly as above. |
+| `P pnpm typecheck` | 0 | 7/7 tasks, 6 cached; changed browser spec checked. |
+| `P LANE_BASE_REF=origin/main pnpm lint` | 1 | Core purity passed (137 files); lane rejects the same 36 inherited SV-4/coordinator paths as the Mac record, including inherited B1 in shadow-persistence. Neither repair path is rejected. No lane/security list edited; package lint not reached by wrapper. |
+| `P LANE_BASE_REF=origin/main pnpm lint:lanes` | 1 | Same inherited branch-state lane failure. |
+| `P pnpm turbo run lint` | 0 | Actual package lint: 7/7 tasks, 2 cached; final spec checked. |
+| `LANE_BASE_REF=origin/main node tools/money-arithmetic-lint.mjs` | 0 | Passed. |
+| `LANE_BASE_REF=origin/main node tools/commercial-boundary-lint.mjs` | 0 | Passed. |
+| `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` | 0 | **19/19** runnable Node tests passed. Git-write fixture tests omitted under the dispatcher's no-Git-writes instruction. |
+| `P pnpm build` | 0 | 7/7 tasks, 6 cached; Next build passed. Existing workspace-root/CSS/autoprefixer and sandbox cache-write warnings. |
+| `P pnpm openapi:check` | 1 | tsx CLI IPC `listen EPERM`, before comparison. |
+| `P pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Same generator/check via Node loader without CLI IPC socket; OpenAPI unchanged. |
+| Initial scratch self-review invocation | 1 | Scratch-script syntax typo before checks; corrected only the temporary script. |
+| `node /private/tmp/jg-sv3-r4-self-review.cjs` (corrected) | 0 | 41 prior expectations and all comparison blocks preserved; test I, protected files, lane and OpenAPI unchanged; exact two-file scope. |
+| Read-only Git inspections and `git diff --check` | 0 | No whitespace errors; no Git write. |
+
+**NOT RUN:** browser Q/I on mobile-360 or desktop, any other browser journey, `pnpm test:db`, `pnpm test:migrations`, PostgreSQL regressions and full `pnpm test` aggregate. Browser/localhost/PostgreSQL are unavailable in this sandbox as issued; the aggregate includes prohibited database suites and Git-write fixtures. No changed unit-test file exists outside the browser spec; unchanged Vitest/evaluation suites were not repeated. No prompt/model/schema/parser/detector changed, and the approved-region live-model evaluation remains a separate NOT RUN release item.
+
+**Required helper handoff:** run Q on **mobile-360 FOUR times and desktop FOUR times**, each individual run from a **fresh cold web-server start**, with no reused warm server or repeat-each shortcut. Record first failing assertions if any and the date assertions/channel comparisons. Dispatcher/CI still own PostgreSQL/retained regression checks and the eventual push.
+
+### Self-review pass and status
+
+Read the full delta: the live request set includes every page request, while API bodies retain exactly the previous `/api/` inclusion rule. A late response has a pending capture before awaiting its finish; `requestfinished` alone cannot release a pending body read; every new request/finish/read resets quiet time; all retained errors are thrown before a successful barrier can release navigation. All prior assertions/comparisons are byte-preserved as one-off receipt evidence, with no permanent hash test. Rule 11: no credential-shaped literal added. Rule 12: semantic barrier assertions only. `apps/api/src/auth/context-boundary.test.ts`, `packages/db/test/shadow-persistence.integration.test.ts`, security lists, lane registry, OpenAPI, AGENTS.md and BUILD_PLAN.md remain unchanged from round base.
+
+No product code, migration, provider action, commercial policy, operational alert or deployment changed. Self-review/source inspection and synthetic control execution are distinct from independently verified browser behavior. No independent verdict or technical acceptance claimed; those await the dispatcher's exact commit and separate reviewers. No commit, add, checkout, push, package download or dependency installation performed. Intended conventional-commit subject/body written to `/private/tmp/jg-msg-sv-3.txt`; dispatcher owns committing. Browser cold-start acceptance remains **HELD**.
