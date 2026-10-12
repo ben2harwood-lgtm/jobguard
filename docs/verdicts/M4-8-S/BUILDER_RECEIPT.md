@@ -129,3 +129,31 @@ Owed: Mac/helper/CI PG and both-project browser runs, fresh complete root checks
 Intended commit message: `/private/tmp/jg-msg-m4-8-s-r2.txt`. Dispatcher owns commit, push and reviews. Generated build/test artifacts are removed before handoff; installed dependencies remain. No git write, remote operation, provider call, spending, deployment or real data occurred.
 
 **Builder receipt only — not independently verified, not accepted.**
+
+---
+
+## Mac verification (12 Oct)
+
+12 October 2026, Claude Sonnet 5.5 as the Mac-side helper (not a reviewer, no verdict). Logs and the verified patch are under `~/.local/share/full-steam/jg-runs/m4-8-s-mac/`. **Result: RED. Nothing was pushed; no pull request opened.**
+
+**Catch-up.** `origin/main` 96f051f merged into 2f71b48 as merge commit b6d653f ("Merge main (96f051f) into M4-8-S"). Conflicts only in append-only files, main's lines first, this piece's additions inserted once: `apps/api/src/app.module.ts` (controller list), `apps/api/src/workspace/application.ts` (return object), `apps/web/app/ui/workspace-shell.tsx` (mount), `packages/core/src/index.ts`, `packages/db/src/migrate.ts` (now ends 0129, 0130, 0131, 0136), `packages/db/MIGRATIONS.md` (0136 section kept after main's 0131 section; its heading raised from `###` to `##` to match every other migration section). `apps/api/openapi.json` was taken from main and regenerated with `pnpm openapi:generate`; `pnpm openapi:check` exit 0. `git diff origin/main --stat` after the merge: 40 files, all this piece's. Rebuilt `core`, `db`, `storage`, `config`, `ai`, each alone, then `@jobguard/api` and `@jobguard/web` (`next build`): all exit 0. Embedded PostgreSQL needed `scripts/hydrate-symlinks.js` (dyld libicudata) once.
+
+**RED finding (owner: the builder; migration 0136 does not apply).** Every database suite fails in `beforeAll` at `migrate()`: `0136_recovery_allocation.sql` raises `syntax error at end of input` (error position 20406 in the file) while creating `app.write_recovery_allocation`. Cause: three PL/pgSQL conditions hold an unparenthesised `CASE WHEN ... THEN ... END` inside an `IF`/`ELSIF ... THEN`; PL/pgSQL ends the condition at the first `THEN` inside the CASE, leaving a truncated expression. They are at lines 200 (`policyVersion` check), 222 (`action` check) and 305 (`sourceRef` check) of the migration. First failing test: `recovery-allocation.integration.test.ts` `beforeAll` (15 tests skipped), `migrate src/migrate.ts:88`. Diagnosis check on a scratch copy outside the repo (repo files unchanged): wrapping those three CASE expressions in parentheses makes all migrations through 0136 apply cleanly. The three-line diff is `~/.local/share/full-steam/jg-runs/m4-8-s-mac/0136-case-parens.diff` (NOT applied here; the builder owns the repair, and any further defects behind this one are unknown because no database suite could run).
+
+| Item | Result |
+| --- | --- |
+| core `recovery-allocation.test.ts` | exit 0, 49 passed |
+| core `recovery-allocation` + `receipt-allocation` + `cumulative-fee` | exit 0, 140 passed (3 files) |
+| core `watchdog.test.ts` | exit 0, 7 passed |
+| api `recovery-allocation.application` + `.controller` tests | exit 0, 38 passed |
+| api `watchdog-registry.test.ts` | exit 0, 121 passed |
+| api `auth/context-boundary.test.ts` (run only, not edited) | exit 0, 145 passed |
+| `node --test tools/*.test.mjs` | exit 0, 85 passed |
+| `pnpm typecheck` | exit 0, 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | exit 0, 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | exit 0 (lane m4-8-s, base 96f051f) |
+| `pnpm openapi:check` | exit 0 |
+| Database suites: `recovery-allocation`, `recovery-line-allocation`, `recovery-allocation-races` (incl. [M-LOCK]), `recovery-allocation-upgrade` (rule 9), `tenancy`, `UIWIRE-12`, `demo-bootstrap`, `recovery-case-join.integration` (J-REQ1 to J-REQ3), `recovery-cases*`, `recovery-eligibility-v3`, `recovery-timing-pin`, `recovery.integration`, `recovery-follow-up`, `recovery-messages`, `command-replay-contract.integration` | **BLOCKED, not passed.** Only `recovery-allocation.integration` was started (exit 1, migration error above); all others share the same `migrate()` and were not started. [M-LOCK] and J-REQ1 to J-REQ3 therefore have no execution evidence. |
+| Browser: `M4-8-S.spec.ts` on `mobile-360` and `desktop` | **NOT RUN.** Same migration step (`bootstrapSyntheticDemo` calls `migrate`) would fail; two start attempts also hit ports 3000/55432 held by another agent's (sv-3) Playwright runs. |
+
+**GRANT reading of 0136 (new build standard).** (1) `GRANT SELECT ON app.<table> TO jobguard_runtime` for the six new tables (`recovery_allocation_review`, `recovery_allocation_line_source`, `recovery_case_allocation`, `recovery_case_allocation_reversal`, `receipt_line_allocation`, `recovery_allocation_command`), each preceded by `REVOKE ALL ... FROM PUBLIC, jobguard_runtime`, owner `jobguard_migration`, ENABLE and FORCE row level security: SELECT only, no INSERT/UPDATE/DELETE grant. (2) `GRANT EXECUTE ON FUNCTION app.write_recovery_allocation(uuid,uuid,text,jsonb,jsonb) TO jobguard_runtime` after `REVOKE ALL ... FROM PUBLIC, jobguard_infrastructure`: the checked SECURITY DEFINER writer owned by `jobguard_migration`, which takes the actor from the persisted practice session and checks the owner role itself. (3) The trigger function and the fraction helper are owner `jobguard_migration` with `REVOKE ALL ... FROM PUBLIC, jobguard_runtime` and no grant back. Reading: no direct write grant for the app login on any new table, so the standard is met on its face; the routine's own checks could not be exercised. One observation, not a finding: the writer's synthetic-only guard reads `app.recovery_allocation_environment`, a setting the caller sets, the same pattern as the merged practice-feed and eligibility routines.
