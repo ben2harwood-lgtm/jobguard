@@ -520,3 +520,136 @@ All four compared tables have nonempty-row guards; every table's control results
 Scope checked: one lane line in name order, three existing proof files, one support file and this receipt only. No original line beyond those listed in the literal-change record was removed/replaced, no title/budget changed, and #138's stated hunks do not overlap. Audit-export, the untouchable API auth test, other shared helpers/proofs, migration sources/list and BUILD_PLAN remain byte-identical. Mixed SQL predicates added here are bracketed. Added text uses the issued scratch/negative-control/later-migration terminology and introduces no credential-shaped literal. Receipt hashes are read-only evidence; no standing test pins unowned files. No UI work or adjacent repair was attempted.
 
 Builder receipt only — not independently verified, not accepted.
+
+
+## Mac verification (12 Oct)
+
+Run by a Mac-side helper (Claude Sonnet 5.5) on the dispatcher's Mac, 12 October 2026, 14:49 to 15:55 BST. Candidate: branch `codex/sandbox/mig-order-4`, head `7de6617b27829a2857c5380de595f75dfd14755e`, cut from `origin/main` `a0963f405fee263cf2bfe8effe68bbeaa9ae1ff6` (merge-base equals `origin/main`). Working directory for every command: `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mig-order-4`. Node v24.17.0, pnpm 10.28.1, PostgreSQL 16.10 (embedded-postgres, one cluster per test file). This section is a run record, not a review and not acceptance. Raw logs: `~/.local/share/full-steam/jg-runs/mig-order-4-scratch/` (outside the repository).
+
+### Scope check
+
+`git status` clean at start (and clean after every scratch run, last checked after the final run). `git diff --stat origin/main..HEAD` lists exactly six paths: `config/agent-lane-assignments.json`, `docs/verdicts/MIG-ORDER-4/BUILDER_RECEIPT.md`, `packages/db/test/job-activation-terms.integration.test.ts`, `packages/db/test/prevention-checks.integration.test.ts`, `packages/db/test/recovery-eligibility-v3.integration.test.ts`, `packages/db/test/upgrade-proof-utils.ts` (6 files, 826 insertions, 10 deletions). `packages/db/test/audit-export.integration.test.ts` does NOT appear.
+
+### Environment finding (not a code fault)
+
+The first database runs failed before any test code ran: `initdb` in this worktree aborted with `dyld: Library not loaded: @loader_path/../lib/libicudata.68.dylib` (the package's short-name library links were missing from `node_modules`, because the package postinstall had not run in this worktree). Effect on the runs: DW4 at 14:52 `Hook timed out in 10000ms`; merged-main DW4 at 14:54 `Postgres init script exited with code null`. Remedy used: ran the package's own postinstall, `node scripts/hydrate-symlinks.js` from `node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64` (exit 0, 17 links created; it only creates links inside the git-ignored `node_modules`; `initdb --version` then printed 16.10). No repository file was touched.
+
+### Commands and results (every command run from the working directory above)
+
+Heavy runs went through `~/.local/bin/heavy-slot`. Run 7 queued for about 35 minutes in heavy-slot (all three slots were busy); to avoid that wait again, the remaining vitest runs were started as `~/.local/bin/heavy-slot <label> zsh <scratch stage script>` where each script runs `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose <files>` ONE FILE PER RUN for the proofs and three per run for the neighbours. That is a wrapper around the ordered command, not the literal command line; the vitest arguments are the ones ordered plus `--reporter=verbose`.
+
+| # | Command (via heavy-slot unless stated) | Exit | Counts / note |
+|---|---|---:|---|
+| 1 | `pnpm --filter @jobguard/core build` | 0 | tsc, 35 s including queue |
+| 2 | `pnpm --filter @jobguard/db build` (alone, after 1) | 0 | tsc, 34 s |
+| 3 | vitest `test/recovery-eligibility-v3.integration.test.ts`, 14:52, before the environment fix | 1 | 0 run / 24 skipped; `Hook timed out in 10000ms` (environment, see above) |
+| 4 | same file restored to `origin/main` bytes (merged DW4), 14:54, before the fix | 1 | `Postgres init script exited with code null` (environment) |
+| 5 | vitest recovery-eligibility-v3 (candidate), 14:58, after the fix, no flags | 1 | 0 run / 24 skipped; `Hook timed out in 10000ms` at `recovery-eligibility-v3.integration.test.ts:23`. See "Timing hazard" |
+| 6 | vitest recovery-eligibility-v3 at `origin/main` bytes (merged DW4), 14:59, no flags | 0 | 24 passed; duration 10.95 s, tests 10.22 s (cold) |
+| 7 | vitest recovery-eligibility-v3 (candidate) with `--hookTimeout=120000` (diagnostic only, 15:36, after a 35 min queue) | 0 | 24 passed, 2.65 s. Not an as-written result |
+| **A1** | vitest recovery-eligibility-v3 (candidate), as committed, no flags, 15:40 | 0 | **24 passed**, 2.81 s |
+| **A2** | vitest prevention-checks (candidate), as committed | 0 | **11 passed**, 3.49 s |
+| **A3** | vitest job-activation-terms (candidate), as committed | 0 | **11 passed**, 4.27 s |
+| B0 | merged DW4 (`origin/main` bytes), warm, 15:41 | 0 | 24 passed, 2.52 s (tests 1.83 s; candidate A1 tests 2.10 s) |
+| C1 | vitest recovery-timing-pin + extra-origin-upgrade + recovery-follow-up-upgrade | 0 | 3 files, **31 passed**, 7.86 s |
+| C2 | vitest practice-feed + recovery-cases (`recovery-cases.integration.test.ts` only) + fingerprinted-row-shape | 0 | 3 files, **52 passed**, 4.88 s |
+| C3 | vitest audit-export + job-parties + tenancy | 0 | 3 files, **106 passed**, 5.25 s |
+| T | `pnpm typecheck` (not heavy-slot) | 0 | 7 successful / 7, 4 cached, 12.8 s |
+| L | `LANE_BASE_REF=origin/main pnpm lint` | 0 | core purity passed (129 files); `Lane boundary passed` (lane mig-order-4, comparison merge-base, base a0963f4, head 7de6617); money arithmetic boundary passed; 7 successful / 7, 4 cached (one cache replay names another worktree's path, `.worktrees/ent-4b`; db, api and web lint executed here) |
+| LL | `pnpm lint:lanes` and `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 and 0 | `Lane boundary passed` both times |
+
+The three reshaped proofs, per test, as committed (runs A1 to A3). Time is vitest's own per-test time; the DW4 proof's controls and the N-alone step run in that file's set-up hook, so the DW4 test itself is only the assertions:
+
+```text
+## recovery-eligibility-v3.integration.test.ts
+PASS  DW1 F15 uses M4-7-S facts and persists exact Q/reason 80ms
+PASS  DW1 F17 uses M4-7-S facts and persists exact Q/reason 22ms
+PASS  DW1 F18 uses M4-7-S facts and persists exact Q/reason 19ms
+PASS  DW1 F19 uses M4-7-S facts and persists exact Q/reason 21ms
+PASS  DW1 F20 uses M4-7-S facts and persists exact Q/reason 18ms
+PASS  DW1 F21 uses M4-7-S facts and persists exact Q/reason 17ms
+PASS  DW1 F22 uses M4-7-S facts and persists exact Q/reason 20ms
+PASS  DW4 migration preserves previous reviews byte-for-byte and version 1ms
+PASS  rejects stale/rebound fixtures, injected fields, cross-job and revoked authority including replay 19ms
+PASS  pending movements and replayed statement representations do not invent qualifying cash 38ms
+PASS  catalogs and runtime enforce FORCE RLS, ownership, append-only and job/case-qualified links 28ms
+PASS  B2 refuses customer receipts as supplier-invoice settlement without writing credit/review rows 14ms
+PASS  source updates yield a new immutable review and races append one revision 39ms
+PASS  append-only triggers deny an owner rewrite, and failures after write roll back review/components/audit 45ms
+PASS  malformed tenant context fails closed, runtime grants are exact, and pooling clears context 13ms
+PASS  a database guard refusal has the same typed code as the application, with no committed effect 17ms
+PASS  runtime cannot put compensation into Q or alter a generated component's exact pence 21ms
+PASS  a duplicate-payment case is refused any new v1 review or approval, by the app and by raw runtime SQL; other categories are unchanged 26ms
+PASS  settled-before-opening is decided in PostgreSQL on microsecond timestamps: settlement 800 microseconds BEFORE opening in the same millisecond is F20 14ms
+PASS  settlement at exactly the case opening instant is excluded with zero Q 14ms
+PASS  settled-before-opening is decided in PostgreSQL on microsecond timestamps: settlement 800 microseconds AFTER opening in the same millisecond qualifies at the plan figure 15ms
+PASS  F17: a runtime-role review whose stored duplicate_supplier_payment omits the reason key cannot commit 25ms
+PASS  F21: a runtime-role review whose stored merchant_overcharge omits the reason key cannot commit 19ms
+PASS  F17: a runtime-role review whose stored duplicate_supplier_payment omits the reason key cannot commit 27ms
+## prevention-checks.integration.test.ts
+PASS  MON-7a real PostgreSQL guarantees > persists cited property facts for homeowners, replaying exactly once with atomic audit 53ms
+PASS  MON-7a real PostgreSQL guarantees > stale and missing fixtures are unknown for every check type, with explicit watch start/stop 53ms
+PASS  MON-7a real PostgreSQL guarantees > refuses every ineligible type server-side without a counterparty row 111ms
+PASS  MON-7a real PostgreSQL guarantees > denies missing context, non-members, wrong-job bindings and direct SQL tampering 45ms
+PASS  MON-7a real PostgreSQL guarantees > fails closed when the customer's latest revision is not eligible: new checks refuse and an existing watch yields nothing 112ms
+PASS  MON-7a real PostgreSQL guarantees > caps a sub-millisecond scenario time so TypeScript and the database evaluate the same instant 41ms
+PASS  MON-7a real PostgreSQL guarantees > leaves fee derivations, journals, recovery cases, illustrations, value inputs and outbound state byte-identical 69ms
+PASS  MON-7a real PostgreSQL guarantees > two distinct watch-start commands against one revision give one effect and a typed conflict 13ms
+PASS  MON-7a real PostgreSQL guarantees > an audit failure rolls back the receipt and all property facts 14ms
+PASS  MON-7a real PostgreSQL guarantees > owns and isolates both tables with narrow grants and immutable rows even for the owner 24ms
+PASS  MON-7a real PostgreSQL guarantees > upgrades the previous supported schema without altering an existing quoting job 434ms
+## job-activation-terms.integration.test.ts
+PASS  CH-1 v3 activation > owns the saved v1 sample per session and refuses a client pricing-generation switch 28ms
+PASS  CH-1 v3 activation > DW1/DW5 generates three named fixtures through the real command, without historic financial effects 210ms
+PASS  CH-1 v3 activation > binds a higher sent net even when the accepted net is small 32ms
+PASS  CH-1 v3 activation > DW1 replays, serializes two clients and rejects command-id reuse with a different payload 47ms
+PASS  CH-1 v3 activation > keeps parties mandatory and rolls failed activation back before audit 25ms
+PASS  CH-1 v3 activation > DW4 denies runtime edits and keeps classification after later commercial activity 35ms
+PASS  CH-1 v3 activation > fails closed for missing/foreign contexts, non-members and wrong-job accepted documents 192ms
+PASS  CH-1 v3 activation > rechecks revoked membership before replaying a successful activation 40ms
+PASS  CH-1 v3 activation > inspects actual catalog privileges, RLS, owner and qualified keys 3ms
+PASS  CH-1 v3 activation > upgrades from the schema just before CH-1's migration without rewriting v1 commercial rows 573ms
+PASS  CH-1 v3 activation > DW3 snapshots/exports and the immutable terms contain no historic copy 7ms
+```
+
+### Controls shown RED (broken comparator, scratch copy of `upgrade-proof-utils.ts`; restored with `git checkout HEAD -- <file>`; `git status` clean afterwards)
+
+Each broken helper was copied over `packages/db/test/upgrade-proof-utils.ts` for one run per file, then restored. Failing assertion is each file's controls assertion: `[MO4-1d]` at `recovery-eligibility-v3.integration.test.ts:123`, `[MO4-3d]` at `prevention-checks.integration.test.ts:250`, `[MO4-4d]` at `job-activation-terms.integration.test.ts:179`. Exit 1, `1 failed` in every run below; the other tests in each file passed.
+
+| Broken comparator | DW4 (0119) | prevention (0103) | activation (0109) | Controls that went red (the expected-versus-received diff) |
+|---|---|---|---|---|
+| V1 no-op: `proofDifferences` returns `{ rows: [], types: [] }` | red | red | red | (a) one microsecond: expected one `changed` row, got none; (a2) row gone: expected one `missing` row, got none; (b) retype: expected the `varchar` type line, got none; (b2) list-form retype: expected the altered-type line, got none. (c), (d), (e), (f) did not differ. |
+| V2 driver-parsed rows, the old shape: row bytes are `JSON.stringify` of the driver's parsed values (stored times rounded to the millisecond) | red | red | red | (a) one microsecond only: expected one `changed` row, got none. (a2), (b), (b2), (c) to (f) did not differ. |
+| V3 type-blind: the name-and-type check removed | red | red | red | (b) retype and (b2) list-form retype only: expected types line missing. Rows controls did not differ. |
+
+The retype statements were accepted by PostgreSQL on all three tables (reason, title, fee_policy_version: `character varying(200 or 80)` to `(201 or 81)`), so no control had to rely on (b2) alone. Activation: because the controls assertion throws at the first mismatch, the failure output shows `app.job_activation` (the first table); the `app.cap_snapshot` controls were not reached in the red runs. They pass in the as-committed run A3, where both tables' controls are asserted (the test passes with its `toHaveLength(2)` assertion).
+
+First stage-B pass note (discarded): my first script run restored the DW4 file from the index instead of HEAD after a baseline step, so its DW4 results (V1 to V3 and the DW4 after-all probe) were run against the merged DW4 bytes and are void. I corrected the restore to `git checkout HEAD -- <file>`, confirmed `git status` and `git diff HEAD` were empty, and re-ran the four DW4 scratch runs; the table above uses only the re-run DW4 results. Prevention and activation were unaffected (their files and the helper were always restored to HEAD).
+
+### The "after all migrations" scratch run, per row proof
+
+One uncommitted edit per file: a `BEGIN; SET LOCAL session_replication_role=replica; UPDATE <table> SET <stored time>=<stored time>+interval '1 microsecond' WHERE <old row>; COMMIT` placed on the line straight after the `migrate()` pair and before the after-all check; then `git checkout HEAD -- <file>`; `git status` clean afterwards. Line numbers below are in the committed file (the scratch edit shifted them by one).
+
+| Proof | Scratch edit | Result |
+|---|---|---|
+| DW4 | `app.recovery_eligibility_revision.created_at` of the old review row | exit 1, 1 failed / 23 passed. Stopped at `[MO4-1e] identified old rows and types after all migrations` (`recovery-eligibility-v3.integration.test.ts:140`): `rows` held exactly the old row's identity as `changed`, `types` empty |
+| prevention | `app.job.created_at` of the old job | exit 1, 1 failed / 10 passed. Stopped at `[MO4-3e] identified old rows and types after all migrations` (`prevention-checks.integration.test.ts:267`): one `changed` row, `types` empty |
+| activation | `app.job_activation.activated_at` of the old activation | exit 1, 1 failed / 10 passed. Stopped at `[MO4-4e] identified old rows and types after all migrations` (`job-activation-terms.integration.test.ts:197`): one `changed` row, `types` empty |
+
+### Stop rule for job-activation-terms (item 4)
+
+Did not fire. The before-0109 state was built on the schema through 0107 (installed by hand with 0095's `BEGIN;` replacement) and filled by the unchanged product calls; the test passed as committed (run A3, 11 of 11, the activation test 573 ms). The file was NOT reverted to its merged bytes. Nothing else was edited.
+
+### Timing hazard (reported, not repaired)
+
+The DW4 set-up hook has the default 10 s hook budget (unchanged by the order). Run 5 (candidate, 14:58) hit exactly that budget with no test code failing, while the merged DW4 file in run 6, one minute later, passed with tests at 10.22 s: both were slow starts (initdb on binaries first executed after the link fix). Warm, the candidate takes about 0.3 s more than the merged file in the hook (tests 2.10 s versus 1.83 s). The as-committed file passed on every run once warm (A1, and the later scratch runs), but it has little headroom on a cold start or a loaded Mac. I did not change any budget.
+
+### NOT RUN
+
+- The order's run A and run B exactly as grouped (audit-export in A; B with recovery-timing-pin and fingerprinted-row-shape): the three reshaped files were run one file per run as asked here; the neighbours ran in C1 to C3. Audit-export was only run unchanged (C3).
+- `pnpm build` (full), `pnpm openapi:check` and its stale-document finding, `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, any whole-package or whole-repository suite, browser suites.
+- Scratch controls for audit-export (struck from the order).
+- Fresh Opus review and the Codex Sol check; no acceptance is claimed.
+- Not committed or pushed: the scratch helper variants and scratch edits (they live only in `~/.local/share/full-steam/jg-runs/mig-order-4-scratch/`).
+
+Mac verification record only, by the Mac helper; not an independent review and not acceptance.
