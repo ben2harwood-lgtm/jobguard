@@ -302,3 +302,58 @@ Source-inspected the complete round-2 diff against starting HEAD, the issued/con
 Checked the upgrade proof does not pin the changed SQL text. No schema, grant, RLS, tenant boundary, lock order, hash, fee, prompt, UI or production-policy change is needed for this value repair. Exact whole-file replacement/insertion checks and the three-path working diff confirm SV-2, SV-3, auth pins, shared registrations, the merged invoice routine and all LATER findings are untouched in this round. The coordinator's B1 commit remains separately owned. The test has no reliance on absence of the lock table.
 
 Final verification and cleanup completed as recorded above. Rechecked exact source hashes, the entire three-file working diff, byte-identical existing test lines and unchanged starting HEAD; no additional repair found. Typecheck, package lint, static test compilation, build and the same OpenAPI checker passed; branch lint/lane checks remain red on the coordinator-owned B1 file. No SQL, database concurrency/RLS/trigger, browser or live-provider execution is claimed. Builder self-review only — not an independent model verdict. Builder receipt only — not independently verified, not accepted. Green GitHub checks including database/browser evidence and fresh independent verdict/separate acceptance remain owed; D12, D13, G1 and the older unguarded path owed to SV-5 remain held. B1's presence at the starting head is not a claim that it passed.
+
+
+## Mac verification (12 Oct, round 2)
+
+Run by the JobGuard dispatcher's Mac helper (Claude Sonnet 5.5), 12 October 2026, in `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-4`, branch `codex/sandbox/sv-4`. This is the first time the Round 2 repair (builder `issuer_details`) and the coordinator's B1 line ran against real PostgreSQL, and the first run on the merged and renumbered tree. It is a verification record only: **not independently verified, not accepted**. Earlier sections of this receipt that name the migration `0130` were written before the renumber.
+
+### Start, merge and renumber
+
+- Start: head `9f93e5b` (clean), `origin/main` `96c0cb8`. Free disk at start 119 GiB.
+- `git merge origin/main` -> merge commit `b588185`. Conflicts only in append-only files; resolved by keeping both sides, main's lines first: `packages/db/src/migrate.ts` (main's 0129 and 0130 lines, then this branch's line), `packages/db/src/index.ts`, `packages/db/MIGRATIONS.md`, `apps/api/src/app.module.ts` (the import, and the one `@Module` line: main's line plus `,FinalAccountLockController` once; character-level diff against main's line = a single 27-character insertion `,FinalAccountLockController` after `IdentityController`), `apps/api/src/workspace/application.ts` (the import, the `const finalAccountLock = ...` line, and main's `return Object.freeze({ ssoRequired, sso, ...` line plus `, finalAccountLock` once before ` });`; character-level diff = a single 18-character insertion). `config/agent-lane-assignments.json`, `BUILD_PLAN.md` and `apps/api/src/workspace/index.ts` merged without conflict; the lane JSON parses.
+- `apps/api/openapi.json`: not hand-merged. Took main's file, ran `pnpm openapi:generate` in `apps/api` (exit 0), then `pnpm openapi:check` (exit 0). Result vs main: 73 lines added, 0 removed, exactly the four `/jobs/{id}/final-account/{lock,dispositions,terms,review-extras}` routes (commit `685aacf`). sha256 of the file: `829f84558973f5b79c7b03a7b1a4994609a88b963b0c86c1db237dc8a236c79f`.
+- Renumber `0130` -> `0132` (commit `9168997`), `git mv packages/db/migrations/0130_final_account_lock.sql packages/db/migrations/0132_final_account_lock.sql`:
+  - sha256 **before** `543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7`, **after** `543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7` (equal; it is also the "Working SHA-256" of Round 2 above).
+  - Why: main's 0129 (ENT-10d) and 0130 (CH-7-F17-BEFORE-OPEN) merged first; 0131 is held for PRACTICE-FACTS-1 (#139).
+  - Changed: `migrate.ts` (registered last, after 0130), `MIGRATIONS.md` (heading `## 0132 — SV-4 final-account lock` with the renumber sentence), `final-account-lock-upgrade.integration.test.ts` (`OWN` name and test title; it installs everything before the file by NAME), `docs/contracts/final-account-lock-v1.md`, this receipt's body and `DRAFT_AUDIT.md`, the SV-4 line of `config/agent-lane-assignments.json` (the allow-list path of the migration file only), and a new `BUILD_PLAN.md` §12.2 paragraph "Ledger amendment — SV-4, 12 October 2026 (catch-up renumber, merge-ahead ruling)".
+  - `ls packages/db/migrations`: exactly one `final_account_lock` migration (0132); no duplicate numbers.
+- Packages rebuilt before any test, each alone through `heavy-slot`: `@jobguard/core`, `db`, `storage`, `config`, `ai`, `api` (all exit 0).
+
+### Results (working directory = worktree root unless shown; every command through `~/.local/bin/heavy-slot <label>`; logs in `~/.local/share/full-steam/jg-runs/sv-4-r2-mac/`)
+
+| # | Command (vitest `--reporter=verbose`) | Exit | Result |
+|---|---|---|---|
+| 1 | `packages/db`: `vitest run --maxWorkers=1 test/shadow-persistence.integration.test.ts` (SV-2's file, unedited, sha256 `a7b1f2670d96290a2778117317d6e8a6b590c4433415aa955d91af294933148c` = HEAD) | 0 | 1 file, **8/8**, including "returns nothing before a lock even with own revealed rows present (DW3 split)" (the coordinator's one-line change checks for no lock ROWS) |
+| 2 | RED EXPERIMENT, same file, `-t "returns nothing before a lock"`, uncommitted scratch edit | 1 | **RED as required**: with a real `final_account_lock` row for job J inserted first, the assertion `SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=ANY($2::uuid[])` ... `toBe(0)` fails: `AssertionError: expected 1 to be +0` (1 failed, 7 skipped by the filter). Details below. |
+| 3 | `packages/db`: `--maxWorkers=1 test/final-account-lock.integration.test.ts test/final-account-lock-invoice.integration.test.ts test/final-account-lock-reveal.integration.test.ts` | 0 | 3 files, **26/26** (14 + 10 + 2). Includes the Round 2 assertion inside "F7 main £40,320 and supplementary £960 bind exact source lines, replay once and never rebill the baseline" (builder `issuer_details`, trigger-filled `parties_snapshot`) |
+| 4 | `packages/db`: `--maxWorkers=1 test/final-account-lock-upgrade.integration.test.ts test/shadow-catalog.integration.test.ts test/tenancy.integration.test.ts` | 0 | 3 files, **16/16**; the rule-9 proof "installs before 0132, compares 0132 alone, all later twice, and exercises the same comparator's rolled-back controls" passed (1.6 s) |
+| 5 | `packages/db`: `--maxWorkers=1 test/UIWIRE-12.integration.test.ts test/demo-bootstrap.integration.test.ts` (catalogue rows touched by SV-4) | 0 | 2 files, **26/26** |
+| 6 | `apps/api`: `--maxWorkers=2 src/final-account-lock.application.test.ts src/final-account-lock.controller.test.ts src/final-account-lock.isolation.test.ts` | 0 | 3 files, **22/22**, including the real-database zero-versus-25-signals test (DW8) |
+| 7 | `packages/core`: `--maxWorkers=2 src/final-account-lock.test.ts src/shadow-domain/lock.test.ts src/watchdog.test.ts` | 0 | 3 files, **16/16** |
+| 8 | `apps/api`: `--maxWorkers=2 src/auth/context-boundary.test.ts src/watchdog-registry.test.ts` | 0 | 2 files, **266/266**; the scanner alone (step run separately) **145/145** (expected 145); watchdog registry 121 |
+| 9 | `pnpm typecheck` | 0 | 7/7 tasks |
+| 10 | `LANE_BASE_REF=origin/main pnpm lint` | **1** | **FAILED at the lane step**: `Lane boundary FAILED: Lane sv-4 cannot edit: "packages/db/test/shadow-persistence.integration.test.ts"`. This is the only path named. It is the coordinator's one-line commit `d620264` (B1); the SV-4 lane allow-list does not contain it (the SV-2 lane line does). Nothing was added to the allow-list and the file was not touched: widening the lane is the coordinator's decision. |
+| 10a | the rest of `pnpm lint`, run separately because the lane step stops the chain: `node tools/core-purity-lint.mjs`; `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs`; `pnpm turbo run lint` | 0 each | core purity 131 files; money arithmetic and commercial boundary passed; turbo lint 7/7 |
+| 11 | `pnpm openapi:check` (in `apps/api`) | 0 | pass |
+| 12 | `pnpm build` | 0 | 7/7 tasks (the production build the browser specs use) |
+| 13 | `apps/web`: `CI=1 PLAYWRIGHT_SKIP_BROWSER_GC=1 pnpm exec playwright test --config ~/.local/share/full-steam/jg-runs/sv-4-r2-mac/pw-local-channel-sv-4-r2.config.ts --workers=1 e2e/SV-4.spec.ts e2e/customer-invoice.spec.ts e2e/final-account.spec.ts` (both projects, mobile-360 and desktop) | 0 | **14 passed** |
+| 14 | same config, `e2e/UIWIRE-9.spec.ts e2e/UIWIRE-10.spec.ts` | 0 | **4 passed** |
+| 15 | same config, `e2e/CH-1.spec.ts e2e/M4-3-S.spec.ts e2e/M4-7-S.spec.ts` (merged specs that issue invoices through the screens SV-4 changed; the older no-lock path must stay open, Q1) | 0 | **20 passed** |
+| 16 | same config, `e2e/UIWIRE-12.spec.ts` | 0 | **6 passed** |
+
+Wrapper config (out of repo): `~/.local/share/full-steam/jg-runs/sv-4-r2-mac/pw-local-channel-sv-4-r2.config.ts`, copied from `pw-local-channel-train-20261012-b.config.ts` with the worktree path changed to this worktree, `outputDir` under `sv-4-r2-mac/pw-results`, `channel: "chromium"`. `ENT-2.spec.ts` was not run, so the known Mac-only `[mobile-360] ENT-2.spec.ts:19` failure did not appear.
+
+### Red experiment (step 2) in detail
+
+The scratch edit (never committed) inserted, immediately before the line-52 assertion of `shadow-persistence.integration.test.ts`, a REAL lock for job J of tenant T built the way the SV-4 fixtures build one: a scope item, an accepted quote version, a final-account draft, a revision and a baseline line for J (as the migration owner, inside a tenant transaction), then through `FinalAccountLockRepository` as the runtime login: `acceptTerms`, `disposition` ("done") and `lock`. All of that succeeded (the failure is at the assertion, not in the set-up). Result: `FAIL ... returns nothing before a lock even with own revealed rows present (DW3 split)`, `AssertionError: expected 1 to be +0`, at the `final_account_lock` count line (line 71 in the scratch copy, line 52 in the committed file). Restored with `git checkout -- packages/db/test/shadow-persistence.integration.test.ts`; `git status --short` printed nothing, and the file's sha256 equals the committed one (`a7b1f267...3148c`).
+
+### Not run
+
+`pnpm test:db`, `pnpm test:migrations` and any whole-package suite (memory rule); `ENT-2.spec.ts`; browser specs of screens SV-4 does not change; SV-3. A real-PostgreSQL check of the Round 2 builder-`issuer_details` assertion against the OLD SQL (the executed "red" for B2) was not run: only the repaired SQL was run, where the assertion passes.
+
+### Push
+
+Not pushed from this run: the required `LANE_BASE_REF=origin/main pnpm lint` is red on the lane step (step 10). Everything else above is green. Resolution is the coordinator's: either add `packages/db/test/shadow-persistence.integration.test.ts` to the `sv-4` allow-list (one entry) or rule otherwise; then `git push origin HEAD:codex/sandbox/sv-4` (plain push; PR #152 is open at the older head `1965aea` and conflicts with main until pushed).
+
+Mac verification record only; the builder receipt above is still "not independently verified, not accepted".
