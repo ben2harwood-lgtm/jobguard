@@ -836,9 +836,11 @@ catalog, support disclosure, rollback, immutable metadata, source-FK/probe and
 non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
 and browser regressions. Local sandbox initialization errors are not DB passes.
 
-### 0124 — PRACTICE-FACTS-1 part A (issued 11 October 2026)
+## 0131 — PRACTICE-FACTS-1 part A
 
-`0124_practice_feed_facts.sql` replaces exactly six catalogue CHECK constraints on
+Renumbered from 0124 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
+
+`0131_practice_feed_facts.sql` replaces exactly six catalogue CHECK constraints on
 `practice_feed_command`, `practice_feed_event` and `practice_feed_receipt_match`.
 It retains every existing allowed value and adds **six movement keys** from
 `practiceFactsCatalogueV1` to the command/event movement checks:
@@ -852,7 +854,7 @@ and `pg_get_constraintdef` containing `receipt-384`, requiring exactly two match
 per table; any mismatch aborts the transaction. Each widened replacement keeps
 its discovered original constraint name and validates existing rows, in the
 same transaction. The upgrade test compares all six names, validation flags
-and every old allowed literal before and after 0124.
+and every old allowed literal before and after 0131.
 
 Creates NO table, column, role, grant, policy, trigger or function. Updates,
 rewrites and deletes NO existing row. Both feed routines remain unchanged.

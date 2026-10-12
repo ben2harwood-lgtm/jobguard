@@ -70,7 +70,7 @@ triggers enforce that same write contract. Existing FORCE RLS, owner and grants
 are retained. As in the merged feed, database environment settings are supplied
 by the server; physical separation from pilot/production remains the boundary.
 
-Migration 0124 widens the six existing catalogue checks under their original,
+Migration 0131 widens the six existing catalogue checks under their original,
 discovered names, validated in the same transaction. The command/event movement
 checks add **six movement keys**: `receipt-12000`, `receipt-14640`,
 `supplier-payment-600`, `supplier-payment-840`, `receipt-interest-120` and

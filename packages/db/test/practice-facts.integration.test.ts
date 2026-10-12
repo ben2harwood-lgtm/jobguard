@@ -90,13 +90,13 @@ const catalogueChecks = async () => (await admin.query<{ table_name: string; con
 )).rows;
 let upgradeChecks: Awaited<ReturnType<typeof catalogueChecks>>;
 let upgradeRows:unknown, upgradeCatalogs:Awaited<ReturnType<typeof catalogs>>, upgraded:{jobId:string;sessionId:string}, mergedBefore:PracticeFeedView;
-// Upgrade-proof reshape (coordinator rule 9): 0124 is applied ALONE and compared at full strength; every later migration then runs twice;
-// afterwards the pre-existing rows are compared by the names of the columns that existed before 0124.
+// Upgrade-proof reshape (coordinator rule 9): 0131 is applied ALONE and compared at full strength; every later migration then runs twice;
+// afterwards the pre-existing rows are compared by the names of the columns that existed before 0131.
 let alone:{rows:unknown;catalogs:Awaited<ReturnType<typeof catalogs>>;checks:Awaited<ReturnType<typeof catalogueChecks>>;perTable:{t:string;checks:{conname:string;def:string;convalidated:boolean}[]}[];view:PracticeFeedView};
 let runBetween:{first:unknown;second:unknown};
 let preColumns:Record<string,string[]>, preIds:Record<string,string[]>, namedBefore:Record<string,unknown[]>, typesBefore:{t:string;name:string;type:string}[];
 const namedRows = async (db:Pick<Pool|PoolClient,"query">) => Object.fromEntries(await Promise.all(Object.keys(preColumns).map(async(t)=>[t,(await db.query(`SELECT row_to_json(t)::text AS bytes FROM (SELECT ${preColumns[t]!.map(c=>`"${c}"`).join(",")} FROM app.${t} WHERE id=ANY($1::uuid[])) t ORDER BY t.id`,[preIds[t]])).rows.map(r=>r.bytes as string)] as const))) as Record<string,string[]>;
-// Name and full type (with modifiers) of each pre-0124 column, in a fixed order; columns added later are ignored.
+// Name and full type (with modifiers) of each pre-0131 column, in a fixed order; columns added later are ignored.
 const namedTypes = async (db:Pick<Pool|PoolClient,"query">) => (await db.query("SELECT c.relname t,a.attname name,format_type(a.atttypid,a.atttypmod) type FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid WHERE a.attrelid=ANY($1::regclass[]) AND a.attnum>0 AND NOT a.attisdropped ORDER BY c.relname,a.attname",[Object.keys(preColumns).map(t=>`app.${t}`)])).rows
   .filter(r=>preColumns[r.t as string]!.includes(r.name as string)).map(r=>({t:r.t as string,name:r.name as string,type:r.type as string}));
 beforeAll(async()=>{
@@ -107,8 +107,8 @@ beforeAll(async()=>{
   await postgres.initialise(); await postgres.start();
   admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password});
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  const index=MIGRATION_URLS.findIndex(u=>fileURLToPath(u).endsWith("0124_practice_feed_facts.sql"));
-  if(index<0)throw new Error("0124 missing");
+  const index=MIGRATION_URLS.findIndex(u=>fileURLToPath(u).endsWith("0131_practice_feed_facts.sql"));
+  if(index<0)throw new Error("0131 missing");
   for(const url of MIGRATION_URLS.slice(0,index)){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[fileURLToPath(url).split("/").at(-1)]);}
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)",[DEMO_TENANT_ID,otherTenant]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[DEMO_IDENTITY_USER_ID]);
@@ -126,7 +126,7 @@ beforeAll(async()=>{
   preColumns=Object.fromEntries(tables.slice(2).map(t=>[t,columnRows.filter(c=>c.table_name===t).map(c=>c.column_name as string)]));
   preIds=Object.fromEntries(await Promise.all(tables.slice(2).map(async t=>[t,(await admin.query(`SELECT id FROM app.${t} ORDER BY id`)).rows.map(r=>r.id as string)] as const)));
   namedBefore=await namedRows(admin);typesBefore=await namedTypes(admin);
-  // Apply 0124 ALONE, the way the runner applies one file (run its SQL, then record it), and capture what it did.
+  // Apply 0131 ALONE, the way the runner applies one file (run its SQL, then record it), and capture what it did.
   const alonePath=fileURLToPath(MIGRATION_URLS[index]!);
   await admin.query(await readFile(alonePath,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[alonePath.split("/").at(-1)]);
   alone={rows:await rows(),catalogs:await catalogs(),checks:await catalogueChecks(),perTable:await Promise.all(tables.slice(2).map(async t=>({t,checks:(await admin.query("SELECT conname,pg_get_constraintdef(oid) def,convalidated FROM pg_constraint WHERE conrelid=$1::regclass AND contype='c' AND position('receipt-384' in pg_get_constraintdef(oid))>0",[`app.${t}`])).rows}))),view:await view(upgraded)};
@@ -137,7 +137,7 @@ afterAll(async()=>{if(priorEnvironment===undefined)delete process.env.JOBGUARD_E
 
 describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox)",()=>{
   it("populated upgrade preserves every old row byte-for-byte, checks all rows, and leaves all security and routine catalogs identical; remigrate no-op",async()=>{
-    // 0124 applied alone: everything it did, at full strength.
+    // 0131 applied alone: everything it did, at full strength.
     expect(alone.rows).toEqual(upgradeRows);expect(alone.catalogs).toEqual(upgradeCatalogs);
     expect(alone.view).toEqual(mergedBefore);
     for(const {checks} of alone.perTable){
@@ -153,12 +153,12 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
       const widenedValues = new Set(replacement.def.match(/'[^']*'|\b\d+\b/gu) ?? []);
       expect(oldValues.every(value => widenedValues.has(value))).toBe(true);
     }
-    // After every later migration, run twice: 0124 recorded once and in order, the second run changed nothing.
+    // After every later migration, run twice: 0131 recorded once and in order, the second run changed nothing.
     const applied=(await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name);
-    expect(applied.filter(n=>n==="0124_practice_feed_facts.sql")).toHaveLength(1);
-    expect(applied.indexOf("0119_recovery_eligibility_v3.sql")).toBeLessThan(applied.indexOf("0124_practice_feed_facts.sql"));
+    expect(applied.filter(n=>n==="0131_practice_feed_facts.sql")).toHaveLength(1);
+    expect(applied.indexOf("0119_recovery_eligibility_v3.sql")).toBeLessThan(applied.indexOf("0131_practice_feed_facts.sql"));
     expect(runBetween.second).toEqual(runBetween.first);
-    // After ALL migrations: the pre-existing rows keep identical values in the columns that existed before 0124 (compared by name),
+    // After ALL migrations: the pre-existing rows keep identical values in the columns that existed before 0131 (compared by name),
     // and the original allowed values are still allowed (tolerant: a later migration may add more).
     for(const t of Object.keys(preColumns))expect(namedBefore[t]!.length).toBeGreaterThan(0);
     expect(await namedRows(admin)).toEqual(namedBefore);
@@ -402,13 +402,13 @@ it("F18 extra receipts settle after a real case opens, retaining original £3,00
   const review=await new RecoveryEligibilityV3Repository(practiceMaterialPool(runtime,auth.digest),"synthetic_demo").review(context,f.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,expectedReviewRevision:0,fixture:"F18"},actor,auth.digest);
   expect(review.result).toMatchObject({qualifyingPrincipal:{pence:262000,currency:"GBP"},reason:"Fixed statutory compensation is not part of the fee base",productionEnabled:false});
 });
-it("fresh migration installs 0124 once without introducing business objects or changing grants",async()=>{
+it("fresh migration installs 0131 once without introducing business objects or changing grants",async()=>{
   const database=`practice_facts_fresh_${randomUUID().replaceAll("-","")}`;
   await admin.query(`CREATE DATABASE ${database}`);
   const fresh=new Pool({...admin.options,password,database});
   try{
     await migrate(fresh);await migrate(fresh);
-    expect((await fresh.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0124_practice_feed_facts.sql'")).rows[0].n).toBe(1);
+    expect((await fresh.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name='0131_practice_feed_facts.sql'")).rows[0].n).toBe(1);
     const counts=(await fresh.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner FROM pg_class c WHERE c.oid=ANY($1::regclass[]) ORDER BY c.relname",[tables.map(t=>`app.${t}`)])).rows;
     expect(counts).toHaveLength(5);expect(counts.every(c=>c.relrowsecurity&&c.relforcerowsecurity&&c.owner==="jobguard_migration")).toBe(true);
   }finally{await fresh.end();await admin.query(`DROP DATABASE ${database}`);}
