@@ -835,3 +835,9 @@ Before acceptance CI must execute real PostgreSQL fresh/upgrade, least-privilege
 catalog, support disclosure, rollback, immutable metadata, source-FK/probe and
 non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
 and browser regressions. Local sandbox initialization errors are not DB passes.
+
+## 0129 — Single sign-on required (ENT-10d)
+
+Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces). Renumbered from 0125 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
+
+Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
