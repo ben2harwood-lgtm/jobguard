@@ -11,7 +11,7 @@ import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSess
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
+import * as mo4Proof from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import type { TenantTransaction } from "../src/tenant-context.js";
 const ctx=testTenantContext(T), actor={membershipId:M,identityUserId:U};
@@ -19,7 +19,7 @@ let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 let legacy:unknown[];
 const oldJob=randomUUID(),oldCase=randomUUID();
-let upgradeProof: { proof: Awaited<ReturnType<typeof proofBefore>>; ownRegistry: string[]; ownRows: unknown[]; controls: Array<{ table: string; microsecond: unknown; missing: unknown; retype: unknown; listRetype: unknown; nullable: unknown; replaced: unknown; inserted: unknown; after: unknown; columns: unknown }>; afterControls: Awaited<ReturnType<typeof proofDifferences>> };
+let upgradeProof: { proof: Awaited<ReturnType<typeof mo4Proof.proofBefore>>; ownRegistry: string[]; ownRows: unknown[]; controls: Array<{ table: string; microsecond: unknown; missing: unknown; retype: unknown; listRetype: unknown; nullable: unknown; replaced: unknown; inserted: unknown; after: unknown; columns: unknown }>; afterControls: Awaited<ReturnType<typeof mo4Proof.proofDifferences>> };
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";directory=await mkdtemp(join(tmpdir(),"jg-ch7-"));const port=await freePort(60500,150);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
@@ -33,7 +33,7 @@ beforeAll(async()=>{
  await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)VALUES($1,$2,$3,32000,'GBP','identified',0,true)",[oldCase,T,oldJob]);
  await admin.query(`INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash)VALUES($1,$2,$3,$4,1,1,1,'reference-d03.v1',1,'pending_money','excluded',NULL,'GBP','Pending money cannot qualify','[]','reviewed','reviewer:previous',$5,$6)`,[randomUUID(),T,oldJob,oldCase,randomUUID(),"a".repeat(64)]);
  legacy=(await admin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_revision r")).rows;
- const proof = await proofBefore(admin, ["app.recovery_eligibility_revision"]);
+ const proof = await mo4Proof.proofBefore(admin, ["app.recovery_eligibility_revision"]);
  await admin.query(await readFile(MIGRATION_URLS[index]!, "utf8"));
  await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [names[index]]);
  const ownRegistry = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name as string);
@@ -45,42 +45,42 @@ beforeAll(async()=>{
    const key = JSON.parse(identity) as { tenant_id: string; id: string };
    const values = [key.tenant_id, key.id];
    const time = "created_at", column = "reason", newType = "character varying(201)", scratchTable = table;
-   const microsecond = await rolledBack(admin, async client => {
+   const microsecond = await mo4Proof.rolledBack(admin, async client => {
      await client.query("SET LOCAL session_replication_role=replica");
      const changed = await client.query(`UPDATE ${table} SET ${time}=${time}+interval '1 microsecond' WHERE (tenant_id=$1) AND (id=$2)`, values);
-     return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+     return { count: changed.rowCount, differences: await mo4Proof.proofDifferences(client, proof) };
    });
-   const missing = await rolledBack(admin, async client => {
+   const missing = await mo4Proof.rolledBack(admin, async client => {
      await client.query("SET LOCAL session_replication_role=replica");
      const changed = await client.query(`DELETE FROM ${table} WHERE (tenant_id=$1) AND (id=$2)`, values);
-     return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+     return { count: changed.rowCount, differences: await mo4Proof.proofDifferences(client, proof) };
    });
-   const retype = await rolledBack(admin, async client => {
+   const retype = await mo4Proof.rolledBack(admin, async client => {
      await client.query("SET LOCAL session_replication_role=replica");
      await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${newType}`);
-     return await proofDifferences(client, proof);
+     return await mo4Proof.proofDifferences(client, proof);
    });
-   const listRetype = await rolledBack(admin, async client => {
+   const listRetype = await mo4Proof.rolledBack(admin, async client => {
      await client.query("SET LOCAL session_replication_role=replica");
-     return await proofDifferences(client, { ...proof, [table]: { ...was, typed: { ...was.typed, [column]: `${was.typed[column]} mo4 scratch` } } });
+     return await mo4Proof.proofDifferences(client, { ...proof, [table]: { ...was, typed: { ...was.typed, [column]: `${was.typed[column]} mo4 scratch` } } });
    });
-   const nullable = await rolledBack(admin, async client => {
+   const nullable = await mo4Proof.rolledBack(admin, async client => {
      await client.query("SET LOCAL session_replication_role=replica");
      await client.query(`ALTER TABLE ${scratchTable} ADD COLUMN mo4_scratch text`);
-     return { exists: (await proofColumns(client, scratchTable)).some(c => c.name === "mo4_scratch" && c.type === "text"), differences: await proofDifferences(client, proof) };
+     return { exists: (await mo4Proof.proofColumns(client, scratchTable)).some(c => c.name === "mo4_scratch" && c.type === "text"), differences: await mo4Proof.proofDifferences(client, proof) };
    });
-   const replaced = await rolledBack(admin, async client => {
+   const replaced = await mo4Proof.rolledBack(admin, async client => {
      await client.query("SET LOCAL session_replication_role=replica");
-     return { replaced: await scratchReplaceFunction(client, "app.half_even_ratio(bigint,bigint,bigint)"), differences: await proofDifferences(client, proof) };
+     return { replaced: await mo4Proof.scratchReplaceFunction(client, "app.half_even_ratio(bigint,bigint,bigint)"), differences: await mo4Proof.proofDifferences(client, proof) };
    });
-   const inserted = await rolledBack(admin, async client => {
+   const inserted = await mo4Proof.rolledBack(admin, async client => {
      await client.query("SET LOCAL session_replication_role=replica");
      const changed = await client.query(`INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash)VALUES($1,$2,$3,$4,2,1,1,'reference-d03.v1',1,'pending_money','excluded',NULL,'GBP','Pending money cannot qualify','[]','reviewed','reviewer:previous',$5,$6)`,[randomUUID(),T,oldJob,oldCase,randomUUID(),"a".repeat(64)]);
-     return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+     return { count: changed.rowCount, differences: await mo4Proof.proofDifferences(client, proof) };
    });
-   controls.push({ table, microsecond, missing, retype, listRetype, nullable, replaced, inserted, after: await proofDifferences(admin, proof), columns: await proofColumns(admin, table) });
+   controls.push({ table, microsecond, missing, retype, listRetype, nullable, replaced, inserted, after: await mo4Proof.proofDifferences(admin, proof), columns: await mo4Proof.proofColumns(admin, table) });
  }
- upgradeProof = { proof, ownRegistry, ownRows, controls, afterControls: await proofDifferences(admin, proof) };
+ upgradeProof = { proof, ownRegistry, ownRows, controls, afterControls: await mo4Proof.proofDifferences(admin, proof) };
  await migrate(admin);await migrate(admin);
  await admin.query("CREATE ROLE ch7_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch7_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"ch7_login",password:"synthetic"});
 });
@@ -137,7 +137,7 @@ it("DW4 migration preserves previous reviews byte-for-byte and version",async()=
  expect(upgradeProof.afterControls, "[MO4-1d] nothing left behind").toEqual({ rows: [], types: [] });
  // fingerprinted-row-shape.integration.test.ts owns "may never gain a column"; recovery_eligibility_revision, job, job_activation and cap_snapshot are absent from its list.
  expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name), "[MO4-1e] all migrations registry").toEqual(names);
- expect(await proofDifferences(admin, proof), "[MO4-1e] identified old rows and types after all migrations").toEqual({ rows: [], types: [] });
+ expect(await mo4Proof.proofDifferences(admin, proof), "[MO4-1e] identified old rows and types after all migrations").toEqual({ rows: [], types: [] });
 });
 it("rejects stale/rebound fixtures, injected fields, cross-job and revoked authority including replay",async()=>{
  const f=await fixture();await f.advance("receipt-3000");const command=review(f.c,"F18"),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
