@@ -842,7 +842,9 @@ Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numb
 
 Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
 
-## 0126 — site extra authority (ENT-3a)
+## 0135 — site extra authority (ENT-3a)
+
+Renumbered from 0126 to 0135 on 12 October 2026 under the merge-ahead ruling because 0127 to 0129 merged first and 0130 to 0134 are reserved by open pull requests; the SQL bytes are unchanged (sha256 1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab).
 
 Additive: only `app.ent3a_extra_authority(uuid,text,uuid)` (STABLE) and
 `app.ent3a_require_extra_authority(uuid,uuid)` (VOLATILE). Both PL/pgSQL,
