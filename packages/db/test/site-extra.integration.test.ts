@@ -1,15 +1,15 @@
 // Written before the repository. NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, afterEach, describe, expect, it, vi } from "vitest";
-import { extraOriginHashV1, SiteExtraError } from "@jobguard/core";
-import { SiteExtraRepository, siteExtraAuthoritySeam, WatchdogError, withTenant, ExtraRepository, derivedUuid, type VerifiedTenantContext } from "../src/index.js";
-import { cluster, siteFixture, input, counts, chain, command, invite, direct, decision, smallJob, smallTrack, cancel, originSql, originHashInput, note, description, type SiteFixture } from "./site-extra-fixtures.js";
+import { extraOriginHashV1, SiteExtraError, siteExtraFailureV1, siteExtraHttpStatus } from "@jobguard/core";
+import { SiteExtraRepository, siteExtraAuthoritySeam, WatchdogError, withTenant, ExtraRepository, WorkOrderRepository, demoFile, demoRow, derivedUuid, type VerifiedTenantContext } from "../src/index.js";
+import { cluster, siteFixture, input, counts, chain, command, invite, direct, decision, smallJob, smallTrack, cancel, ownerTx, originSql, originHashInput, note, description, type SiteFixture } from "./site-extra-fixtures.js";
 import { fixture, type Cluster } from "./extra-fixtures.js";
 let c: Cluster, repo: SiteExtraRepository;
 beforeAll(async () => { c = await cluster(); repo = new SiteExtraRepository(c.runtime); }, 60_000);
 afterAll(async () => { await c?.close(); });
 afterEach(() => vi.restoreAllMocks());
-async function refused(f: SiteFixture, member: SiteFixture["p"], raw = input(f), code = "NOT_FOUND") {
+async function refused(f: SiteFixture, member: SiteFixture["p"], raw: { commandId: string; jobId: string; note: string; description: string } = input(f), code = "NOT_FOUND") {
  const before = await counts(c, f);
  const error = await repo.logSiteExtra(f.ctx, member, raw).then(() => { throw new Error("unexpected success"); }, e => e as SiteExtraError);
  expect(error).toBeInstanceOf(SiteExtraError); expect(error.code).toBe(code); expect(error.message).toBe(code); expect(JSON.stringify(error)).not.toContain(note); expect(JSON.stringify(error)).not.toContain(description);
@@ -31,10 +31,21 @@ describe("ENT-3a governed path", () => {
   expect((await c.admin.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ status: "succeeded" }]);
   expect((await c.admin.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.raised'", [f.p.tenantId, result.variationId])).rowCount).toBe(1); await chain(c, f);
  });
- for (const role of ["owner", "admin", "commercial_manager", "finance", "read_only", "client_approver"] as const) it(`[A3] ${role} refusal is caller-only for four targets and writes no business facts`, async () => {
-  const f = await siteFixture(c), foreign = await fixture(c), raw = input(f), errors = [];
-  for (const jobId of [f.jobId, f.otherJob, foreign.jobId, randomUUID()]) errors.push(await refused(f, f.members[role].member, { ...raw, jobId }, "EXTRA_FORBIDDEN"));
-  for (const error of errors) expect(error).toEqual(errors[0]);
+ it("[A3] an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job", async () => {
+  const f = await siteFixture(c), foreign = await fixture(c);
+  await ownerTx(c, f.p.tenantId, db => db.$client.query("UPDATE app.job SET status='invoiced' WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, f.otherJob]));
+  const targets = [{ kind: "unknown", jobId: randomUUID() }, { kind: "foreign", jobId: foreign.jobId }, { kind: "not-live", jobId: f.otherJob }, { kind: "live", jobId: f.jobId }];
+  expect((await c.admin.query("SELECT id,status FROM app.job WHERE tenant_id=$1 AND id=ANY($2::uuid[]) ORDER BY id", [f.p.tenantId, [f.jobId, f.otherJob]])).rows).toEqual([{ id: f.jobId, status: "live" }, { id: f.otherJob, status: "invoiced" }].sort((a, b) => a.id.localeCompare(b.id)));
+  for (const role of ["owner", "admin", "commercial_manager", "finance", "read_only", "client_approver"] as const) {
+   const raw = input(f), errors = [];
+   for (const target of targets) {
+    const error = await refused(f, f.members[role].member, { ...raw, jobId: target.jobId }, "EXTRA_FORBIDDEN");
+    expect({ status: siteExtraHttpStatus(error.code), body: siteExtraFailureV1.parse({ version: "site-extra-error.v1", code: error.code }), code: error.code }, `${role}: ${target.kind}`).toEqual({ status: 403, body: { version: "site-extra-error.v1", code: "EXTRA_FORBIDDEN" }, code: "EXTRA_FORBIDDEN" });
+    errors.push(error);
+   }
+   // The not-live target must not answer JOB_NOT_LIVE before caller authority is checked.
+   for (const error of errors) expect(error).toEqual(errors[0]);
+  }
  });
  it("[A4] every inaccessible job cause has identical NOT_FOUND and no business effect", async () => {
   const f = await siteFixture(c), foreign = await fixture(c), different = await invite(c, f, "surveyor", { kind: "branch", id: f.otherDemo.branchId });
@@ -158,9 +169,10 @@ describe("ENT-3a governed path", () => {
 async function leaveLive(f: SiteFixture) {
  await withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.transition_job($1,$2,(SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2),'invoiced','issue_invoice',NULL,NULL,NULL,NULL)", [f.p.tenantId, f.jobId]));
 }
-for (const when of ["before precheck", "between precheck and raiseExtra"] as const) it(`[R2] not-live ${when} refuses and leaves no extra, audit or command row`, async () => {
+for (const when of ["before precheck", "between precheck and raiseExtra"] as const) it(when === "before precheck" ? "[R2] a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written" : `[R2] not-live ${when} refuses and leaves no extra, audit or command row`, async () => {
  const f = await siteFixture(c), raw = input(f);
- if (when === "before precheck") await leaveLive(f);
+ // Owner-only fixture setup, like the legacy status fixtures in watchdog.integration.test.ts.
+ if (when === "before precheck") await ownerTx(c, f.p.tenantId, db => db.$client.query("UPDATE app.job SET status='invoiced' WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, f.jobId]));
  else {
   const raise = ExtraRepository.prototype.raiseExtra;
   vi.spyOn(ExtraRepository.prototype, "raiseExtra").mockImplementationOnce(async function(this: ExtraRepository, context, input, seam) { await leaveLive(f); return raise.call(this, context, input, seam); });
@@ -173,7 +185,7 @@ for (const when of ["before precheck", "between precheck and raiseExtra"] as con
  expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n).toBe(auditCount);
  expect((await c.admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rowCount).toBe(0);
 });
-it("[R3] changed request retains one stored row and the internal conflict code", async () => {
+it("[R3] the same command id with a changed payload conflicts", async () => {
  const f = await siteFixture(c), raw = input(f), actor = f.members.supervisor.member, initial = await counts(c, f);
  const first = await repo.logSiteExtra(f.ctx, actor, raw), before = await counts(c, f), head = await chain(c, f);
  expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first);
@@ -183,9 +195,39 @@ it("[R3] changed request retains one stored row and the internal conflict code",
  for (const table of ["variation", "extra_origin", "extra_event", "command_receipt"]) expect(before[table]! - initial[table]!).toBe(1);
 });
 
-it("[R4] live success and identical replay return the same stored result without writes", async () => {
+it("a successful no-op keeps its identity", async () => {
+ // LogSiteExtra has no distinct no-op: this property applies to an identical successful retry,
+ // which keeps the first extra id and creates no new business, command or audit rows.
  const f = await siteFixture(c), raw = input(f), actor = f.members.supervisor.member;
  const first = await repo.logSiteExtra(f.ctx, actor, raw), before = await counts(c, f), head = await chain(c, f);
- expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
+ const replay = await repo.logSiteExtra(f.ctx, actor, raw);
+ expect(replay).toEqual(first); expect(replay.variationId).toBe(first.variationId); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
  expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
+});
+
+it("replaying a command id returns the first result, never the job's current state", async () => {
+ const f = await siteFixture(c), raw = input(f), actor = f.members.supervisor.member;
+ const first = await repo.logSiteExtra(f.ctx, actor, raw);
+ // Move the live job's work-order baseline on through the real import command.
+ await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional-later.csv", kind: "csv", csv: demoFile([demoRow(f.demo, 1, { expectedRevision: 1, priority: "emergency" })]) });
+ const current = (await c.admin.query("SELECT r.id,r.revision,j.status FROM app.work_order_current k JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(k.tenant_id,k.work_order_id,k.revision_id) JOIN app.work_order w ON(w.tenant_id,w.id)=(k.tenant_id,k.work_order_id) JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id) WHERE k.tenant_id=$1 AND k.work_order_id=$2", [f.p.tenantId, f.orderId])).rows[0]!;
+ expect(current).toMatchObject({ revision: 2, status: "live" }); expect(current.id).not.toBe(f.revisionId);
+ const later = await repo.logSiteExtra(f.ctx, actor, input(f)); expect(later.variationId).not.toBe(first.variationId);
+ expect((await c.admin.query("SELECT variation_id,work_order_revision_id FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=ANY($2::uuid[])", [f.p.tenantId, [first.variationId, later.variationId]])).rows).toEqual(expect.arrayContaining([{ variation_id: first.variationId, work_order_revision_id: f.revisionId }, { variation_id: later.variationId, work_order_revision_id: current.id }]));
+ const before = await counts(c, f), head = await chain(c, f);
+ expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first);
+ expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
+ expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
+});
+
+it("the same command id on another job conflicts", async () => {
+ const f = await siteFixture(c), actor = (await invite(c, f, "supervisor", { kind: "tenant", id: f.p.tenantId })).member, raw = input(f);
+ // Both jobs are in scope: this must reach the command conflict rather than an authority refusal.
+ for (const jobId of [f.jobId, f.otherJob]) expect((await decision(c, f, actor, "LogSiteExtra", jobId))[0]!.decision).toBe("allowed");
+ const initial = await counts(c, f), first = await repo.logSiteExtra(f.ctx, actor, raw), before = await counts(c, f), head = await chain(c, f);
+ await expect(repo.logSiteExtra(f.ctx, actor, { ...raw, jobId: f.otherJob })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+ expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
+ expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
+ for (const table of ["variation", "extra_origin", "extra_event", "command_receipt"]) expect(before[table]! - initial[table]!).toBe(1);
+ expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
 });

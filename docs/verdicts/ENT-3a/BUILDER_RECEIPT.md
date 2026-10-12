@@ -1202,3 +1202,157 @@ Migration 0135 file sha256 after the merge: `1e3119299e15572885633d5f892f2bc3857
 | `git grep -n "resolveVerifiedTenantContext\|verifiedTenantContextFromMembership\|bridgeMarker" -- 'apps/api/src/contractor/site-extra*' 'packages/db/src/site-extra*'` | 1 | no output (no match) |
 
 **NOT run.** The full root `pnpm test`; the full `packages/db` suite (only the files in the table); the rest of the `apps/api` and `apps/web` suites; `pnpm test:e2e` and any browser run; GitHub CI and the 45-minute CI job; the db unit file `contractor-session-context.test.ts` (only the integration file was assigned); any independent Claude or Sol review. No deployment. Nothing here is an independent verdict. Not independently verified, not accepted, not released.
+
+
+## Repair round 5 (B-prime)
+
+Issued 12 October 2026, approximately 22:40, by the dispatcher on the
+coordinator's 22:35 ruling: “ENT-3a r4: B-PRIME. My ruling A is withdrawn:
+it cannot be met without the guard answering before authority is checked,
+which would tell a caller with no authority whether a job exists or is live,
+and ENT-3a's own A3 (the same EXTRA_FORBIDDEN for every job id) is the more
+important rule. The builder was right to stop.” The issued order and rounds
+1–3 remain binding. This is builder evidence and self-review, not an independent
+verdict or acceptance.
+
+Starting clean local HEAD: `8a1180324c49b2c7c15f030599a09d6fdcd84473`, branch
+`codex/sandbox/ent-3a`; local `origin/main` is
+`ad1bad244e1712f3af4cbd4c30e784184da33d14`. PR #156's pushed head was `305ea92`.
+The dispatcher's partial round-4 commit `db94ac5` was reverted by `8a11803`;
+`git diff 305ea92 HEAD --exit-code` returned 0, proving the starting tree matches
+that pushed head. Round 4's partial guard-list/public-body regression work is
+reverted, and none is reintroduced. The dispatcher reports its HOLD auto-commit
+bug fixed; that tooling is outside this repair and was not verified here.
+
+The four findings explaining the revert and B-prime scope:
+
+- A guard before precheck would leak job existence/live state to a caller without authority; the current authority-first precheck is retained (`packages/db/src/site-extra-repository.ts:32`, `:36`, `:37`, and `packages/db/migrations/0135_site_extra_authority.sql:35`).
+- The shared harness's `live()` creates adopted small-builder jobs, not contractor work-order jobs (`packages/db/test/watchdog-command-harness.ts:50`, `packages/db/test/watchdog-fixtures.ts:24`, `:28`).
+- Contractor fixtures require `jobguard_synthetic_demo`, which ENT-3a's fixture creates and uses, while the shared harness uses `postgres` (`packages/db/test/extra-fixtures.ts:20`, `:21`, `:38`, `packages/db/test/watchdog-command-harness.ts:194`, `:202`).
+- Shared replay and lock-order suites iterate every harness case, while the legacy suite iterates its applicable persisted subset and probes the other cases, so adding a contractor case would affect those shared suites too (`packages/db/test/command-replay-contract.integration.test.ts:28`, `:49`, `:60`, `:69`, `packages/db/test/watchdog-lock-order.integration.test.ts:76`, `packages/db/test/watchdog-legacy-identities.integration.test.ts:53`).
+
+### Registry-only change and unchanged runtime
+
+Tests were written/updated first, before these three lines were changed at
+`packages/core/src/watchdog.ts:17`:
+
+```ts
+  // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and this route carries its own live-job guard (precheck and seam, `SiteExtraRepository`).
+  "/api/contractor/jobs/[id]/site-extras": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/site-extras": "pre_live_allowed",
+```
+
+These are the only changes in that file. The class matches the work-order-import
+routes; contractor work orders enter live atomically at import (BUILD_PLAN
+§9.1.3 and ENT-2). The registry and command-guard list have no application-runtime
+consumers: repository-wide TypeScript reference inspection found their use in
+tests/harnesses and their definitions only.
+
+the `pre_live_allowed` class switches off NO runtime check for these two routes: it only removes the shared harness and guard-list expectations
+
+Evidence: the allowed-authority precheck still calls `requireLiveJob` at
+`packages/db/src/site-extra-repository.ts:37`; the transactional seam still
+calls it at `:21`. Those guards and their repository file are unchanged. Nest's HTTP 201 remains at
+`apps/api/src/contractor/site-extra.controller.ts:12`, and its documented 409
+`JOB_NOT_LIVE`/`IDEMPOTENCY_CONFLICT` enum remains at `:15`; the controller and
+`apps/api/openapi.json` are unchanged. The shared documentation assertion applies
+only to `watchdog_live_only` Nest rows
+(`apps/api/src/watchdog-registry.test.ts:384`, `:385`, `:389`, `:390`), also unchanged.
+
+### Named real-PostgreSQL proofs
+
+All anchors below are in `packages/db/test/site-extra.integration.test.ts`.
+The database fixture and actual runtime-role repository path are reused.
+**NOT RUN (sandbox cannot start PostgreSQL / a browser)**; the Mac helper/GitHub
+CI must execute these before any claim that the six named properties pass.
+No failed-first database execution is claimed.
+
+| Required property / title | Anchor and assertion |
+|---|---|
+| `replaying a command id returns the first result, never the job's current state` | `:208`: first success, real work-order import advances the baseline from revision 1 to 2 while live, a later extra records revision 2, original replay returns the first result/origin revision with unchanged counts and audit head. |
+| `the same command id with a changed payload conflicts` | `:188`: reused round-3 proof, renamed; changed note returns typed `COMMAND_CONFLICT`, one stored receipt/result and one extra/origin/event, unchanged counts and audit head. |
+| `the same command id on another job conflicts` | `:223`: one tenant-scoped supervisor is explicitly allowed on both work-order jobs; moving the same id/body to the second job returns `COMMAND_CONFLICT`, preserves the sole stored result/rows, and the first job still replays. |
+| `a successful no-op keeps its identity` | `:198`: reused identical-success replay proof, renamed; identical id/body returns the same extra id and result with no new business, command or audit rows. |
+| `a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written` | `:172`: reused precheck regression, renamed; table-owner fixture update sets the work-order job to invoiced, then typed `JOB_NOT_LIVE`, unchanged business counts/audit chain/all audit-row count, and no receipt for the command; the separate between-precheck-and-raiseExtra seam case and all its assertions remain. |
+| `an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job` | `:34`: one table-driven test retains all six previously denied roles and four targets; owner fixture sets the second own job off live and verifies both statuses; typed error/message equality and the public core status/body/code contract are identical (403/EXTRA_FORBIDDEN), with no business or raised-audit writes. |
+
+LogSiteExtra has no distinct no-op: the no-op property applies to a second
+identical call after success, preserving the first extra identity and writing
+nothing new. The test comment states this explicitly. Consolidating A3 retains
+24 role/target combinations and the previous refusal/no-business-write/error
+assertions, while adding the not-live target and status/body/code assertions.
+This tests the repository and public core error contract, not an HTTP server
+or browser. The test-only refusal helper now explicitly types its input strings
+so the existing uppercase-UUID refusal case compiles under Node's UUID return
+type; no assertion or input value changed.
+
+### Checks actually run
+
+Node `v24.17.0`, cached pnpm `10.28.1`, dependencies already installed. Every
+pnpm command used `PATH=/private/tmp/ent3a-bin:$PATH`; no download, installation,
+socket service, PostgreSQL or browser startup. No Vitest run was attempted:
+the only changed checked-in test file requires PostgreSQL. Existing unmodified
+unit/security/shared suites remain for CI under the changed-files-only limit.
+Two temporary Node unit checks test only the changed registry source against
+HEAD; they are not the shared replay/registry suite or database proof.
+
+| Command | Result |
+|---|---|
+| `pnpm typecheck --concurrency=2` | Exit 0; 7/7 tasks, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | Exit 0; repository invariant checks and 7/7 package tasks, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; lane unchanged; final receipt-inclusive result recorded below. |
+| `pnpm exec tsc -p /private/tmp/ent3a-r5-test-tsconfig.json` | First exit 2: existing uppercase-UUID test hit the refusal helper's overly narrow inferred command-id type; after the test-only string annotation, exit 0. Temporary config extends the repository strict config and includes the changed integration file, which package typecheck normally excludes. |
+| `node --test /private/tmp/ent3a-r5-registry.test.mjs` | Exit 0; 2/2 passed: both requested classes, and every other registry entry/guard/lifecycle answer equals HEAD. Temporary HEAD source snapshot obtained using read-only `git show`. |
+| `pnpm build --concurrency=2` | Exit 0; 7/7 tasks, 2 cached; Next generated 29/29 static pages. Existing turbo cache permissions, parent-lockfile/workspace-root, webpack/CSS warnings remain. |
+| `pnpm openapi:check` | Exit 1 before comparison: tsx CLI IPC socket `listen EPERM`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same generator and exact committed-file comparison without CLI IPC; OpenAPI unchanged. |
+| `git diff 305ea92 HEAD --exit-code` | Exit 0; confirms the dispatcher's round-4 revert restores the pushed tree. |
+| `git diff --check` | Exit 0; final receipt-inclusive check recorded below. |
+
+Root `pnpm test`, both ENT-3a PostgreSQL files, `pnpm test:db`,
+`pnpm test:migrations`, shared replay/lock-order/registry/scanner suites, and
+HTTP/browser/e2e suites: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**
+or outside the changed-files-only run scope. Mac helper should run
+`pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/site-extra.integration.test.ts`
+and the unchanged authority suite separately, one run at a time; GitHub CI
+retains all mandatory suites. Fresh pinned install NOT RUN (preinstalled
+dependencies; no downloads authorized). AI evaluation inapplicable.
+
+### Self-review, lane and remaining gap
+
+Self-review source-inspected the final diff, owner-only status setup, real
+work-order revision schema/import path, both-job authority, conflict/replay
+receipt identity, all retained assertions and required titles, unchanged
+precheck/seam order, and unchanged 201/409 documentation. The real PostgreSQL
+outcomes remain unverified here. Unit execution/typecheck/build and source
+inspection are distinct claims; no independent exact-commit verdict or separate
+acceptance is supplied by the builder.
+
+Only `packages/core/src/watchdog.ts`, `packages/db/test/site-extra.integration.test.ts`
+and this existing receipt change. `site-extra-authority.integration.test.ts`
+is unchanged; no lane line or allowlist is widened. No edits to
+`watchdogCommandGuards`, the harness/replay-contract file, `extra-repository.ts`,
+context-boundary/security tests or their lists, any bridge/scanner-pinned file,
+any migration/registration, controller/OpenAPI, runtime repository, BUILD_PLAN,
+AGENTS or other files. No runtime answer changes, migration, backfill,
+backwards-compatibility change, provider action or new operational alert.
+Rule 9 is not reopened; rules 11/12, UI parked, F2 open and existing
+D16/G1/ENT-14/independent-review/acceptance gates remain.
+
+**Named gap — coordinator FIX (dispatcher filed in FIX-LATER):**
+“extend the shared replay harness to contractor-track jobs in the synthetic database and move the contractor write routes onto it”.
+This repair leaves that shared harness outside the ENT-3a lane and unchanged;
+no coordinator policy decision or harness extension is implemented here.
+
+Intended conventional commit subject/body is written to
+`/private/tmp/jg-msg-ent-3a.txt`. No git write/add/commit/checkout/fetch/push,
+merge, deployment or release; the dispatcher commits after this handoff.
+
+Final receipt-inclusive `LANE_BASE_REF=origin/main pnpm lint:lanes`: exit 0,
+ent-3a, 26 permitted branch paths (comparison merge base `d19c9ba`); only the
+three paths above change in round 5. Final `git diff --check`: exit 0.
+Read-only deterministic inspection: exit 0; exactly those three tracked paths
+differ from HEAD, no untracked repository files, watchdog.ts equals HEAD with
+only the exact issued comment/two class replacements, all prior receipt bytes
+are preserved, and each of the six required titles occurs once. The intended
+commit message file exists. PostgreSQL proofs remain NOT RUN; not accepted.
