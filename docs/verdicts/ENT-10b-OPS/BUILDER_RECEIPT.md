@@ -524,3 +524,58 @@ Run 6, the operator command as a separate process, against a scratch embedded da
 Unchanged. The helper recomputed the SHA-256 of all nineteen paths in the working tree at `7e917dd` and compared each with the Round 1 "Nineteen-path preservation record" table above in this file: 19 of 19 equal. `git diff --quiet 8b1a59e HEAD -- <path>` also reports no change for each of the nineteen. The table is not repeated here.
 
 Mac run record only — not a review, not an acceptance.
+
+## Combined-state repair (12 Oct)
+
+Mac-side repair helper for the JobGuard dispatcher (a builder-side repair record: not a review, not an acceptance). Worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-10b-ops`, branch `codex/sandbox/ent-10b-ops`, head before this repair `2d07e6ab7f421d898879f90ab6ed1cbadd11be60` (PR #147).
+
+### Failure
+
+GitHub `checks` (run 38268810813, job 114877670788, 12 Oct) failed in `packages/db/test/audit-checkpoint-handoff.integration.test.ts`: all 22 tests failed in `beforeEach` at line 66 (the statement `TRUNCATE app.audit_event,audit_control.audit_head,audit_control.checkpoint,app.audit_export_checkpoint,app.audit_export CASCADE`) with `error: commercial revisions and snapshots are immutable` (SQLSTATE 55000, `where: PL/pgSQL function app.reject_immutable_commercial_mutation() line 2 at RAISE`). CI totals: 1 file failed, 82 passed; 22 tests failed, 1136 passed. The same file had passed every Mac run on 11 and 12 Oct against base main `8e91b2d`.
+
+### Cause (checked, not assumed)
+
+Main moved on after the piece's base: migration 0128 (SV-2, merged as `a0963f4`) created `app.shadow_disclosure_event` and `app.shadow_break_glass_access`, each with `FOREIGN KEY(tenant_id,id) REFERENCES app.audit_event(tenant_id,id)` (0128 lines 101 and 108), and gave every shadow table `CREATE TRIGGER shadow_no_delete BEFORE DELETE OR TRUNCATE ... FOR EACH STATEMENT EXECUTE FUNCTION app.reject_immutable_commercial_mutation()` (0128 line 130; its comment says "Statement triggers deny even empty mutations, including owner TRUNCATE"). The function is the one from 0003 (`'commercial revisions and snapshots are immutable'`). The test's `TRUNCATE app.audit_event,... CASCADE` therefore now reaches those two tables, and their statement triggers refuse it. Row-level immutability triggers (the older ones) never fired on TRUNCATE, which is why this passed before 0128.
+
+Evidence from a scratch database bootstrapped by `bootstrapSyntheticDemo` on the merged code (`scratchpad/diag.mjs`, outside the repository): the transitive foreign-key closure of the five listed tables is 24 tables (5 listed, 19 cascaded); exactly two of them carry a TRUNCATE trigger: `app.shadow_break_glass_access` and `app.shadow_disclosure_event`, both `shadow_no_delete`. The connection is a superuser (`rolsuper = true`). Plain `TRUNCATE ... CASCADE` raised the same error; the same statement inside `BEGIN; SET LOCAL session_replication_role=replica;` succeeded (rolled back in the probe). 0127 (STORED-TIMES-1) is not involved. This is a defect of the piece's own test set-up in the combined state; no product file is implicated.
+
+### Fix (one test file, set-up only)
+
+`packages/db/test/audit-checkpoint-handoff.integration.test.ts`, `beforeEach`. Technique: `SET LOCAL session_replication_role=replica` as the superuser, as `practice-feed.integration.test.ts` (lines 343, 544, 620), `recovery-follow-up.integration.test.ts` (1108), `recovery-messages.integration.test.ts` (491) and `recovery-eligibility-v3.integration.test.ts` (196) already do. No other merged test resets state with TRUNCATE; they create fresh companies per test, so there was no established TRUNCATE pattern to copy. The reset is the same statement over the same five tables with the same CASCADE; the only change is that guard triggers are off for that one transaction (`SET LOCAL` ends at COMMIT or ROLLBACK, so the pooled connection returns to normal).
+
+Before (line 66):
+```
+  await admin.query(`TRUNCATE ${tables.join(",")} CASCADE`);
+```
+After (lines 66 to 72):
+```
+  // Reset state in one transaction as the superuser with triggers off (session_replication_role=replica, ...
+  const reset = await admin.connect();
+  try { await reset.query("BEGIN"); await reset.query("SET LOCAL session_replication_role=replica"); await reset.query(`TRUNCATE ${tables.join(",")} CASCADE`); await reset.query("COMMIT"); }
+  catch (error) { await reset.query("ROLLBACK"); throw error; }
+  finally { reset.release(); }
+```
+(plus a three-line comment). Note for reviewers: the CASCADE still reaches the two empty shadow tables by catalogue, with their triggers off for that transaction; this test never writes them. A reset that avoids them entirely is not possible, because PostgreSQL refuses to truncate `app.audit_event` unless every referencing table is truncated with it.
+
+State is still really reset between tests: every test calls `startPractice` for two fresh companies after the reset, and A1 (`toHaveLength(2)`), the whole-table snapshots and the global checkpoint export results are only true if the previous test's rows are gone. They all pass (below).
+
+No product file, migration, other test file, security test, pinned list, assertion, deadline, timeout or budget changed. The only code change in this repair is the `beforeEach` above. The merge brought in main only (`fdf6d2a`, FIXLATER-4 #144) with no conflicts.
+
+### Commands as run
+
+All from the worktree root `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-10b-ops` unless stated; memory free was 75 to 76 percent before every heavy run; every heavy run went through `~/.local/bin/heavy-slot <label>`.
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `git fetch origin`; `git merge origin/main` | 0 | merge commit `aff9348` of `fdf6d2a`, no conflicts |
+| 2 | `pnpm --filter @jobguard/core build` | 0 | dist rebuilt |
+| 3 | `pnpm --filter @jobguard/db build` (alone) | 0 | dist rebuilt; no dylib error |
+| 4 | `heavy-slot ent10bops-repro pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/audit-checkpoint-handoff.integration.test.ts` (before the fix) | 1 | 22 failed of 22, same error at line 66 |
+| 5 | `heavy-slot ent10bops-diag env JOBGUARD_ENV=synthetic_demo node diag.mjs` (scratchpad probe, read-only) | 0 | catalogue facts under Cause |
+| 6 | same command as 4, after the fix (label `ent10bops-fix`) | 0 | 1 file, 22 passed of 22 |
+| 7 | `heavy-slot ent10bops-batch pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/audit-export.integration.test.ts test/audit.integration.test.ts test/verify-audit-export-cli.test.ts` (unedited) | 0 | 3 files, 30 passed of 30 |
+| 8 | `heavy-slot ent10bops-typecheck pnpm typecheck` | 0 | 7 tasks successful |
+| 9 | `heavy-slot ent10bops-lint env LANE_BASE_REF=origin/main pnpm lint` | 0 | 7 tasks successful |
+| 10 | `heavy-slot ent10bops-lanes pnpm lint:lanes` (run with the edit in the working tree; the linter also reads uncommitted changes) | 0 | "Lane boundary passed", file list includes the test file |
+
+Not run: `pnpm test`, `pnpm test:db` or any whole-package suite (the instruction limited this repair to the named files). Not done by the helper: any review or acceptance. Fresh checks bound to the new head are still required; GitHub CI on the new head is the full-suite proof.

@@ -63,7 +63,13 @@ beforeAll(async () => {
   contractor = new ContractorRepository(runtime); priorCatalog = await catalog();
 }, 120000);
 beforeEach(async () => {
-  await admin.query(`TRUNCATE ${tables.join(",")} CASCADE`);
+  // Reset state in one transaction as the superuser with triggers off (session_replication_role=replica, the technique the
+  // practice-feed and recovery-follow-up tests use). Since 0128 the shadow tables that reference app.audit_event carry statement
+  // triggers that deny TRUNCATE (even for the owner), so a plain TRUNCATE ... CASCADE is refused; this test never writes them.
+  const reset = await admin.connect();
+  try { await reset.query("BEGIN"); await reset.query("SET LOCAL session_replication_role=replica"); await reset.query(`TRUNCATE ${tables.join(",")} CASCADE`); await reset.query("COMMIT"); }
+  catch (error) { await reset.query("ROLLBACK"); throw error; }
+  finally { reset.release(); }
   a = await contractor.startPractice(randomUUID()); b = await contractor.startPractice(randomUUID());
 });
 afterAll(async () => {
