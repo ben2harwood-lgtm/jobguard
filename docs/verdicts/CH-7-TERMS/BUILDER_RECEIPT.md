@@ -293,3 +293,42 @@ Build/lint/typecheck logs retain sandbox Turbo cache-write I/O warnings; the exi
 Migration 0134, the audit implementation, auth/context-boundary test, tenancy/UIWIRE-12/demo-bootstrap security assertions and the lane registry compare byte-for-byte equal to HEAD. Exactly four authorized tracked files differ. Generated workspace build/cache outputs were removed after checks; dependencies were retained. No migration, compatibility change, operational alert, external action, policy approval or release belongs to this repair. AGENTS §§5.3, 5.4, 5.7 and 5.8 remain exercised by the unchanged tests; runtime proof is owed.
 
 The intended conventional-commit subject/body is written to `/private/tmp/jg-msg-ch-7-terms.txt`. No Git write, commit or push was performed. The dispatcher owns the commit; independent recorded verdicts bound to that exact commit and separate technical acceptance remain owed. This receipt is neither independent verification nor acceptance.
+
+
+## Mac verification (12 Oct, round 3)
+
+Run by the Mac helper (Claude Sonnet 5.5), 12 October 2026, about 23:10 to 23:30. The helper reviewed nothing, gave no verdict and changed no product or test code. **Result: RED. Nothing was pushed.** Logs: `~/.local/share/full-steam/jg-runs/ch-7-terms-mac2/`.
+
+**Head tested:** merge commit `3491777` ("Merge main (96f051f) into CH-7-TERMS"; parents `cdd8dab` Codex round 3 and `96f051f` main, PR #160). No conflicts. `migrate.ts` ends ... 0129, 0130, 0131, 0134 (last). `apps/api/openapi.json` was not touched by the merge (`pnpm openapi:check` exit 0). `git diff origin/main --stat` shows only this piece's 27 files (lane boundary lint lists the same 27).
+
+**The round-3 fixture repair worked.** Both new database files now get past the old `STALE_OR_BLOCKED_FINAL_ACCOUNT` failure: the main file's `beforeAll` completes and the upgrade file's `seed` issues its invoice (`recovery-case-terms-upgrade.integration.test.ts:41-42`). **A second, separate fixture defect is now the first red.**
+
+**First failing assertion.** `ZodError` from `RecoveryCaseRepository.command` (`packages/db/src/recovery-case-repository.ts:95`, `recoveryCaseCommandV1.parse(raw)`): `expectedRevision` is `undefined`, expected the literal `0` (`packages/core/src/recovery-case.ts:203`, the `open` action). Raised by the `newCase` helper at `packages/db/test/recovery-case-terms.integration.test.ts:21` (first reached by `[T1]` at line 83) and by `seed` at `packages/db/test/recovery-case-terms-upgrade.integration.test.ts:43` (called from the file's `beforeAll`, line 67). Both new files build the `open` command without `expectedRevision:0`. **Owner: the builder's test fixtures (this piece's two new test files), not the migration, not product code, not merged main.** The `expectedRevision:z.literal(0)` rule has been in `recovery-case.ts` since `64398d8` (#84), and every merged test that opens a case passes `expectedRevision:0` (for example `practice-facts.integration.test.ts:395`, `recovery-eligibility-v3.integration.test.ts:95`, `recovery-cases.integration.test.ts:11`). Not fixed by the helper.
+
+**Result of the two new database files** (`vitest --maxWorkers=1`, exit 1): `recovery-case-terms.integration.test.ts` 46 tests: 6 passed, 40 failed, all 40 with the same `ZodError` in `newCase`. `recovery-case-terms-upgrade.integration.test.ts`: suite failed in `beforeAll` (same error via `seed`), 3 tests skipped. Total 49 = 6 passed + 40 failed + 3 skipped. The 6 passes are the tests that do not open a case through the repository (three T3 refusals for non-withheld case types, T3 direct tenant mismatch 42501, T3 v1-bound job refusal, T6 controls for non-withheld and no-policy cases).
+
+**What therefore remains UNPROVEN by execution** (no assertion in these ran, because every one calls `newCase`/`seed` first): T2 non-owner (12 roles), revoked-owner and expired-owner refusals with nothing committed, the three direct-runtime forged-input refusals and the active-owner positive control (all 18 T2 tests failed at `newCase` before any assertion); the amended T8 (one transaction identity, `approved_at` = transaction start, each audit event time between start and commit, chain verifies; the main-file T8 failed at `newCase`, the private audit-failure rollback/retry T8 in the upgrade file was skipped); the rule-9 populated upgrade proof for 0134 (both T11 tests skipped). No result for any of these can be quoted. Nothing about 0134 was shown wrong either; the migration applied cleanly on the fresh embedded database in the main file.
+
+| Check | Command (short) | Exit | Result |
+| --- | --- | --- | --- |
+| Builds, each alone | `pnpm --filter @jobguard/{core,db,storage,config,ai,api} build` | 0 each | built |
+| OpenAPI | `pnpm openapi:check` (apps/api) | 0 | passes, file unchanged |
+| New DB tests | vitest, 2 new files, `--maxWorkers=1` | 1 | 6 passed, 40 failed, 3 skipped (see above) |
+| Core unit | `src/recovery-case-terms.test.ts` | 0 | 16 passed |
+| API units | `recovery-case-terms.application` + `watchdog-registry` | 0 | 139 passed (18 + 121) |
+| Boundary scanner | `src/auth/context-boundary.test.ts` (untouched) | 0 | 145 passed |
+| Replay contract | `command-replay-contract.integration.test.ts` | 0 | 53 passed |
+| Merged DB group 1 | recovery-cases, recovery-cases.workbench, recovery-eligibility-v3 | 0 | 84 passed |
+| Merged DB group 2 | recovery-timing-pin, recovery.integration, recovery-follow-up | 0 | 103 passed |
+| Merged DB group 3 | recovery-follow-up-upgrade, recovery-messages, job-activation-terms | 0 | 112 passed |
+| Merged DB group 4 | evidence-packs, fingerprinted-row-shape, extra-origin-upgrade | 0 | 27 passed |
+| Merged DB group 5 | audit-export | 0 | 11 passed |
+| `pnpm test:migrations` | tenancy + demo-bootstrap | 0 | 13 passed |
+| `pnpm typecheck` | | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | | 0 | purity 134 files, lane boundary (27 files), money boundary, 7/7 tasks |
+| `pnpm --filter @jobguard/web build` | production build for the browser run | 0 | built |
+| Browser, M4-5-S + M4-6-S + CH-7 + CH-1 | Playwright, channel chromium, `CI=1`, `--workers=1`, projects mobile-360 and desktop | 0 | 44 passed (18 + 26, same as the earlier Mac run) |
+
+Vitest ran with `--maxWorkers=1` for database files and `--maxWorkers=2` otherwise, at most three files per run, one heavy step at a time through `heavy-slot`. Wrapper config: `~/.local/share/full-steam/jg-runs/ch-7-terms-mac2/pw-ch-7-terms-mac2.config.ts`. The first two browser attempts were refused with "port 3000 already used" because another lane's Playwright run (the sv-3 worktree) held the fixed ports 3000 and 55432; the helper waited for 30 seconds of free ports and ran all four specs in one go. Nothing of the other lane was touched. There is no WebKit project in the Playwright config. The known Mac-only `[mobile-360] ENT-2.spec.ts:19` failure was not in scope and did not appear.
+
+**Not pushed; no pull request opened.** Mac helper record only. Not independently verified, not accepted. No fresh Opus or Sol review exists.
