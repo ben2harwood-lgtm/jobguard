@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorRoles } from "@jobguard/core";
 import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
 import { AuditExportApplication, auditExportHttpFailure } from "../../../apps/api/src/audit-export/audit-export.application.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractor: ContractorRepository, repo: AuditExportRepository;
 const context = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
 const actor = (p: AuthenticatedMembership) => ({ membershipId: p.membershipId, identityUserId: p.identityUserId });
@@ -26,7 +26,7 @@ async function securityCatalog() {
 const request = (commandId = randomUUID()) => ({ version: "audit-export-request.v1", commandId });
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
-  dir = await mkdtemp(join(tmpdir(), "jg-audit-export-")); const port = 58300 + Math.floor(Math.random() * 300);
+  dir = await mkdtemp(join(tmpdir(), "jg-audit-export-")); const port = await freePort(58300, 300);
   postgres = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" }); await control.query("CREATE DATABASE jobguard_synthetic_demo"); await control.end();
