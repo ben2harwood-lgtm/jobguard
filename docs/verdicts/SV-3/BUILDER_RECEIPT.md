@@ -799,3 +799,50 @@ Installed dependencies reused; no clean-install claim. Node **v24.17.0**. Plain 
 Read the full delta: the live request set includes every page request, while API bodies retain exactly the previous `/api/` inclusion rule. A late response has a pending capture before awaiting its finish; `requestfinished` alone cannot release a pending body read; every new request/finish/read resets quiet time; all retained errors are thrown before a successful barrier can release navigation. All prior assertions/comparisons are byte-preserved as one-off receipt evidence, with no permanent hash test. Rule 11: no credential-shaped literal added. Rule 12: semantic barrier assertions only. `apps/api/src/auth/context-boundary.test.ts`, `packages/db/test/shadow-persistence.integration.test.ts`, security lists, lane registry, OpenAPI, AGENTS.md and BUILD_PLAN.md remain unchanged from round base.
 
 No product code, migration, provider action, commercial policy, operational alert or deployment changed. Self-review/source inspection and synthetic control execution are distinct from independently verified browser behavior. No independent verdict or technical acceptance claimed; those await the dispatcher's exact commit and separate reviewers. No commit, add, checkout, push, package download or dependency installation performed. Intended conventional-commit subject/body written to `/private/tmp/jg-msg-sv-3.txt`; dispatcher owns committing. Browser cold-start acceptance remains **HELD**.
+
+## Mac verification (12 Oct, round 4)
+
+Run by the JobGuard dispatcher's Mac helper (Claude Sonnet 5.5), 12 October 2026 (night), in `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-3`, branch `codex/sandbox/sv-3`. A verification record only: **not independently verified, not accepted**. Free disk at the end 103 GiB.
+
+**RESULT: GREEN.** Browser tests I and Q passed on BOTH projects in ALL EIGHT cold-server runs (four on mobile-360, four on desktop). The round-3 failure (`response.body: Protocol error ... No resource with given identifier found` on mobile-360 after a cold start) did not recur. Nothing was fixed or changed by the helper; the only commits are the main merge and this record.
+
+### Start and merge
+
+- Start: head `10c7a93` (clean). `git diff 2658f9f HEAD --stat` showed exactly two files, `apps/web/e2e/SV-3.spec.ts` (+33/-11) and this receipt.
+- `origin/main` had moved from `a54d46f` to `96f051f` (ENT-10c). `git merge origin/main` merged with no conflict -> merge commit `175a21f` "Merge main (96f051f) into SV-3". Main added eight documents (`docs/security/*`, the ENT-10c receipt) and touched `config/agent-lane-assignments.json`, which merged cleanly and still parses. `apps/api/openapi.json` was not touched by main; `pnpm openapi:check` exits 0. `packages/db/test/shadow-persistence.integration.test.ts` sha256 starts `a7b1f2670d96290a` (same as rounds 2 and 3, unedited); migration `0133_shadow_detection.sql` sha256 starts `6d317e04` (unchanged); `apps/api/src/auth/context-boundary.test.ts` untouched.
+- Rebuild: `pnpm build` (turbo, all seven packages including the Next production build) exit 0, 7/7 tasks (6 from the turbo cache; nothing under the build inputs changed in the merge).
+
+### Browser spec `apps/web/e2e/SV-3.spec.ts`: eight separate cold-server runs
+
+Wrapper `pw-local-channel-sv-3-r4.config.ts` (a copy of the round-3 wrapper with only the output folder changed: production build via `next start`, channel chromium). Each run: `CI=1 npx playwright test e2e/SV-3.spec.ts --config <wrapper> --workers=1 --project=<one project> --reporter=list` through `heavy-slot`, one project per run, so every run is the first and only thing the freshly started server serves. Playwright starts and stops `next start` and the embedded PostgreSQL itself; ports 3000 and 55432 were checked free before and after every run. Logs in `~/.local/share/full-steam/jg-runs/sv-3-r4-mac/cold-<project>-<n>.log`.
+
+| Run | Project | Exit | I | Q | Playwright total | Wall incl. server start |
+|---|---|---|---|---|---|---|
+| 1 | mobile-360 | 0 | pass 3.3 s | pass 6.7 s | 14.9 s | 15 s |
+| 2 | mobile-360 | 0 | pass 3.2 s | pass 6.7 s | 14.9 s | 15 s |
+| 3 | mobile-360 | 0 | pass 3.3 s | pass 6.6 s | 15.1 s | 16 s |
+| 4 | mobile-360 | 0 | pass 3.1 s | pass 6.4 s | 13.5 s | 14 s |
+| 1 | desktop | 0 | pass 3.0 s | pass 6.5 s | 14.0 s | 15 s |
+| 2 | desktop | 0 | pass 3.1 s | pass 6.5 s | 13.5 s | 14 s |
+| 3 | desktop | 0 | pass 3.0 s | pass 6.4 s | 14.2 s | 15 s |
+| 4 | desktop | 0 | pass 3.1 s | pass 6.6 s | 14.7 s | 15 s |
+
+- No first failing assertion: none occurred. Q's date assertions and the nine-channel replay comparison are inside Q's body, so a Q pass means they all ran and held; the new request-drain barrier did not time out in any run.
+- Before these eight runs, one run was started by mistake without a spec filename, so it ran the whole `e2e` directory on mobile-360 (174 tests, 6.7 min, one cold start): 173 passed and 1 failed. SV-3 I and Q both passed in it (2.7 s and 6.4 s). The one failure is `ENT-2.spec.ts:19` ("the office imports generated files...") at line 105, `expect(await noSideScroll(page)).toBe(true)` on `/contractor/work-orders` at the 360 px width, which is ENT-2's own page; it is unrelated to SV-3 (no SV-3 file touches it) and was not investigated or counted as one of the eight runs. Log kept as `accidental-full-e2e-mobile-360.log`.
+
+### Other results (every heavy command through `~/.local/bin/heavy-slot <label>`; db files `--maxWorkers=1`, api files `--maxWorkers=2`)
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `packages/db`: `vitest run test/shadow-persistence.integration.test.ts test/command-replay-contract.integration.test.ts` | 0 | 2 files, **61/61**: shadow-persistence **8/8 UNEDITED**, command-replay-contract **53/53** |
+| 2 | `apps/api`: `vitest run src/auth/context-boundary.test.ts src/watchdog-registry.test.ts` | 0 | 2 files, **266/266**: scanner **145**, watchdog registry **121** |
+| 3 | `pnpm typecheck` | 0 | 7/7 tasks (6 cached) |
+| 4 | `pnpm openapi:check` (apps/api) | 0 | pass |
+| 5 | `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 1 | EXPECTED: 36 paths named, all inherited from SV-4 or main-side changes SV-4 carries until it merges; none is SV-3's own (same 36 as the builder's round-4 record) |
+| 6 | `LANE_BASE_REF=origin/codex/sandbox/sv-4 node tools/agent-lane-boundary-lint.mjs` | 1 | EXPECTED: SV-4's pushed head predates main `96f051f`, so the paths named are those that arrived through main (ENT-10c documents, `ci.yml`, FEE-BOTH-1 and TRAIN-LANE-1 files); none is SV-3's own |
+
+### NOT RUN
+
+`pnpm test:db`, `pnpm test:migrations`, any whole-package suite (memory rule), the other retained browser specs (ENT-2 and SV-4 not rerun beyond the accidental full run described above), any live-model run, the shadow-detection and worker test files (unchanged by round 4; run in round 3), and the scratch negative controls (done by the builder).
+
+**Pushed to `origin codex/sandbox/sv-3` after this record (plain push). No pull request opened** (SV-3 carries SV-4's files, so its lane check against main fails until SV-4 merges; the dispatcher opens the PR later). Local head after this record is the commit that adds it.
