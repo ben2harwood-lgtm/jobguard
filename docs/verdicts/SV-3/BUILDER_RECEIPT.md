@@ -644,3 +644,57 @@ Owner: SV-3 itself (its own browser test Q, repaired in round 2). Needs a ruling
 `pnpm test:db`, `pnpm test:migrations` and any whole-package suite (memory rule); `apps/web/e2e/SV-4.spec.ts` and every other retained browser spec; `ENT-2.spec.ts`; any live-model run (a separate release item); the scratch negative control for Q's other-field check (done by the builder in round 2; not repeated).
 
 **Not pushed. No pull request opened.** Mac verification record only; this receipt remains "not independently verified, not accepted".
+
+## Repair round 3 (date header, 12 Oct)
+
+Issued 12 October 2026 by the dispatcher, on the coordinator's 22:45 ruling. Started from clean `03539e1` on `codex/sandbox/sv-3`; read **Mac verification (12 Oct, round 2)** first. Earlier issued orders and repairs remain in force.
+
+> SV-3 browser test Q: YES. Exclude the `date` response header by exact name, with a positive assertion that it is a well-formed HTTP date inside the request's own before/after window widened by one second each side; every other header still compared. Same named-limit treatment as the Retrieved time, in the receipt.
+
+**NAMED LIMIT:** the only fields excluded from the replay comparison are the database clock reading `Retrieved:`/`retrievedAt`, the Nest `etag` where present, and the Next `date` header, each excluded by exact name with a positive window assertion; timing remains the only channel and the window assertions bound it.
+
+Changed only **test Q** in `apps/web/e2e/SV-3.spec.ts`, plus this receipt. Each captured `/api/` response in each replay must have a string `date` matching IMF-fixdate, parse to a finite instant, and round-trip through `toUTCString()` exactly (including the correct weekday and calendar/time values). Missing/malformed dates fail. The request event records its own `Date.now()` before reading; the response event records a separate `Date.now()` immediately on receipt, before awaiting headers/body. Bounds are exactly `[floor(before / 1000) * 1000 - 1000, floor(after / 1000) * 1000 + 1000]`, inclusive. Only the exact lower-case `date` key is filtered from the all-header comparison after the positive check. Every other header is still sorted and compared byte-for-byte in the same `cacheHeaders` channel. The prior database-clock windows, body/visible-value exclusions, absent Next etag assertion, channels and replay comparator are unchanged; this round adds no Nest etag exclusion.
+
+### Scratch controls (not committed)
+
+`/private/tmp/jg-sv3-r3-date-control.cjs` extracts the actual Q date helper, header-filter expression and final channel comparison using the TypeScript AST, transpiles those pieces, and executes them with the installed Playwright assertion library. No browser runner, network server or database is started. Positive execution passes date-only header differences, both inclusive one-second widened/floored bounds, preservation of `cache-control`, `etag` and the date-shaped `last-modified` header, and refusal of missing/malformed dates, wrong weekdays and values one second beyond either bound.
+
+- **OTHER header RED:** changing only `cache-control` from `no-store` to `private` after checking the two dates reaches Q's actual `toBe` header comparison and fails, `matcherResult.pass=false`, exit **1 EXPECTED**. All other retained headers match.
+- **Date-window RED:** a correctly formatted HTTP date sixty seconds later reaches the new upper-window assertion and fails (`1791840238000` received against maximum `1791840180000`), `matcherResult.pass=false`, exit **1 EXPECTED**.
+
+These are execution of the extracted assertions/comparator, **not a browser test Q pass**. The scratch harness and logs are outside the repository.
+
+### Commands and exits
+
+Working directory `W` = `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-3`. `P` = `PATH=/private/tmp/jg-sv3-bin:$PATH`, the existing shim invoking cached pnpm **10.28.1**, Node **v24.17.0**. Dependencies reused; no clean-install claim. Logs: `/private/tmp/jg-sv3-r3-*.log`.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| Initial runtime probe: `node --version`, then plain `pnpm --version` | 0, 130 | Node reported v24.17.0; plain pnpm probe interrupted before a version was returned. Used the already-existing cached shim thereafter. |
+| `P pnpm --version` | 0 | 10.28.1; no install/download command issued. |
+| `node /private/tmp/jg-sv3-r3-date-control.cjs` | 0 | Actual Q helper/filter/comparison positive and malformed/boundary controls passed. |
+| `node /private/tmp/jg-sv3-r3-date-control.cjs other-header` | 1 EXPECTED RED | Changed OTHER header fails exact replay comparison. |
+| `node /private/tmp/jg-sv3-r3-date-control.cjs date-window` | 1 EXPECTED RED | Far-outside date fails positive window assertion. |
+| `P pnpm typecheck` | 0 | 7/7 tasks, 6 cached; changed browser spec checked. |
+| `P LANE_BASE_REF=origin/main pnpm lint` | 1 | Core purity passed (137 files); lane rejects inherited SV-4 paths and inherited coordinator B1 in `shadow-persistence.integration.test.ts`, as in the Mac receipt. Neither round-3 path is rejected. Package lint is not reached by this wrapper. |
+| `P LANE_BASE_REF=origin/main pnpm lint:lanes` | 1 | Same inherited branch-state failure; no allowlist changed. |
+| `LANE_BASE_REF=origin/codex/sandbox/sv-4 node tools/agent-lane-boundary-lint.mjs` | 0 | Supplementary SV-3 delta check passed (33 paths). |
+| `P pnpm turbo run lint` | 0 | 7/7 package lint tasks, 6 cached. |
+| `LANE_BASE_REF=origin/main node tools/money-arithmetic-lint.mjs` | 0 | Passed. |
+| `LANE_BASE_REF=origin/main node tools/commercial-boundary-lint.mjs` | 0 | Passed. |
+| `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` | 0 | **19/19** runnable Node tests passed. Lane-test Git-write fixtures omitted under the dispatcher's no-Git-writes order. |
+| `P pnpm build` | 0 | 7/7 tasks, 6 cached; Next 29/29 pages. Existing unowned CSS/autoprefixer and sandbox Turbo cache-write warnings remain. |
+| `P pnpm openapi:check` | 1 | tsx CLI IPC `listen EPERM`, before comparison. |
+| `P pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Same generator/check via Node loader, without CLI IPC socket. OpenAPI unchanged. |
+| Initial one-off self-review stdin script | 1 | Script syntax error before checks; corrected in the scratch file below. No repository change. |
+| Final self-review before harness scope correction | 1 | Scratch harness initially matched only literal lane entries; the receipt uses an existing directory scope. Corrected the harness to honor that scope; no lane change. |
+| `node /private/tmp/jg-sv3-r3-self-review.cjs` (corrected scope matcher) | 0 | Test I byte-identical; all **34** prior `expect` calls retained, **7** added; syntax, exact two-path lane and protected/list/OpenAPI preservation checked. |
+| `git diff --check`, read-only status/diff/source inspections, scratch/receipt/message writes | 0 | Whitespace clean; only the test spec and this receipt changed. |
+
+**NOT RUN:** Vitest suites, `pnpm test` aggregate, `pnpm test:db`, `pnpm test:migrations`, `pnpm eval`, Playwright/browser I and Q on **both mobile-360 and desktop**, and retained browser/database regressions. Vitest/Playwright cannot run in this sandbox under the issued order; PostgreSQL/localhost are unavailable. The Mac helper runs both browser projects; GitHub CI runs the required suites after dispatcher push. No prompt/model/schema/detector changed; no new live-model gate is triggered by this repair. Existing live-model evaluation remains NOT RUN (separate release item).
+
+### Self-review pass and handoff
+
+Re-read the entire round-3 diff. Strict format plus finite parse plus exact UTC round-trip rejects permissive `Date.parse()` normalization. Each API response is checked before its exact `date` key is removed; the same replay runs for zero and 25 linked signals. Both Date.now readings belong to that response's own request; only the date bounds receive the ruled one-second allowance. Every existing assertion, other header, channel, exclusion and timing limit remains intact. No other test, timeout, retry or security test list was touched. Rule 11: no credential-shaped literal added. Rule 12: semantic assertions only; no standing byte/hash pin introduced. Protected files, lane registry and OpenAPI are byte-identical to round base HEAD (one-off receipt evidence only).
+
+No product code, migrations, commercial/authorization policy, provider action, operational alert or deployment changed. No Git write, commit, push, checkout, install or dependency-download command issued. Intended conventional commit subject/body saved to `/private/tmp/jg-msg-sv-3.txt`; dispatcher owns committing and pushing. Both named negative controls are recorded; sandbox implementation/self-review work is complete. Main-based lane failure remains a failure; browser/database evidence, independent verdict bound to the eventual exact commit, separate acceptance and prior release gates remain held. **Builder receipt only — not independently verified, not accepted.**

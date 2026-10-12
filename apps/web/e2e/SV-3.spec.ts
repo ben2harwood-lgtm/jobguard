@@ -56,7 +56,16 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
   const retrievalRoute=`/api/jobs/${jobId}/prevention-checks`;
   const clockPlaceholder="<retrievedAt: checked within the request window>";
   // Exact named limit: only this response's retrievedAt (top level and payingParty)
-  // and its visible Retrieved: value. All other bytes, statuses and headers are compared.
+  // and its visible Retrieved: value, plus the exact date header checked below.
+  // All other bytes, statuses and headers are compared.
+  function checkHttpDate(value:unknown,before:number,after:number):void{
+   expect(typeof value,'date header is a string').toBe('string');const at=value as string;
+   expect(at,'date header is IMF-fixdate').toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/u);
+   const parsed=Date.parse(at);expect(Number.isFinite(parsed),'date header parses').toBe(true);
+   expect(new Date(parsed).toUTCString(),'date header round-trips exactly').toBe(at);
+   expect(parsed,'date header is not before the widened request window').toBeGreaterThanOrEqual(Math.floor(before/1000)*1000-1000);
+   expect(parsed,'date header is not after the widened response window').toBeLessThanOrEqual(Math.floor(after/1000)*1000+1000);
+  }
   function checkClock(value:unknown,before:number,after:number):string{
    expect(typeof value,'retrievedAt is a string').toBe('string');const at=value as string;
    expect(at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
@@ -80,16 +89,19 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    let visibleClocks=0;
    const requestListener=(request:import('@playwright/test').Request)=>{starts.set(request,Date.now())};
    const listener=(response:import('@playwright/test').Response)=>{
+    const dateAfter=Date.now();
     const url=new URL(response.url());
     if(url.pathname.startsWith('/api/'))pending.push((async()=>{
+     const dateBefore=starts.get(response.request());expect(dateBefore,'date clock reading before this request').toBeDefined();
      const headers=await response.allHeaders(),bytes=await response.body(),after=Date.now();let body=bytes.toString('base64');
+     checkHttpDate(headers.date,dateBefore!,dateAfter);
      if(url.pathname===retrievalRoute){
       expect(response.status()).toBe(200);expect(headers.etag,'Next prevention-checks response has no etag').toBeUndefined();
       const before=starts.get(response.request());expect(before,'clock reading before this request').toBeDefined();
       const checked=compareBody(bytes.toString('utf8'),before!,after);
       retrievals.push({at:checked.at,before:before!,after});body=Buffer.from(checked.text).toString('base64');
      }
-     responses.set(url.pathname+url.search,{status:response.status(),body,headers:Object.fromEntries(Object.entries(headers).sort(([a],[b])=>a.localeCompare(b)))});
+     responses.set(url.pathname+url.search,{status:response.status(),body,headers:Object.fromEntries(Object.entries(headers).filter(([name])=>name!=='date').sort(([a],[b])=>a.localeCompare(b)))});
     })());
    };
    page.on('request',requestListener);page.on('response',listener);
