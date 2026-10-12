@@ -45,7 +45,7 @@ beforeAll(async () => {
   await migrate(admin); await seed(admin);
   await admin.query("CREATE ROLE stored_times_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO stored_times_login");
   runtime = new Pool(connectionOptions("postgres", login));
-}, 120_000);
+}, 40_000);
 afterAll(async () => {
   if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment;
   await closeTestPools(runtime, admin); await postgres?.stop();
@@ -378,7 +378,7 @@ it("[AC9] populated upgrade preserves every stored row, earlier routine and tabl
     await closeTestPools(upgradeRuntime, upgradeAdmin);
     await admin.query(`DROP DATABASE ${database}`);
   }
-}, 60_000);
+}, 15_000);
 it("[AC10] registry is sorted, unique and places the pin after its two dependencies", () => {
   const names = MIGRATION_URLS.map(url => basename(fileURLToPath(url)));
   expect(names).toEqual([...names].sort()); expect(new Set(names).size).toBe(names.length);

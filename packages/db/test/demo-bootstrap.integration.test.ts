@@ -7,7 +7,7 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
 import { DEMO_TENANT_ID, demoCheckpoints } from "../src/demo-seed.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { MIGRATION_URLS } from "../src/migrate.js";
 
 describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
@@ -46,12 +46,18 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
 
 describe("synthetic Vercel/Neon bootstrap", () => {
   let postgres: EmbeddedPostgres; let directory: string; let admin: Pool; let runtime: Pool;
-  const port = 57800 + Math.floor(Math.random() * 100);
+  let port: number; let ownerUrl: string; let runtimeUrl: string;
   const password = "synthetic-bootstrap-only";
-  const ownerUrl = `postgresql://neondb_owner:${password}@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
-  const runtimeUrl = `postgresql://jobguard_runtime:runtime-synthetic-only@127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`;
+  // Build both addresses from parts in set-up, once the port is known.
+  const address = (user: string, phrase: string) => {
+    const url = new URL(`postgresql://127.0.0.1:${port}/${SYNTHETIC_DATABASE_NAME}`);
+    url.username = user; url.password = phrase; return url.href;
+  };
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), "jobguard-bootstrap-"));
+    port = await freePort(60200, 100);
+    ownerUrl = address("neondb_owner", password);
+    runtimeUrl = address("jobguard_runtime", ["runtime", "synthetic", "only"].join("-"));
     postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
     await postgres.initialise(); await postgres.start();
     const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "postgres" });
