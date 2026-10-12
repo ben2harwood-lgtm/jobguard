@@ -5,7 +5,12 @@ import { CustomerCreditNotes } from "./customer-credit-notes";
 import { CustomerReceipts } from "./customer-receipts";
 import { notifyInvoiceChanged } from "./customer-payment-status";
 const pounds=(p:number)=>`GBP ${(p/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-export function CustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean}}) {
+type LockInvoiceGuard = { code: "FINAL_ACCOUNT_LOCK_REQUIRED" | "FINAL_CHECK_NOT_COMPLETE" | "FINAL_CHECK_FAILED" | null; kind: "final" | "supplementary"; lockedRevision?:{id:string;sourceHash:string;issueBlocked:boolean} };
+export function CustomerInvoices({jobId,finalAccount,lockGuard}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};lockGuard?:LockInvoiceGuard}) {
+ if(lockGuard)return <LockBoundCustomerInvoices jobId={jobId} finalAccount={finalAccount} guard={lockGuard}/>;
+ return <PracticeCustomerInvoices jobId={jobId} finalAccount={finalAccount}/>;
+}
+function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean}}) {
  const [view,setView]=useState<PracticeInvoiceResponse|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState(false);
  const load=useCallback(async(refresh=false)=>{
   if(!refresh)setLoading(true);
@@ -52,5 +57,32 @@ export function CustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccount
    <CustomerReceipts key={invoice.id} jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>
   </article>}
   {error&&<p role="alert">{error}</p>}
+ </section>;
+}
+
+/** The SV-4 path is guarded independently; the merged practice path above is unchanged. */
+function LockBoundCustomerInvoices({jobId,finalAccount,guard}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};guard:LockInvoiceGuard}) {
+ const [busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [issued,setIssued]=useState<PracticeInvoiceResponse|null>(null);
+ async function issue(kind:"final"|"supplementary") {
+  if(busy||guard.code||finalAccount.issueBlocked)return;
+  setBusy(true);setError("");
+  const source=kind==="final"&&guard.lockedRevision?guard.lockedRevision:finalAccount;
+  try {
+   const response=await fetch(`/api/jobs/${jobId}/final-account/lock`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({version:"lock-bound-invoice.issue.v1",commandId:crypto.randomUUID(),finalAccountRevisionId:source.id,expectedSourceHash:source.sourceHash,invoiceKind:kind,recipient:"practice-customer@example.invalid",issuedOn:new Date().toISOString().slice(0,10)})});
+   const body=await response.json();
+   if(!response.ok)throw new Error(String(body.code));
+   // Issue response is the same existing invoice projection; the side binding is private to the issue path.
+   setIssued(practiceInvoiceResponseV1.parse(body));notifyInvoiceChanged(jobId);
+  }catch(failure){setError(failure instanceof Error?failure.message:"DATABASE_UNAVAILABLE");}
+  finally{setBusy(false);}
+ }
+ const latest=issued?.invoices.at(-1);
+ return <section data-testid="lock-bound-invoices" aria-label="Lock-bound customer invoices">
+  <button style={{minHeight:44,minWidth:44}} disabled={busy||!!guard.code||finalAccount.issueBlocked} onClick={()=>void issue("final")}>Issue final invoice</button>
+  <button style={{minHeight:44,minWidth:44}} disabled={busy||!!guard.code||finalAccount.issueBlocked} onClick={()=>void issue("supplementary")}>Issue supplementary invoice</button>
+  {guard.code&&<p role="alert">{guard.code}</p>}
+  {error&&<p role="alert">{error}</p>}
+  {latest&&<p data-testid="lock-bound-invoice-gross">{pounds(latest.totalPence)}</p>}
  </section>;
 }

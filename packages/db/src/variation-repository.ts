@@ -1,3 +1,4 @@
+import { FinalAccountLockError } from "@jobguard/core";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { confirmedVariationPriceV1, priceVariation, instantV1 } from "@jobguard/core";
@@ -23,6 +24,33 @@ const captureCanonical = (value: unknown): string => value === null || typeof va
  : `{${Object.entries(value as Record<string, unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([key,child])=>`${JSON.stringify(key)}:${captureCanonical(child)}`).join(",")}}`;
 export class VariationRepository{
  constructor(private readonly pool:Pool){}
+
+ /** AddFinalReviewExtra keeps SH-1 identity/pricing/origin and serializes against the immutable lock. */
+ async addFinalReviewExtra(context: VerifiedTenantContext, raw: unknown): Promise<{variationId:string}> {
+  const checked=finalReviewCaptureV1.safeParse(raw);
+  if(!checked.success)throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
+  const p=variationProposalV1.parse(checked.data.proposal),price=confirmedVariationPriceV1.nullable().parse(checked.data.price),c=checked.data;
+  if(!instantV1.nullable().safeParse(c.deviceCapturedAt).success || (price && price.confirmedByMembershipId!==c.actorMembershipId))throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
+  const requestHash=createHash("sha256").update(captureCanonical({...c,proposal:p,price})).digest("hex");
+  return withTenant(this.pool,context,async db=>{
+   const member=(await db.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,c.actorMembershipId])).rows[0];
+   if(!member)throw new BuilderCaptureError("FORBIDDEN");
+   const prior=(await db.$client.query<{request_hash:string;command_type:string;status:string;result:{variationId:string}}>(`SELECT request_hash,command_type,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,p.id])).rows[0];
+   if(prior){if(prior.command_type!=="AddFinalReviewExtra"||prior.request_hash!==requestHash||prior.status!=="succeeded")throw new BuilderCaptureError("COMMAND_CONFLICT");return prior.result;}
+   await db.$client.query(`SELECT app.prepare_final_review_extra($1,$2,$3)`,[context.tenantId,p.jobId,c.actorMembershipId]);
+   const claimed=await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'AddFinalReviewExtra',$3,$4,'processing',$5) ON CONFLICT DO NOTHING RETURNING command_id`,[context.tenantId,p.id,`extra-origin:${p.jobId}:${p.id}`,requestHash,c.actorMembershipId]);
+   if(!claimed.rowCount){const twin=(await db.$client.query<{request_hash:string;command_type:string;status:string;result:{variationId:string}}>(`SELECT request_hash,command_type,status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,p.id])).rows[0];if(!twin||twin.command_type!=="AddFinalReviewExtra"||twin.request_hash!==requestHash||twin.status!=="succeeded")throw new BuilderCaptureError("COMMAND_CONFLICT");return twin.result;}
+   // Same proposal writer, with a server-selected origin; no human/AI origin is trusted.
+   if(!p.existingScopeItemId){await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state)VALUES($1,$2,$3,'reserved') ON CONFLICT DO NOTHING`,[p.scopeItemId,context.tenantId,p.jobId]);if(p.lineageParentScopeItemId)await db.$client.query(`INSERT INTO app.scope_lineage(tenant_id,job_id,parent_scope_item_id,child_scope_item_id,kind)VALUES($1,$2,$3,$4,'variation') ON CONFLICT DO NOTHING`,[context.tenantId,p.jobId,p.lineageParentScopeItemId,p.scopeItemId]);}
+   await db.$client.query(`INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,lineage_parent_scope_item_id,capture_kind,capture_text,description,origin)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'final_review')`,[p.id,context.tenantId,p.jobId,p.scopeItemId,p.existingScopeItemId,p.lineageParentScopeItemId,p.captureKind,p.captureText,p.description]);
+   await db.$client.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,device_id,device_captured_at,provenance) VALUES($1,$2,$3,'small_builder','final_review',$3,$4,'owner',$5,$6,'command')`,[context.tenantId,p.jobId,p.id,c.actorMembershipId,c.deviceId,c.deviceCapturedAt]);
+   if(price)await insertPricedVariation(db,context.tenantId,priceVariation({id:randomUUID(),variationId:p.id,previous:null,proposal:p,description:p.description,contentHash:createHash("sha256").update(captureCanonical({description:p.description,price})).digest("hex"),confirmed:price}));
+   const result={variationId:p.id};
+   await db.$client.query(`UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,p.id,JSON.stringify(result)]);
+   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${c.actorMembershipId}`,eventType:"variation.final_review_added",subjectType:"variation",subjectRef:p.id,payload:{references:{jobId:p.jobId,commandId:p.id,origin:"final_review"},hashes:{capture:createHash("sha256").update(p.captureText).digest("hex")}}}]);
+   return result;
+  }).catch((error:unknown)=>{if(error instanceof Error && error.message==="FINAL_REVIEW_CLOSED")throw new FinalAccountLockError("FINAL_REVIEW_CLOSED");throw error;});
+ }
 
  /** Non-commercial capture: same receipt/origin contract as SH-1, without send or fee authority. */
  async logBuilderExtra(context: VerifiedTenantContext, raw: unknown): Promise<{variationId:string}> {
@@ -84,3 +112,5 @@ export class VariationRepository{
  async transact<T>(context:VerifiedTenantContext,fn:(db:TenantTransaction)=>Promise<T>){return withTenant(this.pool,context,fn)}
  async reject(db:TenantTransaction,tenantId:string,input:{id:string;variationId:string;revisionId:string;actorMembershipId:string}){const row=await db.$client.query(`SELECT job_id FROM app.variation WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,input.variationId]);if(!row.rowCount)throw new Error("VARIATION_NOT_FOUND");await db.$client.query(`INSERT INTO app.variation_rejection(id,tenant_id,job_id,variation_id,revision_id,actor_membership_id,reason_code,rejected_at)VALUES($1,$2,$3,$4,$5,$6,'customer_did_not_approve',transaction_timestamp()) ON CONFLICT(tenant_id,variation_id,revision_id) DO NOTHING`,[input.id,tenantId,row.rows[0].job_id,input.variationId,input.revisionId,input.actorMembershipId]);await db.$client.query(`UPDATE app.variation SET state='rejected' WHERE tenant_id=$1 AND id=$2 AND current_revision_id=$3`,[tenantId,input.variationId,input.revisionId]);return input}
 }
+
+const finalReviewCaptureV1 = z.object({version:z.literal("final-review-extra.v1"),proposal:z.unknown(),actorMembershipId:z.string().uuid(),price:z.unknown(),deviceId:z.string().min(1).max(200).nullable(),deviceCapturedAt:z.string().nullable()}).strict();

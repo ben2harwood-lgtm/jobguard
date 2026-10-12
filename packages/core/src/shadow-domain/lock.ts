@@ -25,3 +25,20 @@ export function createLockSnapshot(raw: unknown) {
     const canonicalBytes = canonical(snapshot);
     return freezeShadow({ version: "shadow-lock-digest.v1" as const, snapshot, canonicalBytes, digest: sha256(canonicalBytes) });
 }
+
+/** SV-4 component digests reuse the v1 canonicaliser and stable-ID ordering. */
+export function hashLockCaptureRegister(raw: unknown): string {
+    const captures = parseShadow(shadowLockV1.unwrap().shape.captureRegister, raw);
+    uniqueShadowIds(captures.map(c => c.id));
+    return sha256(canonical([...captures].sort((a, b) => order(a.id, b.id))));
+}
+export function hashLockLineSet(raw: unknown): string {
+    const lines = parseShadow(shadowLockV1.unwrap().shape.lines, raw);
+    uniqueShadowIds(lines.map(l => l.id));
+    return sha256(canonical([...lines].sort((a, b) => order(a.id, b.id))));
+}
+export function hashLockScopeDispositions(raw: unknown): string {
+    const dispositions = parseShadow(shadowLockV1.unwrap().shape.scopeDispositions, raw);
+    uniqueShadowIds(dispositions.map(d => d.scopeItemId));
+    return sha256(canonical([...dispositions].sort((a, b) => order(a.scopeItemId, b.scopeItemId))));
+}
