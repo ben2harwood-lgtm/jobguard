@@ -5,19 +5,22 @@ import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, withTenant } from "../src/index.js";
+import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, readRecoveryEligibilityV3, withTenant } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
+import * as mo4Proof from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import type { TenantTransaction } from "../src/tenant-context.js";
+import { evaluateRecoveryEligibilityV3 } from "@jobguard/core";
 const ctx=testTenantContext(T), actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 let legacy:unknown[];
 const oldJob=randomUUID(),oldCase=randomUUID();
+let upgradeProof: { proof: Awaited<ReturnType<typeof mo4Proof.proofBefore>>; ownRegistry: string[]; ownRows: unknown[]; controls: Array<{ table: string; microsecond: unknown; missing: unknown; retype: unknown; listRetype: unknown; nullable: unknown; replaced: unknown; inserted: unknown; after: unknown; columns: unknown }>; afterControls: Awaited<ReturnType<typeof mo4Proof.proofDifferences>> };
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";directory=await mkdtemp(join(tmpdir(),"jg-ch7-"));const port=await freePort(60500,150);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
@@ -31,6 +34,54 @@ beforeAll(async()=>{
  await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)VALUES($1,$2,$3,32000,'GBP','identified',0,true)",[oldCase,T,oldJob]);
  await admin.query(`INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash)VALUES($1,$2,$3,$4,1,1,1,'reference-d03.v1',1,'pending_money','excluded',NULL,'GBP','Pending money cannot qualify','[]','reviewed','reviewer:previous',$5,$6)`,[randomUUID(),T,oldJob,oldCase,randomUUID(),"a".repeat(64)]);
  legacy=(await admin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_revision r")).rows;
+ const proof = await mo4Proof.proofBefore(admin, ["app.recovery_eligibility_revision"]);
+ await admin.query(await readFile(MIGRATION_URLS[index]!, "utf8"));
+ await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [names[index]]);
+ const ownRegistry = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name as string);
+ const ownRows = (await admin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_revision r")).rows;
+ const controls = [];
+ for (const [table, was] of Object.entries(proof)) {
+   const identity = Object.keys(was.rows)[0];
+   if (!identity) continue; // The pre-existing-row guard reports this in the proof test.
+   const key = JSON.parse(identity) as { tenant_id: string; id: string };
+   const values = [key.tenant_id, key.id];
+   const time = "created_at", column = "reason", newType = "character varying(201)", scratchTable = table;
+   const microsecond = await mo4Proof.rolledBack(admin, async client => {
+     await client.query("SET LOCAL session_replication_role=replica");
+     const changed = await client.query(`UPDATE ${table} SET ${time}=${time}+interval '1 microsecond' WHERE (tenant_id=$1) AND (id=$2)`, values);
+     return { count: changed.rowCount, differences: await mo4Proof.proofDifferences(client, proof) };
+   });
+   const missing = await mo4Proof.rolledBack(admin, async client => {
+     await client.query("SET LOCAL session_replication_role=replica");
+     const changed = await client.query(`DELETE FROM ${table} WHERE (tenant_id=$1) AND (id=$2)`, values);
+     return { count: changed.rowCount, differences: await mo4Proof.proofDifferences(client, proof) };
+   });
+   const retype = await mo4Proof.rolledBack(admin, async client => {
+     await client.query("SET LOCAL session_replication_role=replica");
+     await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${newType}`);
+     return await mo4Proof.proofDifferences(client, proof);
+   });
+   const listRetype = await mo4Proof.rolledBack(admin, async client => {
+     await client.query("SET LOCAL session_replication_role=replica");
+     return await mo4Proof.proofDifferences(client, { ...proof, [table]: { ...was, typed: { ...was.typed, [column]: `${was.typed[column]} mo4 scratch` } } });
+   });
+   const nullable = await mo4Proof.rolledBack(admin, async client => {
+     await client.query("SET LOCAL session_replication_role=replica");
+     await client.query(`ALTER TABLE ${scratchTable} ADD COLUMN mo4_scratch text`);
+     return { exists: (await mo4Proof.proofColumns(client, scratchTable)).some(c => c.name === "mo4_scratch" && c.type === "text"), differences: await mo4Proof.proofDifferences(client, proof) };
+   });
+   const replaced = await mo4Proof.rolledBack(admin, async client => {
+     await client.query("SET LOCAL session_replication_role=replica");
+     return { replaced: await mo4Proof.scratchReplaceFunction(client, "app.half_even_ratio(bigint,bigint,bigint)"), differences: await mo4Proof.proofDifferences(client, proof) };
+   });
+   const inserted = await mo4Proof.rolledBack(admin, async client => {
+     await client.query("SET LOCAL session_replication_role=replica");
+     const changed = await client.query(`INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash)VALUES($1,$2,$3,$4,2,1,1,'reference-d03.v1',1,'pending_money','excluded',NULL,'GBP','Pending money cannot qualify','[]','reviewed','reviewer:previous',$5,$6)`,[randomUUID(),T,oldJob,oldCase,randomUUID(),"a".repeat(64)]);
+     return { count: changed.rowCount, differences: await mo4Proof.proofDifferences(client, proof) };
+   });
+   controls.push({ table, microsecond, missing, retype, listRetype, nullable, replaced, inserted, after: await mo4Proof.proofDifferences(admin, proof), columns: await mo4Proof.proofColumns(admin, table) });
+ }
+ upgradeProof = { proof, ownRegistry, ownRows, controls, afterControls: await mo4Proof.proofDifferences(admin, proof) };
  await migrate(admin);await migrate(admin);
  await admin.query("CREATE ROLE ch7_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch7_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"ch7_login",password:"synthetic"});
 });
@@ -60,7 +111,35 @@ it.each([["F15","merchant_overcharge",0,"Credit note below the £250 minimum"],[
  }
  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_fee_journal WHERE tenant_id=$1 AND job_id=$2",[T,f.jobId])).rows[0].n).toBe(0);
 });
-it("DW4 migration preserves previous reviews byte-for-byte and version",async()=>{expect((await admin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_revision r")).rows).toEqual(legacy);});
+it("DW4 migration preserves previous reviews byte-for-byte and version",async()=>{
+ const { proof } = upgradeProof;
+ expect(Object.keys(proof["app.recovery_eligibility_revision"]!.rows).length, "[MO4-1a] pre-existing review row").toBeGreaterThan(0);
+ const names = MIGRATION_URLS.map(u => basename(fileURLToPath(u))), index = names.indexOf("0119_recovery_eligibility_v3.sql");
+ expect(index, "[MO4-1b] migration by name").toBeGreaterThan(0);
+ expect(upgradeProof.ownRegistry, "[MO4-1b] N alone registry").toEqual(names.slice(0, index + 1));
+ expect(upgradeProof.ownRows, "[MO4-1c] complete rows at N alone").toEqual(legacy);
+ for (const result of upgradeProof.controls) {
+   const { table } = result, was = proof[table]!, identity = Object.keys(was.rows)[0]!;
+   const column = "reason", newType = "character varying(201)";
+   expect(result, "[MO4-1d] rolled-back controls (a)-(f)").toEqual({
+     table,
+     microsecond: { count: 1, differences: { rows: [`${table} ${identity}: changed`], types: [] } },
+     missing: { count: 1, differences: { rows: [`${table} ${identity}: missing`], types: [] } },
+     retype: { rows: [], types: [`${table}: ${column} ${was.typed[column]} -> ${newType}`] },
+     listRetype: { rows: [], types: [`${table}: ${column} ${was.typed[column]} mo4 scratch -> ${was.typed[column]}`] },
+     nullable: { exists: true, differences: { rows: [], types: [] } },
+     replaced: { replaced: true, differences: { rows: [], types: [] } },
+     inserted: { count: 1, differences: { rows: [], types: [] } },
+     after: { rows: [], types: [] },
+     columns: was.names.map(name => ({ name, type: was.typed[name] })),
+   });
+ }
+ expect(upgradeProof.controls, "[MO4-1d] one table's controls").toHaveLength(1);
+ expect(upgradeProof.afterControls, "[MO4-1d] nothing left behind").toEqual({ rows: [], types: [] });
+ // fingerprinted-row-shape.integration.test.ts owns "may never gain a column"; recovery_eligibility_revision, job, job_activation and cap_snapshot are absent from its list.
+ expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name), "[MO4-1e] all migrations registry").toEqual(names);
+ expect(await mo4Proof.proofDifferences(admin, proof), "[MO4-1e] identified old rows and types after all migrations").toEqual({ rows: [], types: [] });
+});
 it("rejects stale/rebound fixtures, injected fields, cross-job and revoked authority including replay",async()=>{
  const f=await fixture();await f.advance("receipt-3000");const command=review(f.c,"F18"),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
  await expect(f.repo.review(ctx,f.jobId,review(f.c,"F18"),actor,f.auth.digest)).rejects.toThrow("ELIGIBILITY_STALE_REVISION");
@@ -243,4 +322,260 @@ it.each([["F17","duplicate_supplier_payment","supplier-refund-540",45000,"result
  })).rejects.toMatchObject({code:"23514"});
  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND case_id=$2",[T,f.c.id])).rows[0].n).toBe(0);
  expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3??null).toBeNull();
+});
+
+// CH-7-F17-BEFORE-OPEN: appended before the rule/migration implementation.
+it.each([
+ ["800 microseconds BEFORE","2026-10-11T12:00:00.000900Z","2026-10-11T12:00:00.000100Z",0,"Paid before you opened this case","before_opening"],
+ ["exactly AT","2026-10-11T12:00:00.000900Z","2026-10-11T12:00:00.000900Z",0,"Paid before you opened this case","before_opening"],
+ ["800 microseconds AFTER","2026-10-11T12:00:00.000100Z","2026-10-11T12:00:00.000900Z",45000,null,"after_opening"],
+] as const)("F17 refund settled %s opening: repository, saved result and core/SQL parity",async(_label,caseAt,eventAt,q,reason,paymentTiming)=>{
+ const f=await fixture("duplicate_supplier_payment");await f.advance("supplier-refund-540");
+ await stampTimes(f,"supplier-refund-540",caseAt,eventAt);
+ const command=review(f.c,"F17"),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
+ expect(r.result).toMatchObject({outcome:q===0?"excluded":"eligible_for_review",qualifyingPrincipal:{pence:q,currency:"GBP"},reason});
+ const stored=(await admin.query("SELECT result,source_event_id FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,r.id])).rows[0];
+ expect(stored).toEqual({result:r.result,source_event_id:r.sourceEventId});
+ expect(r.result).toEqual(evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",settlement:"settled",paymentTiming,sourceRef:r.sourceEventId}));
+ expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3).toEqual(r);
+ expect(await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest)).toEqual(r);
+});
+
+// Complete, otherwise-valid runtime transaction: the guard must reject the money,
+// rather than an absent claim line, audit event, source binding or session context.
+async function rawQualifyingF17(pool:Pool,f:{auth:{digest:string};jobId:string;c:{id:string;revision:number}}){
+ return withTenant(practiceMaterialPool(pool,f.auth.digest),ctx,async db=>{
+  await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
+  const sourceEventId=(await db.$client.query<{id:string}>("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='supplier-refund-540' AND event_kind='settled' AND identity='identified'",[T,f.jobId])).rows[0]!.id;
+  // Deliberately propose £450 irrespective of the stored timing, as a raw writer could.
+  const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+  const id=randomUUID(),commandId=randomUUID(),payloadHash=createHash("sha256").update(commandId).digest("hex");
+  const inserted=await db.$client.query<{h:string}>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F17',$6,$7,$8,$9,$10) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') h",[id,T,f.jobId,f.c.id,f.c.revision,sourceEventId,M,commandId,payloadHash,JSON.stringify(result)]);
+  await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'principal','business',45000)",[randomUUID(),T,f.jobId,f.c.id,id]);
+  await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${M}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:f.c.id,payload:{references:{jobId:f.jobId,reviewId:id,commandId,sourceEventId},hashes:{command:payloadHash,result:inserted.rows[0]!.h},classifications:{recovery:"financial"}}}]);
+  return id;
+ });
+}
+it.each([
+ ["before","2026-10-11T12:00:00.000100Z"],
+ ["equal","2026-10-11T12:00:00.000900Z"],
+] as const)("F17 runtime-role raw qualifying insert for a %s-opening refund cannot commit",async(_label,eventAt)=>{
+ const f=await fixture("duplicate_supplier_payment");await f.advance("supplier-refund-540");
+ await stampTimes(f,"supplier-refund-540","2026-10-11T12:00:00.000900Z",eventAt);
+ await expect(rawQualifyingF17(runtime,f)).rejects.toMatchObject({code:"23514",message:"ELIGIBILITY_FIXTURE_MISMATCH"});
+ for(const table of ["recovery_eligibility_v3_review","recovery_claim_line"])expect((await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND case_id=$2`,[T,f.c.id])).rows[0].n).toBe(0);
+ expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.eligibility.v3_reviewed'",[T,f.c.id])).rows[0].n).toBe(0);
+});
+it("F17 runtime-role raw qualifying insert after opening still commits with complete components and audit",async()=>{
+ const f=await fixture("duplicate_supplier_payment");await f.advance("supplier-refund-540");
+ await stampTimes(f,"supplier-refund-540","2026-10-11T12:00:00.000100Z","2026-10-11T12:00:00.000900Z");
+ const id=await rawQualifyingF17(runtime,f);
+ expect((await admin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,id])).rows[0].result).toMatchObject({outcome:"eligible_for_review",qualifyingPrincipal:{pence:45000,currency:"GBP"},reason:null});
+});
+
+// Standing rule 9: "An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything
+// after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no
+// column or replace no function; the fingerprinted-table guard owns 'may never gain a column'."
+// So the 0130 proof below compares whole rows only straight after 0130 has run ALONE. After every later migration it compares just the rows that existed
+// before 0130 (found again by primary key), on the columns and types they had before 0130, as canonical text from the database (never driver-parsed
+// values, which round timestamps to the millisecond). A column, row, trigger or function added or replaced later is not looked at.
+type Queryable=Pick<Pool|PoolClient,"query">;
+type ProofTable={names:string[];typed:Record<string,string>;pk:string[];rows:Record<string,string>};
+const proofTables=["recovery_eligibility_v3_review","recovery_claim_line","audit_event"] as const;
+const proofTimeColumn:Record<typeof proofTables[number],string>={recovery_eligibility_v3_review:"created_at",recovery_claim_line:"created_at",audit_event:"occurred_at"};
+const ident=(name:string)=>`"${name.replaceAll('"','""')}"`;
+async function proofColumns(db:Queryable,table:string){
+ return (await db.query(`SELECT a.attname::text AS name,format_type(a.atttypid,a.atttypmod) AS type FROM pg_attribute a
+  WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum`,[`app.${table}`])).rows as {name:string;type:string}[];
+}
+async function proofRows(db:Queryable,table:string,names:string[],pk:string[]){
+ const found=(await db.query(`SELECT identity,bytes FROM (SELECT (SELECT row_to_json(k)::text FROM (SELECT ${pk.map(name=>`t.${ident(name)}`).join(",")}) k) AS identity,
+  (SELECT row_to_json(s)::text FROM (SELECT ${names.map(name=>`t.${ident(name)}`).join(",")}) s) AS bytes FROM app.${table} t) x ORDER BY identity COLLATE "C"`)).rows;
+ return Object.fromEntries(found.map(row=>[row.identity as string,row.bytes as string]));
+}
+async function proofBefore(db:Queryable){
+ const proof:Record<string,ProofTable>={};
+ for(const table of proofTables){
+  const columns=await proofColumns(db,table),names=columns.map(column=>column.name);
+  const pk=(await db.query(`SELECT a.attname::text AS name FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey)
+   WHERE i.indrelid=$1::regclass AND i.indisprimary ORDER BY array_position(i.indkey::int2[],a.attnum)`,[`app.${table}`])).rows.map(row=>row.name as string);
+  proof[table]={names,typed:Object.fromEntries(columns.map(column=>[column.name,column.type])),pk,rows:await proofRows(db,table,names,pk)};
+ }
+ return proof;
+}
+// Every pre-existing column whose type moved ("table: name type -> new type"; a dropped column reads "(gone)") and every pre-existing row that is missing
+// or whose named columns changed. A later column, or a later row, is not a difference.
+async function proofDifferences(db:Queryable,proof:Record<string,ProofTable>){
+ const rows:string[]=[],types:string[]=[];
+ for(const [table,was] of Object.entries(proof)){
+  const now=new Map((await proofColumns(db,table)).map(column=>[column.name,column.type]));
+  for(const name of was.names)if(now.get(name)!==was.typed[name])types.push(`${table}: ${name} ${was.typed[name]} -> ${now.get(name)??"(gone)"}`);
+  if(was.names.some(name=>!now.has(name)))continue;
+  const live=await proofRows(db,table,was.names,was.pk);
+  for(const [identity,bytes] of Object.entries(was.rows)){
+   if(!(identity in live))rows.push(`${table} ${identity}: missing`);else if(live[identity]!==bytes)rows.push(`${table} ${identity}: changed`);
+  }
+ }
+ return {rows,types};
+}
+async function rolledBack<T>(db:Pool,work:(client:PoolClient)=>Promise<T>){
+ const client=await db.connect();
+ try{await client.query("BEGIN");return await work(client);}finally{await client.query("ROLLBACK");client.release();}
+}
+// The review revision the repository itself will demand next: its own reader of the newest review of a case (the reader behind the expectedReviewRevision check),
+// so the proof never pins a revision number that a later migration may legitimately move.
+const currentReviewRevision=async(db:Queryable,caseId:string)=>(await readRecoveryEligibilityV3({$client:db} as unknown as TenantTransaction,T,caseId))?.revision??0;
+// The case revision the repository demands as expectedCaseRevision: the same projection (app.recovery_case_current) and filters its own query reads, so a case revision
+// appended after the case was opened (an amendment, an event) is followed rather than assumed to be still the number returned by "open".
+const currentCaseRevision=async(db:Queryable,jobId:string,caseId:string)=>Number((await db.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND claim_revision IS NOT NULL",[T,jobId,caseId])).rows[0]?.revision);
+async function routineSource(db:Queryable,routine:string){
+ const row=(await db.query("SELECT pg_get_functiondef(p.oid) AS definition,p.prosrc AS body FROM pg_proc p WHERE p.oid=$1::regprocedure",[routine])).rows[0]!;
+ return {definition:row.definition as string,body:row.body as string};
+}
+// CREATE OR REPLACE with the routine's OWN header and body, both read from the catalog as data, under a dollar-quote delimiter chosen here that occurs in neither the
+// body nor the note. Nothing depends on the delimiter the stored definition happens to print (PostgreSQL picks another one when the body holds "$function$").
+async function replaceRoutine(db:Queryable,routine:string,note:string){
+ const was=await routineSource(db,routine),bodyAt=was.definition.lastIndexOf(was.body);
+ expect(bodyAt,`${routine}: the body is inside its printed definition`).toBeGreaterThan(0);
+ const opening=was.definition.slice(0,bodyAt),header=opening.replace(/\nAS \$[A-Za-z0-9_]*\$$/u,"");
+ expect(header,`${routine}: the printed definition opens its dollar-quoted body`).not.toBe(opening);
+ let delimiter="$ch7_scratch$";for(let n=1;`${note}\n${was.body}`.includes(delimiter);n++)delimiter=`$ch7_scratch${n}$`;
+ await db.query(`${header}\nAS ${delimiter}\n-- ${note}\n${was.body}${delimiter}`);
+ return {was,now:await routineSource(db,routine)};
+}
+it("0130 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
+ const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0130_recovery_eligibility_v3_f17_timing.sql");
+ expect(oldIndex).toBeGreaterThanOrEqual(0);expect(newIndex).toBeGreaterThan(oldIndex);expect(names).toEqual([...names].sort());
+ const database=`ch7_f17_upgrade_${randomUUID().replaceAll("-","")}`;
+ await admin.query(`CREATE DATABASE ${database}`);
+ const upgradeAdmin=new Pool({...admin.options,password:"synthetic",database}),upgradeRuntime=new Pool({...runtime.options,password:"synthetic",database});
+ try{
+  await upgradeAdmin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
+  // Everything registered before 0130 (its index is found by name above, so a later renumbering of the file is a mechanical change), as the runner records it.
+  for(const url of MIGRATION_URLS.slice(0,newIndex)){
+   await upgradeAdmin.query(await readFile(url,"utf8"));
+   await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[basename(fileURLToPath(url))]);
+  }
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names.slice(0,newIndex));
+  await upgradeAdmin.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[T]);await upgradeAdmin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[U]);
+  await upgradeAdmin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'F17 upgrade synthetic')",[A,T]);await upgradeAdmin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')",[M,T,A,U]);
+  const session=await issuePracticeSession(upgradeRuntime),auth=await authenticatePracticeSession(upgradeRuntime,session),jobId=randomUUID();
+  await upgradeAdmin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario)VALUES($1,$2,'F17 upgrade generated job',$3,'capture')",[jobId,T,auth.digest]);
+  const feed=new PracticeFeedRepository(upgradeRuntime,"synthetic_demo"),cases=new RecoveryCaseRepository(practiceMaterialPool(upgradeRuntime,auth.digest));
+  const connected=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
+  await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:connected.revision,action:"advance",movement:"supplier-refund-540",step:"settled"});
+  // The cash settles first. The 0119 guard accepts its qualifying candidate;
+  // 0130 must preserve that historical mistake rather than rewriting history.
+  const c=await cases.command(ctx,jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"open",caseType:"duplicate_supplier_payment",claimedNetPence:300000,counterparty:"Fictional supplier",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:["Supplier invoice INV-320"],expectedRevision:0},actor);
+  const f={auth,jobId,c},id=await rawQualifyingF17(upgradeRuntime,f);
+  const snapshot=async()=>({
+   reviews:(await upgradeAdmin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_v3_review r ORDER BY id")).rows,
+   lines:(await upgradeAdmin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_claim_line r ORDER BY id")).rows,
+   audit:(await upgradeAdmin.query("SELECT row_to_json(r)::text bytes FROM app.audit_event r ORDER BY sequence")).rows,
+  });
+  const before=await snapshot();expect(before.reviews).toHaveLength(1);
+  expect((await upgradeAdmin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE id=$1",[id])).rows[0].result).toMatchObject({qualifyingPrincipal:{pence:45000,currency:"GBP"},reason:null});
+  // What the after-all-migrations comparison will use: the primary keys of the rows that exist now, and their named columns and types.
+  const proof=await proofBefore(upgradeAdmin);
+  expect(Object.keys(proof)).toEqual([...proofTables]);
+  for(const [table,was] of Object.entries(proof)){expect(was.pk.length,`${table} has a primary key`).toBeGreaterThan(0);expect(Object.keys(was.rows).length,`${table} has a pre-existing row to compare`).toBeGreaterThan(0);}
+  // Migration 0130 ALONE, the way the runner applies one file: run its SQL, then record it. Whole rows, byte for byte: this says only what 0130 did.
+  await upgradeAdmin.query(await readFile(MIGRATION_URLS[newIndex]!,"utf8"));
+  await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[names[newIndex]]);
+  expect(await snapshot()).toEqual(before);
+  // Then every later migration, twice; both runs must succeed.
+  await migrate(upgradeAdmin);await migrate(upgradeAdmin);
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names);
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name=$1",[names[newIndex]])).rows).toEqual([{migration_name:"0130_recovery_eligibility_v3_f17_timing.sql"}]);
+  // After ALL migrations: only the rows that existed before 0130, by primary key, on their named columns and types.
+  expect(await proofDifferences(upgradeAdmin,proof)).toEqual({rows:[],types:[]});
+  // Controls: each runs the SAME comparison inside a transaction that is rolled back.
+  for(const table of proofTables){
+   const preExisting=Object.keys(proof[table]!.rows).length;
+   // (a) a one-microsecond change to a stored time (a superuser UPDATE with triggers off, the way this file seeds times) must fail the row comparison for every pre-existing row.
+   const moved=await rolledBack(upgradeAdmin,async client=>{
+    await client.query("SET LOCAL session_replication_role=replica");
+    expect((await client.query(`UPDATE app.${table} SET ${proofTimeColumn[table]}=${proofTimeColumn[table]}+interval '1 microsecond'`)).rowCount).toBeGreaterThanOrEqual(preExisting);
+    return proofDifferences(client,proof);
+   });
+   expect(moved.rows.filter(line=>line.startsWith(`${table} `)&&line.endsWith(": changed")),`control (a) ${table}: ${JSON.stringify(moved)}`).toHaveLength(preExisting);expect(moved.types).toEqual([]);
+   // (c) a nullable column added after 0130 must leave it passing.
+   expect(await rolledBack(upgradeAdmin,async client=>{
+    await client.query(`ALTER TABLE app.${table} ADD COLUMN f17_proof_control text`);
+    expect((await proofColumns(client,table)).map(column=>column.name)).toContain("f17_proof_control");
+    return proofDifferences(client,proof);
+   })).toEqual({rows:[],types:[]});
+  }
+  // (b) a retype of a pre-existing column must fail the type comparison: one that keeps every serialised value, and one that changes only the length.
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   await client.query("ALTER TABLE app.recovery_claim_line ALTER COLUMN net_pence TYPE numeric(20,0)");
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:["recovery_claim_line: net_pence bigint -> numeric(20,0)"]});
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   await client.query("ALTER TABLE app.audit_event ALTER COLUMN event_type TYPE varchar(120)");
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:["audit_event: event_type character varying(100) -> character varying(120)"]});
+  // (d) a function replaced after 0130 (here the very routine 0130 replaced) must leave it passing. The replacement is built from the routine's own header and body
+  // under a delimiter chosen by the test, so it does not rely on how the stored definition is quoted.
+  const routine="app.guard_recovery_eligibility_v3()";
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   const {was,now}=await replaceRoutine(client,routine,"scratch control: replaced after 0130");
+   expect(now.definition).not.toBe(was.definition);expect(now.body).toContain("scratch control: replaced after 0130");
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:[]});
+  // (d2) delimiter collision: a legitimate later replacement whose body itself contains "$function$" (so PostgreSQL has to print it back under another delimiter),
+  // and a second replacement made from that definition. Both must leave it passing.
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   const first=await replaceRoutine(client,routine,"scratch control: a later body that itself contains $function$");
+   expect(first.now.definition).not.toBe(first.was.definition);expect(first.now.body).toContain("$function$");
+   expect(first.now.definition,"the collision made PostgreSQL print a different delimiter").not.toContain("AS $function$");
+   const second=await replaceRoutine(client,routine,"scratch control: replaced a second time");
+   expect(second.now.definition).not.toBe(second.was.definition);
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:[]});
+  // (e) a pre-existing row that has gone must fail it: every one of them must still be present.
+  const gone=await rolledBack(upgradeAdmin,async client=>{
+   await client.query("SET LOCAL session_replication_role=replica");
+   expect((await client.query("DELETE FROM app.recovery_claim_line")).rowCount).toBeGreaterThanOrEqual(Object.keys(proof.recovery_claim_line!.rows).length);
+   return proofDifferences(client,proof);
+  });
+  expect(gone.rows).toHaveLength(Object.keys(proof.recovery_claim_line!.rows).length);expect(gone.rows.every(line=>line.startsWith("recovery_claim_line ")&&line.endsWith(": missing"))).toBe(true);expect(gone.types).toEqual([]);
+  // (f) a row added after 0130 is ignored (a rolled-back scratch claim line here; the corrected review saved below is a real later row, with its audit events).
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   await client.query("SET LOCAL session_replication_role=replica");
+   expect((await client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)SELECT $1::uuid,tenant_id,job_id,case_id,review_id,'fixed_compensation',debtor_type,1 FROM app.recovery_claim_line LIMIT 1",[randomUUID()])).rowCount).toBe(1);
+   expect(Object.keys(await proofRows(client,"recovery_claim_line",proof.recovery_claim_line!.names,proof.recovery_claim_line!.pk))).toHaveLength(Object.keys(proof.recovery_claim_line!.rows).length+1);
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:[]});
+  // (g) a review added after 0130 (a rolled-back copy of the saved one, one revision higher) must leave it passing, and the revision the next review has to be
+  // appended against is read from the database, not assumed.
+  const saved=await currentReviewRevision(upgradeAdmin,c.id);expect(saved).toBeGreaterThanOrEqual(1);
+  const later=await rolledBack(upgradeAdmin,async client=>{
+   await client.query("SET LOCAL session_replication_role=replica");
+   expect((await client.query("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)SELECT $1::uuid,tenant_id,job_id,case_id,revision+1,case_revision,fixture,source_event_id,actor_membership_id,$2::uuid,payload_hash,result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$3 AND case_id=$4 AND revision=$5",[randomUUID(),randomUUID(),T,c.id,saved])).rowCount).toBe(1);
+   expect(Object.keys(await proofRows(client,"recovery_eligibility_v3_review",proof.recovery_eligibility_v3_review!.names,proof.recovery_eligibility_v3_review!.pk))).toHaveLength(Object.keys(proof.recovery_eligibility_v3_review!.rows).length+1);
+   return {revision:await currentReviewRevision(client,c.id),differences:await proofDifferences(client,proof)};
+  });
+  expect(later.differences).toEqual({rows:[],types:[]});expect(later.revision).toBe(saved+1);
+  // (h) a case revision added after 0130 (a rolled-back claim revision one higher, the shape of an amendment) must leave it passing, and moves the case revision the next
+  // review has to be appended against.
+  const openedAt=await currentCaseRevision(upgradeAdmin,jobId,c.id);expect(openedAt).toBeGreaterThanOrEqual(c.revision);
+  const amended=await rolledBack(upgradeAdmin,async client=>{
+   await client.query("SET LOCAL session_replication_role=replica");
+   expect((await client.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash,previous_hash)SELECT $1::uuid,tenant_id,job_id,case_id,revision+1,claimed_net_pence,currency,reviewer_ref,encode(sha256(convert_to($2::text,'UTF8')),'hex'),subject_hash FROM app.recovery_claim_revision WHERE tenant_id=$3 AND case_id=$4 ORDER BY revision DESC LIMIT 1",[randomUUID(),randomUUID(),T,c.id])).rowCount).toBe(1);
+   return {revision:await currentCaseRevision(client,jobId,c.id),differences:await proofDifferences(client,proof)};
+  });
+  expect(amended.differences).toEqual({rows:[],types:[]});expect(amended.revision).toBe(openedAt+1);
+  const repo=new RecoveryEligibilityV3Repository(practiceMaterialPool(upgradeRuntime,auth.digest),"synthetic_demo");
+  // The corrected review is appended against the case revision (read by the case repository's own reader) and the review revision the database holds now, so a case or
+  // review a later migration appended is allowed, and any number of reviews may exist.
+  const caseNow=(await cases.listForMember(ctx,jobId,actor)).find(x=>x.id===c.id);expect(caseNow?.revision).toBe(await currentCaseRevision(upgradeAdmin,jobId,c.id));
+  const current=await currentReviewRevision(upgradeAdmin,c.id);expect(current).toBeGreaterThanOrEqual(saved);
+  const corrected=await repo.review(ctx,jobId,review({id:c.id,revision:caseNow!.revision},"F17",current),actor,auth.digest);
+  expect(corrected.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"});
+  expect(corrected.revision).toBe(current+1);
+  expect(await proofDifferences(upgradeAdmin,proof)).toEqual({rows:[],types:[]});
+ }finally{
+  await closeTestPools(upgradeRuntime,upgradeAdmin);await admin.query(`DROP DATABASE ${database}`);
+ }
 });
