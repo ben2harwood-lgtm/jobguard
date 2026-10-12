@@ -451,3 +451,76 @@ Run 14, the built command `node packages/db/dist/audit-checkpoint-handoff-cli.js
 Not run: `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, any package `test` script, `pnpm openapi:check` (no route or schema changed), the web unit file. No browser was installed.
 
 Mac run record only — not a review, not an acceptance.
+
+## Round 2 (the last): builder status and Mac verification
+
+Run record only, written by the Mac test helper (Claude Sonnet, 12 October 2026). The helper changed no product code and no test; the only file it changed is this receipt. This is not a review and not an acceptance. Everything is local: nothing was pushed or fetched and no GitHub call was made.
+
+Code under test: branch `codex/sandbox/ent-10b-ops`, head `7e917dd2cba808b640f6d12db5c67e4e01ee8a69` (parent `8b1a59e75ee8a7846ccac17242e7eeb0dda94d5e`), clean tree before and after every run (`git status --short` empty). `git diff --stat 8b1a59e..HEAD` lists exactly four files (238 insertions, 36 deletions): `docs/contracts/audit-export-v1.md`, `packages/db/src/audit.ts`, `packages/db/src/audit-checkpoint-handoff.test.ts`, `packages/db/test/audit-checkpoint-handoff.integration.test.ts`. `origin/main` was not fetched; it is the local ref as before.
+
+### (i) The builder session
+
+The Codex builder session ended with `Selected model is at capacity` (printed twice at the very end of its log) after it had finished its code, so no builder receipt section for Round 2 was written. The checks the log shows it ran, in `packages/db` / the worktree root of the sandbox, under a pinned pnpm 10.28.1 on `PATH` (the default launcher stalled once and was interrupted, exit 130 after about 43 seconds):
+
+- unit file `src/audit-checkpoint-handoff.test.ts`, `--maxWorkers=2`: exit 1 with 7 of 33 failing (the new guard cases, before the guard repair); exit 1 with 9 of 35 failing (after adding the two checkpoint unit cases, before the query repair); exit 0 with 35 passed; exit 0 with 56 passed (the last run, same count as the Mac run below). These red runs are the builder's log, not reproduced by the helper.
+- `pnpm typecheck` exit 0 (7 tasks successful); `LANE_BASE_REF=origin/main pnpm lint` exit 0 (7 tasks); `LANE_BASE_REF=origin/main pnpm lint:lanes` exit 0; `pnpm build --force --concurrency=2` exit 0 (7 tasks successful).
+- `pnpm openapi:check` exit 1: the `tsx` launcher could not bind its pipe (EPERM), a sandbox limit, before the check ran. `node --import tsx src/generate-openapi.ts --check` in `apps/api` was then run and the log shows it succeeded.
+- one scripted read-only check: 19 recorded hashes match HEAD, only the four repair paths changed, added lines hold no credential shape.
+- NOT RUN by the builder: any PostgreSQL test (no integration command appears in its log), any browser (Playwright) run, the restore rehearsal.
+
+### (ii) Fix 1, Fix 2, Fix 3 (read against `ENT-10b-OPS-r2-repair.txt`; "reads as" is the helper's reading, not a review)
+
+| Fix | Status | Evidence |
+| --- | --- | --- |
+| 1 (P1, conflict committed during the statement) | DONE (reads as) | In `exportAuditCheckpoints` the one materialized insert statement now returns every candidate `(tenant, sequence, hash)` with an `inserted` flag. If any candidate was skipped, a second `pool.query` (a new statement, so a fresh snapshot) compares only those fixed identities with `audit_control.checkpoint` using `IS DISTINCT FROM` on the hash; it does not read `app.audit_event`. A difference throws the same typed error `AUDIT_VERIFICATION_FAILED`, message `Stored checkpoint differs for tenant <company> at sequence <n>`. The return value is the inserted rows only. No migration. Proved on real PostgreSQL by the new `[Round 2 F1]` cases (run b). |
+| 2 (P2, constant-path dynamic import + aliased export) | DONE (reads as) | The guard resolves a `const` string, a template without substitutions, `+` concatenation and `const` identifiers bound by TypeScript's own scope checker, for `import()`, `require()`, `import x = require()`, `require.resolve()` and `createRequire(...)` results (aliases included); anything it cannot resolve throws `Unresolved module specifier in <file>`. The checker's exact fixture is the first case of `[Round 2 F2] same guard refuses constant-path loading followed by an aliased export`; the function-argument cases are `[Round 2 F2] unresolved import(path)` / `require(path) fails closed naming the file`. All Round 1 mutation cases and `[C-OPS-1]` (real tree) pass. |
+| 3 (P2, repeated wildcard in an exports target) | DONE (reads as) | The two-part `split("*")` is replaced by a pattern in which every `*` of the target matches any run of characters and every literal part is kept (the `dist` form and the `.ts/.tsx/.mts/.cts` source forms). The checker's exact fixture (`"./features/*": "./dist/*/entry-*.js"`, with `dist/ops/entry-ops.js` re-exporting the operator) is `[Round 2 F3] same guard refuses a repeated-wildcard target before a request imports its subpath`; it throws `Operator reachable` with no request import. |
+
+Beyond the order (read, run and passing, not judged): the builder added `[Round 2 self-review]` guard cases for `export * as`, `import type`, `typeof import()`, `require.resolve`, `createRequire` forms, shadowed or computed specifiers failing closed, and `.mjs` / `.cjs` / `.d.ts` export targets; and `[Round 2 F3]` negative and source-fallback cases. `docs/contracts/audit-export-v1.md` was updated to describe the two-step check.
+
+### (iii) Commands exactly as run, with results
+
+Every command ran inside `~/.local/bin/heavy-slot <label> ...` (one at a time; memory at least 80% free before each run, `memory_pressure | tail -1`), worktree root `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-10b-ops` unless stated. Vitest runs had `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` and `--maxWorkers=2`. Runs that start a database or a browser had `TMPDIR` pointing at `~/.local/share/full-steam/jg-runs/ent-10b-ops-mac-tmp`, not `/private/tmp`. `<runs>` = `~/.local/share/full-steam/jg-runs`; logs are `<runs>/ent-10b-ops-r2-mac-*`. Node v24.17.0, pnpm 10.28.1, embedded PostgreSQL 16.10.0-beta.15, Chromium 1193 (installed full build).
+
+| # | Command (exact, without the heavy-slot wrapper) | Exit | Result |
+| --- | --- | --- | --- |
+| 1 | `git status --short`; `git rev-parse HEAD`; `git diff --stat 8b1a59e..HEAD` | 0 | clean; `7e917dd`; exactly the four files |
+| 2 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose src/audit-checkpoint-handoff.test.ts` | 0 | 1 file, 56 passed (see list A) |
+| 3 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/audit-checkpoint-handoff.integration.test.ts` | 0 | 1 file, 22 passed, real PostgreSQL (see list B) |
+| 4 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/audit-export.integration.test.ts test/audit.integration.test.ts test/verify-audit-export-cli.test.ts` | 0 | 3 files, 30 passed (11 + 5 + 14), merged files unedited |
+| 5 | `pnpm turbo run build --filter=@jobguard/api... --concurrency=2` (alone, refreshes the gitignored `dist/` before run 6) | 0 | 6 tasks successful, 4 cached |
+| 6 | `node <runs>/ent-10b-ops-mac-cli-e2e.mjs` (the Round 1 scratch script, outside the repository; it starts `node packages/db/dist/audit-checkpoint-handoff-cli.js` as a separate process six times) | 0 | see below |
+| 7 | `pnpm typecheck --concurrency=2` | 0 | 7 tasks successful, 4 cached |
+| 8 | `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | 0 | root lints incl. lane boundary passed; 7 tasks successful, 4 cached |
+| 9 | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane boundary passed at head `7e917dd` |
+| 10 | `pnpm build --concurrency=2` (alone) | 0 | 7 tasks successful, 6 cached; the web Next production build ran (cache miss) |
+| 11 | in `apps/web`: `CI=1 pnpm exec playwright test --config <runs>/pw-local-channel-ent-10b-ops.config.ts --project=mobile-360 --project=desktop --workers=1 --list ENT-10b.spec.ts` | 0 | 2 tests in 1 file (`ENT-10b.spec.ts`), nothing else |
+| 12 | in `apps/web`: `CI=1 pnpm exec playwright test --config <runs>/pw-local-channel-ent-10b-ops.config.ts --project=mobile-360 --project=desktop --workers=1 --reporter=list ENT-10b.spec.ts` | 0 | 2 passed (mobile-360 and desktop), spec unedited, production server |
+| 13 | `pnpm openapi:check` (extra; the builder's sandbox could not run it) | 0 | passed; no route or schema changed |
+
+The Playwright wrapper config is outside the repository (it imports this worktree's `apps/web/playwright.config.ts` and only sets `channel: "chromium"`). The web server printed the usual Next.js "multiple lockfiles" warning; not a finding.
+
+List A, run 2, all 56 passed. The mutation cases that ran: Round 1 F2 (unrelated graph permitted; direct request import; three indirect aliases `export { x as renamed } from`, `export * from`, import-then-`export { local as renamed }`; emitted module outside source roots harmless until exported; `exports` target; `main` target) and the new cases: `[Round 2 F2]` constant-path `import(operatorPath)` with a string literal, with a template literal, and `require(operatorPath)` after a `base + "..."` concatenation (3, all throw `Operator reachable`); `[Round 2 F2]` unresolved `import(path)` and `require(path)` (2, throw `Unresolved module specifier in packages/bridge/src/index.ts`); `[Round 2 F3]` repeated-wildcard target refused before any request import, full suffix kept, a non-matching suffix not inspected, source fallback inspected before a build (4); `[Round 2 F2]` constant external imports permitted (1); `[Round 2 self-review]` related import syntax (9) and computed or shadowed specifiers fail closed (6) and `.mjs` / `.cjs` / `.d.ts` targets (3). Also passed: `[C-OPS-1]` real tree cannot reach the operator, `[C-OPS-5]`, the Round 1 and Round 2 F1 unit cases (statement shape, fresh statement with original identities, inserted rows returned), and the `[A14]` cases.
+
+List B, run 3, all 22 passed, among them:
+- `[Round 2 F1] wrong checkpoint committed during insert wait rejects and keeps other company (pre-existing: false)` — passed. A second connection W inserts a wrong-hash checkpoint for company A at sequence N and leaves its transaction open; the helper's insert statement runs on another connection; the test polls `pg_stat_activity` (`wait_event_type='Lock'`, `pg_blocking_pids` containing W's pid, query text the checkpoint INSERT) until the helper is waiting (asserted found within 3 seconds, polled with `setImmediate`, no sleep), checks W's row is still invisible, then commits W. The function REJECTED with `AUDIT_VERIFICATION_FAILED` and the message naming company A and sequence N; the stored row stayed W's wrong hash; company B's valid checkpoint (inserted by this call) was kept.
+- `[Round 2 F1] ... (pre-existing: true)` — passed. Same, with company B's checkpoint already stored; it stayed unchanged.
+- `[Round 1 F1a] candidate disagreement rejects naming company and sequence after an intervening append` — passed (different hash rejects, names company and sequence; function issues two statements).
+- `[Round 1 F1b] other-company checkpoint is committed and kept when the candidate disagrees after an append` — passed (valid second company kept).
+- `[Round 1 F1c] equal candidate hash skips without a duplicate after an intervening append` — passed (equal hash, no error, no duplicate).
+- `[A4] different stored hash fails verification while true other-company records stand` — passed; `[A3] concurrent checkpoint exports resolve with one record per newest sequence` — passed.
+- All remaining cases (A1, A2, A5 to A13, C-OPS-3) passed.
+
+Run 6, the operator command as a separate process, against a scratch embedded database (owner login, `bootstrapSyntheticDemo`, two practice companies): with `--operator mac.check`, exit 0, one JSON line, both companies `handed_off` at sequence 2 (events 2 to 4, checkpoints 0 to 2, hand-offs 0 to 2); a second run, exit 0, both `unchanged` with `nothing to do`, counts unchanged; missing `--operator`, exit 1, `AUDIT_CHECKPOINT_INVALID_INPUT`; invalid operator name, exit 1, `AUDIT_CHECKPOINT_INVALID_INPUT`; the runtime login in the migration URL, exit 1, `AUDIT_CHECKPOINT_FORBIDDEN` naming the role found and the role needed, counts unchanged; `JOBGUARD_ENV=pilot_no_charge`, exit 1, `AUDIT_CHECKPOINT_MODE_HELD`, counts unchanged. The two stored hand-off events carry `references.operator` `mac.check`. No output held a credential, host or port; the only owner-side text was the owner login role name, which the refusal message names by design (C-OPS-2).
+
+### (iv) NOT RUN
+
+- The new database test was NOT run against the code at `8b1a59e`, so "each new database test fails on the old code" is not verified by the Mac. (The builder's log shows the new unit cases failing before the repair: 7 of 33 and 9 of 35; the helper did not reproduce that.)
+- NOT RUN: `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, any whole package or repository suite; `test/tenancy.integration.test.ts`, `test/demo-bootstrap.integration.test.ts`, `packages/db/tools/synthetic-restore.mjs` (no change to those or their callers this round); the API unit files (`audit-export.application.test.ts`, `context-boundary.test.ts`); the web unit file; `ENT-2.spec.ts` (known to fail at mobile-360 on plain main on this Mac; not part of this piece).
+- Not done by the helper: any independent review, any acceptance, anything on GitHub, any push. Fresh Opus and Sol checks bound to this commit are still required.
+
+### (v) Nineteen merged-file hashes
+
+Unchanged. The helper recomputed the SHA-256 of all nineteen paths in the working tree at `7e917dd` and compared each with the Round 1 "Nineteen-path preservation record" table above in this file: 19 of 19 equal. `git diff --quiet 8b1a59e HEAD -- <path>` also reports no change for each of the nineteen. The table is not repeated here.
+
+Mac run record only — not a review, not an acceptance.
