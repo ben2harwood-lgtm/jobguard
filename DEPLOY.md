@@ -65,3 +65,18 @@ Expected output is a single success JSON object. Run the same command again to v
 - This is a disposable synthetic demo, not evidence of real-data readiness, residency approval, backup/restore readiness, external-provider approval, regulatory approval, or production acceptance.
 - Demo UI actions remain fixture/local behavior: no live send, charge, spend, payment rail, AI, transcription, or provider fallback exists in this deployment.
 - Delete the Vercel project and Neon database when testing ends. Do not migrate its records into a real environment.
+
+## Audit checkpoint hand-off (operator)
+
+Practice sandbox only. From a trusted shell with `JOBGUARD_ENV=synthetic_demo` and `MIGRATION_DATABASE_URL=<owner-login-url>` already set, run:
+
+```sh
+pnpm handoff:audit-checkpoint --operator <name>
+pnpm handoff:audit-checkpoint --operator <name> --tenant <id>
+```
+
+`--operator` is required: 1–64 letters, digits, dots, underscores or hyphens. Use a plain operator name, never a credential. The connected login must own `jobguard_synthetic_demo` and be able to act as the existing `jobguard_migration` and `jobguard_runtime` roles. A refused login receives a message naming the found role and required owner/migration role, with exit 1. Application requests continue to use their existing login.
+
+The command emits one JSON line with `ok`, `environment`, `database` and per-company `outcomes`. An effective outcome is `handed_off` with the new sequence; an idle outcome is `unchanged` with `message: "nothing to do"`; a failure is `failed` with a typed code and exit 1. Successful runs exit 0. Each effective run records the operator label, database session user and event server time in that company's audit trail, with the checkpoint taken at that event. Driver details and connection URLs are omitted.
+
+It is safe to run again: without new events it writes nothing. A company created after the last run needs another run before its first signed audit export. Creating an export itself adds an event, so a subsequent hand-off may take another checkpoint. The command closes its dedicated connection on success and failure; company settings exist only within its own transactions. It adds no database rights and is never run from a request, worker, deployment hook or timer.
