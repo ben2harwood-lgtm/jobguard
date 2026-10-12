@@ -45,13 +45,19 @@ async function seed(owner:Pool,run:Pool){
 }
 async function preview(){const repo=new RecoveryMessageRepository(runtime),ready=await repo.read(context,caseId);return repo.preview(context,caseId,{version:"recovery-message-preview.v1",commandId:randomUUID(),expectedCaseRevision:ready.readiness.caseRevision,packId},messageActor);}
 async function proofFixture(owner:Pool,j:string){
- const scope=(await owner.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 LIMIT 1",[T,j])).rows[0].id as string,upload=randomUUID(),evidence=randomUUID();
+ // Match the merged proof journey: verified certificate -> evidence link -> completed electrical stage.
+ const scopes=(await owner.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id",[T,j])).rows as {id:string}[];
+ for(const {id:scope} of scopes){
+ const upload=randomUUID(),evidence=randomUUID(),link=randomUUID(),objectKey=`terms/proof/${j}/${scope}`;
  const bytes=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aNioAAAAASUVORK5CYII=","base64"),digest=createHash("sha256").update(bytes).digest("hex");
  await withTenant(owner,context,async db=>{
- await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,'terms/proof',$5,'image/png',$6,'standard_evidence','verified','terms-proof-v1',clock_timestamp(),clock_timestamp()+interval '1 hour')",[upload,T,j,scope,digest,bytes.length]);
- await db.$client.query("INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,'terms/proof','terms-proof-v1','synthetic_demo','image/png',$5)",[T,upload,j,scope,bytes]);
- await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','site_photo','terms/proof','terms-proof-v1',$6,$7,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())",[evidence,T,upload,j,scope,digest,bytes.length]);
+ await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,$7,$5,'image/png',$6,'standard_evidence','verified','terms-proof-v1',clock_timestamp(),clock_timestamp()+interval '1 hour')",[upload,T,j,scope,digest,bytes.length,objectKey]);
+ await db.$client.query("INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,$6,'terms-proof-v1','synthetic_demo','image/png',$5)",[T,upload,j,scope,bytes,objectKey]);
+ await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','electrical_certificate',$8,'terms-proof-v1',$6,$7,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())",[evidence,T,upload,j,scope,digest,bytes.length,objectKey]);
+ await db.$client.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'electrical_certificate')",[link,T,evidence,j,scope]);
+ await db.$client.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'electrical-stage',$5,$6)",[randomUUID(),T,j,scope,link,randomUUID()]);
  });
+ }
 }
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"ch7-terms-upgrade-"));port=await freePort(58600,200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start();

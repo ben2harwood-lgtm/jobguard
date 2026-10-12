@@ -235,3 +235,61 @@ Vitest ran with `--maxWorkers=1` for database files and `--maxWorkers=2` otherwi
 **Seen, not changed:** (a) the 0134 section of `packages/db/MIGRATIONS.md` still says "T8's audit clock semantics need a coordinator ruling before acceptance", which round 2 settled; stale wording, left for the next builder round. (b) The helper added no commit other than the merge and this record.
 
 Mac helper record only. Not independently verified, not accepted.
+
+
+## Repair round 3 (fixtures, 12 Oct)
+
+Issued by the dispatcher about 23:10 on 12 October 2026, starting at clean HEAD `741fa76fe6a08cd34d7c85abc6bb26fd5136139d` on `codex/sandbox/ch-7-terms`, after the plain merge of main `ad1bad2`, regenerated OpenAPI and the Mac receipt above. This round changes only the two new database fixture helpers, the one issued sentence in `packages/db/MIGRATIONS.md:891`, and this receipt. Product code, SQL, assertions, merged tests, security lists, lane registry and UI remain unchanged. Earlier orders, including the active-owner predicate and amended T8, remain in force.
+
+**Cause (source-confirmed; repair execution owed):** the original `proofFixture` registered only an unlinked `site_photo`. `FinalAccountCommandService.assemble` reads proof through `stage_completion -> evidence_link -> evidence_object`, requires a verified original and excludes invalidated evidence (`packages/db/src/final-account-repository.ts:6`); the required type is `electrical_certificate`. Missing mandatory proof sets `issueBlocked` (`packages/core/src/final-account.ts:28`), and `app.issue_practice_customer_invoice` refuses the blocked revision (`packages/db/migrations/0095_job_parties.sql:360`). Thus the Mac's two `beforeAll` failures occurred before any of the 49 database tests executed. The repair must be rerun on real PostgreSQL before claiming those assertions pass.
+
+**Merged fixture paths reused as the setup model (source-inspected):** `apps/web/e2e/helpers/recovery-sources.ts:11` finalizes verified proof and completes the scope; its invoice journey at `:52` completes proof, assembles an unblocked account, then issues through the practice-invoice endpoint at `:55` (used by M4-5-S/M4-6-S recovery journeys). `apps/web/e2e/helpers/customer-invoice-journey.ts:61` selects/finalizes/completes generated proof before rebuilding and issuing the account (also used by CH-1); CH-7 starts from the merged capture journey. The merged database proof setup at `packages/db/test/proof-application-records.integration.test.ts:27` uses `electrical_certificate`, then `:28` completes `electrical-stage`; the underlying merged command creates the evidence link and stage completion at `packages/db/src/proof-repository.ts:23`. Inspection also covered `job-activation-terms.integration.test.ts`, `recovery-follow-up.integration.test.ts:58` and `final-account.integration.test.ts`; the latter invoice fixtures seed an already-issuable account and do not provide a compatible proof-only helper for these existing jobs. No reusable shared database test-support helper accepts these already-created jobs; the browser helpers require Playwright and the watchdog harness owns a different tenant/job lifecycle. Neither shared helpers nor merged fixtures were edited or copied. These two narrow, privileged synthetic setup helpers seed the same verified certificate/link/completed-stage row shape with foreign keys and ordinary triggers enabled; account assembly and invoice issue still use their real runtime repositories, with no fabricated unblocked final-account revision.
+
+| New test file | Before (HEAD 741fa76) | After (working tree) |
+| --- | --- | --- |
+| `packages/db/test/recovery-case-terms.integration.test.ts` | `:42–50` helper; `:43` chose one arbitrary scope, `:47–49` used fixed object key `terms/proof`, and `:49` stored only `site_photo` | `:42–56` helper; `:44–46` iterates all confirmed scopes and makes a job/scope-specific object key; `:49–51` binds that key to upload/original/object and stores `electrical_certificate`; `:52–53` adds its evidence link and completed `electrical-stage` |
+| `packages/db/test/recovery-case-terms-upgrade.integration.test.ts` | `:47–55` helper; `:48` chose one arbitrary scope, `:52–54` used fixed object key `terms/proof`, and `:54` stored only `site_photo` | `:47–61` helper; `:49–51` iterates all confirmed scopes and makes a job/scope-specific object key; `:54–56` binds that key to upload/original/object and stores `electrical_certificate`; `:57–58` adds its evidence link and completed `electrical-stage` |
+
+The distinct object key also avoids the existing tenant/object-key uniqueness constraint (`0002_evidence.sql:22`) when the integration setup reaches its second, no-policy control job; without this repair its second proof upload would collide. All existing T1–T13 assertions remain verbatim, including T2's non-owner/revoked-owner/expired-owner refusals with nothing committed and active-owner positive control, and T8's one transaction identity, ordered times, chain and private rollback/retry assertions. No skips, new timeout, weaker assertions or production capability were added.
+
+The stale 0134 documentation sentence now records the coordinator's 12 October ruling: ONE transaction identity with ordered times, never approval/audit clock equality. The separate historical receipt and contract statements are preserved; this round's authority changes exactly the issued migration-note sentence.
+
+**0134 GRANT list (source-inspected again; unchanged):**
+
+1. `packages/db/migrations/0134_recovery_case_terms.sql:29`: `GRANT SELECT ON app.recovery_case_terms_approval TO jobguard_runtime`, after line 28 revokes ALL from PUBLIC and runtime; approval-table read only.
+2. `:71`: `GRANT EXECUTE ON FUNCTION app.approve_recovery_case_terms(uuid,uuid,uuid,uuid,uuid,uuid,uuid) TO jobguard_runtime`; SECURITY DEFINER, owned by `jobguard_migration`, with its own tenant check, active-owner predicate at `:61` and exact-authorization joins at `:55–63`.
+3. `:81`: `GRANT EXECUTE ON FUNCTION app.recovery_case_terms_approved(uuid,uuid,uuid) TO jobguard_runtime`; SECURITY INVOKER, STABLE and read-only, declared at `:73`.
+
+**NEW BUILD STANDARD — existing authorization-row trust weakness (F1/F2):** No new direct INSERT, UPDATE or DELETE grant for the application login was added; the approval routine still trusts hand-made receipt, decision and authorization rows that the runtime login can already forge (audit findings F1 and F2, `audit-definer-trusts-authorization-20261012.md`), an existing weakness rather than a new grant, tracked by the least-privilege proposal.
+
+**Migration bytes:** SHA-256 of `packages/db/migrations/0134_recovery_case_terms.sql` before repair: `0f981e24c45f1e7decd69d7c872d49056b6c27d11512eebac774925cb5b88d5a`; after repair: `0f981e24c45f1e7decd69d7c872d49056b6c27d11512eebac774925cb5b88d5a`. A direct HEAD-versus-working-tree byte comparison also passes. This is builder source evidence, not an independent verdict or a database catalog check.
+
+
+### Round-3 run receipt
+
+Node `v24.17.0`, pinned cached pnpm `10.28.1`; all pnpm commands use the existing inspected `PATH=/private/tmp/ent3a-bin:$PATH` wrapper. Dependencies were already installed; no package install/download or clean-install claim. Only this task branch's two unit files were run, each separately with `--maxWorkers=2`; neither unit file was edited in this fixture repair. No full `pnpm test`, merged unit suite, database startup or browser launch was attempted.
+
+| Command actually run | Observed result | Log |
+| --- | --- | --- |
+| `pnpm typecheck` | exit 0; 7/7 tasks pass, 4 cached | `/private/tmp/ch7-terms-r3-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | exit 0; boundary checks and 7/7 tasks pass, 4 cached | `/private/tmp/ch7-terms-r3-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | exit 0; ch-7-terms lane only | `/private/tmp/ch7-terms-r3-lanes.log` |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/recovery-case-terms.integration.test.ts test/recovery-case-terms-upgrade.integration.test.ts` | exit 0; both changed test files compile, no database execution | `/private/tmp/ch7-terms-r3-test-types.log` |
+| `pnpm build` | exit 0; 7/7 tasks pass, 2 cached; 29 Next static pages | `/private/tmp/ch7-terms-r3-build.log` |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/recovery-case-terms.test.ts` | exit 0; 16 tests pass, one task-owned file | `/private/tmp/ch7-terms-r3-core-unit.log` |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/recovery-case-terms.application.test.ts` | exit 0; 18 tests pass, one task-owned file; mocked application boundaries, not PostgreSQL proof | `/private/tmp/ch7-terms-r3-api-unit.log` |
+| `pnpm openapi:check` | exit 1; `tsx` CLI IPC socket fails with `listen EPERM` in sandbox | `/private/tmp/ch7-terms-r3-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | exit 0; same generator/source check without the CLI IPC listener; no generated OpenAPI edit | `/private/tmp/ch7-terms-r3-openapi-socket-free.log` |
+| `git diff --check`; deterministic HEAD/source-preservation comparison | exit 0; fixture-only test edits and unchanged protected sources | `/private/tmp/ch7-terms-r3-self-review.log` |
+
+Build/lint/typecheck logs retain sandbox Turbo cache-write I/O warnings; the existing build warnings remain. The standard OpenAPI script needs its normal CI run where sockets are permitted. No script/configuration was weakened. Vitest invocations ran serially; typecheck and lint overlapped briefly, both passed, and subsequent compilation/build/test steps ran individually.
+
+**PostgreSQL and browser suites: NOT RUN (sandbox cannot start PostgreSQL / a browser).** The Mac helper/CI must rerun both new database files, including T2, amended T8 and the rule-9 populated upgrade proof; all 49 database tests remain unproven in this round. The earlier Mac GREEN merged/database/browser results remain reported helper evidence, not a new run or verdict. No eval applies to this test-fixture/documentation repair.
+
+### Round-3 self-review
+
+**PASS — builder source self-review only.** A deterministic comparison against `741fa76` replaces only each `proofFixture` block before comparing the entire remaining test file byte-for-byte: every test declaration and assertion is unchanged, including T1–T13, both T8 tests and T2's raw-runtime owner controls. Both repaired helpers are identical, bind verified originals to evidence links and stage completions on the same tenant/job/scope, retain exact hashes/version IDs/bytes, and use distinct per-job/per-scope object keys. Inspection checked applicable original constraints and later live-job/idempotency triggers; no trigger or constraint was disabled by this repair. Both setup callers activate their jobs before proof setup and still assemble and issue through the real runtime repositories. This is source inspection and test compilation, not successful invoice execution.
+
+Migration 0134, the audit implementation, auth/context-boundary test, tenancy/UIWIRE-12/demo-bootstrap security assertions and the lane registry compare byte-for-byte equal to HEAD. Exactly four authorized tracked files differ. Generated workspace build/cache outputs were removed after checks; dependencies were retained. No migration, compatibility change, operational alert, external action, policy approval or release belongs to this repair. AGENTS §§5.3, 5.4, 5.7 and 5.8 remain exercised by the unchanged tests; runtime proof is owed.
+
+The intended conventional-commit subject/body is written to `/private/tmp/jg-msg-ch-7-terms.txt`. No Git write, commit or push was performed. The dispatcher owns the commit; independent recorded verdicts bound to that exact commit and separate technical acceptance remain owed. This receipt is neither independent verification nor acceptance.
