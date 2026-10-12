@@ -886,4 +886,8 @@ Renumbered from 0130 to 0132 on 12 October 2026 under the merge-ahead ruling bec
 
 `0132_final_account_lock.sql`: SV-4 immutable lock, dispositions, synthetic terms, append-only check facts and invoice/line side bindings; only new lock-bound issue is guarded. No fingerprinted-table columns or existing grants change. Forward-fix by additive migration; do not delete locks or issued invoices.
 
-- `0129_shadow_detection.sql` — SV-3: append-only FORCE-RLS `shadow_must_surface_firing`, shadow-only `surface_shadow_signal_early` EXECUTE, and the single `must_surface_signal` finding kind. Atomic Decision/disclosure/firing/audit; no new business-table grants. Forward fix only: retain immutable firings and disclosures; disable the worker to stop new detections. Database upgrade proof is in `shadow-detection.integration.test.ts`.
+## 0133 — SV-3 shadow detection
+
+Renumbered from 0129 to 0133 on 12 October 2026 under the merge-ahead ruling because 0129 (ENT-10d), 0130 (CH-7-F17) and 0131 (PRACTICE-FACTS-1) merged first and 0132 is SV-4; the SQL bytes are unchanged (sha256 6d317e043790d4bb97acfb91d918b755a0e2ee9a08fdf6cbeefeb26fbdfe5aa6).
+
+`0133_shadow_detection.sql`: SV-3: append-only FORCE-RLS `shadow_must_surface_firing`, shadow-only `surface_shadow_signal_early` EXECUTE, and the single `must_surface_signal` finding kind. Atomic Decision/disclosure/firing/audit; no new business-table grants. Forward fix only: retain immutable firings and disclosures; disable the worker to stop new detections. Database upgrade proof is in `shadow-detection.integration.test.ts`.

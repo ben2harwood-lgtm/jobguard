@@ -172,12 +172,12 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
   const rows=(await admin.query(`SELECT id,version,tenant_id AS "tenantId",sequence::int,actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",occurred_at AS "occurredAt",payload,payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash" FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`,[T])).rows as AuditEvent[];
   expect(rows.some(r=>r.eventType==="shadow.must_surface_fired")).toBe(true);expect(()=>verifyAuditChain(rows)).not.toThrow();
  });
- it("0129 upgrade proves its own step, named-column text/type preservation, and rolled-back adversarial controls",async()=>{
+ it("0133 upgrade proves its own step, named-column text/type preservation, and rolled-back adversarial controls",async()=>{
   // An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare;
   // then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations.
   const database=`sv3_upgrade_${randomUUID().replaceAll('-','')}`;await admin.query(`CREATE DATABASE ${database}`);const p=pool("postgres",database);
   try{
-   const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0129_shadow_detection.sql"));expect(own).toBeGreaterThan(0);
+   const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0133_shadow_detection.sql"));expect(own).toBeGreaterThan(0);
    await p.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
    for(const url of MIGRATION_URLS.slice(0,own)){
     const name=url.pathname.split('/').at(-1)!;let sql=await readFile(url,"utf8");if(name==="0095_job_parties.sql")sql=sql.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);");
@@ -214,12 +214,12 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
    const newKeys=()=>p.query<{table_name:string;definition:string}>("SELECT conrelid::regclass::text table_name,pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conname=ANY($1::text[]) ORDER BY conname",[["job_finding_tenant_job_id_decision_key","shadow_disclosure_event_tenant_job_id_key"]]);
    expect((await newKeys()).rows).toEqual([]);
    await p.query(await readFile(MIGRATION_URLS[own]!,"utf8"));await compare(p);
-   expect(await appliedNames()).toEqual(registeredBefore); // This step applied 0129 alone, without later migrations.
+   expect(await appliedNames()).toEqual(registeredBefore); // This step applied 0133 alone, without later migrations.
    expect((await newKeys()).rows).toEqual([
     {table_name:"app.job_finding",definition:"UNIQUE (tenant_id, job_id, id, decision_id)"},
     {table_name:"app.shadow_disclosure_event",definition:"UNIQUE (tenant_id, job_id, id)"},
    ]);
-   await p.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0129_shadow_detection.sql')");
+   await p.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0133_shadow_detection.sql')");
    await migrate(p);await migrate(p);await compare(p);
    expect(await appliedNames()).toEqual(MIGRATION_URLS.map(u=>u.pathname.split('/').at(-1)!).sort());
    async function control(sql:string,fail:boolean){const db=await p.connect();try{await db.query("BEGIN");await db.query(sql);if(fail)await expect(compare(db)).rejects.toThrow();else await compare(db)}finally{await db.query("ROLLBACK");db.release()}}

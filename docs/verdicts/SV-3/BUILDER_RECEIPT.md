@@ -7,6 +7,8 @@ No fetch, GitHub operation, add, commit, push, merge, package/dependency change,
 
 **Status: HOLD — only the issued external integrations (B) and ruling/release gates (C) remain. Nothing owed inside the SV-3 lane remains.** Continuation round 1 below supersedes the first round's HOLD reasons. This is builder evidence, not independent verification or technical acceptance. PostgreSQL and browser proofs are authored and NOT RUN.
 
+Integrator-owned BUILD_PLAN §12.2 ledger sentence: the allocation first written here as 0129 (`0129_shadow_detection.sql`) was renumbered to **0133** on 12 October 2026; the new ledger paragraph is in BUILD_PLAN.md §12.2 ("Ledger amendment — SV-3, 12 October 2026 (catch-up renumber, merge-ahead ruling)"). The dated sections below (Continuation round 1, Mac verification (12 Oct), Follow-up (12 Oct), Repair round 2) were written before the renumber and still use the old name `0129_shadow_detection.sql` and the old SV-4 name `0130_final_account_lock.sql` (now `0132_final_account_lock.sql`); see "Mac verification (12 Oct, round 2)" at the end for the rename and the hashes.
+
 ## Changed files
 
 - `apps/api/src/shadow-detection.worker.test.ts`
@@ -31,7 +33,7 @@ No fetch, GitHub operation, add, commit, push, merge, package/dependency change,
 - `packages/core/src/shadow-detection.test.ts`
 - `packages/core/src/shadow-detection.ts`
 - `packages/db/MIGRATIONS.md`
-- `packages/db/migrations/0129_shadow_detection.sql`
+- `packages/db/migrations/0133_shadow_detection.sql` (first written as `0129_shadow_detection.sql`; renumbered on 12 October 2026, see below)
 - `packages/db/src/index.ts`
 - `packages/db/src/migrate.ts`
 - `packages/db/src/shadow-detection-repository.ts`
@@ -76,7 +78,7 @@ No fetch, GitHub operation, add, commit, push, merge, package/dependency change,
 
 ## Migration and role catalogue
 
-`0129_shadow_detection.sql` adds only `shadow_must_surface_firing`, `surface_shadow_signal_early(...)`, and the fourth permitted finding kind. No column added to a fingerprinted table, no other existing table/policy/grant/role/routine changed by this migration. Existing SV-2 routines and emergency path are untouched.
+`0133_shadow_detection.sql` (first written as `0129_shadow_detection.sql`) adds only `shadow_must_surface_firing`, `surface_shadow_signal_early(...)`, and the fourth permitted finding kind. No column added to a fingerprinted table, no other existing table/policy/grant/role/routine changed by this migration. Existing SV-2 routines and emergency path are untouched.
 
 | Object | Ownership, RLS and effective privileges |
 | --- | --- |
