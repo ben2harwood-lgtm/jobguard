@@ -486,3 +486,107 @@ F4. `pnpm openapi:check` printed nothing and exited 2 on its very first run in t
 `pnpm test:db` and `pnpm test:migrations` as aggregates; the other database files in `packages/db/test` not named above (including `demo-bootstrap` and `UIWIRE-12`); the whole API vitest suite; the full-repository `pnpm build`; `apps/web/e2e/SV-4.spec.ts` and every retained browser regression; any live-model run; anything that needs a real provider, real data or a deployment. `git push` of SV-4's branch (not done, by instruction). No pull request opened.
 
 Mac verification record only — not an independent review, not acceptance.
+
+## Repair round 2 (12 Oct)
+
+Base HEAD: `43c3bf0ca46793965c77cef33b1b046d4c5f0f89`, initially clean. Re-read the issued order, dispatch addendum, continuation order, and the Follow-up (12 Oct) helper record. Only the five named SV-3 files changed; SV-4 and SV-2 tests stay untouched. Builder receipt only — not independently verified, not accepted.
+
+Tests first: added T1's three direct-superuser FK refusal cases, each with a matching positive control, and extended the 0129 upgrade proof to include a pre-existing disclosure row as well as a finding row and to assert both additive keys. The early receipt was saved immediately after that first change; final implementation and check results follow below.
+
+T1–T3 database and browser Q: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. No database/browser pass is claimed for this round.
+
+### SV-2 catalogue test on the new head — to be filled by the Mac helper
+
+**NOT RUN (sandbox cannot start PostgreSQL / a browser)**. Helper must run the unedited `packages/db/test/shadow-persistence.integration.test.ts` on the dispatcher's exact new head and record command, head, exit and counts here.
+
+### Item 1: database bindings
+
+Before (exact SQL):
+```sql
+ FOREIGN KEY(tenant_id,decision_id) REFERENCES app.decision(tenant_id,id),
+ FOREIGN KEY(tenant_id,finding_id) REFERENCES app.job_finding(tenant_id,id),
+ FOREIGN KEY(tenant_id,disclosure_event_id) REFERENCES app.shadow_disclosure_event(tenant_id,id) DEFERRABLE INITIALLY DEFERRED,
+```
+After (exact SQL; first two links become one):
+```sql
+ FOREIGN KEY(tenant_id,job_id,finding_id,decision_id) REFERENCES app.job_finding(tenant_id,job_id,id,decision_id),
+ FOREIGN KEY(tenant_id,job_id,disclosure_event_id) REFERENCES app.shadow_disclosure_event(tenant_id,job_id,id) DEFERRABLE INITIALLY DEFERRED,
+```
+
+Migration 0129 adds exactly the two coordinator-named UNIQUE constraints before creating the firing table: `job_finding_tenant_job_id_decision_key` on `(tenant_id,job_id,id,decision_id)` and `shadow_disclosure_event_tenant_job_id_key` on `(tenant_id,job_id,id)`. Names are unchanged from the order. No column is added; no other constraint, grant, policy or trigger on these two existing tables is changed by this repair. Migration 0013 declares `job_finding`'s primary key `(tenant_id,id)` and its decision FK; migration 0128 declares `shadow_disclosure_event`'s primary key `(tenant_id,id)`. Each new key includes its table's already unique primary key, so two existing rows cannot duplicate the new key. This proves absence of data-uniqueness conflicts; it is not a claim that operational DDL cannot fail for unrelated reasons.
+
+The routine body is unchanged: Decision INSERT → job_finding INSERT → firing INSERT → record_shadow_disclosure → audit. The immediate finding/decision link therefore has its parent before the firing insert. The disclosure link keeps `DEFERRABLE INITIALLY DEFERRED` because the disclosure is inserted after the firing, in the same transaction. All routine checks remain the second layer, and the table comment states that the database carries the job binding. The firing's existing unique keys and audit link stay unchanged.
+
+- **T1 BUILT:** three parameterized direct-superuser INSERT refusals in `shadow-detection.integration.test.ts` (finding, decision, disclosure). The finding case uses K's finding and its own matching decision, isolating the job mismatch. The decision case uses J's finding with K's decision. The disclosure case uses J's finding/decision with K's disclosure and explicitly reaches `SET CONSTRAINTS ALL IMMEDIATE` after a successful INSERT. Each asserts SQLSTATE 23503 and the actual FK constraint name, rolls back to a savepoint, inserts the fully matching J row, forces constraints and verifies the accepted row. Audit parents are valid chain entries. No new trigger disabling or `session_replication_role` use. **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- **T2 BUILT:** extended the existing rule-9 proof. Installs all registered migrations before 0129 by name, asserts those ledger names, seeds a finding plus a real disclosure/audit through SV-2's routine before the snapshot, and guards nonempty rows on all five compared tables. Applies 0129 alone, compares named-column `row_to_json(t)::text` and full `format_type` values, verifies both new unique keys, then runs `migrate()` twice, compares the same captured identities, and verifies the complete registered ledger. Retains the rolled-back microsecond/retype FAIL and nullable-column/function/later-insert PASS controls unchanged. **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- **T3 SOURCE-INSPECTED:** existing direct firing fixture already inserts its own finding/decision before the firing; existing routine fixtures already bind every row to the same job. No older assertion or fixture was weakened or changed. **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- **T4:** SV-2's `shadow-persistence.integration.test.ts` is untouched; the Mac helper result belongs in the placeholder above. **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+
+### Item 2: browser Q named limit
+
+Only test Q changes. It brackets each browser request with its own Node `Date.now()` readings (request event before; complete response bytes after), asserts ISO format and exact Date round-trip, checks top-level and payingParty `retrievedAt` in that request window, and checks each visible `Retrieved: ` value against the same request's returned clock and window. Only the exact body pair for that value and the visible value after the exact label receive the placeholder; an occurrence-count assertion prevents masking another body's field. Every other page character and body byte, response status and all captured response headers remain compared exactly; the Next prevention-checks response must have no etag. Headers now include every name, replacing the prior three-header subset.
+
+**Named limit:** the only field excluded is the database clock reading (`SELECT clock_timestamp()` at `packages/db/src/prevention-check-repository.ts:45`, no table input); timing is the only remaining channel and the window assertion bounds it.
+
+The literal all-header requirement is implemented, including Date; no Date exception has been added. The optional clarification has not received an answer during this round. Node/Next may supply a changing Date header (the API test has an existing Date exclusion); the helper must verify this strict header comparison, and any further exclusion needs a ruling. Browser Q (both projects): **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+
+### Changed files and scratch control
+
+Round-2 files only:
+
+- `packages/db/test/shadow-detection.integration.test.ts` — T1 and populated own-step upgrade proof.
+- `packages/db/migrations/0129_shadow_detection.sql` — two additive unique keys, two job-bound FKs, comments.
+- `apps/web/e2e/SV-3.spec.ts` — test Q only.
+- `docs/contracts/shadow-detection-v1.md` — corrected the obsolete routine-only binding paragraph to describe the database keys and second-layer checks.
+- `docs/verdicts/SV-3/BUILDER_RECEIPT.md` — this round.
+
+Uncommitted scratch `/private/tmp/jg-sv3-r2-comparison-control.cjs` extracted/transpiled the actual Q `checkClock`/`compareBody` helpers; it did not copy a different comparator. Clock-only body differences compared successfully (exit 0); `payingParty.recordedAt` and a result's separate `retrievedAt` stayed untouched; an out-of-window clock was refused. The RED invocation changed only `otherField` from `unchanged` to `changed` after clock normalization and reached the exact Playwright `toBe` assertion: exit 1, `Expected ... "otherField":"unchanged" ... Received ... "otherField":"changed" ...`, `matcherResult.pass=false`. This is comparator execution without a browser or database, not a browser-test pass. First scratch attempts could not resolve TypeScript from `/private/tmp` (both exit 1, `MODULE_NOT_FOUND`); changed the scratch harness to resolve the already installed module from the repository, then ran the successful positive and intended RED controls. Nothing from the scratch harness is committed.
+
+### Sandbox commands and actual results
+
+Working directory `W` = `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-3`. Every command below was issued from W; package-filtered commands execute in the named package. `P` = `PATH=/private/tmp/jg-sv3-bin:$PATH`, the already-existing shim invoking cached pnpm **10.28.1** directly (Node **v24.17.0**), without an install/download. Dependencies were reused; this is not a clean-install claim. Root typecheck, root lint and root build each ran once.
+
+| Command | Working directory | Exit / observed count and result |
+| --- | --- | --- |
+| `node /private/tmp/jg-sv3-r2-comparison-control.cjs` (initial attempt) | W | 1; TypeScript resolution failure before comparator execution. |
+| `node /private/tmp/jg-sv3-r2-comparison-control.cjs red` (initial attempt) | W | 1; same resolution failure, not negative-control evidence. |
+| `node /private/tmp/jg-sv3-r2-comparison-control.cjs` (fixed scratch harness) | W | 0; clock-only equality, both unrelated-field preservation checks and out-of-window refusal succeeded. Actual Q helpers executed; no browser/database. |
+| `node /private/tmp/jg-sv3-r2-comparison-control.cjs red` (fixed scratch harness) | W | 1 **EXPECTED RED**; one OTHER-field byte-comparison assertion failed. |
+| `P pnpm --filter @jobguard/db exec tsc --noEmit --strict --module nodenext --target es2023 --skipLibCheck --esModuleInterop --exactOptionalPropertyTypes --noUncheckedIndexedAccess test/shadow-detection.integration.test.ts` | W → `packages/db` | 0; one changed integration file source/typechecked, zero database tests executed. |
+| `P pnpm typecheck` | W | 0; 7/7 tasks successful, 4 cached; 2m29.359s. Includes changed browser spec; database test checked separately above. |
+| `P LANE_BASE_REF=origin/main pnpm lint` | W | 1; core purity passed (135 TypeScript files), then lane check rejected inherited SV-4 files and SV-2's inherited persistence-test change. Package lint did not run through this wrapper. None of the five round-2 files is rejected. |
+| `P LANE_BASE_REF=origin/main pnpm lint:lanes` | W | 1; same inherited branch-state paths. No allowlist changed to obtain a pass. |
+| `P LANE_BASE_REF=origin/main pnpm turbo run lint` | W | 0; 7/7 package lint tasks successful, 4 cached; 1m52.961s. Supplemental checks omitted by the failed root wrapper. |
+| `LANE_BASE_REF=origin/main node tools/money-arithmetic-lint.mjs` | W | 0; money arithmetic boundary passed. |
+| `LANE_BASE_REF=origin/main node tools/commercial-boundary-lint.mjs` | W | 0; commercial boundary completed, no output/count reported. |
+| `P pnpm build` | W | 0; 7/7 tasks successful, 2 cached; 2m27.053s; Next generated 27/27 pages. Existing unowned CSS autoprefixer warning and sandbox Turbo cache-write IO warnings; no build failure. |
+| `P pnpm openapi:check` | W | 1; tsx CLI IPC `listen EPERM`, before generator comparison. |
+| `P pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | W → `apps/api` | 0; same source generator/check through the Node loader, no tsx CLI IPC socket. OpenAPI unchanged. |
+| `ps -ax -o pid,etime,command` pipeline (one read-only progress diagnostic) | W | 1; sandbox denied process inspection; no state changed or escalation attempted. |
+| One-off Python/Node lane, assertion-preservation, routine-byte and credential-shape inspections | W | 0; initially four paths, finally all five; 112 prior DB and 42 prior browser `expect` calls preserved; four protected file SHA-256 values recorded below. No standing test added. |
+| `git diff --check`, final `git status --short` / `git diff --stat`, source reads/searches and temporary message/receipt writes | W | 0; whitespace clean; only the five named SV-3 files changed; intended message saved outside the repository. |
+
+Logs: `/private/tmp/jg-sv3-r2-{typecheck,lint,lanes,package-lint,money-lint,commercial-lint,build,openapi,openapi-loader}.log`. All inspection/edit scripts completed with exit 0 except the explicitly recorded initial scratch resolution failures and denied process diagnostic. No root/package test aggregate ran. No changed runnable unit file exists in this round: the changed test files require PostgreSQL or a browser, so their suites stay NOT RUN; the scratch comparator is the available executable proof. No prompt/model/AI schema/detector changed, so no additional golden-set run was required for this repair.
+
+All new/retained PostgreSQL cases (T1–T3, migration controls), SV-2's unchanged catalogue test (T4), browser I/Q on mobile-360 and desktop, `pnpm test:db`, `pnpm test:migrations` and retained DB/browser regressions: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. No sockets/browser/PostgreSQL service was started. Live-model evaluation remains **NOT RUN (separate release item)**.
+
+### Repair self-review
+
+Re-read every round-2 diff against HEAD, including the complete new SQL/tests, browser Q and contract/receipt. Inspected the main-based lane difference and separated inherited SV-4 work from this round. Checked that the only SQL edits are in 0129; the two candidate keys include their existing primary keys; all non-audit firing FKs carry tenant/job; decision existence is transitively guaranteed; deferrability, existing firing unique keys, role ownership/RLS/grants, routine checks and insert order are preserved. Verified that each bad T1 link isolates its own constraint and has a matching control with all deferred constraints forced, and that snapshots include populated findings/disclosures, exact named-column text/full types/captured identities and all retained rule-9 controls.
+
+Verified Q's exact route scope, exact retrievedAt pair/count masking, preservation of other result clock fields and other bytes, visible-value/body association, request clock windows, status and full-header comparisons, and absent Next etag. All original assertions remain verbatim: the one-off AST inspection found **112** existing `expect` calls in the database test and **42** in the browser spec, including nested calls. No test timeout/retry was changed. No product screen/layout/wording changed. No detector, prompt/model/parser, worker composition, API replay, fee, authorization, or commercial policy changed. No new trigger disabling was added; the pre-existing rolled-back microsecond control remains unchanged.
+
+One-off preservation checks (receipt evidence, no standing freeze test):
+
+| Protected file | SHA-256, byte-identical to round base HEAD |
+| --- | --- |
+| `packages/db/test/shadow-persistence.integration.test.ts` | `a7b1f2670d96290a2778117317d6e8a6b590c4433415aa955d91af294933148c` |
+| `packages/db/test/shadow-catalog.integration.test.ts` | `0ee8767ffdf773e515b679cb964dfa6f8b3ee511164cf2521978c221f1b3d455` |
+| `apps/api/src/auth/context-boundary.test.ts` | `7f1914846f763c3534ffafc79701fc6f768e8e1546be2fe98e27bc32a99e0e8d` |
+| `packages/db/migrations/0130_final_account_lock.sql` | `31afda6d5d32c4afc92fa2c77b47fe7ac0b5abf3ae2bb845124d3d10571dfe8b` |
+
+The complete SQL from `CREATE FUNCTION app.surface_shadow_signal_early` through its grants is byte-identical to HEAD. All five changed paths match the existing SV-3 lane; added lines have no credential-shaped literals. No lane/list/pin changed. No Git write, dependency install/download, network provider, real data, deployment or release operation. Intended conventional commit subject/body saved to `/private/tmp/jg-msg-sv-3.txt`; dispatcher owns commit/push/PR.
+
+Could not verify PostgreSQL FK/catalog execution, populated migration/rollback execution, browser windows/rendering/full headers on either project, or live-model/provider processing. The expected main-based lane failure remains inherited branch-state evidence; it is not converted into a pass. Missing database/browser evidence is a hold for the helper/review, not acceptance. Previous external integrations and commercial/security/model/release gates remain held exactly as issued.
+
+**Nothing owed inside this lane remains after this round.** This statement covers the authorized implementation and authored tests; the explicitly unrun helper suites and independent exact-commit verdict/acceptance remain required. Builder receipt only — not independently verified, not accepted.

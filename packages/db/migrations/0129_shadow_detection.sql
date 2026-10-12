@@ -4,6 +4,11 @@ ALTER TABLE app.job_finding DROP CONSTRAINT job_finding_kind_check;
 ALTER TABLE app.job_finding ADD CONSTRAINT job_finding_kind_check
  CHECK(kind IN('unresolved_question','required_proof','materials_bill_review','must_surface_signal'));
 
+ALTER TABLE app.job_finding ADD CONSTRAINT job_finding_tenant_job_id_decision_key UNIQUE(tenant_id,job_id,id,decision_id);
+ALTER TABLE app.shadow_disclosure_event ADD CONSTRAINT shadow_disclosure_event_tenant_job_id_key UNIQUE(tenant_id,job_id,id);
+
+-- The database binds finding/decision and disclosure to the firing's tenant/job.
+-- The controlled routine's job/subject checks remain a second layer.
 CREATE TABLE app.shadow_must_surface_firing (
  tenant_id uuid NOT NULL,job_id uuid NOT NULL,id uuid NOT NULL,signal_id uuid NOT NULL,
  rule varchar(40) NOT NULL CHECK(rule IN('safety','prior_written_agreement','worsening_dispute','disclosure_duty')),
@@ -17,9 +22,8 @@ CREATE TABLE app.shadow_must_surface_firing (
  FOREIGN KEY(tenant_id,job_id,signal_id) REFERENCES app.shadow_commercial_signal(tenant_id,job_id,id),
  FOREIGN KEY(tenant_id,job_id,signal_id,source_ref,object_version_id)
   REFERENCES app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id),
- FOREIGN KEY(tenant_id,decision_id) REFERENCES app.decision(tenant_id,id),
- FOREIGN KEY(tenant_id,finding_id) REFERENCES app.job_finding(tenant_id,id),
- FOREIGN KEY(tenant_id,disclosure_event_id) REFERENCES app.shadow_disclosure_event(tenant_id,id) DEFERRABLE INITIALLY DEFERRED,
+ FOREIGN KEY(tenant_id,job_id,finding_id,decision_id) REFERENCES app.job_finding(tenant_id,job_id,id,decision_id),
+ FOREIGN KEY(tenant_id,job_id,disclosure_event_id) REFERENCES app.shadow_disclosure_event(tenant_id,job_id,id) DEFERRABLE INITIALLY DEFERRED,
  FOREIGN KEY(tenant_id,audit_event_id) REFERENCES app.audit_event(tenant_id,id) DEFERRABLE INITIALLY DEFERRED
 );
 ALTER TABLE app.shadow_must_surface_firing OWNER TO jobguard_migration;
@@ -33,8 +37,7 @@ GRANT SELECT ON app.shadow_must_surface_firing TO jobguard_shadow;
 CREATE TRIGGER shadow_firing_no_mutation BEFORE UPDATE OR DELETE OR TRUNCATE ON app.shadow_must_surface_firing
  FOR EACH STATEMENT EXECUTE FUNCTION app.reject_immutable_commercial_mutation();
 
--- Only this routine may create the firing. Decision/disclosure FKs are tenant-qualified;
--- their job/subject bindings are checked here because the existing tables have no job-qualified unique key.
+-- Only this routine may create the firing; its checks reinforce the database job bindings.
 CREATE FUNCTION app.surface_shadow_signal_early(
  p_tenant uuid,p_job uuid,p_signal uuid,p_firing uuid,p_decision uuid,p_disclosure uuid,
  p_rule text,p_version text,p_source uuid,p_object_version text,p_facts jsonb

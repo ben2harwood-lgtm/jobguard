@@ -119,6 +119,39 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,'synthetic:boundary')`,[tenant,job,randomUUID(),prior.signal_id,prior.rule,prior.rule_version,prior.source_ref,prior.object_version_id,decision,finding,randomUUID(),randomUUID(),JSON.stringify(prior.facts),prior.request_hash]);
   })).rejects.toMatchObject({code:"23503",constraint:expect.stringMatching(/shadow_must_surface_firing_tenant_id_job_id/u)});
  });
+ it.each(["finding", "decision", "disclosure"] as const)("T1: the database refuses a same-tenant other-job %s link, with an accepted matching control",async link=>{
+  // Ordinary superuser INSERTs isolate the foreign keys from the routine and RLS.
+  const o=observation();await evidence(o);
+  const db=await admin.connect(),signalJ=randomUUID(),signalK=randomUUID(),findingJ=randomUUID(),findingK=randomUUID(),decisionJ=randomUUID(),decisionK=randomUUID(),disclosureJ=randomUUID(),disclosureK=randomUUID(),firing=randomUUID();
+  try{
+   await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[T]);
+   for(const [job,signal,decision,finding,disclosure] of [[J,signalJ,decisionJ,findingJ,disclosureJ],[K,signalK,decisionK,findingK,disclosureK]]){
+    await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:T1','2026-10-01','Fictional FK control','low')",[T,job,signal]);
+    await db.query("INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'review')",[T,decision,job]);
+    await db.query("INSERT INTO app.job_finding(tenant_id,id,job_id,decision_id,fingerprint,kind,classification,title,detail,subject_ref,action_type,snapshot_revision) VALUES($1,$2,$3,$4,$5,'required_proof','mandatory','Fictional FK control','','synthetic:T1','review',0)",[T,finding,job,decision,createHash('sha256').update(finding!).digest('hex')]);
+    await db.query("INSERT INTO app.shadow_disclosure_event(tenant_id,job_id,id,signal_id,route,actor_ref,before_lock) VALUES($1,$2,$3,$4,'defect','synthetic:T1',true)",[T,job,disclosure,signal]);
+   }
+   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)",[T,J,signalJ,o.evidence.id,o.evidence.objectVersionId,o.evidence.sha256,o.evidence.serverReceivedAt]);
+   // Audit parents are genuine chain entries; neither FK triggers nor guards are disabled.
+   await db.query("SELECT app.append_shadow_audit($1,$2,'shadow.disclosed')",[disclosureJ,J]);
+   await db.query("SELECT app.append_shadow_audit($1,$2,'shadow.disclosed')",[disclosureK,K]);
+   await db.query("SET CONSTRAINTS ALL IMMEDIATE");await db.query("SET CONSTRAINTS ALL DEFERRED");
+   const insert=(finding:string,decision:string,disclosure:string)=>db.query(`INSERT INTO app.shadow_must_surface_firing(tenant_id,job_id,id,signal_id,rule,rule_version,source_ref,object_version_id,decision_id,finding_id,disclosure_event_id,audit_event_id,facts,request_hash,actor_ref)
+    VALUES($1,$2,$3,$4,'safety','shadow_attribution_policy_v3',$5,$6,$7,$8,$9,$10,'{}',repeat('a',64),'synthetic:T1')`,[T,J,firing,signalJ,o.evidence.id,o.evidence.objectVersionId,decision,finding,disclosure,disclosureJ]);
+   const foreignKeys=(await db.query<{conname:string;target:string;condeferrable:boolean;condeferred:boolean}>("SELECT conname,confrelid::regclass::text target,condeferrable,condeferred FROM pg_constraint WHERE conrelid='app.shadow_must_surface_firing'::regclass AND contype='f'")).rows;
+   const fk=foreignKeys.find(c=>c.target===(link==="disclosure"?"app.shadow_disclosure_event":"app.job_finding"));expect(fk).toBeDefined();
+   expect(fk!.condeferrable).toBe(link==="disclosure");expect(fk!.condeferred).toBe(link==="disclosure");
+   await db.query("SAVEPOINT bad_link");
+   const badFinding=link==="finding"?findingK:findingJ,badDecision=link==="finding"||link==="decision"?decisionK:decisionJ,badDisclosure=link==="disclosure"?disclosureK:disclosureJ;
+   if(link==="disclosure"){
+    await insert(badFinding,badDecision,badDisclosure); // Deferred link accepts INSERT, then refuses constraint enforcement.
+    await expect(db.query("SET CONSTRAINTS ALL IMMEDIATE")).rejects.toMatchObject({code:"23503",constraint:fk!.conname});
+   }else await expect(insert(badFinding,badDecision,badDisclosure)).rejects.toMatchObject({code:"23503",constraint:fk!.conname});
+   await db.query("ROLLBACK TO SAVEPOINT bad_link");
+   await insert(findingJ,decisionJ,disclosureJ);await db.query("SET CONSTRAINTS ALL IMMEDIATE");
+   expect((await db.query("SELECT job_id,finding_id,decision_id,disclosure_event_id FROM app.shadow_must_surface_firing WHERE tenant_id=$1 AND id=$2",[T,firing])).rows).toEqual([{job_id:J,finding_id:findingJ,decision_id:decisionJ,disclosure_event_id:disclosureJ}]);
+  }finally{await db.query("ROLLBACK");db.release()}
+ });
  it("C5: missing/non-member tenant and wrong-job sources fail closed; roles cannot cross pool boundaries",async()=>{
   const o=observation();await evidence(o);const request=batch([o]);await new ShadowDetectionRepository(shadow).persist(testTenantContext(T),request);
   const args=firingArgs(observation({...o,facts:{...o.facts,customerClearlyRequested:true,needsPriorWrittenAgreement:true,significantWork:{basis:"synthetic_fixture",sourceRef:"synthetic:boundary",significant:true}}}),request.proposals[0]!.signalId);
@@ -150,13 +183,17 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
     const name=url.pathname.split('/').at(-1)!;let sql=await readFile(url,"utf8");if(name==="0095_job_parties.sql")sql=sql.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);");
     await p.query(sql);await p.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
    }
-   await seed(p);const s=randomUUID(),d=randomUUID(),f=randomUUID();
+   const registeredBefore=MIGRATION_URLS.slice(0,own).map(u=>u.pathname.split('/').at(-1)!).sort();
+   const appliedNames=async()=>(await p.query<{migration_name:string}>("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name);
+   expect(await appliedNames()).toEqual(registeredBefore);
+   await seed(p);const s=randomUUID(),d=randomUUID(),f=randomUUID(),disclosure=randomUUID();
    await fixtureContext(p,T,async db=>{
     await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-upgrade',clock_timestamp(),'Fictional outside tap','low')",[T,J,s,randomUUID()]);
     await db.query("INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'review')",[T,d,J]);
     await db.query("INSERT INTO app.job_finding(id,tenant_id,job_id,decision_id,fingerprint,kind,classification,title,detail,subject_ref,action_type,snapshot_revision,created_at) VALUES($1,$2,$3,$4,repeat('a',64),'required_proof','mandatory','Fictional proof','','Fictional proof','review',0,'2026-10-01T00:00:00.123456Z')",[f,T,J,d]);
+    await db.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'defect')",[T,J,s,disclosure]);
    });
-   const tables=["app.job","app.decision","app.job_finding","app.shadow_commercial_signal"];
+   const tables=["app.job","app.decision","app.job_finding","app.shadow_commercial_signal","app.shadow_disclosure_event"];
    type Snapshot={columns:{name:string;type:string}[];keys:string[];rows:string[];pk:string[]};
    const snapshots:Record<string,Snapshot>={};
    const qi=(n:string)=>`"${n.replaceAll('"','""')}"`;
@@ -174,9 +211,17 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
     const after=(await columns(client,table)).filter(c=>snapshot.columns.some(old=>old.name===c.name));expect(after).toEqual(snapshot.columns);
     expect((await rows(client,table,snapshot.columns,snapshot.pk,snapshot.keys)).map(r=>r.value)).toEqual(snapshot.rows);
    }}
+   const newKeys=()=>p.query<{table_name:string;definition:string}>("SELECT conrelid::regclass::text table_name,pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conname=ANY($1::text[]) ORDER BY conname",[["job_finding_tenant_job_id_decision_key","shadow_disclosure_event_tenant_job_id_key"]]);
+   expect((await newKeys()).rows).toEqual([]);
    await p.query(await readFile(MIGRATION_URLS[own]!,"utf8"));await compare(p);
+   expect(await appliedNames()).toEqual(registeredBefore); // This step applied 0129 alone, without later migrations.
+   expect((await newKeys()).rows).toEqual([
+    {table_name:"app.job_finding",definition:"UNIQUE (tenant_id, job_id, id, decision_id)"},
+    {table_name:"app.shadow_disclosure_event",definition:"UNIQUE (tenant_id, job_id, id)"},
+   ]);
    await p.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0129_shadow_detection.sql')");
    await migrate(p);await migrate(p);await compare(p);
+   expect(await appliedNames()).toEqual(MIGRATION_URLS.map(u=>u.pathname.split('/').at(-1)!).sort());
    async function control(sql:string,fail:boolean){const db=await p.connect();try{await db.query("BEGIN");await db.query(sql);if(fail)await expect(compare(db)).rejects.toThrow();else await compare(db)}finally{await db.query("ROLLBACK");db.release()}}
    await control("ALTER TABLE app.job_finding DISABLE TRIGGER job_finding_immutable; UPDATE app.job_finding SET created_at=created_at+interval '1 microsecond'",true);
    await control("ALTER TABLE app.job_finding ALTER COLUMN title TYPE varchar(161)",true);

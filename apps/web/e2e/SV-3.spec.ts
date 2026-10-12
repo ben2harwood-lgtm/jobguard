@@ -53,32 +53,68 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    const originalFetch=window.fetch;window.fetch=function(input,init){const url=String(input instanceof Request?input.url:input);state.cacheKeys.push({url,cache:init?.cache??"default"});if(/analytics|telemetry|beacon/u.test(url))state.analytics.push({url});return originalFetch.call(this,input,init)};
    const originalBeacon=navigator.sendBeacon.bind(navigator);navigator.sendBeacon=(url,data)=>{state.analytics.push({url:String(url),bytes:data instanceof Blob?data.size:null});return originalBeacon(url,data)};
   });
+  const retrievalRoute=`/api/jobs/${jobId}/prevention-checks`;
+  const clockPlaceholder="<retrievedAt: checked within the request window>";
+  // Exact named limit: only this response's retrievedAt (top level and payingParty)
+  // and its visible Retrieved: value. All other bytes, statuses and headers are compared.
+  function checkClock(value:unknown,before:number,after:number):string{
+   expect(typeof value,'retrievedAt is a string').toBe('string');const at=value as string;
+   expect(at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
+   expect(new Date(Date.parse(at)).toISOString()).toBe(at);
+   expect(Date.parse(at),'retrievedAt is not before the request').toBeGreaterThanOrEqual(before);
+   expect(Date.parse(at),'retrievedAt is not after the response').toBeLessThanOrEqual(after);
+   return at;
+  }
+  function compareBody(text:string,before:number,after:number){
+   const body=JSON.parse(text) as {retrievedAt?:unknown;payingParty?:{retrievedAt?:unknown}|null};
+   const at=checkClock(body.retrievedAt,before,after);
+   if(body.payingParty)checkClock(body.payingParty.retrievedAt,before,after);
+   if(body.payingParty)expect(body.payingParty.retrievedAt).toBe(at);
+   const needle=`"retrievedAt":"${at}"`;
+   expect(text.split(needle).length-1,'only the two named body paths').toBe(body.payingParty?2:1);
+   return {at,text:text.split(needle).join(`"retrievedAt":"${clockPlaceholder}"`)};
+  }
   async function replay(){
-   const responses=new Map<string,{body:string;headers:Record<string,string>}>(),pending:Promise<void>[]=[];
+   const responses=new Map<string,{status:number;body:string;headers:Record<string,string>}>(),pending:Promise<void>[]=[];
+   const starts=new Map<import('@playwright/test').Request,number>(),retrievals:Array<{at:string;before:number;after:number}>=[];
+   let visibleClocks=0;
+   const requestListener=(request:import('@playwright/test').Request)=>{starts.set(request,Date.now())};
    const listener=(response:import('@playwright/test').Response)=>{
-    if(new URL(response.url()).pathname.startsWith('/api/'))pending.push((async()=>{
-     const headers=await response.allHeaders();
-     responses.set(new URL(response.url()).pathname+new URL(response.url()).search,{
-      body:(await response.body()).toString('base64'),
-      headers:Object.fromEntries(Object.entries(headers).filter(([key])=>['cache-control','etag','vary'].includes(key))),
-     });
+    const url=new URL(response.url());
+    if(url.pathname.startsWith('/api/'))pending.push((async()=>{
+     const headers=await response.allHeaders(),bytes=await response.body(),after=Date.now();let body=bytes.toString('base64');
+     if(url.pathname===retrievalRoute){
+      expect(response.status()).toBe(200);expect(headers.etag,'Next prevention-checks response has no etag').toBeUndefined();
+      const before=starts.get(response.request());expect(before,'clock reading before this request').toBeDefined();
+      const checked=compareBody(bytes.toString('utf8'),before!,after);
+      retrievals.push({at:checked.at,before:before!,after});body=Buffer.from(checked.text).toString('base64');
+     }
+     responses.set(url.pathname+url.search,{status:response.status(),body,headers:Object.fromEntries(Object.entries(headers).sort(([a],[b])=>a.localeCompare(b)))});
     })());
    };
-   page.on('response',listener);
+   page.on('request',requestListener);page.on('response',listener);
    const views:Array<{responseShape:string;counts:(string|null)[];badges:(string|null)[];errors:(string|null)[];cacheKeys:string[];notifications:unknown[];analytics:unknown[];storage:Array<Array<Array<string|null>>>}>=[];
    try{for(const route of ['/',`/jobs/${jobId}`]){
     await page.goto(route);if(route==='/'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
     else{const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();await price.click();await expect(page.locator('.quote-editor')).toBeVisible()} // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
     await page.waitForLoadState('networkidle');await Promise.all(pending);
-    views.push(await page.evaluate(()=>{
+    const view=await page.evaluate(()=>{
      const read=(selector:string)=>[...document.querySelectorAll(selector)].map(n=>n.textContent);
      const storage=(s:Storage)=>Object.keys(s).sort().map(key=>[key,s.getItem(key)]);
      const trace=(window as unknown as {__sv3Trace:{notifications:unknown[];cacheKeys:unknown[];analytics:unknown[]}}).__sv3Trace;
      return {responseShape:document.body.innerText,counts:read('[data-testid*="count"]'),badges:read('.nav-count,.decision-count,[class*="badge"]'),errors:read('[role="alert"]'),cacheKeys:[...new Set(trace.cacheKeys.map(v=>JSON.stringify(v)))].sort(),notifications:trace.notifications,analytics:trace.analytics,storage:[storage(localStorage),storage(sessionStorage)]};
-    }));
-   }}finally{page.off('response',listener)}
+    });
+    view.responseShape=view.responseShape.replace(/(?<=Retrieved: )[^\s]+/gu,value=>{
+     const retrieval=retrievals.find(r=>r.at===value);expect(retrieval,'visible Retrieved: value comes from this request').toBeDefined();
+     checkClock(value,retrieval!.before,retrieval!.after);visibleClocks++;
+     return clockPlaceholder;
+    });
+    views.push(view);
+   }}finally{page.off('request',requestListener);page.off('response',listener)}
+   expect(retrievals.length,'prevention-checks response was checked').toBeGreaterThan(0);
+   expect(visibleClocks,'visible Retrieved: value was checked').toBeGreaterThan(0);
    expect(responses.size).toBeGreaterThan(0);
-   return Object.fromEntries(surfaces.map(channel=>[channel,channel==='cacheHeaders'?[...responses].map(([url,data])=>({url,headers:data.headers})).sort((a,b)=>a.url.localeCompare(b.url)):channel==='responseShape'?{views:views.map(v=>v.responseShape),responses:[...responses].map(([url,data])=>({url,body:data.body})).sort((a,b)=>a.url.localeCompare(b.url))}:views.map(v=>v[channel])])) as Record<typeof surfaces[number],unknown>;
+   return Object.fromEntries(surfaces.map(channel=>[channel,channel==='cacheHeaders'?[...responses].map(([url,data])=>({url,headers:data.headers})).sort((a,b)=>a.url.localeCompare(b.url)):channel==='responseShape'?{views:views.map(v=>v.responseShape),responses:[...responses].map(([url,data])=>({url,status:data.status,body:data.body})).sort((a,b)=>a.url.localeCompare(b.url))}:views.map(v=>v[channel])])) as Record<typeof surfaces[number],unknown>;
   }
   const zero=await replay();
   await withTenant(shadow,testTenantContext(T),async db=>{for(let n=0;n<25;n++){
