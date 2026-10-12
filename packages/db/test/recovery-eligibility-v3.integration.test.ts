@@ -376,8 +376,8 @@ it("F17 runtime-role raw qualifying insert after opening still commits with comp
 // Standing rule 9: "An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything
 // after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no
 // column or replace no function; the fingerprinted-table guard owns 'may never gain a column'."
-// So the 0123 proof below compares whole rows only straight after 0123 has run ALONE. After every later migration it compares just the rows that existed
-// before 0123 (found again by primary key), on the columns and types they had before 0123, as canonical text from the database (never driver-parsed
+// So the 0130 proof below compares whole rows only straight after 0130 has run ALONE. After every later migration it compares just the rows that existed
+// before 0130 (found again by primary key), on the columns and types they had before 0130, as canonical text from the database (never driver-parsed
 // values, which round timestamps to the millisecond). A column, row, trigger or function added or replaced later is not looked at.
 type Queryable=Pick<Pool|PoolClient,"query">;
 type ProofTable={names:string[];typed:Record<string,string>;pk:string[];rows:Record<string,string>};
@@ -443,15 +443,15 @@ async function replaceRoutine(db:Queryable,routine:string,note:string){
  await db.query(`${header}\nAS ${delimiter}\n-- ${note}\n${was.body}${delimiter}`);
  return {was,now:await routineSource(db,routine)};
 }
-it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
- const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0123_recovery_eligibility_v3_f17_timing.sql");
+it("0130 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
+ const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0130_recovery_eligibility_v3_f17_timing.sql");
  expect(oldIndex).toBeGreaterThanOrEqual(0);expect(newIndex).toBeGreaterThan(oldIndex);expect(names).toEqual([...names].sort());
  const database=`ch7_f17_upgrade_${randomUUID().replaceAll("-","")}`;
  await admin.query(`CREATE DATABASE ${database}`);
  const upgradeAdmin=new Pool({...admin.options,password:"synthetic",database}),upgradeRuntime=new Pool({...runtime.options,password:"synthetic",database});
  try{
   await upgradeAdmin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  // Everything registered before 0123 (its index is found by name above, so a later renumbering of the file is a mechanical change), as the runner records it.
+  // Everything registered before 0130 (its index is found by name above, so a later renumbering of the file is a mechanical change), as the runner records it.
   for(const url of MIGRATION_URLS.slice(0,newIndex)){
    await upgradeAdmin.query(await readFile(url,"utf8"));
    await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[basename(fileURLToPath(url))]);
@@ -465,7 +465,7 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
   const connected=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
   await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:connected.revision,action:"advance",movement:"supplier-refund-540",step:"settled"});
   // The cash settles first. The 0119 guard accepts its qualifying candidate;
-  // 0123 must preserve that historical mistake rather than rewriting history.
+  // 0130 must preserve that historical mistake rather than rewriting history.
   const c=await cases.command(ctx,jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"open",caseType:"duplicate_supplier_payment",claimedNetPence:300000,counterparty:"Fictional supplier",book:"supplier_cost",sourceType:"supplier_documents",sourceRefs:["Supplier invoice INV-320"],expectedRevision:0},actor);
   const f={auth,jobId,c},id=await rawQualifyingF17(upgradeRuntime,f);
   const snapshot=async()=>({
@@ -479,15 +479,15 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
   const proof=await proofBefore(upgradeAdmin);
   expect(Object.keys(proof)).toEqual([...proofTables]);
   for(const [table,was] of Object.entries(proof)){expect(was.pk.length,`${table} has a primary key`).toBeGreaterThan(0);expect(Object.keys(was.rows).length,`${table} has a pre-existing row to compare`).toBeGreaterThan(0);}
-  // Migration 0123 ALONE, the way the runner applies one file: run its SQL, then record it. Whole rows, byte for byte: this says only what 0123 did.
+  // Migration 0130 ALONE, the way the runner applies one file: run its SQL, then record it. Whole rows, byte for byte: this says only what 0130 did.
   await upgradeAdmin.query(await readFile(MIGRATION_URLS[newIndex]!,"utf8"));
   await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[names[newIndex]]);
   expect(await snapshot()).toEqual(before);
   // Then every later migration, twice; both runs must succeed.
   await migrate(upgradeAdmin);await migrate(upgradeAdmin);
   expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names);
-  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name=$1",[names[newIndex]])).rows).toEqual([{migration_name:"0123_recovery_eligibility_v3_f17_timing.sql"}]);
-  // After ALL migrations: only the rows that existed before 0123, by primary key, on their named columns and types.
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name=$1",[names[newIndex]])).rows).toEqual([{migration_name:"0130_recovery_eligibility_v3_f17_timing.sql"}]);
+  // After ALL migrations: only the rows that existed before 0130, by primary key, on their named columns and types.
   expect(await proofDifferences(upgradeAdmin,proof)).toEqual({rows:[],types:[]});
   // Controls: each runs the SAME comparison inside a transaction that is rolled back.
   for(const table of proofTables){
@@ -499,7 +499,7 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
     return proofDifferences(client,proof);
    });
    expect(moved.rows.filter(line=>line.startsWith(`${table} `)&&line.endsWith(": changed")),`control (a) ${table}: ${JSON.stringify(moved)}`).toHaveLength(preExisting);expect(moved.types).toEqual([]);
-   // (c) a nullable column added after 0123 must leave it passing.
+   // (c) a nullable column added after 0130 must leave it passing.
    expect(await rolledBack(upgradeAdmin,async client=>{
     await client.query(`ALTER TABLE app.${table} ADD COLUMN f17_proof_control text`);
     expect((await proofColumns(client,table)).map(column=>column.name)).toContain("f17_proof_control");
@@ -515,12 +515,12 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
    await client.query("ALTER TABLE app.audit_event ALTER COLUMN event_type TYPE varchar(120)");
    return proofDifferences(client,proof);
   })).toEqual({rows:[],types:["audit_event: event_type character varying(100) -> character varying(120)"]});
-  // (d) a function replaced after 0123 (here the very routine 0123 replaced) must leave it passing. The replacement is built from the routine's own header and body
+  // (d) a function replaced after 0130 (here the very routine 0130 replaced) must leave it passing. The replacement is built from the routine's own header and body
   // under a delimiter chosen by the test, so it does not rely on how the stored definition is quoted.
   const routine="app.guard_recovery_eligibility_v3()";
   expect(await rolledBack(upgradeAdmin,async client=>{
-   const {was,now}=await replaceRoutine(client,routine,"scratch control: replaced after 0123");
-   expect(now.definition).not.toBe(was.definition);expect(now.body).toContain("scratch control: replaced after 0123");
+   const {was,now}=await replaceRoutine(client,routine,"scratch control: replaced after 0130");
+   expect(now.definition).not.toBe(was.definition);expect(now.body).toContain("scratch control: replaced after 0130");
    return proofDifferences(client,proof);
   })).toEqual({rows:[],types:[]});
   // (d2) delimiter collision: a legitimate later replacement whose body itself contains "$function$" (so PostgreSQL has to print it back under another delimiter),
@@ -540,14 +540,14 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
    return proofDifferences(client,proof);
   });
   expect(gone.rows).toHaveLength(Object.keys(proof.recovery_claim_line!.rows).length);expect(gone.rows.every(line=>line.startsWith("recovery_claim_line ")&&line.endsWith(": missing"))).toBe(true);expect(gone.types).toEqual([]);
-  // (f) a row added after 0123 is ignored (a rolled-back scratch claim line here; the corrected review saved below is a real later row, with its audit events).
+  // (f) a row added after 0130 is ignored (a rolled-back scratch claim line here; the corrected review saved below is a real later row, with its audit events).
   expect(await rolledBack(upgradeAdmin,async client=>{
    await client.query("SET LOCAL session_replication_role=replica");
    expect((await client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)SELECT $1::uuid,tenant_id,job_id,case_id,review_id,'fixed_compensation',debtor_type,1 FROM app.recovery_claim_line LIMIT 1",[randomUUID()])).rowCount).toBe(1);
    expect(Object.keys(await proofRows(client,"recovery_claim_line",proof.recovery_claim_line!.names,proof.recovery_claim_line!.pk))).toHaveLength(Object.keys(proof.recovery_claim_line!.rows).length+1);
    return proofDifferences(client,proof);
   })).toEqual({rows:[],types:[]});
-  // (g) a review added after 0123 (a rolled-back copy of the saved one, one revision higher) must leave it passing, and the revision the next review has to be
+  // (g) a review added after 0130 (a rolled-back copy of the saved one, one revision higher) must leave it passing, and the revision the next review has to be
   // appended against is read from the database, not assumed.
   const saved=await currentReviewRevision(upgradeAdmin,c.id);expect(saved).toBeGreaterThanOrEqual(1);
   const later=await rolledBack(upgradeAdmin,async client=>{
@@ -557,7 +557,7 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
    return {revision:await currentReviewRevision(client,c.id),differences:await proofDifferences(client,proof)};
   });
   expect(later.differences).toEqual({rows:[],types:[]});expect(later.revision).toBe(saved+1);
-  // (h) a case revision added after 0123 (a rolled-back claim revision one higher, the shape of an amendment) must leave it passing, and moves the case revision the next
+  // (h) a case revision added after 0130 (a rolled-back claim revision one higher, the shape of an amendment) must leave it passing, and moves the case revision the next
   // review has to be appended against.
   const openedAt=await currentCaseRevision(upgradeAdmin,jobId,c.id);expect(openedAt).toBeGreaterThanOrEqual(c.revision);
   const amended=await rolledBack(upgradeAdmin,async client=>{
