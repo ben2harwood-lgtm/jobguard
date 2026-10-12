@@ -6,6 +6,8 @@ DRAFT for founder review. Not to be sent to any buyer until Ben approves it.
 
 Evidence cutoff: 96c0cb8a5b5562c65b79f5f601ba9d60f8fcf05a (12 October 2026)
 
+Audit note: the evidence cutoff predates the internal security audit of 12 October 2026 and any remediation of its findings (the audit is an internal document, not yet in this repository). Q-16, Q-18, E-17b, E-21, E-22, E-23 and the new not-claimed rows E-71 to E-73 reflect it.
+
 ## 1 What this is and who it is for
 
 A practice questionnaire and source map for a contractor’s IT buyer. It is an internal draft for the founder, not an outward statement. The founder decides sharing; the contract set also needs solicitor review. No buyer format is chosen.
@@ -45,6 +47,8 @@ The identical scope disclaimer and verbatim source/test quotes are printed in ba
 
 - Automatic provisioning/removal (SCIM), OpenID sign-in, usable emergency access and native mobile sign-in: E-51, E-52, E-54, E-57 not claimed. See internal dependencies in the register.
 - Long-term export checking, rotation and outside timestamps: E-59 and E-60 NOT BUILT.
+- Forgery by the app's database login of owner approvals, membership changes, job status and price, or audit entries: E-71 not claimed (NOT IN PLACE; hardening proposed, founder decision pending).
+- Practice-area session expiry, revocation and hashed storage: E-72 NOT BUILT (piece issued, not built). Removal of a member on every sign-in route: E-73 NOT EVIDENCED beyond the practice contractor route.
 - Independent assessment and Cyber Essentials, Cyber Essentials Plus, ISO 27001 or SOC 2: E-66, E-67, E-67a, E-68 and E-68a NOT COMMISSIONED / NOT STARTED.
 - Master services agreement, data processing agreement (DPA), sub-processor list, data protection impact assessment (DPIA) and pilot runbook: E-61 NOT PRODUCED; contract-set work is identified in the register.
 - Real-data hosting, encryption, retention, backups, incidents and monitoring: E-61 to E-65 not claimed.

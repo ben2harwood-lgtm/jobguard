@@ -29,7 +29,7 @@ This is JobGuard’s own proposed sequence, not the text of any standard. All wo
 |---|---|---|---|---|---|---|
 | 0 | Decide to begin; name accountable owner | This draft map | E-66, E-69 | founder | Whether to start; accountable owner | not started |
 | 1 | Write the company, systems, people and device scope | E-15, E-31, E-38 practice limits | E-61, E-69 | data/security owner (D04, unassigned) | Exact scope outside the repository | not started |
-| 2 | Gather existing evidence and list gaps | E-01, E-03, E-16, E-18, E-22, E-26, E-33, E-33b, E-34, E-35, E-39 | E-50 to E-70 and lettered pending IDs | data/security owner (D04, unassigned) | Evidence owner and completeness | not started |
+| 2 | Gather existing evidence and list gaps | E-01, E-03, E-16, E-18, E-22, E-26, E-33, E-33b, E-34, E-35, E-39 | E-50 to E-73 and lettered pending IDs | data/security owner (D04, unassigned) | Evidence owner and completeness | not started |
 | 3 | Ask an external assessor for a gap review against current scheme text | E-40 practice metadata; this pack | E-66, E-67, E-67a, E-68, E-68a, E-69 | founder | Paid engagement and scheme selection | not started |
 | 4 | Fix gaps named by the assessor; retain evidence | Existing mapped controls only | E-61, E-62, E-63, E-64, E-65, E-69 | data and operations owners (D07) | Agreed remediation scope and resources | not started |
 | 5 | Formal assessment by the assessing body outside the project | Evidence gathered after earlier steps; none yet | E-67, E-67a, E-68, E-68a | an external assessor (unnamed) | Founder commissions assessment | not started |

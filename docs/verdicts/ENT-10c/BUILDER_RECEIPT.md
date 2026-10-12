@@ -901,18 +901,19 @@ The table below covers every line emitted by P9, including headings, path pointe
 | File:line | Evidence ID | Status / interpretation |
 |---|---|---|
 | `docs/security/README.md:3` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:11` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:15` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:19` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:13` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:17` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
 | `docs/security/README.md:21` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:23` | E-03, E-26, E-69 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:31` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:42` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:46` | E-51, E-52, E-54, E-57 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:49` | E-61 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:50` | E-61, E-65 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
-| `docs/security/README.md:52` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:23` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:25` | E-03, E-26, E-69 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:33` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:44` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:48` | E-51, E-52, E-54, E-57 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:51` | E-72, E-73 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:53` | E-61 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:54` | E-61, E-65 | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
 | `docs/security/README.md:56` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
+| `docs/security/README.md:60` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
 | `docs/security/buyer-questionnaire.md:3` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
 | `docs/security/buyer-questionnaire.md:9` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
 | `docs/security/buyer-questionnaire.md:11` | — | label/limit sentence, not a claim — scope, reading rule, recorded review history or pending scope |
@@ -939,11 +940,11 @@ The table below covers every line emitted by P9, including headings, path pointe
 | `docs/security/buyer-questionnaire.md:181` | E-16, E-16b, E-17b | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
 | `docs/security/buyer-questionnaire.md:183` | E-16, E-16b, E-17b | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:197` | E-18, E-19, E-19b, E-20b, E-58 | in place; pending portions and limits remain labelled |
-| `docs/security/buyer-questionnaire.md:209` | E-21, E-22, E-58 | in place; pending portions and limits remain labelled |
+| `docs/security/buyer-questionnaire.md:209` | E-21, E-22, E-58, E-71 | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:221` | E-17, E-17c, E-20, E-58 | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:231` | E-17, E-17c, E-20, E-58 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
-| `docs/security/buyer-questionnaire.md:233` | E-22, E-23, E-24, E-59, E-60 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
-| `docs/security/buyer-questionnaire.md:235` | E-22, E-23, E-24, E-59, E-60 | in place; pending portions and limits remain labelled |
+| `docs/security/buyer-questionnaire.md:233` | E-22, E-23, E-24, E-59, E-60, E-71 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
+| `docs/security/buyer-questionnaire.md:235` | E-22, E-23, E-24, E-59, E-60, E-71 | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:245` | E-25, E-63 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
 | `docs/security/buyer-questionnaire.md:257` | E-26, E-26b, E-27, E-27b, E-28, E-60 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
 | `docs/security/buyer-questionnaire.md:259` | E-26, E-26b, E-27, E-27b, E-28, E-60 | in place; pending portions and limits remain labelled |
@@ -1052,6 +1053,8 @@ The table below covers every line emitted by P9, including headings, path pointe
 | `docs/security/evidence-map.md:120` | E-64 | label/limit sentence, not a claim — NOT EVIDENCED |
 | `docs/security/evidence-map.md:121` | E-65 | label/limit sentence, not a claim — NOT EVIDENCED |
 | `docs/security/evidence-map.md:127` | E-69 | label/limit sentence, not a claim — NOT EVIDENCED |
+| `docs/security/evidence-map.md:130` | E-72 | label/limit sentence, not a claim — NOT BUILT |
+| `docs/security/evidence-map.md:131` | E-73 | label/limit sentence, not a claim — NOT EVIDENCED |
 | `docs/security/not-claimed-register.md:3` | — | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:11` | — | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:13` | — | label/limit sentence, not a claim — pending register or bounded parent mapping |
@@ -1061,33 +1064,35 @@ The table below covers every line emitted by P9, including headings, path pointe
 | `docs/security/not-claimed-register.md:21` | E-54 | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:23` | E-56 | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:24` | E-57 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:26` | E-51 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:32` | E-57 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:34` | — | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:38` | E-58 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:48` | E-61 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:49` | E-62 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:56` | E-64 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:57` | E-65 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:63` | E-66 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:64` | E-67 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:65` | E-67a | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:66` | E-68 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:67` | E-68a | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:68` | E-69 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:70` | E-66 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:84` | E-04, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:85` | E-05, E-05b, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:86` | E-03, E-06b, E-07, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:87` | E-08, E-08b, E-09, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:90` | E-11, E-57 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:91` | E-52 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:92` | E-12, E-12b, E-13, E-17b, E-41, E-52 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:94` | E-10, E-12b, E-16, E-16b, E-57, E-52, E-51, E-54, E-70 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:95` | E-26b, E-27, E-27b, E-60 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:97` | E-26, E-30, E-61 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:100` | E-42, E-54, E-57, E-70, E-60, E-66, E-67, E-67a, E-68, E-68a, E-40 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:102` | — | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:25` | E-72 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:26` | E-73 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:28` | E-51 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:34` | E-57 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:38` | — | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:42` | E-58 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:53` | E-61 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:54` | E-62 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:61` | E-64 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:62` | E-65 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:68` | E-66 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:69` | E-67 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:70` | E-67a | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:71` | E-68 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:72` | E-68a | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:73` | E-69 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:75` | E-66 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:89` | E-04, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:90` | E-05, E-05b, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:91` | E-03, E-06b, E-07, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:92` | E-08, E-08b, E-09, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:95` | E-11, E-57 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:96` | E-52 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:97` | E-12, E-12b, E-13, E-17b, E-41, E-52 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:99` | E-10, E-12b, E-16, E-16b, E-57, E-52, E-51, E-54, E-70 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:100` | E-26b, E-27, E-27b, E-60 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:102` | E-26, E-30, E-61 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:105` | E-42, E-54, E-57, E-70, E-60, E-66, E-67, E-67a, E-68, E-68a, E-40 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:107` | — | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/security-test-scope.md:3` | — | label/limit sentence, not a claim — proposed scope/sequence; not started or not commissioned |
 | `docs/security/security-test-scope.md:15` | E-66, E-69 | label/limit sentence, not a claim — proposed scope/sequence; not started or not commissioned |
 | `docs/security/security-test-scope.md:19` | — | label/limit sentence, not a claim — proposed scope/sequence; not started or not commissioned |
@@ -1267,3 +1272,77 @@ Merged after b223394: PRs 155 (M4-8-S-PRE), 138 (CH-7-F17-BEFORE-OPEN) and 139 (
 No cited test was run (P10: no vitest, build, typecheck of code, browser or database command). The mechanical lane-floor script is the dispatcher's. P9 fairness read, the GREEN verdict and the pull-request comment are the integrator's. Because the credential-shape check P6 fails as written (one false-positive line above), the branch was NOT pushed and no pull request was opened from this run.
 
 `Mac check record only — not independently verified, not accepted.`
+
+## Repair round 1 (12 Oct): built by Claude, Codex unavailable: coordinator's six fixes
+
+Built on 12 October 2026 by a Claude Sonnet 5.5 session acting as the builder for this round (Codex was unavailable; the coordinator approved this documents-only repair), in the existing ent-10c worktree. Start head: 23b9a67b09c6886bd4c3bde4e89487ace40fd5d8 (clean, already pushed). Only files under docs/security and this receipt were edited; the lane line and every other path are unchanged. The evidence cutoff stays 96c0cb8 (no cited source or test line moved, so no row was re-derived; P2 below passes at HEAD).
+
+This section is a builder record of what was changed and what the checks printed. It is not a review, a verdict or an acceptance, and the earlier sections above are left as they were (they describe the pack at the start head, with the P9 table renumbered as explained under the P9 row below). The GREEN integrator verdict is still pending.
+
+Why: the coordinator read the pack and ruled "REPAIR, documents only, one round": it was written before the 12 October internal security audit, and two answers would now mislead a buyer. The audit is an internal document that is not yet in this repository; the pack cites it by name and date only.
+
+### The six fixes (file and line, at the head of this round)
+
+| # | Coordinator's fix | Where | What it says now |
+|---|---|---|---|
+| 1 | Q-16: drop the bare word "unprivileged", keep what the login cannot do, add what it can do and that the removal programme is proposed | `docs/security/buyer-questionnaire.md:209` (answer), `:217` (Not done now lists E-58 and E-71) | "It is not a superuser and cannot bypass or alter row-level security. It cannot change, delete or truncate audit rows. Covered by named automated tests. It can still add or change company memberships including owner, write approval records, set a job's status, agreed price and fee cap, write invoice and payment records directly, and append new audit entries. A programme to remove those rights is proposed and not yet decided. This limit does not cover the database owner login or compromise of the identity service." |
+| 2 | E-21: reword the plain claim; extend the scope limit with the same sentence about what it can write | `docs/security/evidence-map.md:63` (claim cell and merged-control cell; scope cell) | Claim: "The app's database login is not a superuser and cannot bypass or alter row-level security". Scope limit gains: "Limit: today that login can still add or change company memberships including owner, write approval records, set a job's status, agreed price and fee cap, write invoice and payment records directly, and append new audit entries; a programme to remove those rights is proposed and not yet decided (see E-71)." Source, anchor, test and test-title cells are unchanged (the test title keeps its own word in backticks, verbatim). |
+| 3 | Q-18, E-22, E-23: add the tamper-evident limit | `docs/security/buyer-questionnaire.md:235` (answer), `:243` (Not done now lists E-59, E-60 and E-71); `docs/security/evidence-map.md:69` (E-22) and `:70` (E-23) scope cells | Q-18 now says: "It detects change or removal of existing entries relative to a trusted checkpoint; it does not stop the app's own database login appending false new entries. A trusted checkpoint is a saved chain position and hash." (this replaces the older sentence "Changes are detected against a trusted checkpoint: a saved chain position and hash."). E-22 and E-23 scope cells gain: "Limit: detects change or removal of existing entries relative to a trusted checkpoint; it does not stop the app's own database login appending false new entries (see E-71)." E-24 and E-25 were not named in the fix and are unchanged. |
+| 4 | Three new not-claimed rows in map section F and the register | `docs/security/evidence-map.md:129` (E-71), `:130` (E-72), `:131` (E-73); `docs/security/not-claimed-register.md:25` (E-72), `:26` (E-73), `:45` (E-71) | E-71: "Owner approvals, membership changes, job status and price, and audit entries cannot be forged by the app's database login" - last cell "HELD — NOT IN PLACE: found by the internal audit of 12 October 2026; hardening proposed; founder decision pending." E-72: "Practice-area sessions expire, can be revoked and store only a hashed key" — "NOT BUILT — piece issued, not built: an order has been written; nothing is built yet." (the piece is PRACTICE-SESSION-HARDEN-1; its ID appears in the register only). E-73: "A removed member loses access on every sign-in route" — "NOT EVIDENCED — beyond the practice contractor route (E-17b); the ordinary sign-in session route is not covered (known gap, fix-later)." No merged control is claimed for any of the three. |
+| 5 | E-17b scope limit | `docs/security/evidence-map.md:56` | Scope cell now begins: "Limit: practice contractor route only; the ordinary sign-in session route is not covered (known gap, fix-later; see E-73)." The rest of the cell, the claim, source, test and run-record cells are unchanged. |
+| 6 | README line about the audit | `docs/security/README.md:9` | "Audit note: the evidence cutoff predates the internal security audit of 12 October 2026 and any remediation of its findings (the audit is an internal document, not yet in this repository). Q-16, Q-18, E-17b, E-21, E-22, E-23 and the new not-claimed rows E-71 to E-73 reflect it." No file path of the audit is copied. |
+
+Label note for fix 4: the order's P2 checker accepts only these starts for a not-claimed last cell: HELD, IN REVIEW, NOT BUILT, NOT EVIDENCED, NOT DETERMINED, PLANNED, NOT STARTED, NOT COMMISSIONED, NOT PRODUCED. "NOT IN PLACE" is not on that list, so E-71 starts with HELD (the founder decision is pending) and carries the words NOT IN PLACE straight after it. The checker was not changed.
+
+### Small additions beyond the six (links and counts only; no claim changed)
+
+- `docs/security/README.md:50` and `:51`: two bullets in the "does not cover" list naming E-71, E-72 and E-73, so each new ID is cited outside the register and the map.
+- `docs/security/not-claimed-register.md:36`: the R10 "Waits" sentence for E-72 (the order is written but a pull-request title, an order or a plan line never moves a row).
+- `docs/security/certification-roadmap.md:32`: the "evidence we lack" range "E-50 to E-70" became "E-50 to E-73" so it still covers every not-claimed ID.
+- Pointers "(see E-71)" or "(see E-73)" in the E-17b, E-21, E-22 and E-23 scope cells.
+- Revert any of these if the coordinator does not want them; none of them states a new fact.
+
+### Found, not changed (for the coordinator's ruling)
+
+- Q-09 and Q-14 (and the register's parent-assertion row that cites E-17b) still say administrator revocation or a revoked membership takes effect on the next request, without the new "practice contractor route only" limit; E-73 is not in their Not done lines.
+- Q-10 (session length) does not mention practice-area sessions or E-72.
+- The plain answers for Q-16 and Q-18 are now 85 and 78 words. The earlier statement in the change manifest above ("Every plain answer is 57 words or fewer") is no longer true for these two; the full wording in fixes 1 and 3 was required.
+- E-17 and E-17c carry the older "correctly authenticated server context required" limit and were not part of the fix list.
+
+### Mac checks re-run after the repair (12 October 2026)
+
+All commands were run in the ent-10c worktree on the working tree after the edits above and before this receipt section was written (the receipt-wide checks P4, P6 and P7 were run again after it; see their rows). `REF=HEAD` is the start head; the cited code and test files are unchanged on it. The cited tests were not run (P10): no vitest, build, typecheck, browser or database command was run.
+
+| Check | Result |
+|---|---|
+| P1 file set and registry | Paths that differ from origin/main (ad1bad2, unchanged since the earlier run): the lane registry line, the six files under docs/security, and this receipt; nothing else. The registry still parses as JSON. The lane line itself is unchanged. |
+| P2 evidence rows (the order's own checker, REF=HEAD, exit 0) | `88 rows: 62 in place, 26 not claimed, 0 failures` (was 85 rows: 62 in place, 23 not claimed). The seed-row expectation for the checker is now 88 / 62 / 26. |
+| P3 question and ID coverage | 34 question blocks, Q-01 to Q-34 with none missing; each of the five labels counts 34. IDs used outside the map: 88; IDs defined in the map: 88; used but not defined: none; defined but not used: none; no duplicate IDs. Every ID in a Merged control line is `in place` and every ID in a Not done line is `not claimed` (scripted, 0 mismatches). |
+| P4 banned words | Tier 1 prints nothing for docs/security (re-run on this receipt below). Tier 2 prints the same 14 lines as before (the banner sentence in six files, headings and table labels, README lines now 25, 44 and 53, the register pack-honesty row), each already justified in the tier-2 table above. Backticked hits are the banner sentence and the same three verbatim test titles in the evidence map. |
+| P5 unmerged work and pull-request numbers | 40 distinct hit lines in the unmerged-work search, the same count as before; the new text adds none. Pull-request numbers appear only in the evidence map. All 14 numbers cited (1, 4, 6, 7, 15, 38, 75, 100, 104, 115, 131, 133, 146, 147) are MERGED on GitHub (checked today with gh pr view). No open pull request is cited. |
+| P6 credential shape | Both commands print nothing (docs/security and this receipt; re-run after this section was written). |
+| P7 links and paths | Both loops print nothing (re-run after this section was written). |
+| P8 waits, limits, banner | The R10 Waits sentence is present for E-51, E-52, E-54, E-57, E-60 and E-66 (and now E-72); Q-04 and Q-09 carry the SCIM statement; limit phrases L1 to L10 each count 1 or more in the questionnaire; every file carries the scope sentence, the DRAFT banner and the cutoff line. |
+| P9 coverage | The grep now emits 206 lines (was 201: the audit note and the first README bullet add none; the second README bullet and the E-72 and E-73 rows in the map and in the register add 5 lines). The P9 table above was renumbered to the repaired files and has 206 rows, equal to the grep. Rows for changed lines carry the added IDs (Q-16 and Q-18 now include E-71). Coverage only: whether each plain answer is fair is the coordinator's and integrator's read, not done here. The raw grep output printed under the first "P9" heading above is the pre-repair output and is left as history. |
+| Lint (`LANE_BASE_REF=origin/main pnpm lint`, through heavy-slot, exit 0) | Core purity passed (131 files); lane boundary passed (lane ent-10c, merge-base comparison, base ad1bad2, 8 files); money arithmetic passed; commercial boundary printed nothing; turbo lint 7 of 7 tasks, all replayed from the shared cache (a cache replay, not a fresh compiler run; the change touches no code). pnpm also printed its usual warning about a package.json setting it no longer reads; that line is paraphrased here to avoid a false match of the rule 11 check. |
+
+### SHA-256 of the six pack files after the repair
+
+```text
+cc1a1cebb1209116cc52d9f0979c3c68b1ffad9bb5980361ed57d63bd14657e3  docs/security/README.md
+7230322048f5b3b7bda2b010d1617f0afd5e4b4e15820629d86ca8c36f773792  docs/security/buyer-questionnaire.md
+cd2098dfdc56dc8c4a2f13d649266ab8c61f62b9834c2baedc70094f2ca7db78  docs/security/certification-roadmap.md
+7df648c71c010c993097134d4c795d8e80b766fe21a044ca9a118154bcc1cc32  docs/security/evidence-map.md
+b90c55a7972463b10e94c6f6141f01976397a1305ca60b2cad8e6495baba1779  docs/security/not-claimed-register.md
+df85baf26241386277bd4907000358d8ae04a8d7ec652a1b125b115774aaf4d3  docs/security/security-test-scope.md
+```
+
+The security-test scope file is byte-identical to the earlier run. The receipt's own digest cannot be listed here; the integrator computes it after the commit.
+
+### What was NOT done in this round
+
+No merge, no verdict, no review of this work, no change outside docs/security and this receipt, no new worktree, no deletion, no force-push. No cited test was run (P10). The Codex builder was not used. The audit document itself was not copied into the repository and none of its file paths appear in the pack.
+
+`Builder repair record only — not independently verified, not accepted.`
+
+No independent model verdict is claimed for this GREEN piece.

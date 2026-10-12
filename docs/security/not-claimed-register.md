@@ -22,6 +22,8 @@ Each label identifies evidence we lack, not a defect filed by this pack. Interna
 | E-55 | Emailed-code session duration pinned by a test | NOT DETERMINED | Contract says 24 hours; no cited test pins that number. | A merged named duration test. | founder | A future identity piece |
 | E-56 | Multi-factor sign-in | NOT EVIDENCED | An emailed code is not described as a second factor. | Defined scope, merged control and its own tests. | founder | A future identity piece |
 | E-57 | Native mobile single sign-on | HELD | Native path is deferred. | Merged native path and device/build tests. | founder | M3 |
+| E-72 | Practice-area sessions expire, can be revoked and store only a hashed key | NOT BUILT | Piece issued, not built: an order has been written; nothing is built yet. | Merged session hardening with its own named tests. | founder | PRACTICE-SESSION-HARDEN-1 (piece issued, not built) |
+| E-73 | A removed member loses access on every sign-in route | NOT EVIDENCED | Evidenced only on the practice contractor route (E-17b); the ordinary sign-in session route is not covered (known gap, fix-later). | A merged control and a named test for each remaining sign-in route. | founder | A fix-later item |
 
 **E-51:** Not claimed. Waits for OpenID sign-in to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
 
@@ -31,6 +33,8 @@ Each label identifies evidence we lack, not a defect filed by this pack. Interna
 
 **E-57:** Not claimed. Waits for native mobile sign-in to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
 
+**E-72:** Not claimed. Waits for practice-area session hardening to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
+
 ## Company separation and records
 
 | E-id | Item (plain words) | Label | Why | What would change it | Who decides | Waits for |
@@ -38,6 +42,7 @@ Each label identifies evidence we lack, not a defect filed by this pack. Interna
 | E-58 | Protection if privileged database or identity access is compromised | NOT EVIDENCED | Row-level security does not cover this trust-boundary failure. | A separately scoped control and named tests, with its residual limits. | data/security owner (D04, unassigned) | Separate security work |
 | E-59 | Outside audit-chain anchor | NOT BUILT | Checkpoints remain within the database trust boundary. | Merged external anchor and named tests. | founder | M4 |
 | E-60 | Signer registry, rotation, revocation, outside timestamp, scheduled hand-off and long-term checking | NOT BUILT | Per-export material and manual hand-off only; no durable signer lifecycle. | Merged lifecycle/retained-material controls and their own tests. | founder | M5-9 / M4 |
+| E-71 | Owner approvals, membership changes, job status and price, and audit entries cannot be forged by the app's database login | HELD | NOT IN PLACE: found by the internal audit of 12 October 2026 (an internal document, not yet in this repository). Hardening is proposed; founder decision pending. | A founder decision, then a merged change removing those rights from the app's database login, with its own named tests. | founder | Founder decision on the proposed hardening programme |
 
 **E-60:** Not claimed. Waits for long-term export checking and signer lifecycle to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
 

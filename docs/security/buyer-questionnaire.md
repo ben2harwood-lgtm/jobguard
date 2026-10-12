@@ -206,7 +206,7 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-16 What can the application’s database login not do?
 
-**Plain answer:** The business runtime login is unprivileged: it cannot alter the row-security policy or change, delete or truncate audit rows. Covered by named automated tests. This limit does not cover the database owner login or compromise of the identity service.
+**Plain answer:** It is not a superuser and cannot bypass or alter row-level security. It cannot change, delete or truncate audit rows. Covered by named automated tests. It can still add or change company memberships including owner, write approval records, set a job's status, agreed price and fee cap, write invoice and payment records directly, and append new audit entries. A programme to remove those rights is proposed and not yet decided. This limit does not cover the database owner login or compromise of the identity service.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
@@ -214,7 +214,7 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 **Verifying tests:** [tenancy.integration.test.ts:383](../../packages/db/test/tenancy.integration.test.ts#L383); [audit.integration.test.ts:107](../../packages/db/test/audit.integration.test.ts#L107)
 
-**Not done:** E-58
+**Not done:** E-58, E-71
 
 ### Q-17 How does the application choose a request’s company?
 
@@ -232,7 +232,7 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-18 Do you keep a tamper-evident record?
 
-**Plain answer:** A per-company chain links entries by hashes calculated from their contents; it is append-only for the runtime login. Changes are detected against a trusted checkpoint: a saved chain position and hash. Covered by named automated tests. The database owner could replace the whole chain and its in-database checkpoints. No outside anchor or timestamp is built.
+**Plain answer:** A per-company chain links entries by hashes calculated from their contents; it is append-only for the runtime login. It detects change or removal of existing entries relative to a trusted checkpoint; it does not stop the app's own database login appending false new entries. A trusted checkpoint is a saved chain position and hash. Covered by named automated tests. The database owner could replace the whole chain and its in-database checkpoints. No outside anchor or timestamp is built.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
@@ -240,7 +240,7 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 **Verifying tests:** [audit.integration.test.ts:107](../../packages/db/test/audit.integration.test.ts#L107); [audit.integration.test.ts:85](../../packages/db/test/audit.integration.test.ts#L85); [audit.integration.test.ts:98](../../packages/db/test/audit.integration.test.ts#L98)
 
-**Not done:** E-59, E-60
+**Not done:** E-59, E-60, E-71
 
 ### Q-19 What personal data goes into that record?
 
