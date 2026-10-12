@@ -978,3 +978,189 @@ Two findings worth the next round's attention. (1) The scanner test `context-bou
 In the merge commit alone, `migrate.ts` lists 0126 after 0129 (out of numeric order) by design; the next commit puts it at 0135. The upgrade proof now installs 0127 to 0129 before 0135 (it selects by name from 0122 up to 0135), and it passes.
 
 **NOT run.** The full root `pnpm test`; the full `packages/db` suite (only the files in the table above); the rest of the `apps/api` and `apps/web` suites; `pnpm test:e2e` and any browser run; GitHub CI; the 45-minute CI job; any independent Claude or Sol review of this catch-up. No push, no PR, no deployment, no verdict. Not independently verified, not accepted, not released. Free disk 117 GiB at start, 116 GiB at end.
+
+
+## Repair round 3 (bridge switch)
+
+Issued local head `40ff3405ea14285f40b24615ca57877c74cf9f25`, branch
+`codex/sandbox/ent-3a`. Read `git log` first: head is the dispatcher catch-up
+receipt, after `77a98ab` renumbered the SQL to 0135 and `2eed74e` merged main
+`b223394` (CTX-BRIDGE-1, PR #151). Read Q3 and repair round 2, AGENTS,
+BUILD_PLAN §9.1.4/§9.1.5/ENT-3 and ledger amendments, the site-extra contract,
+the shared bridge and the merged audit-export application's `resolveContext`.
+The bridge exists and is already exported from `@jobguard/db`; no index edit
+was needed. All four code/test paths and this receipt are already in the
+`ent-3a` lane. No lane widening, migration edit or git write.
+
+**The merge hold of Q3 is now lifted by this switch.** The reviewed shared
+bridge is merged and this piece now uses it. This statement discharges only
+that explicit prerequisite: it is not an independent verdict, technical
+acceptance, permission to merge, or release approval. F2 is still open;
+success paths are reachable in tests only. UI remains parked.
+
+### Application change and context route
+
+Removed `contextForContractorSession` in full: the inert hand-made AuthProvider,
+its request/verify-code refusals, generated membership projection, marker,
+fictional origin and local principal-bridge call, plus their exclusive imports
+(`AuthError`, `AuthProvider`, `resolveVerifiedTenantContext`). There is no
+credential-shaped replacement value. The application constructs no tenant
+context and adds no scanner name.
+
+`SiteExtraApplication.resolveContext` follows merged audit-export's shape:
+`const context: VerifiedTenantContext = await contractorSessionContext(this.pool, sessionId)`,
+read its tenant ID, reject a mismatch with the persisted actor's tenant as
+`UNAUTHENTICATED`, return the exact whole context, and translate an
+unauthenticated bridge lookup to the piece's existing typed unauthenticated
+error. `log` passes that unchanged context to `logSiteExtra`.
+
+A valid command looks up the session **twice**: once through merged
+`ContractorRepository.resolveSession` for the unchanged actor argument, and
+once inside the shared bridge, which performs its own persisted lookup and
+uses only that result to create context. The actor is never passed to the
+bridge or a context constructor. This is the issued two-lookup option and the
+audit-export model; it keeps the bridge's context lookup authoritative.
+Both use the same pool/session ID. A changed tenant or unknown second lookup
+fails closed before the command repository. Activity, role, scope and grant
+checks remain in the database path; the bridge intentionally retains context
+for an attributable revoked/expired member so a refusal can be recorded.
+
+Round-2 registry rows, precheck/seam `JOB_NOT_LIVE`, success/replay 201,
+public `IDEMPOTENCY_CONFLICT` and OpenAPI 201/409 enum remain unchanged.
+No operational alert, migration, new external action or public error envelope
+is added. Backwards compatibility: only the internal context route/lookup count
+changes; existing HTTP bodies and statuses are preserved.
+
+Required command, run after the switch:
+
+```sh
+git grep -n "resolveVerifiedTenantContext\|verifiedTenantContextFromMembership\|bridgeMarker" -- 'apps/api/src/contractor/site-extra*' 'packages/db/src/site-extra*'
+```
+
+Output: **empty (no matches)**. Exit **1**, git grep's normal no-match result.
+No scanner test, bridge file or pinned file is edited.
+
+### Tests first and every changed expected value
+
+Changed only this piece's application test, Nest HTTP test and Next route test.
+Every existing test case remains; no skip, weakened intent or deleted case.
+The deleted adapter's assertions now drive the real shared bridge rather than
+its removed provider interface. Before/after replacements are enumerated below;
+all other previous expected values remain unchanged.
+
+| Assertion / intent | Before | After |
+|---|---|---|
+| Application [A8] exact persisted session lookup | exactly once with session ID | exactly twice, both calls exactly `[sessionId]`; identical actor object and exactly four command fields still asserted |
+| Nest HTTP [A15](e) unknown-job lookup | exactly once with session ID | exactly twice, both exactly `[sessionId]`; additionally one real shared-bridge call and repository context identical to its returned object; HTTP 404/body/no-store and zero actual query/connect unchanged |
+| Next [A17] successful transport-canary lookup | exactly once with session ID | exactly twice, both exactly `[sessionId]`; additionally one shared-bridge call and identical returned context; 201/body-field refusals/path refusal/one repository write unchanged |
+| Application [A17] observed bridge | one local principal-bridge call | exactly one shared `contractorSessionContext(pool, sessionId)` call |
+| [A17] tenant selection | adapter credentials' requested tenant equals persisted tenant | only pool/session passed to shared bridge; second lookup returns the exact persisted member; unchanged tenant equality assertion and real withTenant stamp check; returned context identity/frozen assertions added |
+| [A17] valid provider authentication | returned identity user equals persisted identity user | second real-bridge lookup result is the identical persisted membership object (includes identity user); actor remains identical to it |
+| [A17] provider membership projection | projected ID equals persisted membership ID, invented `read_only` role | exact unchanged persisted member reaches shared bridge/actor; no projected role or membership substitution; existing forged-role transport refusals retained |
+| [A17] unrelated session via provider | provider returns undefined | shared bridge rejects unrelated session with typed `UNAUTHENTICATED` |
+| [A17] foreign tenant and altered identity via provider membership arguments | provider returns undefined for each | tenant/member IDs used as sessions are rejected as `UNAUTHENTICATED`; authority object is rejected before lookup; existing body/path/principal/cookie/header/query tampering assertions retained |
+| [A17] provider requestCode/verifyCode | both inert methods reject as `UNAUTHENTICATED` | provider/methods removed; own application source asserts absence of AuthProvider/requestCode/verifyCode; shared bridge rejects missing/malformed sessions as `UNAUTHENTICATED` and non-synthetic mode as `MODE_FORBIDDEN` without further lookup |
+
+The two negative shared-lookup cases are new: unknown second session and
+second tenant mismatch both answer typed `UNAUTHENTICATED` before repository
+or connection access. Missing/malformed-principal coverage is strengthened by
+zero lookup/query/connect assertions; the previously included unknown valid
+session is still asserted separately in the same test. Nest's pre-handler
+canaries additionally assert the shared bridge was never called.
+
+New requested inactive-member test runs revoked and expired cases: persisted
+session resolves through the actual shared bridge; actual SiteExtraRepository
+and merged withTenant/assertContractorGate run against a fake PoolClient that
+models no active member and an already-recorded refusal on retry. Both answer
+403 with the piece's `EXTRA_FORBIDDEN` envelope after both transactions complete,
+and never call `ExtraRepository.raiseExtra`. Like audit-export, a persisted
+inactive member remains attributable but cannot perform the action. This is
+mocked database evidence, not PostgreSQL verification of revocation/expiry or
+of refusal durability. The existing PostgreSQL A5/A12 coverage remains owed
+in CI; no database test was changed.
+
+### Commands and results — round 3
+
+Every pnpm command uses `PATH=/private/tmp/ent3a-bin:$PATH`, the already-cached
+pinned pnpm 10.28.1 wrapper; Node v24.17.0. Dependencies were already installed;
+no install/download or socket/database/browser startup. One heavy command at a
+time, vitest `--maxWorkers=2`, only changed test files, at most three per run.
+`origin/main` observed at `8472ae0014b2ddb71943d4a903982d77084bdecc`; no fetch,
+merge or ref update performed by this builder.
+
+- Tests-first `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/site-extra.application.test.ts`:
+  exit 1; 1 file, 41 tests, 35 passed/6 failed. Failures: [A8] saw one lookup
+  rather than two; original [A17] and both inactive cases saw zero shared-bridge
+  calls; both second-lookup cases returned SITE_EXTRA_UNAVAILABLE instead of
+  UNAUTHENTICATED because the second lookup did not yet exist.
+- Same application command after switching: exit 0; 1 file / 41 tests passed.
+- First `pnpm typecheck --concurrency=2`: exit 2; 5/6 tasks passed;
+  new test's `Pool.connect` overloaded callback signature made `.mockResolvedValue`
+  infer void (TS2345). Changed only the fake client stub to `.mockImplementation`
+  with an async PoolClient return; no assertion or product change.
+
+- Final `pnpm typecheck --concurrency=2`: exit 0; 7/7 tasks passed, 5 cached.
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=2`: exit 0; core purity
+  (131 TypeScript files), lane boundary, money arithmetic and 7/7 package tasks
+  passed, 5 cached.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: exit 0; lane ent-3a passed,
+  26 files in the branch/working-tree comparison. This repair changes five only.
+
+- `pnpm build --concurrency=2`: exit 0; 7/7 tasks, 2 cached; Next generated
+  29/29 static pages. Existing workspace-root/parent-lockfile, CSS/autoprefixer,
+  webpack serialization and shared turbo cache permission warnings remain.
+  Cached output naming other worktrees is replayed output, not execution there.
+- Final `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/site-extra.application.test.ts`:
+  exit 0; 1 file / 41 tests passed.
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/contractor/jobs/[id]/site-extras/route.test.ts'`:
+  exit 0; 1 file / 30 tests passed. In-process adapter, no browser.
+- `pnpm openapi:check`: exit 1 before comparison; tsx CLI cannot create its IPC
+  socket (`listen EPERM`). No permission escalation or check bypass added.
+- `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`:
+  exit 0; the same repository generator/comparison succeeds without the CLI IPC
+  server. Committed OpenAPI stays byte-identical.
+- Required grep above: exit 1, no matches.
+- `git diff --check`: exit 0. Saved before-round SHA-256 inventory comparison:
+  exit 0, exactly five authorized tracked files differ; every other tracked
+  file is byte-identical. Final added-code-line credential-pattern inspection:
+  exit 0, no matches (local deterministic check only).
+
+### Self-review and remaining evidence
+
+Re-read the final application, all three test diffs and this receipt. Checked
+that only the shared bridge constructs context, no actor or requested tenant
+is passed to it, the context is returned/passed whole without copies or caches,
+and the audit-export model's tenant mismatch and UNAUTHENTICATED behavior are
+preserved. Confirmed missing/malformed principal and non-synthetic refusals
+precede access; successful forged transport values cannot select tenant/member/
+role; membership authorization remains in the database path; the real stamp
+is accepted by merged withTenant. Reviewed each assertion replacement in the
+table, every new refusal test and retained round-2 tests. No new standing test
+pins any unowned source file; the new source assertion reads only this piece's
+application. No test was skipped or weakened to obtain a pass.
+
+The inventory proves `apps/api/src/auth/context-boundary.test.ts`, all its
+pinned files including the shared bridge, every migration including 0135,
+watchdog.ts, the db exports/repositories, the OpenAPI file, BUILD_PLAN and lane
+registry remain byte-identical. The only changed code/test files are the four
+issued paths. Historical Q3 HOLD entries above are superseded by this section's
+explicit bridge-switch statement; all other outstanding limits remain.
+
+- Database and browser suites (`pnpm test:db`, `pnpm test:migrations`,
+  `pnpm test:e2e`): **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/site-extra.http.test.ts`:
+  **NOT RUN (sandbox cannot bind localhost)**; 16 cases remain, assertions
+  updated and typechecked, no socket attempted.
+- Root `pnpm test`, scanner and other merged tests: NOT RUN in this round under
+  the changed-files-only order and socket/PostgreSQL restrictions. Mandatory
+  CI suites stay enforced. Existing success/membership stubs and the new fake
+  PoolClient tests are not a live database integration. Fresh install NOT RUN
+  (dependencies preinstalled; no downloads authorized). AI eval inapplicable.
+
+Intended conventional commit subject/body written to
+`/private/tmp/jg-msg-ent-3a.txt`. No commit, add, checkout, fetch, merge, push,
+PR, deployment or release. Dispatcher commits the working-tree changes.
+Independent recorded exact-commit verdicts, separate acceptance and CI remain
+owed. Builder self-review and deterministic/test-executed evidence only;
+not independently verified, not accepted. F2, UI, D16/G1/ENT-14 and the other
+existing held items remain open.

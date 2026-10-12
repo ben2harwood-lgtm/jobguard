@@ -1,10 +1,10 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Pool } from "pg";
-import { ContractorRepository, SiteExtraRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
+import { Pool, type PoolClient } from "pg";
+import { ContractorRepository, ExtraRepository, SiteExtraRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError, siteExtraHttpStatus } from "@jobguard/core";
-import * as bridge from "../auth/principal-bridge.js";
+import * as bridge from "@jobguard/db";
 import { SiteExtraApplication, siteExtraHttpFailure } from "./site-extra.application.js";
 import { SiteExtraController } from "./site-extra.controller.js";
 import { createWorkspaceApplication } from "../workspace/application.js";
@@ -18,7 +18,7 @@ describe("ENT-3a service and Nest boundary", () => {
   const lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
   const repo = vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra").mockResolvedValue({ variationId: crypto.randomUUID() });
   const result = await createWorkspaceApplication({ pool, sessionId }).siteExtras.log(jobId, raw);
-  expect(lookup).toHaveBeenCalledExactlyOnceWith(sessionId); expect(repo.mock.calls[0]![1]).toBe(m);
+  expect(lookup).toHaveBeenCalledTimes(2); expect(lookup.mock.calls).toEqual([[sessionId], [sessionId]]); expect(repo.mock.calls[0]![1]).toBe(m);
   expect(repo.mock.calls[0]![2]).toEqual({ commandId: raw.commandId, jobId, note: raw.note, description: raw.description });
   expect(result).toMatchObject({ version: "site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId, state: "logged" }); await pool.end();
  });
@@ -29,19 +29,32 @@ describe("ENT-3a service and Nest boundary", () => {
  });
  it("[A17] only the persisted member reaches the real bridge and its context passes the actual stamp check", async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); const pool = new Pool(), m = member(), sessionId = crypto.randomUUID();
-  vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m); const real = bridge.resolveVerifiedTenantContext, observe = vi.spyOn(bridge, "resolveVerifiedTenantContext").mockImplementation(real);
+  const lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockImplementation(async value => {
+   if (value !== sessionId) throw Object.assign(new Error("unknown session"), { code: "UNAUTHENTICATED" });
+   return m;
+  });
+  const real = bridge.contractorSessionContext, observe = vi.spyOn(bridge, "contractorSessionContext").mockImplementation(real);
   const marker = new Error("connection attempted after stamp verification"); const connect = vi.spyOn(pool, "connect").mockRejectedValue(marker);
   const repo = vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra").mockImplementation(async (context, actor) => {
-   expect(actor).toBe(m); expect(context.tenantId).toBe(m.tenantId);
+   expect(actor).toBe(m); expect(context.tenantId).toBe(m.tenantId); expect(Object.isFrozen(context)).toBe(true);
    await expect(withTenant(pool, context, async () => undefined)).rejects.toBe(marker);
    return { variationId: crypto.randomUUID() };
   });
   await new SiteExtraApplication(pool).log({ version: "contractor-principal.v1", sessionId }, crypto.randomUUID(), body());
-  expect(observe).toHaveBeenCalledOnce(); const [provider, credentials] = observe.mock.calls[0]!;
-  expect(credentials.requestedTenantId).toBe(m.tenantId); const principal = await provider.authenticate(sessionId); expect(principal?.identityUserId).toBe(m.identityUserId);
-  expect(await provider.findMembership(principal!, m.tenantId)).toMatchObject({ id: m.membershipId, role: "read_only" }); expect(await provider.authenticate(crypto.randomUUID())).toBeUndefined();
-  expect(await provider.findMembership(principal!, crypto.randomUUID())).toBeUndefined(); expect(await provider.findMembership({ ...principal!, identityUserId: crypto.randomUUID() }, m.tenantId)).toBeUndefined();
-  await expect(provider.requestCode({} as never)).rejects.toMatchObject({ code: "UNAUTHENTICATED" }); await expect(provider.verifyCode("fictional@fictional.invalid", "signin", "0".repeat(8))).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(observe).toHaveBeenCalledExactlyOnceWith(pool, sessionId);
+  expect(lookup.mock.calls).toEqual([[sessionId], [sessionId]]);
+  await expect(lookup.mock.results[1]!.value).resolves.toBe(m);
+  expect(repo.mock.calls[0]![0]).toBe(await observe.mock.results[0]!.value);
+  // The shared bridge accepts only a session: tenant/member IDs or an authority object cannot select membership.
+  for (const value of [crypto.randomUUID(), m.tenantId, m.membershipId]) await expect(real(pool, value)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  await expect(real(pool, { sessionId, tenantId: m.tenantId, membershipId: m.membershipId, identityUserId: crypto.randomUUID(), role: "owner" } as never)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(lookup).toHaveBeenCalledTimes(5);
+  const calls = lookup.mock.calls.length;
+  for (const value of [undefined, "invalid"]) await expect(real(pool, value as never)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  vi.stubEnv("JOBGUARD_ENV", "production_billing"); await expect(real(pool, sessionId)).rejects.toMatchObject({ code: "MODE_FORBIDDEN" });
+  expect(lookup).toHaveBeenCalledTimes(calls);
+  const applicationSource = readFileSync(resolve(process.cwd(), "src/contractor/site-extra.application.ts"), "utf8");
+  expect(applicationSource).not.toMatch(/AuthProvider|\.requestCode|\.verifyCode/u);
   expect(connect).toHaveBeenCalledOnce(); expect(repo).toHaveBeenCalledOnce(); await pool.end();
  });
  it("[A17] different client tenant, member and role in body/path/principal are refused; extra cookies never change context", async () => {
@@ -55,14 +68,41 @@ describe("ENT-3a service and Nest boundary", () => {
   await expect(controller.log(`tenantId=${crypto.randomUUID()}&membershipId=${crypto.randomUUID()}&role=owner`, cookie, "https://app.fictional.invalid", body())).rejects.toMatchObject({ status: 404 });
   await expect(new SiteExtraApplication(pool).log({ version: "contractor-principal.v1", sessionId, tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), role: "owner" }, jobId, body())).rejects.toMatchObject({ code: "UNAUTHENTICATED" }); expect(repo).toHaveBeenCalledOnce(); await pool.end();
  });
+ it.each(["unknown", "different tenant"])("[A17] %s second session lookup refuses before the command repository", async cause => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); const pool = new Pool(), m = member(), sessionId = crypto.randomUUID();
+  const lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValueOnce(m);
+  if (cause === "unknown") lookup.mockRejectedValueOnce({ code: "UNAUTHENTICATED" }); else lookup.mockResolvedValueOnce(member());
+  const repo = vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra"), connect = vi.spyOn(pool, "connect");
+  await expect(new SiteExtraApplication(pool).log({ version: "contractor-principal.v1", sessionId }, crypto.randomUUID(), body())).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(lookup.mock.calls).toEqual([[sessionId], [sessionId]]); expect(repo).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled(); await pool.end();
+ });
+ it.each(["revoked", "expired"])("[A17] a persisted session with %s membership reaches the shared bridge but is refused with 403", async () => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); const pool = new Pool(), m = member(), sessionId = crypto.randomUUID();
+  const lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
+  const observe = vi.spyOn(bridge, "contractorSessionContext");
+  const raise = vi.spyOn(ExtraRepository.prototype, "raiseExtra");
+  // Model the gate's absent active-membership row for either revocation or expiry.
+  // An existing refusal audit models a retry; real PostgreSQL revocation coverage remains mandatory in CI.
+  const query = vi.fn(async (sql: string) => ({ rows: [], rowCount: sql.startsWith("SELECT 1 FROM app.audit_event") ? 1 : 0 }));
+  const release = vi.fn(), connect = vi.spyOn(pool, "connect").mockImplementation(async () => ({ query, release }) as unknown as PoolClient);
+  const failure = await new SiteExtraApplication(pool).log({ version: "contractor-principal.v1", sessionId }, crypto.randomUUID(), body()).then(() => undefined, siteExtraHttpFailure);
+  expect(failure).toEqual({ status: 403, body: { version: "site-extra-error.v1", code: "EXTRA_FORBIDDEN" } });
+  expect(observe).toHaveBeenCalledExactlyOnceWith(pool, sessionId); expect(lookup.mock.calls).toEqual([[sessionId], [sessionId]]);
+  expect(connect).toHaveBeenCalledTimes(2); expect(release).toHaveBeenCalledTimes(2); expect(raise).not.toHaveBeenCalled();
+  expect(query.mock.calls.filter(([sql]) => sql === "COMMIT")).toHaveLength(2); await pool.end();
+ });
  it.each(["pilot_no_charge", "production_billing", ""])("[A15] %s mode refuses before any database access", async mode => {
   vi.stubEnv("JOBGUARD_ENV", mode); const pool = new Pool(), connect = vi.spyOn(pool, "connect"), lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession");
   await expect(new SiteExtraApplication(pool).log(undefined, crypto.randomUUID(), body())).rejects.toMatchObject({ code: "MODE_FORBIDDEN" }); expect(connect).not.toHaveBeenCalled(); expect(lookup).not.toHaveBeenCalled(); await pool.end();
  });
  it("[A15] missing/malformed/unrecognised sessions and invalid paths have typed failures", async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); const pool = new Pool(), app = new SiteExtraApplication(pool), lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockRejectedValue({ code: "UNAUTHENTICATED" });
-  for (const principal of [undefined, { version: "contractor-principal.v1" }, { version: "contractor-principal.v1", sessionId: "invalid" }, { version: "contractor-principal.v1", sessionId: crypto.randomUUID() }]) await expect(app.log(principal, crypto.randomUUID(), body())).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
-  lookup.mockResolvedValue(member()); await expect(app.log({ version: "contractor-principal.v1", sessionId: crypto.randomUUID() }, "invalid", body())).rejects.toMatchObject({ code: "NOT_FOUND" }); await pool.end();
+  const connect = vi.spyOn(pool, "connect"), query = vi.spyOn(pool, "query");
+  for (const principal of [undefined, { version: "contractor-principal.v1" }, { version: "contractor-principal.v1", sessionId: "invalid" }]) await expect(app.log(principal, crypto.randomUUID(), body())).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(lookup).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled(); expect(query).not.toHaveBeenCalled();
+  await expect(app.log({ version: "contractor-principal.v1", sessionId: crypto.randomUUID() }, crypto.randomUUID(), body())).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  lookup.mockResolvedValue(member()); await expect(app.log({ version: "contractor-principal.v1", sessionId: crypto.randomUUID() }, "invalid", body())).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(connect).not.toHaveBeenCalled(); expect(query).not.toHaveBeenCalled(); await pool.end();
  });
  it.each([undefined, "null", "https://foreign.invalid"])("[A15] Nest refuses Origin %s before service with no-store", async origin => {
   const pool = new Pool(), controller = new SiteExtraController(pool), log = vi.spyOn(SiteExtraApplication.prototype, "log");

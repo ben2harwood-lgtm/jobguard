@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WatchdogError, type AuthenticatedMembership } from "@jobguard/db";
+import * as bridge from "@jobguard/db";
 import { logSiteExtraV1, SiteExtraError, siteExtraHttpStatus } from "@jobguard/core";
 const { log, workspace } = vi.hoisted(() => { const log = vi.fn(); return { log, workspace: vi.fn<() => Promise<{ siteExtras: { log: (jobId: string, raw: unknown) => Promise<unknown> } }>>(async () => ({ siteExtras: { log } })) }; });
 vi.mock("server-only", () => ({}));
@@ -32,15 +33,17 @@ it("[A17] tampered tenant/member/role in every transport place cannot select con
  const pool = new Pool(), sessionId = crypto.randomUUID();
  const persisted = { tenantId: crypto.randomUUID(), membershipId: crypto.randomUUID(), identityUserId: crypto.randomUUID() } as AuthenticatedMembership;
  const lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(persisted);
+ const context = vi.spyOn(bridge, "contractorSessionContext");
  const marker = new Error("stamp accepted before connection"); vi.spyOn(pool, "connect").mockRejectedValue(marker);
  const repo = vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra").mockImplementation(async (context, actor) => {
-  expect(actor).toBe(persisted); expect(context.tenantId).toBe(persisted.tenantId);
+  expect(actor).toBe(persisted); expect(context.tenantId).toBe(persisted.tenantId); expect(Object.isFrozen(context)).toBe(true);
   await expect(withTenant(pool, context, async () => undefined)).rejects.toBe(marker); return { variationId: crypto.randomUUID() };
  });
  workspace.mockResolvedValueOnce(createWorkspaceApplication({ pool, sessionId }));
  try {
   const response = await post(JSON.stringify(raw()), "https://app.fictional.invalid", { "x-tenant-id": crypto.randomUUID(), "x-membership-id": crypto.randomUUID(), role: "owner", cookie: `jg_session=${sessionId}; tenantId=${crypto.randomUUID()}; membershipId=${crypto.randomUUID()}; role=owner` }, `?tenantId=${crypto.randomUUID()}&membershipId=${crypto.randomUUID()}&role=owner`);
-  expect(response.status).toBe(201); expect(lookup).toHaveBeenCalledExactlyOnceWith(sessionId); expect(repo).toHaveBeenCalledOnce();
+  expect(response.status).toBe(201); expect(lookup).toHaveBeenCalledTimes(2); expect(lookup.mock.calls).toEqual([[sessionId], [sessionId]]); expect(repo).toHaveBeenCalledOnce();
+  expect(context).toHaveBeenCalledExactlyOnceWith(pool, sessionId); expect(repo.mock.calls[0]![0]).toBe(await context.mock.results[0]!.value);
   for (const field of ["tenantId", "membershipId", "role"]) {
    const response = await post(JSON.stringify({ ...raw(), [field]: field === "role" ? "owner" : crypto.randomUUID() })); expect(response.status).toBe(400);
   }

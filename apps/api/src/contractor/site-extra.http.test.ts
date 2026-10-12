@@ -9,6 +9,7 @@ import { Pool } from "pg";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContractorRepository, SiteExtraRepository, WatchdogError, type AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError } from "@jobguard/core";
+import * as bridge from "@jobguard/db";
 import { AppModule } from "../app.module.js";
 import { SiteExtraApplication } from "./site-extra.application.js";
 import { SiteExtraController } from "./site-extra.controller.js";
@@ -19,7 +20,7 @@ const payload = () => ({ version: "log-site-extra.v1", commandId: randomUUID(), 
 const session = () => `jg_session=${randomUUID()}`;
 const member = () => ({ tenantId: randomUUID(), membershipId: randomUUID(), identityUserId: randomUUID() }) as AuthenticatedMembership;
 let app: INestApplication;
-let service: ReturnType<typeof vi.spyOn>, lookup: ReturnType<typeof vi.spyOn>, logged: ReturnType<typeof vi.spyOn>, query: ReturnType<typeof vi.spyOn>, connect: ReturnType<typeof vi.spyOn>;
+let context: ReturnType<typeof vi.spyOn>, service: ReturnType<typeof vi.spyOn>, lookup: ReturnType<typeof vi.spyOn>, logged: ReturnType<typeof vi.spyOn>, query: ReturnType<typeof vi.spyOn>, connect: ReturnType<typeof vi.spyOn>;
 async function start(mode: string | undefined) {
  vi.stubEnv("JOBGUARD_ENV", mode as never); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", allowed); vi.stubEnv("DATABASE_URL", undefined as never);
  // The real identity application the merged guard builds when the request is not a synthetic session; its storage address never receives a statement here.
@@ -27,7 +28,7 @@ async function start(mode: string | undefined) {
  vi.stubEnv("IDENTITY_DATABASE_URL", "postgresql://jobguard_identity@127.0.0.1:1/jobguard_identity"); vi.stubEnv("AUTH_ALLOWED_ORIGIN", allowed); vi.stubEnv(codeVariable, material);
  const database = new Error("a database statement was issued");
  query = vi.spyOn(Pool.prototype, "query").mockRejectedValue(database as never); connect = vi.spyOn(Pool.prototype, "connect").mockRejectedValue(database as never);
- service = vi.spyOn(SiteExtraApplication.prototype, "log"); lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession"); logged = vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra");
+ context = vi.spyOn(bridge, "contractorSessionContext"); service = vi.spyOn(SiteExtraApplication.prototype, "log"); lookup = vi.spyOn(ContractorRepository.prototype, "resolveSession"); logged = vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra");
  const module = await Test.createTestingModule({ imports: [AppModule] }).compile(); app = module.createNestApplication(); await app.init();
 }
 const post = (cookie: string | undefined, origin: string | undefined, body: unknown = payload(), job = randomUUID()) => {
@@ -36,7 +37,7 @@ const post = (cookie: string | undefined, origin: string | undefined, body: unkn
  if (origin !== undefined) call = call.set("origin", origin);
  return call.send(body as object);
 };
-const untouched = () => { for (const spy of [service, lookup, logged, query, connect]) expect(spy).not.toHaveBeenCalled(); };
+const untouched = () => { for (const spy of [service, lookup, context, logged, query, connect]) expect(spy).not.toHaveBeenCalled(); };
 afterEach(async () => { await app?.close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 describe("ENT-3a Nest HTTP pipeline for POST /contractor/jobs/:id/site-extras", () => {
  beforeEach(() => start("synthetic_demo"));
@@ -67,7 +68,8 @@ describe("ENT-3a Nest HTTP pipeline for POST /contractor/jobs/:id/site-extras", 
   const response = await post(cookie, allowed, body, job);
   expect(response.status).toBe(404); expect(response.body).toEqual({ version: "site-extra-error.v1", code: "NOT_FOUND" }); expect(response.headers["cache-control"]).toBe("no-store");
   expect(service).toHaveBeenCalledExactlyOnceWith({ version: "contractor-principal.v1", sessionId }, job, body);
-  expect(lookup).toHaveBeenCalledExactlyOnceWith(sessionId); expect(logged).toHaveBeenCalledOnce(); expect(logged.mock.calls[0]![1]).toBe(m);
+  expect(lookup).toHaveBeenCalledTimes(2); expect(lookup.mock.calls).toEqual([[sessionId], [sessionId]]); expect(context).toHaveBeenCalledExactlyOnceWith(expect.any(Pool), sessionId); expect(logged).toHaveBeenCalledOnce(); expect(logged.mock.calls[0]![1]).toBe(m);
+  expect(logged.mock.calls[0]![0]).toBe(await context.mock.results[0]!.value);
   expect(query).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled();
  });
  it("[A15] (e) a well-formed request whose body breaks the strict schema answers the piece's own INVALID_COMMAND envelope with no-store and reaches no repository write", async () => {
