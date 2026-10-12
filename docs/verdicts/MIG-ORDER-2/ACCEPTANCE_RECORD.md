@@ -5,7 +5,7 @@ Pull request: #137
 Merge commit on main: 11f394b
 Accepted head: cbd8d57
 GitHub run: 38169981466 (on cbd8d57)
-PR comment: not recorded
+PR comment: 6113706357
 Lane: RED (LANE-LOG: "red | amber by path")
 
 Verdict files (first 16 hex of sha256):
