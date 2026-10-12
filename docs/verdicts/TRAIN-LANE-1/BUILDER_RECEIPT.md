@@ -196,3 +196,126 @@ The dispatcher commits the exact working-tree change, refreshes from current mai
 Intended commit message written to `/private/tmp/jg-msg-train-lane-1.txt`.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (12 Oct)
+
+Run by the Mac-side helper (Claude Sonnet 5.5) on Monday 12 October 2026, 21:30 to 21:55 BST, in
+`.worktrees/train-lane-1` on the real Mac (macOS 26.4, Node v24.17.0, git 2.50.1, pnpm 10.28.1). This is a verification record,
+not a review, not a verdict and not an acceptance: **Not independently verified or accepted.** The helper changed no product code:
+only merges from `origin/main` and this receipt. The negative controls below were run on **scratch copies of the lint outside the repository**,
+so no switched-off check ever existed in a tracked file and nothing needs to be restored. Heavy commands ran through
+`~/.local/bin/heavy-slot <label> <script>`, one at a time, `node --test --test-concurrency=2`. Free disk 119 GiB at the start, 112 GiB at the end.
+
+### Heads and merges
+
+| Step | Commit | Note |
+|---|---|---|
+| Builder head | `1e64818` | cut from main 18743cb |
+| Merge 1 | `8ca0f1f` | `origin/main` 96c0cb8 merged; no conflicts (lane registry and ledger merged cleanly) |
+| Merge 2 | `ca1493a` | main moved to ad1bad2 (pull request #139) during the run; merged; no conflicts; lane registry still parses; main's move touched no file under `tools/` or `.github/` |
+
+Results were produced on `8ca0f1f` and again on **`ca1493a`**, the head they are bound to. The pushed head is `ca1493a` plus this receipt commit.
+`tools/agent-lane-boundary-lint.mjs` and `tools/agent-lane-boundary-train.test.mjs` are byte-identical at both heads, so the controls (run once, on the lint as built) apply to both.
+
+### Test runs, exit codes and counts
+
+| Command | Exit | At 8ca0f1f | At ca1493a |
+|---|---|---|---|
+| `node --test --test-concurrency=2 tools/agent-lane-boundary-train.test.mjs` (new file) | 0 | 43 tests, 43 passed, 0 skipped | 43 / 43 / 0 |
+| `node --test --test-concurrency=2 tools/agent-lane-boundary.test.mjs` (existing, zero diff) | 0 | 23 passed, 0 skipped | 23 / 0 |
+| `node --test --test-concurrency=2 tools/*.test.mjs` (all 9 files) | 0 | 85 passed (43 + 23 + 19 in the other files), 0 skipped | 85 passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane `train-lane-1` passed, five changed paths all in its allow list | same, base ad1bad2 |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | core purity, lane boundary, money arithmetic and commercial boundary checks passed; 7 of 7 package lint tasks successful | same |
+| `pnpm typecheck` | 0 | 7 of 7 successful | 7 of 7 successful |
+
+Tests first, repeated: the same 43-test file run against **main's unchanged lint** (`git show origin/main:tools/agent-lane-boundary-lint.mjs`,
+blob `9151301760a44eb8dc7b5d30a254465dc5453a96`, the same blob as on 18743cb) and main's unchanged `ci.yml`, in a scratch folder: **exit 1, 43 tests, 5 passed, 38 stopped passing**.
+The five that already pass are the ones that pin today's messages (TL-D1, D2, D3, D4, D6); every TL-P case is refused with
+`Branch "train/2026-10-12-a" must match exactly one registered lane; found 0. Register the task before building.` This is the builder's recorded 38 / 5, reproduced.
+
+Other required records:
+
+- `git hash-object tools/agent-lane-boundary.test.mjs` prints `83803f113018110c809821e1d6858e5d6432589b` (the file's identity on main; the order's partial-file hash was replaced by this, as Q4 ruled) and `git diff --numstat origin/main -- tools/agent-lane-boundary.test.mjs` prints nothing: zero diff.
+- `JSON.parse` of `config/agent-lane-assignments.json`: parses (version 2). The registry diff is one added line, `train-lane-1`.
+- YAML parse of `.github/workflows/ci.yml` with the installed js-yaml 4.3.2: `on.pull_request.types` is `["opened","synchronize","reopened","ready_for_review"]`, `on.push` is `{"branches":["main"]}`, `permissions` is `{"contents":"read","pull-requests":"read"}`, and the jobs and time limits are unchanged (`checks` 45 minutes, `dependency-review` 10).
+- `git diff origin/main -- .github/workflows/ci.yml` is **exactly one added line**: `+    types: [opened, synchronize, reopened, ready_for_review]`, with no removed line. The workflow adds a trigger and removes none.
+
+### Negative controls (the order's seven), on scratch copies of the lint
+
+For each, one check in a scratch copy of the lint was switched off (T5: the draft test; T2: the whole-name test, leaving only a `train/` prefix test;
+C2: the exactly-two-parents test, leaving "at least one parent"; C3(i): the exact-branch-tip test; C3(ii): the registered-lane test;
+C3(iii): the piece's-own-paths test; C4: the tree-equality test), the whole 43-test file was run, and the copy was thrown away.
+"Accepted" means the test reported *Missing expected exception*, that is, the lint would have **passed** the bad input.
+
+| Check off | Exit | Tests / passed / stopped passing | Named tests that stop passing | What the lint does with the bad input |
+|---|---|---|---|---|
+| T5 draft is `true` | 1 | 43 / 40 / 3 | TL-P5, TL-R5 (both) | **accepted**: a non-draft pull request passes |
+| T2 whole-name pattern | 1 | 43 / 42 / 1 | TL-D1 | **accepted**: names such as `train/x_y` and `train/X` enter the train rule |
+| C2 exactly two parents | 1 | 43 / 36 / 7 | TL-R3 (all 5), TL-R4 three parents, TL-R4 zero parents | three-parent merge **accepted**; one-parent commits stop only because the stand-in test leaves the missing second parent to crash a git call, so the stop is incidental, not a clean refusal |
+| C3(i) exact branch tip | 1 | 43 / 39 / 4 | TL-R4 reversed parents, TL-R6 local only, parent of tip, child of tip | refused by another rule instead (the C6 path net: `paths outside every piece lane`, or C2 for the reversed shape): defence in depth |
+| C3(ii) registered lane | 1 | 43 / 39 / 4 | TL-R6 no lane, sibling registration, integration lane, other train | refused by the C6 path net, `paths outside every piece lane: "tools/b/item.mjs"` |
+| C3(iii) piece's own lane | 1 | 43 / 42 / 1 | TL-R7 | refused by the C6 path net, `paths outside every piece lane: "packages/db/protected.txt"` |
+| C4 tree equals plain merge | 1 | 43 / 37 / 6 | TL-P5, TL-R1 (all 5) | four hand-edited merges **accepted** (extra file inside a lane, altered content, dropped file, `-s ours`); the extra file outside every lane is still refused by the C6 path net |
+
+Every control stops at least one test, as the order requires. The lint as built (no switch) passes all 43. The controls show that the draft rule, the whole-name rule,
+the parent-count rule and above all the tree-equality rule are each the only thing standing between a bad train and a pass, while the three registration rules
+(C3) are backed up by the separate path net (C6). Nothing in the final diff contains any switch.
+
+### Exact refusal texts (from the lint as built, on the fixture's real git history)
+
+Every train refusal begins `Train branch "train/2026-10-12-a" refused: `. Commit ids below are the fixture's own and differ on each run.
+Collected by logging each message the 43 tests assert (30 distinct):
+
+| Case (test) | Exact refusal text |
+|---|---|
+| TL-P5 pass and refusal preserve objects refs index and worktree | `Train branch "train/2026-10-12-a" refused: the event must declare draft as the boolean true.` |
+| TL-P5 pass and refusal preserve objects refs index and worktree | `Train branch "train/2026-10-12-a" refused: commit 61cf84aaf89b2138a1a4d81e4c543ffef9e7ece6 has a hand-edited merge tree; differing paths: "tools/a/staged.mjs"` |
+| TL-R1 extra inside hand-edited merge is refused | `Train branch "train/2026-10-12-a" refused: commit 80e59ef9ad037538c18319a93b72d498edb8bbe0 has a hand-edited merge tree; differing paths: "tools/a/extra.mjs"` |
+| TL-R1 extra outside hand-edited merge is refused | `Train branch "train/2026-10-12-a" refused: commit b5f82c5e9da809be604eee6660ceefb7030b91d2 has a hand-edited merge tree; differing paths: "outside.txt"` |
+| TL-R1 altered hand-edited merge is refused | `Train branch "train/2026-10-12-a" refused: commit 623d346521636e770b640a2e57efecc01537e476 has a hand-edited merge tree; differing paths: "tools/b/item.mjs"` |
+| TL-R1 dropped hand-edited merge is refused | `Train branch "train/2026-10-12-a" refused: commit 7cb7085a8a0ea28bce718adbee6e8ad63c1378e7 has a hand-edited merge tree; differing paths: "tools/b/item.mjs"` |
+| TL-R1 ours hand-edited merge is refused | `Train branch "train/2026-10-12-a" refused: commit c0f520fb6428cc7d8bdf2da7fdc4b66ed6d5063f has a hand-edited merge tree; differing paths: "tools/b/item.mjs"` |
+| TL-R2 same file line resolved conflict is refused | `Train branch "train/2026-10-12-a" refused: commit 3a8c3aaf9c3eb3b4c1d2c9f8432b9b5f00f9342c: plain merge conflicts; the piece leaves the train (CHECK-LANES section 9 step 1).` |
+| TL-R2 adjacent lane lines resolved conflict is refused | `Train branch "train/2026-10-12-a" refused: commit 1dcbd639aa18fa329d240a53f31f18dd80b4864c: plain merge conflicts; the piece leaves the train (CHECK-LANES section 9 step 1).` |
+| TL-R3 ordinary on top one-parent commit is refused | `Train branch "train/2026-10-12-a" refused: commit 83067b02ff2b02ba7cf27c7d6a6297f916a409c3 has 1 parents; exactly two are required.` |
+| TL-R3 empty on top one-parent commit is refused | `Train branch "train/2026-10-12-a" refused: commit 62ffaea34317766672ae1c747f3a6caaa2426ada has 1 parents; exactly two are required.` |
+| TL-R3 between merges one-parent commit is refused | `Train branch "train/2026-10-12-a" refused: commit e90238619ae58c665dfa0c9428d6a9852ee9ba52 has 1 parents; exactly two are required.` |
+| TL-R3 fast-forward one-parent commit is refused | `Train branch "train/2026-10-12-a" refused: commit a80d3466f54f5e09bda4ce333793e0a1a146d171 has 1 parents; exactly two are required.` |
+| TL-R3 merge-style message one-parent commit is refused | `Train branch "train/2026-10-12-a" refused: commit 7b0f5447af11fe15dcd40c81895a99bb353bf558 has 1 parents; exactly two are required.` |
+| TL-R4 three parents merge shape is refused | `Train branch "train/2026-10-12-a" refused: commit 06dccd5ee3072b17e8f88fd3985ed6ee1c2d846b has 3 parents; exactly two are required.` |
+| TL-R4 reversed parents merge shape is refused | `Train branch "train/2026-10-12-a" refused: commit 3143d41acc3c5ec992fe85eef120b3f58e3f5ffa, second parent d8aa008e8916590c87e59eb69ee95f8cfe99410a: no branch tip points exactly at this parent.` |
+| TL-R4 zero parents merge shape is refused | `Train branch "train/2026-10-12-a" refused: commit a0a6d2c8d6fd8ab742901eeb3013ff16d59a7619 has 0 parents; exactly two are required.` |
+| TL-R5 only the draft boolean true is permitted | `Train branch "train/2026-10-12-a" refused: the event must declare draft as the boolean true.` |
+| TL-R5 draft decoys do not replace the event boolean | `Train branch "train/2026-10-12-a" refused: the event must declare draft as the boolean true.` |
+| TL-R6 no lane second parent is refused | `Train branch "train/2026-10-12-a" refused: commit d8aa008e8916590c87e59eb69ee95f8cfe99410a, second parent 6523fde1f5cc0d8be075b6d31c3065509f250425: not registered; unregistered/piece: Branch "unregistered/piece" must match exactly one registered lane; found 0. Register the task before building.` |
+| TL-R6 local only second parent is refused | `Train branch "train/2026-10-12-a" refused: commit d8aa008e8916590c87e59eb69ee95f8cfe99410a, second parent 6523fde1f5cc0d8be075b6d31c3065509f250425: no branch tip points exactly at this parent.` |
+| TL-R6 parent of tip second parent is refused | `Train branch "train/2026-10-12-a" refused: commit d8aa008e8916590c87e59eb69ee95f8cfe99410a, second parent 6523fde1f5cc0d8be075b6d31c3065509f250425: no branch tip points exactly at this parent.` |
+| TL-R6 child of tip second parent is refused | `Train branch "train/2026-10-12-a" refused: commit 9a0e9551db0ab834e25378d48e4cc89e4bacaf00, second parent a575ddfc552ab91b8d0658c3c1a5edf5b64981a8: no branch tip points exactly at this parent.` |
+| TL-R6 sibling registration second parent is refused | `Train branch "train/2026-10-12-a" refused: commit 4bd88981c0f5639b9244120e1309112a27b49e91, second parent 6e98264adfb8edbb28bf7f8dcfd3da21cc02d998: not registered; codex/sandbox/piece-b: Branch "codex/sandbox/piece-b" must match exactly one registered lane; found 0. Register the task before building.` |
+| TL-R6 integration lane second parent is refused | `Train branch "train/2026-10-12-a" refused: commit d8aa008e8916590c87e59eb69ee95f8cfe99410a, second parent 6523fde1f5cc0d8be075b6d31c3065509f250425: not registered; main: Integration lanes cannot be used by a pull request; use a registered task branch.` |
+| TL-R6 other train second parent is refused | `Train branch "train/2026-10-12-a" refused: commit d8aa008e8916590c87e59eb69ee95f8cfe99410a, second parent 6523fde1f5cc0d8be075b6d31c3065509f250425: not registered; train/other: Branch "train/other" must match exactly one registered lane; found 0. Register the task before building.` |
+| TL-R6 two lanes second parent is refused | `Train branch "train/2026-10-12-a" refused: commit 16b6274894ba0f91b78b7916ff3e1637a7d27638, second parent 1d02903106cb4982eb1b3960256bd2a980dbd037: exact branch tips select different lanes: codex/sandbox/piece-b (piece-b), codex/sandbox/second (second).` |
+| TL-R7 piece must pass its own lane | `Train branch "train/2026-10-12-a" refused: commit df3216bb6b65293e9d56fa1f609d9791efcb4a10, second parent 1ebd68b5c4ea9edf006adfba3701b4d75481255a, piece codex/sandbox/piece-b, lane piece-b cannot edit: "packages/db/protected.txt"` |
+| TL-R8 only the main base branch is permitted | `Train branch "train/2026-10-12-a" refused: the base branch must be main.` |
+| TL-R9 only main-side merges are refused | `Train branch "train/2026-10-12-a" refused: at least one registered head must be a second parent.` |
+
+Non-train branches behave as before. From TL-D1 and a direct call of `selectLane`, whole messages unchanged:
+
+- `train-x`, `trains/x`, `train/`, `train`, `Train/x`, `train/X`, `train/x/y`, `train//x`, `train/../main`, `train/..`, `train/.x`, `train/x.lock`, `train/x_y`, `train/x y`, `train/x-`, `train/-x`, `train/x--y`, `codex/train/x`, `xtrain/x`, `refs/heads/train/x`, a 65-character name, and `train/x` followed by a line break each give `Branch "<name>" must match exactly one registered lane; found 0. Register the task before building.`
+- A branch that matches two lanes (checked with `selectLane` directly): `Branch "codex/sandbox/x" must match exactly one registered lane; found 2. Register the task before building.`
+- A train name that a lane lists (TL-D3) is an ordinary lane branch: `Lane named cannot edit:\n"tools/b/item.mjs"` when it touches a path outside its allow list; the train rule is not consulted, draft or not.
+- Local run, `push` event, `AGENT_LANE` or `--lane=` on a train name: the same `found 0` text; event `pull_request_target`: `Unsupported CI event pull_request_target; no permissive fallback.`
+
+### Observations for the checkers
+
+- The refusal text for a one-parent train commit reads "has 1 parents" (grammar only). Not changed.
+- The control table shows C2, C3 and C6 overlap by design; a checker may want to confirm that C6 alone cannot be relied on (it only compares paths).
+- The approval sentence ("verified only that every commit is a clean merge of main or an exact current branch tip that passes its own lane check; it does not verify that any piece is approved") is printed on a train pass and not on an ordinary pass (TL-P6, passed).
+- Main moved twice during the run (96c0cb8, then ad1bad2); both catch-up merges were clean.
+
+### NOT run
+
+GitHub's run on the pushed head and the first real train on the runner's git 2.55; `pnpm build`, `openapi:check`; all of `packages/*` and `apps/*` tests, PostgreSQL and browser suites (no such file is touched);
+a fresh pinned install. The two RED checks (fresh Claude Opus and Codex Sol) and acceptance are outstanding.
+
+Mac verification only. Not independently verified or accepted.
