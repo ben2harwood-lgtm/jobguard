@@ -347,6 +347,9 @@ async function rolledBack<T>(db:Pool,work:(client:PoolClient)=>Promise<T>){
 // The review revision the repository itself will demand next: its own reader of the newest review of a case (the reader behind the expectedReviewRevision check),
 // so the proof never pins a revision number that a later migration may legitimately move.
 const currentReviewRevision=async(db:Queryable,caseId:string)=>(await readRecoveryEligibilityV3({$client:db} as unknown as TenantTransaction,T,caseId))?.revision??0;
+// The case revision the repository demands as expectedCaseRevision: the same projection (app.recovery_case_current) and filters its own query reads, so a case revision
+// appended after the case was opened (an amendment, an event) is followed rather than assumed to be still the number returned by "open".
+const currentCaseRevision=async(db:Queryable,jobId:string,caseId:string)=>Number((await db.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND claim_revision IS NOT NULL",[T,jobId,caseId])).rows[0]?.revision);
 async function routineSource(db:Queryable,routine:string){
  const row=(await db.query("SELECT pg_get_functiondef(p.oid) AS definition,p.prosrc AS body FROM pg_proc p WHERE p.oid=$1::regprocedure",[routine])).rows[0]!;
  return {definition:row.definition as string,body:row.body as string};
@@ -476,10 +479,21 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
    return {revision:await currentReviewRevision(client,c.id),differences:await proofDifferences(client,proof)};
   });
   expect(later.differences).toEqual({rows:[],types:[]});expect(later.revision).toBe(saved+1);
+  // (h) a case revision added after 0123 (a rolled-back claim revision one higher, the shape of an amendment) must leave it passing, and moves the case revision the next
+  // review has to be appended against.
+  const openedAt=await currentCaseRevision(upgradeAdmin,jobId,c.id);expect(openedAt).toBeGreaterThanOrEqual(c.revision);
+  const amended=await rolledBack(upgradeAdmin,async client=>{
+   await client.query("SET LOCAL session_replication_role=replica");
+   expect((await client.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash,previous_hash)SELECT $1::uuid,tenant_id,job_id,case_id,revision+1,claimed_net_pence,currency,reviewer_ref,encode(sha256(convert_to($2::text,'UTF8')),'hex'),subject_hash FROM app.recovery_claim_revision WHERE tenant_id=$3 AND case_id=$4 ORDER BY revision DESC LIMIT 1",[randomUUID(),randomUUID(),T,c.id])).rowCount).toBe(1);
+   return {revision:await currentCaseRevision(client,jobId,c.id),differences:await proofDifferences(client,proof)};
+  });
+  expect(amended.differences).toEqual({rows:[],types:[]});expect(amended.revision).toBe(openedAt+1);
   const repo=new RecoveryEligibilityV3Repository(practiceMaterialPool(upgradeRuntime,auth.digest),"synthetic_demo");
-  // The corrected review is appended against the revision the database holds now (any review a later migration appended is allowed), and any number of reviews may exist.
+  // The corrected review is appended against the case revision (read by the case repository's own reader) and the review revision the database holds now, so a case or
+  // review a later migration appended is allowed, and any number of reviews may exist.
+  const caseNow=(await cases.listForMember(ctx,jobId,actor)).find(x=>x.id===c.id);expect(caseNow?.revision).toBe(await currentCaseRevision(upgradeAdmin,jobId,c.id));
   const current=await currentReviewRevision(upgradeAdmin,c.id);expect(current).toBeGreaterThanOrEqual(saved);
-  const corrected=await repo.review(ctx,jobId,review(c,"F17",current),actor,auth.digest);
+  const corrected=await repo.review(ctx,jobId,review({id:c.id,revision:caseNow!.revision},"F17",current),actor,auth.digest);
   expect(corrected.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"});
   expect(corrected.revision).toBe(current+1);
   expect(await proofDifferences(upgradeAdmin,proof)).toEqual({rows:[],types:[]});
