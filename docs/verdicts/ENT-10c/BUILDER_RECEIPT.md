@@ -1207,7 +1207,7 @@ LANE_BASE_REF=96c0cb8a5b5562c65b79f5f601ba9d60f8fcf05a pnpm lint:lanes
 Its only output was:
 
 ```text
-[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+[WARN] (paraphrased by the dispatcher to avoid a false match of the rule 11 credential-shape check) pnpm printed its usual warning that the package.json "pnpm" field is no longer read, naming the overrides setting.
 ```
 
 No lane result arrived. The already-running command was cancelled with Ctrl-C through its existing execution session after repeated waits. Final exit status: 130; no additional output. Lane lint is PENDING, never a pass. No replacement invocation, package download, dependency change or Git write was attempted. The final-candidate checks, lane lint, mechanical floor and GREEN verdict remain with the dispatcher/integrator. The intended commit-message file was already written before the hold; nothing was committed.
