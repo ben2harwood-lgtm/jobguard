@@ -37,6 +37,8 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input);const check=await appendCheck(f,a,'completed');
   const input=invoiceInput(a),first=await repo.issueInvoice(a.context,input);expect(await repo.issueInvoice(a.context,input)).toEqual(first);
   const main=(await f.admin.query("SELECT * FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];expect([Number(main.net_pence),Number(main.tax_pence),Number(main.total_pence)]).toEqual([3360000,672000,4032000]);
+  const parties=(await asFixtureTenant(f.admin,a.tenantId,db=>db.query("SELECT app.require_current_job_parties($1,$2) snapshot",[a.tenantId,a.jobId]))).rows[0].snapshot;
+  expect({issuer_details:main.issuer_details,parties_snapshot:main.parties_snapshot},"F7 builder issuer and trigger-populated party snapshot").toEqual({issuer_details:{legalName:'Fictional Builder Ltd',runIdentity:a.tenantId},parties_snapshot:parties});
   const revision=randomUUID(),scope=randomUUID(),line=randomUUID(),source=randomUUID(),commercial=randomUUID(),hash='b'.repeat(64);
   await asFixtureTenant(f.admin,a.tenantId,async db=>{
    await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,a.tenantId,a.jobId]);

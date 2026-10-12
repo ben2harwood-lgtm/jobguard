@@ -232,3 +232,73 @@ The wrapper config is out of repo: `~/.local/share/full-steam/jg-runs/pw-local-c
 - `ENT-2.spec.ts` (known failing on plain main on this Mac; not this piece's file).
 
 Mac verification record only; the builder receipt above is still "not independently verified, not accepted".
+
+## Round 2 repair
+
+12 October 2026. Builder: Codex GPT-6.1 Sol. Reviewed head: `1965aea297db7995d29a831cf3dc7d0c9db41583`; actual clean starting head: `d620264da0461decb2b9c516ebb3947b1976e10e`, branch `codex/sandbox/sv-4`. The intervening commit contains only the coordinator's B1 one-line replacement in `shadow-persistence.integration.test.ts`. This round does not edit that file, any SV-2 file, or the lane policy. The F7 test does not depend on the obsolete table-absence assertion. No git write command, package download, commit, push or acceptance was performed; dispatcher owns the commit, using `/private/tmp/jg-msg-sv-4.txt`.
+
+### B2 fix and test-first sequence
+
+First appended one assertion to the existing test **F7 main £40,320 and supplementary £960 bind exact source lines, replay once and never rebill the baseline**, named **F7 builder issuer and trigger-populated party snapshot**. It compares both invoice fields with `toEqual`: `issuer_details` must contain exactly `{legalName:'Fictional Builder Ltd',runIdentity:a.tenantId}`, and `parties_snapshot` must equal the current job-party snapshot returned by the same `app.require_current_job_parties` routine used by the merged insert trigger. All existing assertions remain byte-identical. The test and SQL were inspected before changing SQL; the old issuer value is the customer/site/paying-party object and cannot equal that builder object. This is a source-inspected expected failure, not an executed red test: PostgreSQL is unavailable here.
+
+Then changed exactly one value in the unmerged `0130_final_account_lock.sql` customer-invoice INSERT:
+
+- Before: `party_snapshot`.
+- After: `jsonb_build_object('legalName','Fictional Builder Ltd','runIdentity',p_tenant)`.
+
+Copied the expression exactly from `app.issue_practice_customer_invoice` in `origin/main:packages/db/migrations/0095_job_parties.sql`. Added no column and supplied no `parties_snapshot` insert value; the existing `invoice_party_snapshot` trigger still populates it. No existing invoices are rewritten. The upgrade proof reads migration text to execute it, but does not hash or snapshot that text, so it remains untouched under rule 9. No other SQL value, DDL, grant, policy, arithmetic, UI, SV-3 behavior or LATER item changed. The repair affects the accuracy of immutable invoice/evidence-pack records; authorization, totals, lock/check guards and the older invoice routine remain unchanged. No new operational alert or external action.
+
+### Round 2 commands and results
+
+All commands run from `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-4`. As in the first receipt, use the existing cached-pnpm shim: common prefix **`PATH=/private/tmp/jg-sv4-bin:$PATH COREPACK_ENABLE_NETWORK=0`**. It invokes the installed pnpm 10.28.1 without network access. The initial system `pnpm typecheck` stalled in the pnpm 11 wrapper before Turbo started; interrupted with Ctrl-C, exit **130**, zero tasks/tests executed. The prefixed version probe then returned **10.28.1**, exit **0**. This is not a clean-install claim.
+
+| Command (after common prefix for pnpm) | Exit | Result/count |
+|---|---:|---|
+| `pnpm typecheck` | 0 | 7/7 Turbo tasks successful, 4 cached; 1m59.655s |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1 | Core purity passed (131 TypeScript files); lane check refused the coordinator's already-committed `packages/db/test/shadow-persistence.integration.test.ts`; package lint not reached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1 | Same single coordinator-owned path refused; no lane policy edit or waiver |
+| `node tools/money-arithmetic-lint.mjs` | 0 | Money arithmetic boundary passed |
+| `node tools/commercial-boundary-lint.mjs` | 0 | Commercial boundary passed (no diagnostics) |
+| `pnpm turbo run lint` | 0 | 7/7 package tasks successful, 4 cached; 9m8.225s; package checks not reached by the top-level lint failure |
+| `node --input-type=module` (TypeScript compiler here-doc below) | 0 | 1 changed entry file, 0 diagnostics; no test/database execution |
+| `pnpm build` | 0 | 7/7 Turbo tasks successful, 4 cached; 5m29.731s; Next generated 27/27 static pages |
+| `pnpm openapi:check` | 1 | tsx CLI failed on forbidden IPC socket (`listen EPERM`) before checker execution; not a stale-schema result |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Same existing OpenAPI checker via Node loader; committed document matched, no source/script changed |
+
+Static test-file compilation used the existing root compiler options (package typecheck includes `src` only):
+
+```js
+import ts from 'typescript';
+const files=['packages/db/test/final-account-lock-invoice.integration.test.ts'];
+const config=ts.readConfigFile('tsconfig.json',ts.sys.readFile);
+const options=ts.parseJsonConfigFileContent(config.config,ts.sys,'.').options;
+const diagnostics=ts.getPreEmitDiagnostics(ts.createProgram(files,{...options,noEmit:true}));
+if(diagnostics.length)process.stdout.write(ts.formatDiagnosticsWithColorAndContext(diagnostics,{getCurrentDirectory:ts.sys.getCurrentDirectory,getCanonicalFileName:f=>f,getNewLine:()=> '\n'}));
+process.stdout.write(`${files.length} entry file; ${diagnostics.length} diagnostics; no database or test execution.\n`);
+process.exitCode=diagnostics.length?1:0;
+```
+
+One-off `python3 - <<'PY'` source-preservation audit, exit **0**, **8 grouped checks passed**, zero tests/SQL executed: the entire migration equals HEAD with exactly the one replacement; the expression is present verbatim on origin/main; the merged trigger exists; the new INSERT omits `parties_snapshot`; the test equals HEAD with only the two appended lines (one query, one assertion); the receipt keeps its existing prefix; the working diff has exactly the three repair paths. No permanent test pins any unowned source.
+
+| Repair source | HEAD SHA-256 | Working SHA-256 |
+|---|---|---|
+| `0130_final_account_lock.sql` | `31afda6d5d32c4afc92fa2c77b47fe7ac0b5abf3ae2bb845124d3d10571dfe8b` | `543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7` |
+| `final-account-lock-invoice.integration.test.ts` | `15076e980b6cfffa35b8251b2815f3b5a0d53844fbc073a83bdf6a36b29346b0` | `f882f61ae1ee2742d0563133cb67cfd9a79c9dccf667872afc03579000c65730` |
+
+Build/check warnings: shared Turbo cache writes outside the sandbox were denied; existing Next workspace-root/multiple-lockfile and `practice-receipts.module.css` autoprefixer/webpack-cache warnings. No affected source was changed. Read-only `memory_pressure`: exit **0**, 66% free during package lint. Read-only process inspection was unavailable (`ps`: operation not permitted); it provides no check evidence.
+
+Generated-output cleanup (`python3` here-doc): exit **0**, **17** output/cache paths removed after all checks. It enumerated only root/app/package `dist`, `.next`, `.turbo`, `test-results`, `playwright-report`, `.pnpm-store` and `*.tsbuildinfo`; asserted no tracked files and ignored-output status before removal. Installed `node_modules` was retained. `git status --short`, `git diff --stat`, `git diff --check`, `git rev-parse HEAD`: exit **0**, exactly three repair paths, no whitespace diagnostics, HEAD still `d620264`. Implementation/test diff is **3 insertions / 1 deletion**; receipt changes are appended only. Intended conventional commit subject/body written to `/private/tmp/jg-msg-sv-4.txt`; no git write.
+
+Dispatcher follow-up: the coordinator's B1 commit is already at HEAD, but the unchanged SV-4 lane checker rejects its SV-2 path when comparing to `origin/main`. Resolve that coordinator-owned lane evidence separately; this builder does not widen the lane. Run the real PostgreSQL F7 assertion against the old value to establish executed red evidence, then against this repaired SQL, plus the required database/migration/browser suites on the repaired commit. The sandbox provides neither red nor green database execution. Full green GitHub checks and fresh independent review/separate acceptance remain required.
+
+### Round 2 NOT RUN
+
+`packages/db/test/final-account-lock-invoice.integration.test.ts` (including the new F7 assertion), lock/reveal/upgrade integration files, API database isolation, all other database suites (`pnpm test:db`, `pnpm test:migrations`) and all browser suites: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. No database/browser command was attempted and no skip, timeout, retry wrapper or weakened assertion was introduced. Whole-repository tests and unchanged pure/unit test files are not run under the binding rule allowing only test files changed in this round (at most three per run, Vitest `--maxWorkers=2`, one run at a time). The only changed test file requires PostgreSQL; consequently no eligible unit test executes in this round. `pnpm eval` is inapplicable: no AI change.
+
+### Round 2 Self-review
+
+Source-inspected the complete round-2 diff against starting HEAD, the issued/continuation orders, Opus BLOCKING section, applicable plan lock/invoice contracts and merged routine/trigger. Confirmed the only SQL change is the exact builder object; no `parties_snapshot` column/value is supplied by the new routine. The paired `toEqual` assertion checks the full builder shape and the trigger's existing party snapshot in a distinct field, after the real lock-bound issue command. It would fail on the old SQL by source inspection; actual PostgreSQL execution is still owed. All prior F7 money, replay and supplementary-line assertions remain byte-identical; no old test name, assertion, skip or timeout changed.
+
+Checked the upgrade proof does not pin the changed SQL text. No schema, grant, RLS, tenant boundary, lock order, hash, fee, prompt, UI or production-policy change is needed for this value repair. Exact whole-file replacement/insertion checks and the three-path working diff confirm SV-2, SV-3, auth pins, shared registrations, the merged invoice routine and all LATER findings are untouched in this round. The coordinator's B1 commit remains separately owned. The test has no reliance on absence of the lock table.
+
+Final verification and cleanup completed as recorded above. Rechecked exact source hashes, the entire three-file working diff, byte-identical existing test lines and unchanged starting HEAD; no additional repair found. Typecheck, package lint, static test compilation, build and the same OpenAPI checker passed; branch lint/lane checks remain red on the coordinator-owned B1 file. No SQL, database concurrency/RLS/trigger, browser or live-provider execution is claimed. Builder self-review only — not an independent model verdict. Builder receipt only — not independently verified, not accepted. Green GitHub checks including database/browser evidence and fresh independent verdict/separate acceptance remain owed; D12, D13, G1 and the older unguarded path owed to SV-5 remain held. B1's presence at the starting head is not a claim that it passed.
