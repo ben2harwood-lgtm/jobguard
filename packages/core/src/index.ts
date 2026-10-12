@@ -54,3 +54,4 @@ export * from "./activation-v3.js";
 
 export * from "./recovery-eligibility-v3.js";
 export * from "./extra-persistence.js";
+export * from "./final-account-lock.js";

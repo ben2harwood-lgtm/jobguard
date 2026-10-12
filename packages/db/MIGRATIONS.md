@@ -825,3 +825,5 @@ Before acceptance CI must execute real PostgreSQL fresh/upgrade, least-privilege
 catalog, support disclosure, rollback, immutable metadata, source-FK/probe and
 non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
 and browser regressions. Local sandbox initialization errors are not DB passes.
+
+- `0130_final_account_lock.sql` — SV-4 immutable lock, dispositions, synthetic terms, append-only check facts and invoice/line side bindings; only new lock-bound issue is guarded. No fingerprinted-table columns or existing grants change. Forward-fix by additive migration; do not delete locks or issued invoices.
