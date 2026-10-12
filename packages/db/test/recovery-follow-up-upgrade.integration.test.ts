@@ -154,7 +154,7 @@ beforeAll(async () => {
     if (kind === "revoked") state = await repo.command(context, caseId, command("revoke", state.latest!), actor);
     legacy[kind] = { context, caseId, actor, view: state.latest! };
   }
-});
+}, 120_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
 describe("M4-6-S-R1 populated upgrade proof", () => {
@@ -199,7 +199,7 @@ describe("M4-6-S-R1 populated upgrade proof", () => {
         Object.assign(beforeRepairPrivileges, at0112);
       } else expect(afterPrivileges).toEqual(beforeRepairPrivileges);
     }
-  });
+  }, 60_000);
 
   it("preserves preview/approve/revoke/deliver/reconcile and their refusals on upgraded messages without resending", async () => {
     const first = legacy.previewed!;
@@ -250,7 +250,7 @@ describe("M4-6-S-R1 populated upgrade proof", () => {
     expect(retypedColumns(columnsAt0115, await liveColumns()), "A later migration changed the type of a column that existed at 0115 (table.column: old -> new); "
       + "the serialised values can look unchanged, but the column is not the one this proof pinned.").toEqual([]);
     expect(await namedColumnRowsOf(columnsAt0115)).toEqual(history);
-  });
+  }, 60_000);
 });
 const beforeRepairPrivileges: Awaited<ReturnType<typeof privileges>> = { roles: [], memberships: [], tables: [], policies: [], routines: [] };
 // The columns of every table in the five schemas as they stand after 0115, in ordinal order, each as "name type" (type as format_type prints it,

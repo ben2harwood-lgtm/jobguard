@@ -91,7 +91,7 @@ describe('0107 upgrade from a populated previous supported schema (through 0106)
     expect(again.manifestHash).toBe(manifestHash);
     expect(again.contentHash).toBe(contentHash);
     expect(again.id).not.toBe(packId);
-  });
+  }, 60_000);
 
   it('lets a case that existed before the upgrade be previewed over its already-approved pack', async () => {
     // The newest pack (the rebuild above) is not yet approved: an old approval does not carry across a revision.

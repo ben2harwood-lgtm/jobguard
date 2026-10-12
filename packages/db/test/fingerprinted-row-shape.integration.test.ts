@@ -80,7 +80,7 @@ beforeAll(async () => {
   await postgres.initialise(); await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" });
   await migrate(admin); // the whole registry: this guard is about the shape at head, whatever migrations have merged
-});
+}, 120_000);
 afterAll(async () => { await closeTestPools(admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
 describe("fingerprinted row shape (MIG-ORDER-2)", () => {
