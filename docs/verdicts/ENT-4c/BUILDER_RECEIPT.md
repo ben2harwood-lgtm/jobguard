@@ -373,3 +373,29 @@ One-time byte comparisons against repair HEAD passed for coordinator-only `origi
 Final repair diff: two files only, this receipt and `packages/db/test/extra-unlink.integration.test.ts`; the test diff is one insertion and one deletion on the same line. Working HEAD remains `f03144ca074c1ea1d98a9f28e6bbf38445c75870`. Self-review passed for the permitted test setup repair; database execution and independent acceptance are still pending.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (12 Oct)
+
+Recorded by the Mac-side helper (Claude Sonnet 5.5), not a review and not a verdict. Tested head: `679fe9c8978b911216fc19df714fc199c16b3ca6`, which is Codex's repair commit `51cc398` plus a plain merge of `origin/main` at `ad1bad244e1712f3af4cbd4c30e784184da33d14` (no conflicts; the diff against `origin/main` is only this piece's files, and no migration appears). This receipt section is the only change after that head. Environment: Mac, Node v24.17.0, pnpm 10.28.1, embedded PostgreSQL 16 (library symlinks already re-hydrated earlier in the day). Every heavy step ran through `~/.local/bin/heavy-slot`, one at a time, with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`, vitest `--maxWorkers=2` (database files `--maxWorkers=1`), at most three test files per run. The five packages `core`, `db`, `storage`, `config`, `ai` were each rebuilt alone first (all exit 0).
+
+| Step | Exit | Count |
+|---|---|---|
+| db REAL PostgreSQL: `test/extra-unlink.integration.test.ts` | 0 | 18 of 18 passed (D1 to D18) |
+| db: `extra-links` + `extra-origin` + `job-scheduling` integration (merged, unedited) | 0 | 56 of 56 (3 files) |
+| db: `extra-origin-upgrade` + `contractor-session-context` integration | 0 | 4 of 4 (2 files) |
+| db: `command-replay-contract.integration.test.ts` (new this evening) | 0 | 53 of 53 |
+| core: `extra-unlink.test.ts` + `enterprise-domain/duplicate-unlink-roles.test.ts` + `enterprise-domain/origin.test.ts` | 0 | 211 of 211 (3 files; `origin.test.ts` is 175 of these) |
+| core: `enterprise-domain/transitions.test.ts` + `fee.test.ts` | 0 | 160 of 160 (2 files) |
+| `pnpm typecheck` | 0 | 7 of 7 tasks (2 replayed from the build cache, 5 executed) |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | core purity (133 files), lane boundary (lane `ent-4c`), money arithmetic, turbo lint 7 of 7 |
+| apps/api `src/auth/context-boundary.test.ts` (scanner) | 0 | 145 of 145 |
+| apps/api `src/watchdog-registry.test.ts` (new this evening; this piece adds no registry row) | 0 | 121 of 121 |
+| apps/api `pnpm openapi:check` | 0 | snapshot unchanged |
+
+**D7 now runs its real assertions and passes.** Quoted from the verbose rerun of the same file on the same head (exit 0, 18 of 18): `✓ test/extra-unlink.integration.test.ts > ENT-4c un-link command > [D7] a refused caller gets one answer, whatever they name 605ms`. The first Mac run (on `f03144c`, before Codex's repair `51cc398`) stopped D7 in the builder's helper `madeUpJobs` with `duplicate key value violates unique constraint "job_commercial_track_pkey"`, a set-up error: migration 0053's `job_legacy_live_track` trigger already writes a track row for a live non-imported job, so the helper's own second insert for the contractor job collided. Codex's repair gives the contractor fixture the draft status (the same pattern as the merged `extra-origin-upgrade.integration.test.ts`). The first run's other 17 cases passed then and pass now. The helper edited no test or product code; the repair is Codex's commit `51cc398`.
+
+Logs: `~/.local/share/full-steam/jg-runs/ent-4c-mac/r4/` (`progress.txt`, one `.log` and `.exit` per step, `db-unlink-verbose.log`) and the earlier run (D7 red) in the parent folder.
+
+NOT run: `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, the full db and api suites, browser tests, `pnpm build` (only the five package builds), `lint:lanes` on its own (`pnpm lint` includes the lane check), the db test-file `tsc` check on its own. GitHub's run on the pushed head covers the rest.
+
+Not independently verified or accepted. RED lane: a fresh Claude Opus review and a Codex Sol review must both pass before this merges.
