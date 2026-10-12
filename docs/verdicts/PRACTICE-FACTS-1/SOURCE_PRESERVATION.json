@@ -1,0 +1,169 @@
+{
+  "version": "practice-facts-source-preservation.v1",
+  "claim": "Deterministic source inspection only; no database/browser execution or independent verdict",
+  "base": "4a70824d1fa9cab84699436ea4217a1da0ad487e",
+  "remote_ref_at_final_inspection": "bbca5ca5ee55a6a4d7fcdf89de426195d28c3e27",
+  "protected_file_count": 21,
+  "protected_files": [
+    {
+      "path": "packages/core/src/practice-feed.ts",
+      "base_sha256": "6b29f4312efe9d96ebc83a72a1766d04ee93926c1bff89e7d08e6056a026c8f3",
+      "working_tree_sha256": "6b29f4312efe9d96ebc83a72a1766d04ee93926c1bff89e7d08e6056a026c8f3",
+      "byte_identical": true
+    },
+    {
+      "path": "packages/core/src/practice-feed.test.ts",
+      "base_sha256": "101140a849b3f3b9d74910c883f454dece336bf2721edfc8f698cdddda078a11",
+      "working_tree_sha256": "101140a849b3f3b9d74910c883f454dece336bf2721edfc8f698cdddda078a11",
+      "byte_identical": true
+    },
+    {
+      "path": "packages/db/migrations/0106_practice_feed.sql",
+      "base_sha256": "47c469b941a0f8f2f342222ae967e42b8f363cd34f5a99383273c145bf9d44b7",
+      "working_tree_sha256": "47c469b941a0f8f2f342222ae967e42b8f363cd34f5a99383273c145bf9d44b7",
+      "byte_identical": true
+    },
+    {
+      "path": "packages/db/test/practice-feed.integration.test.ts",
+      "base_sha256": "e0ff0b5d9cfaeaf24401136e683fa3e06125cd31bd43a52d85017a3b39304a2e",
+      "working_tree_sha256": "e0ff0b5d9cfaeaf24401136e683fa3e06125cd31bd43a52d85017a3b39304a2e",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/web/app/ui/practice-receipts.tsx",
+      "base_sha256": "52fcc3279e0c6413fba81039f939acf99f5490155cdb8a146aecfb87c4f919d9",
+      "working_tree_sha256": "52fcc3279e0c6413fba81039f939acf99f5490155cdb8a146aecfb87c4f919d9",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/web/e2e/M4-7-S.spec.ts",
+      "base_sha256": "52974cbd9aa792c5465ea4b91067a0ac1ce04a7fdba09e82b0705f2492e76c90",
+      "working_tree_sha256": "52974cbd9aa792c5465ea4b91067a0ac1ce04a7fdba09e82b0705f2492e76c90",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/web/e2e/CH-7.spec.ts",
+      "base_sha256": "c8b77db254c3dec4d13c663e31f7117593ce6c634516750bb615341bf809facf",
+      "working_tree_sha256": "c8b77db254c3dec4d13c663e31f7117593ce6c634516750bb615341bf809facf",
+      "byte_identical": true
+    },
+    {
+      "path": "packages/db/migrations/0119_recovery_eligibility_v3.sql",
+      "base_sha256": "15e217b0bf7926315859d92ebc708b86b3831942c82ff7627474d2b37b0028d7",
+      "working_tree_sha256": "15e217b0bf7926315859d92ebc708b86b3831942c82ff7627474d2b37b0028d7",
+      "byte_identical": true
+    },
+    {
+      "path": "packages/core/src/recovery-eligibility-v3.ts",
+      "base_sha256": "f6871a32bf0ab6c8069d03c804a5bee18808e07cae7bc425f1313c6f9a1ea8c8",
+      "working_tree_sha256": "f6871a32bf0ab6c8069d03c804a5bee18808e07cae7bc425f1313c6f9a1ea8c8",
+      "byte_identical": true
+    },
+    {
+      "path": "packages/core/src/recovery-eligibility-v3.test.ts",
+      "base_sha256": "63a2aa9d78b8a32b1d3f6d01f728187ccc2d5bcb1ac4ef574de0e5b81906fd21",
+      "working_tree_sha256": "63a2aa9d78b8a32b1d3f6d01f728187ccc2d5bcb1ac4ef574de0e5b81906fd21",
+      "byte_identical": true
+    },
+    {
+      "path": "packages/db/src/recovery-eligibility-v3-repository.ts",
+      "base_sha256": "8a931c6017e316329dd15c01d4aba5230860dd94161f448361b978e98ea717ff",
+      "working_tree_sha256": "8a931c6017e316329dd15c01d4aba5230860dd94161f448361b978e98ea717ff",
+      "byte_identical": true
+    },
+    {
+      "path": "packages/db/test/recovery-eligibility-v3.integration.test.ts",
+      "base_sha256": "a79a13353c236da9155f92ba33c33527ec680fa2944d818ca7446e51f80ae7a1",
+      "working_tree_sha256": "a79a13353c236da9155f92ba33c33527ec680fa2944d818ca7446e51f80ae7a1",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/api/src/recovery-eligibility-v3.application.test.ts",
+      "base_sha256": "4864ac3aa5e670abb53e95f0de02c0f130f632b553cb5f870fc7d831ac88104d",
+      "working_tree_sha256": "4864ac3aa5e670abb53e95f0de02c0f130f632b553cb5f870fc7d831ac88104d",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/web/app/ui/recovery-cases.tsx",
+      "base_sha256": "21a71130f57a57c70956311dc8172adc98fdbb362bb2d8231d37575847cfee17",
+      "working_tree_sha256": "21a71130f57a57c70956311dc8172adc98fdbb362bb2d8231d37575847cfee17",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/api/src/auth/context-boundary.test.ts",
+      "base_sha256": "7f1914846f763c3534ffafc79701fc6f768e8e1546be2fe98e27bc32a99e0e8d",
+      "working_tree_sha256": "7f1914846f763c3534ffafc79701fc6f768e8e1546be2fe98e27bc32a99e0e8d",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/api/src/practice-feed.application.test.ts",
+      "base_sha256": "c1df482476c57799f4f1494af27971c6ee8f8e9e10e7b7834824a8f63117dadf",
+      "working_tree_sha256": "c1df482476c57799f4f1494af27971c6ee8f8e9e10e7b7834824a8f63117dadf",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/api/src/practice-feed.application.ts",
+      "base_sha256": "1acdf191e7ee1a393c3d50a86808c01b86ba3bbe20d047330e5d202f7cf0b6fb",
+      "working_tree_sha256": "1acdf191e7ee1a393c3d50a86808c01b86ba3bbe20d047330e5d202f7cf0b6fb",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/api/src/practice-feed.controller.ts",
+      "base_sha256": "3179c902a8fbbff3c783452f02e16630a2afd60f409fbaf5c1617efb0859e257",
+      "working_tree_sha256": "3179c902a8fbbff3c783452f02e16630a2afd60f409fbaf5c1617efb0859e257",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/api/src/practice-feed.http.ts",
+      "base_sha256": "95405e209c4d814d2ee7a2357d8d92c65274422f6757751f7ec14e20f3f9d88d",
+      "working_tree_sha256": "95405e209c4d814d2ee7a2357d8d92c65274422f6757751f7ec14e20f3f9d88d",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/api/src/practice-feed.contracts.ts",
+      "base_sha256": "dd7b470d6dedb185cd0eab33b29309b20e1c75f87644573b5a72bba6bbbc6869",
+      "working_tree_sha256": "dd7b470d6dedb185cd0eab33b29309b20e1c75f87644573b5a72bba6bbbc6869",
+      "byte_identical": true
+    },
+    {
+      "path": "apps/api/src/practice-feed.controller.test.ts",
+      "base_sha256": "0d9fae4692a08b3d42102d7ceeddeef73f955dd4f062ce70a8ca4eb361b60bfa",
+      "working_tree_sha256": "0d9fae4692a08b3d42102d7ceeddeef73f955dd4f062ce70a8ca4eb361b60bfa",
+      "byte_identical": true
+    }
+  ],
+  "auth_source_pins_checked": 7,
+  "existing_openapi_paths_preserved": 83,
+  "new_openapi_paths": [
+    "/jobs/{id}/practice-facts"
+  ],
+  "changed_files": [
+    "apps/api/openapi.json",
+    "apps/api/src/app.module.ts",
+    "apps/api/src/practice-facts.application.test.ts",
+    "apps/api/src/practice-facts.application.ts",
+    "apps/api/src/practice-facts.contracts.ts",
+    "apps/api/src/practice-facts.controller.test.ts",
+    "apps/api/src/practice-facts.controller.ts",
+    "apps/api/src/practice-facts.http.ts",
+    "apps/api/src/workspace/application.ts",
+    "apps/api/src/workspace/index.ts",
+    "apps/web/app/api/jobs/[id]/practice-facts/route.ts",
+    "apps/web/app/ui/practice-facts.tsx",
+    "apps/web/app/ui/workspace-shell.tsx",
+    "apps/web/e2e/PRACTICE-FACTS-1.spec.ts",
+    "config/agent-lane-assignments.json",
+    "docs/contracts/practice-facts-v1.md",
+    "docs/verdicts/PRACTICE-FACTS-1/BUILDER_RECEIPT.md",
+    "docs/verdicts/PRACTICE-FACTS-1/SOURCE_PRESERVATION.json",
+    "packages/core/src/index.ts",
+    "packages/core/src/practice-facts.test.ts",
+    "packages/core/src/practice-facts.ts",
+    "packages/core/src/watchdog.ts",
+    "packages/db/MIGRATIONS.md",
+    "packages/db/migrations/0124_practice_feed_facts.sql",
+    "packages/db/src/migrate.ts",
+    "packages/db/src/practice-feed-repository.ts",
+    "packages/db/test/practice-facts.integration.test.ts"
+  ]
+}
