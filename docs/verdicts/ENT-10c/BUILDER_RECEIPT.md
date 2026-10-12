@@ -1213,3 +1213,57 @@ Its only output was:
 No lane result arrived. The already-running command was cancelled with Ctrl-C through its existing execution session after repeated waits. Final exit status: 130; no additional output. Lane lint is PENDING, never a pass. No replacement invocation, package download, dependency change or Git write was attempted. The final-candidate checks, lane lint, mechanical floor and GREEN verdict remain with the dispatcher/integrator. The intended commit-message file was already written before the hold; nothing was committed.
 
 No acceptance or completion of the task is claimed while the required lane check is pending. The final receipt digest must be computed externally by the dispatcher; embedding the receipt’s own final digest is impossible. No independent model verdict is claimed for this GREEN piece.
+
+## Mac verification (12 Oct)
+
+Run on the Mac by the Mac-side helper (a Claude Sonnet 5.5 session acting for the dispatcher) on 12 October 2026, in the existing ent-10c worktree. These are mechanical checks only: no document content above was edited, and this section is a record, not a review, verdict or acceptance. No independent model verdict is claimed for this GREEN piece.
+
+Free disk before the checks: 111 GiB (the Mac's main volume, 10 percent used).
+
+### Merge
+
+The sandbox commit was 79a45ced372f690d5f7a8f68a188b3bcb296ba3e (parent: the 96c0cb8 merge of PR 138). Working tree was clean. After `git fetch origin`, origin/main was ad1bad2 (PR 139, PRACTICE-FACTS-1). Plain merge commit "Merge main (ad1bad2) into ENT-10c" created head 1faf37aebb4e9a510c4ddaa7e34dcdda981a5ec8. No conflicts, so nothing needed resolving. The configuration file still parses as JSON.
+
+Head tested by every check below: 1faf37aebb4e9a510c4ddaa7e34dcdda981a5ec8. The six pack files were identical before and after the merge; only this receipt section was added afterwards.
+
+### Results
+
+| Check | Command (short form) | Exit | Result |
+|---|---|---|---|
+| Diff vs main | `git diff origin/main --stat` and `--name-only` | 0 | Exactly 8 paths, 2065 insertions, 0 deletions: the lane line, the six files under docs/security, and this receipt. Nothing else. |
+| Registry parses | node JSON.parse of the lane registry | 0 | parses; the one added line is the ent-10c lane |
+| C1 | ancestor loop, SCIM grep, OpenID grep, migration list (on the merged head) | 0 | all 12 commits are ancestors; SCIM grep gives only the one test-title line (unchanged baseline); OpenID grep gives no output; newest migrations are 0129, 0130 (recovery timing) and 0131 (practice feed facts, not identity). No stop condition. |
+| P2 | the order's own evidence-row checker, REF=HEAD | 0 | `85 rows: 62 in place, 23 not claimed, 0 failures` |
+| P3 | question and ID counts | 0 | 34 question blocks, Q-01 to Q-34 with none missing; each of the five labels counts 34; IDs used but not defined: none; IDs defined but not used: none (85 each). Every ID in a Merged control line is `in place` and every ID in a Not done line is `not claimed` (scripted, 0 mismatches). |
+| P4 | tier 1, tier 2, backticked list | 0 | tier 1 prints nothing. Tier 2 prints 14 lines (banner sentence in six files, headings and table labels, README lines 23, 42, 49, the register pack-honesty row); every one is already justified in the P4 tier-2 table above. Backticked hits are the banner sentence and three verbatim test titles in the evidence map. |
+| P5 | the two greps on the working tree | 0 | 40 distinct hit lines for the unmerged-work search, matching the hit-by-hit table above; pull-request numbers appear only in the evidence map. All 14 numbers cited (1, 4, 6, 7, 15, 38, 75, 100, 104, 115, 131, 133, 146, 147) are MERGED on GitHub. No open pull request is cited. |
+| P6 | the two credential-shape greps | see below | second grep (user-and-host addresses) prints nothing. First grep prints ONE hit: this receipt, line 1210, inside the quoted warning text of the SOURCE HOLD section above. It is a false positive in a builder-written line (a package-manager warning that happens to contain the word for a setting name next to a long dotted name), but under rule 11 and the order's P6 text it is a failure of the check as written, and I have not reworded it. This new section adds no further hits. |
+| P7 | link and path loops | 0 | print nothing |
+| P8 | waits, limits, banner | 0 | the six Waits rows carry the exact R10 sentence; Q-04 and Q-09 carry the SCIM statement; L1 to L10 counts are all 1 or more in the questionnaire; every file has the scope sentence and the DRAFT banner |
+| P9 | coverage only | 0 | the grep emits 201 lines; the receipt table has 201 rows; none missing, none extra. Whether each plain answer is fair is the integrator's read and was NOT done here. |
+| Lint | `LANE_BASE_REF=origin/main pnpm lint`, through the heavy-slot wrapper | 0 | core purity passed (131 files); lane boundary passed (lane ent-10c, merge-base comparison, base ad1bad2, head 1faf37a, the 8 files above); money arithmetic passed; commercial boundary printed nothing and exited cleanly; turbo lint 7 of 7 tasks, all replayed from the shared cache |
+
+Note on the lane lint that was cancelled in the sandbox (exit 130, left pending above): it has now run on the Mac to completion and passed, as part of the full lint line above. The lane boundary result comes from the actual run on this branch (not cached). The turbo typecheck part was a cache replay of identical earlier runs, not a fresh compiler run; the change touches no code, so that is expected.
+
+### SHA-256 of the six pack files (final, unchanged by the merge)
+
+```text
+fdca7958d4747762d7ccf1b44b44059d93ec434db213f1a3ee1b5c4d69552fd9  docs/security/README.md
+956a8c1b6eb771683c1fb5928b481bc912527854dab5fd960be28821f4c62541  docs/security/buyer-questionnaire.md
+9efc04e62875570680841ffb25a8d223520f14fec641103639226d8e34776c35  docs/security/certification-roadmap.md
+d2ce1ca5aef1fc858db61389e863e829c8895b6c29ddfdbd714f9dc8acdf1952  docs/security/evidence-map.md
+3ad034ffca7a7d5c681d1150702b5dbb68ee361095a6c2f18043806d7cdde585  docs/security/not-claimed-register.md
+df85baf26241386277bd4907000358d8ae04a8d7ec652a1b125b115774aaf4d3  docs/security/security-test-scope.md
+```
+
+The receipt's own digest cannot be listed here; the dispatcher computes it after the commit.
+
+### Merges since the drafting cutoff (report only, nothing edited)
+
+Merged after b223394: PRs 155 (M4-8-S-PRE), 138 (CH-7-F17-BEFORE-OPEN) and 139 (PRACTICE-FACTS-1). Open at the time of the run: ENT-3a (156), SV-4 (152), FEE-BOTH-1 (157), TRAIN-LANE-1 (158). What was checked: between b223394 and origin/main no file whose path names sign-in, SSO, identity, export, audit, tenant, session, signer or checkpoint changed; the only contract files changed are the practice-facts and recovery-eligibility contracts (neither is in the pack's scope); no file under docs/decisions or docs/operations changed; no incident, backup or monitoring document exists on main (the only retention and recovery document is the D07 decision, which the pack already treats as proposed). So none of the 23 `not claimed` rows became claimable, and no `in place` row cited a line that moved (P2 passes). This is a path-level check, not a full read of the three merged changes. Nothing in the pack cites an open pull request.
+
+### What was NOT run
+
+No cited test was run (P10: no vitest, build, typecheck of code, browser or database command). The mechanical lane-floor script is the dispatcher's. P9 fairness read, the GREEN verdict and the pull-request comment are the integrator's. Because the credential-shape check P6 fails as written (one false-positive line above), the branch was NOT pushed and no pull request was opened from this run.
+
+`Mac check record only — not independently verified, not accepted.`
