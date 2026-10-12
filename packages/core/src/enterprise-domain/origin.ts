@@ -7,6 +7,8 @@ const senior = ["supervisor", "surveyor", "commercial_manager"] as const;
 // Who may un-link a duplicate before export: the five roles the founder named on 12 Oct 2026 (BUILD_PLAN §9.1.6; card jobguard-who-may-unlink-duplicates-2026-10-11). "senior" above still decides who may confirm a prompt and is not changed.
 const unlinkRoles = ["supervisor", "surveyor", "commercial_manager", "admin", "owner"] as const;
 const billedStates = ["billed", "part_paid", "paid"] as const;
+// Fee rule for a site extra, by who logged it. Founder, 12 Oct 2026 (card jobguard-fee-on-surveyor-extras-2026-10-12, 'charge on both'): a supervisor's or a surveyor's counts whether or not that person is named on the job; an operative's counts only when the operative is named on the job; no other role's counts.
+const siteFeeRolesWithoutNaming = ["supervisor", "surveyor"] as const satisfies readonly EnterpriseExtra["raisingCommand"]["role"][];
 export function assertDuplicateGroup(raw: unknown): void {
   assertParsedDuplicateGroup(parseEnterpriseGroup(raw));
 }
@@ -38,7 +40,7 @@ export function siteOriginated(raw: unknown): boolean {
 function parsedSiteOriginated(g: EnterpriseGroup): boolean {
   const e = parsedEffectiveOrigin(g), kind = e.origin.origin.kind;
   if (g.jobTrack !== "contractor" || !["site_user", "jobguard_surfaced_confirmed"].includes(kind) || e.orderAtOrigin.coverage === "fully_instructed" || !captureSatisfied(e)) return false;
-  if (kind === "site_user") return ["operative", "supervisor"].includes(e.raisingCommand.role) && e.raisingCommand.assigned;
+  if (kind === "site_user") return e.raisingCommand.role === "operative" ? e.raisingCommand.assigned : siteFeeRolesWithoutNaming.includes(e.raisingCommand.role as typeof siteFeeRolesWithoutNaming[number]);
   const p = e.prompt;
   return p !== null && p.confirmedBy.membershipId === e.origin.raisingMembershipId && covers(p.confirmedBy, e, senior) &&
     g.members.every(member => compareServerInstants(p.surfacedAt, member.origin.serverRecordedAt) < 0);
