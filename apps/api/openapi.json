@@ -92,6 +92,157 @@
         ]
       }
     },
+    "/auth/sso-required": {
+      "get": {
+        "operationId": "SsoRequiredController_view",
+        "parameters": [
+          {
+            "name": "requested_tenant_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "sso-required-view.v1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "sso-required-state.v1; administrator, origin and CSRF required"
+          }
+        },
+        "summary": "Read persisted synthetic single sign-on requirement",
+        "tags": [
+          "sso-required"
+        ]
+      },
+      "post": {
+        "operationId": "SsoRequiredController_command",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "required",
+                  "expectedRevision",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-required-command.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483646
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Persisted switch and audit in one transaction; synthetic only"
+          }
+        },
+        "summary": "Append an SSO requirement revision from a bound administrator session",
+        "tags": [
+          "sso-required"
+        ]
+      }
+    },
+    "/auth/sso-required/emergency": {
+      "post": {
+        "operationId": "SsoRequiredController_emergency",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "email",
+                  "code",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-emergency.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{8}$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "403": {
+            "description": "SSO_EMERGENCY_REFUSED; identical for every cause; no session"
+          }
+        },
+        "summary": "Mailbox-proven emergency access; approver rule held, every request refused",
+        "tags": [
+          "sso-required"
+        ]
+      }
+    },
     "/auth/sso/{connectionId}/start": {
       "get": {
         "operationId": "SsoController_view",

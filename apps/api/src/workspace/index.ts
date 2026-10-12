@@ -66,5 +66,7 @@ export * from "../practice-feed.http.js";
 
 export * from "../auth/sso/sso.application.js";
 export * from "../auth/sso/sso.contracts.js";
+export * from "../auth/sso/sso-required.application.js";
+export * from "../auth/sso/sso-required.contracts.js";
 export { AuditExportApplication, auditExportHttpFailure, assertAuditExportMode } from "../audit-export/audit-export.application.js";
 export { SiteExtraApplication, assertSiteExtraMode, siteExtraHttpFailure } from "../contractor/site-extra.application.js";
