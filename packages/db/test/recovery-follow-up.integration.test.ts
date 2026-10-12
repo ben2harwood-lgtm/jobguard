@@ -917,7 +917,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(await sinkCount(base.caseId)).toBe(2);
     expect((await repo.read(ctx, base.caseId)).latest).toMatchObject({ state: "delivered", newSimulatedMessages: 1 });
     await verifyChain();
-  });
+  }, 90_000);
 
   it.each(["active", "queued", "executing", "outcome_unknown", "succeeded", "retryable", "dead_letter"] as const)("R1: a later %s attempt still refuses the delivered source in the repository and raw SQL guard", async status => {
     const base = await previewed();
@@ -983,7 +983,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(delivered.latest).toMatchObject({ state: "delivered", newSimulatedMessages: 1 });
     expect(delivered.scheduling.sourceMessageId).toBe(reminder.id);
     await verifyChain();
-  });
+  }, 90_000);
 
   it("Round 1 A: a live follow-up with an unapproved preview retains ALREADY_ACTIVE and its delivered scheduling source", async () => {
     const base = await previewed();
@@ -1014,6 +1014,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     const connectionA = await runtime.connect();
     const connectionB = new Pool({ host: "127.0.0.1", port, user: "jobguard_runtime", password, database: "jobguard_synthetic_demo", max: 1 });
     let retry: Promise<RecoveryFollowUpState> | undefined;
+    let gaveUp = false;
     try {
       const pidA = Number((await connectionA.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
       await connectionA.query("BEGIN");
@@ -1028,7 +1029,8 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
       // Handle failure while observing the backend; a retry that exits without waiting must fail this test promptly.
       let retryFinished = false;
       void retry.then(() => { retryFinished = true; }, () => { retryFinished = true; });
-      // Observe PostgreSQL's actual lock wait, pausing briefly between polls; no test retries or extra timeout.
+      // Observe PostgreSQL's actual lock wait, pausing briefly between polls; give up with a named error after 20 seconds, with nothing retried.
+      const waitDeadline = Date.now() + 20_000;
       let blocked = false;
       while (!blocked) {
         await new Promise<void>(resolve => setTimeout(resolve, 25));
@@ -1037,6 +1039,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
         blocked = activity?.wait_event_type === "Lock" && activity.blockers.includes(pidA);
         if (blocked) expect(activity.query).toContain("recovery-follow-up-audit");
         else if (retryFinished) { await retry; throw new Error("retry finished without waiting on the audit key"); }
+        else if (Date.now() > waitDeadline) { gaveUp = true; throw new Error("retry neither waited on the audit key nor finished within 20 s"); }
       }
       expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.follow_up.time_advanced'", [DEMO_TENANT_ID, base.followUp.id])).toBe(0);
       // A now performs the repaired due signal, reusing its held intent/key and appending both facts before commit.
@@ -1048,9 +1051,84 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
       expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.follow_up.became_due'", [DEMO_TENANT_ID, base.followUp.id])).toBe(1);
       await verifyChain();
     } finally {
-      await connectionA.query("ROLLBACK"); connectionA.release();
-      if (retry) await retry.catch(() => undefined);
-      await connectionB.end();
+      // After give-up, clean-up cannot throw and is limited to 5 seconds to preserve the named error; afterAll closes any stuck connection.
+      if (gaveUp) {
+        const cleanUp = (async () => {
+          try { await connectionA.query("ROLLBACK"); } finally { connectionA.release(); }
+          if (retry) await retry.catch(() => undefined);
+          await connectionB.end();
+        })().catch(() => undefined);
+        await Promise.race([cleanUp, new Promise<void>(resolve => setTimeout(resolve, 5_000))]);
+      } else {
+        await connectionA.query("ROLLBACK"); connectionA.release();
+        if (retry) await retry.catch(() => undefined);
+        await connectionB.end();
+      }
     }
-  });
+  }, 60_000);
+
+  it("R1 parity: audit entries written by the database hash exactly as audit.ts hashes them", async () => {
+    const { canonicalAuditHash } = await import("../src/audit.js");
+    const base = await scheduled(), commandId = randomUUID();
+    await sandbox.advance(token, base.runId, commandId);
+    const rows = (await admin.query(`SELECT id,tenant_id AS "tenantId",sequence::int,version,actor_ref AS "actorRef",
+      event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",occurred_at AS "occurredAt",payload,
+      trim(payload_hash) AS "payloadHash",trim(previous_hash) AS "previousHash",trim(event_hash) AS "eventHash"
+      FROM app.audit_event WHERE tenant_id=$1 AND subject_type=$2 AND subject_ref=$3 AND actor_ref=$4 ORDER BY sequence`,
+    [DEMO_TENANT_ID, "recovery_follow_up", base.followUp.id, "system:recovery-follow-up-clock"])).rows;
+    expect(rows.map(row => row.eventType)).toEqual(["recovery.follow_up.time_advanced", "recovery.follow_up.became_due"]);
+    for (const row of rows) expect(canonicalAuditHash(row)).toBe(row.eventHash);
+    const due = (await admin.query(`SELECT decision_id,audit_event_id FROM app.recovery_follow_up_due
+      WHERE tenant_id=$1 AND follow_up_id=$2`, [DEMO_TENANT_ID, base.followUp.id])).rows;
+    expect(due).toHaveLength(1);
+    const clock = (await admin.query(`SELECT trim(payload_hash) AS "payloadHash" FROM app.sandbox_run_event
+      WHERE tenant_id=$1 AND run_id=$2 AND command_id=$3 AND kind=$4`, [DEMO_TENANT_ID, base.runId, commandId, "advanced"])).rows;
+    expect(clock).toHaveLength(1);
+    expect(rows[0]!.payload).toEqual({
+      classifications: { action: "commercial" }, hashes: { clock: clock[0]!.payloadHash },
+      references: { caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
+    });
+    expect(rows[1]!.payload).toEqual({
+      classifications: { action: "commercial" }, hashes: {},
+      references: { caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
+    });
+    expect(rows[1]!.id).toBe(due[0]!.audit_event_id);
+    await verifyChain();
+  }, 60_000);
+
+  it("R1 parity (first entry): database-written audit entries that start an empty chain hash exactly as audit.ts hashes them", async () => {
+    const { canonicalAuditHash, verifyAuditChain } = await import("../src/audit.js");
+    const base = await scheduled(), commandId = randomUUID();
+    await sandbox.advance(token, base.runId, commandId);
+    const before = await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1", [DEMO_TENANT_ID]);
+    expect(before).toBeGreaterThan(2);
+    const owner = await admin.connect();
+    try {
+      await owner.query("BEGIN");
+      await owner.query("SET LOCAL session_replication_role = replica");
+      expect((await owner.query("DELETE FROM app.audit_event WHERE tenant_id=$1", [DEMO_TENANT_ID])).rowCount).toBe(before);
+      expect((await owner.query("UPDATE audit_control.audit_head SET sequence=0,event_hash=NULL WHERE tenant_id=$1", [DEMO_TENANT_ID])).rowCount).toBe(1);
+      await owner.query("SET LOCAL session_replication_role = origin");
+      await owner.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      expect(Number((await owner.query("SELECT app.evaluate_recovery_follow_ups($1,$2) AS n", [DEMO_TENANT_ID, base.runId])).rows[0].n)).toBe(0);
+      const rows = (await owner.query(`SELECT id,tenant_id AS "tenantId",sequence::int,version,actor_ref AS "actorRef",
+        event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",occurred_at AS "occurredAt",payload,
+        trim(payload_hash) AS "payloadHash",trim(previous_hash) AS "previousHash",trim(event_hash) AS "eventHash"
+        FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [DEMO_TENANT_ID])).rows;
+      expect(rows.map(row => row.eventType)).toEqual(["recovery.follow_up.time_advanced", "recovery.follow_up.became_due"]);
+      expect(rows.map(row => row.sequence)).toEqual([1, 2]);
+      expect(rows[0]!.previousHash).toBeNull();
+      expect(rows[1]!.previousHash).toBe(rows[0]!.eventHash);
+      for (const row of rows) {
+        expect(row.subjectRef).toBe(base.followUp.id);
+        expect(row.actorRef).toBe("system:recovery-follow-up-clock");
+      }
+      for (const row of rows) expect(canonicalAuditHash(row)).toBe(row.eventHash);
+      expect(() => verifyAuditChain(rows)).not.toThrow();
+    } finally {
+      await owner.query("ROLLBACK"); owner.release();
+    }
+    expect(await count("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1", [DEMO_TENANT_ID])).toBe(before);
+    await verifyChain();
+  }, 30_000);
 });

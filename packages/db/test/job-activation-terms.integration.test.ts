@@ -8,6 +8,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, SwitchJobLiveMutation, withTenant, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, PracticeActivationRepository, FinalAccountCommandService, QuoteRepository, insertVariationProposal, UserCommandDispatcher, SwitchJobLiveV3Mutation, prepareActivationFixtureV3, seedActivationFixturesV3, issuePracticeSession, authenticatePracticeSession, authorizePracticeJob } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
+import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 const context=testTenantContext(T);
 const originalEnvironment=process.env.JOBGUARD_ENV;
@@ -105,20 +106,99 @@ describe("CH-1 v3 activation",()=>{
  it("upgrades from the schema just before CH-1's migration without rewriting v1 commercial rows",async()=>{
   await admin.query("CREATE DATABASE ch1_upgrade");const upgrade=new Pool({host:"127.0.0.1",port:pgPort,user:"postgres",password:"synthetic",database:"ch1_upgrade"});
   try{
-   // The existing migration runner, on real PG, is told the last migration is
-   // already applied only during this setup pass. Its earlier SQL is unchanged.
-   await migrate({query:async(sql:string,values?:unknown[])=>values?.[0]==="0109_job_activation_terms.sql"&&sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")?{rows:[{}],rowCount:1}:upgrade.query(sql,values)} as Pick<Pool,"query">);
+   const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!),own=names.indexOf("0109_job_activation_terms.sql"),feed=names.indexOf("0106_practice_feed.sql");
+   expect(own, "[MO4-4b] migration by name").toBeGreaterThan(0);
+   await upgrade.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz DEFAULT clock_timestamp())");
+   for (const url of MIGRATION_URLS.slice(0,own)) {
+    const name=fileURLToPath(url).split("/").at(-1)!,sql=await readFile(url,"utf8");
+    await upgrade.query(name === "0095_job_parties.sql" ? sql.replace("BEGIN;", "BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);") : sql);
+    await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
+   }
    await upgrade.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1500000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1500000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1500000-0000-4000-8000-000000000002','d1500000-0000-4000-8000-000000000001','owner');`);
    const job=await prepareActivationFixtureV3(upgrade,context,"historic-upgrade",100000),row=(await upgrade.query(`SELECT j.revision,d.id,d.document_version,d.content_hash FROM app.job j JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(j.tenant_id,j.accepted_quote_version_id) WHERE j.id=$1`,[job])).rows[0];
    const input={version:"switch-live.v1",activationId:randomUUID(),capSnapshotId:randomUUID(),syntheticObligationId:null,jobId:job,acceptedDocumentId:row.id,acceptedDocumentVersion:row.document_version,acceptedDocumentHash:row.content_hash,expectedJobRevision:row.revision,acceptedNetValuePence:100000,recoveryCapPence:1500,mode:"pilot_no_charge",activationTermsVersion:"pilot_no_charge.v1",feePolicyVersion:"reference_fee_policy_v1",activatedAt:new Date()};
    await new UserCommandDispatcher(upgrade).dispatch(context,{version:"command.v1",commandId:randomUUID(),commandType:"job.switch_live",semanticKey:`historic:${job}`,actorMembershipId:M,subjectType:"job",subjectRef:job,action:{actionType:"job.switch_live",recipient:null,contentHash:row.content_hash,aggregateRevision:row.document_version,amountPence:null,currency:null,policyVersion:"pilot_no_charge.v1",expiresAt:new Date("2099-01-01")}},new SwitchJobLiveMutation(T,"pilot_no_charge",input));
-   const snapshot=async()=>(await upgrade.query(`SELECT row_to_json(a) activation,row_to_json(c) snapshot FROM app.job_activation a JOIN app.cap_snapshot c ON(c.tenant_id,c.activation_id)=(a.tenant_id,a.id)`)).rows;
-   const before=await snapshot();await migrate(upgrade);await migrate(upgrade);expect(await snapshot()).toEqual(before);
+   const snapshot=async()=>(await upgrade.query(`SELECT row_to_json(a)::text activation,row_to_json(c)::text snapshot FROM app.job_activation a JOIN app.cap_snapshot c ON(c.tenant_id,c.activation_id)=(a.tenant_id,a.id)`)).rows;
+   const before=await snapshot();
+   expect(before.length, "[MO4-4a] pre-existing joined rows").toBeGreaterThan(0);
+   const proof=await proofBefore(upgrade, ["app.job_activation","app.cap_snapshot"]);
+   for (const [table, was] of Object.entries(proof)) expect(Object.keys(was.rows).length, `[MO4-4a] ${table} pre-existing row`).toBeGreaterThan(0);
+   await upgrade.query(await readFile(MIGRATION_URLS[own]!, "utf8"));
+   await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[names[own]]);
+   expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name), "[MO4-4b] N alone registry").toEqual(names.slice(0,own+1));
+   expect(await snapshot(), "[MO4-4c] complete joined rows at N alone").toEqual(before);
    expect((await upgrade.query(`SELECT count(*)::int n FROM app.job_activation_terms`)).rows[0].n).toBe(0);
-   const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!),own=names.indexOf("0109_job_activation_terms.sql"),feed=names.indexOf("0106_practice_feed.sql");expect(feed).toBeGreaterThanOrEqual(0);expect(own).toBeGreaterThan(feed);expect(names.every((name,index)=>index===0||names[index-1]<name)).toBe(true);expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name)).toEqual(names);
+   const controls = [];
+   for (const [table, was] of Object.entries(proof)) {
+     const identity = Object.keys(was.rows)[0];
+     if (!identity) continue; // The pre-existing-row guard reports this in the proof test.
+     const key = JSON.parse(identity) as { tenant_id: string; id: string };
+     const values = [key.tenant_id, key.id];
+     const time = table === "app.job_activation" ? "activated_at" : "created_at";
+     const column = "fee_policy_version", newType = "character varying(81)", scratchTable = "app.job_activation";
+     const microsecond = await rolledBack(upgrade, async client => {
+       await client.query("SET LOCAL session_replication_role=replica");
+       const changed = await client.query(`UPDATE ${table} SET ${time}=${time}+interval '1 microsecond' WHERE (tenant_id=$1) AND (id=$2)`, values);
+       return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+     });
+     const missing = await rolledBack(upgrade, async client => {
+       await client.query("SET LOCAL session_replication_role=replica");
+       const changed = await client.query(`DELETE FROM ${table} WHERE (tenant_id=$1) AND (id=$2)`, values);
+       return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+     });
+     const retype = await rolledBack(upgrade, async client => {
+       await client.query("SET LOCAL session_replication_role=replica");
+       await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${newType}`);
+       return await proofDifferences(client, proof);
+     });
+     const listRetype = await rolledBack(upgrade, async client => {
+       await client.query("SET LOCAL session_replication_role=replica");
+       return await proofDifferences(client, { ...proof, [table]: { ...was, typed: { ...was.typed, [column]: `${was.typed[column]} mo4 scratch` } } });
+     });
+     const nullable = await rolledBack(upgrade, async client => {
+       await client.query("SET LOCAL session_replication_role=replica");
+       await client.query(`ALTER TABLE ${scratchTable} ADD COLUMN mo4_scratch text`);
+       return { exists: (await proofColumns(client, scratchTable)).some(c => c.name === "mo4_scratch" && c.type === "text"), differences: await proofDifferences(client, proof) };
+     });
+     const replaced = await rolledBack(upgrade, async client => {
+       await client.query("SET LOCAL session_replication_role=replica");
+       return { replaced: await scratchReplaceFunction(client, "app.half_even_ratio(bigint,bigint,bigint)"), differences: await proofDifferences(client, proof) };
+     });
+     const inserted = await rolledBack(upgrade, async client => {
+       await client.query("SET LOCAL session_replication_role=replica");
+       const changed = await client.query(table === "app.job_activation"
+         ? `INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at,recorded_at) SELECT gen_random_uuid(),tenant_id,gen_random_uuid(),accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at,recorded_at FROM app.job_activation WHERE (tenant_id=$1) AND (id=$2)`
+         : `INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative,created_at) SELECT gen_random_uuid(),tenant_id,gen_random_uuid(),gen_random_uuid(),baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative,created_at FROM app.cap_snapshot WHERE (tenant_id=$1) AND (id=$2)`, values);
+       return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+     });
+     controls.push({ table, microsecond, missing, retype, listRetype, nullable, replaced, inserted, after: await proofDifferences(upgrade, proof), columns: await proofColumns(upgrade, table) });
+   }
+   for (const result of controls) {
+     const { table } = result, was = proof[table]!, identity = Object.keys(was.rows)[0]!;
+     const column = "fee_policy_version", newType = "character varying(81)";
+     expect(result, "[MO4-4d] rolled-back controls (a)-(f)").toEqual({
+       table,
+       microsecond: { count: 1, differences: { rows: [`${table} ${identity}: changed`], types: [] } },
+       missing: { count: 1, differences: { rows: [`${table} ${identity}: missing`], types: [] } },
+       retype: { rows: [], types: [`${table}: ${column} ${was.typed[column]} -> ${newType}`] },
+       listRetype: { rows: [], types: [`${table}: ${column} ${was.typed[column]} mo4 scratch -> ${was.typed[column]}`] },
+       nullable: { exists: true, differences: { rows: [], types: [] } },
+       replaced: { replaced: true, differences: { rows: [], types: [] } },
+       inserted: { count: 1, differences: { rows: [], types: [] } },
+       after: { rows: [], types: [] },
+       columns: was.names.map(name => ({ name, type: was.typed[name] })),
+     });
+   }
+   expect(controls, "[MO4-4d] both tables' controls").toHaveLength(2);
+   expect(await proofDifferences(upgrade, proof), "[MO4-4d] nothing left behind").toEqual({ rows: [], types: [] });
+   for (const [table, was] of Object.entries(proof)) expect(await proofColumns(upgrade, table), `[MO4-4d] ${table} columns after all controls`).toEqual(was.names.map(name => ({ name, type: was.typed[name] })));
+   await migrate(upgrade);await migrate(upgrade);
+   // fingerprinted-row-shape.integration.test.ts owns "may never gain a column"; recovery_eligibility_revision, job, job_activation and cap_snapshot are absent from its list.
+   expect(await proofDifferences(upgrade, proof), "[MO4-4e] identified old rows and types after all migrations").toEqual({ rows: [], types: [] });
+   expect(feed).toBeGreaterThanOrEqual(0);expect(own).toBeGreaterThan(feed);expect(names.every((name,index)=>index===0||names[index-1]<name)).toBe(true);expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name)).toEqual(names);
    expect((await readFile(fileURLToPath(MIGRATION_URLS[own]!),"utf8")).trim()).toMatch(/^BEGIN;[\s\S]*COMMIT;$/u);
   }finally{await closeTestPools(upgrade);}
- });
+ }, 60_000);
  it("DW3 snapshots/exports and the immutable terms contain no historic copy",async()=>{
   const job=(await admin.query(`SELECT job_id FROM app.job_activation_terms LIMIT 1`)).rows[0].job_id;
   await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:job,actorMembershipId:M});
