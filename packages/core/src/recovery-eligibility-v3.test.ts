@@ -53,3 +53,10 @@ describe("CH-7 D03 v3 candidate reviews", () => {
   expect(recoveryEligibilityViewV3.safeParse({...result,lines:result.lines.map(line=>({...line,qualifyingPrincipal:{...line.qualifyingPrincipal,fee:1}}))}).success).toBe(false);
  });
 });
+
+describe("CH-7-F17-BEFORE-OPEN timing parity",()=>{
+ it.each(["settled","pending"])("F17 excludes a refund originally settled at or before opening, including %s proof",settlement=>{
+  const result=evaluateRecoveryEligibilityV3(facts("F17",{paymentTiming:"before_opening",settlement}));
+  expect(result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case",lines:[{netPence:45000,qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"}]});
+ });
+});

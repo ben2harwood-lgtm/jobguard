@@ -1,0 +1,8 @@
+file:///Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open/apps/api/dist/generate-openapi.js:13
+        throw new Error("openapi.json is stale; run pnpm --filter @jobguard/api openapi:generate");
+              ^
+
+Error: openapi.json is stale; run pnpm --filter @jobguard/api openapi:generate
+    at file:///Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open/apps/api/dist/generate-openapi.js:13:15
+
+Node.js v24.17.0

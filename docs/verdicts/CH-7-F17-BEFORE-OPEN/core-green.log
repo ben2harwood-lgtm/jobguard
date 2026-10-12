@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open/packages/core
+
+
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+   Start at  19:50:20
+   Duration  118ms (transform 42ms, setup 0ms, import 55ms, tests 10ms, environment 0ms)
+
