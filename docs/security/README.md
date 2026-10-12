@@ -6,7 +6,7 @@ DRAFT for founder review. Not to be sent to any buyer until Ben approves it.
 
 Evidence cutoff: 96c0cb8a5b5562c65b79f5f601ba9d60f8fcf05a (12 October 2026)
 
-Audit note: the evidence cutoff predates the internal security audit of 12 October 2026 and any remediation of its findings (the audit is an internal document, not yet in this repository). Q-16, Q-18, E-17b, E-21, E-22, E-23 and the new not-claimed rows E-71 to E-73 reflect it.
+Audit note: the evidence cutoff predates the internal security audit of 12 October 2026 and any remediation of its findings (the audit is an internal document, not yet in this repository). Q-09, Q-10, Q-14, Q-16, Q-18, E-17b, E-21, E-22, E-23, the register's administrator-revocation row and the new not-claimed rows E-71 to E-73 reflect it.
 
 ## 1 What this is and who it is for
 

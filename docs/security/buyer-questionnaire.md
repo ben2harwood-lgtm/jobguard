@@ -112,7 +112,7 @@ Not claimed. Waits for automatic account provisioning and removal to merge to ma
 
 ### Q-09 When someone leaves, how soon does access end?
 
-**Plain answer:** There is no SCIM: removal only in your identity provider does not remove the account in JobGuard. SAML sessions end within 15 minutes; next SAML sign-in replaces prior SAML sessions and unmapped grants. Unless “SSO required” is ON (default OFF), a SAML-linked account can still use emailed code. Administrator revocation takes effect on the next request.
+**Plain answer:** There is no SCIM: removal only in your identity provider does not remove the account in JobGuard. SAML sessions end within 15 minutes; next SAML sign-in replaces prior SAML sessions and unmapped grants. Unless “SSO required” is ON (default OFF), a SAML-linked account can still use emailed code. Administrator revocation takes effect on the next request on the practice contractor route.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 
@@ -120,7 +120,7 @@ Not claimed. Waits for automatic account provisioning and removal to merge to ma
 
 **Verifying tests:** [contractor.integration.test.ts:262](../../packages/db/test/contractor.integration.test.ts#L262); [auth.test.ts:92](../../apps/api/src/auth/auth.test.ts#L92); [enterprise-identity.integration.test.ts:383](../../packages/db/test/enterprise-identity.integration.test.ts#L383); [enterprise-identity.integration.test.ts:312](../../packages/db/test/enterprise-identity.integration.test.ts#L312); [enterprise-identity.integration.test.ts:182](../../packages/db/test/enterprise-identity.integration.test.ts#L182); [sso-required.integration.test.ts:84](../../packages/db/test/sso-required.integration.test.ts#L84)
 
-**Not done:** E-52
+**Not done:** E-52, E-73
 
 Not claimed. Waits for automatic account provisioning and removal to merge to main with its own named test. This row does not change on the strength of a pull-request title, an order or a plan line.
 
@@ -134,7 +134,7 @@ Not claimed. Waits for automatic account provisioning and removal to merge to ma
 
 **Verifying tests:** [enterprise-identity.integration.test.ts:182](../../packages/db/test/enterprise-identity.integration.test.ts#L182); [action-paths.test.ts:272](../../apps/api/src/auth/sso/action-paths.test.ts#L272); [identity.test.ts:20](../../apps/api/src/auth/identity.test.ts#L20)
 
-**Not done:** E-55
+**Not done:** E-55, E-72
 
 ### Q-11 Is there multi-factor sign-in?
 
@@ -180,15 +180,15 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-14 What roles exist, and how is access limited by team, branch, region or client?
 
-**Plain answer:** Nine roles: owner, administrator, operative, supervisor, surveyor, commercial manager, finance, read-only and client approver. A permission-by-role-by-scope matrix is covered for every combination in pure code and again against PostgreSQL. Client approvers are limited to their client. Revoked memberships fail on the next request. Practice build only.
+**Plain answer:** Nine roles: owner, administrator, operative, supervisor, surveyor, commercial manager, finance, read-only and client approver. A permission-by-role-by-scope matrix is covered for every combination in pure code and again against PostgreSQL. Client approvers are limited to their client. Revoked memberships fail on the next request on the practice contractor route. Practice build only.
 
-**Status:** in place (practice build)
+**Status:** in place for the named practice controls; not claimed for the Not done items
 
 **Merged control:** E-16, E-16b, E-17b
 
 **Verifying tests:** [contractor.test.ts:5](../../packages/core/src/contractor.test.ts#L5); [contractor.integration.test.ts:106](../../packages/db/test/contractor.integration.test.ts#L106); [contractor.integration.test.ts:262](../../packages/db/test/contractor.integration.test.ts#L262)
 
-**Not done:** nothing further
+**Not done:** E-73
 
 ## C Keeping companies apart
 

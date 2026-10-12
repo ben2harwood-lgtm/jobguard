@@ -928,8 +928,8 @@ The table below covers every line emitted by P9, including headings, path pointe
 | `docs/security/buyer-questionnaire.md:79` | E-04, E-05, E-05b, E-06, E-06b, E-07, E-07b, E-08, E-08b, E-09, E-50 | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:91` | E-10, E-50 | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:103` | E-11, E-16 | in place; pending portions and limits remain labelled |
-| `docs/security/buyer-questionnaire.md:115` | E-17b, E-17, E-12, E-12b, E-13, E-41, E-52 | in place; pending portions and limits remain labelled |
-| `docs/security/buyer-questionnaire.md:127` | E-13, E-14, E-14b, E-55 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
+| `docs/security/buyer-questionnaire.md:115` | E-17b, E-17, E-12, E-12b, E-13, E-41, E-52, E-73 | in place; pending portions and limits remain labelled |
+| `docs/security/buyer-questionnaire.md:127` | E-13, E-14, E-14b, E-55, E-72 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
 | `docs/security/buyer-questionnaire.md:139` | E-56 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
 | `docs/security/buyer-questionnaire.md:141` | E-56 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
 | `docs/security/buyer-questionnaire.md:151` | E-42, E-54 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
@@ -937,8 +937,8 @@ The table below covers every line emitted by P9, including headings, path pointe
 | `docs/security/buyer-questionnaire.md:165` | E-57 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
 | `docs/security/buyer-questionnaire.md:167` | E-57 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
 | `docs/security/buyer-questionnaire.md:177` | E-57 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
-| `docs/security/buyer-questionnaire.md:181` | E-16, E-16b, E-17b | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
-| `docs/security/buyer-questionnaire.md:183` | E-16, E-16b, E-17b | in place; pending portions and limits remain labelled |
+| `docs/security/buyer-questionnaire.md:181` | E-16, E-16b, E-17b, E-73 | label/limit sentence, not a claim — question, test pointer, wait or pending answer |
+| `docs/security/buyer-questionnaire.md:183` | E-16, E-16b, E-17b, E-73 | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:197` | E-18, E-19, E-19b, E-20b, E-58 | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:209` | E-21, E-22, E-58, E-71 | in place; pending portions and limits remain labelled |
 | `docs/security/buyer-questionnaire.md:221` | E-17, E-17c, E-20, E-58 | in place; pending portions and limits remain labelled |
@@ -1087,7 +1087,7 @@ The table below covers every line emitted by P9, including headings, path pointe
 | `docs/security/not-claimed-register.md:92` | E-08, E-08b, E-09, E-50 | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:95` | E-11, E-57 | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:96` | E-52 | label/limit sentence, not a claim — pending register or bounded parent mapping |
-| `docs/security/not-claimed-register.md:97` | E-12, E-12b, E-13, E-17b, E-41, E-52 | label/limit sentence, not a claim — pending register or bounded parent mapping |
+| `docs/security/not-claimed-register.md:97` | E-12, E-12b, E-13, E-17b, E-41, E-52, E-73 | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:99` | E-10, E-12b, E-16, E-16b, E-57, E-52, E-51, E-54, E-70 | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:100` | E-26b, E-27, E-27b, E-60 | label/limit sentence, not a claim — pending register or bounded parent mapping |
 | `docs/security/not-claimed-register.md:102` | E-26, E-30, E-61 | label/limit sentence, not a claim — pending register or bounded parent mapping |
@@ -1344,5 +1344,59 @@ The security-test scope file is byte-identical to the earlier run. The receipt's
 No merge, no verdict, no review of this work, no change outside docs/security and this receipt, no new worktree, no deletion, no force-push. No cited test was run (P10). The Codex builder was not used. The audit document itself was not copied into the repository and none of its file paths appear in the pack.
 
 `Builder repair record only — not independently verified, not accepted.`
+
+No independent model verdict is claimed for this GREEN piece.
+
+## Consistency touch (12 Oct): coordinator
+
+Built on 12 October 2026 by the same Claude Sonnet 5.5 builder session, after the coordinator read the repair diff 23b9a67..d1a4642 and gave the GREEN verdict at d1a4642 (that verdict is the coordinator's; it is not repeated or judged here). Start head: d1a464281a366e409e0c4154cd074311475643d3. The coordinator kept E-71's label as written ("HELD / NOT IN PLACE"), accepted the small cross-references and the longer Q-16 and Q-18 answers, and asked for one more small touch because the same over-statement ("revocation takes effect on the next request") appears in other places. Documents only: the edits below, the P9 table cells they change in this receipt, and nothing else. No merge, no verdict, no review of this work.
+
+### Edited lines (file and line, before and after)
+
+| # | Where | Before | After |
+|---|---|---|---|
+| 1 | `docs/security/buyer-questionnaire.md:115` (Q-09 plain answer) | "...Administrator revocation takes effect on the next request." | "...Administrator revocation takes effect on the next request on the practice contractor route." |
+| 2 | `docs/security/buyer-questionnaire.md:123` (Q-09 Not done) | "E-52" | "E-52, E-73" |
+| 3 | `docs/security/buyer-questionnaire.md:183` (Q-14 plain answer) | "...Revoked memberships fail on the next request. Practice build only." | "...Revoked memberships fail on the next request on the practice contractor route. Practice build only." |
+| 4 | `docs/security/buyer-questionnaire.md:185` (Q-14 Status) | "in place (practice build)" | "in place for the named practice controls; not claimed for the Not done items" |
+| 5 | `docs/security/buyer-questionnaire.md:191` (Q-14 Not done) | "nothing further" | "E-73" |
+| 6 | `docs/security/not-claimed-register.md:97` (parent row, practice evidence cell) | "ENT-10a E-12, E-12b, E-13; administrator revocation E-17b" | "ENT-10a E-12, E-12b, E-13; administrator revocation E-17b (practice contractor route only; the ordinary sign-in session route is not covered (known gap, fix-later; see E-73))" |
+| 7 | `docs/security/buyer-questionnaire.md:137` (Q-10 Not done) | "E-55" | "E-55, E-72" |
+| 8 | `docs/security/README.md:9` (audit note, list of what reflects the audit) | "Q-16, Q-18, E-17b, E-21, E-22, E-23 and the new not-claimed rows E-71 to E-73 reflect it." | "Q-09, Q-10, Q-14, Q-16, Q-18, E-17b, E-21, E-22, E-23, the register's administrator-revocation row and the new not-claimed rows E-71 to E-73 reflect it." |
+
+Why edits 4 and 8 are there (consequences of the requested edits, not extra scope): the pack labels a question "in place (practice build)" only when its Not done line is empty; once Q-14 lists E-73 the label has to be the mixed one used by every other question that has a Not done ID (a scripted check of all 34 Status lines against their Merged control and Not done lines found 0 mismatches after the change). The README note lists which items were changed after the audit, so it now names the three questions and the register row that were touched here.
+
+Not touched, as asked: E-17 and E-17c wording, E-17b's own row (its limit was added in repair round 1), every other row and answer. The Q-09 and Q-14 Merged control and Verifying tests lines are unchanged.
+
+Cross-references and counts changed by these edits: the P9 table in this receipt now shows E-73 on the Q-09 plain-answer row (`docs/security/buyer-questionnaire.md:115`), the Q-14 question and answer rows (`:181`, `:183`) and the register parent row (`docs/security/not-claimed-register.md:97`), and E-72 on the Q-10 question row (`docs/security/buyer-questionnaire.md:127`). No line number moved (every edit is inside an existing line), so the grep and the table still agree line for line. Counts that do not change: map rows 88 (62 in place, 26 not claimed); IDs used outside the map 88 and defined in the map 88 (E-72 and E-73 were already used by the README and the register); the P9 grep lines and table rows 206. Earlier sections of this receipt (including the repair round 1 note "Found, not changed" and the raw P5 and P9 outputs) are history and are left as written; edits 1 to 3 and 5 to 7 above close the first two bullets of that note.
+
+### Checks re-run (12 October 2026, working tree after the edits above and before this section was written; P4, P6 and P7 were run again on this receipt after it)
+
+| Check | Result |
+|---|---|
+| P2 evidence rows (the order's own checker, REF=HEAD, exit 0) | `88 rows: 62 in place, 26 not claimed, 0 failures` |
+| P3 question and ID coverage | 34 question blocks, Q-01 to Q-34, none missing; each of the five labels counts 34; IDs used outside the map 88, defined 88, used but not defined none, defined but not used none, no duplicates; every ID in a Merged control line is `in place` and every ID in a Not done line is `not claimed` (0 mismatches); every Status line matches its lists (0 mismatches). |
+| P4 banned words | Tier 1 prints nothing (pack and this receipt). Tier 2 still prints the same 14 lines (banner sentence in six files, headings and table labels, README lines 25, 44 and 53, the register pack-honesty row), each already justified above. |
+| P5 | 40 distinct hit lines in the unmerged-work search (unchanged); no pull-request number outside the evidence map; the 14 cited numbers were confirmed MERGED in repair round 1 and no number was added. |
+| P6 credential shape | Both commands print nothing (docs/security and this receipt). |
+| P7 links and paths | Both loops print nothing (pack and this receipt). |
+| P8 | The R10 Waits sentence is present for E-51, E-52, E-54, E-57, E-60, E-66 and E-72; Q-04 and Q-09 carry the SCIM statement; limit phrases L1 to L10 each count 1 or more; every file carries the scope sentence, the DRAFT banner and the cutoff line. |
+| P9 coverage | The grep emits 206 lines; the table above has 206 rows. Coverage only; fairness is the coordinator's and integrator's read. |
+| Lint (`LANE_BASE_REF=origin/main pnpm lint`, through heavy-slot, exit 0) | Core purity passed (131 files); lane boundary passed (lane ent-10c, merge-base comparison, the same 8 files); money arithmetic passed; turbo lint 7 of 7, all replayed from the shared cache. origin/main had moved to a54d46f (pull requests 157 and 158 merged) since the earlier run, so the base printed by the lane lint is a54d46f; this branch has not been merged with it (not asked). A dry-run merge of the branch with origin/main (no files changed) reports no conflict. pnpm also printed its usual warning about a package.json setting it no longer reads; paraphrased here to avoid a false match of the rule 11 check. |
+
+### SHA-256 of the six pack files after this touch
+
+```text
+0d5f16458fceee9e132c2063aa4c83daac7df8a64281fe663eabda298bbdb985  docs/security/README.md
+aa764f6c99fbe8100668b35dad57cf054fc6826dd1498a96f80f20d2523a30aa  docs/security/buyer-questionnaire.md
+cd2098dfdc56dc8c4a2f13d649266ab8c61f62b9834c2baedc70094f2ca7db78  docs/security/certification-roadmap.md
+7df648c71c010c993097134d4c795d8e80b766fe21a044ca9a118154bcc1cc32  docs/security/evidence-map.md
+61cf91eca14dd1112e0379f39ec611f9860d6ada75263b4d0663c3f709a7f688  docs/security/not-claimed-register.md
+df85baf26241386277bd4907000358d8ae04a8d7ec652a1b125b115774aaf4d3  docs/security/security-test-scope.md
+```
+
+The evidence map, the roadmap and the security-test scope file are byte-identical to repair round 1. The receipt's own digest cannot be listed here.
+
+`Builder consistency record only — not independently verified, not accepted.`
 
 No independent model verdict is claimed for this GREEN piece.

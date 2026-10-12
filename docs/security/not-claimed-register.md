@@ -94,7 +94,7 @@ Aggregate acceptance remains outstanding. The merged-piece list describes practi
 | Emailed-code accounts never link silently | ENT-10a merged; E-10 | Live provider E-50 HELD |
 | Finance/commercial roles explicit; mapping changes recorded | ENT-10a merged; E-11 | Native E-57 HELD |
 | SCIM deactivation refuses next request | Not claimed; E-52 NOT BUILT | ENT-10a2 |
-| Without SCIM, access ends at next sign-in and within limit | ENT-10a E-12, E-12b, E-13; administrator revocation E-17b | Emailed code remains unless ENT-10d switch ON (E-41); automatic removal E-52 NOT BUILT |
+| Without SCIM, access ends at next sign-in and within limit | ENT-10a E-12, E-12b, E-13; administrator revocation E-17b (practice contractor route only; the ordinary sign-in session route is not covered (known gap, fix-later; see E-73)) | Emailed code remains unless ENT-10d switch ON (E-41); automatic removal E-52 NOT BUILT |
 | Existing permission conformance suite passes unchanged | ENT-1 named pure/database suites E-16, E-16b | Regression duty of code pieces; not run or claimed passing here |
 | Every M5-7 assertion passes | Web/background limits covered by ENT-10a E-10, E-12b; matrix E-16, E-16b | Native E-57, SCIM E-52, OpenID E-51, usable emergency E-54 and D04/G5 E-70 remain not claimed |
 | Checker detects altered or missing entries | ENT-10b merged; E-26b, E-27, E-27b | M5-9 long-term checking and rotation E-60 NOT BUILT |
