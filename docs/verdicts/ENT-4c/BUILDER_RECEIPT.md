@@ -4,6 +4,8 @@ Builder: Codex GPT-6.1 Sol. Task id: ENT-4c. Branch: `codex/sandbox/ent-4c`. Che
 
 Builder receipt only — not independently verified, not accepted.
 
+Repair round 1 (12 Oct) is recorded at the end of this receipt. The original build evidence below is historical; the repair section records the Mac failure supplied by the dispatcher and the checks run for this repair.
+
 ## First questions
 
 Source inspection of coordinator commit `edb79557fbdccb622f905c71671305c0bdd9deaf` says it adds exactly the five-role un-link list, uses it for pre-export repair, and changes the one corresponding merged test row. The `senior` list, prompt test and fee rule keep their bytes. It was already in BASE, followed by dispatcher lane commit `4f53989`; neither was edited. The new R tests executed: five roles need covering grants, other five are refused, all five are refused after export, and prompt/reconciliation lists keep their rules.
@@ -298,3 +300,76 @@ One-time added-line credential-shape check: no matches.
 ```
 
 OpenAPI is byte-identical to BASE (E2 blob); its generator did not complete because the sandbox refused the pipe. The lane line is byte-identical to BASE. No app, migration, shared pin or coordinator file changed. Generated output cleanup removed only `.pnpm-store` and `apps/web/tsconfig.tsbuildinfo`; no build output or test-results remains.
+
+## Repair round 1 (12 Oct)
+
+Repair starting head: `f03144ca074c1ea1d98a9f28e6bbf38445c75870` (build plus the dispatcher's plain merge of main). Branch: `codex/sandbox/ent-4c`; initial working tree clean. The issued order remains in force. This repair changes only `packages/db/test/extra-unlink.integration.test.ts` and this receipt. No product code, migration, merged fixture, assertion, timeout, role list, security pin or lane line changes. No commit, add, checkout, push, merge or PR action by the builder. Intended commit message: `/private/tmp/jg-msg-ent-4c.txt`.
+
+### Cause and exact edit
+
+The dispatcher supplied the first Mac PostgreSQL result: 17 database tests passed, but D7 stopped in `madeUpJobs` with `job_commercial_track_pkey` before reaching its refusal assertions. Those assertions were unproven; this receipt does not turn that run into a D7 pass.
+
+Source inspection confirms the cause. Migration `0053_shared_money_origin.sql` defines `PRIMARY KEY(tenant_id,job_id)` on `app.job_commercial_track`. Its `job_legacy_live_track` AFTER INSERT trigger calls `app.bind_small_builder_track()`, which inserts a `small_builder` row for a live, non-imported job. The helper inserted both jobs as live, then tried to insert a second track row for the contractor job. The permitted values and checks allow the existing contractor binding (`contractor`, `synthetic_demo`, `work_order_import`), but the primary key already existed. This was a test setup mistake, with no evidence of a product defect.
+
+Merged pattern reused: `extra-origin-upgrade.integration.test.ts:65` creates a contractor fixture with the default draft status, then inserts its contractor track. Migration 0003 defines that default as `draft`; the merged work-order creation routine in 0110 also inserts a draft job before its contractor track. `work-order-fixtures.ts` and scheduling fixtures use that work-order import path. The repair uses an explicit draft status for the contractor fixture. The live small-builder fixture still exercises the normal trigger; the contractor fixture still has no work order and retains the same job provenance. No trigger is disabled and no track row is updated or deleted.
+
+The only test-file edit is line 100 in `madeUpJobs`, before:
+
+```ts
+  await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional small builder','live'),($1,$3,'Fictional contractor fixture','live')", [f.p.tenantId, small, contractor]);
+```
+
+After:
+
+```ts
+  await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional small builder','live'),($1,$3,'Fictional contractor fixture','draft')", [f.p.tenantId, small, contractor]);
+```
+
+Line 101's track INSERT and parameters are unchanged. `madeUpJobs` is called only by D7 (line 239). **D7 is still the same test:** its entire body, every named job/link/member/role case, refusal code/message checks and before/after snapshots are unchanged. All other 17 test bodies, including the non-member checks, are unchanged. Test budgets are unchanged. No skipped, deleted or weakened assertion, retry wrapper or new fixture file.
+
+### Repair checks actually run
+
+Runtime: Node `v24.17.0`. Available local pnpm versions remain 9.0.0 and 11.8.0; the pinned 10.28.1 executable is unavailable. No package download/install or version-check bypass. Logs and exact invocation arrays for this repair are under `/private/tmp/jg-ent-4c-repair-round-1/`.
+
+Five root-script attempts used `node /Users/benharwood/Library/pnpm/.tools/pnpm/11.8.0/node_modules/pnpm/bin/pnpm.mjs --pm-on-fail=error <script>`: `typecheck`, `lint`, `lint:lanes`, `build`, `openapi:check`. Every attempt exited **1 before its script ran**, refusing pnpm 11.8.0 because the repository requires 10.28.1. All carried `LANE_BASE_REF=origin/main`. `pnpm-checks.json` and the five `pnpm-*.log` files record these failures. These are not root pnpm passes.
+
+Direct checks with installed tools:
+
+| Command / cwd | Exit | Result / log |
+|---|---|---|
+| `node node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --exactOptionalPropertyTypes --noUncheckedIndexedAccess --module NodeNext --moduleResolution NodeNext --target ES2023 packages/db/test/extra-unlink.integration.test.ts` / root | 0 | Changed test compiles; `db-test-typecheck.log`; not PostgreSQL proof |
+| `node tools/core-purity-lint.mjs` / root | 0 | 131 TypeScript files; `core-purity-lint.log` |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` / root | 0 | Lane `ent-4c`; `agent-lane-boundary-lint.log` |
+| `node tools/money-arithmetic-lint.mjs` / root | 0 | `money-arithmetic-lint.log` |
+| `node tools/commercial-boundary-lint.mjs` / root | 0 | `commercial-boundary-lint.log` |
+| `node node_modules/typescript/bin/tsc -p <package>/tsconfig.json --noEmit` / root, separately for `packages/core`, `packages/config`, `packages/storage`, `packages/ai`, `packages/db`, `apps/api`, `apps/web` | 0 each | All seven compiler checks passed; `<package-with-slashes-replaced>-typecheck.log`; `direct-checks.json` |
+| `node --import tsx src/generate-openapi.ts --check` / apps/api | 0 | Actual generator matched committed OpenAPI; `openapi-node-import.log`, `openapi-check.json`; this Node invocation needs no tsx CLI pipe |
+| `node node_modules/typescript/bin/tsc -p packages/<name>/tsconfig.json --outDir /private/tmp/jg-ent-4c-repair-round-1/build/<name>` / root, separately for core, config, storage, ai, db | 0 each | All five library builds emitted to temporary directories; `<name>-build-direct.log`, `direct-builds.json` |
+| `node node_modules/@nestjs/cli/bin/nest.js build` / apps/api | 0 | API build passed; `api-build-normal.log`, `build-retry.json` |
+| `node node_modules/next/dist/bin/next build` / apps/web, after the API build | 0 | Compiled successfully and generated 29/29 static pages; `web-build-with-api.log`, `build-retry.json`; workspace-root and CSS warnings retained in the log |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` / root, after the receipt update | 0 | All four root boundary checks passed together; no changed source to require another compiler run |
+| `git diff --check` / root | 0 | No whitespace errors |
+
+Build sequence note: an earlier Nest attempt with `--path /private/tmp/jg-ent-4c-repair-round-1/api-build-tsconfig.json` exited 1 because Nest did not locate the absolute config path (`api-build-direct.log`). The first direct Next build exited 1 because the API's compiled package exports were absent (`web-build-direct.log`, `web-build.json`). The normal API build resolved that setup issue before the web build was repeated; both initial failures remain recorded.
+
+The direct library/API/web build tools passed; the pinned root pnpm build remains blocked at the version check. Newly generated `apps/api/dist` and `apps/web/.next` were removed after the build. Library emission went only to `/private/tmp`. No package store or test-results directory was created; pre-existing ignored dependency/build directories were not replaced by the library checks. The generated web typecheck cache was removed at cleanup.
+
+### NOT RUN and remaining proof
+
+**NOT RUN (sandbox cannot start PostgreSQL / a browser):** the changed `extra-unlink.integration.test.ts`, all D1–D18 including repaired D7. No attempt to start PostgreSQL or bind a socket. The Mac helper must rerun the complete file, unchanged in meaning:
+
+```sh
+VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/extra-unlink.integration.test.ts
+```
+
+No Vitest unit file changed in this repair. Unit tests and the unchanged scanner were not rerun, respecting the repair order's limit to changed test files. The dispatcher's reported core/scanner results are supplied prior-run evidence, not new builder execution. No full `pnpm test`, database/migration suite, regression file or browser suite ran. No migration (rule 9 not applicable); no database object created, replaced or altered. No AI/native/UI change. Pinned root checks, exact repaired-head PostgreSQL/CI results, fresh independent RED reviews and separate acceptance remain pending. D7 and the other database cases are not claimed passing after this repair.
+
+### Repair self-review
+
+Builder source inspection only. One-time comparison against repair HEAD confirmed the test file equals the original with exactly one literal substitution. D7 was compared by its D7/D8 markers, giving identical SHA-256 `a375453426f370789cdb2a01dccca4b4d381557ea7862e697cacd2b9395a5cef`. An initial comparison reused old character offsets after the one-character length change and failed the inspection script; the corrected marker-based comparison exited 0. This was no test execution or assertion change.
+
+One-time byte comparisons against repair HEAD passed for coordinator-only `origin.ts` and `origin.test.ts`, the dispatcher's lane file and `apps/api/src/auth/context-boundary.test.ts`. No standing hash test was added. The whole repair diff was reviewed: test setup plus receipt only, no credential-shaped added string, no product/migration/security edit, no widening of the lane. The draft contractor still lacks a work order, so the existing database authority check refuses it for the same reason; the small-builder job remains live. The repair requires the real PostgreSQL rerun to prove setup and refusal assertions. No self-acceptance or independent-verdict claim.
+
+Final repair diff: two files only, this receipt and `packages/db/test/extra-unlink.integration.test.ts`; the test diff is one insertion and one deletion on the same line. Working HEAD remains `f03144ca074c1ea1d98a9f28e6bbf38445c75870`. Self-review passed for the permitted test setup repair; database execution and independent acceptance are still pending.
+
+Builder receipt only — not independently verified, not accepted.

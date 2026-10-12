@@ -97,7 +97,7 @@ async function secondJob(f: Fixture) {
 async function madeUpJobs(f: Fixture) {
  return ownerTx(c, f.p.tenantId, async db => {
   const small = randomUUID(), contractor = randomUUID();
-  await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional small builder','live'),($1,$3,'Fictional contractor fixture','live')", [f.p.tenantId, small, contractor]);
+  await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional small builder','live'),($1,$3,'Fictional contractor fixture','draft')", [f.p.tenantId, small, contractor]);
   await db.$client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'contractor','synthetic_demo','work_order_import')", [f.p.tenantId, contractor]);
   return [small, contractor];
  });
