@@ -82,11 +82,16 @@ CLI output is one JSON line. `ok` is false and exit status is 1 if any company f
 
 **Later:** every hosted practice sign-in creates a new tenant, so a manual run covers only companies existing at enumeration; a later company still sees `CHECKPOINT_REQUIRED` until another run. Automatic or scheduled hand-off, a hand-off at deploy, and a screen or route are not built. A future automatic hand-off needs a separate RED order deciding frequency, where the owner credential may live outside the build, and the evidential worth of system-taken versus deliberate operator checkpoints. External time-stamping remains M4 / M5-9. Non-synthetic modes, D04/G5 and M5-9 approvals remain held. Recording the operator person label is built under C-OPS-4; it is not deferred.
 
-### All-company checkpoint candidate snapshot (Round 1)
+### All-company checkpoint candidate snapshot (Rounds 1–2)
 
 `exportAuditCheckpoints(pool)` selects each company's newest `(tenant, sequence, hash)`
-triple once in a materialized candidate set, in the same PostgreSQL statement that
-inserts missing checkpoints and checks existing checkpoints. A candidate disagreement
+triple once in a materialized candidate set, in the PostgreSQL statement that
+inserts missing checkpoints. That statement returns every candidate and whether it
+was inserted. After it completes, a fresh statement checks the stored checkpoint for
+every skipped candidate, using only those fixed identities and hashes. This also
+covers a conflicting row committed while the insert waited on uniqueness: that row
+can be invisible to the insert snapshot, but is visible to the fresh check.
+A candidate disagreement
 means the existing checkpoint at that candidate's tenant and sequence has a different
 hash. An append after that snapshot cannot move the check to a newer sequence.
 Equal hashes are harmless skips; the return value contains only newly inserted rows.

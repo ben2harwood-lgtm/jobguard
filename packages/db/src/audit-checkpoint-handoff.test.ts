@@ -159,11 +159,11 @@ function assertOperatorUnreachable(files: ReadonlyMap<string, string>): void {
   const targetFiles = (directory: string, target: string): string[] => {
     const path = posix.normalize(posix.join(directory, target));
     if (!path.includes("*")) return moduleFiles(path);
-    const [prefix, suffix] = path.split("*");
-    const sourcePrefix = prefix!.replace("/dist/", "/src/");
-    const sourceSuffix = suffix!.replace(/\.(?:[cm]?js)$/u, ".ts");
-    return [...files.keys()].filter(file => file.startsWith(prefix!) && file.endsWith(suffix!) ||
-      file.startsWith(sourcePrefix) && file.endsWith(sourceSuffix)).flatMap(moduleFiles);
+    // A target may repeat the wildcard. With no subpath in hand, conservatively match
+    // every wildcard as any run of characters while retaining every literal segment.
+    const patterns = [path, ...[".ts", ".tsx", ".mts", ".cts"].map(extension => path.replace("/dist/", "/src/").replace(/\.(?:[cm]?js)$/u, extension))];
+    const matches = patterns.map(pattern => new RegExp("^" + pattern.split("*").map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")).join(".*") + "$", "u"));
+    return [...files.keys()].filter(file => matches.some(pattern => pattern.test(file))).flatMap(moduleFiles);
   };
   const resolveModule = (from: string, specifier: string): string[] => {
     if (specifier.startsWith(".")) return moduleFiles(posix.join(posix.dirname(from), specifier));
@@ -197,11 +197,67 @@ function assertOperatorUnreachable(files: ReadonlyMap<string, string>): void {
     visited.add(path);
     if (!edges.has(path)) {
       const source = ts.createSourceFile(path, files.get(path) ?? "", ts.ScriptTarget.Latest, true);
+      // Bind identifiers with TypeScript's lexical scopes; a function parameter or local
+      // declaration must not borrow a same-named constant from an outer scope.
+      const program = ts.createProgram([path], { noResolve: true, noLib: true, allowJs: true }, {
+        ...ts.createCompilerHost({}), getSourceFile: name => name === path ? source : undefined,
+        fileExists: name => name === path, readFile: name => files.get(name),
+      });
+      const checker = program.getTypeChecker();
+      const constant = (node: ts.Expression | undefined, seen = new Set<ts.Node>()): string | undefined => {
+        if (!node || seen.has(node)) return undefined;
+        seen.add(node);
+        if (ts.isStringLiteralLike(node)) return node.text;
+        if (ts.isParenthesizedExpression(node)) return constant(node.expression, seen);
+        if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+          const left = constant(node.left, new Set(seen)), right = constant(node.right, new Set(seen));
+          return left === undefined || right === undefined ? undefined : left + right;
+        }
+        if (ts.isIdentifier(node)) {
+          const declarations = checker.getSymbolAtLocation(node)?.declarations;
+          const declaration = declarations?.length === 1 ? declarations[0] : undefined;
+          if (declaration && ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name) &&
+            ts.isVariableDeclarationList(declaration.parent) && declaration.parent.flags & ts.NodeFlags.Const) return constant(declaration.initializer, seen);
+        }
+        return undefined;
+      };
+      const fromNodeModule = (declaration: ts.Node): boolean => {
+        for (let parent: ts.Node | undefined = declaration; parent; parent = parent.parent) {
+          if (ts.isImportDeclaration(parent)) return ts.isStringLiteralLike(parent.moduleSpecifier) && ["module", "node:module"].includes(parent.moduleSpecifier.text);
+        }
+        return false;
+      };
+      const isRequireFactory = (expression: ts.Expression): boolean => {
+        if (ts.isPropertyAccessExpression(expression) && expression.name.text === "createRequire") {
+          return (checker.getSymbolAtLocation(expression.expression)?.declarations ?? []).some(declaration =>
+            (ts.isNamespaceImport(declaration) || ts.isImportClause(declaration)) && fromNodeModule(declaration));
+        }
+        if (!ts.isIdentifier(expression)) return false;
+        return (checker.getSymbolAtLocation(expression)?.declarations ?? []).some(declaration =>
+          ts.isImportSpecifier(declaration) && (declaration.propertyName ?? declaration.name).text === "createRequire" && fromNodeModule(declaration));
+      };
+      const isRequire = (expression: ts.Expression, seen = new Set<ts.Node>()): boolean => {
+        if (seen.has(expression)) return false;
+        seen.add(expression);
+        if (ts.isCallExpression(expression)) return isRequireFactory(expression.expression);
+        if (!ts.isIdentifier(expression)) return false;
+        if (expression.text === "require") return true;
+        return (checker.getSymbolAtLocation(expression)?.declarations ?? []).some(declaration =>
+          ts.isVariableDeclaration(declaration) && ts.isVariableDeclarationList(declaration.parent) &&
+          Boolean(declaration.parent.flags & ts.NodeFlags.Const) && declaration.initializer && isRequire(declaration.initializer, seen));
+      };
       const dependencies: string[] = [];
+      const addSpecifier = (expression: ts.Expression | undefined) => {
+        const specifier = constant(expression);
+        if (specifier === undefined) throw new Error(`Unresolved module specifier in ${path}`);
+        dependencies.push(specifier);
+      };
       const visit = (node: ts.Node) => {
         if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)) dependencies.push(node.moduleSpecifier.text);
-        if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference) && node.moduleReference.expression && ts.isStringLiteralLike(node.moduleReference.expression)) dependencies.push(node.moduleReference.expression.text);
-        if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || ts.isIdentifier(node.expression) && node.expression.text === "require") && node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) dependencies.push(node.arguments[0].text);
+        if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) addSpecifier(node.moduleReference.expression);
+        if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteralLike(node.argument.literal)) dependencies.push(node.argument.literal.text);
+        if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || isRequire(node.expression) ||
+          ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "resolve" && isRequire(node.expression.expression))) addSpecifier(node.arguments[0]);
         ts.forEachChild(node, visit);
       };
       visit(source);
@@ -268,13 +324,89 @@ it.each(["exports", "main"])("[Round 1 F2] same guard refuses a %s target exposi
   files.set("packages/bridge/dist/entry.js", 'export * from "../../db/src/audit-checkpoint-handoff.js";');
   expect(() => assertOperatorUnreachable(files)).toThrow("Operator reachable");
 });
+it.each([
+  'const operatorPath = "../../db/dist/audit-checkpoint-handoff.js"; const operatorModule = await import(operatorPath); export const renamed = operatorModule.runAuditCheckpointHandoff;',
+  'const operatorPath = `../../db/dist/audit-checkpoint-handoff.js`; const operatorModule = await import(operatorPath); export const renamed = operatorModule.runAuditCheckpointHandoff;',
+  'const base = "../../db/dist/"; const operatorPath = base + "audit-checkpoint-handoff.js"; const operatorModule = require(operatorPath); export const renamed = operatorModule.runAuditCheckpointHandoff;',
+])("[Round 2 F2] same guard refuses constant-path loading followed by an aliased export: %s", source => {
+  const files = reachabilityFixture();
+  files.set("apps/api/src/handler.ts", 'import { renamed } from "@jobguard/bridge";');
+  files.set("packages/bridge/src/index.ts", source);
+  expect(() => assertOperatorUnreachable(files)).toThrow("Operator reachable");
+});
+it.each(["import(path)", "require(path)"])("[Round 2 F2] unresolved %s fails closed naming the file", expression => {
+  const files = reachabilityFixture();
+  files.set("packages/bridge/src/index.ts", `export function load(path: string) { return ${expression}; }`);
+  expect(() => assertOperatorUnreachable(files)).toThrow("Unresolved module specifier in packages/bridge/src/index.ts");
+});
+it("[Round 2 F3] same guard refuses a repeated-wildcard target before a request imports its subpath", () => {
+  const files = reachabilityFixture();
+  files.set("packages/bridge/package.json", JSON.stringify({ name: "@jobguard/bridge", exports: { "./features/*": "./dist/*/entry-*.js" } }));
+  files.set("packages/bridge/dist/ops/entry-ops.js", 'export * from "../../../db/dist/audit-checkpoint-handoff.js";');
+  expect(() => assertOperatorUnreachable(files)).toThrow("Operator reachable");
+});
+it("[Round 2 F3] repeated-wildcard target keeps its full suffix", () => {
+  const files = reachabilityFixture();
+  files.set("packages/bridge/package.json", JSON.stringify({ name: "@jobguard/bridge", exports: { "./features/*": "./dist/*/entry-*.js" } }));
+  files.set("packages/bridge/dist/ops/entry-ops.txt.js", 'export * from "../../../db/dist/audit-checkpoint-handoff.js";');
+  // This also matches the conservative all-wildcards scan, but a truncated suffix would miss it.
+  expect(() => assertOperatorUnreachable(files)).toThrow("Operator reachable");
+});
+it.each([
+  'const base = "../../db/"; const path = (base + `dist/`) + "audit-checkpoint-handoff.js"; export const renamed = await import(path);',
+  'export * as renamed from "../../db/dist/audit-checkpoint-handoff.js";',
+  'import type { entry } from "../../db/dist/audit-checkpoint-handoff.js";',
+  'export type Entry = typeof import("../../db/dist/audit-checkpoint-handoff.js");',
+  'const path = "../../db/dist/audit-checkpoint-handoff.js"; require.resolve(path);',
+  'import { createRequire as makeLoader } from "node:module"; const load = makeLoader(import.meta.url); export const renamed = load("../../db/dist/audit-checkpoint-handoff.js");',
+  'import * as mod from "node:module"; const load = mod.createRequire(import.meta.url); export const renamed = load("../../db/dist/audit-checkpoint-handoff.js");',
+  'import mod from "node:module"; export const renamed = mod.createRequire(import.meta.url)("../../db/dist/audit-checkpoint-handoff.js");',
+  'const load = require; const alias = load; export const renamed = alias("../../db/dist/audit-checkpoint-handoff.js");',
+])("[Round 2 self-review] same guard follows related import syntax: %s", source => {
+  const files = reachabilityFixture(); files.set("packages/bridge/src/index.ts", source);
+  expect(() => assertOperatorUnreachable(files)).toThrow("Operator reachable");
+});
+it.each([
+  'const path = "safe-external"; export function load(path: string) { return import(path); }',
+  'let path = "safe-external"; export const loaded = require(path);',
+  'export function load(path: string) { return import(`external/${path}`); }',
+  'const a = b; const b = a; export const loaded = import(a);',
+  'import { createRequire } from "node:module"; const load = createRequire(import.meta.url); export function entry(path: string) { return load(path); }',
+  'export function entry(path: string) { return require.resolve(path); }',
+])("[Round 2 self-review] computed or shadowed specifiers fail closed: %s", source => {
+  const files = reachabilityFixture(); files.set("packages/bridge/src/index.ts", source);
+  expect(() => assertOperatorUnreachable(files)).toThrow("Unresolved module specifier in packages/bridge/src/index.ts");
+});
+it("[Round 2 F2] constant external dynamic imports and requires are permitted", () => {
+  const files = reachabilityFixture();
+  files.set("packages/bridge/src/index.ts", 'const path = "safe-external"; export const loaded = import(path); require(`safe-` + "external");');
+  expect(() => assertOperatorUnreachable(files)).not.toThrow();
+});
+it.each(["mjs", "cjs", "d.ts"])("[Round 2 self-review] package %s targets are inspected", extension => {
+  const files = reachabilityFixture();
+  files.set("packages/bridge/package.json", JSON.stringify({ name: "@jobguard/bridge", exports: { "./entry": `./dist/entry.${extension}` } }));
+  files.set(`packages/bridge/dist/entry.${extension}`, 'export * from "../../db/dist/audit-checkpoint-handoff.js";');
+  expect(() => assertOperatorUnreachable(files)).toThrow("Operator reachable");
+});
+it("[Round 2 F3] full repeated-wildcard patterns do not inspect a nonmatching suffix", () => {
+  const files = reachabilityFixture();
+  files.set("packages/bridge/package.json", JSON.stringify({ name: "@jobguard/bridge", exports: { "./features/*": "./dist/*/entry-*.js" } }));
+  files.set("packages/bridge/dist/ops/entry-ops.txt", 'export * from "../../../db/dist/audit-checkpoint-handoff.js";');
+  expect(() => assertOperatorUnreachable(files)).not.toThrow();
+});
+it("[Round 2 F3] repeated-wildcard source fallback is inspected before a build", () => {
+  const files = reachabilityFixture();
+  files.set("packages/bridge/package.json", JSON.stringify({ name: "@jobguard/bridge", exports: { "./features/*": "./dist/*/entry-*.js" } }));
+  files.set("packages/bridge/src/ops/entry-ops.ts", 'export * from "../../../db/dist/audit-checkpoint-handoff.js";');
+  expect(() => assertOperatorUnreachable(files)).toThrow("Operator reachable");
+});
 it("[C-OPS-5] operator source does not construct request tenant authority", () => {
   for (const name of ["audit-checkpoint-handoff.ts", "audit-checkpoint-handoff-cli.ts"]) {
     expect(readFileSync(join(root, "packages/db/src", name), "utf8")).not.toMatch(/verifiedTenantContextFromMembership|verifiedTenantContextForQueuedJob|VerifiedTenantContext|withTenant/u);
   }
 });
 
-it("[Round 1 F1] checkpoint export uses one materialized candidate statement for insert and disagreement", async () => {
+it("[Round 1 F1] checkpoint export fixes candidates in one materialized insert statement", async () => {
   const query = vi.fn().mockResolvedValue({ rows: [] });
   expect(await exportAuditCheckpoints({ query } as unknown as Pool)).toEqual([]);
   expect(query).toHaveBeenCalledOnce();
@@ -282,25 +414,42 @@ it("[Round 1 F1] checkpoint export uses one materialized candidate statement for
   expect(sql).toMatch(/WITH candidates AS MATERIALIZED/u);
   expect(sql.match(/FROM app\.audit_event/gu)).toHaveLength(1);
   expect(sql).toMatch(/INSERT INTO audit_control\.checkpoint[\s\S]*FROM candidates/u);
-  expect(sql).toMatch(/FROM candidates[\s\S]*JOIN audit_control\.checkpoint/u);
+  expect(sql).toMatch(/FROM candidates candidate LEFT JOIN inserted/u);
   expect(sql).toContain("ON CONFLICT (tenant_id, sequence) DO NOTHING");
 });
 
 it("[Round 1 F1] successful checkpoint results keep the existing public shape", async () => {
   const checkpoint = { tenantId: tenant, sequence: 7, eventHash: headHash, recordedAt: new Date() };
-  const query = vi.fn().mockResolvedValue({ rows: [{ ...checkpoint, disagreement: false }] });
+  const query = vi.fn().mockResolvedValue({ rows: [{ ...checkpoint, inserted: true }] });
   expect(await exportAuditCheckpoints({ query } as unknown as Pool)).toEqual([checkpoint]);
   expect(query).toHaveBeenCalledOnce();
 });
 it("[Round 1 F1] candidate disagreement reports its exact identity alongside valid insert results", async () => {
-  const query = vi.fn().mockResolvedValue({ rows: [
-    { tenantId: other, sequence: 8, eventHash: headHash, recordedAt: new Date(), disagreement: false },
-    { tenantId: tenant, sequence: 7, eventHash: "f".repeat(64), recordedAt: new Date(), disagreement: true },
-  ] });
+  const query = vi.fn().mockResolvedValueOnce({ rows: [
+    { tenantId: other, sequence: 8, eventHash: headHash, recordedAt: new Date(), inserted: true },
+    { tenantId: tenant, sequence: 7, eventHash: headHash, recordedAt: null, inserted: false },
+  ] }).mockResolvedValueOnce({ rows: [{ tenantId: tenant, sequence: 7 }] });
   await expect(exportAuditCheckpoints({ query } as unknown as Pool)).rejects.toMatchObject({ code: "AUDIT_VERIFICATION_FAILED", message: `Stored checkpoint differs for tenant ${tenant} at sequence 7` });
-  expect(query).toHaveBeenCalledOnce();
+  expect(query).toHaveBeenCalledTimes(2);
 });
 
+it("[Round 2 F1] skipped candidates are checked in a fresh statement using their original identities", async () => {
+  const candidate = { tenantId: tenant, sequence: 7, eventHash: headHash, recordedAt: null, inserted: false };
+  const query = vi.fn().mockResolvedValueOnce({ rows: [candidate] }).mockResolvedValueOnce({ rows: [{ tenantId: tenant, sequence: 7 }] });
+  await expect(exportAuditCheckpoints({ query } as unknown as Pool)).rejects.toMatchObject({ code: "AUDIT_VERIFICATION_FAILED", message: `Stored checkpoint differs for tenant ${tenant} at sequence 7` });
+  expect(query).toHaveBeenCalledTimes(2);
+  const [sql, values] = query.mock.calls[1]! as [string, string[]];
+  expect(sql).not.toContain("app.audit_event");
+  expect(sql).toContain("audit_control.checkpoint");
+  expect(JSON.parse(values[0]!)).toEqual([{ tenantId: tenant, sequence: 7, eventHash: headHash }]);
+});
+it("[Round 2 F1] valid inserts are returned and only skipped candidates need the fresh lookup", async () => {
+  const checkpoint = { tenantId: other, sequence: 8, eventHash: headHash, recordedAt: new Date() };
+  const query = vi.fn().mockResolvedValueOnce({ rows: [{ ...checkpoint, inserted: true }, { tenantId: tenant, sequence: 7, eventHash: headHash, recordedAt: null, inserted: false }] }).mockResolvedValueOnce({ rows: [] });
+  expect(await exportAuditCheckpoints({ query } as unknown as Pool)).toEqual([checkpoint]);
+  expect(query).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(query.mock.calls[1]![1][0])).toEqual([{ tenantId: tenant, sequence: 7, eventHash: headHash }]);
+});
 it("[A14] disagreement path has no INSERT and ends in ROLLBACK", async () => {
   mismatched = true;
   expect((await runAuditCheckpointHandoff(options)).outcomes).toEqual([{ tenantId: tenant, outcome: "failed", sequence: null, code: "AUDIT_CHECKPOINT_DISAGREEMENT" }]);

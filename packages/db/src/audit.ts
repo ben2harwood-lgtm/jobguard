@@ -94,10 +94,11 @@ export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: Aud
 }
 
 /** Migration/assurance credentials only. Returns newly recorded checkpoints; equal hashes skip.
- * Candidates are fixed in one statement snapshot. Valid inserts commit before a candidate
- * disagreement is reported, naming its tenant and sequence; other companies' records remain. */
+ * The insert fixes candidate identities; skipped candidates are verified in a fresh statement.
+ * Valid inserts commit before disagreement is reported; other companies' records remain. */
 export async function exportAuditCheckpoints(pool: Pool): Promise<AuditCheckpoint[]> {
-  const result = await pool.query<AuditCheckpoint & { disagreement: boolean }>(`WITH candidates AS MATERIALIZED (
+  type Candidate = Omit<AuditCheckpoint, "recordedAt"> & { recordedAt: Date | null; inserted: boolean };
+  const result = await pool.query<Candidate>(`WITH candidates AS MATERIALIZED (
     SELECT DISTINCT ON (tenant_id) tenant_id, sequence, event_hash FROM app.audit_event
     ORDER BY tenant_id, sequence DESC
   ), inserted AS (
@@ -106,15 +107,24 @@ export async function exportAuditCheckpoints(pool: Pool): Promise<AuditCheckpoin
     ON CONFLICT (tenant_id, sequence) DO NOTHING
     RETURNING tenant_id, sequence, event_hash, recorded_at
   )
-  SELECT tenant_id AS "tenantId", sequence::int, event_hash AS "eventHash",
-    recorded_at AS "recordedAt", false AS disagreement FROM inserted
-  UNION ALL
-  SELECT c.tenant_id AS "tenantId", c.sequence::int, c.event_hash AS "eventHash",
-    c.recorded_at AS "recordedAt", true AS disagreement
-  FROM candidates newest JOIN audit_control.checkpoint c
-    ON (c.tenant_id,c.sequence)=(newest.tenant_id,newest.sequence)
-  WHERE c.event_hash <> newest.event_hash`);
-  const disagreement = result.rows.find(row => row.disagreement);
-  if (disagreement) throw new AuditVerificationError(`Stored checkpoint differs for tenant ${disagreement.tenantId} at sequence ${disagreement.sequence}`);
-  return result.rows.map(({ disagreement: _disagreement, ...checkpoint }) => checkpoint);
+  SELECT candidate.tenant_id AS "tenantId", candidate.sequence::int, candidate.event_hash AS "eventHash",
+    inserted.recorded_at AS "recordedAt", inserted.tenant_id IS NOT NULL AS inserted
+  FROM candidates candidate LEFT JOIN inserted
+    ON (inserted.tenant_id,inserted.sequence)=(candidate.tenant_id,candidate.sequence)
+  ORDER BY candidate.tenant_id, candidate.sequence`);
+  const skipped = result.rows.filter(row => !row.inserted)
+    .map(({ tenantId, sequence, eventHash }) => ({ tenantId, sequence, eventHash }));
+  if (skipped.length) {
+    // DO NOTHING may wait for a row invisible to the insert snapshot. Re-read only those
+    // fixed identities after the statement completes, never today's newest events.
+    const conflicts = await pool.query<Pick<AuditCheckpoint, "tenantId" | "sequence">>(`SELECT candidate."tenantId", candidate.sequence
+      FROM jsonb_to_recordset($1::jsonb) AS candidate("tenantId" uuid, sequence bigint, "eventHash" text)
+      LEFT JOIN audit_control.checkpoint stored
+        ON (stored.tenant_id,stored.sequence)=(candidate."tenantId",candidate.sequence)
+      WHERE stored.event_hash IS DISTINCT FROM candidate."eventHash"
+      ORDER BY candidate."tenantId", candidate.sequence`, [JSON.stringify(skipped)]);
+    const disagreement = conflicts.rows[0];
+    if (disagreement) throw new AuditVerificationError(`Stored checkpoint differs for tenant ${disagreement.tenantId} at sequence ${disagreement.sequence}`);
+  }
+  return result.rows.filter(row => row.inserted).map(({ inserted: _inserted, ...checkpoint }) => ({ ...checkpoint, recordedAt: checkpoint.recordedAt! }));
 }

@@ -74,10 +74,10 @@ async function restrictedExport(pool: Pool = owner, afterInsert?: (client: PoolC
   const client = await pool.connect();
   try {
     // The helper accepts a pool: give it a facade over this owner connection with a local role in each query transaction.
-    const facade = { async query(sql: string) {
+    const facade = { async query(sql: string, values?: unknown[]) {
       onStatement?.();
       await client.query("BEGIN"); await client.query("SET LOCAL ROLE jobguard_migration");
-      try { const result = await client.query(sql); await client.query("COMMIT");
+      try { const result = await client.query(sql, values); await client.query("COMMIT");
         if (sql.includes("INSERT INTO audit_control.checkpoint")) await afterInsert?.(client);
         return result; }
       catch (error) { await client.query("ROLLBACK"); throw error; }
@@ -150,8 +150,8 @@ async function interveningAppend(equal: boolean, keepOther: boolean) {
     }
     expect((await admin.query("SELECT sequence::text,event_hash FROM audit_control.checkpoint WHERE tenant_id=$1", [a.tenantId])).rows).toEqual([{ sequence: h.sequence, event_hash: equal ? h.event_hash : "f".repeat(64) }]);
     expect((await admin.query("SELECT sequence::text,event_hash FROM audit_control.checkpoint WHERE tenant_id=$1", [b.tenantId])).rows).toEqual([{ sequence: otherHead.sequence, event_hash: otherHead.event_hash }]);
-    // All three cases also require the single candidate statement; the old implementation uses two.
-    expect(statements).toBe(1);
+    // One fixed candidate/insert statement, followed by one fresh verification statement.
+    expect(statements).toBe(2);
   } finally {
     await blocker.query("SELECT pg_advisory_unlock($1)", [lockId]);
     await appender.query("ROLLBACK");
@@ -162,6 +162,44 @@ async function interveningAppend(equal: boolean, keepOther: boolean) {
 it("[Round 1 F1a] candidate disagreement rejects naming company and sequence after an intervening append", () => interveningAppend(false, false));
 it("[Round 1 F1b] other-company checkpoint is committed and kept when the candidate disagrees after an append", () => interveningAppend(false, true));
 it("[Round 1 F1c] equal candidate hash skips without a duplicate after an intervening append", () => interveningAppend(true, false));
+it.each([false, true])("[Round 2 F1] wrong checkpoint committed during insert wait rejects and keeps other company (pre-existing: %s)", async keepOther => {
+  const h = await head(a.tenantId), otherHead = await head(b.tenantId);
+  if (keepOther) await admin.query("INSERT INTO audit_control.checkpoint(tenant_id,sequence,event_hash) VALUES($1,$2,$3)", [b.tenantId, otherHead.sequence, otherHead.event_hash]);
+  const second = new Pool({ connectionString: ownerUrl, max: 1 });
+  const writer = await owner.connect(), observer = await admin.connect();
+  let pending: Promise<{ rows?: AuditCheckpoint[]; error?: unknown }> | undefined;
+  try {
+    const writerPid = (await writer.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0]!.pid;
+    const observerPid = (await observer.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0]!.pid;
+    expect(observerPid).not.toBe(writerPid);
+    await writer.query("BEGIN"); await writer.query("SET LOCAL ROLE jobguard_migration");
+    await writer.query("INSERT INTO audit_control.checkpoint(tenant_id,sequence,event_hash) VALUES($1,$2,$3)", [a.tenantId, h.sequence, "f".repeat(64)]);
+    pending = restrictedExport(second).then(rows => ({ rows }), error => ({ error }));
+    const deadline = Date.now() + 3000;
+    let waiter: { pid: number } | undefined;
+    while (Date.now() < deadline) {
+      waiter = (await observer.query<{ pid: number }>(`SELECT pid FROM pg_stat_activity
+        WHERE wait_event_type='Lock' AND $1=ANY(pg_blocking_pids(pid))
+        AND query LIKE '%INSERT INTO audit_control.checkpoint%'`, [writerPid])).rows[0];
+      if (waiter) break;
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    expect(waiter).toBeDefined();
+    expect(waiter!.pid).not.toBe(writerPid); expect(waiter!.pid).not.toBe(observerPid);
+    // W is still uncommitted, and A is demonstrably waiting on W's unique-key conflict.
+    expect((await observer.query("SELECT 1 FROM audit_control.checkpoint WHERE tenant_id=$1", [a.tenantId])).rowCount).toBe(0);
+    await writer.query("COMMIT");
+    const result = await pending;
+    expect(result.error).toMatchObject({ code: "AUDIT_VERIFICATION_FAILED", message: `Stored checkpoint differs for tenant ${a.tenantId} at sequence ${h.sequence}` });
+    expect(result.rows).toBeUndefined();
+    expect((await observer.query("SELECT sequence::text,event_hash FROM audit_control.checkpoint WHERE tenant_id=$1", [a.tenantId])).rows).toEqual([{ sequence: h.sequence, event_hash: "f".repeat(64) }]);
+    expect((await observer.query("SELECT sequence::text,event_hash FROM audit_control.checkpoint WHERE tenant_id=$1", [b.tenantId])).rows).toEqual([{ sequence: otherHead.sequence, event_hash: otherHead.event_hash }]);
+  } finally {
+    await writer.query("ROLLBACK");
+    if (pending) await pending;
+    writer.release(); observer.release(); await second.end();
+  }
+});
 it("[A5] [C-OPS-4] effective run followed by unchanged run has identical snapshots", async () => {
   const first = await run(); expect(first.outcomes).toHaveLength(2);
   expect(first.outcomes.map(o => o.tenantId).sort()).toEqual([a.tenantId, b.tenantId].sort());
