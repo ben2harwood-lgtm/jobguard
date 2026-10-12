@@ -67,3 +67,6 @@ export * from "../practice-feed.http.js";
 export * from "../auth/sso/sso.application.js";
 export * from "../auth/sso/sso.contracts.js";
 export { AuditExportApplication, auditExportHttpFailure, assertAuditExportMode } from "../audit-export/audit-export.application.js";
+
+export * from "../final-account-lock.application.js";
+export * from "../final-account-lock.contracts.js";

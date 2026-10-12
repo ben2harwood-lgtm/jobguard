@@ -827,3 +827,4 @@ non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
 and browser regressions. Local sandbox initialization errors are not DB passes.
 
 - `0129_shadow_detection.sql` — SV-3: append-only FORCE-RLS `shadow_must_surface_firing`, shadow-only `surface_shadow_signal_early` EXECUTE, and the single `must_surface_signal` finding kind. Atomic Decision/disclosure/firing/audit; no new business-table grants. Forward fix only: retain immutable firings and disclosures; disable the worker to stop new detections. Database upgrade proof is in `shadow-detection.integration.test.ts`.
+- `0130_final_account_lock.sql` — SV-4 immutable lock, dispositions, synthetic terms, append-only check facts and invoice/line side bindings; only new lock-bound issue is guarded. No fingerprinted-table columns or existing grants change. Forward-fix by additive migration; do not delete locks or issued invoices.
