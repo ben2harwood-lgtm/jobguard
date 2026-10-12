@@ -1,0 +1,60 @@
+{
+  "version": "shadow-labels.v1",
+  "cases": [
+    {
+      "id": "held-out-1",
+      "class": "genuine_extra",
+      "expectedExtras": 1
+    },
+    {
+      "id": "held-out-2",
+      "class": "contracted_work",
+      "expectedExtras": 0
+    },
+    {
+      "id": "held-out-3",
+      "class": "ambiguity",
+      "expectedExtras": 0
+    },
+    {
+      "id": "held-out-4",
+      "class": "chat",
+      "expectedExtras": 0
+    },
+    {
+      "id": "held-out-5",
+      "class": "alternative_material",
+      "expectedExtras": 0
+    },
+    {
+      "id": "held-out-6",
+      "class": "duplicates",
+      "expectedExtras": 1
+    },
+    {
+      "id": "held-out-7",
+      "class": "cancelled_or_unfinished_request",
+      "expectedExtras": 0
+    },
+    {
+      "id": "held-out-8",
+      "class": "supplier_spares",
+      "expectedExtras": 0
+    },
+    {
+      "id": "held-out-9",
+      "class": "builder_mistake",
+      "expectedExtras": 0
+    },
+    {
+      "id": "held-out-10",
+      "class": "already_captured",
+      "expectedExtras": 0
+    },
+    {
+      "id": "held-out-11",
+      "class": "extra_several_sources",
+      "expectedExtras": 1
+    }
+  ]
+}

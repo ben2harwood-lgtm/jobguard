@@ -1,3 +1,4 @@
+import { runShadowEvaluation, formatShadowEvaluation } from "./shadow-evaluation.js";
 import { pathToFileURL } from "node:url";
 import { MUTATIONS, runCaptureEvaluation, type EvaluationMutation } from "./evaluation-runner.js";
 export async function evaluationMain(argv: readonly string[], emit: (text: string) => void = text => process.stdout.write(text)): Promise<number> {
@@ -7,7 +8,8 @@ export async function evaluationMain(argv: readonly string[], emit: (text: strin
   }
   try {
     const report = await runCaptureEvaluation(argv[1] as EvaluationMutation | undefined);
-    emit(JSON.stringify(report, null, 2) + "\n");
+    const shadow = !argv.length ? await runShadowEvaluation() : undefined;
+    emit(JSON.stringify({ ...report, ...(shadow ? { shadowEvaluation: shadow, shadowSummary: formatShadowEvaluation(shadow) } : {}) }, null, 2) + "\n");
     return report.status === "PASS" ? 0 : 1;
   } catch {
     // A missing/invalid corpus or runtime failure is never a successful empty
