@@ -357,3 +357,35 @@ The scratch edit (never committed) inserted, immediately before the line-52 asse
 Not pushed from this run: the required `LANE_BASE_REF=origin/main pnpm lint` is red on the lane step (step 10). Everything else above is green. Resolution is the coordinator's: either add `packages/db/test/shadow-persistence.integration.test.ts` to the `sv-4` allow-list (one entry) or rule otherwise; then `git push origin HEAD:codex/sandbox/sv-4` (plain push; PR #152 is open at the older head `1965aea` and conflicts with main until pushed).
 
 Mac verification record only; the builder receipt above is still "not independently verified, not accepted".
+
+
+## Re-check after catch-up (12 Oct, evening)
+
+Run by the JobGuard dispatcher's Mac helper (Claude Sonnet 5.5), 12 October 2026 (evening), in `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-4`, branch `codex/sandbox/sv-4`. Verification record only: **not independently verified, not accepted**. Free disk at start 112 GiB.
+
+- Start: head `8949219` (the dispatcher's lane-line fix, clean). `origin/main` `ad1bad2`. Merge commit `b24a20d` "Merge main (ad1bad2) into SV-4".
+- Conflicts, all in append-only files, resolved keeping both sides with main's lines first: `packages/core/src/index.ts` (main's `practice-facts.js` export, then ours), `packages/db/src/migrate.ts` (main's 0131 line, then our 0132 line, registered last), `packages/db/MIGRATIONS.md` (main's 0131 section, then ours). `apps/api/src/app.module.ts`: main's `@Module` line plus `,FinalAccountLockController` once (character-level diff against main's line = a single 27-character insertion after `PracticeFactsController`). `apps/api/src/workspace/application.ts`: our `const finalAccountLock = ...` line, then main's `return Object.freeze({ ssoRequired, sso, ...` line plus `, finalAccountLock` once before ` });` (single 18-character insertion). `BUILD_PLAN.md`, `config/agent-lane-assignments.json` (parses), `apps/api/src/workspace/index.ts` and `packages/core/src/watchdog.ts` merged without conflict.
+- `apps/api/openapi.json`: not hand-merged. Took main's file, rebuilt `core`, `db`, `storage`, `config`, `ai` each alone, then `api`, ran `pnpm openapi:generate` in `apps/api` (exit 0) and `pnpm openapi:check` (exit 0). Result vs main: 73 lines added, 0 removed (the four `/jobs/{id}/final-account/...` routes). sha256 `04fdd616144672010f44a4ba7f543038bf4b645eee3b4450c3debd387c00c7f5`.
+- Migrations: `ls packages/db/migrations` ends 0130, 0131, 0132; exactly one `final_account_lock` file (0132); no duplicate numbers. `0132_final_account_lock.sql` sha256 still `543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7` (unchanged).
+- SV-2's `shadow-persistence.integration.test.ts` not edited here; sha256 `a7b1f2670d96290a2778117317d6e8a6b590c4433415aa955d91af294933148c`, the same as before the merge.
+
+Every command through `~/.local/bin/heavy-slot <label>`; vitest `--reporter=verbose`, db files `--maxWorkers=1`, others `--maxWorkers=2`; logs in `~/.local/share/full-steam/jg-runs/sv-4-r3-mac/`.
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `packages/db`: `test/shadow-persistence.integration.test.ts test/command-replay-contract.integration.test.ts test/final-account-lock.integration.test.ts` | 0 | 3 files, **75/75** (8 + 53 + 14). The new contract test passes on this branch (no uncovered watchdog_live_only key) |
+| 2 | `packages/db`: `test/final-account-lock-invoice.integration.test.ts test/final-account-lock-reveal.integration.test.ts test/final-account-lock-upgrade.integration.test.ts` | 0 | 3 files, **13/13** (10 + 2 + 1); the rule-9 upgrade proof "installs before 0132, compares 0132 alone, all later twice, and exercises the same comparator's rolled-back controls" passed |
+| 3 | `packages/db`: `test/shadow-catalog.integration.test.ts test/tenancy.integration.test.ts` | 0 | 2 files, **15/15** (6 + 9) |
+| 4 | `apps/api`: `src/auth/context-boundary.test.ts src/watchdog-registry.test.ts` | 0 | 2 files, **266/266**: scanner **145** (expected 145), watchdog registry **121** |
+| 5 | `apps/api`: `src/final-account-lock.application.test.ts src/final-account-lock.controller.test.ts src/final-account-lock.isolation.test.ts` | 0 | 3 files, **22/22** |
+| 6 | `pnpm typecheck` | 0 | 7/7 tasks |
+| 7 | `LANE_BASE_REF=origin/main pnpm lint` | 0 | **passes the lane step now** ("Lane boundary passed", lane `sv-4`, base `ad1bad2`, head `b24a20d`; the file list includes `packages/db/test/shadow-persistence.integration.test.ts` as the coordinator's one allowed line); core purity 133 files; money arithmetic boundary passed; turbo lint 7/7 |
+| 8 | `pnpm openapi:check` (in `apps/api`) | 0 | pass |
+| 9 | `pnpm build` | 0 | 7/7 tasks (production build for the browser spec) |
+| 10 | `apps/web`: `CI=1 PLAYWRIGHT_SKIP_BROWSER_GC=1 pnpm exec playwright test --config ~/.local/share/full-steam/jg-runs/sv-4-r3-mac/pw-local-channel-sv-4-r3.config.ts --workers=1 e2e/SV-4.spec.ts` (both projects, mobile-360 and desktop) | 0 | **10 passed** |
+
+### Not run in this re-check
+
+The shadow-persistence red experiment (done on `2cfca30`; the file is unchanged), `pnpm test:db`, `pnpm test:migrations` and any whole-package suite (memory rule), `ENT-2.spec.ts`, browser specs other than `SV-4.spec.ts` (the previous helper ran the others on `2cfca30`), SV-3.
+
+Mac verification record only; the builder receipt above is still "not independently verified, not accepted".
