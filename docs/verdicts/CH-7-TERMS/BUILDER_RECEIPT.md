@@ -1,26 +1,26 @@
-# CH-7-TERMS builder receipt — continuation round 1
+# CH-7-TERMS builder receipt — continuation round 2
 
-Builder: Codex GPT-6.1 Sol. Issued 12 October 2026; Q1–Q5 adopted, plus the coordinator's active-owner amendment supplied in this round.
+Builder: Codex. Issued 12 October 2026; Q1–Q5 and the active-owner amendment remain in force. Round 2 implements only the coordinator's amended T8 ruling of 12 October 22:40, issued about 22:45. T1–T7 and T9–T13 are unchanged.
 
-**Status: implementation written; acceptance HOLD on T8's conflicting timestamp requirement.** This is a builder receipt, not a database verdict. No commit, add, checkout, fetch, push, package install/download, database or browser was performed. All changes remain in the working tree. The intended message is `/private/tmp/jg-msg-ch-7-terms.txt`.
+**Status: amended T8 test written; PostgreSQL/browser execution and independent acceptance remain owed.** Round 1 was committed by the dispatcher as `ba6e30f8617df84f1dda12c6bcfbe46d1af138ba` (`feat(recovery): record synthetic case fee terms and guard pursuit`), the starting HEAD of this continuation on `codex/sandbox/ch-7-terms`. Round 2 changes only the existing T8 integration test and this receipt. No commit, add, checkout, fetch, push, package install/download, PostgreSQL or browser was performed by this builder. The intended commit message is `/private/tmp/jg-msg-ch-7-terms.txt`.
 
-Issued branch/head: `codex/sandbox/ch-7-terms`, `3fa7e7edfa08dd44a3f58d9288f94fc7050e6008`. Its merged main base is `96c0cb8a5b5562c65b79f5f601ba9d60f8fcf05a`. That main snapshot ended at 0130; 0134 remains the issued number. `origin/main` advanced externally during this round to `ad1bad244e1712f3af4cbd4c30e784184da33d14` (including PRACTICE-FACTS-1/0131). The worktree/head was not changed to follow it. Lane checks use the merge base; preservation evidence below distinguishes fixed-base changes from newer main. Dispatcher integration of newer main is owed before reviewing the final commit.
+The fixed merged-main base remains `96c0cb8a5b5562c65b79f5f601ba9d60f8fcf05a`; the locally available `origin/main` is `ad1bad244e1712f3af4cbd4c30e784184da33d14`. No branch/ref was changed. Migration 0134 and every production file remain byte-for-byte as committed in round 1. Lane checks use the merge base; dispatcher integration of newer main remains owed. The following implementation inventory and round-1 command history are retained as historical evidence, distinct from the round-2 run below.
 
-## Preflight finding (credited)
+## Round-1 preflight finding (credited)
 
 The previous builder round found the genuine conflict between T2's forged direct-call refusal and the prohibition on carrying an SQL membership predicate. Credit that builder for identifying the concrete counterexample and refusing to weaken T2; that was the correct finding. The coordinator's 12 October ruling amends the order: the new routine carries its OWN active-owner predicate while continuing to use the merged dispatcher receipt and audit paths. This is a tightening inside the new routine; no existing predicate or grant is altered.
 
 Mirrored `packages/db/migrations/0109_job_activation_terms.sql:58` exactly in shape: `role='owner'`, `revoked_at IS NULL`, `(expires_at IS NULL OR expires_at>clock_timestamp())`. The new query joins membership on tenant and receipt actor at `0134_recovery_case_terms.sql:56`, with the predicate at line 61, alongside the exact-authorization joins modelled on 0109:59–65. **0109:58 contains no contractor-membership revocation check at this base; none was invented or omitted.** The new direct-runtime tests insert a processing receipt, case Decision, approved resolution and exact unexpired authorization for a non-owner, revoked owner and expired owner, then invoke the routine in the same transaction and compare all approval/authorization/chase/audit counts after rollback. The active-owner construction is the positive control. T2 remains unchanged as an acceptance requirement.
 
-## New acceptance conflict — T8 remains unsatisfied
+## Why exact equality was never achievable (T8)
 
-T8 requires the two audit events to “carry the same transaction time as the approval row”. Its exact equality assertion remains in `[T8] two approval audit events share transaction time and the chain verifies`; it has NOT been skipped, relaxed or represented as passing.
+The merged audit path takes a fresh `clock_timestamp()` per event (`packages/db/src/audit.ts:59–60`), while the approval requires the transaction's start time, `transaction_timestamp()` (`0134_recovery_case_terms.sql:31`). These are different clocks by design. The order forbids changing or restating the audit path, so an exact-equality assertion can never pass as the required guarantee. **Nobody should re-add exact equality between approval and audit timestamps.**
 
-The mandatory merged path at `packages/db/src/audit.ts:59–60` obtains a fresh `clock_timestamp()` for each event and persists the driver Date. The new approval is required to use `transaction_timestamp()` (0134:31); the order also forbids altering/replacing the merged audit path or restating it. These clocks are not equal. This is a source-inspected conflict, not an executed PostgreSQL result. The test's timestamp assertion is expected to fail under the mandated semantics.
+The coordinator's 12 October 22:40 ruling replaces that assertion. T8 now proves what it was for: one transaction and ordered times. A test-local connection proxy follows the merged `lock-observer.ts` technique and forwards every real runtime statement unchanged. Immediately after BEGIN it reads `pg_current_xact_id()` and `transaction_timestamp()` on that same connection; immediately after COMMIT it reads `clock_timestamp()` in a second statement as the allowed upper bound, not an exact commit timestamp. The test requires exactly one observed, committed transaction; reads the approval and both audit rows' `xmin`; compares all three with the captured transaction ID; compares approval time exactly with the captured start; and asserts `start <= occurred_at <= post-commit bound` for each of the two named audit events. Timestamp reads use PostgreSQL text and comparisons run in SQL to preserve microsecond precision.
 
-An explicit coordinator ruling was requested during this round: either amend T8 to prove the same PostgreSQL transaction identity while retaining both timestamp semantics, or issue the separately owned audit-path change. **No answer/approval has been received or assumed.** No audit code was changed. The independent private-database rollback/retry test and chain-verification assertions are written, but T8 cannot be marked satisfied. AGENTS §1's contract-conflict rule holds technical acceptance until a ruling replaces the incompatible assertion. The helper must not skip/weaken it or report all T1–T13 green.
+The existing chain-verification assertion is exactly unchanged. The independent private-database audit-failure rollback/retry test is exactly unchanged. No new test file, timeout, skip, merged audit-path edit/restatement, migration or production-code change was needed. This is source-inspected coverage, not a PostgreSQL test result.
 
-## Changed files and design choices
+## Round-1 changed files and design choices
 
 - New core command/view schemas and canonical identifier hash; one core barrel export.
 - Migration 0134, registry entry and appended migration note: one forced-RLS side table; two callable functions, two trigger functions, timestamp pin/immutable trigger and three pursuit triggers. No prior row is backfilled or revised; no case event/revision is added.
@@ -46,7 +46,7 @@ BUILT means code/tests written, not PostgreSQL/browser execution or independent 
 | T5 | BUILT | `[T5] preview refusal writes nothing; [T6] approval then preview/approve/deliver succeeds unchanged`; `[T5] raw runtime writes on all three chase tables hit their added terms triggers`; HTTP 409 unit test. DB NOT RUN. |
 | T6 | BUILT | Positive preview/approve/deliver path above; `[T6] controls: non-withheld and no-policy cases require no terms` includes real pack/preview calls. DB NOT RUN. |
 | T7 | BUILT | `[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's same-UUID case guard`; `[T7] even the migration owner cannot mislink tenant/job/case identity`; missing-context SELECT. DB NOT RUN. |
-| T8 | **NOT BUILT to full acceptance** | Private audit-failure rollback/retry test written; chain/equality test written. Exact timestamp equality conflicts with the merged clock path and remains unsatisfied. Coordinator ruling outstanding. DB NOT RUN. |
+| T8 | BUILT (amended ruling; execution owed) | `[T8] approval and both audit events share one writing transaction, ordered times and a verified chain`: real transaction ID/start read inside BEGIN–COMMIT; approval/both audit `xmin` match; approval equals start; each audit time is within start/post-commit bound. Private audit-failure rollback/retry and original chain assertions unchanged. **NOT RUN (sandbox cannot start PostgreSQL / a browser).** |
 | T9 | BUILT | `[T9] actual catalog financial counts stay unchanged and terms authorization cannot execute another action`; `[T9] terms authorization cannot approve a recovery message`; proposed D01/mode unit controls; preservation evidence below. DB NOT RUN. |
 | T10 | BUILT | `[T10] pinned time, immutable rows and narrow table grants`; `[T10] routine timestamps are pinned inside PostgreSQL, never a supplied date`. Raw owner past/future times, runtime/migration mutation refusals and infra/identity grants. DB NOT RUN. |
 | T11 | BUILT | `[T11] fresh catalog has only the new forced-RLS table, controlled functions and additive ordinary triggers`; `[T11] populated before N, apply N alone, compare canonical named columns, then later migrations succeed twice`. All rule-9 controls use the same comparator. DB NOT RUN. |
@@ -116,7 +116,7 @@ All migrations at the fixed base were searched for default/global business grant
 
 This is least-privilege source derivation, not observed catalog proof. Trusted schema-owner/superuser control can alter triggers/privileges and is not described as protected by RLS or these ordinary triggers.
 
-## Commands actually run and results
+## Round-1 commands actually run and results (historical)
 
 All pnpm calls used `PATH=/private/tmp/ent3a-bin:$PATH`, the existing wrapper inspected before use. It directly executes the cached pinned pnpm 10.28.1; `pnpm --version` returned **10.28.1** (exit 0), Node **v24.17.0**. No signature fetch/install was attempted this round. Vitest used `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`, `--maxWorkers=2`, one file/run and one run at a time.
 
@@ -140,7 +140,7 @@ No full `pnpm test`, database command or Playwright invocation was attempted; no
 
 **Every database integration test and browser test: NOT RUN (sandbox cannot start PostgreSQL / a browser).** In particular:
 
-- New `recovery-case-terms.integration.test.ts` and `recovery-case-terms-upgrade.integration.test.ts`; T8's exact equality remains an explicit HOLD before any all-green claim.
+- `recovery-case-terms.integration.test.ts` (including amended T8) and `recovery-case-terms-upgrade.integration.test.ts`; mandatory PostgreSQL execution remains owed before any all-green claim.
 - `recovery-messages`, `recovery-follow-up`, `recovery-follow-up-upgrade`, `recovery-cases`, `recovery-cases.workbench`, `recovery-eligibility-v3`, `recovery-timing-pin`, `job-activation-terms`, `evidence-packs`, `fingerprinted-row-shape`, `extra-origin-upgrade`, `audit-export`, `tenancy`, `UIWIRE-12`, `demo-bootstrap` (`packages/db/test/*.integration.test.ts`), at most three per run, --maxWorkers=2.
 - `pnpm test:migrations` under the helper's allowed environment; not invoked here.
 - Playwright M4-5-S, M4-6-S, CH-7, CH-1 in Chromium and WebKit.
@@ -155,66 +155,43 @@ No full `pnpm test`, database command or Playwright invocation was attempted; no
 - Revocation, withdrawal and re-agreement/new terms version.
 - Live M4-5's later call to the shared helper.
 - Insurer wording and PRACTICE-FACTS-1b/other lanes.
-- Coordinator ruling on T8, real helper/CI execution, two independent RED reviews bound to the exact eventual commit and separate acceptance/merge/release.
+- Real helper/CI execution, two independent RED reviews bound to the exact eventual commit and separate acceptance/merge/release. The T8 ruling is supplied and implemented; database verification is still owed.
 
-## Self-review
+## Round-1 self-review (historical)
 
 Read the whole local diff against HEAD and the moving-origin diff, and re-read the new SQL, schemas, repository and tests. The migration has exactly one CREATE TABLE and the prescribed callable/trigger functions; no CREATE OR REPLACE, existing-table ALTER, existing grant/policy edit, DML backfill, ENABLE ALWAYS or financial action. The new table alone has owner/RLS ALTER statements. Its SELECT grant and two callable EXECUTE grants are the only added grants. Timestamp pin is the first ordinary approval insert trigger; immutable mutation delegates to the merged rejecting function. Membership owner predicate is the coordinator-authorized tightening; receipt/audit remain dispatcher-owned. All stored terms/time fields are server-derived; IDs are the only routine parameters. Every normal business lock precedes the dispatcher audit append.
 
 Merged source files gained lines only, except the expressly replaced eligibility sentence; OpenAPI has only an additive route; E2E files each gain one setup call; tenancy gains only two allowed catalogue rows. No unowned permanent file pin, credential-shaped long literal, security list/hash/count edit, held feature, context mint or package/lock/CI change was introduced. The 0134 registry assertion is by name/ascending order, never last/count. Privilege limits and synthetic fixtures are labelled accurately. Generated dist, Next, Turbo and tsbuildinfo outputs were removed after the final checks; no build output, test-results or .pnpm-store remains in the worktree. Dependencies were retained.
 
-The review does **not** turn T8's known source conflict into a pass or imply that any PostgreSQL/browser assertion was observed. This round has made the whole implementation reviewable, but has not completed all task acceptance assertions. Do not accept/release while the T8 ruling and mandatory helper/RED evidence are missing.
+Round 1 correctly held the incompatible T8 assertion for a coordinator ruling. That ruling has now been supplied and implemented. No PostgreSQL/browser assertion was observed in either round.
 
-Tracked-file diff at receipt-writing time (untracked new source/test/contract files are separately in status; this stat is not a total diff):
+## Round-2 commands actually run and results
 
-```text
- apps/api/openapi.json                            | 15 +++++++++++++++
- apps/api/src/recovery-case.application.ts        |  9 +++++++++
- apps/api/src/recovery-case.contracts.ts          |  8 ++++++++
- apps/api/src/recovery-case.controller.ts         |  6 ++++++
- apps/api/src/recovery-message.errors.ts          |  1 +
- apps/web/e2e/M4-5-S.spec.ts                      |  1 +
- apps/web/e2e/M4-6-S.spec.ts                      |  1 +
- docs/contracts/recovery-eligibility-v3.md        |  2 +-
- packages/core/src/index.ts                       |  1 +
- packages/core/src/watchdog.ts                    |  1 +
- packages/db/MIGRATIONS.md                        | 12 ++++++++++++
- packages/db/src/index.ts                         |  1 +
- packages/db/src/migrate.ts                       |  1 +
- packages/db/src/recovery-follow-up-repository.ts |  2 ++
- packages/db/src/recovery-message-repository.ts   |  2 ++
- packages/db/test/tenancy.integration.test.ts     |  2 ++
- 16 files changed, 64 insertions(+), 1 deletion(-)
-```
+Node `v24.17.0`, cached pinned pnpm `10.28.1` (version commands exit 0). Every pnpm command used the inspected existing `PATH=/private/tmp/ent3a-bin:$PATH` wrapper. Dependencies were preinstalled; no clean install or package download was attempted. Vitest ran one file per invocation, one invocation at a time, with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` and `--maxWorkers=2`. No full `pnpm test` was invoked under the lane's test-file limits.
 
-Working-tree file list at receipt-writing time:
+| Command | Observed result | Log |
+| --- | --- | --- |
+| `pnpm build` | **exit 0**; 7/7 tasks successful, 2 cached; Next generated 29 static pages | `/private/tmp/ch7-terms-r2-build.log` |
+| `pnpm typecheck` | **exit 0**; 7/7 tasks successful, 2 cached | `/private/tmp/ch7-terms-r2-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | **exit 0**; boundary checks and 7/7 package tasks pass, 2 cached | `/private/tmp/ch7-terms-r2-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **exit 0**; only permitted ch-7-terms paths | `/private/tmp/ch7-terms-r2-lanes.log` |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/recovery-case-terms.test.ts` | **exit 0**; 16 tests pass, 1 file | `/private/tmp/ch7-terms-r2-core-unit.log` |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/recovery-case-terms.application.test.ts` | **exit 0**; 18 tests pass, 1 file; mocked application boundaries, not a DB guarantee | `/private/tmp/ch7-terms-r2-api-unit.log` |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/recovery-case-terms.integration.test.ts test/recovery-case-terms-upgrade.integration.test.ts` | **exit 0**; both integration files typecheck; no PostgreSQL execution | `/private/tmp/ch7-terms-r2-test-types.log` |
+| `pnpm openapi:check` | **exit 1**; tsx IPC socket `listen EPERM` in this sandbox | `/private/tmp/ch7-terms-r2-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | **exit 0**; same source OpenAPI check, without the CLI IPC socket | `/private/tmp/ch7-terms-r2-openapi-socket-free.log` |
+| `git diff --check` and deterministic source-preservation self-review | **exit 0**; scope and unchanged assertions verified | Source inspection, not an independent model verdict |
 
-```text
- M apps/api/openapi.json
- M apps/api/src/recovery-case.application.ts
- M apps/api/src/recovery-case.contracts.ts
- M apps/api/src/recovery-case.controller.ts
- M apps/api/src/recovery-message.errors.ts
- M apps/web/e2e/M4-5-S.spec.ts
- M apps/web/e2e/M4-6-S.spec.ts
- M docs/contracts/recovery-eligibility-v3.md
- M packages/core/src/index.ts
- M packages/core/src/watchdog.ts
- M packages/db/MIGRATIONS.md
- M packages/db/src/index.ts
- M packages/db/src/migrate.ts
- M packages/db/src/recovery-follow-up-repository.ts
- M packages/db/src/recovery-message-repository.ts
- M packages/db/test/tenancy.integration.test.ts
-?? apps/api/src/recovery-case-terms.application.test.ts
-?? apps/web/app/api/jobs/[id]/recovery-cases/terms/
-?? docs/contracts/recovery-case-terms-v1.md
-?? packages/core/src/recovery-case-terms.test.ts
-?? packages/core/src/recovery-case-terms.ts
-?? packages/db/migrations/0134_recovery_case_terms.sql
-?? packages/db/src/recovery-case-terms-repository.ts
-?? packages/db/test/recovery-case-terms-upgrade.integration.test.ts
-?? packages/db/test/recovery-case-terms.integration.test.ts
-```
+Build output retained the existing workspace-root/autoprefixer warnings; shared Turbo cache writes reported sandbox I/O warnings but all tasks completed successfully. No configuration/check was weakened. The ordinary OpenAPI script is still owed in CI where its IPC socket is allowed.
 
-Builder receipt only — not independently verified, not accepted.
+**PostgreSQL and browser suites: NOT RUN (sandbox cannot start PostgreSQL / a browser).** The amended T8, private rollback/retry, full migration/DB regressions and browser journeys remain for dispatcher/CI after push. No eval applies: no prompt/model/schema/parser/gateway changed in this continuation.
+
+## Round-2 self-review
+
+**PASS — builder source self-review only.** Reviewed the full round-2 diff against `ba6e30f`. A deterministic comparison removes the T8 block and verifies the rest of the integration file is byte-for-byte unchanged. The original `verifyAuditChain(rows)` assertion is verbatim. The entire private-database audit-failure rollback/retry test file, `packages/db/src/audit.ts`, migration 0134, `apps/api/src/auth/context-boundary.test.ts` and the lane registry are byte-for-byte unchanged against HEAD. Only the existing integration test and this receipt differ; no new test file or production file was introduced, and no security list changed.
+
+T8's observer forwards real statements and never mocks a database result. Its captured transaction count/commit bound are asserted; approval and each named audit event are matched to the same captured ID via their actual writing `xmin`; all time comparisons happen in SQL. Exactly two approval events are required. The old equality assertion was explicitly replaced under the issued ruling, never skipped. No extra timeout or retry was added.
+
+Generated workspace build/cache outputs were removed after the checks; installed dependencies were retained. No migration, operational alert, compatibility change, external action or policy approval belongs to this continuation. AGENTS §§5.3, 5.4 and 5.7 are exercised by the amended test; its runtime evidence and the earlier release gates remain owed. The requested intended commit subject/body is written to `/private/tmp/jg-msg-ch-7-terms.txt`; the dispatcher owns the commit. No Git write was performed.
+
+Builder receipt only — not independently verified, not accepted. Mandatory CI, two independent RED verdicts bound to the final commit, separate acceptance, and dispatcher integration remain outstanding.

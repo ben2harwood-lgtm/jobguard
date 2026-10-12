@@ -149,9 +149,43 @@ it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's sa
  await expect(repo.approve(context,bj,command(id),actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});expect(await counts()).toEqual(before);
  expect((await runtime.query("SELECT * FROM app.recovery_case_terms_approval")).rows).toEqual([]);
 });
-it("[T8] two approval audit events share transaction time and the chain verifies",async()=>{
- const id=await newCase(),input=command(id);await new RecoveryCaseTermsRepository(runtime).approve(context,job,input,actor);
- const times=(await admin.query(`SELECT e.event_type,e.occurred_at=a.approved_at same FROM app.audit_event e JOIN app.recovery_case_terms_approval a ON a.tenant_id=e.tenant_id AND a.command_id=$2 WHERE e.tenant_id=$1 AND e.payload->'references'->>'commandId'=$2::text`,[T,input.commandId])).rows;expect(times).toHaveLength(2);expect(times.every(r=>r.same)).toBe(true);
+it("[T8] approval and both audit events share one writing transaction, ordered times and a verified chain",async()=>{
+ const id=await newCase(),input=command(id);
+ const transactions:{transactionId:string;startedAt:string;postCommitAt?:string}[]=[];
+ // Observe the real runtime connection as in lock-observer; forward every statement unchanged.
+ // Read text/compare in PostgreSQL so JS Date conversion cannot discard microseconds.
+ const observed=new Proxy(runtime,{
+  get(target,property){
+   if(property!=="connect"){const value=Reflect.get(target,property,target);return typeof value==="function"?value.bind(target):value;}
+   return async()=>{
+    const client=await target.connect();let current:typeof transactions[number]|undefined;
+    return new Proxy(client,{
+     get(target,property){
+      if(property!=="query"){const value=Reflect.get(target,property,target);return typeof value==="function"?value.bind(target):value;}
+      return async(...args:unknown[])=>{
+       const sql=typeof args[0]==="string"?args[0]:(args[0] as {text?:string})?.text??"";
+       const result=await (target.query as (...args:unknown[])=>Promise<unknown>)(...args);
+       if(sql.trim().toUpperCase()==="BEGIN"){
+        current=(await target.query<{transactionId:string;startedAt:string}>(`SELECT pg_current_xact_id()::text AS "transactionId",transaction_timestamp()::text AS "startedAt"`)).rows[0]!;transactions.push(current);
+       }else if(sql.trim().toUpperCase()==="COMMIT"&&current){
+        // A second statement after COMMIT is the permitted upper bound, not the exact commit time.
+        current.postCommitAt=(await target.query<{time:string}>("SELECT clock_timestamp()::text AS time")).rows[0]!.time;current=undefined;
+       }
+       return result;
+      };
+     },
+    });
+   };
+  },
+ });
+ await new RecoveryCaseTermsRepository(observed).approve(context,job,input,actor);
+ expect(transactions).toHaveLength(1);const transaction=transactions[0]!;expect(transaction.postCommitAt).toBeDefined();
+ const approval=(await admin.query(`SELECT xmin::text AS "transactionId",approved_at=$3::timestamptz AS "atStart" FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND command_id=$2`,[T,input.commandId,transaction.startedAt])).rows;
+ expect(approval).toEqual([{transactionId:transaction.transactionId,atStart:true}]);
+ // The merged audit path uses a fresh clock_timestamp per event. Never re-add exact time equality.
+ const times=(await admin.query(`SELECT e.event_type,e.xmin::text AS "transactionId",e.occurred_at >= $3::timestamptz AS "afterStart",e.occurred_at <= $4::timestamptz AS "beforeCommitBound" FROM app.audit_event e WHERE e.tenant_id=$1 AND e.payload->'references'->>'commandId'=$2::text ORDER BY e.sequence`,[T,input.commandId,transaction.startedAt,transaction.postCommitAt])).rows;
+ expect(times).toHaveLength(2);expect(times.map(r=>r.event_type).sort()).toEqual(["command.succeeded","recovery.terms.approved"]);
+ for(const event of times)expect(event).toMatchObject({transactionId:transaction.transactionId,afterStart:true,beforeCommitBound:true});
  const rows=(await admin.query(`SELECT id,tenant_id AS "tenantId",sequence::int,version,actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",occurred_at AS "occurredAt",payload,trim(payload_hash) AS "payloadHash",trim(previous_hash) AS "previousHash",trim(event_hash) AS "eventHash" FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`,[T])).rows;expect(()=>verifyAuditChain(rows)).not.toThrow();
 });
 it("[T9] actual catalog financial counts stay unchanged and terms authorization cannot execute another action",async()=>{
