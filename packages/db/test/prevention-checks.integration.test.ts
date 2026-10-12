@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { customerTypes } from "@jobguard/core";
 import { migrate, MIGRATION_URLS, JobPartiesRepository, PreventionCheckRepository, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type VerifiedTenantContext } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
+import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, port: number, context: VerifiedTenantContext;
 const tenant = randomUUID(), other = randomUUID(), member = randomUUID(), user = randomUUID(), account = randomUUID();
@@ -188,12 +189,83 @@ describe("MON-7a real PostgreSQL guarantees", () => {
     const upgrade=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"prevention_upgrade"});
     try {
       await upgrade.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz DEFAULT clock_timestamp())");
-      for(const url of MIGRATION_URLS.filter(url=>!url.pathname.endsWith("0103_prevention_checks.sql"))){await upgrade.query(await readFile(url,"utf8"));await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
+      const own=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("/0103_prevention_checks.sql"));expect(own, "[MO4-3b] migration by name").toBeGreaterThan(0);
+      for(const url of MIGRATION_URLS.slice(0,own)){await upgrade.query(await readFile(url,"utf8"));await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
       await upgrade.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[tenant]);
       const id=randomUUID();await upgrade.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Earlier fictional job','quoting')",[tenant,id]);
-      const before=(await upgrade.query("SELECT * FROM app.job WHERE id=$1",[id])).rows;
+      const before=(await upgrade.query("SELECT row_to_json(j)::text AS bytes FROM app.job j WHERE id=$1",[id])).rows;
+      const proof = await proofBefore(upgrade, ["app.job"]);
+      expect(Object.keys(proof["app.job"]!.rows).length, "[MO4-3a] pre-existing job row").toBeGreaterThan(0);
+      await upgrade.query(await readFile(MIGRATION_URLS[own]!, "utf8"));
+      await upgrade.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [MIGRATION_URLS[own]!.pathname.split("/").at(-1)]);
+      const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!);
+      expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name), "[MO4-3b] N alone registry").toEqual(names.slice(0, own + 1));
+      expect((await upgrade.query("SELECT row_to_json(j)::text AS bytes FROM app.job j WHERE id=$1",[id])).rows, "[MO4-3c] whole job row at N alone").toEqual(before);
+      expect(await proofDifferences(upgrade, proof), "[MO4-3c] old rows and types at N alone").toEqual({ rows: [], types: [] });
+      const controls = [];
+      for (const [table, was] of Object.entries(proof)) {
+        const identity = Object.keys(was.rows)[0];
+        if (!identity) continue; // The pre-existing-row guard reports this in the proof test.
+        const key = JSON.parse(identity) as { tenant_id: string; id: string };
+        const values = [key.tenant_id, key.id];
+        const time = "created_at", column = "title", newType = "character varying(201)", scratchTable = table;
+        const microsecond = await rolledBack(upgrade, async client => {
+          await client.query("SET LOCAL session_replication_role=replica");
+          const changed = await client.query(`UPDATE ${table} SET ${time}=${time}+interval '1 microsecond' WHERE (tenant_id=$1) AND (id=$2)`, values);
+          return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+        });
+        const missing = await rolledBack(upgrade, async client => {
+          await client.query("SET LOCAL session_replication_role=replica");
+          const changed = await client.query(`DELETE FROM ${table} WHERE (tenant_id=$1) AND (id=$2)`, values);
+          return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+        });
+        const retype = await rolledBack(upgrade, async client => {
+          await client.query("SET LOCAL session_replication_role=replica");
+          await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${newType}`);
+          return await proofDifferences(client, proof);
+        });
+        const listRetype = await rolledBack(upgrade, async client => {
+          await client.query("SET LOCAL session_replication_role=replica");
+          return await proofDifferences(client, { ...proof, [table]: { ...was, typed: { ...was.typed, [column]: `${was.typed[column]} mo4 scratch` } } });
+        });
+        const nullable = await rolledBack(upgrade, async client => {
+          await client.query("SET LOCAL session_replication_role=replica");
+          await client.query(`ALTER TABLE ${scratchTable} ADD COLUMN mo4_scratch text`);
+          return { exists: (await proofColumns(client, scratchTable)).some(c => c.name === "mo4_scratch" && c.type === "text"), differences: await proofDifferences(client, proof) };
+        });
+        const replaced = await rolledBack(upgrade, async client => {
+          await client.query("SET LOCAL session_replication_role=replica");
+          return { replaced: await scratchReplaceFunction(client, "app.half_even_ratio(bigint,bigint,bigint)"), differences: await proofDifferences(client, proof) };
+        });
+        const inserted = await rolledBack(upgrade, async client => {
+          await client.query("SET LOCAL session_replication_role=replica");
+          const changed = await client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Earlier fictional job','quoting')", [tenant,randomUUID()]);
+          return { count: changed.rowCount, differences: await proofDifferences(client, proof) };
+        });
+        controls.push({ table, microsecond, missing, retype, listRetype, nullable, replaced, inserted, after: await proofDifferences(upgrade, proof), columns: await proofColumns(upgrade, table) });
+      }
+      for (const result of controls) {
+        const { table } = result, was = proof[table]!, identity = Object.keys(was.rows)[0]!;
+        const column = "title", newType = "character varying(201)";
+        expect(result, "[MO4-3d] rolled-back controls (a)-(f)").toEqual({
+          table,
+          microsecond: { count: 1, differences: { rows: [`${table} ${identity}: changed`], types: [] } },
+          missing: { count: 1, differences: { rows: [`${table} ${identity}: missing`], types: [] } },
+          retype: { rows: [], types: [`${table}: ${column} ${was.typed[column]} -> ${newType}`] },
+          listRetype: { rows: [], types: [`${table}: ${column} ${was.typed[column]} mo4 scratch -> ${was.typed[column]}`] },
+          nullable: { exists: true, differences: { rows: [], types: [] } },
+          replaced: { replaced: true, differences: { rows: [], types: [] } },
+          inserted: { count: 1, differences: { rows: [], types: [] } },
+          after: { rows: [], types: [] },
+          columns: was.names.map(name => ({ name, type: was.typed[name] })),
+        });
+      }
+      expect(controls, "[MO4-3d] one table's controls").toHaveLength(1);
+      expect(await proofDifferences(upgrade, proof), "[MO4-3d] nothing left behind").toEqual({ rows: [], types: [] });
       await migrate(upgrade);await migrate(upgrade);
-      expect((await upgrade.query("SELECT * FROM app.job WHERE id=$1",[id])).rows).toEqual(before);
+      // fingerprinted-row-shape.integration.test.ts owns "may never gain a column"; recovery_eligibility_revision, job, job_activation and cap_snapshot are absent from its list.
+      expect(await proofDifferences(upgrade, proof), "[MO4-3e] identified old rows and types after all migrations").toEqual({ rows: [], types: [] });
+      expect((await upgrade.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name), "[MO4-3e] all migrations registry").toEqual(names);
       expect((await upgrade.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0103_prevention_checks.sql'")).rowCount).toBe(1);
     }finally{await upgrade.end();}
   }, 60_000);
