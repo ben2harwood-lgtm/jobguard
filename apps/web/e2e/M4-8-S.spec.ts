@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { recoveryAllocationViewV1 } from "../../api/src/recovery-allocation.contracts";
-import { allocationDatabase, allocateThroughUi, allocationPanel, allocationPath, post, readAllocations, readyAllocations, recovery18800, refused } from "./helpers/recovery-allocation-journey";
+import { allocationDatabase, allocateThroughUi, allocationPanel, allocationPath, parseAllocationView, post, readAllocations, readyAllocations, recovery18800, refused } from "./helpers/recovery-allocation-journey";
 
 // NOT RUN (sandbox cannot start PostgreSQL / a browser). Both mobile-360 and desktop run these real-route journeys.
 test.setTimeout(360_000);
@@ -107,9 +106,9 @@ test("DW5 invalidates only claim 2 proof without changing receipts, allocated ro
 
 test("DW3 refuses unavailable cash with a focused error; concurrent alternate approvals and replay conserve the receipt", async ({ page }) => {
   const fixture = await recovery18800(page), source = fixture.cases[0]!, panel = allocationPanel(page);
-  await panel.getByLabel("Recovery case", { exact: true }).selectOption(source.caseId);
-  await panel.getByLabel("Matched receipt", { exact: true }).selectOption(source.paymentId);
-  await panel.getByLabel("Verified recovery evidence", { exact: true }).selectOption(source.evidenceId);
+  await panel.getByRole("combobox", { name: "Recovery case", exact: true }).selectOption(source.caseId);
+  await panel.getByRole("combobox", { name: "Matched receipt", exact: true }).selectOption(source.paymentId);
+  await panel.getByRole("combobox", { name: "Verified recovery evidence", exact: true }).selectOption(source.evidenceId);
   await panel.getByLabel("Allocation gross (£)", { exact: true }).fill("390.00");
   await panel.getByRole("button", { name: "Review receipt allocation", exact: true }).click();
   await expect(panel.getByTestId("recovery-allocation-error")).toContainText("exceeds"); await expect(panel.getByTestId("recovery-allocation-error")).toBeFocused();
@@ -133,15 +132,15 @@ test("DW3 refuses unavailable cash with a focused error; concurrent alternate ap
   await expect(panel.getByRole("alert")).toContainText("ALLOCATION_NOT_FOUND"); await expect(panel.getByRole("alert")).toBeFocused();
   await page.unroute(scopedRoute);
   const reviewA = command(), reviewB = command(fixture.cases[1]!);
-  const a = recoveryAllocationViewV1.parse(await post(page, allocationPath(fixture.jobId), reviewA));
-  const b = recoveryAllocationViewV1.parse(await post(page, allocationPath(fixture.jobId), reviewB));
+  const a = await parseAllocationView(await post(page, allocationPath(fixture.jobId), reviewA));
+  const b = await parseAllocationView(await post(page, allocationPath(fixture.jobId), reviewB));
   const approveA = { ...reviewA, action: "allocate", commandId: crypto.randomUUID(), approvalHash: a.review!.approvalHash };
   const approveB = { ...reviewB, action: "allocate", commandId: crypto.randomUUID(), approvalHash: b.review!.approvalHash };
   const responses = await Promise.all([page.request.post(allocationPath(fixture.jobId), { data: approveA }), page.request.post(allocationPath(fixture.jobId), { data: approveB })]);
   expect(responses.map(response => response.status()).sort()).toEqual([200, 409]);
   const winning = responses[0]!.status() === 200 ? approveA : approveB;
-  const first = recoveryAllocationViewV1.parse(await (responses[0]!.status() === 200 ? responses[0]! : responses[1]!).json());
-  const replay = recoveryAllocationViewV1.parse(await post(page, allocationPath(fixture.jobId), winning));
+  const first = await parseAllocationView(await (responses[0]!.status() === 200 ? responses[0]! : responses[1]!).json());
+  const replay = await parseAllocationView(await post(page, allocationPath(fixture.jobId), winning));
   expect(replay).toEqual(first);
   await refused(page.request.post(allocationPath(fixture.jobId), { data: { ...winning, grossPence: 38394 } }), 409, "ALLOCATION_IDEMPOTENCY_CONFLICT");
   saved = await readAllocations(page, fixture.jobId); expect(saved.allocations).toHaveLength(1); expect(saved.allocations[0]?.grossPence).toBe(38400);
@@ -150,9 +149,9 @@ test("DW3 refuses unavailable cash with a focused error; concurrent alternate ap
 
 test("pauses after unknown command and failed refresh until a successful saved-state read", async ({ page }) => {
   const fixture = await recovery18800(page), source = fixture.cases[0]!, panel = allocationPanel(page);
-  await panel.getByLabel("Recovery case", { exact: true }).selectOption(source.caseId);
-  await panel.getByLabel("Matched receipt", { exact: true }).selectOption(source.paymentId);
-  await panel.getByLabel("Verified recovery evidence", { exact: true }).selectOption(source.evidenceId);
+  await panel.getByRole("combobox", { name: "Recovery case", exact: true }).selectOption(source.caseId);
+  await panel.getByRole("combobox", { name: "Matched receipt", exact: true }).selectOption(source.paymentId);
+  await panel.getByRole("combobox", { name: "Verified recovery evidence", exact: true }).selectOption(source.evidenceId);
   await panel.getByLabel("Allocation gross (£)", { exact: true }).fill("384.00");
   let writes = 0, blockRead = false;
   const pattern = `**${allocationPath(fixture.jobId)}`;
@@ -163,7 +162,7 @@ test("pauses after unknown command and failed refresh until a successful saved-s
   });
   await panel.getByRole("button", { name: "Review receipt allocation", exact: true }).click();
   await expect(panel.getByRole("alert")).toContainText("result is unknown"); await expect(panel.getByRole("alert")).toBeFocused();
-  await expect(panel.getByLabel("Recovery case", { exact: true })).toBeDisabled(); expect(writes).toBe(1);
+  await expect(panel.getByRole("combobox", { name: "Recovery case", exact: true })).toBeDisabled(); expect(writes).toBe(1);
   blockRead = true; await panel.getByRole("button", { name: "Load saved allocations", exact: true }).click();
   await expect(panel.getByRole("alert")).toContainText("Changes stay paused"); await expect(panel.getByLabel("Allocation gross (£)", { exact: true })).toBeDisabled();
   blockRead = false; await page.unroute(pattern); await panel.getByRole("button", { name: "Load saved allocations", exact: true }).click(); await readyAllocations(page);
@@ -185,7 +184,7 @@ test("B2/B6 selects an issued credit note and preserves its source through exact
   const sources = (await readAllocations(page, fixture.jobId)).reversalSources;
   expect(sources).toContainEqual({ allocationId: allocated.id, sourceId: creditId, kind: "credit_note", availableGrossPence: 60000 });
   const article = allocationPanel(page).locator(`[data-allocation-id="${allocated.id}"]`);
-  await article.getByLabel("Recorded reversal source", { exact: true }).selectOption(`credit_note:${creditId}`);
+  await article.getByRole("combobox", { name: "Recorded reversal source", exact: true }).selectOption(`credit_note:${creditId}`);
   await article.getByRole("button", { name: "Review allocation reversal", exact: true }).click();
   await expect(allocationPanel(page).getByTestId("allocation-review-split")).toHaveText("£600.00 = £500.00 net + £100.00 tax");
   const sent = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith(`${allocationPath(fixture.jobId)}/reversals`));

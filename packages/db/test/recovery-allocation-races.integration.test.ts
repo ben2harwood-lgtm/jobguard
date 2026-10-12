@@ -27,6 +27,24 @@ const hash = (value: string | Buffer) => createHash("sha256").update(value).dige
 const repo = (environment = "synthetic_demo", pool = runtime) => new RecoveryAllocationRepository(pool, environment);
 const version = "recovery-allocation-command.v1";
 
+// Evidence set-up inserts run on a live job, where app.guard_watchdog_input needs the tenant setting.
+// Each one therefore runs in its own transaction after set_config('app.tenant_id', <tenant>, true).
+const tq = async (sql: string, params: unknown[] = []) => {
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    const result = await client.query(sql, params);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   directory = await mkdtemp(join(tmpdir(), "jg-allocation-races-"));
@@ -84,11 +102,11 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
     const evidenceId = randomUUID(), uploadId = randomUUID(), proofScopeId = randomUUID(), bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64");
     const objectKey = `allocation/${evidenceId}`, objectVersion = `proof-${index + 1}-v1`, proofHash = hash(bytes);
     await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [proofScopeId, DEMO_TENANT_ID, jobId]);
-    await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)
+    await tq(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)
       VALUES($1,$2,$3,$4,$5,$6,'image/png',$7,'standard_evidence','verified',$8,clock_timestamp(),clock_timestamp()+interval '1 hour')`, [uploadId, DEMO_TENANT_ID, jobId, proofScopeId, objectKey, proofHash, bytes.length, objectVersion]);
-    await admin.query(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
+    await tq(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
       VALUES($1,$2,$3,$4,$5,$6,'synthetic_demo','image/png',$7)`, [DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, bytes]);
-    await admin.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+    await tq(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
       VALUES($1,$2,$3,$4,$5,'original','site_photo',$6,$7,$8,$9,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidenceId, DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, proofHash, bytes.length]);
     evidenceIds.push(evidenceId);
   }
@@ -147,13 +165,19 @@ async function originals(f: Fixture) {
     (await admin.query(`SELECT row_to_json(t)::text AS bytes FROM app.${table} t WHERE tenant_id=$1 AND job_id=$2 ORDER BY id`, [DEMO_TENANT_ID, f.jobId])).rows.map(row => row.bytes)])));
 }
 
+// pg_stat_activity can show wait_event_type='Lock' while `query` still holds the previous statement, so a row only counts
+// once its query text is the advisory-lock statement itself. Poll every 10 ms; the wait stays bounded and fails loudly.
 async function waitForLock(applicationName: string) {
   const deadline = Date.now() + 2000;
+  let lastSeen: string[] = [];
   while (Date.now() < deadline) {
     const rows = (await admin.query("SELECT query,wait_event_type FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock'", [applicationName])).rows;
-    if (rows.length) return rows[0]!;
+    const hit = rows.find(row => String(row.query).includes("pg_advisory_xact_lock"));
+    if (hit) return hit;
+    lastSeen = rows.map(row => String(row.query).slice(0, 120));
+    await new Promise(resolve => setTimeout(resolve, 10));
   }
-  throw new Error("Expected PostgreSQL case advisory wait was not observed");
+  throw new Error(`Expected PostgreSQL case advisory wait (pg_advisory_xact_lock under wait_event_type='Lock') was not observed within 2000 ms for ${applicationName}; lock-waiting queries last seen: ${JSON.stringify(lastSeen)}`);
 }
 function heldCasePool(applicationName: string) {
   let release!: () => void, acquired!: () => void;
@@ -268,9 +292,9 @@ it("DW3: different cases competing for one fully allocated receipt conserve Post
 async function legacyLanding(f: Fixture) {
   const receiptId = randomUUID(), eligibilityId = randomUUID(), landingId = randomUUID(), evidenceId = randomUUID(), uploadId = randomUUID();
   const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64"), sha = hash(bytes), objectKey = `allocation-legacy/${uploadId}`;
-  await admin.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,$5,'image/png',$6,'standard_evidence','verified','v1',clock_timestamp(),clock_timestamp()+interval '1 hour')", [uploadId, DEMO_TENANT_ID, f.jobId, objectKey, sha, bytes.length]);
-  await admin.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'v1',$6,$7,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())", [evidenceId, DEMO_TENANT_ID, uploadId, f.jobId, objectKey, sha, bytes.length]);
-  await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at) VALUES($1,$2,$3,$1::text,$1::text,'settled',120,'GBP',true,clock_timestamp())", [receiptId, DEMO_TENANT_ID, f.jobId]);
+  await tq("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,$5,'image/png',$6,'standard_evidence','verified','v1',clock_timestamp(),clock_timestamp()+interval '1 hour')", [uploadId, DEMO_TENANT_ID, f.jobId, objectKey, sha, bytes.length]);
+  await tq("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'v1',$6,$7,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())", [evidenceId, DEMO_TENANT_ID, uploadId, f.jobId, objectKey, sha, bytes.length]);
+  await admin.query("INSERT INTO app.synthetic_recovery_receipt(id,tenant_id,job_id,source_identity,reconciliation_identity,status,gross_pence,currency,synthetic,settled_at) VALUES($1::uuid,$2,$3,($1::uuid)::text,($1::uuid)::text,'settled',120,'GBP',true,clock_timestamp())", [receiptId, DEMO_TENANT_ID, f.jobId]);
   for (const [id, kind] of [[eligibilityId, "eligibility"], [landingId, "landing"]]) await admin.query("INSERT INTO app.recovery_approval(id,tenant_id,job_id,case_id,kind,expected_case_revision,status,policy_version,expires_at,command_id) VALUES($1,$2,$3,$4,$5,$6,'approved','reference_fee_policy_v1',clock_timestamp()+interval '1 hour',$7)", [id, DEMO_TENANT_ID, f.jobId, f.case1.id, kind, f.case1.revision, randomUUID()]);
   return { version: "recovery.landing.approve.v1", allocationId: randomUUID(), derivationId: randomUUID(), journalId: randomUUID(), jobId: f.jobId,
     caseId: f.case1.id, receiptId, evidenceId, eligibilityApprovalId: eligibilityId, landingApprovalId: landingId,

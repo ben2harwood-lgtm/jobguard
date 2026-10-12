@@ -6,6 +6,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { MAX_EXACT_PENCE_DIGITS } from "@jobguard/core";
 import { EvidencePackRepository } from "../src/evidence-pack-repository.js";
 import { PracticeFeedRepository } from "../src/practice-feed-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
@@ -26,6 +27,24 @@ let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const repo = (environment = "synthetic_demo", pool = runtime) => new RecoveryAllocationRepository(pool, environment);
 const version = "recovery-allocation-command.v1";
+
+// Evidence set-up inserts run on a live job, where app.guard_watchdog_input needs the tenant setting.
+// Each one therefore runs in its own transaction after set_config('app.tenant_id', <tenant>, true).
+const tq = async (sql: string, params: unknown[] = []) => {
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    const result = await client.query(sql, params);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
 
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -84,11 +103,11 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
     const evidenceId = randomUUID(), uploadId = randomUUID(), proofScopeId = randomUUID(), bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNoaGj4DwAFhAKAjM1mJgAAAABJRU5ErkJggg==", "base64");
     const objectKey = `allocation/${evidenceId}`, objectVersion = `proof-${index + 1}-v1`, proofHash = hash(bytes);
     await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [proofScopeId, DEMO_TENANT_ID, jobId]);
-    await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)
+    await tq(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)
       VALUES($1,$2,$3,$4,$5,$6,'image/png',$7,'standard_evidence','verified',$8,clock_timestamp(),clock_timestamp()+interval '1 hour')`, [uploadId, DEMO_TENANT_ID, jobId, proofScopeId, objectKey, proofHash, bytes.length, objectVersion]);
-    await admin.query(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
+    await tq(`INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
       VALUES($1,$2,$3,$4,$5,$6,'synthetic_demo','image/png',$7)`, [DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, bytes]);
-    await admin.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+    await tq(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
       VALUES($1,$2,$3,$4,$5,'original','site_photo',$6,$7,$8,$9,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidenceId, DEMO_TENANT_ID, uploadId, jobId, proofScopeId, objectKey, objectVersion, proofHash, bytes.length]);
     evidenceIds.push(evidenceId);
   }
@@ -315,7 +334,7 @@ it("C4/new build standard: every new table is tenant safe, FORCE RLS, migration 
   expect(fk.some(row => row.table_name === "app.recovery_case_allocation" && row.target === "app.practice_feed_account"
     && row.definition.includes("FOREIGN KEY (tenant_id, job_id, account_id)"))).toBe(true);
   const execute = (await admin.query(`SELECT p.prosecdef,pg_get_userbyid(p.proowner) AS owner,p.proconfig,
-    ARRAY(SELECT CASE x.grantee WHEN 0 THEN 'PUBLIC' ELSE pg_get_userbyid(x.grantee) END FROM aclexplode(p.proacl) x WHERE x.privilege_type='EXECUTE' ORDER BY 1) AS grantees
+    ARRAY(SELECT CASE x.grantee WHEN 0 THEN 'PUBLIC' ELSE pg_get_userbyid(x.grantee) END::text FROM aclexplode(p.proacl) x WHERE x.privilege_type='EXECUTE' ORDER BY 1) AS grantees
     FROM pg_proc p WHERE p.oid='app.write_recovery_allocation(uuid,uuid,text,jsonb,jsonb)'::regprocedure`)).rows[0]!;
   expect(execute).toMatchObject({ prosecdef: true, owner: "jobguard_migration", grantees: ["jobguard_migration", "jobguard_runtime"] });
   expect(execute.proconfig.join(" ")).toContain("search_path=pg_catalog, app");
@@ -392,3 +411,84 @@ it("C5: an expired matching review cannot authorize an allocation", async () => 
   await expect(run(f, { ...input, action: "allocate", commandId: randomUUID(), approvalHash: view.review!.approvalHash })).rejects.toMatchObject({ code: "ALLOCATION_APPROVAL_CHANGED" });
   expect(await countRows(f)).toEqual(before);
 });
+
+// R2-3 (repair round 2, item 3): the four exact-fraction text columns of receipt_line_allocation keep EXACTLY the intended
+// digit bound. The intended bound is MAX_EXACT_PENCE_DIGITS (260213, packages/core/src/cumulative-fee.ts): a numerator is an
+// optional minus sign plus 1..260213 digits, a denominator is 1..260213 digits whose first digit is not zero. PostgreSQL
+// regex repeat counts stop at 255, so the table checks are a shape test plus a length test; the original repeat-count
+// patterns are kept below only as an oracle, because JavaScript has no such limit. Rows are inserted straight into the table
+// as its owner (jobguard_migration, tenant set, foreign-key triggers skipped for the probe only, so every CHECK still fires)
+// and every probe is rolled back. A refusal counts only when it is the column's own CHECK (23514), never the old
+// "invalid regular expression" error, which also made every real row fail.
+const fractionColumns = ["gross_numerator", "gross_denominator", "net_numerator", "net_denominator"] as const;
+type FractionColumn = (typeof fractionColumns)[number];
+async function probeFractionRow(column: FractionColumn, value: string) {
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL session_replication_role = replica");
+    await client.query("SET LOCAL ROLE jobguard_migration");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    const values: Record<FractionColumn, string> = { gross_numerator: "1", gross_denominator: "1", net_numerator: "1", net_denominator: "1" };
+    values[column] = value;
+    try {
+      await client.query(`INSERT INTO app.receipt_line_allocation(id,tenant_id,job_id,payment_id,invoice_id,line_id,allocation_id,source_id,rule,source_ref,gross_numerator,gross_denominator,net_numerator,net_denominator)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,'pro_rata','digit-bound-probe',$9,$10,$11,$12)`,
+      [randomUUID(), DEMO_TENANT_ID, randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(),
+        values.gross_numerator, values.gross_denominator, values.net_numerator, values.net_denominator]);
+      return { accepted: true as const };
+    } catch (error) {
+      const failure = error as { code?: string; constraint?: string; message?: string };
+      return { accepted: false as const, code: failure.code, constraint: failure.constraint, message: String(failure.message).slice(0, 160) };
+    }
+  } finally {
+    await client.query("ROLLBACK").catch(() => undefined);
+    client.release();
+  }
+}
+
+it("R2-3: receipt_line_allocation fraction columns accept and refuse exactly the intended 260213-digit bound, as the table owner", async () => {
+  const MAX = MAX_EXACT_PENCE_DIGITS;
+  expect(MAX).toBe(260213);
+  const digitsOf = (count: number, digit = "1") => digit.repeat(count);
+  const originalNumerator = new RegExp(`^-?[0-9]{1,${MAX}}$`), originalDenominator = new RegExp(`^[1-9][0-9]{0,${MAX - 1}}$`);
+  const numerators: Array<[string, boolean]> = [
+    ["0", true], ["-0", true], ["7", true], ["-7", true], ["007", true],
+    [digitsOf(MAX - 1), true], [digitsOf(MAX), true], ["-" + digitsOf(MAX - 1), true], ["-" + digitsOf(MAX), true],
+    [digitsOf(MAX + 1), false], [digitsOf(MAX + 2), false], ["-" + digitsOf(MAX + 1), false],
+    ["", false], ["-", false], ["--1", false], ["+1", false], ["1-", false], ["1-1", false], ["1.5", false], ["1e3", false],
+    [" 1", false], ["1 ", false], ["1\n", false], ["\n1", false], ["abc", false], ["١٢٣", false], ["−1", false],
+  ];
+  const denominators: Array<[string, boolean]> = [
+    ["1", true], ["9", true], ["10", true], [digitsOf(MAX - 1), true], [digitsOf(MAX), true], ["9" + "0".repeat(MAX - 1), true],
+    [digitsOf(MAX + 1), false], ["9" + "0".repeat(MAX), false],
+    ["0", false], ["00", false], ["01", false], ["-1", false], ["", false], ["1.0", false], ["1 ", false], [" 1", false], ["1\n", false], ["1e3", false],
+  ];
+  const label = (value: string) => (value.length > 30 ? `${JSON.stringify(value.slice(0, 6))}... (${value.length} characters)` : JSON.stringify(value));
+  for (const column of fractionColumns) {
+    const numerator = column.endsWith("numerator");
+    for (const [value, expected] of numerator ? numerators : denominators) {
+      // The oracle is the intended original pattern; pin it to the literal expectation so the oracle itself cannot drift.
+      expect((numerator ? originalNumerator : originalDenominator).test(value), `oracle ${column} ${label(value)}`).toBe(expected);
+      const result = await probeFractionRow(column, value);
+      if (expected) expect(result, `${column} ${label(value)} must be accepted`).toEqual({ accepted: true });
+      else expect(result, `${column} ${label(value)} must be refused by its own CHECK`).toMatchObject({ accepted: false, code: "23514", constraint: `receipt_line_allocation_${column}_check` });
+    }
+  }
+  // Short random strings over a hostile alphabet (signs, spaces, newlines, a non-ASCII digit): the table's verdict must equal the
+  // original pattern's verdict for every one. Fixed seed, so the run is repeatable.
+  let seed = 20261013;
+  const next = () => { seed = (seed * 48271) % 2147483647; return seed; };
+  const alphabet = ["0", "1", "7", "9", "-", "+", ".", "e", " ", "\n", "\u0663"];
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    let value = "";
+    for (let position = next() % 7; position > 0; position -= 1) value += alphabet[next() % alphabet.length]!;
+    for (const column of fractionColumns) {
+      const expected = (column.endsWith("numerator") ? originalNumerator : originalDenominator).test(value);
+      const result = await probeFractionRow(column, value);
+      if (expected) expect(result, `${column} ${label(value)} must be accepted`).toEqual({ accepted: true });
+      else expect(result, `${column} ${label(value)} must be refused by its own CHECK`).toMatchObject({ accepted: false, code: "23514", constraint: `receipt_line_allocation_${column}_check` });
+    }
+  }
+  expect((await admin.query("SELECT count(*)::int n FROM app.receipt_line_allocation WHERE source_ref='digit-bound-probe'")).rows).toEqual([{ n: 0 }]);
+}, 300_000);

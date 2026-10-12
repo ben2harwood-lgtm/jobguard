@@ -1,14 +1,27 @@
-import { parsePoundsToPence } from "@jobguard/core";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { pounds } from "../../app/lib/pounds";
 import { expect, type APIResponse, type Page } from "@playwright/test";
 import { openQuotingWatchdogJob } from "./capture-journey";
 import { jsonResult } from "./customer-invoice-journey";
-import { recoveryAllocationViewV1, type RecoveryAllocationView } from "../../../api/src/recovery-allocation.contracts";
+import type { RecoveryAllocationView } from "../../../api/src/recovery-allocation.contracts";
+
+// Playwright's CommonJS loader cannot require @jobguard/core (its exports have only an "import" condition), directly or through
+// apps/api/src/recovery-allocation.contracts. Both are therefore loaded from their BUILT ESM output with a native dynamic
+// import, the mechanism apps/web/e2e/M4-3-S.spec.ts uses for core. The real core pounds parser and the real compiled view
+// schema run here; nothing is stubbed. Playwright runs from apps/web, so process.cwd() is apps/web.
+const nativeImport = <T>(fromWebRoot: string) => (new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<T>)(pathToFileURL(join(process.cwd(), fromWebRoot)).href);
+const loadCore = () => nativeImport<typeof import("@jobguard/core")>("../../packages/core/dist/index.js");
+const loadContracts = () => nativeImport<typeof import("../../../api/src/recovery-allocation.contracts")>("../api/dist/recovery-allocation.contracts.js");
 
 export const allocationPanel = (page: Page) => page.getByTestId("recovery-allocation-workbench");
 export const allocationPath = (jobId: string) => `/api/jobs/${jobId}/recovery-allocations`;
+/** Validates a view with the real compiled schema (apps/api/dist), so a malformed saved view fails the journey. */
+export async function parseAllocationView(value: unknown): Promise<RecoveryAllocationView> {
+  return (await loadContracts()).recoveryAllocationViewV1.parse(value);
+}
 export async function readAllocations(page: Page, jobId: string): Promise<RecoveryAllocationView> {
-  return recoveryAllocationViewV1.parse(await jsonResult(page.request.get(allocationPath(jobId)), "Read saved allocation"));
+  return parseAllocationView(await jsonResult(page.request.get(allocationPath(jobId)), "Read saved allocation"));
 }
 export async function post(page: Page, path: string, body: unknown) {
   return jsonResult(page.request.post(path, { data: body }), "Save real synthetic command");
@@ -22,6 +35,7 @@ export async function readyAllocations(page: Page) {
  * No success response or allocation output is mocked. All workbench allocations use its public routes.
  */
 export async function recovery18800(page: Page) {
+  const { parsePoundsToPence } = await loadCore();
   await openQuotingWatchdogJob(page);
   for (const input of await page.getByLabel(/Unit rate/u).all()) await input.fill("1.00");
   const clean = page.getByLabel("Unit rate Clean site", { exact: true });
@@ -75,9 +89,9 @@ export async function recovery18800(page: Page) {
 }
 export async function allocateThroughUi(page: Page, source: { caseId: string; evidenceId: string; paymentId: string }, pounds: string, split: string) {
   const panel = allocationPanel(page);
-  await panel.getByLabel("Recovery case", { exact: true }).selectOption(source.caseId);
-  await panel.getByLabel("Matched receipt", { exact: true }).selectOption(source.paymentId);
-  await panel.getByLabel("Verified recovery evidence", { exact: true }).selectOption(source.evidenceId);
+  await panel.getByRole("combobox", { name: "Recovery case", exact: true }).selectOption(source.caseId);
+  await panel.getByRole("combobox", { name: "Matched receipt", exact: true }).selectOption(source.paymentId);
+  await panel.getByRole("combobox", { name: "Verified recovery evidence", exact: true }).selectOption(source.evidenceId);
   await panel.getByLabel("Allocation gross (£)", { exact: true }).fill(pounds);
   await panel.getByRole("button", { name: "Review receipt allocation", exact: true }).click();
   await expect(panel.getByTestId("allocation-review-split")).toHaveText(split);

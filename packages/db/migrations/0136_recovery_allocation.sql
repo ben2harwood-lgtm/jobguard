@@ -74,8 +74,11 @@ CREATE TABLE app.receipt_line_allocation (
  id uuid NOT NULL,tenant_id uuid NOT NULL,job_id uuid NOT NULL,payment_id uuid NOT NULL,invoice_id uuid NOT NULL,line_id uuid NOT NULL,
  allocation_id uuid NOT NULL,reversal_id uuid,reverses_id uuid,source_id uuid NOT NULL,
  rule text NOT NULL CHECK(rule IN('explicit','separate_invoice','pro_rata')),source_ref text NOT NULL CHECK(length(source_ref) BETWEEN 1 AND 300),
- gross_numerator text NOT NULL CHECK(gross_numerator ~ '^-?[0-9]{1,260213}$'),gross_denominator text NOT NULL CHECK(gross_denominator ~ '^[1-9][0-9]{0,260212}$'),
- net_numerator text NOT NULL CHECK(net_numerator ~ '^-?[0-9]{1,260213}$'),net_denominator text NOT NULL CHECK(net_denominator ~ '^[1-9][0-9]{0,260212}$'),
+ -- 260213 = MAX_EXACT_PENCE_DIGITS in packages/core/src/cumulative-fee.ts (longest exact-pence numerator/denominator, in digits).
+ -- PostgreSQL regex repeat counts stop at 255, so the digit bound is a plain length test beside a shape test.
+ -- Numerator: optional minus sign, then 1..260213 digits (the sign is not counted). Denominator: 1..260213 digits, first one non-zero.
+ gross_numerator text NOT NULL CHECK(gross_numerator ~ '^-?[0-9]+$' AND length(translate(gross_numerator,'-',''))<=260213),gross_denominator text NOT NULL CHECK(gross_denominator ~ '^[1-9][0-9]*$' AND length(gross_denominator)<=260213),
+ net_numerator text NOT NULL CHECK(net_numerator ~ '^-?[0-9]+$' AND length(translate(net_numerator,'-',''))<=260213),net_denominator text NOT NULL CHECK(net_denominator ~ '^[1-9][0-9]*$' AND length(net_denominator)<=260213),
  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
  PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,job_id) REFERENCES app.job(tenant_id,id),UNIQUE(tenant_id,job_id,id),
  FOREIGN KEY(tenant_id,job_id,payment_id) REFERENCES app.customer_payment(tenant_id,job_id,id),
@@ -197,7 +200,7 @@ BEGIN
  OR(p_artifact->>'grossPence')::bigint IS DISTINCT FROM amount OR net IS NULL OR net<=0 OR tax IS NULL OR tax<0 OR amount<>net+tax
  OR amount::numeric*inv.net_pence<>net::numeric*inv.total_pence
  OR (original.id IS NULL AND p_artifact->>'eligibilityId' IS DISTINCT FROM eligibility.id::text)
- OR p_artifact->>'policyVersion' IS DISTINCT FROM CASE WHEN original.id IS NULL THEN eligibility.policy_version ELSE original.policy_version END THEN
+ OR p_artifact->>'policyVersion' IS DISTINCT FROM (CASE WHEN original.id IS NULL THEN eligibility.policy_version ELSE original.policy_version END) THEN
   RAISE EXCEPTION 'INVALID_CASE_SPLIT' USING ERRCODE='23514'; END IF;
  IF original.id IS NULL THEN
   IF NOT(c.source_refs ? inv.id::text) THEN RAISE EXCEPTION 'ALLOCATION_SOURCE_REQUIRED' USING ERRCODE='23514'; END IF;
@@ -219,7 +222,7 @@ BEGIN
   IF source_id IS NULL THEN RAISE EXCEPTION 'ALLOCATION_REVERSAL_SOURCE_REQUIRED' USING ERRCODE='23514'; END IF;
   direction:=-1;
  END IF;
- IF p_artifact->>'action' IS DISTINCT FROM CASE WHEN original.id IS NULL THEN 'allocate' ELSE 'reverse' END
+ IF p_artifact->>'action' IS DISTINCT FROM (CASE WHEN original.id IS NULL THEN 'allocate' ELSE 'reverse' END)
  OR p_artifact->>'allocationId' IS DISTINCT FROM original.id::text OR p_artifact->>'sourceId' IS DISTINCT FROM source_id::text
  OR p_artifact->>'sourceKind' IS DISTINCT FROM source_kind THEN RAISE EXCEPTION 'INVALID_ALLOCATION_FACTS' USING ERRCODE='23514'; END IF;
  -- Validate complete composition and immutable line bindings; arithmetic below checks kernel output by cross products.
@@ -302,7 +305,7 @@ BEGIN
     INSERT INTO app.recovery_allocation_line_source(id,tenant_id,job_id,invoice_id,line_id,net_pence,gross_pence,existed_at,evidence_id,evidence_object_version_id,evidence_hash,evidence_server_received_at,gross_numerator,gross_denominator,rule,source_ref)
     VALUES(gen_random_uuid(),p_tenant,p_job,inv.id,lf.line_id,lf.net_pence,lf.gross_pence,lf.existed_at,remittance_ev.id,remittance_ev.object_version_id,remittance_ev.sha256,remittance_ev.server_received_at,coalesce(share->'gross'->>'numerator','0'),coalesce(share->'gross'->>'denominator','1'),'explicit',remittance_ev.id::text);
    END IF;
-  ELSIF line->>'rule' IS DISTINCT FROM 'pro_rata' OR line->>'sourceRef' IS DISTINCT FROM CASE WHEN original.id IS NULL THEN m.movement_id::text ELSE source_id::text END THEN RAISE EXCEPTION 'INVALID_ALLOCATION_FACTS' USING ERRCODE='23514'; END IF;
+  ELSIF line->>'rule' IS DISTINCT FROM 'pro_rata' OR line->>'sourceRef' IS DISTINCT FROM (CASE WHEN original.id IS NULL THEN m.movement_id::text ELSE source_id::text END) THEN RAISE EXCEPTION 'INVALID_ALLOCATION_FACTS' USING ERRCODE='23514'; END IF;
  END LOOP;
  IF given_pair[1]<>amount*given_pair[2] OR total_pair[1]<amount*total_pair[2] THEN RAISE EXCEPTION 'INVALID_ALLOCATION_FACTS' USING ERRCODE='23514'; END IF;
  IF remittance IS NULL THEN

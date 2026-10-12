@@ -102,7 +102,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
         has_table_privilege('jobguard_runtime',c.oid,'INSERT') can_insert,
         has_table_privilege('jobguard_runtime',c.oid,'UPDATE') can_update,
         has_table_privilege('jobguard_runtime',c.oid,'DELETE') can_delete
-        FROM pg_class c WHERE c.oid=$1::regclass`, [`app.${table}`])).rows).toEqual([{
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=$1`, [table])).rows).toEqual([{
         owner: "jobguard_migration", relrowsecurity: true, relforcerowsecurity: true, can_select: true, can_insert: false, can_update: false, can_delete: false,
       }]);
     }
