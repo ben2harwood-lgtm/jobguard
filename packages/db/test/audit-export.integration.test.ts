@@ -20,7 +20,7 @@ let priorSecurityCatalog: unknown;
 let upgrade: {
   before: Subject[]; names: string[]; own: number; halfOid: string; ownRegistry: string[]; ownTables: boolean[];
   ownStepSecurityCatalog: SecurityCatalog; ownStepDifferences: string[]; controls: ControlResult[];
-  afterControlsCatalog: SecurityCatalog; afterControlsDifferences: string[]; scratchCount: string;
+  afterControlsCatalog: SecurityCatalog; afterControlsDifferences: string[]; scratchCount: string; afterAllDifferences: string[];
 };
 type Queryable = Pick<Pool | PoolClient, "query">;
 async function securityCatalog(db: Queryable = admin) {
@@ -44,6 +44,9 @@ type ControlResult = Control & { result: ControlReading };
 // Not compared at any step: grants on schemas, sequences, views and types, or default privileges.
 // After later migrations: routine bodies/settings are not compared; any older policy text change stops the proof,
 // without deciding whether it got tighter. An older object dropped without a same-id/name counterpart is no longer compared.
+// Memberships of an older jobguard_ role are read in both directions ("member of X" and "has member X"), so any role, new or
+// old, jobguard_ or not, that joins an older jobguard_ role is seen on that older role. Not read: admin, inherit and set flags
+// of a membership that already existed, and role-level settings.
 async function privilegeFacts(db: Queryable): Promise<Subject[]> {
   const rows = (await db.query(`
     SELECT row_to_json(s)::text AS bytes FROM (
@@ -83,7 +86,8 @@ async function privilegeFacts(db: Queryable): Promise<Subject[]> {
       SELECT 'role'::text AS kind,r.oid::text AS oid,r.rolname::text AS name,
         ARRAY(SELECT a.name FROM (VALUES ('rolsuper',r.rolsuper),('rolbypassrls',r.rolbypassrls),('rolcreaterole',r.rolcreaterole),
           ('rolcreatedb',r.rolcreatedb),('rolinherit',r.rolinherit),('rolcanlogin',r.rolcanlogin),('rolreplication',r.rolreplication)) a(name,enabled) WHERE a.enabled)
-          || ARRAY(SELECT DISTINCT 'member of '||pg_get_userbyid(m.roleid) FROM pg_auth_members m WHERE m.member=r.oid) AS facts,
+          || ARRAY(SELECT DISTINCT 'member of '||pg_get_userbyid(m.roleid) FROM pg_auth_members m WHERE m.member=r.oid)
+          || ARRAY(SELECT DISTINCT 'has member '||pg_get_userbyid(m.member) FROM pg_auth_members m WHERE m.roleid=r.oid) AS facts,
         ARRAY[]::text[] AS columns,'[]'::json AS "columnGrants",'{}'::json AS policies
       FROM pg_roles r WHERE r.rolname LIKE 'jobguard_%'
     ) s
@@ -157,8 +161,9 @@ beforeAll(async () => {
     { id: "S11", statements: ["CREATE ROLE mo5_scratch_role NOLOGIN", `GRANT EXECUTE ON FUNCTION ${half} TO mo5_scratch_role`], expected: [`routine ${halfName}: + grant mo5_scratch_role EXECUTE`], merged: ["routines"] },
     { id: "S12", statements: [`ALTER FUNCTION ${half} SECURITY DEFINER`], expected: [`routine ${halfName}: + runs as owner`], merged: ["routines"] },
     { id: "S13", statements: ["ALTER ROLE jobguard_runtime CREATEDB"], expected: ["role jobguard_runtime: + rolcreatedb"], merged: ["roles"] },
-    { id: "S14", statements: ["GRANT jobguard_migration TO jobguard_runtime"], expected: ["role jobguard_runtime: + member of jobguard_migration"], merged: [] },
+    { id: "S14", statements: ["GRANT jobguard_migration TO jobguard_runtime"], expected: ["role jobguard_migration: + has member jobguard_runtime", "role jobguard_runtime: + member of jobguard_migration"], merged: [] },
     { id: "S15", statements: ["CREATE ROLE mo5_scratch_role NOLOGIN", `ALTER FUNCTION ${half} RENAME TO mo5_half_renamed`, "GRANT EXECUTE ON FUNCTION app.mo5_half_renamed(bigint,bigint,bigint) TO mo5_scratch_role"], expected: [`routine ${halfName?.replace("half_even_ratio", "mo5_half_renamed")}: + grant mo5_scratch_role EXECUTE`], merged: ["routines"] },
+    { id: "S16", statements: ["CREATE ROLE mo5_scratch_role NOLOGIN", "GRANT jobguard_runtime TO mo5_scratch_role"], expected: ["role jobguard_runtime: + has member mo5_scratch_role"], merged: [] },
     { id: "N1", statements: [], expected: ["table app.job: + grant jobguard_runtime SELECT"], merged: null, inspect: "name" },
     { id: "P1", statements: ["REVOKE INSERT ON app.job FROM jobguard_runtime"], expected: [], merged: ["tables"] },
     { id: "P2", statements: ["CREATE TABLE app.mo5_scratch(tenant_id uuid NOT NULL, id uuid PRIMARY KEY)", "ALTER TABLE app.mo5_scratch ENABLE ROW LEVEL SECURITY", "CREATE POLICY mo5_scratch ON app.mo5_scratch FOR ALL TO jobguard_runtime USING (true)", "GRANT SELECT,INSERT,UPDATE,DELETE ON app.mo5_scratch TO jobguard_runtime, PUBLIC"], expected: [], merged: ["tables", "policies"] },
@@ -201,8 +206,10 @@ beforeAll(async () => {
     UNION ALL SELECT policyname::text FROM pg_policies
     UNION ALL SELECT rolname::text FROM pg_roles
   ) s WHERE name LIKE '%mo5%'`)).rows[0]!.count as string;
-  upgrade = { before, names, own, halfOid, ownRegistry, ownTables: [ownTables.exports, ownTables.checkpoints], ownStepSecurityCatalog, ownStepDifferences, controls, afterControlsCatalog, afterControlsDifferences, scratchCount };
   await migrate(admin); await migrate(admin);
+  // [MO5-e] The reading is taken here, before the test's own login below joins jobguard_runtime, and asserted in the test.
+  const afterAllDifferences = await privilegeDifferences(admin, before);
+  upgrade = { before, names, own, halfOid, ownRegistry, ownTables: [ownTables.exports, ownTables.checkpoints], ownStepSecurityCatalog, ownStepDifferences, controls, afterControlsCatalog, afterControlsDifferences, scratchCount, afterAllDifferences };
   await admin.query("CREATE ROLE audit_export_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO audit_export_login");
   runtime = new Pool({ host: "127.0.0.1", port, user: "audit_export_login", password: "synthetic", database: "jobguard_synthetic_demo", max: 6 });
   contractor = new ContractorRepository(runtime); repo = new AuditExportRepository(runtime);
@@ -264,8 +271,10 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     // Nothing reads whole catalogue rows, routine text or routine settings after the later migrations.
     // They may add tables, columns, policies on their own tables, routines and roles, replace routines and take privileges away.
     // They may not widen a grant, move an owner, switch row security off, change an older policy, add a permissive policy to an
-    // older row-secured table, remove an older restrictive policy, or give an older jobguard_ role an attribute or membership.
-    expect(await privilegeDifferences(admin, upgrade.before), "[MO5-e] later migrations did not widen older permission facts").toEqual([]);
+    // older row-secured table, remove an older restrictive policy, give an older jobguard_ role an attribute or a membership, or
+    // give any role (new or old) membership of an older jobguard_ role. The reading was taken in the set-up directly after the
+    // migrate() pair, before the test's own login joined jobguard_runtime, and is asserted here.
+    expect(upgrade.afterAllDifferences, "[MO5-e] later migrations did not widen older permission facts").toEqual([]);
   });
   it("exports one tenant only, including shared-user tenants, with its own audit event and distinct public key", async () => {
     const a = await setup(), b = await setup();
