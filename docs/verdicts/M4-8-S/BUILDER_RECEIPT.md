@@ -1,148 +1,131 @@
-# M4-8-S builder receipt — addendum 2
+# M4-8-S builder receipt — Continuation round 1
 
-12 October 2026. Builder: Codex GPT-6.1 Sol (dispatch attribution). Branch `codex/sandbox/m4-8-s-r2`.
+12 October 2026. Builder: Codex GPT-6.1 Sol (dispatch attribution). Branch `codex/sandbox/m4-8-s-r2`; LOCAL only.
 
-**HOLD — core mapping and J-REQ corrections built; allocation persistence and the vertical slice remain incomplete pending the coordinator's literal lock-order clarification.** This is a builder receipt, not technical acceptance.
+**Implementation built for review; technical acceptance remains HOLD for PostgreSQL/browser execution, a fresh full build and independent verdicts.** No commit, push, acceptance or release was performed. The first-round receipt is preserved verbatim in [ROUND0-before-continuation-2026-10-12.md](ROUND0-before-continuation-2026-10-12.md).
 
-## Base and previous HOLD
+## Base and ruling
 
-- Supplied main: `8472ae0` (PR #155 M4-8-S-PRE). Supplied worktree base/HEAD: `7387c8220a33197fd90ce8a74e20ac7bbeb55512` (`7387c82`), merging that main into this branch.
-- SV-2 is merged as `a0963f4`; its actual tables and line identity key were inspected and reused by the core contract design.
-- Read the previous HOLD before changing code; preserved it verbatim in `HOLD-before-PRE-2026-10-12.md` in this directory. **Lifted:** absence of a public transaction-participating case write; inability to atomically compose through a supported public entrypoint; the old lane exclusion of the three explicitly widened join files; the former unmerged SV-2 premise. No recovery command body was copied or reimplemented.
-- Read `packages/db/src/recovery-case-repository.ts` and `docs/verdicts/M4-8-S-PRE/BUILDER_RECEIPT.md` first, then the applicable plan/contracts and merged kernels/schema.
-- Local `origin/main` moved ahead to `96c0cb8a5b5562c65b79f5f601ba9d60f8fcf05a` (PR #138). No fetch or git write was run. Differences against that ref include later-main changes absent from the supplied base; these are not this leaf's edits.
-- The existing lane line retains the issued branch; changed migration path from 0131 to **0136** and added exactly `packages/db/src/recovery-case-repository.ts`, `packages/db/test/recovery-case-join.integration.test.ts`, `packages/db/test/recovery-case-join.test.ts`. No other lane line was edited or allow path added.
+Supplied clean HEAD: `1267a2f07c3cb7478d3f3633ed5217822bfd40df`, the first build round over main `8472ae0` through merge `7387c8220a33197fd90ce8a74e20ac7bbeb55512`. SV-2 is merged as `a0963f4`. The merged public joined entry is reused; its implementation is not copied or changed in this round. Local origin/main is ahead of the supplied base, so the origin/main diff also includes other tasks absent from this worktree; those differences are not this continuation's edits. No fetch or git write was run.
 
-## Current HOLD: exact dispatch conflict
+The coordinator's 12 October 22:40 ruling supersedes the former literal prohibition on caller job/case foreign-key share locks. The former lock-order HOLD is lifted; all other issued/addendum requirements remain in force.
 
-The final dispatcher review line says:
+**Lock order:** On every write path, the canonical case advisory key is taken first before any job/case access, business locks and allocation/Decision/source writes follow, `commandInTransaction` runs last for an allocation or reversal, the caller appends its own audit, and the transaction commits.
 
-> nothing the caller locks BEFORE the joined call may be something that function takes AFTER the case advisory key: the job and case rows
+The key is exactly the merged two-key `pg_advisory_xact_lock(hashtext(tenant_uuid_text),hashtext(case_uuid_text))`. The checked writer retakes it before job/case reads, receipt/source locks and referencing inserts; it adds no explicit parent-row lock and follows the merged repository shape. Same-case v1 callers must take that same key first. The joined acquisition is reentrant. Nothing is deferred; all constraints are immediate. A newly recorded joined command holds the audit head; replay returns before the merged audit append. After the joined call the repository does only its own audit and commit. Review-only commands append Decision/review and caller audit without a landing transition; replays create no further business or audit rows.
 
-The merged public entry header also says to call it **AFTER every other lock and write**, and after return only append audit and commit. Meanwhile this order requires new allocation tables with tenant/job/case composite foreign keys and their inserts in the same transaction before the joined `record_landing` / `reverse_landing`.
+## What was built
 
-A referencing allocation INSERT takes PostgreSQL foreign-key KEY SHARE locks on the referenced job/case rows. The existing routine at `0097_recovery_case_current.sql:47` takes the case advisory key, then job/case FOR UPDATE at lines 48–49. The merged repository's own lock-order comment explicitly identifies foreign-key share locks. Thus ordinary required allocation INSERTs before the joined call cannot meet the new literal prohibition. Deferring foreign keys would instead acquire business locks after audit, contrary to AGENTS §5.4 and the call-last contract. Removing the foreign keys, changing the v1 routine, writing after the joined call or reimplementing the case command would breach the order.
+- Public `RecoveryAllocationRepository` allocator/reversal caller: per-call verified tenant, persisted session owner check, strict command/artifact schemas, server-derived splits and source facts, current review authorization, same-command replay, exact SH-1 mappings, persisted projections and joined case events.
+- Migration **0136**, registered LAST: six immutable tenant-owned tables, their qualified keys/foreign keys, FORCE RLS, protected writes, source/rational validation and the checked writer. No fingerprinted table gains a column.
+- Reviews create Decisions. Exact approval atomically records the approved resolution, authorization, case allocation/reversal, line-source bindings and receipt-line fractions before the joined command. Actor authority comes from the persisted practice session, with the routine's own current owner predicate.
+- Reliable generated remittance sources use a versioned JSON PNG text chunk bound to finalized original bytes, object version and SHA-256. Commands select a source, never supply its shares. Fresh refund/credit remittances use item-specific shares; inherited remittances and unallocated reversals use SH-1's exact rules. PNG bounds/CRCs and strict JSON are checked; the writer checks hash-bound source inclusion independently.
+- Nest application/controller, in-process workspace composition, authenticated thin Next routes, generated OpenAPI, allocation/reversal workbench and one mount. The workbench supports recorded payment-reversal and credit-note selection, optional finalized remittance selection, exact review/approval, source drill-down, held/reopened/paused states and focused typed refusals.
+- Four authorized registry rows use **post_live_billing**, matching the existing recovery/billing classification. No watchdog_live_only route or replay-harness widening was added.
+- Four real-PostgreSQL suites written tests first, catalogue rows appended in the three authorized existing suites, six browser journeys for BOTH existing projects. No provider success response is mocked in browser journeys.
+- Reversal commands gained optional finalized `remittanceEvidenceId`; client shares remain refused. First-round J-REQ1–J-REQ3 are unchanged in this round.
 
-A concrete safe interpretation is available: acquire the SAME canonical case advisory key before any allocation/Decision INSERT, then perform all business writes, call the joined command last (its advisory acquisition is reentrant), append the caller audit, commit. This preserves advisory-key → job/case locks against the v1 routine. **That interpretation is not assumed to override the literal dispatcher line.** A focused asynchronous clarification was sent; no answer had arrived at handoff. No dependent persistence caller or migration was added. This is a source-inspected contract conflict, not an executed PostgreSQL deadlock finding.
+The earlier apparent migration-role read-policy question was resolved by reading the actual later amendments: 0026 extends final-account policies and 0018 extends evidence/invalidation policies to `jobguard_migration`. No new role, role membership or old-policy exception is needed.
 
-## Changes retained
+## Acceptance disposition
 
-- `packages/core/src/recovery-allocation.ts`: strict versioned review/allocate/review_reverse/reverse commands, typed errors, server-facts boundary, integer case-split validation, receipt/reversal mapping to SH-1 and exact read summation. Human selection of a finalized `evidenceId` is required; caller-supplied hashes, splits, rules, rationals, settlement and reviewer are refused. An optional remittance evidence/credit ID selects a source, not its arithmetic.
-- `packages/core/src/recovery-allocation.test.ts`: 48 pure tests, including all five exact reference scenarios, fixed priority, deposit cutoff at microsecond precision, explicit later-line refusal, reversal hierarchy, split equivalence, money limits, strict commands and an architecture guard on this leaf's own source only.
-- `packages/core/src/index.ts`: one appended export.
-- The three widened join files: J-REQ1–J-REQ3, below.
-- `docs/contracts/recovery-allocation-v1.md`: implemented core boundary, intended authority requirements and explicit persistence HOLD.
-- The one lane line and this receipt/history file.
+“BUILT” below means source and named executable coverage exist; it does **not** claim PostgreSQL/browser execution or independent verification.
 
-Preparatory API/UI drafts are archived under `/private/tmp/jg-m4-8-s-api-draft/` (including `shared.patch`); allocation/race fixture-only drafts under `/private/tmp/jg-m4-8-s-db-draft/`. They are **not retained implementation, not acceptance coverage, not tested and not ready to ship**. The unimplemented API/UI files were removed and their shared additions restored byte-identically to HEAD. No dangling repository import or workbench mount remains. No browser spec was created. Same-model helpers prepared independent file groups as AGENTS §1/§2.2 permits; these are implementation assistance, not an independent verdict.
-
-## Required join corrections
-
-| Requirement | Implemented evidence | Execution limits |
-| --- | --- | --- |
-| J-REQ1 | Joined tenant proof uses CASE + `pg_input_is_valid` before UUID cast; equality for valid values unchanged. Four new real-PG cases cover unset, empty, foreign and malformed settings; every case has a same-client valid-setting control and caller-visible event/audit/state assertions. Malformed setting also proves its transaction remains usable before rollback. | Unit SQL-contract assertions pass. PostgreSQL cases NOT RUN. |
-| J-REQ2 | J2/J3/J11 now read current case, exact command event, recovery audit and caller row using the caller's own client before rollback/throw. J2 checks `{caseId, replayed:false}`. Earlier isolation/rollback assertions remain. | Written source coverage; NOT RUN on PostgreSQL. |
-| J-REQ3 | Header distinguishes newly recorded commands from replay and retains call-last. The corrective L4 below records the same distinction in this receipt. | Source-inspected; replay unit coverage passes. |
-
-**Corrected L4:** after a newly recorded joined command returns, the caller holds the tenant's audit head until the transaction ends. A replay returns before the repository's audit append and does not acquire that head; the caller's own later audit batch acquires it if needed. The call-last restriction still applies.
-
-The historic PRE receipt's L4 is corrected by the above explicit amendment; its file was not edited because addendum 2 widens this lane for exactly three code/test paths, not the other task's receipt. All existing assertions are preserved semantically. The one unavoidable assertion-literal change is J-T2's exact expected SQL string, updated from the unsafe cast to the required guarded query; its statement count, parameters and refusal assertions are unchanged. No assertion was removed or weakened.
-
-## Build and Done-when disposition
-
-All persisted acceptance remains HELD; a pure test is not a saved-row or browser proof.
-
-| Item | Status and evidence |
+| Item | Disposition / evidence |
 | --- | --- |
-| B1 gross/net/tax case approval | HELD persistence/Decision; core integer split and strict commands BUILT (`validates DW1 integer case splits`, overflow/tampering cases). |
-| B2 reversal workbench | HELD: no mounted UI or persisted reversal command. |
-| B3 receipt_line_allocation rows | HELD: mapping BUILT, table not created. |
-| B4 rule/source/rationals/bound line | HELD saved links; core mapping preserves source/rule and exact string fractions. |
-| B5 deposit-before-line | Core BUILT (`a deposit gives later lines zero`, explicit refusal, microsecond cutoff); persisted behavior HELD. |
-| B6 refund/credit reversal | Core BUILT (`item-specific refund/credit`, `unallocated refunds reverse pro-rata`); merged-fact persistence HELD. |
-| DW1 384/3000 figures and drill-down | HELD: integer split tests pass, no saved rows/browser journey. |
-| DW2 F4/F4b/F5/F6/F7 exact | Core BUILT: five named fixture tests and test-only fee-kernel cross-checks; persisted F4/F4b/F6 HELD current conflict; saved F5/F7 additionally HELD Q2. |
-| DW3 over-allocation/job links/reuse/races | HELD database/UI; strict boundary and claim/evidenced limit unit tests pass, not PostgreSQL conservation. |
-| DW4 reverse 3000/reopen/paused/originals | HELD full saved/browser path; no original facts changed. |
-| DW5 invalidate claim2 only | HELD saved projection. Q3 display figures not asserted or made policy. |
-| DW6 priority | Core BUILT (`F6 explicit ... even when another rule would give a catch more`, F7, F4); saved proof HELD. |
-| DW7 deposit exclusion | Core BUILT under all three rules; saved proof HELD. |
-| DW8 real PostgreSQL exact/races/refunds/split | HELD: no execution or allocator integration acceptance suite. Pure split/reversal checks pass. |
-| DW9 unrounded deemed net | Pure-source/fraction test BUILT (`DW9 own allocator delegates exact math...`); API/persistence portion HELD. |
+| B1 | BUILT: reviewed gross/net/tax allocations, exact Decision authorization and joined `record_landing`; integration DW1 plus approval/refusal tests. |
+| B2 | BUILT: workbench recorded reversal/credit sources, exact reviewed reversal and joined `reverse_landing`; browser DW4 and credit journey. |
+| B3 | BUILT: persisted `receipt_line_allocation`; line integration saved F4/F4b/F6. |
+| B4 | BUILT: source/version/rule/fractions and qualified invoice/final-account line bindings; source drill-down and catalogue tests. |
+| B5 | BUILT: earliest server source existence time, kernel deposit cutoff and direct SQL zero/cross-product validation; persisted later-line refusal test. Saved F5 remains Q2-held. |
+| B6 | BUILT: selected item-specific refund/credit and pro-rata otherwise; real-PG named partial refund/credit tests and credit browser journey. |
+| DW1 | BUILT: exact 38400/32000/6400 and 300000/250000/50000, source hashes/versions/reviewer/Decision checks, reload/Jobs/second-context browser proof. NOT RUN on PG/browser. |
+| DW2 | BUILT pure F4/F4b/F5/F6/F7; saved F4/F4b/F6 tests written. Saved F5/F7 HELD Q2. |
+| DW3 | BUILT: direct runtime writer overcash/evidence/claim/job/line/movement refusals, replay/races, UI focused error; NOT RUN on PG/browser. |
+| DW4 | BUILT: reverse £3,000, 32000 eligible net/6400 tax, 2217600 invoice balance, reopened 250000 outstanding and pause, originals retained; NOT RUN. |
+| DW5 | BUILT: claim-2 evidence hold only, gross338400/balance1917600 unchanged and original facts preserved; unspecified Q3 figures remain unasserted. NOT RUN. |
+| DW6 | BUILT core fixed explicit → separate invoice → pro-rata hierarchy; saved F6 source precedence; supplementary saved half HELD Q2. |
+| DW7 | BUILT pure all-rule deposit exclusion, persisted late-line exclusion and explicit refusal; NOT RUN on PG. |
+| DW8 | BUILT real-PG exact fractions, parallel/replay/cash races, same-case interleavings, item-specific refund/credit, pro-rata reversal, split/combined equality; NOT RUN. |
+| DW9 | BUILT unrounded denominator43 and API fraction strings; own-core architecture test passes; stored fraction proof NOT RUN. |
+| M-LOCK | BUILT `recovery-allocation-races.integration.test.ts`: own cluster, held canonical key/pg_stat_activity technique, both A/B orders for same-ID and distinct-ID callers, both orders against merged public case command and `app.approve_synthetic_landing`, 3s lock timeout/5s statement timeout, no deadlock/timeout and one winning write; replay assertions preserve row counts. NOT RUN. |
+| J-REQ1–3 | PRESERVED byte-identically to HEAD1267a2f: guarded tenant proof, J2/J3/J11 in-transaction positive reads, replay/audit-head distinction. Prior mock-unit execution is in round0; real-PG tests remain NOT RUN. |
 
-## Exact reference results (pure tests only)
+The untouched v1 landing routine refuses an exhausted-receipt replay rather than returning a new success; the race test asserts its 23514 refusal and no additional write. No v1 behavior was rewritten to make that test pass.
 
-| Scenario | Integer pence / exact fraction | Test-only fee check |
+## Exact reference figures
+
+| Scenario | Required exact pence / rational | Evidence |
 | --- | --- | --- |
-| receipt 384 split | 38400 = 32000 + 6400 | none |
-| receipt 3000 split | 300000 = 250000 + 50000 | none |
-| DW1 combined (requirement, not saved result) | gross 338400; net 282000; tax 56400 | none |
-| DW4 (requirement, not result) | net 32000; tax 6400; invoice balance 2217600; case2 outstanding 250000 | paused projection required |
-| DW5 (requirement, not result) | gross 338400; invoice balance 1917600; only case2 held | Q3 unspecified figures held |
-| F4 | catch net 2000000/43; rule pro_rata | 4651 |
-| F4b | cumulative catch net 80000/1 | cumulative 8000; delta 3349 |
-| F5 | deposit 0/1; later catch net 40000/1 | 4000 |
-| F6 | catch net 0/1; explicit source | 0 |
-| F7 | catch net 80000/1; separate_invoice; main gross 4032000 untouched | 8000 |
+| DW1 | gross338400; net282000; tax56400 | Pure passed; PG/browser written, NOT RUN. |
+| DW4 | net32000; tax6400; balance2217600; outstanding250000 | PG/browser written, NOT RUN. |
+| DW5 | gross338400; balance1917600; only case2 held | PG/browser written, NOT RUN. |
+| F4 | catch net2000000/43; pro_rata; fee cross-check4651 | Pure passed; saved proof NOT RUN. |
+| F4b | cumulative80000/1; fee8000, delta3349 | Pure passed; saved proof NOT RUN. |
+| F5 | deposit0/1 then40000/1; fee4000 | Pure passed; saved half Q2-held. |
+| F6 | catch0/1; explicit non-catch source; fee0 | Pure passed; saved proof NOT RUN. |
+| F7 | catch80000/1; separate_invoice; main4032000 untouched; fee8000 | Pure passed; saved half Q2-held. |
 
-Pure fixtures use Test M/Test N composition and stored-facts-shaped inputs, not a database. `recovery-18800` saved fixture remains unexercised. No fee, qualifying principal, posting delta, journal, statement, entitlement or collection is implemented or stored. Fee calls exist in tests only.
+Fee checks are test-only imports of the existing kernel. No entitlement, cumulative fee principal, fee, posting, journal, statement or collection is derived or stored by this implementation.
 
-## Migration, grants and upgrade proof
+## Migration and grants
 
-**0136 is assigned but not created or registered.** Added database objects/grants/routines/policies/triggers: none. No existing table/view/column/role/policy/grant/routine is altered. The v1 0018 objects and all earlier financial/evidence facts remain untouched. No PostgreSQL process or database was opened. An executed old-row preservation test is still owed.
+0136 adds `recovery_allocation_command`, `recovery_allocation_review`, `recovery_allocation_line_source`, `recovery_case_allocation`, `recovery_case_allocation_reversal`, `receipt_line_allocation`; two partial line-uniqueness indexes plus base-binding uniqueness; mutation guards and the specific checked writer/private fraction-integrity helper. All six are owned by `jobguard_migration`, ENABLE/FORCE RLS, non-null tenant and qualified job identity, append-only, with source/Decision/authorization identities linked. Movement qualification composes the original tenant/account/event key with its existing tenant/job/account key; the routine checks the exact event's job and hash. No old movement key, table or grant is altered.
 
-The planned catalogue remains owed: new case allocation, reversal and receipt-line tables; migration ownership; nonnull tenant; qualified job/case/receipt/movement/evidence/invoice/line keys; ENABLE/FORCE RLS; runtime SELECT/INSERT only; append-only guards; exact routine EXECUTE grantees; atomic approved Decision/case/caller audit.
+**Grant statement:** Every new table gives `jobguard_runtime` SELECT only and NO direct INSERT, UPDATE, DELETE or TRUNCATE; the new writer's EXECUTE grantees are exactly `jobguard_migration` and `jobguard_runtime`, and the private helper/trigger functions grant runtime/PUBLIC no EXECUTE.
 
-> An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
+No existing table, view, column, routine, role, policy, trigger or grant is changed by 0136. The upgrade test installs all predecessors, populates actual v1 landings/cases/movements/invoices, captures every populated predecessor table's primary identities, named canonical `row_to_json(...)::text` values and full `format_type`, applies 0136 alone via a migration login, compares old rows/types/privileges, then applies later migrations twice. Rolled-back controls cover microsecond change, retype, later nullable column, replaced function and later insert. Nonempty guards accompany all compared tables. This is written coverage, NOT executed upgrade evidence.
 
-That proof remains owed, including `row_to_json(t)::text` over exactly named pre-existing columns, captured primary keys, name/full-format_type snapshots, nonempty guards, failing one-microsecond/retype controls and passing later nullable-column/function/insert controls. No substitute whole-row or all-functions test was added.
+Forward fix: disable the allocator, retain historical rows, and add a reviewed compensating migration if necessary. Do not edit/drop financial history. This migration has no backfill and expands the preceding synthetic app compatibly. Any new expiry/default/display choice is an implementation detail, not commercial approval.
 
 ## Commands actually run
 
-Installed pinned pnpm 10.28.1 was invoked from `/Users/benharwood/Library/pnpm/store/v11/links/@pnpm/exe/10.28.1/fb01edf4af110b9a4ace971426a9e1b8e5948ece46be4a99cffa555e3c429dcc/bin`; root checks prepend that directory to PATH. No package download or clean reinstall. Only added/changed test files ran, one Vitest run at a time, maxWorkers=2.
+Installed Node24.17.0 and pinned pnpm10.28.1 were used. The pnpm executable directory was prepended to PATH; dependencies were already installed. No download or clean reinstall is claimed. Only changed core/API unit files ran, maxWorkers=2, no more than three files per run and one Vitest run at a time.
 
-| Command | Exit / counts |
+| Command | Actual exit/result |
 | --- | --- |
-| `pnpm --filter @jobguard/core exec vitest run src/recovery-allocation.test.ts --maxWorkers=2` initial | 0; 1 file, 43 tests passed before evidence-selection amendment. |
-| Same core command, final | 0; 1 file, **48 tests passed**, 3.01s. Includes amended evidence-ID schema and corrected test-only source reader. |
-| `pnpm --filter @jobguard/db exec vitest run test/recovery-case-join.test.ts --maxWorkers=2` initial | 1; zero tests, missing built @jobguard/core entry. No DB started. |
-| Same join unit command, after emitted core dependency | 0; 1 file, **13 tests passed**, 28.45s. Mock-client unit contracts, not live PostgreSQL. |
-| `pnpm build` (one root run) | 2; stopped at core TS2307 for test-only static `node:fs` import; 2 successful of 3 tasks, 2 cache hits. Fixed by typed test-only runtime import, preserving core's no-Node-types boundary; root build not repeated under once-only dispatch limit. Build is **not green**. |
-| `pnpm typecheck` | 0; 7/7 successful tasks, 2 cache hits; 6m13.527s. Corrected core test import typechecks. IO permission warnings occurred. |
-| `LANE_BASE_REF=origin/main pnpm lint` | 0; root lint and lane check passed; 7/7 package tasks, 2 cache hits; 1m34.319s. IO permission warnings occurred. |
-| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; lane m4-8-s, merge-base comparison, all 10 leaf paths authorized. |
-| `pnpm openapi:check` | 1; tsx failed creating its IPC pipe with listen EPERM. Generator did not execute; OpenAPI remains unchanged. |
-| `git diff --check` | 0; no whitespace errors. |
+| `pnpm turbo run build --filter=@jobguard/api...` | 2; DB guard-narrowing errors; fixed by explicit never-returning function declaration. |
+| `pnpm --filter @jobguard/core exec vitest run src/recovery-allocation.test.ts --maxWorkers=2` | 0; 1 file, **49 passed**. |
+| `pnpm build` (one root run) | 2; DB TS2589 nested imported Zod type depth; fixed with typed wrappers preserving the same runtime validation. Root build NOT repeated under once-only order. |
+| `pnpm typecheck` (one root run) | 2; 6/7 successful, web helper dynamic import lacked .js; fixed, with final web check below. |
+| `LANE_BASE_REF=origin/main pnpm lint` (one root run) | 0; 7/7 successful, 2 cache hits; 23.986s. Later credit-source changes also compile in the final targeted checks below. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; m4-8-s branch and exact allow paths passed, merge-base comparison. |
+| `pnpm --filter @jobguard/api exec vitest run src/recovery-allocation.application.test.ts src/recovery-allocation.controller.test.ts --maxWorkers=2` initial | 0; 2 files, 36 passed; repository unit doubles, not PG. |
+| Same API command after credit-source boundary coverage | 0; 2 files, **37 passed**; 1.23s; repository unit doubles. A final known-transition refusal case then passed **38 tests** in the same two files (handoff log). |
+| `pnpm --filter @jobguard/api build` final | 0; Nest build. Does not prove the full Next production build. |
+| `pnpm --filter @jobguard/web typecheck` final | 0; final helper/workbench/API/DB source types compile. |
+| Targeted TypeScript compiler API, seven changed PG suites | Initial1: four mixed-Promise generic errors in the new race helper; corrected. Subsequent0: 7 targets/0 diagnostics; compiler validation only, NOT PG execution. |
+| `node --import tsx src/generate-openapi.ts` in apps/api | 0; generated actual new OpenAPI paths and strict request variants without binding a listener. |
+| `pnpm openapi:check` | 1; tsx IPC listen EPERM, generator not executed by that wrapper. |
+| `node --import tsx src/generate-openapi.ts --check` in apps/api | 0; same generator and byte-comparison path, without the blocked tsx CLI IPC listener. |
+| `git diff --check` | 0; whitespace clean. |
 
-Root logs are `/private/tmp/jg-m4-8-s-r2-{build,typecheck,lint,lanes,openapi}.log`. Cache-replayed paths belonging to other worktrees are not fresh execution claims. Generated dist/.turbo/.next/.pnpm-store/build-info/test-results artifacts were removed before handoff; installed node_modules retained. No whole package/repository test suite was run. Separate API build/test omitted: no retained API change, and root build allowed once. Earlier unchanged kernel/watchdog files omitted per the binding changed-files-only test restriction. No AI/eval change.
+Logs are `/private/tmp/jg-m4-8-s-c1-*.log`. Root scripts remain truthful failures where shown: a fresh complete root typecheck/build still belongs to the Mac helper/CI. Compiler checks are distinct from tests. Cache-replayed work is not new execution evidence. The four core/kernel/watchdog test files named by the older order were narrowed to the actually changed core file by the binding later memory/changed-files restriction; unchanged watchdog-registry/join unit files were not rerun merely to satisfy a wider older list.
 
-NOT RUN (sandbox cannot start PostgreSQL / a browser): `pnpm test:db`, `pnpm test:migrations`, `recovery-case-join.integration.test.ts`, all planned allocation/line/races/upgrade integration acceptance, and the issued mobile-360/desktop browser command for M4-8-S/M4-7-S/M4-1-S/M4-2-S/UIWIRE-12/UIWIRE-14. No allocated-row/browser suite is claimed written or passed. No socket, PostgreSQL or browser process started.
+## NOT RUN list
 
-## Self-review and preservation
+**NOT RUN (sandbox cannot start PostgreSQL / a browser):** `pnpm test:db`, `pnpm test:migrations`, `recovery-allocation.integration.test.ts`, `recovery-line-allocation.integration.test.ts`, `recovery-allocation-races.integration.test.ts` (including M-LOCK), `recovery-allocation-upgrade.integration.test.ts`, the changed `tenancy.integration.test.ts`, `UIWIRE-12.integration.test.ts`, `demo-bootstrap.integration.test.ts`, and the first-round `recovery-case-join.integration.test.ts`.
 
-Re-read the retained whole diff against supplied base and against local origin/main, the full new mapper/tests/contract and the widened join changes. Checked: every pure reference figure is exact; F4 remains denominator 43; implementation contains no proportional/rounding/net-conversion/fee implementation; hierarchy chooses by source presence rather than benefit; microsecond cutoff and explicit deposit refusal use the kernel; schemas reject client authority; J2/J3/J11 now cannot pass a no-op joined writer; guarded SQL cannot cast malformed settings; header and corrected L4 distinguish replay. No SQL or case command implementation was copied.
+**NOT RUN (sandbox cannot start PostgreSQL / a browser):** `pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop M4-8-S.spec.ts M4-7-S.spec.ts M4-1-S.spec.ts M4-2-S.spec.ts UIWIRE-12.spec.ts UIWIRE-14.spec.ts`. The six new M4-8-S browser journeys are written for both configured projects, not passed journeys. No database, browser or listening service was started. AI/eval is inapplicable: no model/prompt/parser/gateway change.
 
-Checked every retained path is in the lane and the lane gained exactly the three authorized paths. Checked no fingerprinted table, v1 fee/landing/journal path, practice-feed catalogue, approved policy, dependency/lockfile, BUILD_PLAN or pinned auth source changed. The sole existing assertion literal changed is the guarded SQL expectation required by J-REQ1; other assertions remain intact. Architecture tests inspect only this leaf's own file, not merged/shared hashes. One-off hashes below are receipt evidence only.
+## Self-review
 
-Checked persisted B/DW criteria remain HELD instead of treating pure/mocked tests as implementation acceptance. Database conservation, actual grants/RLS/catalogues, original-row preservation, concurrent races, upgrade migration, real audit rollback and browser behavior **could not be verified**. Full build completion was not verified after the corrected import. Core/J helpers used the same builder model; no different-model verdict or separate acceptance occurred.
+Read the whole continuation diff against HEAD1267a2f and the relevant supplied-main/origin-main differences, the new migration/repository, all new tests, application/routes/workbench and source contracts. Checked exact reference amounts and preserved denominator43; exact kernel delegation and cross-product-only SQL integrity validation; no division of a fractional deemed amount; omitted explicit zero lines versus complete composition; earliest source timestamps; finalized PNG source bytes; all SELECT-only new GRANTs and exact routine grantees; session-derived owner and Decision/resolution/expiry binding; same-command/body/job/actor replay; cash/case/source lock order and absence of an extra parent-row lock; joined call last; original-preserving reversal; claim-2 invalidation projection; no deferred foreign key or completion trigger; credits/unmatched customer-payment balance projection; four post_live_billing registrations; no new live-only route; thin route authentication before deferred JSON; unknown outcome pause; source drill-down; six browser journeys and all required PG/upgrade/race controls.
 
-| Unchanged file at supplied HEAD | SHA-256 |
-| --- | --- |
-| 0018_recovery_outcomes.sql | 42d13efe6aa491149300f167f2b3f7e4c66070f72357a4c75a0ca57a6840f3ba |
-| 0097_recovery_case_current.sql | 84aef359c62455818e4eb66d26ca9d21c13c49ddd06af202fd107be3950d9375 |
-| 0106_practice_feed.sql | 47c469b941a0f8f2f342222ae967e42b8f363cd34f5a99383273c145bf9d44b7 |
-| 0128_shadow_persistence.sql | d8f7370560595a47f1395dad198abacda1e1351ade096697656c76805e957afe |
-| auth/context-boundary.test.ts | d082694df3dc005461d92ac79f275f31525d35c3e022948b47efa0ed7f9a772f |
-| practice-session.ts | 9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14 |
+Fixed during self-review: integer guard narrowing/Zod type inference; dynamic helper import and matching tenant-context module instance; exact rational database validation in place of recurring numeric division; generated PNG rather than mislabeled text evidence; predecessor fixture activation through the real switch-live routine (including the cap required by v1 races/upgrade), not merely a status transition; omitted explicit candidates; original source timestamp; SQL-computed audit/approval hashes; source/Decision audit prefix; late historical receipt refusal; replay disposition of untouched v1; credit selection preserved through approval; direct SQL test's latest eligibility binding; PL/pgSQL movement alias separated from its record variable; bounded control sizing for the credit selector. Removed the optional deferred completion assertion and its unissued extra test to obey the literal no-deferral ruling; the issued public-caller transaction/audit rollback tests remain. Earlier standing assertions were preserved; three existing suites gain only catalog rows/table names. No source hash test pins a shared/merged file. Final read-only lane inspection found 34 continuation paths and zero unauthorized paths; the four protected J/auth paths have no continuation diff.
 
-All five preparatory shared mounts/registrations were also checked byte-identical to HEAD after parking the draft. No persistent source-hash test was added for them.
+The checked SQL writer is one stage of the trusted public repository transaction, not a complete standalone case/audit command; arbitrary direct callers must preserve that composition. Its own session/role predicate, source/money/Decision guards and conservation remain database checks.
 
-## Overlap, follow-ups and gates
+Could not verify actual PostgreSQL syntax/catalog/privileges/RLS/conservation/races/upgrade/rollback or browser behavior, a fresh pinned install or full production build after corrections. No different-model verdict or separate technical acceptance exists for this working tree. Same-model helpers prepared separate authorized file groups, not an independent verdict.
 
-Actual shared overlaps: the single lane line and appended core export, root-owned/serialized; widened PRE repository/test changes authorized by addendum2, coordinated by root. Other migration/export/catalogue/OpenAPI/watchdog/mount files remain unchanged. No UI polish survives. No new data migration, backwards-incompatible transport, provider destination, secret/configuration or operational alert is introduced. New core schemas are unused exports until the future authorized application exists.
+The preserved files retain the round0 SHA-256 values: 0018 `42d13efe6aa491149300f167f2b3f7e4c66070f72357a4c75a0ca57a6840f3ba`; 0097 `84aef359c62455818e4eb66d26ca9d21c13c49ddd06af202fd107be3950d9375`; 0106 `47c469b941a0f8f2f342222ae967e42b8f363cd34f5a99383273c145bf9d44b7`; 0128 `d8f7370560595a47f1395dad198abacda1e1351ade096697656c76805e957afe`; pinned auth test `d082694df3dc005461d92ac79f275f31525d35c3e022948b47efa0ed7f9a772f`; practice-session `9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14`. The three J-REQ source/test files have zero continuation diff against HEAD1267a2f. No package/lockfile/tools/security decision/provider route change was made.
 
-Owed: coordinator interpretation of the final lock-order line; then the public joined caller, all persisted tables/guards/Decision and line-source bindings, allocator/reversal workbench, API/OpenAPI/routes, upgrade/catalogue/race tests and both browser projects. Saved F5 remains Q2-held until a separate order adds two generated movements; saved F7 remains Q2-held until SV-4 provides supplementary invoices. Q3 held display figures, Q6 fractional case splits and Q9 role widening remain held. SV-6 and M4-9-S are consumers only, not implemented. D01/D02/D03v3 remain proposed; G4-S unmet. Independent Claude review and separate Sol check/acceptance are still required on a dispatcher commit.
+## Overlap, owed work and release gates
 
-Intended commit message is `/private/tmp/jg-msg-m4-8-s-r2.txt`; dispatcher owns the commit, push and review process. No git write, remote/GitHub action, deployment, real data, provider call or spending occurred.
+Shared append registrations serialize with dispatcher-owned merges: migration list/log, db export, core registry, app module/workspace export/composition, OpenAPI, catalogue rows and the one workbench mount. No lane widening beyond the earlier three J paths is needed. Migration0136 may be renumbered by the dispatcher at landing without changing SQL bytes. Updated types/boundaries are additive; only synthetic deployment is admitted. No new external service, secret, operational provider alert or real action is introduced.
 
-Builder receipt only — not independently verified, not accepted.
+Owed: Mac/helper/CI PG and both-project browser runs, fresh complete root checks, then a fresh Claude verdict bound to the dispatcher's commit and separate Sol acceptance. Saved F5 stays Q2-held for its separately ordered generated movements; saved F7 stays Q2-held for SV-4 supplementary invoice/line bindings. Q3 unspecified held figures, Q6 fractional splits and Q9 role widening remain held. SV-6 and M4-9-S consume this allocator; neither is implemented here. D01, D02 and D03v3 remain proposed, G4-S remains unmet, and production fees/collection remain disabled.
+
+Intended commit message: `/private/tmp/jg-msg-m4-8-s-r2.txt`. Dispatcher owns commit, push and reviews. Generated build/test artifacts are removed before handoff; installed dependencies remain. No git write, remote operation, provider call, spending, deployment or real data occurred.
+
+**Builder receipt only — not independently verified, not accepted.**

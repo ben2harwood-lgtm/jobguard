@@ -68,6 +68,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0127_recovery_timing_pin.sql", import.meta.url),
   new URL("../migrations/0128_shadow_persistence.sql", import.meta.url),
   new URL("../migrations/0129_sso_required.sql", import.meta.url),
+  new URL("../migrations/0136_recovery_allocation.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 

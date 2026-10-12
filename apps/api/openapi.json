@@ -2825,6 +2825,437 @@
           "identity"
         ]
       }
+    },
+    "/jobs/{id}/recovery-allocations": {
+      "get": {
+        "operationId": "RecoveryAllocationController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "recovery-allocation-view.v1; exact rational line amounts, no fees"
+          }
+        },
+        "summary": "Read persisted synthetic receipt allocation and reversal facts",
+        "tags": [
+          "recovery-allocations"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryAllocationController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "caseId",
+                      "paymentId",
+                      "evidenceId"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review"
+                        ]
+                      },
+                      "caseId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "evidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "caseId",
+                      "paymentId",
+                      "evidenceId",
+                      "approvalHash"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "allocate"
+                        ]
+                      },
+                      "caseId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "evidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "approvalHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "allocationId"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "creditNoteId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review_reverse"
+                        ]
+                      },
+                      "allocationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "allocationId",
+                      "approvalHash"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "creditNoteId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reverse"
+                        ]
+                      },
+                      "allocationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "approvalHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "recovery-allocation-view.v1; reviewed or approved artifact"
+          },
+          "409": {
+            "description": "Changed approval, stale case, unavailable cash or missing proof"
+          }
+        },
+        "summary": "Review or approve an exact receipt-to-case allocation",
+        "tags": [
+          "recovery-allocations"
+        ]
+      }
+    },
+    "/jobs/{id}/recovery-allocations/reversals": {
+      "post": {
+        "operationId": "RecoveryAllocationController_reverse",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "allocationId"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "creditNoteId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review_reverse"
+                        ]
+                      },
+                      "allocationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "allocationId",
+                      "approvalHash"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "creditNoteId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reverse"
+                        ]
+                      },
+                      "allocationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "approvalHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Append-only reversal facts; original allocations retained"
+          }
+        },
+        "summary": "Review or approve allocation reversal against a recorded refund, credit or receipt reversal",
+        "tags": [
+          "recovery-allocations"
+        ]
+      }
     }
   },
   "info": {

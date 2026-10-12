@@ -197,3 +197,12 @@ describe("M4-8-S exact case split and command boundaries", () => {
     expect(f4.denominator).toBe("43");
   });
 });
+
+// A finalized source selection carries no client arithmetic, including on a refund.
+it("accepts a selected finalized reversal remittance but rejects client reversal shares", () => {
+  const base = { version: "recovery-allocation-command.v1", action: "review_reverse", commandId: "10000000-0000-4000-8000-000000000001",
+    allocationId: "20000000-0000-4000-8000-000000000002", expectedCaseRevision: 3, grossPence: 120,
+    remittanceEvidenceId: "30000000-0000-4000-8000-000000000003" };
+  expect(recoveryAllocationCommandV1.parse(base)).toEqual(base);
+  expect(() => recoveryAllocationCommandV1.parse({ ...base, shares: [{ lineId: "catch", grossPence: 120 }] })).toThrow();
+});

@@ -14,7 +14,7 @@ const commandBase = {
   expectedCaseRevision: revision, grossPence: positiveAmount,
 };
 const allocationTarget = { caseId: z.string().uuid(), paymentId: z.string().uuid(), evidenceId: z.string().uuid(), remittanceEvidenceId: z.string().uuid().optional() };
-const reversalTarget = { allocationId: z.string().uuid(), creditNoteId: z.string().uuid().optional() };
+const reversalTarget = { allocationId: z.string().uuid(), creditNoteId: z.string().uuid().optional(), remittanceEvidenceId: z.string().uuid().optional() };
 
 /** The human chooses an amount to review, never its split, rule, reviewer or settlement facts. */
 export const recoveryAllocationCommandV1 = z.discriminatedUnion("action", [
