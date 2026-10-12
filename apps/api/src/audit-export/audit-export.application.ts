@@ -1,15 +1,13 @@
 import type { Pool } from "pg";
 import { ZodError } from "zod";
-import { AuditExportError, AuditExportRepository, ContractorRepository, AUDIT_EXPORT_NOTICE, AUDIT_EXPORT_SANDBOX } from "@jobguard/db";
-import { resolveVerifiedTenantContext } from "../auth/principal-bridge.js";
-import { AuthError, type AuthProvider } from "../auth/auth-provider.js";
+import { AuditExportError, AuditExportRepository, ContractorRepository, contractorSessionContext, type VerifiedTenantContext, AUDIT_EXPORT_NOTICE, AUDIT_EXPORT_SANDBOX } from "@jobguard/db";
 import { auditExportFailureV1, auditExportRequestV1, auditExportSessionV1 } from "./audit-export.contracts.js";
 
 export function assertAuditExportMode(): void {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new AuditExportError("AUDIT_EXPORT_MODE_HELD");
 }
 
-/** Uses the existing authenticated bridge rather than minting a new synthetic context. No tenant input is accepted. */
+/** Uses the shared contractor-session bridge; the persisted session supplies the tenant. No tenant input is accepted. */
 export class AuditExportApplication {
   private readonly repository: AuditExportRepository;
   constructor(private readonly pool: Pool) { this.repository = new AuditExportRepository(pool); }
@@ -41,17 +39,16 @@ export class AuditExportApplication {
       throw error;
     }
   }
-  private async resolveContext(sessionId: string, member: Awaited<ReturnType<AuditExportApplication["member"]>>) {
-    // This read-only adapter consumes ENT-1's persisted session lookup. The role is deliberately inert:
-    // the repository rechecks current tenant-wide owner/admin grants under the shared ENT-1 lock.
-    const denied = async (): Promise<never> => { throw new AuthError("UNAUTHENTICATED"); };
-    const provider: AuthProvider = {
-      requestCode: denied, verifyCode: denied,
-      authenticate: async token => token === sessionId ? { identityUserId: member.identityUserId, sessionId, csrfToken: "audit-export-internal-bridge-token" } : undefined,
-      findMembership: async (principal, tenantId) => principal.identityUserId === member.identityUserId && tenantId === member.tenantId ? { id: member.membershipId, identityUserId: member.identityUserId, tenantId: member.tenantId, role: "read_only", email: "generated@fictional.invalid" } : undefined,
-    };
-    // Browser origin checks are in both HTTP adapters; these values are internal bridge credentials, never user input.
-    return resolveVerifiedTenantContext(provider, { sessionToken: sessionId, requestedTenantId: member.tenantId, csrfToken: "audit-export-internal-bridge-token", origin: "https://audit-export.fictional.invalid" }, "https://audit-export.fictional.invalid");
+  private async resolveContext(sessionId: string, member: Awaited<ReturnType<AuditExportApplication["member"]>>): Promise<VerifiedTenantContext> {
+    try {
+      const context: VerifiedTenantContext = await contractorSessionContext(this.pool, sessionId);
+      const tenantId = context.tenantId;
+      if (tenantId.toLowerCase() !== member.tenantId.toLowerCase()) throw new AuditExportError("AUDIT_EXPORT_UNAUTHENTICATED");
+      return context;
+    } catch (error) {
+      if ((error as { code?: string }).code === "UNAUTHENTICATED") throw new AuditExportError("AUDIT_EXPORT_UNAUTHENTICATED");
+      throw error;
+    }
   }
   async list(sessionId: string | undefined) {
     const member = await this.member(sessionId, "list");
