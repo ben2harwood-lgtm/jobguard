@@ -195,3 +195,43 @@ T8's observer forwards real statements and never mocks a database result. Its ca
 Generated workspace build/cache outputs were removed after the checks; installed dependencies were retained. No migration, operational alert, compatibility change, external action or policy approval belongs to this continuation. AGENTS §§5.3, 5.4 and 5.7 are exercised by the amended test; its runtime evidence and the earlier release gates remain owed. The requested intended commit subject/body is written to `/private/tmp/jg-msg-ch-7-terms.txt`; the dispatcher owns the commit. No Git write was performed.
 
 Builder receipt only — not independently verified, not accepted. Mandatory CI, two independent RED verdicts bound to the final commit, separate acceptance, and dispatcher integration remain outstanding.
+
+## Mac verification (12 Oct)
+
+Run by the Mac helper (Claude Sonnet 5.5), 12 October 2026, evening. The helper reviewed nothing, gave no verdict and changed no product code. **Result: RED. Nothing was pushed.** Logs: `~/.local/share/full-steam/jg-runs/ch-7-terms-mac/`.
+
+**Head tested:** `b1b352d7651498a51da1e3c3d31b7ecf5ca02750` ("Merge main (ad1bad2) into CH-7-TERMS") plus the regenerated `apps/api/openapi.json` (15 added lines, the new `/jobs/{id}/recovery-cases/terms` route), which the merge commit does not yet hold. The commit that records this section adds exactly that file and this text. Parents of the merge: `e5c438d` (Codex round 2) and `ad1bad2` (main, PR #139). Conflicts: three append-only files (`packages/core/src/index.ts` export list, `packages/db/src/migrate.ts` migration list, `packages/db/MIGRATIONS.md`); both sides kept, main first; `migrate.ts` now lists ... 0129, 0130, 0131, 0134 (last). `apps/api/openapi.json` was taken from main and regenerated (`pnpm openapi:generate`, then `pnpm openapi:check`), never hand-merged. `git diff origin/main --stat` showed only this piece's 26 files.
+
+**First failing assertion (the only red).** Both new database files fail in their own `beforeAll`, so all 49 tests (46 + 3) are skipped and none ran. Error `STALE_OR_BLOCKED_FINAL_ACCOUNT` (raised by `app.issue_practice_customer_invoice`, `0095_job_parties.sql:360`) at `PracticeInvoiceRepository.issue`, called from `packages/db/test/recovery-case-terms.integration.test.ts:69` (and the same chain in `recovery-case-terms-upgrade.integration.test.ts:42` via `seed`, called at `:61`). **Owner: the builder's test fixture (this piece's new test files), not the migration, not the product code, not merged main.** Reading (not executed to confirm): the fixture's `proofFixture` inserts only an `evidence_object` of type `site_photo`; `FinalAccountCommandService.assemble` takes proof only from a `stage_completion` joined to an `evidence_link` and requires an `electrical_certificate` per confirmed scope (`packages/db/src/final-account-repository.ts` line 6; `packages/core/src/final-account.ts:28`, `issueBlocked: missing.length>0`), so the assembled revision is `issue_blocked` and the invoice issue is refused. Every database test of this piece is therefore still unproven by execution, including T2 (direct-runtime counterexamples), the amended T8, and the rule-9 upgrade proof.
+
+| Check | Command (short) | Exit | Result |
+| --- | --- | --- | --- |
+| Builds, each alone | `pnpm --filter @jobguard/{core,db,storage,config,ai,api} build` | 0 each | built |
+| OpenAPI | `pnpm openapi:generate` in apps/api, then `pnpm openapi:check` | 0, 0 | +15 lines; check passes |
+| New DB tests (attempt 1) | vitest, 2 new files, `--maxWorkers=1` | 1 | embedded PostgreSQL would not start: "Postgres init script exited with code null" (missing dylib symlinks); fixed by running `scripts/hydrate-symlinks.js` inside the `@embedded-postgres/darwin-arm64` package folder |
+| New DB tests (attempt 2) | same | 1 | 2 files failed, 49 tests skipped, `STALE_OR_BLOCKED_FINAL_ACCOUNT` as above |
+| Core unit | `src/recovery-case-terms.test.ts` | 0 | 16 passed |
+| API units | `recovery-case-terms.application`, `recovery-message.errors`, `watchdog-registry` | 0 | 173 passed, 3 files (watchdog registry GREEN) |
+| Boundary scanner | `src/auth/context-boundary.test.ts` (untouched) | 0 | 145 passed |
+| Merged DB group 1 | recovery-cases, recovery-cases.workbench, recovery-eligibility-v3 | 0 | 84 passed |
+| Merged DB group 2 | recovery-timing-pin, recovery.integration, recovery-follow-up | 0 | 103 passed |
+| Merged DB group 3 | recovery-follow-up-upgrade, recovery-messages, job-activation-terms | 0 | 112 passed |
+| Merged DB group 4 | evidence-packs, fingerprinted-row-shape, extra-origin-upgrade | 0 | 27 passed |
+| Merged DB group 5 | audit-export, UIWIRE-12, command-replay-contract | 0 | 86 passed (command-replay-contract GREEN) |
+| `pnpm test:migrations` | tenancy + demo-bootstrap | 0 | 13 passed |
+| `pnpm typecheck` | | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | | 0 | purity 133 files, lane boundary, money boundary, 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | | 0 | 27 files, all allowed |
+| `pnpm --filter @jobguard/web build` | production build for the browser run | 0 | built |
+| Browser, M4-5-S + M4-6-S | Playwright, channel chromium, `CI=1`, `--workers=1`, projects mobile-360 and desktop | 0 | 18 passed (these two specs now make the one set-up call through the new route) |
+| Browser, CH-7 + CH-1 | same | 0 | 26 passed |
+
+Vitest ran with `--maxWorkers=1` for database files and `--maxWorkers=2` otherwise, at most three files per run, one heavy step at a time through `heavy-slot`. The Playwright config has two projects only (`mobile-360`, `desktop`, both Chrome-based); there is no WebKit project, so no WebKit run exists to report. Wrapper config: `~/.local/share/full-steam/jg-runs/ch-7-terms-mac/pw-ch-7-terms-mac.config.ts`. The known Mac-only `[mobile-360] ENT-2.spec.ts:19` failure was not in scope and did not appear.
+
+**NOT run / not proven:** T1 to T11 database tests of this piece (46 + 3 tests, blocked by the fixture above); therefore also T2's direct-runtime refusal of a non-owner, a revoked owner and an expired owner, the active-owner positive control, the amended T8 (one transaction identity, ordered times), and the rule-9 upgrade proof for 0134. No fresh Opus or Sol review exists. Not pushed; no pull request opened.
+
+**GRANT statements in `0134_recovery_case_terms.sql`** (helper's reading, reported only; the reviewers own the verdict): three, no other. (1) line 29: `GRANT SELECT ON app.recovery_case_terms_approval TO jobguard_runtime` after `REVOKE ALL ... FROM PUBLIC,jobguard_runtime` (line 28): read-only, no new direct write grant on a money or authorization table. (2) line 71: `GRANT EXECUTE ON FUNCTION app.approve_recovery_case_terms(...) TO jobguard_runtime`: a SECURITY DEFINER routine owned by `jobguard_migration` that carries its own tenant check, active-owner predicate (0109:58 shape) and exact-authorization join; this is the "checked routine" shape the new build standard asks for. It still trusts hand-made receipt, decision and authorization rows that `jobguard_runtime` can already forge (audit findings F1 and F2, `audit-definer-trusts-authorization-20261012.md`); that is the existing least-privilege problem, not a new grant, but the receipt should name it. (3) line 81: `GRANT EXECUTE ON FUNCTION app.recovery_case_terms_approved(uuid,uuid,uuid) TO jobguard_runtime`: SECURITY INVOKER, STABLE, read-only. The pin function and the guard function revoke from PUBLIC and runtime. Conclusion: no new INSERT, UPDATE or DELETE grant for `jobguard_runtime` on any money, membership, authorization, receipt or audit table.
+
+**Seen, not changed:** (a) the 0134 section of `packages/db/MIGRATIONS.md` still says "T8's audit clock semantics need a coordinator ruling before acceptance", which round 2 settled; stale wording, left for the next builder round. (b) The helper added no commit other than the merge and this record.
+
+Mac helper record only. Not independently verified, not accepted.
