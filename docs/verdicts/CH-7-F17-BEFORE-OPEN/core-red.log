@@ -1,0 +1,85 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open/packages/core
+
+ ❯ src/recovery-eligibility-v3.test.ts (24 tests | 2 failed) 21ms
+     × F17 excludes a refund originally settled at or before opening, including settled proof 5ms
+     × F17 excludes a refund originally settled at or before opening, including pending proof 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/recovery-eligibility-v3.test.ts > CH-7-F17-BEFORE-OPEN timing parity > F17 excludes a refund originally settled at or before opening, including settled proof
+AssertionError: expected { …(10) } to match object { outcome: 'excluded', …(3) }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+@@ -2,17 +2,17 @@
+    "lines": [
+      {
+        "netPence": 45000,
+        "qualifyingPrincipal": {
+          "currency": "GBP",
+-         "pence": 0,
++         "pence": 45000,
+        },
+-       "reason": "Paid before you opened this case",
++       "reason": null,
+      },
+    ],
+-   "outcome": "excluded",
++   "outcome": "eligible_for_review",
+    "qualifyingPrincipal": {
+      "currency": "GBP",
+-     "pence": 0,
++     "pence": 45000,
+    },
+-   "reason": "Paid before you opened this case",
++   "reason": null,
+  }
+
+ ❯ src/recovery-eligibility-v3.test.ts:60:18
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/recovery-eligibility-v3.test.ts > CH-7-F17-BEFORE-OPEN timing parity > F17 excludes a refund originally settled at or before opening, including pending proof
+AssertionError: expected { …(10) } to match object { outcome: 'excluded', …(3) }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+@@ -4,15 +4,15 @@
+        "netPence": 45000,
+        "qualifyingPrincipal": {
+          "currency": "GBP",
+          "pence": 0,
+        },
+-       "reason": "Paid before you opened this case",
++       "reason": "Pending money cannot qualify",
+      },
+    ],
+    "outcome": "excluded",
+    "qualifyingPrincipal": {
+      "currency": "GBP",
+      "pence": 0,
+    },
+-   "reason": "Paid before you opened this case",
++   "reason": "Pending money cannot qualify",
+  }
+
+ ❯ src/recovery-eligibility-v3.test.ts:60:18
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 22 passed (24)
+   Start at  19:48:27
+   Duration  442ms (transform 307ms, setup 0ms, import 328ms, tests 21ms, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open/packages/core:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run --maxWorkers=2 src/recovery-eligibility-v3.test.ts
