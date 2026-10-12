@@ -13,6 +13,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   let raw: unknown; try { raw = await request.json(); } catch { throw new SiteExtraError("INVALID_COMMAND"); }
   const body = logSiteExtraV1.safeParse(raw); if (!body.success) throw new SiteExtraError("INVALID_COMMAND");
   const { id } = await context.params;
-  return NextResponse.json(await (await workspaceApplication()).siteExtras.log(id, body.data), { headers });
+  return NextResponse.json(await (await workspaceApplication()).siteExtras.log(id, body.data), { status: 201, headers });
  } catch (error) { return failure(error); }
 }

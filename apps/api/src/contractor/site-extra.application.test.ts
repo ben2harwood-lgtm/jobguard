@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
-import { ContractorRepository, SiteExtraRepository, withTenant, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorRepository, SiteExtraRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError, siteExtraHttpStatus } from "@jobguard/core";
 import * as bridge from "../auth/principal-bridge.js";
 import { SiteExtraApplication, siteExtraHttpFailure } from "./site-extra.application.js";
@@ -70,7 +70,7 @@ describe("ENT-3a service and Nest boundary", () => {
   expect(Reflect.getMetadata("__headers__", SiteExtraController.prototype.log)).toEqual(expect.arrayContaining([{ name: "Cache-Control", value: "no-store" }])); await pool.end();
  });
  it("[A15] closed errors map to one status and unexpected database text is removed", () => {
-  for (const code of ["UNAUTHENTICATED", "MODE_FORBIDDEN", "ORIGIN_FORBIDDEN", "TRACK_FORBIDDEN", "EXTRA_FORBIDDEN", "INVALID_COMMAND", "NOT_FOUND", "COMMAND_CONFLICT", "STALE_REVISION", "SITE_EXTRA_UNAVAILABLE"] as const) expect(siteExtraHttpFailure(new SiteExtraError(code))).toEqual({ status: siteExtraHttpStatus(code), body: { version: "site-extra-error.v1", code } });
+  for (const code of ["UNAUTHENTICATED", "MODE_FORBIDDEN", "ORIGIN_FORBIDDEN", "TRACK_FORBIDDEN", "EXTRA_FORBIDDEN", "INVALID_COMMAND", "NOT_FOUND", "COMMAND_CONFLICT", "STALE_REVISION", "SITE_EXTRA_UNAVAILABLE"] as const) expect(siteExtraHttpFailure(new SiteExtraError(code))).toEqual({ status: siteExtraHttpStatus(code), body: code === "COMMAND_CONFLICT" ? { code: "IDEMPOTENCY_CONFLICT" } : { version: "site-extra-error.v1", code } });
   expect(siteExtraHttpFailure(new Error("PostgreSQL detail with Fictional note"))).toEqual({ status: 503, body: { version: "site-extra-error.v1", code: "SITE_EXTRA_UNAVAILABLE" } });
  });
  it("[A18] sole application caller uses the guard; repository has no direct writes or replaceable command type", () => {
@@ -78,7 +78,32 @@ describe("ENT-3a service and Nest boundary", () => {
   function sources(dir: string): string[] { return readdirSync(dir).flatMap(name => { const path = resolve(dir, name); return statSync(path).isDirectory() ? sources(path) : /\.(?:ts|tsx|mjs)$/u.test(name) && !/\.(?:test|spec)\./u.test(name) ? [path] : []; }); }
   const files = [...sources(resolve(root, "apps/api/src")), ...sources(resolve(root, "apps/web/app")), ...readdirSync(resolve(root, "packages")).flatMap(name => sources(resolve(root, "packages", name, "src")))];
   const callers = files.filter(file => /\.raiseExtra\s*\(/u.test(readFileSync(file, "utf8"))).map(file => relative(root, file)); expect(callers).toEqual(["packages/db/src/site-extra-repository.ts"]);
-  const source = readFileSync(resolve(root, callers[0]!), "utf8"); expect(source.match(/LogSiteExtra/gu)).toHaveLength(1); expect(source).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/u); expect(source).toMatch(/siteExtraAuthoritySeam\)/u);
+  const source = readFileSync(resolve(root, callers[0]!), "utf8"); expect(source.match(/LogSiteExtra/gu)).toHaveLength(1); expect(source).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/u); expect(source).toMatch(/await siteExtraAuthoritySeam\(db, fact\)/u);
   expect(source).not.toMatch(/(?:logSiteExtra|siteExtraAuthoritySeam)\([^)]*commandType/u);
  });
+});
+
+// Repair round 2: direct controller tests need no socket or PostgreSQL.
+it.each([{ id: "R2", error: new WatchdogError("JOB_NOT_LIVE") }, { id: "R3", error: new SiteExtraError("COMMAND_CONFLICT") }])("[$id] controller preserves the exact public live/conflict refusal", async ({ error }) => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.fictional.invalid");
+ const pool = new Pool(); vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(member());
+ vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra").mockRejectedValue(error);
+ const code = error.code === "COMMAND_CONFLICT" ? "IDEMPOTENCY_CONFLICT" : "JOB_NOT_LIVE";
+ await expect(new SiteExtraController(pool).log(crypto.randomUUID(), `jg_session=${crypto.randomUUID()}`, "https://app.fictional.invalid", body())).rejects.toMatchObject({ status: 409, response: { code } });
+ expect(siteExtraHttpFailure(error)).toEqual({ status: 409, body: { code } }); await pool.end();
+});
+it("[R4] Nest success and replay use 201 and the same repository result", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.fictional.invalid");
+ const pool = new Pool(), controller = new SiteExtraController(pool), jobId = crypto.randomUUID(), request = body(), cookie = `jg_session=${crypto.randomUUID()}`;
+ vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(member());
+ const stored = { variationId: crypto.randomUUID() }; vi.spyOn(SiteExtraRepository.prototype, "logSiteExtra").mockResolvedValue(stored);
+ const first = await controller.log(jobId, cookie, "https://app.fictional.invalid", request);
+ expect(await controller.log(jobId, cookie, "https://app.fictional.invalid", request)).toEqual(first);
+ expect(first.extraId).toBe(stored.variationId); expect(Reflect.getMetadata("__httpCode__", controller.log)).toBe(201); await pool.end();
+});
+it("[R5] site-extra OpenAPI documents 201 and the exact live-only conflict enum", () => {
+ const spec = JSON.parse(readFileSync(resolve(process.cwd(), "openapi.json"), "utf8"));
+ const responses = spec.paths["/contractor/jobs/{id}/site-extras"].post.responses;
+ expect(responses["201"]).toBeDefined(); expect(responses["200"]).toBeDefined();
+ expect(responses["409"].content["application/json"].schema.properties.code.enum).toEqual(["JOB_NOT_LIVE", "IDEMPOTENCY_CONFLICT"]);
 });

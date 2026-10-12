@@ -5,6 +5,7 @@ import { ExtraRepository, type ExtraTransactionSeam, type RaisedExtra } from "./
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, derivedUuid } from "./work-order-repository.js";
 import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership } from "./tenant-context.js";
+import { requireLiveJob, WatchdogError } from "./watchdog.js";
 const commandType = "LogSiteExtra";
 const inputV1 = z.object({ commandId: z.string().uuid(), jobId: z.string().uuid(), note: z.string().min(1).max(5000).refine(value => /\S/u.test(value)), description: z.string().min(1).max(500).refine(value => /\S/u.test(value)) }).strict();
 type Input = z.infer<typeof inputV1>;
@@ -15,8 +16,9 @@ const answerV1 = z.discriminatedUnion("decision", [
  z.object({ decision: z.literal("forbidden"), reason_code: z.enum(["member_inactive", "command_type_not_permitted", "role_not_permitted"]), raising_grant: z.null() }).strict(),
  z.object({ decision: z.literal("not_found"), reason_code: z.literal("job_out_of_scope"), raising_grant: z.null() }).strict(),
 ]);
-/** The seam performs only the stored-fact guard, before ENT-4b's final audit append. */
+/** Both checks run before ENT-4b's final audit append; raiseExtra already holds its per-job lock. */
 export const siteExtraAuthoritySeam: ExtraTransactionSeam = async (db, fact) => {
+ await requireLiveJob(db, fact.jobId);
  await db.$client.query("SELECT app.ent3a_require_extra_authority($1,$2)", [fact.jobId, fact.variationId]);
 };
 export class SiteExtraRepository {
@@ -31,7 +33,10 @@ export class SiteExtraRepository {
    const rows = (await db.$client.query("SELECT decision,reason_code,raising_grant FROM app.ent3a_extra_authority($1,$2,$3)", [actor.membershipId, commandType, jobId])).rows;
    const answer = answerV1.safeParse(rows.length === 1 ? rows[0] : undefined);
    if (!answer.success) return { code: "NOT_FOUND", reason: "job_out_of_scope" };
-   if (answer.data.decision === "allowed") return { grant: answer.data.raising_grant };
+   if (answer.data.decision === "allowed") {
+    await requireLiveJob(db, jobId);
+    return { grant: answer.data.raising_grant };
+   }
    if (answer.data.decision === "not_found") return { code: "NOT_FOUND", reason: "job_out_of_scope" };
    return { code: "EXTRA_FORBIDDEN", reason: answer.data.reason_code === "role_not_permitted" ? "role_not_permitted" : "member_inactive" };
   });
@@ -52,6 +57,7 @@ export class SiteExtraRepository {
   const parsed = inputV1.safeParse(raw); if (!parsed.success) throw new SiteExtraError("INVALID_COMMAND");
   const input = parsed.data;
   let refusal: Refusal | undefined;
+  let liveRefusal: WatchdogError | undefined;
   try {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (actor.tenantId.toLowerCase() !== context.tenantId.toLowerCase()) refusal = { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
@@ -60,8 +66,18 @@ export class SiteExtraRepository {
     if ("code" in authority) refusal = authority;
     else {
      try {
-      return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description }, siteExtraAuthoritySeam);
+      return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description }, async (db, fact) => {
+       try { await siteExtraAuthoritySeam(db, fact); } catch (error) {
+        if (error instanceof WatchdogError) {
+         liveRefusal = error;
+         // A known persistence error rolls back; retain the typed guard failure outside raiseExtra.
+         throw new ExtraPersistenceError("DATABASE_UNAVAILABLE");
+        }
+        throw error;
+       }
+      });
      } catch (error) {
+      if (liveRefusal) throw liveRefusal;
       if (error instanceof ExtraPersistenceError && (error.code === "NOT_FOUND" || error.code === "INVALID_ORIGIN")) {
        const current = await this.precheck(context, actor, input.jobId);
        if ("grant" in current) throw new SiteExtraError("STALE_REVISION");
@@ -72,6 +88,10 @@ export class SiteExtraRepository {
    }
   } catch (error) {
    if (error instanceof InvalidTenantContextError) refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
+   else if (error instanceof WatchdogError) {
+    if (error.code === "JOB_NOT_FOUND") refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
+    else throw error;
+   }
    else if (error instanceof SiteExtraError) throw error;
    else {
     const code: SiteExtraErrorCode = error instanceof ExtraPersistenceError && (error.code === "INVALID_COMMAND" || error.code === "COMMAND_CONFLICT" || error.code === "STALE_REVISION") ? error.code : "SITE_EXTRA_UNAVAILABLE";

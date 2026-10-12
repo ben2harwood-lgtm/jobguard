@@ -14,6 +14,9 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // ENT-3a: note-only site extras record live site facts on both transports.
+  "/api/contractor/jobs/[id]/site-extras": "watchdog_live_only",
+  "nest:/contractor/jobs/:id/site-extras": "watchdog_live_only",
   "/api/jobs/[id]/commercial-integrity/reviews": "post_live_billing",
   "/api/jobs/[id]/confirm": "pre_live_allowed",
   "/api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes/preview": "post_live_billing",

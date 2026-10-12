@@ -59,6 +59,31 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "201": {
+            "description": "Site extra logged, or the identical stored result replayed"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept site extras. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Log a note-only site extra in synthetic_demo; persisted session and database authority only",

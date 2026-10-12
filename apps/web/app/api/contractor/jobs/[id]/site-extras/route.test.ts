@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AuthenticatedMembership } from "@jobguard/db";
+import { WatchdogError, type AuthenticatedMembership } from "@jobguard/db";
 import { logSiteExtraV1, SiteExtraError, siteExtraHttpStatus } from "@jobguard/core";
 const { log, workspace } = vi.hoisted(() => { const log = vi.fn(); return { log, workspace: vi.fn<() => Promise<{ siteExtras: { log: (jobId: string, raw: unknown) => Promise<unknown> } }>>(async () => ({ siteExtras: { log } })) }; });
 vi.mock("server-only", () => ({}));
@@ -12,7 +12,7 @@ afterEach(() => vi.unstubAllEnvs());
 describe("ENT-3a thin Next adapter", () => {
  it("[A8] passes only the parsed body and path ID, ignoring tenant/member/role in headers and query", async () => {
   const body = raw(); const response = await post(JSON.stringify(body), "https://app.fictional.invalid", { "x-tenant-id": crypto.randomUUID(), "x-membership-id": crypto.randomUUID(), role: "owner" }, `?tenantId=${crypto.randomUUID()}&membershipId=${crypto.randomUUID()}&role=owner`);
-  expect(log).toHaveBeenCalledExactlyOnceWith("00000000-0000-4000-8000-000000000001", logSiteExtraV1.parse(body)); expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(log).toHaveBeenCalledExactlyOnceWith("00000000-0000-4000-8000-000000000001", logSiteExtraV1.parse(body)); expect(response.status).toBe(201); expect(response.headers.get("cache-control")).toBe("no-store");
  });
  it.each(["tenantId", "membershipId", "role", "origin", "commandType", "state", "grantId"])("[A8] refuses body authority field %s before service", async field => {
   const response = await post(JSON.stringify({ ...raw(), [field]: "tampered" })); expect(response.status).toBe(400); expect(await response.json()).toEqual({ version: "site-extra-error.v1", code: "INVALID_COMMAND" }); expect(log).not.toHaveBeenCalled(); expect(response.headers.get("cache-control")).toBe("no-store");
@@ -23,7 +23,7 @@ describe("ENT-3a thin Next adapter", () => {
  });
  it.each(["pilot_no_charge", "production_billing", ""])("[A15] refuses %s before composition/database", async mode => { vi.stubEnv("JOBGUARD_ENV", mode); const response = await post(JSON.stringify(raw())); expect(response.status).toBe(403); expect(await response.json()).toEqual({ version: "site-extra-error.v1", code: "MODE_FORBIDDEN" }); expect(workspace).not.toHaveBeenCalled(); expect(response.headers.get("cache-control")).toBe("no-store"); });
  it("[A15] malformed JSON is INVALID_COMMAND and does not call service", async () => { const response = await post("{invalid"); expect(response.status).toBe(400); expect(await response.json()).toEqual({ version: "site-extra-error.v1", code: "INVALID_COMMAND" }); expect(workspace).not.toHaveBeenCalled(); expect(response.headers.get("cache-control")).toBe("no-store"); });
- it.each(["UNAUTHENTICATED", "MODE_FORBIDDEN", "ORIGIN_FORBIDDEN", "TRACK_FORBIDDEN", "EXTRA_FORBIDDEN", "INVALID_COMMAND", "NOT_FOUND", "COMMAND_CONFLICT", "STALE_REVISION", "SITE_EXTRA_UNAVAILABLE"] as const)("[A15] %s response has no-store and code-only body", async code => { log.mockRejectedValue(new SiteExtraError(code)); const response = await post(JSON.stringify(raw())); expect(response.status).toBe(siteExtraHttpStatus(code)); expect(await response.json()).toEqual({ version: "site-extra-error.v1", code }); expect(response.headers.get("cache-control")).toBe("no-store"); });
+ it.each(["UNAUTHENTICATED", "MODE_FORBIDDEN", "ORIGIN_FORBIDDEN", "TRACK_FORBIDDEN", "EXTRA_FORBIDDEN", "INVALID_COMMAND", "NOT_FOUND", "COMMAND_CONFLICT", "STALE_REVISION", "SITE_EXTRA_UNAVAILABLE"] as const)("[A15] %s response has no-store and code-only body", async code => { log.mockRejectedValue(new SiteExtraError(code)); const response = await post(JSON.stringify(raw())); expect(response.status).toBe(siteExtraHttpStatus(code)); expect(await response.json()).toEqual(code === "COMMAND_CONFLICT" ? { code: "IDEMPOTENCY_CONFLICT" } : { version: "site-extra-error.v1", code }); expect(response.headers.get("cache-control")).toBe("no-store"); });
  it("[A15] removes unexpected PostgreSQL detail", async () => { log.mockRejectedValue(new Error("PostgreSQL detail and Fictional note")); const response = await post(JSON.stringify(raw())); expect(response.status).toBe(503); expect(await response.json()).toEqual({ version: "site-extra-error.v1", code: "SITE_EXTRA_UNAVAILABLE" }); expect(response.headers.get("cache-control")).toBe("no-store"); });
 });
 
@@ -40,7 +40,7 @@ it("[A17] tampered tenant/member/role in every transport place cannot select con
  workspace.mockResolvedValueOnce(createWorkspaceApplication({ pool, sessionId }));
  try {
   const response = await post(JSON.stringify(raw()), "https://app.fictional.invalid", { "x-tenant-id": crypto.randomUUID(), "x-membership-id": crypto.randomUUID(), role: "owner", cookie: `jg_session=${sessionId}; tenantId=${crypto.randomUUID()}; membershipId=${crypto.randomUUID()}; role=owner` }, `?tenantId=${crypto.randomUUID()}&membershipId=${crypto.randomUUID()}&role=owner`);
-  expect(response.status).toBe(200); expect(lookup).toHaveBeenCalledExactlyOnceWith(sessionId); expect(repo).toHaveBeenCalledOnce();
+  expect(response.status).toBe(201); expect(lookup).toHaveBeenCalledExactlyOnceWith(sessionId); expect(repo).toHaveBeenCalledOnce();
   for (const field of ["tenantId", "membershipId", "role"]) {
    const response = await post(JSON.stringify({ ...raw(), [field]: field === "role" ? "owner" : crypto.randomUUID() })); expect(response.status).toBe(400);
   }
@@ -49,4 +49,19 @@ it("[A17] tampered tenant/member/role in every transport place cannot select con
   workspace.mockResolvedValueOnce(createWorkspaceApplication({ pool, sessionId }));
   const invalidPathResponse = await POST(request, { params: Promise.resolve({ id: `tenantId=${crypto.randomUUID()}&membershipId=${crypto.randomUUID()}&role=owner` }) }); expect(invalidPathResponse.status).toBe(404); expect(repo).toHaveBeenCalledOnce();
  } finally { vi.restoreAllMocks(); await pool.end(); }
+});
+
+it("[R2] Next answers the merged JOB_NOT_LIVE refusal with 409 and no-store", async () => {
+ log.mockRejectedValue(new WatchdogError("JOB_NOT_LIVE")); const response = await post(JSON.stringify(raw()));
+ expect(response.status).toBe(409); expect(await response.json()).toEqual({ code: "JOB_NOT_LIVE" }); expect(response.headers.get("cache-control")).toBe("no-store");
+});
+it("[R3] Next maps internal command conflict to the public IDEMPOTENCY_CONFLICT", async () => {
+ log.mockRejectedValue(new SiteExtraError("COMMAND_CONFLICT")); const response = await post(JSON.stringify(raw()));
+ expect(response.status).toBe(409); expect(await response.json()).toEqual({ code: "IDEMPOTENCY_CONFLICT" }); expect(response.headers.get("cache-control")).toBe("no-store");
+});
+it("[R4] Next success and identical replay answer 201 with the same stored result", async () => {
+ const request = JSON.stringify(raw()), stored = { version: "site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: "00000000-0000-4000-8000-000000000001", extraId: crypto.randomUUID(), state: "logged" };
+ log.mockResolvedValue(stored); const first = await post(request), replay = await post(request);
+ expect(first.status).toBe(201); expect(replay.status).toBe(201); expect(await first.json()).toEqual(stored); expect(await replay.json()).toEqual(stored);
+ expect(first.headers.get("cache-control")).toBe("no-store"); expect(replay.headers.get("cache-control")).toBe("no-store"); expect(log.mock.calls[1]).toEqual(log.mock.calls[0]);
 });

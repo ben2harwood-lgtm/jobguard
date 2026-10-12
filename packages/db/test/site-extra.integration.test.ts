@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, afterEach, describe, expect, it, vi } from "vitest";
 import { extraOriginHashV1, SiteExtraError } from "@jobguard/core";
-import { SiteExtraRepository, siteExtraAuthoritySeam, ExtraRepository, derivedUuid, type VerifiedTenantContext } from "../src/index.js";
+import { SiteExtraRepository, siteExtraAuthoritySeam, WatchdogError, withTenant, ExtraRepository, derivedUuid, type VerifiedTenantContext } from "../src/index.js";
 import { cluster, siteFixture, input, counts, chain, command, invite, direct, decision, smallJob, smallTrack, cancel, originSql, originHashInput, note, description, type SiteFixture } from "./site-extra-fixtures.js";
 import { fixture, type Cluster } from "./extra-fixtures.js";
 let c: Cluster, repo: SiteExtraRepository;
@@ -152,4 +152,40 @@ describe("ENT-3a governed path", () => {
   vi.spyOn(c.runtime, "connect").mockImplementation((async () => { const client = await connect(); if (wrapped.has(client)) return client; wrapped.add(client); const original = client.query.bind(client); vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => { if (String(sql).includes("INSERT INTO app.audit_event")) throw new Error(note); return original(sql, params); }) as any); return client; }) as any);
   const error = await refused(f, member, input(f), "EXTRA_FORBIDDEN"); expect(error).toEqual(errors[0]); expect(JSON.stringify(error)).not.toContain(note);
  });
+});
+
+// Real PostgreSQL acceptance; NOT RUN in this socket-restricted sandbox.
+async function leaveLive(f: SiteFixture) {
+ await withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.transition_job($1,$2,(SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2),'invoiced','issue_invoice',NULL,NULL,NULL,NULL)", [f.p.tenantId, f.jobId]));
+}
+for (const when of ["before precheck", "between precheck and raiseExtra"] as const) it(`[R2] not-live ${when} refuses and leaves no extra, audit or command row`, async () => {
+ const f = await siteFixture(c), raw = input(f);
+ if (when === "before precheck") await leaveLive(f);
+ else {
+  const raise = ExtraRepository.prototype.raiseExtra;
+  vi.spyOn(ExtraRepository.prototype, "raiseExtra").mockImplementationOnce(async function(this: ExtraRepository, context, input, seam) { await leaveLive(f); return raise.call(this, context, input, seam); });
+ }
+ const before = await counts(c, f), head = await chain(c, f);
+ const auditCount = (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n;
+ const error = await repo.logSiteExtra(f.ctx, f.members.supervisor.member, raw).catch(error => error);
+ expect(error).toBeInstanceOf(WatchdogError); expect(error).toMatchObject({ code: "JOB_NOT_LIVE" });
+ expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
+ expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n).toBe(auditCount);
+ expect((await c.admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rowCount).toBe(0);
+});
+it("[R3] changed request retains one stored row and the internal conflict code", async () => {
+ const f = await siteFixture(c), raw = input(f), actor = f.members.supervisor.member, initial = await counts(c, f);
+ const first = await repo.logSiteExtra(f.ctx, actor, raw), before = await counts(c, f), head = await chain(c, f);
+ expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first);
+ await expect(repo.logSiteExtra(f.ctx, actor, { ...raw, note: "Fictional changed request" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+ expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
+ expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
+ for (const table of ["variation", "extra_origin", "extra_event", "command_receipt"]) expect(before[table]! - initial[table]!).toBe(1);
+});
+
+it("[R4] live success and identical replay return the same stored result without writes", async () => {
+ const f = await siteFixture(c), raw = input(f), actor = f.members.supervisor.member;
+ const first = await repo.logSiteExtra(f.ctx, actor, raw), before = await counts(c, f), head = await chain(c, f);
+ expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
+ expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
 });

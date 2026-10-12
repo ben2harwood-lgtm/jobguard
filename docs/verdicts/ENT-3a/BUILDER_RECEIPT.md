@@ -738,3 +738,207 @@ Worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3a`; n
 - Nothing was pushed or fetched; no pull request; no review by Opus or Sol was run by this helper.
 
 Round 1 builder/helper receipt only — not independently verified, not accepted.
+
+
+## Repair round 2 (12 Oct)
+
+Issued head: `af753af62c3d8492c27ed6fbc7f411a3338db1d0`. Local working-tree
+repair only; no commit, push, PR, merge, catch-up or renumbering. Existing HOLD
+and limits remain in force (including the round-1 clarification of A15).
+F2 remains open; success paths are reachable in tests only.
+
+### Before record — tests first
+
+`PATH=/private/tmp/ent3a-bin:$PATH pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/watchdog-registry.test.ts`
+ran before any edit: exit 1; 1 file, 121 tests, 119 passed and 2 failed.
+Every failure reported:
+
+- `fails when any job mutation route is unclassified`: `Unclassified job mutation: /api/contractor/jobs/[id]/site-extras`; throw at `watchdog-registry.test.ts:71:29`, call at `:240:5`.
+- `classifies standalone job mutations and dispatcher command literals too`: `Unclassified job mutation: nest:/contractor/jobs/:id/site-extras`; same throw at `:71:29`, call at `:344:5`.
+
+The printed source for both failures was lines 69–73, with the missing-key
+throw at line 71. No separate `src/watchdog.filter.test.ts` exists in this
+checkout (`rg --files apps/api/src`); the registry suite includes typed filter
+checks. No other watchdog test file exists under that source directory.
+
+Before SHA-256 text hash of `contextForContractorSession`, from its `async function`
+line through the closing brace immediately before `export class SiteExtraApplication`
+(excluding the separating newline): `b41102294f59f88ec59a3eb4d911e81c14a8712d712ae2d6572d845f5b022f64`. After hash: `b41102294f59f88ec59a3eb4d911e81c14a8712d712ae2d6572d845f5b022f64` — identical.
+
+Rule 9 is not re-opened: no new migration, and
+`0126_site_extra_authority.sql` will remain byte-identical. Pinned security lists,
+scanner and its pinned files, `watchdogCommandGuards` and extra-repository.ts
+will not be touched. Final implementation anchors and R1–R5 results follow.
+
+
+### Implementation and named limit
+
+Exactly two new registry rows, both `watchdog_live_only`, plus one ENT-3a
+comment line. POST Next derives `/api/contractor/jobs/[id]/site-extras` from the
+route file (test lines 57–64); POST Nest combines `@Controller("contractor")`
+with `@Post("jobs/:id/site-extras")` and prefixes `nest:` without a verb
+(test lines 202–207): `nest:/contractor/jobs/:id/site-extras`. The source scan
+requires no `command:` or `method:` addition: the raising type remains a bound
+constant. No existing registry row or `watchdogCommandGuards` entry changed.
+
+**Named limit:** the second check runs after raiseExtra's per-job lock, which cannot be avoided without editing extra-repository.ts.
+Precheck is a separate transaction before raiseExtra; the seam rechecks before
+its final audit append. A typed guard failure is retained in logSiteExtra's
+local variable while a known persistence error forces rollback, then rethrown
+as the original WatchdogError. This is the issued compromise; RED adjudication
+remains owed. The seam runs after tentative business inserts, which all roll
+back on failure. Existing stored-result replay returns before the seam; precheck
+still guards replay, and replay creates no new business facts.
+
+Pair source observations: merged ReadinessController and ProofController use
+Nest's default 201 plus ApiCreatedResponse. Their Next twins currently use
+NextResponse.json without a status (200). This checkout therefore does not show
+universal status parity in the merged pairs; the issued instruction governs
+ENT-3a: both transports explicitly return 201, including identical replay.
+Nothing in those merged pairs was edited.
+
+First post-edit API run (same wrapper, maxWorkers=2; registry plus site-extra
+application test): exit 1, 2 files, 158 tests; leaf application 37 passed;
+registry 119 passed / the same 2 missing-row failures. The API imports the
+built core package and this first run still read its pre-repair dist. Rebuild
+before the final registry run; no test or resolution config is changed.
+
+OpenAPI generated via the repository generator with `node --import tsx`:
+exit 0. All other operations/root content compared structurally equal to HEAD.
+The earlier documented 200 response is retained; 201 and the exact 409 schema
+are added. Final regeneration follows the final controller text.
+
+
+### Behaviour anchors (a–d) and changed expected values
+
+- (a) `packages/db/src/site-extra-repository.ts:37`: merged requireLiveJob in
+  precheck after the unchanged authority decision. `:21`: recheck in existing
+  seam. `:60`, `:70`, `:80`, `:91`: retained typed refusal, rollback and mapping.
+  JOB_NOT_LIVE throws without entering recordRefusal. Application `:38` preserves
+  WatchdogError; HTTP mapping at `apps/api/src/contractor/site-extra.application.ts:45`
+  yields 409 `{code:"JOB_NOT_LIVE"}`. Refused authority targets retain earlier semantics.
+- (b) `apps/api/src/contractor/site-extra.controller.ts:12`: explicit 201;
+  `apps/web/app/api/contractor/jobs/[id]/site-extras/route.ts:16`: identical 201.
+  Stored result and command identity are unchanged.
+- (c) `apps/api/src/contractor/site-extra.application.ts:46`: internal
+  SiteExtraError(COMMAND_CONFLICT) maps only this route's public answer to 409
+  `{code:"IDEMPOTENCY_CONFLICT"}`. Core/internal name and PostgreSQL [A9]
+  expectations remain unchanged.
+- (d) `apps/api/src/contractor/site-extra.controller.ts:13`: created response;
+  `:14`: retained prior 200 documentation; `:15`: exact 409 enum. The repository
+  generator updates only this OpenAPI operation. `apps/api/openapi.json` line
+  anchor will be recorded after final regeneration.
+
+| Own existing assertion | Before | After |
+|---|---|---|
+| Next [A8] parsed-body response, route.test.ts:14 | 200 | 201 |
+| Next [A17] persisted-context response, route.test.ts:42 | 200 | 201 |
+| API [A15] COMMAND_CONFLICT branch, application.test.ts:73 | 409 / `{version:"site-extra-error.v1",code:"COMMAND_CONFLICT"}` | 409 / `{code:"IDEMPOTENCY_CONFLICT"}` |
+| Next [A15] COMMAND_CONFLICT branch, route.test.ts:26 | same versioned conflict body | same code-only IDEMPOTENCY_CONFLICT body |
+| API [A18] sole-caller seam assertion, application.test.ts:81 | direct `siteExtraAuthoritySeam)` argument | `await siteExtraAuthoritySeam(db, fact)` in rollback-preserving wrapper |
+| New [R3], self-review correction before execution | tenant-wide receipt count equals 1 | count increases by 1, and exact command-id query returns one stored result |
+
+[A18] continues asserting one application writer, fixed raising type, no direct
+writes, and no replaceable command type; it follows the necessary seam wrapper.
+No earlier assertion was deleted, skipped or weakened. No prior OpenAPI snapshot
+test exists for this operation; [R5] tests only this piece's operation.
+
+
+### R1–R5 evidence on this working tree
+
+| ID | Evidence and limits |
+|---|---|
+| R1 | EXECUTED: unedited `apps/api/src/watchdog-registry.test.ts`, 121/121 passed after core rebuild; exact two-row registry delta verified. |
+| R2 | EXECUTED: direct Nest controller/application and Next adapter tests return 409 / `{code:"JOB_NOT_LIVE"}`. PostgreSQL `site-extra.integration.test.ts:161` has separately named before-precheck and between-transactions cases using the merged `app.transition_job` to invoiced, with business counts, complete audit count, chain head and command-row assertions. **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. Nest socket pipeline test `[R2]` added; **NOT RUN (sandbox cannot bind localhost)**. |
+| R3 | EXECUTED: public 409 / `{code:"IDEMPOTENCY_CONFLICT"}` on direct Nest and Next adapters. PostgreSQL `[R3]` at `site-extra.integration.test.ts:176` keeps one persisted receipt/result and business effect under a changed request, internal COMMAND_CONFLICT unchanged; **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. Nest socket pipeline `[R3]`: **NOT RUN (sandbox cannot bind localhost)**. |
+| R4 | EXECUTED: Nest 201 metadata plus identical application result, Next 201 on success/replay plus identical result. PostgreSQL `[R4]` at `site-extra.integration.test.ts:186` asserts same stored result and unchanged counts/head; **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. Nest actual HTTP `[R4]` added, **NOT RUN (sandbox cannot bind localhost)**. Mocked transport tests do not prove PostgreSQL persistence. |
+| R5 | EXECUTED: operation-specific `[R5]`, unedited registry documentation check, and generator comparison. OpenAPI operation starts at `apps/api/openapi.json:4`; its 201 and exact `['JOB_NOT_LIVE','IDEMPOTENCY_CONFLICT']` enum are present. Every original response (200, unchanged description) and every other OpenAPI operation/root field compare equal to HEAD. |
+
+### Commands and results — round 2
+
+All pnpm commands used `PATH=/private/tmp/ent3a-bin:$PATH`, the preinstalled
+cached pinned pnpm 10.28.1 wrapper. Node v24.17.0. No install/download.
+One heavy command at a time; vitest maxWorkers=2, at most two files here.
+
+- Before run and first stale-dist run: recorded above, exits 1.
+- `pnpm build --concurrency=2`: exit 0, 7/7 tasks, 2 cached, 27 static pages.
+  Unchanged warnings: parent lockfile/root inference, CSS end-value support,
+  webpack warning serialization and shared turbo cache permission.
+- `pnpm openapi:check`, working directory `apps/api`: exit 1 before comparison,
+  `listen EPERM` at `/var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/7103.pipe`.
+  No socket exception or check bypass added.
+- Sequential generator fallback: `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts`
+  and the same with `--check`: both exit 0; same generator and comparison.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/watchdog-registry.test.ts src/contractor/site-extra.application.test.ts`:
+  exit 0, 2 files / 158 tests (121 registry, 37 leaf) passed. No merged test edited.
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/contractor/jobs/[id]/site-extras/route.test.ts'`:
+  exit 0, 1 file / 30 tests passed. This is an in-process adapter run, no browser.
+
+Root typecheck and both lint results follow after completion.
+
+
+- `pnpm typecheck --concurrency=2`: exit 0, 7/7 tasks, 2 cached.
+- `LANE_BASE_REF=origin/main pnpm lint --concurrency=2`: exit 0, core purity,
+  lane boundary, money/commercial checks and 7/7 package tasks, 2 cached.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: exit 0, lane ent-3a; origin/main
+  at invocation `d58560e39bd726dc3eba08e763ef465d98b23cb0`, unchanged checkout HEAD
+  `af753af62c3d8492c27ed6fbc7f411a3338db1d0`. The lane reports 26 files across
+  the branch plus working tree; this repair itself changes exactly 12 files.
+  No fetch, merge or ref write was used.
+- `git diff --check`: exit 0.
+
+### Self-review and preservation — round 2
+
+Re-read the entire round-2 diff as a strict reviewer: repository and both error
+layers, route status/body/no-store, all changed/new tests, OpenAPI operation,
+registry delta, lane line and this receipt. Checked the real helper's signature
+and InboxRelevanceRepository invocation, raiseExtra's error wrapper and lock/
+write/seam/audit order, merged lifecycle transition SQL, persisted replay's
+seam bypass, and all earlier authority/source-boundary assertions.
+
+Caught and fixed one new database-test assumption before handoff: fixture setup
+can already persist command receipts, so `[R3]` now checks a one-row delta from
+pre-command counts and one exact result row for this command id, rather than
+assuming the tenant had no receipts. Added an explicit `this: ExtraRepository`
+type on the test-only forwarding function. These final test-source edits affect
+only the NOT RUN PostgreSQL suite; no executed product/unit source changed.
+An earlier edit helper failed to find its HTTP-test insertion anchor; corrected
+the anchor and added the tests without changing any original assertion.
+
+Executed deterministic checks against the saved before-round SHA-256 inventory:
+exactly the 12 files listed by this repair's diff change; every other tracked
+file is byte-identical. In particular: `context-boundary.test.ts`, all files it
+pins, all migrations including `0126_site_extra_authority.sql`, extra-repository.ts,
+BUILD_PLAN.md, and every merged test are unchanged. `contextForContractorSession`
+text SHA-256 is identical before and after, as recorded above. Pinned lists were
+not touched: no security list/value, no watchdogCommandGuards entry, no command:
+or method: registry addition. Removing the one comment and two rows from the
+new watchdog.ts reproduces its exact before bytes. Only ent-3a's lane line changes;
+its allow list adds watchdog.ts only (OpenAPI was already listed).
+Local rule-11 added-line scans found zero credential-shaped literals or addresses
+carrying a user/password. This is a local deterministic scan, not GitHub CI or
+an independent model verdict. New [R5] assertions bind only this piece's operation;
+no new standing test freezes an unowned file (rule 12).
+
+Could not verify PostgreSQL behaviour, concurrency/rollback and catalogue paths,
+real Nest HTTP responses, browsers, a fresh install or post-catch-up CI here.
+Database and browser suites: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+Nest `site-extra.http.test.ts` (16 tests, including new R2–R4):
+**NOT RUN (sandbox cannot bind localhost)**. Root `pnpm test` is NOT RUN because
+it exceeds the issued test-file limit and includes socket/PostgreSQL work;
+the permitted unit runs above are the executed evidence. `pnpm test:db`,
+`pnpm test:migrations`, `pnpm test:e2e`: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+No AI change; eval inapplicable. No suite weakened or made optional.
+
+### Dispatcher handoff
+
+Intended conventional commit subject/body written to
+`/private/tmp/jg-msg-ent-3a.txt`. Commit nothing myself; no git write, push, PR,
+catch-up or migration numbering. Rule 9 not re-opened. Existing shared-bridge
+merge HOLD and all other issued limits remain, F2 still open, UI parked,
+synthetic mode only. No new alerts, migration or external action. HTTP backwards
+compatibility changes are exactly 200→201 and the public conflict envelope above.
+Independent exact-commit RED pair verdicts, separate acceptance, helper/CI runs,
+and dispatcher catch-up/landing renumbering remain owed. Builder receipt only —
+source-inspected and test-executed where labelled; not independently verified,
+not accepted, not released.

@@ -7,7 +7,7 @@ import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { Pool } from "pg";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ContractorRepository, SiteExtraRepository, type AuthenticatedMembership } from "@jobguard/db";
+import { ContractorRepository, SiteExtraRepository, WatchdogError, type AuthenticatedMembership } from "@jobguard/db";
 import { SiteExtraError } from "@jobguard/core";
 import { AppModule } from "../app.module.js";
 import { SiteExtraApplication } from "./site-extra.application.js";
@@ -82,6 +82,23 @@ describe("ENT-3a Nest HTTP pipeline for POST /contractor/jobs/:id/site-extras", 
   expect(response.status).toBe(401); expect(response.body).toEqual({ version: "site-extra-error.v1", code: "UNAUTHENTICATED" }); expect(response.headers["cache-control"]).toBe("no-store");
   expect(logged).not.toHaveBeenCalled(); expect(query).not.toHaveBeenCalled(); expect(connect).not.toHaveBeenCalled();
  });
+ it("[R2] Nest HTTP answers a typed not-live refusal with 409 JOB_NOT_LIVE", async () => {
+  lookup.mockResolvedValue(member()); logged.mockRejectedValue(new WatchdogError("JOB_NOT_LIVE"));
+  const response = await post(session(), allowed);
+  expect(response.status).toBe(409); expect(response.body).toEqual({ code: "JOB_NOT_LIVE" }); expect(response.headers["cache-control"]).toBe("no-store");
+ });
+ it("[R3] Nest HTTP maps internal command conflict to 409 IDEMPOTENCY_CONFLICT", async () => {
+  lookup.mockResolvedValue(member()); logged.mockRejectedValue(new SiteExtraError("COMMAND_CONFLICT"));
+  const response = await post(session(), allowed);
+  expect(response.status).toBe(409); expect(response.body).toEqual({ code: "IDEMPOTENCY_CONFLICT" }); expect(response.headers["cache-control"]).toBe("no-store");
+ });
+ it("[R4] Nest HTTP success and replay answer 201 with the same stored result", async () => {
+  lookup.mockResolvedValue(member()); const stored = { variationId: randomUUID() }; logged.mockResolvedValue(stored);
+  const job = randomUUID(), body = payload(), cookie = session(), first = await post(cookie, allowed, body, job), replay = await post(cookie, allowed, body, job);
+  expect(first.status).toBe(201); expect(replay.status).toBe(201); expect(replay.body).toEqual(first.body); expect(first.body.extraId).toBe(stored.variationId);
+  expect(first.headers["cache-control"]).toBe("no-store"); expect(replay.headers["cache-control"]).toBe("no-store");
+ });
+
 });
 describe("ENT-3a Nest HTTP pipeline in every other mode", () => {
  it.each([["pilot_no_charge", "pilot_no_charge"], ["production_billing", "production_billing"], ["an empty mode", ""], ["an unset mode", undefined]] as const)("[A15] (c) %s is refused by the global guard's own 401 UNAUTHENTICATED (not 403), for a valid session, a valid Origin and a valid body; nothing runs", async (_name, mode) => {
