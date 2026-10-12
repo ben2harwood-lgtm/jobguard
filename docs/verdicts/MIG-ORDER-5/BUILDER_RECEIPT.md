@@ -398,3 +398,112 @@ index 48dba6c..d73fd4c 100644
 +    // older row-secured table, remove an older restrictive policy, or give an older jobguard_ role an attribute or membership.
 +    expect(await privilegeDifferences(admin, upgrade.before), "[MO5-e] later migrations did not widen older permission facts").toEqual([]);
 ```
+
+## Mac verification (12 Oct)
+
+Run by the Mac helper (Claude Sonnet, for the JobGuard dispatcher) on 12 Oct 2026, 17:55-18:12 local, against the committed candidate `382ec299c4d77a28095b5234abd05ede105a7348` (branch `codex/sandbox/mig-order-5`, stacked on #145 head `07f6a69`). Working directory for every command: `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mig-order-5` (database commands run vitest from `packages/db`). Node v24.17.0, pnpm 10.28.1, embedded PostgreSQL 16.10. Every heavy command went through `~/.local/bin/heavy-slot`, one at a time, vitest `--maxWorkers=2`, memory free 67-72% before each. Logs: `~/.local/share/full-steam/jg-runs/mig-order-5-mac/`. This is a verification record by a helper, not an independent review and not acceptance.
+
+Candidate checks first: `git status` clean; HEAD as above; `git diff --stat 07f6a69..HEAD` lists exactly `config/agent-lane-assignments.json`, `docs/verdicts/MIG-ORDER-5/BUILDER_RECEIPT.md` and `packages/db/test/audit-export.integration.test.ts` (3 files, 612 insertions, 8 deletions); `packages/db/test/upgrade-proof-utils.ts` is not in the diff.
+
+### Commands as run
+
+| # | Command | Exit | Result |
+|---|---|---:|---|
+| 1 | `pnpm --filter @jobguard/{core,storage,db,config,ai} build` (five separate runs, each alone, in that order) | 0 each | `tsc -p tsconfig.json` clean for all five |
+| 2 | first try of the Run A command (row 4), before row 3 was done | 1 | `Postgres init script exited with code null`: the suite failed to start (11 skipped) because the dylib short names were missing |
+| 3 | `node scripts/hydrate-symlinks.js`, working directory `node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64` (node_modules only) | 0 | 17 symlinks present; nothing tracked changed |
+| 4 | **Run A** `heavy-slot mo5-audit-export pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/audit-export.integration.test.ts` | 0 | 1 file passed; **11 passed (11)**, same 11 as on main; first test "leaves every existing table..." passed in 23 ms; duration 17.73 s |
+| 5 | X1-X4, same command plus `-t "leaves every existing table"`, one scratch statement after the `migrate()` pair each | see below | |
+| 6 | neighbours: `... vitest run --maxWorkers=2 --reporter=verbose test/audit.integration.test.ts test/verify-audit-export-cli.test.ts test/tenancy.integration.test.ts` | 0 | 3 files passed, **28 passed (28)**, 3.38 s |
+| 7 | `pnpm typecheck` (repo root) | 0 | 7 successful / 7 total, 4 cached. It does not cover `packages/db/test` |
+| 8 | `node ~/.local/share/full-steam/jg-runs/mig-order-4-scratch/round1-tsc-one-file.cjs <worktree> packages/db/test/audit-export.integration.test.ts` | 0 | 0 diagnostics in the changed file, 0 in other files |
+| 9 | `LANE_BASE_REF=origin/main pnpm lint` | 1 | core purity passed (129 files); then **lane boundary FAILED** on the five inherited MIG-ORDER-4 paths below; later stages did not run in this command |
+| 10 | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1 | same five paths; nothing of MIG-ORDER-5's own |
+| 11 | supplementary, not a substitute: `LANE_BASE_REF=07f6a69 pnpm lint:lanes` | 0 | "Lane boundary passed" for lane mig-order-5, base `07f6a69`, head `382ec29`: the own diff is inside the allow list |
+| 12 | supplementary, the stages row 9 skipped: `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs`; `pnpm exec turbo run lint` | 0, 0, 0 | passed; turbo 7 successful / 7 total, 4 cached |
+
+The five lane failures (rows 9 and 10) are exactly the inherited ones the builder listed: `docs/verdicts/MIG-ORDER-4/BUILDER_RECEIPT.md`, `packages/db/test/job-activation-terms.integration.test.ts`, `packages/db/test/prevention-checks.integration.test.ts`, `packages/db/test/recovery-eligibility-v3.integration.test.ts`, `packages/db/test/upgrade-proof-utils.ts`. They come from the stacked route (they leave the list when #145 merges into main); they are not MIG-ORDER-5 edits.
+
+### The prediction: after-all result is the empty list
+
+Run A passed, including [MO5-e]: there are 64 migrations, 0121 is index 60 and the three after it are 0122, 0127 and 0128; after those real later migrations `privilegeDifferences(admin, upgrade.before)` returned `[]`, twice-run migrator included. [MO5-c] also held: the four merged queries at 0121's own step equal the snapshot, and `ownStepDifferences` was `[]`. The snapshot held 198 tables, 152 routines, 4 `jobguard_` roles and 197 policies. No line appeared; nothing was adjusted.
+
+### Controls, observed (from a scratch dump of the 26 results; every one equals the order's expectation, so the assertions passed)
+
+| ID | observed `after` | observed `merged` | red under broken comparator |
+|---|---|---|---|
+| S1 | `table app.job: + grant jobguard_runtime TRUNCATE` (precondition false) | tables | V1, V2 |
+| S2 | `table app.job: + grant mo5_scratch_role SELECT` | tables | V1, V2 |
+| S3 | `table app.job: + grant jobguard_runtime SELECT WITH GRANT OPTION` | tables | V1, V2 |
+| S4 | `table app.job: + column title grant jobguard_runtime UPDATE` (precondition false) | none | V1, V2, V5 |
+| S5 | five `+ grant jobguard_runtime ...` lines (DELETE, REFERENCES, TRIGGER, TRUNCATE, UPDATE) and `+ owner jobguard_runtime`, all starting `table app.job: + ` | tables | V1, V16 |
+| S6 | `+ row security not forced`, `+ row security off` | tables | V1, V8 |
+| S7 / S8 | `policy app.job.tenant_isolation: changed` | policies | V1, V3 |
+| S9 | `policy app.job.mo5_scratch: permissive policy added` | policies | V1, V3 |
+| S10 | `policy app.merchant.practice_material_isolation: restrictive policy gone` | policies | V1, V3 |
+| S11 | `routine app.half_even_ratio(bigint, bigint, bigint): + grant mo5_scratch_role EXECUTE` | routines | V1, V2 |
+| S12 | `routine app.half_even_ratio(bigint, bigint, bigint): + runs as owner` | routines | V1, V17 |
+| S13 | `role jobguard_runtime: + rolcreatedb` | roles | V1, V4 |
+| S14 | `role jobguard_runtime: + member of jobguard_migration` | none | V1, V4 |
+| S15 | `routine app.mo5_half_renamed(bigint, bigint, bigint): + grant mo5_scratch_role EXECUTE` | routines | V1, V2, V6 |
+| N1 | `table app.job: + grant jobguard_runtime SELECT` | not read | V1, V2, V7 |
+| P1 | `[]` | tables | V9 |
+| P2 | `[]` | tables, policies | V11b |
+| P3 | `[]` (replacement confirmed true) | none | V13 |
+| P4 | `[]` (column confirmed present) | none | V12 |
+| P5 | `[]` | routines | V11b |
+| P6 | `[]` | roles | V11b |
+| P7 | `[]` | none | V12 |
+| P8 | `[]` | policies | V14 |
+| P9 | `[]` | policies | V10 |
+| P10 | `[]` | routines | V13 |
+
+No `merged` cell and no `after` cell differed from the order's table; no statement was refused. Routine names are printed by PostgreSQL with spaces after the commas (`bigint, bigint, bigint`); the test builds expected names from the recorded snapshot, as the order requires.
+
+### Scratch experiments (all uncommitted, each restored with `git checkout -- packages/db/test/audit-export.integration.test.ts`; `git status --short` and `git diff --stat` empty after every one)
+
+The order's four, one statement on a new line directly after the `migrate()` pair, `-t "leaves every existing table"`:
+
+| Exp | Scratch statement | Exit | Result |
+|---|---|---:|---|
+| X1 | `GRANT TRUNCATE ON app.job TO jobguard_runtime` | 1 | 1 failed / 10 skipped; only at [MO5-e]; received exactly `["table app.job: + grant jobguard_runtime TRUNCATE"]` |
+| X2 | `ALTER POLICY tenant_isolation ON app.job USING (true)` | 1 | only at [MO5-e]; exactly `["policy app.job.tenant_isolation: changed"]` |
+| X3 | `ALTER ROLE jobguard_runtime CREATEDB` | 1 | only at [MO5-e]; exactly `["role jobguard_runtime: + rolcreatedb"]` |
+| X4 | `REVOKE INSERT ON app.job FROM jobguard_runtime` | 0 | 1 passed / 10 skipped |
+
+Set-up hook time, measured with a scratch `Date.now()` around `beforeAll` (the budget is 120000 ms): candidate 1720 ms and 1689 ms (of which the pre-pair part, install plus 26 controls, 1673 and 1647 ms; the `migrate()` pair about 35 ms); the base `07f6a69` version of the file measured the same way 1703 ms and 1193 ms. Budget not at risk.
+
+Broken-comparator runs (an edit to `compare`/`privilegeFacts`, with the [MO5-d] loop's `expect(` temporarily `expect.soft(` so every red control is listed in one run; same filtered command; every run exit 1, which is the intended red):
+
+| Exp | Broken comparator | Controls that went red | Also |
+|---|---|---|---|
+| V1 | no-op (`compare` returns `[]`) | S1-S15 and N1 (all 16 stop controls); no pass control | |
+| V2 | grants-blind (no `grant ...` fact, no column grants) | S1, S2, S3, S4, S11, S15, N1 | |
+| V3 | policy-blind | S7, S8, S9, S10 | |
+| V4 | role-blind | S13, S14 | |
+| V5 | column-grant-blind | S4 | |
+| V6 | name-only matching | S15 | |
+| V7 | id-only matching | N1 | |
+| V8 | row-security-flag-blind | S6 | |
+| V16 | owner-blind | S5 | |
+| V17 | runs-as-owner-blind | S12 | |
+| V9 | over-strict: a fact that disappears gives a line | P1, S5 | [MO5-e] red with 4 lines: `- grant PUBLIC EXECUTE` on `app.advance_final_account_draft`, `app.invalidate_stale_final_account_authorizations`, `app.issue_practice_customer_invoice`, `app.reserve_customer_invoice_number` (migration 0128 takes those away, a narrowing the subset rule rightly lets through) |
+| V10 | over-strict: a removed permissive policy gives a line | P9 | [MO5-e] stayed green |
+| V11b | over-strict: objects added later are compared (0121's own tables excluded to keep it clean) | P2, P5, P6 | [MO5-e] red with 145 lines (the later migrations' new objects); the unrestricted variant V11 turned every control red because 0121's own two tables are "added later" at its own step |
+| V12 | over-strict: a new column is a line | P4, P7 | [MO5-e] red with 15 lines (e.g. `table app.extra_origin: + column client_capture_id`) |
+| V13 | over-strict: routine body and settings compared | P3, P10 | [MO5-e] red with 1 line: `routine app.validate_extra_origin(): + body d69fba1c... {"search_path=pg_catalog, app"}` (0128 replaces that routine and adds a settings clause) |
+| V14 | over-strict: any new policy is a line (restrictive too) | P8 | |
+| V15 | old whole-catalogue shape after the pair (compare `securityCatalog()` with the 0121-step catalogue) | none of the controls | red at the [OLD-SHAPE] line: `tables`, `policies`, `routines`, `roles` all differ after 0122, 0127 and 0128, which is why a whole-row after-all comparison cannot be used |
+
+So each of the 16 stop controls goes red under a comparator that is blind to the thing it guards, and each of the 10 pass controls goes red under a comparator that is stricter than the rule; and the after-all line catches a widening (X1), a loosening (X2) and a new role attribute (X3) while letting a narrowing through (X4).
+
+### NOT RUN
+
+- Independent reviews (fresh Claude Opus, separate Codex Sol), acceptance and dispatcher integration: not part of this helper's task.
+- Whole-package or whole-repository vitest suite; the other 10 tests of the audit-export file ran once (Run A), unfiltered; X and V runs used the filter, so tests 2-11 were skipped there by design.
+- `pnpm build` of the whole repo (only the five package builds above); `pnpm openapi:check` and the compiled OpenAPI comparison (builder-reported stale document, not in this lane); browser suites (no screen touched; UI parked).
+- `LANE_BASE_REF=origin/main pnpm lint` as one passing command: it cannot pass until #145 merges; its later stages ran separately (row 12) and the own diff passed the lane check against `07f6a69` (row 11).
+- A run on the merged main (the stack is not merged); a run after #145 merges and the dispatcher merges main into this branch.
+- Anything on GitHub other than the push of this record to the branch; no pull request was opened.
+
+Mac helper record only; independent verification and acceptance remain pending.
