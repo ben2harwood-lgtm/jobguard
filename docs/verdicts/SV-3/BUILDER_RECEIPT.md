@@ -698,3 +698,43 @@ Working directory `W` = `/Users/benharwood/Claude/Projects/my-new-project/.workt
 Re-read the entire round-3 diff. Strict format plus finite parse plus exact UTC round-trip rejects permissive `Date.parse()` normalization. Each API response is checked before its exact `date` key is removed; the same replay runs for zero and 25 linked signals. Both Date.now readings belong to that response's own request; only the date bounds receive the ruled one-second allowance. Every existing assertion, other header, channel, exclusion and timing limit remains intact. No other test, timeout, retry or security test list was touched. Rule 11: no credential-shaped literal added. Rule 12: semantic assertions only; no standing byte/hash pin introduced. Protected files, lane registry and OpenAPI are byte-identical to round base HEAD (one-off receipt evidence only).
 
 No product code, migrations, commercial/authorization policy, provider action, operational alert or deployment changed. No Git write, commit, push, checkout, install or dependency-download command issued. Intended conventional commit subject/body saved to `/private/tmp/jg-msg-sv-3.txt`; dispatcher owns committing and pushing. Both named negative controls are recorded; sandbox implementation/self-review work is complete. Main-based lane failure remains a failure; browser/database evidence, independent verdict bound to the eventual exact commit, separate acceptance and prior release gates remain held. **Builder receipt only — not independently verified, not accepted.**
+
+## Mac verification (12 Oct, round 3)
+
+Run by the JobGuard dispatcher's Mac helper (Claude Sonnet 5.5), 12 October 2026 (night), in `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-3`, branch `codex/sandbox/sv-3`. A verification record only: **not independently verified, not accepted**. Free disk at start 106 GiB.
+
+**RESULT: RED on browser test Q, project mobile-360 only, and NOT PUSHED.** The `date` repair itself works: Q passes on desktop in every run and on mobile-360 in 4 of 4 warm-server runs, with none of its `date` assertions failing. But Q on mobile-360 fails the first time it runs after the web server starts, twice out of two full-spec runs (the same `response.body` error seen once in round 2), so "I and Q pass on both projects" is not met on a fresh server. Nothing was fixed (order: report the first failing assertion and the owning side). No push, no pull request.
+
+### Start and merge
+
+- Start: head `d11424f` (clean); `git diff 03539e1 HEAD --stat` showed exactly two files, `apps/web/e2e/SV-3.spec.ts` (+14/-2) and this receipt. `origin/main` had moved from `ad1bad2` to `a54d46f` (FEE-BOTH-1 and TRAIN-LANE-1), so `git merge origin/main` -> merge commit `8b8823e` "Merge main (a54d46f) into SV-3". One conflict, `BUILD_PLAN.md` section 12.2 (append-only ledger paragraphs): kept both sides, main's FEE-BOTH-1 paragraph first, then SV-4's and SV-3's. `config/agent-lane-assignments.json` merged cleanly and parses (main added `fee-both-1` and `train-lane-1`). `apps/api/openapi.json` was not touched by main; `pnpm openapi:check` passes. Migration `0133_shadow_detection.sql` sha256 unchanged (`6d317e04...fe5aa6`). `packages/db/test/shadow-persistence.integration.test.ts` sha256 `a7b1f267...3148c`, same as round 2 (unedited); `context-boundary.test.ts` untouched.
+- Build: `pnpm build` (turbo, all seven packages incl. api and the Next production build) exit 0, 7/7 tasks.
+
+### Browser spec `apps/web/e2e/SV-3.spec.ts` (wrapper `pw-local-channel-sv-3-r3.config.ts`, a copy of the round-2 wrapper with only the output folder changed; production build, channel chromium; `CI=1 ... --workers=1`; logs in `~/.local/share/full-steam/jg-runs/sv-3-r3-mac/`)
+
+| Run | Command | Exit | mobile-360 | desktop |
+|---|---|---|---|---|
+| 1 | both projects | **1** | I pass, **Q FAIL** | I pass, Q pass |
+| 2 | both projects, identical rerun (fresh server) | **1** | I pass, **Q FAIL** | I pass, Q pass |
+| 3 | `--project=mobile-360 --repeat-each=4` (diagnostic, one server for all 8 tests) | 0 | I x4 pass, Q x4 pass | not run |
+
+- **Q's `date` assertions:** IMF-fixdate regex, finite parse, exact `toUTCString()` round-trip, and the lower and upper window bounds ran for every `/api/` response in all six passing Q executions (2 desktop, 4 mobile-360) with **no failure**; the `cacheHeaders` channel (all headers except `date`) matched between the zero-signal and 25-signal runs, as did the five channels before it. The round-2 failure (`cacheHeaders` on `date`) did not recur.
+- **First failing assertion (runs 1 and 2, mobile-360 Q):** `Error: response.body: Protocol error (Network.getResponseBody): No resource with given identifier found` at `apps/web/e2e/SV-3.spec.ts:96:69` (`await response.body()` inside the response listener; a follow-on `page.waitForLoadState: Test ended` at line 112 is a consequence). It occurs about 2.7 s into the test, in the first replay, on the first job-page load after the server starts. The Playwright trace shows five job-page API responses (`materials`, `things-to-check`, `readiness`, the job itself, `purchase-orders`) with no body saved, arriving after the page's first network-idle point and just before the next `page.goto`. This is read from the trace, not proven.
+- **Owner: SV-3's own browser test Q** (the response listener's unguarded body read, and `networkidle` followed by `Promise.all(pending)` not covering responses that arrive after the idle point). No product code is involved. This is the same error the round-2 helper saw once on the first mobile-360 run and called a probable timing flake; it has now returned twice with the `date` question settled, and it is reproducible on a fresh server, so it needs a small builder edit and a ruling on whether to guard or await it. Warm-server reruns pass.
+
+### Other results (every heavy command through `~/.local/bin/heavy-slot <label>`; db files `--maxWorkers=1`, others `--maxWorkers=2`)
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `packages/db`: `test/shadow-persistence.integration.test.ts test/command-replay-contract.integration.test.ts test/shadow-detection.integration.test.ts` | 0 | 3 files, **78/78**: shadow-persistence **8/8 UNEDITED** (including "qualifies every shadow link by tenant/job, and classifications by run/signal"), command-replay-contract **53/53**, shadow-detection **17/17** (T1 x3 and the 0133 upgrade test pass) |
+| 2 | `apps/api`: `src/auth/context-boundary.test.ts src/watchdog-registry.test.ts src/shadow-detection.worker.test.ts` | 0 | 3 files, **273/273**: scanner **145**, watchdog registry **121**, worker 7 |
+| 3 | `pnpm typecheck` | 0 | 7/7 tasks |
+| 4 | `pnpm openapi:check` (apps/api) | 0 | pass |
+| 5 | `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 1 | EXPECTED: 36 paths named, every one a path SV-4 carries until it merges (including the coordinator's one B1 line in `shadow-persistence.integration.test.ts`); none is SV-3's own |
+| 6 | `LANE_BASE_REF=origin/codex/sandbox/sv-4 node tools/agent-lane-boundary-lint.mjs` | 1 | EXPECTED here: SV-4's pushed head predates main `a54d46f`, so the only eight paths named are those that arrived through main's FEE-BOTH-1 and TRAIN-LANE-1 (`ci.yml`, two receipts, `fee-both.test.ts`, `origin.ts`, `transitions.test.ts`, `agent-lane-boundary-lint.mjs`, `agent-lane-boundary-train.test.mjs`); none is SV-3's own, and the round-2 pass against SV-4's head (32 files) is unchanged in substance |
+
+### NOT RUN
+
+`pnpm test:db`, `pnpm test:migrations`, any whole-package suite (memory rule), the other retained browser specs, any live-model run, the `core`/`ai` unit files re-run (unchanged by this round). The scratch negative controls for Q (changed other header; far-out date) were done by the builder and are not repeated here.
+
+**Not pushed. No pull request opened.** Local head after this record is the commit that adds it.
