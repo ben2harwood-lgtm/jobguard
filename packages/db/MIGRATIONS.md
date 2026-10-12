@@ -849,6 +849,36 @@ and browser regressions. Local sandbox initialization errors are not DB passes.
 Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces). Renumbered from 0125 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
 
 Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
+## 0131 — PRACTICE-FACTS-1 part A
+
+Renumbered from 0124 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
+
+`0131_practice_feed_facts.sql` replaces exactly six catalogue CHECK constraints on
+`practice_feed_command`, `practice_feed_event` and `practice_feed_receipt_match`.
+It retains every existing allowed value and adds **six movement keys** from
+`practiceFactsCatalogueV1` to the command/event movement checks:
+`receipt-12000`, `receipt-14640`, `supplier-payment-600`, `supplier-payment-840`,
+`receipt-interest-120` and `receipt-compensation-70`.
+The receipt-only checks (command match action and receipt-match keys/amounts)
+add **four receipt keys**: `receipt-12000`, `receipt-14640`,
+`receipt-interest-120` and `receipt-compensation-70`.
+Supplier payments cannot match customer receipts. Constraint discovery uses table identity
+and `pg_get_constraintdef` containing `receipt-384`, requiring exactly two matches
+per table; any mismatch aborts the transaction. Each widened replacement keeps
+its discovered original constraint name and validates existing rows, in the
+same transaction. The upgrade test compares all six names, validation flags
+and every old allowed literal before and after 0131.
+
+Creates NO table, column, role, grant, policy, trigger or function. Updates,
+rewrites and deletes NO existing row. Both feed routines remain unchanged.
+The access-exclusive lock and validation scan are the operational migration cost.
+The populated upgrade, row bytes, no-op rerun and unchanged security/routine
+catalogue probes are in `test/practice-facts.integration.test.ts`; they are
+NOT RUN in the builder sandbox (cannot start PostgreSQL).
+
+Forward-fix: retain the expanded checks and disable the new route if a defect is
+found. Narrowing the checks is unsafe once new rows exist; do not delete or edit
+append-only facts to roll back. The integrator owns the BUILD_PLAN §12.2 ledger.
 
 ## 0134 — CH-7-TERMS (proposed synthetic withheld-payment terms)
 
