@@ -30,6 +30,28 @@ function pathFor(route:string){return route.replace(/\{(?:id|jobId)\}|\[(?:id|jo
 // PostgreSQL log entries start at a "LOG:" line; DETAIL (bound parameters) and continuation lines belong to the entry before them. onLog delivers raw stderr chunks cut anywhere, so entries are rebuilt from the joined text, and the database name in the log prefix (which differs by construction between the zero and many databases) is made neutral before the lists are compared.
 function runtimeStatements(logStart:number,database:string){return statementsLog.slice(logStart).join("").split(/\n(?=SV3:[^\n]*?: LOG:  )/u).filter(s=>s.includes(`SV3:sv3_isolation_runtime:${database}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,"").replaceAll(`SV3:sv3_isolation_runtime:${database}:`,"SV3:sv3_isolation_runtime:DB:"));}
 function stableHeaders(headers:Record<string,string>){return Object.fromEntries(Object.entries(headers).filter(([k])=>k!=="date").sort(([a],[b])=>a.localeCompare(b)));}
+// NAMED LIMIT (coordinator ruling, 12 Oct 2026; SV-3 BUILDER_RECEIPT "Follow-up (12 Oct)"). Only in the replay comparison below, and only on the two prevention-checks GETs (Nest /jobs/{id}/prevention-checks and Next /api/jobs/{id}/prevention-checks),
+// exactly two things are not compared byte for byte between the two replays: the body field `retrievedAt` (the database wall clock, so two replays can never match; it is also copied into payingParty.retrievedAt) and the `etag` response header, which Express derives from the body bytes.
+// Only the Nest endpoint carries an etag (Next 15.5.27 sends none for a route handler), so the etag exclusion exists on that one endpoint only; on the Next endpoint the test asserts that no etag exists and compares the headers exactly.
+// Every other byte of those two responses (status, every other header, every other body byte) is still compared exactly. Each excluded thing has its own positive assertion in the test (a time inside that replay's own window; an etag equal to Express's etag of the other fields plus that time).
+const nestRetrievalRoute=`/jobs/${jobId}/prevention-checks`,nextRetrievalRoute=`/api/jobs/${jobId}/prevention-checks`;
+const retrievedAtRoutes=new Set([nestRetrievalRoute,nextRetrievalRoute]);
+const retrievedAtNeedle=(value:string)=>`"retrievedAt":"${value}"`;
+const swapRetrievedAt=(text:string,from:string,to:string)=>text.split(retrievedAtNeedle(from)).join(retrievedAtNeedle(to));
+const RETRIEVED_AT_CHECKED_SEPARATELY="<retrievedAt: checked by the named-limit assertions>",ETAG_CHECKED_SEPARATELY="<etag: checked by the named-limit assertions>";
+type Retrieval={route:string;status:number;text:string;etag:string|undefined;before:number;after:number};
+/** Positive assertion (a): the field is a well-formed time (and nothing else) inside the window the test itself read around that request; returns it. */
+function checkRetrievedAt(r:Retrieval):string{
+ expect(r.status,r.route).toBe(200);
+ const body=JSON.parse(r.text) as {retrievedAt?:unknown;payingParty?:{retrievedAt?:unknown}|null},value=body.retrievedAt;
+ expect(typeof value,`${r.route} retrievedAt`).toBe("string");const at=value as string;
+ expect(at,r.route).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);expect(new Date(Date.parse(at)).toISOString(),r.route).toBe(at);
+ expect(Date.parse(at),`${r.route} retrievedAt is not before the request`).toBeGreaterThanOrEqual(r.before);expect(Date.parse(at),`${r.route} retrievedAt is not after the response`).toBeLessThanOrEqual(r.after);
+ // The repository assigns one value to both places; no other occurrence of this exact pair exists.
+ if(body.payingParty)expect(body.payingParty.retrievedAt,r.route).toBe(at);
+ expect(r.text.split(retrievedAtNeedle(at)).length-1,`${r.route} occurrences of the excluded field`).toBe(body.payingParty?2:1);
+ return at;
+}
 async function startNext(database:string):Promise<{child:ChildProcess;base:string}>{
  const httpPort=await freePort(31000,500),base=`http://127.0.0.1:${httpPort}`;
  const child=spawn(process.execPath,[new URL("../../web/node_modules/next/dist/bin/next",import.meta.url).pathname,"start","--hostname","127.0.0.1","--port",String(httpPort)],{cwd:new URL("../../web/",import.meta.url).pathname,env:{...process.env,JOBGUARD_ENV:"synthetic_demo",DATABASE_URL:connection("sv3_isolation_runtime",database)},stdio:"pipe"});
@@ -75,7 +97,7 @@ beforeAll(async()=>{
 },60000);
 afterAll(async()=>{await closeTestPools(owner);await postgres?.stop();if(dir)await rm(dir,{recursive:true,force:true})});
 describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
- it("replays every OpenAPI builder GET and Next job GET with byte-identical status, headers and body",async()=>{
+ it("replays every OpenAPI builder GET and Next job GET with byte-identical status, headers and body (named limit: retrievedAt and its etag on the two prevention-checks GETs, asserted separately)",async()=>{
   const api=JSON.parse(await readFile(new URL("../openapi.json",import.meta.url),"utf8")) as {paths:Record<string,Record<string,unknown>>};
   const nestRoutes=Object.entries(api.paths).filter(([path,ops])=>ops.get && !path.startsWith('/auth/') && path!=="/healthz").map(([path])=>pathFor(path));
   const webRoutes=(await nextRoutes(new URL("../../web/app/api",import.meta.url).pathname)).filter(path=>path.startsWith('/api/jobs/')).map(pathFor);
@@ -84,20 +106,47 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
    const logStart=statementsLog.length;
    const runtime=pool("sv3_isolation_runtime",database),module=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(Pool).useValue(runtime).compile(),app=module.createNestApplication();
    let next:Awaited<ReturnType<typeof startNext>>|undefined;
-   try{await app.init();await app.listen(await freePort(32000,500),"127.0.0.1");const nest=await app.getUrl();next=await startNext(database);const output=[];
+   try{await app.init();await app.listen(await freePort(32000,500),"127.0.0.1");const nest=await app.getUrl();next=await startNext(database);const output=[],retrievals:Retrieval[]=[];
+    // Express's own etag function, taken from the running application (used only by the named-limit assertion on the Nest endpoint).
+    const nestEtag=(app.getHttpAdapter().getInstance() as {get(setting:string):unknown}).get("etag fn") as (body:Buffer)=>string;
     for(const [base,routes] of [[nest,nestRoutes],[next.base,webRoutes]] as const)for(const path of routes){
      const url=new URL(path,base);url.searchParams.set("tenantId",DEMO_TENANT_ID);url.searchParams.set("jobId",jobId);
+     const before=Date.now();
      const response=await fetch(url,{headers:{cookie:`jg_session=${session}`,"x-jobguard-verified-tenant":DEMO_TENANT_ID}});
-     output.push({route:path,status:response.status,headers:stableHeaders(Object.fromEntries(response.headers)),body:Buffer.from(await response.arrayBuffer()).toString("base64")});
+     const bytes=Buffer.from(await response.arrayBuffer()),after=Date.now(),headers=stableHeaders(Object.fromEntries(response.headers));
+     if(retrievedAtRoutes.has(path)){
+      // Named limit: compare everything except retrievedAt and the etag; both are asserted separately after the two replays.
+      const text=bytes.toString("utf8"),at=(JSON.parse(text) as {retrievedAt?:unknown}).retrievedAt;
+      retrievals.push({route:path,status:response.status,text,etag:headers.etag,before,after});
+      output.push({route:path,status:response.status,headers:path===nestRetrievalRoute&&"etag" in headers?{...headers,etag:ETAG_CHECKED_SEPARATELY}:headers,body:Buffer.from(typeof at==="string"?swapRetrievedAt(text,at,RETRIEVED_AT_CHECKED_SEPARATELY):text).toString("base64")});
+     }else output.push({route:path,status:response.status,headers,body:bytes.toString("base64")});
     }
     await new Promise<void>(resolve=>setTimeout(resolve,25));
     const statements=runtimeStatements(logStart,database);
     expect(statements.length).toBeGreaterThan(0);
     expect(statements.join("\n")).not.toMatch(/\b(?:shadow_commercial_signal|shadow_signal_\w+|shadow_reconciliation_run|shadow_disclosure_event|shadow_break_glass_access|shadow_must_surface_firing|reveal_shadow_signals|record_shadow_disclosure|surface_shadow_signal_early)\b/u);
-    return {output,statements};
+    return {compared:{output,statements},retrievals,nestEtagOf:(text:string)=>nestEtag(Buffer.from(text,"utf8"))};
    }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await app.close();await closeTestPools(runtime)}
   }
-  expect(await replay("sv3_isolation_many")).toEqual(await replay("sv3_isolation_zero"));
+  const many=await replay("sv3_isolation_many"),zero=await replay("sv3_isolation_zero");
+  // Everything compared exactly, except the two named-limit items (placeholders stand in for them on exactly the two prevention-checks GETs).
+  expect(many.compared).toEqual(zero.compared);
+  for(const route of retrievedAtRoutes){
+   const m=many.retrievals.filter(r=>r.route===route),z=zero.retrievals.filter(r=>r.route===route);
+   expect(m,`${route} fetched once in the many replay`).toHaveLength(1);expect(z,`${route} fetched once in the zero replay`).toHaveLength(1);
+   // (a) each replay's retrievedAt is a well-formed time inside that replay's own request window.
+   const mAt=checkRetrievedAt(m[0]!),zAt=checkRetrievedAt(z[0]!);
+   // (b) Nest: the etag is Express's etag of the body, so the other replay's body with only retrievedAt swapped gives exactly this replay's etag: the etag changes with retrievedAt and with nothing else that is compared.
+   if(route===nestRetrievalRoute){
+    expect(m[0]!.etag,`${route} many etag present`).toEqual(expect.any(String));expect(z[0]!.etag,`${route} zero etag present`).toEqual(expect.any(String));
+    expect(many.nestEtagOf(swapRetrievedAt(z[0]!.text,zAt,mAt)),`${route} many etag = etag(zero body with the many retrievedAt)`).toBe(m[0]!.etag);
+    expect(zero.nestEtagOf(swapRetrievedAt(m[0]!.text,mAt,zAt)),`${route} zero etag = etag(many body with the zero retrievedAt)`).toBe(z[0]!.etag);
+    if(mAt!==zAt)expect(m[0]!.etag,`${route} etag changes with retrievedAt`).not.toBe(z[0]!.etag);
+   }else{
+    // Next: no etag exists on this response in either replay, so nothing derived from retrievedAt is excluded here (headers were compared exactly above).
+    expect(m[0]!.etag,`${route} many: no etag`).toBeUndefined();expect(z[0]!.etag,`${route} zero: no etag`).toBeUndefined();
+   }
+  }
  },180000);
  it("successful Log an extra, retries, mutation errors and current builder counts/inbox responses ignore held signals",async()=>{
   const {createWorkspaceApplication}=await import("./workspace/application.js");
