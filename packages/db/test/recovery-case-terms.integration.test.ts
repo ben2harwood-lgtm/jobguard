@@ -18,7 +18,7 @@ const hash=(text:string)=>createHash("sha256").update(text).digest("hex");
 const tables=["recovery_case_terms_approval","decision","decision_resolution","action_authorization","command_receipt","recovery_message","recovery_message_event","recovery_message_approval","recovery_message_sink","action_outbox","audit_event"];
 async function counts(){return Object.fromEntries(await Promise.all(tables.map(async table=>[table,(await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[T])).rows[0].n])));}
 async function newCase(type="withheld_customer_payment",target=job){
- if(type==="withheld_customer_payment"&&target===job)return (await new RecoveryCaseRepository(runtime).command(context,job,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:type,claimedNetPence:32000,counterparty:"Fictional customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoice]},actor)).id;
+ if(type==="withheld_customer_payment"&&target===job)return (await new RecoveryCaseRepository(runtime).command(context,job,{version:"recovery-case-command.v1",action:"open",expectedRevision:0,commandId:randomUUID(),caseType:type,claimedNetPence:32000,counterparty:"Fictional customer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoice]},actor)).id;
  const id=randomUUID();await admin.query(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP',$5,0,true,$4,'Fictional party','builder_customer','customer_invoice',$6)`,[id,T,target,type,type==="prevention"?"prevented":"identified",JSON.stringify(type==="merchant_overcharge"?supplierRefs:[target===unbound?unboundInvoice:invoice])]);
  await admin.query(`INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)`,[randomUUID(),T,target,id,hash(id)]);
  await admin.query(`INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,$5,NULL,$6,'fixture-owner',$7,$8)`,[randomUUID(),T,target,id,type==="prevention"?"prevent":"opened",type==="prevention"?"prevented":"identified",randomUUID(),hash(id)]);return id;
@@ -147,11 +147,12 @@ it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's sa
  await db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP','identified',0,true,'withheld_customer_payment','Fictional party','builder_customer','customer_invoice','[]')",[id,b,bj]);
  await db.$client.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)",[randomUUID(),b,bj,id,hash(id)]);
  await db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",[randomUUID(),b,bj,id,randomUUID(),hash(id)]);
- });const before=await counts();
+ });const fresh=await newCase();const before=await counts();
  expect(await repo.read(ctx,job,id)).toBeNull();expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT * FROM app.recovery_case_terms_approval"))).rows).toEqual([]);
  expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[b,bj,id]))).rows[0].ok).toBe(false);
  await expect(repo.approve(ctx,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});
- await expect(repo.approve(context,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});
+ await expect(repo.approve(context,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});
+ await expect(repo.approve(context,job,command(fresh),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});
  await expect(repo.approve(context,bj,command(id),actor)).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});expect(await counts()).toEqual(before);
  expect((await runtime.query("SELECT * FROM app.recovery_case_terms_approval")).rows).toEqual([]);
 });

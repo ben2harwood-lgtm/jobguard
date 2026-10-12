@@ -332,3 +332,55 @@ Run by the Mac helper (Claude Sonnet 5.5), 12 October 2026, about 23:10 to 23:30
 Vitest ran with `--maxWorkers=1` for database files and `--maxWorkers=2` otherwise, at most three files per run, one heavy step at a time through `heavy-slot`. Wrapper config: `~/.local/share/full-steam/jg-runs/ch-7-terms-mac2/pw-ch-7-terms-mac2.config.ts`. The first two browser attempts were refused with "port 3000 already used" because another lane's Playwright run (the sv-3 worktree) held the fixed ports 3000 and 55432; the helper waited for 30 seconds of free ports and ran all four specs in one go. Nothing of the other lane was touched. There is no WebKit project in the Playwright config. The known Mac-only `[mobile-360] ENT-2.spec.ts:19` failure was not in scope and did not appear.
 
 **Not pushed; no pull request opened.** Mac helper record only. Not independently verified, not accepted. No fresh Opus or Sol review exists.
+
+## Repair round 4 (two fixture defects, 12 Oct)
+
+Issued by the dispatcher about 23:55 on 12 October 2026, starting at clean HEAD `b165088` on `codex/sandbox/ch-7-terms`, including the merge of main `96f051f` and the Mac round-3 receipt. Earlier orders and rounds remain in force. This repair changes only the two new database test files and this receipt; migration 0134 and all product code, merged tests, security assertions/lists and other files remain unchanged.
+
+Read and understood the Mac helper's scratch diff at `~/.local/share/full-steam/jg-runs/ch-7-terms-mac2/probe-diffs/ch-7-terms-scratch-all.diff`, checked it against the two helpers, the versioned open-command schema, the terms repository and the merged dispatcher, then applied it after `patch -p1 --dry-run` passed. No assertion was removed or weakened: T7 retains its exact nothing-committed assertion and gains the fresh-case foreign-actor refusal.
+
+**Defect 1:** `packages/db/test/recovery-case-terms.integration.test.ts:21` (`newCase`) and `packages/db/test/recovery-case-terms-upgrade.integration.test.ts:43` (`seed`) omitted `expectedRevision:0` from the case `open` command. `packages/core/src/recovery-case.ts:203` requires literal 0; `RecoveryCaseRepository.command` parses the command at `packages/db/src/recovery-case-repository.ts:95`. The omission caused the reported Zod failure before the substantive assertions.
+
+Before/after in both helpers (all other command fields unchanged):
+
+```diff
+-action:"open",commandId:randomUUID(),
++action:"open",expectedRevision:0,commandId:randomUUID(),
+```
+
+**Defect 2:** the foreign actor expectation at `packages/db/test/recovery-case-terms.integration.test.ts:154` used `RECOVERY_TERMS_FORBIDDEN` for tenant A's already-approved case (approval at line 142). The merged dispatcher at `packages/db/src/commands.ts:68–77` finds its occupied command-type/semantic key and returns `COMMAND_CONFLICT` before the owner or tenant-qualified foreign-key check. The repository maps that to `RECOVERY_TERMS_COMMAND_CONFLICT`. On a fresh unapproved case the foreign actor reaches the tenant-qualified receipt foreign-key refusal and receives `RECOVERY_TERMS_FORBIDDEN`.
+
+Before/after for T7 (original line 150 and assertion at 154; the added assertion is now line 155):
+
+```diff
+- });const before=await counts();
++ });const fresh=await newCase();const before=await counts();
+- await expect(repo.approve(context,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});
++ await expect(repo.approve(context,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_COMMAND_CONFLICT"});
++ await expect(repo.approve(context,job,command(fresh),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_FORBIDDEN"});
+```
+
+The existing `expect(await counts()).toEqual(before);` remains exactly unchanged and covers both refusals; the fresh case is created before the snapshot. Every other assertion remains exactly unchanged, including T2, amended T8 and rule-9 T11.
+
+**Open question for the coordinator:** should a foreign actor receive FORBIDDEN even on an already-approved case? That is a product choice requiring a merged-dispatcher change, outside this tests-only repair.
+
+The Mac probe showed all 49 database tests green with these two fixes. This is dispatcher-reported scratch-probe evidence, not a database run by this builder: 46 tests in the main file plus 3 in the upgrade file, including all 18 T2 tests, both amended T8 tests and both rule-9 T11 tests. The dispatcher reports migration 0134 applied cleanly. A Mac helper rerun of this repaired working tree remains owed; the probe is neither an independent verdict nor technical acceptance.
+
+### Round-4 run receipt
+
+Dependencies were already installed; no install/download or clean-install claim. Node `v24.17.0`, cached pinned pnpm `10.28.1` through the inspected existing `PATH=/private/tmp/ent3a-bin:$PATH` wrapper. An initial default-launcher `pnpm --version` stalled and was interrupted; the existing wrapper returned the pinned version without a package download.
+
+Only typechecking is run under the round's tighter memory limit. No unit test applies to the two touched files: both are PostgreSQL integration tests. Full tests, lint, lint:lanes, build and OpenAPI execution are NOT RUN in this round under that limit, despite the generic environment checklist; previous round/helper results above remain historical evidence.
+
+| Command actually run | Observed result | Log |
+| --- | --- | --- |
+| `patch -p1 --dry-run`, then `patch -p1`, using the inspected scratch diff | Both exit 0; only the two issued test files patched | Tool output |
+| `PATH=/private/tmp/ent3a-bin:$PATH pnpm typecheck` | exit 0; 7/7 tasks passed, 4 cached; existing Turbo cache-write I/O warnings | `/private/tmp/ch7-terms-r4-typecheck.log` |
+| `PATH=/private/tmp/ent3a-bin:$PATH pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/recovery-case-terms.integration.test.ts test/recovery-case-terms-upgrade.integration.test.ts` | exit 0; both touched tests compile, no database execution | `/private/tmp/ch7-terms-r4-test-types.log` |
+| `git diff --check`; deterministic HEAD/source comparison | exit 0; each test equals HEAD plus exactly the issued replacements/addition; 0134 byte-for-byte unchanged; exactly three authorized tracked files differ | Tool output |
+
+**PASS — builder source self-review only.** Exact whole-file comparisons preserve every other byte of both tests, including the original nothing-committed assertion. No migration, product behavior, compatibility impact, operational alert, external action or release is introduced by this repair. Rules 11 and 12 remain in force; no credential fixture, permanent source/hash pin or security-list change was introduced.
+
+**PostgreSQL database tests: NOT RUN in this sandbox (cannot bind localhost or start PostgreSQL).** Database, migration and browser suites remain for the Mac helper/CI; no database or browser startup was attempted. No model/prompt/schema implementation changed, so no evaluation applies.
+
+The intended conventional-commit subject and body are written to `/private/tmp/jg-msg-ch-7-terms.txt`. No Git write, commit or push was performed. The dispatcher owns committing and pushing; independent recorded verdicts bound to that exact commit and separate acceptance remain owed. This receipt is builder evidence only.
