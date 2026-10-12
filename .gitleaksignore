@@ -1,0 +1,6 @@
+# Exact false-positive exceptions for the secret scanner. One finding per line, in the scanner's own
+# fingerprint form (commit:file:rule:line). Each entry matches ONE line in ONE commit and nothing else.
+# Approved by the founder (Ben, 12 Oct 2026: "Exact exceptions only" / typed "yes to all").
+# Both values are made-up practice-feed names in test set-up, not secrets. Never add a pattern or a path here.
+3a82b3e6c542c0965243fb1f46fec6f4f3b0a073:packages/db/test/recovery-eligibility-v3.integration.test.ts:generic-api-key:239
+90a1534b23a5a421c72de4bda6af163c4c12689c:packages/db/test/practice-facts.integration.test.ts:generic-api-key:255

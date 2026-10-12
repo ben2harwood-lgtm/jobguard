@@ -4,24 +4,122 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorRoles } from "@jobguard/core";
 import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
 import { AuditExportApplication, auditExportHttpFailure } from "../../../apps/api/src/audit-export/audit-export.application.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
+import * as upgradeProof from "./upgrade-proof-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractor: ContractorRepository, repo: AuditExportRepository;
 const context = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
 const actor = (p: AuthenticatedMembership) => ({ membershipId: p.membershipId, identityUserId: p.identityUserId });
 let priorSecurityCatalog: unknown;
-async function securityCatalog() {
+let upgrade: {
+  before: Subject[]; names: string[]; own: number; halfOid: string; ownRegistry: string[]; ownTables: boolean[];
+  ownStepSecurityCatalog: SecurityCatalog; ownStepDifferences: string[]; controls: ControlResult[];
+  afterControlsCatalog: SecurityCatalog; afterControlsDifferences: string[]; scratchCount: string; afterAllDifferences: string[];
+};
+type Queryable = Pick<Pool | PoolClient, "query">;
+async function securityCatalog(db: Queryable = admin) {
   return {
-    tables: (await admin.query(`SELECT n.nspname,c.relname,c.relacl::text,c.relowner,c.relrowsecurity,c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('app','audit_control','identity','control_plane','infrastructure') AND c.relkind='r' AND c.relname NOT IN ('audit_export','audit_export_checkpoint') ORDER BY n.nspname,c.relname`)).rows,
-    policies: (await admin.query(`SELECT * FROM pg_policies WHERE schemaname IN ('app','audit_control','identity','control_plane','infrastructure') AND tablename NOT IN ('audit_export','audit_export_checkpoint') ORDER BY schemaname,tablename,policyname`)).rows,
-    routines: (await admin.query(`SELECT n.nspname,p.proname,p.proargtypes::text,p.proacl::text,p.proowner,p.prosecdef,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('app','audit_control','identity','control_plane','infrastructure') ORDER BY n.nspname,p.proname,p.proargtypes`)).rows,
-    roles: (await admin.query(`SELECT rolname,rolsuper,rolbypassrls,rolcreaterole,rolcreatedb,rolinherit FROM pg_roles WHERE rolname LIKE 'jobguard_%' ORDER BY rolname`)).rows,
+    tables: (await db.query(`SELECT n.nspname,c.relname,c.relacl::text,c.relowner,c.relrowsecurity,c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('app','audit_control','identity','control_plane','infrastructure') AND c.relkind='r' AND c.relname NOT IN ('audit_export','audit_export_checkpoint') ORDER BY n.nspname,c.relname`)).rows,
+    policies: (await db.query(`SELECT * FROM pg_policies WHERE schemaname IN ('app','audit_control','identity','control_plane','infrastructure') AND tablename NOT IN ('audit_export','audit_export_checkpoint') ORDER BY schemaname,tablename,policyname`)).rows,
+    routines: (await db.query(`SELECT n.nspname,p.proname,p.proargtypes::text,p.proacl::text,p.proowner,p.prosecdef,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('app','audit_control','identity','control_plane','infrastructure') ORDER BY n.nspname,p.proname,p.proargtypes`)).rows,
+    roles: (await db.query(`SELECT rolname,rolsuper,rolbypassrls,rolcreaterole,rolcreatedb,rolinherit FROM pg_roles WHERE rolname LIKE 'jobguard_%' ORDER BY rolname`)).rows,
   };
+}
+type Subject = {
+  kind: "table" | "routine" | "role"; oid: string; name: string; facts: string[];
+  columns: string[]; columnGrants: { column: string; fact: string }[];
+  policies: Record<string, { permissive: boolean; text: string }>;
+};
+type SecurityCatalog = Awaited<ReturnType<typeof securityCatalog>>;
+type Control = { id: string; statements: string[]; expected: string[] | "owner moved"; merged: (keyof SecurityCatalog)[] | null; inspect?: "replace" | "column" | "name"; precondition?: string };
+type ControlReading = { after: string[]; merged?: (keyof SecurityCatalog)[]; confirmed?: boolean; precondition?: boolean } | { error: string };
+type ControlResult = Control & { result: ControlReading };
+
+// Not compared at any step: grants on schemas, sequences, views and types, or default privileges.
+// After later migrations: routine bodies/settings are not compared; any older policy text change stops the proof,
+// without deciding whether it got tighter. An older object dropped without a same-id/name counterpart is no longer compared.
+// Memberships of an older jobguard_ role are read in both directions ("member of X" and "has member X"), so any role, new or
+// old, jobguard_ or not, that joins an older jobguard_ role is seen on that older role. Not read: admin, inherit and set flags
+// of a membership that already existed, and role-level settings.
+async function privilegeFacts(db: Queryable): Promise<Subject[]> {
+  const rows = (await db.query(`
+    SELECT row_to_json(s)::text AS bytes FROM (
+      SELECT 'table'::text AS kind,c.oid::text AS oid,(n.nspname||'.'||c.relname)::text AS name,
+        ARRAY['owner '||pg_get_userbyid(c.relowner)] || ARRAY(
+          SELECT 'grant '||(CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END)||' '||a.privilege_type||g.suffix
+          FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
+          CROSS JOIN LATERAL (SELECT ''::text AS suffix UNION ALL SELECT ' WITH GRANT OPTION' WHERE a.is_grantable) g
+        ) || (CASE WHEN c.relrowsecurity THEN ARRAY[]::text[] ELSE ARRAY['row security off'] END)
+          || (CASE WHEN c.relforcerowsecurity THEN ARRAY[]::text[] ELSE ARRAY['row security not forced'] END) AS facts,
+        ARRAY(SELECT a.attname::text FROM pg_attribute a WHERE (a.attrelid=c.oid) AND (a.attnum>0) AND (NOT a.attisdropped) ORDER BY a.attnum) AS columns,
+        coalesce((SELECT json_agg(json_build_object('column',a.attname::text,'fact',
+          'grant '||(CASE WHEN acl.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(acl.grantee) END)||' '||acl.privilege_type||g.suffix))
+          FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+          CROSS JOIN LATERAL (SELECT ''::text AS suffix UNION ALL SELECT ' WITH GRANT OPTION' WHERE acl.is_grantable) g
+          WHERE (a.attrelid=c.oid) AND (a.attnum>0) AND (NOT a.attisdropped)), '[]'::json) AS "columnGrants",
+        coalesce((SELECT json_object_agg(p.policyname,json_build_object('permissive',p.permissive='PERMISSIVE','text',
+          (SELECT row_to_json(x)::text FROM (SELECT p.permissive,p.roles,p.cmd,p.qual,p.with_check) x)))
+          FROM pg_policies p WHERE (p.schemaname=n.nspname) AND (p.tablename=c.relname)), '{}'::json) AS policies
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE (n.nspname IN ('app','audit_control','identity','control_plane','infrastructure')) AND (c.relkind='r')
+    ) s
+    UNION ALL
+    SELECT row_to_json(s)::text AS bytes FROM (
+      SELECT 'routine'::text AS kind,p.oid::text AS oid,(n.nspname||'.'||p.proname||'('||oidvectortypes(p.proargtypes)||')')::text AS name,
+        ARRAY['owner '||pg_get_userbyid(p.proowner)] || ARRAY(
+          SELECT 'grant '||(CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END)||' '||a.privilege_type||g.suffix
+          FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          CROSS JOIN LATERAL (SELECT ''::text AS suffix UNION ALL SELECT ' WITH GRANT OPTION' WHERE a.is_grantable) g
+        ) || (CASE WHEN p.prosecdef THEN ARRAY['runs as owner'] ELSE ARRAY[]::text[] END) AS facts,
+        ARRAY[]::text[] AS columns,'[]'::json AS "columnGrants",'{}'::json AS policies
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname IN ('app','audit_control','identity','control_plane','infrastructure')
+    ) s
+    UNION ALL
+    SELECT row_to_json(s)::text AS bytes FROM (
+      SELECT 'role'::text AS kind,r.oid::text AS oid,r.rolname::text AS name,
+        ARRAY(SELECT a.name FROM (VALUES ('rolsuper',r.rolsuper),('rolbypassrls',r.rolbypassrls),('rolcreaterole',r.rolcreaterole),
+          ('rolcreatedb',r.rolcreatedb),('rolinherit',r.rolinherit),('rolcanlogin',r.rolcanlogin),('rolreplication',r.rolreplication)) a(name,enabled) WHERE a.enabled)
+          || ARRAY(SELECT DISTINCT 'member of '||pg_get_userbyid(m.roleid) FROM pg_auth_members m WHERE m.member=r.oid)
+          || ARRAY(SELECT DISTINCT 'has member '||pg_get_userbyid(m.member) FROM pg_auth_members m WHERE m.roleid=r.oid) AS facts,
+        ARRAY[]::text[] AS columns,'[]'::json AS "columnGrants",'{}'::json AS policies
+      FROM pg_roles r WHERE r.rolname LIKE 'jobguard_%'
+    ) s
+  `)).rows as { bytes: string }[];
+  return rows.map(row => JSON.parse(row.bytes) as Subject);
+}
+function compare(before: Subject[], live: Subject[]): string[] {
+  const differences: string[] = [];
+  for (const now of live) {
+    const was = before.find(subject => subject.kind === now.kind && subject.oid === now.oid)
+      ?? before.find(subject => subject.kind === now.kind && subject.name === now.name);
+    if (!was) continue;
+    for (const fact of now.facts) if (!was.facts.includes(fact)) differences.push(`${now.kind} ${now.name}: + ${fact}`);
+    if (now.kind !== "table") continue;
+    for (const grant of now.columnGrants) if (was.columns.includes(grant.column)
+      && !was.columnGrants.some(old => old.column === grant.column && old.fact === grant.fact)) {
+      differences.push(`table ${now.name}: + column ${grant.column} ${grant.fact}`);
+    }
+    for (const [name, policy] of Object.entries(was.policies)) {
+      const current = now.policies[name];
+      if (current && current.text !== policy.text) differences.push(`policy ${now.name}.${name}: changed`);
+      else if (!current && !policy.permissive) differences.push(`policy ${now.name}.${name}: restrictive policy gone`);
+    }
+    for (const [name, policy] of Object.entries(now.policies)) if (!Object.hasOwn(was.policies, name)
+      && policy.permissive && !was.facts.includes("row security off")) {
+      differences.push(`policy ${now.name}.${name}: permissive policy added`);
+    }
+  }
+  return differences.sort();
+}
+async function privilegeDifferences(db: Queryable, before: Subject[]): Promise<string[]> {
+  return compare(before, await privilegeFacts(db));
 }
 const request = (commandId = randomUUID()) => ({ version: "audit-export-request.v1", commandId });
 beforeAll(async () => {
@@ -33,11 +131,85 @@ beforeAll(async () => {
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "jobguard_synthetic_demo" });
   // Real upgrade from the preceding supported schema, then idempotent migrator replay.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for (const url of MIGRATION_URLS.filter(u => !u.pathname.endsWith("/0121_audit_export.sql"))) {
+  const names = MIGRATION_URLS.map(u => u.pathname.split("/").at(-1)!), own = names.indexOf("0121_audit_export.sql");
+  expect(own).toBeGreaterThan(0);
+  for (const url of MIGRATION_URLS.slice(0, own)) {
     await admin.query(await readFile(url, "utf8")); await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
   }
   priorSecurityCatalog = await securityCatalog();
+  const before = await privilegeFacts(admin);
+  await admin.query(await readFile(MIGRATION_URLS[own]!, "utf8"));
+  await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [names[own]]);
+  const ownRegistry = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name as string);
+  const ownTables = (await admin.query("SELECT (to_regclass('app.audit_export') IS NOT NULL) AS exports,(to_regclass('app.audit_export_checkpoint') IS NOT NULL) AS checkpoints")).rows[0]!;
+  const ownStepSecurityCatalog = await securityCatalog();
+  const ownStepDifferences = await privilegeDifferences(admin, before);
+  const half = "app.half_even_ratio(bigint,bigint,bigint)";
+  const halfOid = (await admin.query("SELECT $1::regprocedure::oid::text AS oid", [half])).rows[0]!.oid as string;
+  const halfName = before.find(subject => subject.kind === "routine" && subject.oid === halfOid)?.name;
+  const definitions: Control[] = [
+    { id: "S1", statements: ["GRANT TRUNCATE ON app.job TO jobguard_runtime"], expected: ["table app.job: + grant jobguard_runtime TRUNCATE"], merged: ["tables"], precondition: "SELECT has_table_privilege('jobguard_runtime','app.job','TRUNCATE') AS allowed" },
+    { id: "S2", statements: ["CREATE ROLE mo5_scratch_role NOLOGIN", "GRANT SELECT ON app.job TO mo5_scratch_role"], expected: ["table app.job: + grant mo5_scratch_role SELECT"], merged: ["tables"] },
+    { id: "S3", statements: ["GRANT SELECT ON app.job TO jobguard_runtime WITH GRANT OPTION"], expected: ["table app.job: + grant jobguard_runtime SELECT WITH GRANT OPTION"], merged: ["tables"] },
+    { id: "S4", statements: ["GRANT UPDATE(title) ON app.job TO jobguard_runtime"], expected: ["table app.job: + column title grant jobguard_runtime UPDATE"], merged: [], precondition: "SELECT has_column_privilege('jobguard_runtime','app.job','title','UPDATE') AS allowed" },
+    { id: "S5", statements: ["ALTER TABLE app.job OWNER TO jobguard_runtime"], expected: "owner moved", merged: ["tables"] },
+    { id: "S6", statements: ["ALTER TABLE app.job DISABLE ROW LEVEL SECURITY", "ALTER TABLE app.job NO FORCE ROW LEVEL SECURITY"], expected: ["table app.job: + row security not forced", "table app.job: + row security off"], merged: ["tables"] },
+    { id: "S7", statements: ["ALTER POLICY tenant_isolation ON app.job USING (true)"], expected: ["policy app.job.tenant_isolation: changed"], merged: ["policies"] },
+    { id: "S8", statements: ["ALTER POLICY tenant_isolation ON app.job TO PUBLIC"], expected: ["policy app.job.tenant_isolation: changed"], merged: ["policies"] },
+    { id: "S9", statements: ["CREATE POLICY mo5_scratch ON app.job FOR SELECT TO jobguard_runtime USING (true)"], expected: ["policy app.job.mo5_scratch: permissive policy added"], merged: ["policies"] },
+    { id: "S10", statements: ["DROP POLICY practice_material_isolation ON app.merchant"], expected: ["policy app.merchant.practice_material_isolation: restrictive policy gone"], merged: ["policies"] },
+    { id: "S11", statements: ["CREATE ROLE mo5_scratch_role NOLOGIN", `GRANT EXECUTE ON FUNCTION ${half} TO mo5_scratch_role`], expected: [`routine ${halfName}: + grant mo5_scratch_role EXECUTE`], merged: ["routines"] },
+    { id: "S12", statements: [`ALTER FUNCTION ${half} SECURITY DEFINER`], expected: [`routine ${halfName}: + runs as owner`], merged: ["routines"] },
+    { id: "S13", statements: ["ALTER ROLE jobguard_runtime CREATEDB"], expected: ["role jobguard_runtime: + rolcreatedb"], merged: ["roles"] },
+    { id: "S14", statements: ["GRANT jobguard_migration TO jobguard_runtime"], expected: ["role jobguard_migration: + has member jobguard_runtime", "role jobguard_runtime: + member of jobguard_migration"], merged: [] },
+    { id: "S15", statements: ["CREATE ROLE mo5_scratch_role NOLOGIN", `ALTER FUNCTION ${half} RENAME TO mo5_half_renamed`, "GRANT EXECUTE ON FUNCTION app.mo5_half_renamed(bigint,bigint,bigint) TO mo5_scratch_role"], expected: [`routine ${halfName?.replace("half_even_ratio", "mo5_half_renamed")}: + grant mo5_scratch_role EXECUTE`], merged: ["routines"] },
+    { id: "S16", statements: ["CREATE ROLE mo5_scratch_role NOLOGIN", "GRANT jobguard_runtime TO mo5_scratch_role"], expected: ["role jobguard_runtime: + has member mo5_scratch_role"], merged: [] },
+    { id: "N1", statements: [], expected: ["table app.job: + grant jobguard_runtime SELECT"], merged: null, inspect: "name" },
+    { id: "P1", statements: ["REVOKE INSERT ON app.job FROM jobguard_runtime"], expected: [], merged: ["tables"] },
+    { id: "P2", statements: ["CREATE TABLE app.mo5_scratch(tenant_id uuid NOT NULL, id uuid PRIMARY KEY)", "ALTER TABLE app.mo5_scratch ENABLE ROW LEVEL SECURITY", "CREATE POLICY mo5_scratch ON app.mo5_scratch FOR ALL TO jobguard_runtime USING (true)", "GRANT SELECT,INSERT,UPDATE,DELETE ON app.mo5_scratch TO jobguard_runtime, PUBLIC"], expected: [], merged: ["tables", "policies"] },
+    { id: "P3", statements: [], expected: [], merged: [], inspect: "replace" },
+    { id: "P4", statements: ["ALTER TABLE app.job ADD COLUMN mo5_scratch text"], expected: [], merged: [], inspect: "column" },
+    { id: "P5", statements: ["CREATE FUNCTION app.mo5_scratch() RETURNS integer LANGUAGE sql AS 'SELECT 1'"], expected: [], merged: ["routines"] },
+    { id: "P6", statements: ["CREATE ROLE jobguard_mo5_scratch NOLOGIN CREATEDB"], expected: [], merged: ["roles"] },
+    { id: "P7", statements: ["ALTER TABLE app.job ADD COLUMN mo5_scratch text", "GRANT UPDATE(mo5_scratch) ON app.job TO jobguard_runtime"], expected: [], merged: [] },
+    { id: "P8", statements: ["CREATE POLICY mo5_scratch ON app.job AS RESTRICTIVE FOR ALL TO jobguard_runtime USING (false)"], expected: [], merged: ["policies"] },
+    { id: "P9", statements: ["DROP POLICY tenant_isolation ON app.job"], expected: [], merged: ["policies"] },
+    { id: "P10", statements: [`ALTER FUNCTION ${half} SET search_path=pg_catalog`], expected: [], merged: ["routines"] },
+  ];
+  const controls: ControlResult[] = [];
+  for (const control of definitions) {
+    let result: ControlReading;
+    try {
+      result = await upgradeProof.rolledBack(admin, async client => {
+        const precondition = control.precondition ? (await client.query(control.precondition)).rows[0]!.allowed as boolean : undefined;
+        for (const statement of control.statements) await client.query(statement);
+        let confirmed: boolean | undefined;
+        if (control.inspect === "replace") confirmed = await upgradeProof.scratchReplaceFunction(client, half);
+        if (control.inspect === "column") confirmed = (await client.query("SELECT EXISTS(SELECT 1 FROM pg_attribute WHERE (attrelid='app.job'::regclass) AND (attname='mo5_scratch') AND (NOT attisdropped)) AS present")).rows[0]!.present as boolean;
+        if (control.inspect === "name") {
+          const copy = structuredClone(before), job = copy.find(subject => subject.kind === "table" && subject.name === "app.job")!;
+          job.oid = "0"; job.facts = job.facts.filter(fact => fact !== "grant jobguard_runtime SELECT");
+          return { after: compare(copy, await privilegeFacts(client)) };
+        }
+        const after = await privilegeDifferences(client, before), catalog = await securityCatalog(client);
+        const merged = (Object.keys(catalog) as (keyof SecurityCatalog)[]).filter(key => !isDeepStrictEqual(catalog[key], (priorSecurityCatalog as SecurityCatalog)[key]));
+        return { after, merged, ...(confirmed === undefined ? {} : { confirmed }), ...(precondition === undefined ? {} : { precondition }) };
+      });
+    } catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
+    controls.push({ ...control, result });
+  }
+  const afterControlsCatalog = await securityCatalog();
+  const afterControlsDifferences = await privilegeDifferences(admin, before);
+  const scratchCount = (await admin.query(`SELECT (count(*))::text AS count FROM (
+    SELECT relname::text AS name FROM pg_class WHERE relkind='r'
+    UNION ALL SELECT proname::text FROM pg_proc
+    UNION ALL SELECT policyname::text FROM pg_policies
+    UNION ALL SELECT rolname::text FROM pg_roles
+  ) s WHERE name LIKE '%mo5%'`)).rows[0]!.count as string;
   await migrate(admin); await migrate(admin);
+  // [MO5-e] The reading is taken here, before the test's own login below joins jobguard_runtime, and asserted in the test.
+  const afterAllDifferences = await privilegeDifferences(admin, before);
+  upgrade = { before, names, own, halfOid, ownRegistry, ownTables: [ownTables.exports, ownTables.checkpoints], ownStepSecurityCatalog, ownStepDifferences, controls, afterControlsCatalog, afterControlsDifferences, scratchCount, afterAllDifferences };
   await admin.query("CREATE ROLE audit_export_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO audit_export_login");
   runtime = new Pool({ host: "127.0.0.1", port, user: "audit_export_login", password: "synthetic", database: "jobguard_synthetic_demo", max: 6 });
   contractor = new ContractorRepository(runtime); repo = new AuditExportRepository(runtime);
@@ -61,8 +233,48 @@ async function invite(p: AuthenticatedMembership, role: string, scopeKind = "ten
 }
 describe("ENT-10b PostgreSQL audit exports", () => {
   it("leaves every existing table, policy, routine privilege and runtime role attribute unchanged on upgrade", async () => {
+    // [MO5-a] Older subjects and the exact subjects used by the controls exist before 0121.
+    for (const kind of ["table", "routine", "role"] as const) expect(upgrade.before.some(subject => subject.kind === kind), `[MO5-a] ${kind}`).toBe(true);
+    expect(upgrade.before.some(subject => Object.keys(subject.policies).length > 0), "[MO5-a] policy").toBe(true);
+    const job = upgrade.before.find(subject => subject.kind === "table" && subject.name === "app.job")!;
+    expect(job, "[MO5-a] app.job").toBeDefined();
+    expect(job.facts, "[MO5-a] app.job grants").toEqual(expect.arrayContaining(["grant jobguard_runtime SELECT", "grant jobguard_runtime INSERT"]));
+    expect(job.facts, "[MO5-a] row security on").not.toContain("row security off");
+    expect(job.facts, "[MO5-a] row security forced").not.toContain("row security not forced");
+    expect(job.policies.tenant_isolation?.permissive, "[MO5-a] permissive tenant policy").toBe(true);
+    expect(upgrade.before.find(subject => subject.kind === "table" && subject.name === "app.merchant")?.policies.practice_material_isolation?.permissive, "[MO5-a] restrictive merchant policy").toBe(false);
+    expect(upgrade.before.find(subject => subject.kind === "routine" && subject.oid === upgrade.halfOid), "[MO5-a] half_even_ratio identity").toBeDefined();
+    expect(upgrade.before.some(subject => subject.kind === "role" && subject.name === "jobguard_runtime"), "[MO5-a] runtime role").toBe(true);
+    for (const name of ["app.audit_export", "app.audit_export_checkpoint"]) expect(upgrade.before.some(subject => subject.name === name), `[MO5-a] not yet present: ${name}`).toBe(false);
     expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0121_audit_export.sql'")).rows).toEqual([{ migration_name: "0121_audit_export.sql" }]);
-    expect(await securityCatalog()).toEqual(priorSecurityCatalog);
+    expect(upgrade.ownRegistry, "[MO5-b] 0121 alone registry").toEqual(upgrade.names.slice(0, upgrade.own + 1));
+    expect(upgrade.ownTables, "[MO5-b] 0121 tables exist at its own step").toEqual([true, true]);
+    expect(upgrade.ownStepSecurityCatalog).toEqual(priorSecurityCatalog); // [MO5-c] Same four merged queries and full equality at 0121 alone.
+    expect(upgrade.ownStepDifferences, "[MO5-c] named permission facts").toEqual([]);
+    // [MO5-d] Every scratch statement was rolled back; a refused statement is a recorded failure here.
+    for (const control of upgrade.controls) {
+      const message = `[MO5-d] ${control.id}: ${JSON.stringify(control.result)}`;
+      expect(control.result, message).not.toHaveProperty("error");
+      if ("error" in control.result) continue;
+      if (control.expected === "owner moved") {
+        expect(control.result.after, message).toContain("table app.job: + owner jobguard_runtime");
+        expect(control.result.after.every(line => line.startsWith("table app.job: + ")), message).toBe(true);
+      } else expect(control.result.after, message).toEqual(control.expected);
+      if (control.merged !== null) expect(control.result.merged, message).toEqual(control.merged);
+      if (control.precondition) expect(control.result.precondition, message).toBe(false);
+      if (control.inspect === "replace" || control.inspect === "column") expect(control.result.confirmed, message).toBe(true);
+    }
+    expect(upgrade.afterControlsCatalog, "[MO5-f] catalogue restored").toEqual(upgrade.ownStepSecurityCatalog);
+    expect(upgrade.afterControlsDifferences, "[MO5-f] permission facts restored").toEqual([]);
+    expect(upgrade.scratchCount, "[MO5-f] no scratch objects or roles").toBe("0");
+    expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name), "[MO5-e] all migrations recorded").toEqual(upgrade.names);
+    // Nothing reads whole catalogue rows, routine text or routine settings after the later migrations.
+    // They may add tables, columns, policies on their own tables, routines and roles, replace routines and take privileges away.
+    // They may not widen a grant, move an owner, switch row security off, change an older policy, add a permissive policy to an
+    // older row-secured table, remove an older restrictive policy, give an older jobguard_ role an attribute or a membership, or
+    // give any role (new or old) membership of an older jobguard_ role. The reading was taken in the set-up directly after the
+    // migrate() pair, before the test's own login joined jobguard_runtime, and is asserted here.
+    expect(upgrade.afterAllDifferences, "[MO5-e] later migrations did not widen older permission facts").toEqual([]);
   });
   it("exports one tenant only, including shared-user tenants, with its own audit event and distinct public key", async () => {
     const a = await setup(), b = await setup();
