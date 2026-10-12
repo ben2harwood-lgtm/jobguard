@@ -849,3 +849,9 @@ and browser regressions. Local sandbox initialization errors are not DB passes.
 Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces). Renumbered from 0125 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
 
 Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
+
+## 0138_practice_session_hardening.sql — contractor practice session boundary
+
+Depends on 0054 and 0094. Converts contractor session values in place into canonical SHA-256 digests and independent random row numbers. Live home records supply the remaining deadline; ended or absent home records end converted rows. New starts with no home record retain a nonrenewable seven-day cap. Lookup reads the home record on every call. Adds holder-only contractor revoke with a deferred audit requirement, write-once guards, and the same owner refusal in grant.create as member.invite. No new direct table write grants; only the checked revoke routine gains runtime EXECUTE.
+
+Forward fix preferred. A rollback restoring the three 0054 routines must also drop the three new NOT NULL requirements and the guard trigger, since the old start writes four columns. No current row retains its original session value, so restoring the old lookup ends every current session; each browser starts a new company. No rows are deleted. PostgreSQL upgrade and catalogue checks remain pending outside the sandbox.
