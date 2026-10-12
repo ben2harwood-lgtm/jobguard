@@ -1,0 +1,49 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-4c
+
+ ❯ packages/core/src/extra-unlink.test.ts (2 tests | 2 failed) 38ms
+   × [P1] un-link input and links-read schemas are strict and versioned 9ms
+   × [P2] three new codes are appended and the ten merged codes keep their order 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/core/src/extra-unlink.test.ts > [P1] un-link input and links-read schemas are strict and versioned
+TypeError: Cannot read properties of undefined (reading 'parse')
+ ❯ packages/core/src/extra-unlink.test.ts:8:32
+      6|
+      7| it("[P1] un-link input and links-read schemas are strict and versioned…
+      8|  expect(extraDuplicateUnlinkV1.parse(input)).toEqual(input);
+       |                                ^
+      9|  expect(extraUnlinkCommandType).toBe("UnlinkDuplicate");
+     10|  expect(extraUnlinkReasonCodes).toEqual(["not_same_work", "wrong_pair"…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  packages/core/src/extra-unlink.test.ts > [P2] three new codes are appended and the ten merged codes keep their order
+AssertionError: expected [ Array(10) ] to deeply equal [ 'NOT_FOUND', …(12) ]
+
+- Expected
++ Received
+
+@@ -7,9 +7,6 @@
+    "PROMPT_ORIGIN_HELD",
+    "DUPLICATE_LINK_REFUSED",
+    "EXTRA_EXPORTED",
+    "ORDER_LINE_LINK_REFUSED",
+    "DATABASE_UNAVAILABLE",
+-   "UNLINK_FORBIDDEN",
+-   "NOT_LINKED",
+-   "ALREADY_UNLINKED",
+  ]
+
+ ❯ packages/core/src/extra-unlink.test.ts:27:37
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 34 passed (36)
+   Start at  20:24:50
+   Duration  2.19s (transform 1.63s, setup 0ms, import 2.22s, tests 197ms, environment 0ms)
+

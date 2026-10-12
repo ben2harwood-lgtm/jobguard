@@ -4,13 +4,14 @@ import type { Pool } from "pg";
 import {
  ExtraPersistenceError, extraPersistenceErrorCodes, raiseExtraV1, extraRecordV1, extraRecordLegacyV1, extraDuplicateLinkV1, extraOrderLineLinkV1,
  originForCommand, effectiveOrigin, type ExtraRecord, type ExtraReadRecord, type RaiseExtra, type EnterpriseGroup, type ExtraPersistenceErrorCode,
+ extraDuplicateUnlinkV1, extraDuplicateLinksV1, extraUnlinkCommandType, type ExtraDuplicateLinks,
 } from "@jobguard/core";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { canonicalJson, sha256Hex, derivedUuid } from "./work-order-repository.js";
 import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type TenantTransaction } from "./tenant-context.js";
 
 /** ENT-3/ENT-5 may append their own facts here, before the final audit-head lock. */
-export type ExtraTransactionSeam = (db: TenantTransaction, fact: Readonly<{ kind: "raise" | "duplicate_link" | "order_line_link"; commandId: string; jobId: string; variationId: string; linkId?: string }>) => Promise<void>;
+export type ExtraTransactionSeam = (db: TenantTransaction, fact: Readonly<{ kind: "raise" | "duplicate_link" | "order_line_link" | "duplicate_unlink"; commandId: string; jobId: string; variationId: string; linkId?: string; reversesLinkId?: string }>) => Promise<void>;
 export type RaisedExtra = { variationId: string };
 export type ExtraLinkResult = { linkId: string; variationId: string };
 const uuid = z.string().uuid();
@@ -48,7 +49,7 @@ async function claim<T>(db: TenantTransaction, tenant: string, commandId: string
  const rows = (await db.$client.query<{ request_hash: string; status: string; result: T }>("SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type=$3 AND semantic_key=$4))", [tenant, commandId, type, semantic])).rows;
  if (rows.length !== 1 || rows[0]!.request_hash !== hash || rows[0]!.status !== "succeeded") throw new ExtraPersistenceError("COMMAND_CONFLICT"); return rows[0]!.result;
 }
-async function complete(db: TenantTransaction, tenant: string, commandId: string, result: RaisedExtra | ExtraLinkResult): Promise<void> {
+async function complete(db: TenantTransaction, tenant: string, commandId: string, result: RaisedExtra | ExtraLinkResult | ExtraUnlinkResult): Promise<void> {
  await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, commandId, canonicalJson(result)]);
 }
 function audit(tenant: string, actor: string, type: string, subject: string, references: Record<string, string>, hashes?: Record<string, string>, id = randomUUID()): AuditEventInput {
@@ -165,4 +166,68 @@ export class ExtraRepository {
    const chosen = effectiveOrigin(orderingFacts); return { canonicalId, members, effectiveOrigin: members.find(m => m.origin.variationId === chosen.id)! };
   }); } catch (error) { failure(error); }
  }
+ async readDuplicateLinks(context: VerifiedTenantContext, jobId: string): Promise<ExtraDuplicateLinks> {
+  const job = parse(uuid, jobId).toLowerCase();
+  try { return await withTenant(this.pool, context, async db => {
+   const tenant = context.tenantId.toLowerCase();
+   const row = (await db.$client.query(`SELECT j.id AS "jobId",
+    (SELECT count(*)::int FROM app.extra_duplicate_link h WHERE h.tenant_id=j.tenant_id AND h.job_id=j.id) AS revision,
+    coalesce((SELECT jsonb_agg(jsonb_build_object('linkId',l.id,'duplicateId',l.duplicate_id,'canonicalId',l.canonical_id) ORDER BY l.id)
+     FROM app.extra_duplicate_link l WHERE l.tenant_id=j.tenant_id AND l.job_id=j.id AND l.kind='link'
+      AND NOT EXISTS(SELECT 1 FROM app.extra_duplicate_link u WHERE (u.tenant_id,u.reverses_link_id)=(l.tenant_id,l.id))), '[]'::jsonb) AS "activeLinks"
+    FROM app.job j WHERE j.tenant_id=$1 AND j.id=$2`, [tenant, job])).rows[0];
+   if (!row) throw new ExtraPersistenceError("NOT_FOUND");
+   return parse(extraDuplicateLinksV1, { version: "extra-duplicate-links.v1", ...row });
+  }); } catch (error) { unlinkFailure(error); }
+ }
+ async unlinkDuplicate(context: VerifiedTenantContext, raw: unknown, seam?: ExtraTransactionSeam): Promise<ExtraUnlinkResult> {
+  const parsed = parse(extraDuplicateUnlinkV1, raw);
+  const input = { ...parsed, commandId: parsed.commandId.toLowerCase(), jobId: parsed.jobId.toLowerCase(), actorMembershipId: parsed.actorMembershipId.toLowerCase(), linkId: parsed.linkId.toLowerCase() };
+  const { commandId: _commandId, ...content } = input;
+  const requestHash = sha256Hex(canonicalJson(content));
+  try { return await withTenant(this.pool, context, async db => {
+   const tenant = context.tenantId.toLowerCase();
+   await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1::uuid::text,54))", [tenant]);
+   const authority = (await db.$client.query<{ allowed: boolean }>(`SELECT ${unlinkAllowed(1, 2)} AS allowed`, [input.actorMembershipId, input.jobId])).rows[0];
+   if (authority?.allowed !== true) throw new ExtraPersistenceError("UNLINK_FORBIDDEN");
+   await lockJob(db, tenant, input.jobId);
+   const binding = (await db.$client.query("SELECT j.provenance,t.job_track,t.environment FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2", [tenant, input.jobId])).rows[0];
+   if (!binding || binding.job_track !== "contractor" || binding.provenance !== "work_order" || binding.environment !== "synthetic_demo") throw new ExtraPersistenceError("NOT_FOUND");
+   const replay = await claim<ExtraUnlinkResult>(db, tenant, input.commandId, extraUnlinkCommandType, unlinkSemantic(input.jobId, input.linkId, input.commandId), requestHash, input.actorMembershipId);
+   if (replay) return replay;
+   const link = (await db.$client.query<{ duplicate_id: string; canonical_id: string }>("SELECT duplicate_id,canonical_id FROM app.extra_duplicate_link WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND kind='link'", [tenant, input.jobId, input.linkId])).rows[0];
+   if (!link) throw new ExtraPersistenceError("NOT_LINKED");
+   if ((await db.$client.query("SELECT 1 FROM app.extra_duplicate_link WHERE tenant_id=$1 AND job_id=$2 AND reverses_link_id=$3", [tenant, input.jobId, input.linkId])).rowCount) throw new ExtraPersistenceError("ALREADY_UNLINKED");
+   const revision = (await db.$client.query<{ revision: number }>("SELECT count(*)::int AS revision FROM app.extra_duplicate_link WHERE tenant_id=$1 AND job_id=$2", [tenant, input.jobId])).rows[0]!.revision;
+   if (revision !== input.expectedRevision) throw new ExtraPersistenceError("STALE_REVISION");
+   const unlinkId = randomUUID();
+   const written = await db.$client.query(`INSERT INTO app.extra_duplicate_link(tenant_id,id,job_id,duplicate_id,canonical_id,kind,reverses_link_id,reason_code,command_id,actor_membership_id)
+    SELECT l.tenant_id,$4,l.job_id,l.duplicate_id,l.canonical_id,'unlink',l.id,$5,$6,$7
+    FROM app.extra_duplicate_link l WHERE l.tenant_id=$1 AND l.job_id=$2 AND l.id=$3 AND l.kind='link' AND ${unlinkAllowed(7, 2)}
+    RETURNING id`, [tenant, input.jobId, input.linkId, unlinkId, input.reasonCode, input.commandId, input.actorMembershipId]);
+   if (!written.rowCount) throw new ExtraPersistenceError("UNLINK_FORBIDDEN");
+   await seam?.(db, { kind: "duplicate_unlink", commandId: input.commandId, jobId: input.jobId, variationId: link.duplicate_id, linkId: unlinkId, reversesLinkId: input.linkId });
+   await appendAuditBatch(db, [audit(tenant, input.actorMembershipId, "contractor.extra.duplicate_unlinked", link.duplicate_id, { command: input.commandId, job: input.jobId, duplicate: link.duplicate_id, canonical: link.canonical_id, link: unlinkId, reverses: input.linkId }, undefined, unlinkId)]);
+   const result = { unlinkId, linkId: input.linkId, variationId: link.duplicate_id, revision: input.expectedRevision + 1 };
+   await complete(db, tenant, input.commandId, result); return result;
+  }); } catch (error) { unlinkFailure(error); }
+ }
+}
+
+export type ExtraUnlinkResult = { unlinkId: string; linkId: string; variationId: string; revision: number };
+/** INTERIM permission names; the database owns all grant and job coverage rules. */
+function unlinkAllowed(actorPosition: number, jobPosition: number): string {
+ return `(app.contractor_job_allowed($${actorPosition}::uuid,'organisation.manage',$${jobPosition}::uuid) OR app.contractor_job_allowed($${actorPosition}::uuid,'extra.price',$${jobPosition}::uuid))`;
+}
+function unlinkSemantic(job: string, link: string, commandId: string): string {
+ return `extra-duplicate-unlink:${job}:${link}:${commandId}`;
+}
+function unlinkFailure(error: unknown): never {
+ if (error instanceof ExtraPersistenceError || error instanceof InvalidTenantContextError) throw error;
+ const e = error as { code?: string; message?: string };
+ const known = extraPersistenceErrorCodes.find(code => e?.message === code);
+ if (known) throw new ExtraPersistenceError(known);
+ if (e?.code === "23505") throw new ExtraPersistenceError("ALREADY_UNLINKED");
+ if (e?.code === "40001" || e?.code === "40P01") throw new ExtraPersistenceError("STALE_REVISION");
+ throw new ExtraPersistenceError("DATABASE_UNAVAILABLE");
 }

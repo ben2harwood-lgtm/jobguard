@@ -1,0 +1,26 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-4c
+
+ ❯ packages/core/src/enterprise-domain/boundaries.test.ts (5 tests | 1 failed) 1736ms
+   × new subdirectory production source is pure and directly reuses SH-1 kernels; money operators are bigint 679ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/core/src/enterprise-domain/boundaries.test.ts > new subdirectory production source is pure and directly reuses SH-1 kernels; money operators are bigint
+TypeError: .toMatch() expects to receive a string, but got undefined
+ ❯ packages/core/src/enterprise-domain/boundaries.test.ts:33:22
+     31|  const program=ts.createProgram(files.map(f=>`src/enterprise-domain/${…
+     32|  for(const f of files) {const path=`src/enterprise-domain/${f}.ts`,sou…
+     33|   expect(source).not.toMatch(/from\s+["'](?:node:|pg|postgres|@jobguar…
+       |                      ^
+     34|   expect(source).not.toMatch(/(?:function|const)\s+(?:calculateCumulat…
+     35|   const tree=program.getSourceFile(path)!;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 183 passed (184)
+   Start at  20:28:26
+   Duration  10.92s (transform 2.48s, setup 0ms, import 2.60s, tests 11.54s, environment 0ms)
+

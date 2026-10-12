@@ -27,7 +27,7 @@ export type ExtraLegacyRecord = z.infer<typeof extraRecordLegacyV1>;
 export type ExtraReadRecord = ExtraRecord | ExtraLegacyRecord;
 export const extraDuplicateLinkV1 = z.object({ version: z.literal("extra-duplicate-link.v1"), commandId: uuid, jobId: uuid, actorMembershipId: uuid, duplicateId: uuid, canonicalId: uuid }).strict();
 export const extraOrderLineLinkV1 = z.object({ version: z.literal("extra-order-line-link.v1"), commandId: uuid, jobId: uuid, actorMembershipId: uuid, variationId: uuid, workOrderId: uuid, revisionId: uuid, scopeItemId: uuid }).strict();
-export const extraPersistenceErrorCodes = ["NOT_FOUND", "INVALID_COMMAND", "COMMAND_CONFLICT", "INVALID_ORIGIN", "STALE_REVISION", "PROMPT_ORIGIN_HELD", "DUPLICATE_LINK_REFUSED", "EXTRA_EXPORTED", "ORDER_LINE_LINK_REFUSED", "DATABASE_UNAVAILABLE"] as const;
+export const extraPersistenceErrorCodes = ["NOT_FOUND", "INVALID_COMMAND", "COMMAND_CONFLICT", "INVALID_ORIGIN", "STALE_REVISION", "PROMPT_ORIGIN_HELD", "DUPLICATE_LINK_REFUSED", "EXTRA_EXPORTED", "ORDER_LINE_LINK_REFUSED", "DATABASE_UNAVAILABLE", "UNLINK_FORBIDDEN", "NOT_LINKED", "ALREADY_UNLINKED"] as const;
 export type ExtraPersistenceErrorCode = typeof extraPersistenceErrorCodes[number];
 export class ExtraPersistenceError extends Error {
  constructor(readonly code: ExtraPersistenceErrorCode) { super(code); this.name = "ExtraPersistenceError"; }
@@ -40,3 +40,16 @@ export function extraOriginHashV1(input: ExtraOriginHashInput): string {
  const encode = (v: string | boolean | null) => v === null ? "N;" : `S${new TextEncoder().encode(String(v)).length}:${String(v)};`;
  return sha256(`extra-origin-hash.v1\n${extraOriginHashFields.map(k => encode(input[k])).join("")}`);
 }
+
+export const extraUnlinkCommandType = "UnlinkDuplicate" as const;
+export const extraUnlinkReasonCodes = ["not_same_work", "wrong_pair", "linked_in_error"] as const;
+export const extraDuplicateUnlinkV1 = z.object({
+ version: z.literal("extra-duplicate-unlink.v1"), commandId: uuid, jobId: uuid, actorMembershipId: uuid, linkId: uuid,
+ expectedRevision: z.number().int().min(1).max(1_000_000), reasonCode: z.enum(extraUnlinkReasonCodes),
+}).strict();
+export type ExtraDuplicateUnlink = z.infer<typeof extraDuplicateUnlinkV1>;
+export const extraDuplicateLinksV1 = z.object({
+ version: z.literal("extra-duplicate-links.v1"), jobId: uuid, revision: z.number().int().nonnegative().safe(),
+ activeLinks: z.array(z.object({ linkId: uuid, duplicateId: uuid, canonicalId: uuid }).strict()),
+}).strict();
+export type ExtraDuplicateLinks = z.infer<typeof extraDuplicateLinksV1>;

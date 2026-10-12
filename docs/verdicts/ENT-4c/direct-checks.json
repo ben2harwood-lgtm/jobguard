@@ -1,0 +1,110 @@
+[
+  {
+    "command": [
+      "node",
+      "/Users/benharwood/Library/pnpm/.tools/pnpm/11.8.0/node_modules/pnpm/bin/pnpm.mjs",
+      "--pm-on-fail=error",
+      "typecheck"
+    ],
+    "exit": 1,
+    "log": "typecheck-local-pnpm.log"
+  },
+  {
+    "command": [
+      "node",
+      "tools/core-purity-lint.mjs"
+    ],
+    "exit": 0,
+    "log": "core-purity-lint.log"
+  },
+  {
+    "command": [
+      "node",
+      "tools/agent-lane-boundary-lint.mjs"
+    ],
+    "exit": 1,
+    "log": "agent-lane-boundary-lint.log"
+  },
+  {
+    "command": [
+      "node",
+      "tools/money-arithmetic-lint.mjs"
+    ],
+    "exit": 0,
+    "log": "money-arithmetic-lint.log"
+  },
+  {
+    "command": [
+      "node",
+      "tools/commercial-boundary-lint.mjs"
+    ],
+    "exit": 0,
+    "log": "commercial-boundary-lint.log"
+  },
+  {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "packages/config/tsconfig.json",
+      "--noEmit"
+    ],
+    "exit": 0,
+    "log": "config-typecheck-direct.log"
+  },
+  {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "packages/storage/tsconfig.json",
+      "--noEmit"
+    ],
+    "exit": 0,
+    "log": "storage-typecheck-direct.log"
+  },
+  {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "packages/ai/tsconfig.json",
+      "--noEmit"
+    ],
+    "exit": 0,
+    "log": "ai-typecheck-direct.log"
+  },
+  {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "packages/db/tsconfig.json",
+      "--noEmit"
+    ],
+    "exit": 0,
+    "log": "db-typecheck-direct.log"
+  },
+  {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "apps/api/tsconfig.json",
+      "--noEmit"
+    ],
+    "exit": 0,
+    "log": "api-typecheck-direct.log"
+  },
+  {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "apps/web/tsconfig.json",
+      "--noEmit"
+    ],
+    "exit": 0,
+    "log": "web-typecheck-direct.log"
+  }
+]

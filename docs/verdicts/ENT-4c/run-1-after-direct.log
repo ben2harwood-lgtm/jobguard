@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-4c
+
+
+ Test Files  2 passed (2)
+      Tests  36 passed (36)
+   Start at  20:27:48
+   Duration  851ms (transform 689ms, setup 0ms, import 844ms, tests 129ms, environment 1ms)
+

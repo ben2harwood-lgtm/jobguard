@@ -10,7 +10,7 @@ Persistence/repository/audit only, synthetic_demo. No HTTP command surface, perm
 
 `extra_event`: append-only lifecycle facts, server time and gapless sequence per variation, starting at 1 with logged (and only logged at 1). Kinds are ENT-4a's twelve enterpriseStates. The first event uses the origin receipt. An optional revision is bound to the same extra and job. Only logged is written by this repository; transition authority belongs to ENT-5. `variation.state` is untouched.
 
-`extra_duplicate_link`: immutable link/unlink rows, composite tenant/job keys to both extras and to the reversed link. Link rows have no reason/reversal; unlink rows require a reason token and their exact link, which can be reversed once. An active link has no reversing row. A duplicate can have one active parent; no extra can be both duplicate and canonical, preventing chains/cycles. A per-job advisory transaction lock serialises checks. An exported event on either endpoint refuses both kinds. Guards support unlink rows, but no unlink receipt type or repository function is shipped (Q9, no command named in plan).
+`extra_duplicate_link`: immutable link/unlink rows, composite tenant/job keys to both extras and to the reversed link. Link rows have no reason/reversal; unlink rows require a reason token and their exact link, which can be reversed once. An active link has no reversing row. A duplicate can have one active parent; no extra can be both duplicate and canonical, preventing chains/cycles. A per-job advisory transaction lock serialises checks. An exported event on either endpoint refuses both kinds. Guards support unlink rows; ENT-4c adds the un-link command receipt type, repository method and authority rule described in [extra-unlink-v1.md](extra-unlink-v1.md).
 
 `extra_order_line_link`: one link per extra and per instructing line; work order/revision/scope keys bind the line to the extra's job and order. The instructing revision number must be strictly later than the origin's order revision. Origin fields/hash remain unchanged. ENT-6 owes billed-once/export proof; ENT-7 owns post-export reconciliation.
 
@@ -29,7 +29,7 @@ Audit subject type `extra`. Allowed keys:
 | Event | references | hashes |
 |---|---|---|
 | contractor.extra.raised | command, job, extra, environment | origin |
-| contractor.extra.duplicate_linked / duplicate_unlinked | command, job, duplicate, canonical, link, environment | none |
+| contractor.extra.duplicate_linked / duplicate_unlinked | command, job, duplicate, canonical, link, environment; duplicate_unlinked also has reverses | none |
 | contractor.extra.order_line_linked | command, job, extra, link, work_order, revision, scope, environment | none |
 
 Every reference value is a UUID except the closed token `synthetic_demo` for environment. Hashes are lower-case SHA-256. Note/description/device/capture times never enter audit. Errors are closed codes, with no PostgreSQL detail or client free text.
@@ -75,6 +75,6 @@ Digest: 461292ec6f37346ad387cf7499f2e15f538b564d7f18adf86de26524fb358654. The sa
 
 B5 pricing basis: HELD — a column on a fingerprinted table would change approved evidence packs; it needs its own decision. No pricing-basis column or side table is built. SoR and excess references remain on `app.variation`; provenance remains on `app.extra_origin`. No column is added to any fingerprinted table.
 
-Q3: role-per-command authority needs founder ruling before ENT-3. Q4: first-route stamped-context bridge belongs to ENT-3; scanner/pinned files untouched. Q5: cached variation.state expansion/transition rules belong to ENT-5. Q6: prompt table/FK/provenance belongs to ENT-8a; jobguard_surfaced_confirmed refused on work-order jobs. Q9: unlink command/type/authority held because plan names no command. No fee assertions; D16, G1 and ENT-14 still gate release. SV-2 shares extra_origin; both origin suites must run on the merged result.
+Q3: role-per-command authority needs founder ruling before ENT-3. Q4: first-route stamped-context bridge belongs to ENT-3; scanner/pinned files untouched. Q5: cached variation.state expansion/transition rules belong to ENT-5. Q6: prompt table/FK/provenance belongs to ENT-8a; jobguard_surfaced_confirmed refused on work-order jobs. Q9: un-link command/type/authority are described in [extra-unlink-v1.md](extra-unlink-v1.md) (ENT-4c). No fee assertions; D16, G1 and ENT-14 still gate release. SV-2 shares extra_origin; both origin suites must run on the merged result.
 
 `readExtra` returns `extra-record.v1` with the unchanged strict SH-1 `extra-origin.v1` for command-backed origins. Legacy/backfilled small-builder rows return the leaf-owned strict `extra-record-legacy.v1` / `extra-origin-legacy.v1`: `legacy: true`, the stored provenance (`legacy_synthetic_capture` or `backfilled_synthetic_fixture`), explicit NULL command ID, nullable membership ID preserved from storage, `legacy_unrecorded` role, and the original small-builder/builder-logged identity and timestamps. No stored row is changed and no identity is fabricated. Duplicate-group ordering continues to require strict command-backed contractor records.

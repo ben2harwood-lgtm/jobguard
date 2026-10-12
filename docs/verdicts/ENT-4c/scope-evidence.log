@@ -1,0 +1,30 @@
+$ git diff --name-only 4f539892a056554a68b85f14dc7d3368b603e99b
+exit 0
+docs/contracts/extra-origin-persistence-v1.md
+packages/core/src/extra-persistence.ts
+packages/db/src/extra-repository.ts
+
+$ git status --porcelain
+exit 0
+ M docs/contracts/extra-origin-persistence-v1.md
+ M packages/core/src/extra-persistence.ts
+ M packages/db/src/extra-repository.ts
+?? docs/contracts/extra-unlink-v1.md
+?? docs/verdicts/ENT-4c/
+?? packages/core/src/enterprise-domain/duplicate-unlink-roles.test.ts
+?? packages/core/src/extra-unlink.test.ts
+?? packages/db/test/extra-unlink.integration.test.ts
+
+$ git diff --check
+exit 0
+
+$ git diff 4f539892a056554a68b85f14dc7d3368b603e99b -- packages/db/migrations/ apps/
+exit 0
+
+$ rg -n '[\x27\x22](owner|admin|supervisor|surveyor|commercial_manager|finance|operative|read_only|client_approver|connector)[\x27\x22]' packages/db/src/extra-repository.ts packages/core/src/extra-persistence.ts
+exit 1
+
+All changed/untracked files match the unchanged issued lane.
+No changed app or migration file.
+
+One-time added-line credential-shape check: no matches.
