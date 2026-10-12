@@ -273,13 +273,13 @@ describe("ENT-4a-ALIGN: who may record each kind of extra (founder, 11 Oct 2026)
   expectRefusal(input,"INVALID_TRANSITION","surveyor capture");
  });
 
- // Merged fee rule, unchanged by ENT-4a-ALIGN. Whether a site extra logged by a surveyor, or by a supervisor not named on the job, should carry a fee is an open founder question (F1). These rows record today's rule; they decide nothing.
+ // Fee rule for a site extra, by who logged it. Rows 3 to 5 follow the founder's answer of 12 Oct 2026 ('charge on both', card jobguard-fee-on-surveyor-extras-2026-10-12), built by FEE-BOTH-1: a surveyor's, and a supervisor's not named on the job, now count. Rows 1, 2 and 6 are as ENT-4a-ALIGN wrote them. Hand-written literals, never read from the implementation.
  it.each([
   {role:"operative",assigned:true,site:true,principal:{numerator:15000n,denominator:1n},fee:true},
   {role:"supervisor",assigned:true,site:true,principal:{numerator:15000n,denominator:1n},fee:true},
-  {role:"surveyor",assigned:true,site:false,principal:{numerator:0n,denominator:1n},fee:false},
-  {role:"surveyor",assigned:false,site:false,principal:{numerator:0n,denominator:1n},fee:false},
-  {role:"supervisor",assigned:false,site:false,principal:{numerator:0n,denominator:1n},fee:false},
+  {role:"surveyor",assigned:true,site:true,principal:{numerator:15000n,denominator:1n},fee:true},
+  {role:"surveyor",assigned:false,site:true,principal:{numerator:15000n,denominator:1n},fee:true},
+  {role:"supervisor",assigned:false,site:true,principal:{numerator:15000n,denominator:1n},fee:true},
   {role:"operative",assigned:false,site:false,principal:{numerator:0n,denominator:1n},fee:false},
  ] as const)("[AL-6] merged fee rule / $role named=$assigned", ({role,assigned,site,principal,fee}) => {
   const e = extra();
