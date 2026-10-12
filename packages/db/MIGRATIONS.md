@@ -792,3 +792,46 @@ Runtime UPDATE/DELETE remains denied by 0018/0034 (case) and 0106 (feed), SQLSTA
 After this pin a raw writer can still back-date by as long as it keeps its own transaction open, because the stored time is the transaction's start. That is bounded, needs raw database access, and is not closed by this order.
 
 Forward fix: never drop or rewrite history; correct by a later reviewed migration. Prior product paths omit these times and retain the same transaction clock. `extra-origin-upgrade.integration.test.ts` must still pass unedited for this change: 0127 only CREATES a new function and preserves every earlier definition. Fresh/upgrade, privilege and F18/F19 coverage is in `test/recovery-timing-pin.integration.test.ts`; database/browser execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). See `docs/contracts/recovery-timing-pin-v1.md` and the builder receipt. Independent RED-lane reviews and acceptance remain pending.
+
+## 0128 — SV-2 shadow persistence and isolation
+
+Renumbered from 0100 to 0118 on 11 October and from 0118 to 0128 on 12 October under Ben's 5 October merge-ahead ruling. 0119 (CH-7), 0120 (ENT-10a), 0121 (ENT-10b), 0122 (ENT-4b) and everything lower have merged; 0123 (CH-7-F17-BEFORE-OPEN), 0124 (PRACTICE-FACTS-1), 0125 (ENT-10d) and 0126 (ENT-3a) are reserved and 0127 (STORED-TIMES-1, PR #142) precedes it in this branch's base, so 0128 is the next free number. The SQL bytes are unchanged by both renumberings (sha256 recorded in the refresh receipt); the runner lists it last.
+
+Expand-only after 0094. Adds eight restricted shadow tables and one append-only
+variation-withdrawal fact, qualified evidence/version/hash/receive-time identity,
+small-builder catch-source enforcement, bounded reveal/disclosure/emergency read
+routines, and a private audit implementation using the existing serialized chain.
+No backfill: SH-1's completed origins and source labels remain unchanged. The
+existing application capture path starts issuing `LogBuilderExtra`; the legacy
+synthetic insert compatibility remains for earlier demos and fixtures.
+
+Fresh superuser installs create the two NOLOGIN shadow roles idempotently. The
+non-superuser Neon bootstrap creates/checks them before migration; migration owner
+remains NOCREATEROLE. PostgreSQL 16 gives that CREATEROLE bootstrap owner an
+automatic ADMIN-only membership in each role it creates (no INHERIT, no SET,
+granted by the bootstrap superuser). The owner cannot revoke it, so it stays; the
+bootstrap accepts exactly that shape, fails closed on any other holder, and the
+support route checks `USAGE` (not `MEMBER`) so the leftover membership grants no
+support authority. No support holder is appointed. Because the schema `app` is
+now usable by these two roles, 0128 revokes PUBLIC EXECUTE from the four older
+SECURITY DEFINER routines that never had it revoked (`advance_final_account_draft`,
+`invalidate_stale_final_account_authorizations`, `reserve_customer_invoice_number`,
+`issue_practice_customer_invoice`); `jobguard_runtime` keeps its explicit grants.
+Runtime has no shadow-table privilege; catch-source probes
+are denied before PostgreSQL's RLS-bypassing FK checks. Emergency reads and every
+disclosure append audit atomically. New facts reject UPDATE/DELETE/TRUNCATE;
+signal source fields and disclosure provenance are immutable/monotonic.
+
+The reveal routine fails closed when SV-4's lock relation is absent. It checks
+only a matching tenant/job lock when present. SV-4 owes positive reveal tests and
+must acquire the job lock before recording the lock/audit; SV-5 adds exact locked
+line/disposition bindings. Neither dependency is simulated with a new lock table.
+
+Forward fix: disable application use of affected routines first, retain evidence,
+origin, disclosure and audit history, then append a reviewed corrective migration.
+Do not down-migrate populated history or weaken the probe barrier. A migration
+failure rolls its SQL transaction back, leaving the predecessor schema intact.
+Before acceptance CI must execute real PostgreSQL fresh/upgrade, least-privilege
+catalog, support disclosure, rollback, immutable metadata, source-FK/probe and
+non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
+and browser regressions. Local sandbox initialization errors are not DB passes.
