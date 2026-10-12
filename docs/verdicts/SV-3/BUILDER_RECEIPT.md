@@ -311,3 +311,102 @@ Intended conventional commit message: `/private/tmp/jg-msg-sv-3.txt`. Dispatcher
 **Builder receipt only — not independently verified, not accepted.**
 
 Cleanup completed: removed generated `dist`, `.next`, `.turbo`, local Vitest caches and TypeScript build-info files; no `.pnpm-store`, build output or `test-results` remains in the worktree. Installed dependencies and all tracked files retained. Cleanup and final `git diff --check` exited 0.
+
+
+## Mac verification (12 Oct)
+
+Run by the JobGuard dispatcher's Mac helper (Claude Sonnet 5.5), 12 Oct 2026, in the worktree `W` = `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-3`, branch `codex/sandbox/sv-3`. This is the first time any SV-3 database, API-with-database or browser test ran. It is a verification record by a helper, not a review and not an acceptance. `HS` = `~/.local/bin/heavy-slot <label>`; every vitest run used `--maxWorkers=2`, one run at a time, memory 66-71% free before each.
+
+### Start and merges
+
+Start HEAD `08d3299` (clean: `git status --short` printed nothing). `git fetch origin` (exit 0). `git merge origin/codex/sandbox/sv-4` (head `1965aea`, test-fixture fixes only) made merge commit `53d38ce` with NO conflicts (ort; 20 files, all append-only or SV-4-owned; `migrate.ts` order is 0127, 0128, 0129 SV-3, 0130 SV-4; both lane lines `sv-3` and `sv-4` present). `git merge origin/main` (`17c82ee`): "Already up to date". No migration renumbered. dist rebuilt first (each alone through HS, from W): `pnpm --filter @jobguard/core build`, `@jobguard/db`, `@jobguard/storage`, `@jobguard/config`, `@jobguard/ai` all exit 0. Later, because two tests need them: `pnpm --filter @jobguard/api build` (`nest build`) exit 0 and `pnpm --filter @jobguard/web build` (`next build`) exit 0, each alone. PostgreSQL started without needing `hydrate-symlinks.js`.
+
+### Fixture fixes (test files only; no assertion deleted or weakened, no deadline changed, no product or merged/SV-4 file touched)
+
+1. `packages/db/test/shadow-detection.integration.test.ts` (test "C4: firing catalog is migration-owned ..."), line 105. Failure: `expected [ { grantees: [ 'jobguard_shadow' ], ...} ] to deeply equal` received `grantees: "{jobguard_shadow}"`. Cause: the pg driver does not parse a `name[]` array. Before: `SELECT ARRAY(SELECT pg_get_userbyid(a.grantee) FROM aclexplode(...` After: `SELECT ARRAY(SELECT pg_get_userbyid(a.grantee)::text FROM aclexplode(...`. The expectation (`grantees:["jobguard_shadow"]`, proconfig) is unchanged.
+2. `packages/db/test/shadow-isolation-query-log.integration.test.ts` (three set-up defects, found one after another):
+   a. Practice session. Failure: `session fixture requires migration owner` (SQLSTATE 42501, from `app.seed_saved_v1_sample()` in migration 0109: the trigger on `control_plane.practice_session` refuses a direct insert by any role but the migration owner). Before: `await admin.query("INSERT INTO control_plane.practice_session(token_digest,expires_at) VALUES($1,'2099-10-01')",[digest]);` After: `await admin.query("SELECT app.issue_practice_session($1)",[digest]);` (the product's own SECURITY DEFINER routine, as SV-4's merged fixture does; it also creates three practice jobs and the saved v1 sample for that session, and the session expiry is the routine's default 7 days; no guard is switched off). SEE THE PERMISSION REFUSAL BELOW: my first attempt at this fix was refused.
+   b. Failure: `new row for relation "evidence_object" violates check constraint "evidence_object_kind_ck"` (an original evidence object needs `upload_id`, so its `evidence_upload` parent row). Added one `INSERT INTO app.evidence_upload(...)` (same shape as the merged application test's) before the unchanged `evidence_object` insert, which now also names `upload_id`.
+   c. Failure: `inconsistent types deduced for parameter $1` (text versus uuid) in my own new upload insert: `$1` and `$1::text` in one statement. Used a fourth parameter for `object_key`.
+3. `apps/api/src/shadow-isolation.application.test.ts`:
+   a. Same practice-session defect as 2a, same fix (`SELECT app.issue_practice_session($1)`); the `fixed` created_at is no longer applied to the session row only (the zero and many databases are clones of one template, so they still share it).
+   b. Same `$1`/`$1::text` (evidence_upload) and `$3`/`$3::text` (evidence_object) parameter conflicts in the 25-row set-up: separate parameters for `object_key`.
+   c. DEPENDENCY INJECTION. The test imported `AppModule` from `./app.module.js` (source). Nest's constructor injection here relies on tsc's `emitDecoratorMetadata`, which vitest's transform does not emit, so every controller's `pool` was `undefined` and every Nest route threw `TypeError: Cannot read properties of undefined` (500) in BOTH replays: the Nest half of the "byte-identical" comparison was vacuous. Before: `import { AppModule } from "./app.module.js";` After: `const {AppModule}=await import(new URL("../dist/app.module.js",import.meta.url).href);` (the compiled application, built with `pnpm --filter @jobguard/api build`). With the real application the Nest routes return their real answers (403/404/200 etc.).
+   d. Statement log capture. `onLog` delivers raw stderr chunks cut anywhere and the log prefix contains the database name (`%d`), so the zero and many statement lists differed by chunking and by the prefix, not by content. Added a small helper `runtimeStatements(logStart, database)` that rebuilds log entries from the joined text (an entry starts at a `LOG:` line; `DETAIL` parameter lines and continuation lines stay with it) and makes the database name in the prefix neutral. Statement text AND bound parameters are still compared; used in both places that built the list.
+   e. Mutation scenario set-up: `UPDATE app.job SET ... baseline_quote_version_id=$2` violated `job_baseline_shape`; now also sets `accepted_net_value_pence=100000,fee_policy_version='reference_fee_policy_v3'` (the constraint's required companions; 100000 is the fixture's net). The signal evidence object needed its `evidence_upload` parent and `upload_id` (same as 2b). Proof completion failed with `PROOF_INVALID` because the lock fixture's scope item has no `app.scope_progress` row (review confirmation creates it): added `INSERT INTO app.scope_progress(...) ... ON CONFLICT DO NOTHING` inside the existing fixture transaction.
+   f. JUDGEMENT CALL (veto it if you disagree): the all-public-tables dump compared `app.watchdog_command_identity.claimed_xact`, which stores the cluster-wide PostgreSQL transaction number; the zero replay ran first (902-917) and the many replay later (941-956), a constant offset caused by order, not by signals. That one column is now left out of that one table's dump (`(to_jsonb(t)-'claimed_xact')::text`); every other byte of every row of every table is still compared and this was the ONLY differing table of 188.
+4. `apps/web/e2e/SV-3.spec.ts`:
+   a. Same four `$1`/`$1::text` and `$3`/`$3::text` parameter conflicts in the two evidence set-ups (two uploads, two objects), same fix.
+   b. Both tests started with `openQuote(page); startWatchdogJob(page)`: the merged `startWatchdogJob` then waited for "Preview immutable quote" to enable, which it never did (unit rates not entered; four failures at `helpers/capture-journey.ts:55`). Now `openLiveWatchdogJob(page)` (the merged helper CH-2 uses: scope with five lines, then quote, then live). Import changed accordingly.
+   c. JUDGEMENT CALL (veto it if you disagree): in test Q a fresh load of `/jobs/<id>` shows the scope summary with a "Price the work" button, not the quote editor, so `await expect(page.locator('.quote-editor')).toBeVisible()` never held. The assertion is unchanged; a click on "Price the work" (as `startWatchdogJob` does) now comes first.
+
+### Permission refusal (reported as ordered)
+
+While doing fix 2a I first tried to edit `packages/db/test/shadow-isolation-query-log.integration.test.ts` replacing the direct `practice_session` insert with a `BEGIN; SET LOCAL session_replication_role='replica'; INSERT ...; COMMIT` block (the trigger switched off for that transaction). The Mac's permission check refused that Edit: "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Security Test Removal]." I did NOT repeat or route round that edit. I made a different change instead, which switches no guard off: the product's own `app.issue_practice_session` routine (2a/3a). The dispatcher should confirm that this substitute is acceptable. No other command or edit was refused.
+
+### Product defects / wrong expectations found (NOT fixed, per the order)
+
+P1. Wall-clock `retrievedAt` in the prevention-checks GET. `packages/db/src/prevention-check-repository.ts:45` sets `retrievedAt` from `SELECT clock_timestamp()`; both `GET /jobs/{id}/prevention-checks` (Nest) and `GET /api/jobs/{id}/prevention-checks` (Next) return it, and the page shows "Retrieved: <time>". Two replays can never be byte-identical, so SV-3's "byte-identical" expectation is wrong for this field (the mutation test already freezes the clock in its disposable databases; the GET replays do not). It fails:
+   - `apps/api/src/shadow-isolation.application.test.ts` > "replays every OpenAPI builder GET and Next job GET with byte-identical status, headers and body": `AssertionError: expected { output: [ { …(4) }, …(72) ], …(1) } to deeply equal { output: [ { …(4) }, …(72) ], …(1) }`. Of 73 responses exactly TWO differ (the two routes above), only in body `retrievedAt` (e.g. `2026-10-12T17:35:11.604Z` versus `...10.392Z`) and the `etag` derived from it. All statement lists (text and parameters) are equal.
+   - `apps/web/e2e/SV-3.spec.ts` test Q, both projects: `Error: responseShape`: the visible text differs only in `Source: Builder's saved paying-party record · Retrieved: <time>`, and one response body differs only in `retrievedAt` (decoded). `cacheHeaders` (etag) is the same cause.
+   Diagnostic only (changed temporarily, run, then reverted byte for byte; not committed): with the `responseShape` and `cacheHeaders` channels skipped, all four browser tests passed (18.6 s), so no other browser surface channel differs with 25 held signals. The earlier "Test timeout of 30000ms exceeded" line in the failing runs is teardown after the failed assertion, not slowness. The fix choice (freeze the clock in the zero/many databases as the mutation test does, or mask that one field) belongs to the builder/dispatcher.
+No other product defect was found. Nothing in migration 0129, the repository, the routine or core logic failed any database test.
+
+### One-name diff on SV-2's catalogue test (verbatim, `git diff origin/main..HEAD -- packages/db/test/shadow-catalog.integration.test.ts`; numstat `1 1`)
+
+```diff
+@@ -74,7 +74,7 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
+-  const explicit:Record<string,string[]>={jobguard_shadow:["record_shadow_disclosure"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
++  const explicit:Record<string,string[]>={jobguard_shadow:["record_shadow_disclosure","surface_shadow_signal_early"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
+```
+
+### Commands as run (working directory `W` unless a path is given; pnpm 10.28.1)
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `HS pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/shadow-detection.integration.test.ts` (first) | 1 | 13 passed, 1 failed (fix 1) |
+| 2 | same, after fix 1 | 0 | 1 file, 14 passed |
+| 3 | `... test/shadow-isolation-query-log.integration.test.ts` (first) | 1 | suite failed in beforeAll (2a), 1 skipped |
+| 4 | same, after 2a | 1 | `Cannot find module .../apps/api/dist/workspace/application.js` (dist not built yet) |
+| 5 | same, after `pnpm --filter @jobguard/api build` | 1 | `evidence_object_kind_ck` (2b) |
+| 6 | same, after 2b | 1 | `inconsistent types deduced for parameter $1` (2c) |
+| 7 | same, after 2c | 0 | 1 file, 1 passed |
+| 8 | `... test/shadow-catalog.integration.test.ts test/tenancy.integration.test.ts test/small-builder-origin.integration.test.ts` | 0 | 3 files, 25 passed |
+| 9 | `... test/final-account-lock.integration.test.ts` | 0 | 14 passed |
+| 10 | `... test/final-account-lock-invoice.integration.test.ts` | 0 | 10 passed |
+| 11 | `... test/final-account-lock-reveal.integration.test.ts` | 0 | 2 passed |
+| 12 | `... test/final-account-lock-upgrade.integration.test.ts` | 0 | 1 passed |
+| 13 | `... test/shared-money-origin.integration.test.ts test/recovery-timing-pin.integration.test.ts test/extra-origin-upgrade.integration.test.ts` | 0 | 3 files, 40 passed |
+| 14 | `HS pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 --reporter=verbose src/observation.test.ts src/shadow-detection.test.ts` | 0 | 2 files, 15 passed |
+| 15 | `HS pnpm --filter @jobguard/ai exec vitest run ... src/shadow-proposal.test.ts src/shadow-evaluation.test.ts` | 0 | 2 files, 8 passed |
+| 16 | `HS pnpm --filter @jobguard/api exec vitest run ... src/shadow-detection.worker.test.ts src/auth/context-boundary.test.ts` (scanner run, not edited) | 0 | 2 files, 152 passed (7 worker + 145 scanner) |
+| 17 | `HS pnpm --filter @jobguard/core exec vitest run ... src/final-account-lock.test.ts src/shadow-domain/lock.test.ts` (SV-4, combined branch) | 0 | 2 files, 9 passed |
+| 18 | `HS pnpm --filter @jobguard/api exec vitest run ... src/final-account-lock.application.test.ts src/final-account-lock.controller.test.ts src/final-account-lock.isolation.test.ts` (SV-4, combined branch) | 0 | 3 files, 22 passed |
+| 19 | `HS pnpm --filter @jobguard/api exec vitest run ... src/shadow-isolation.application.test.ts` (first; needs `apps/web/.next`, built alone before) | 1 | suite failed in beforeAll (3a), 15 skipped |
+| 20 | same, after 3a and 3b | 1 | 13 passed, 2 failed (HTTP replay unequal: Nest routes all 500 because of 3c, `retrievedAt`, log chunking; mutation: `job_baseline_shape`) |
+| 20b | same, after 3c, a first version of 3d and the 3e `job_baseline_shape` fix | 1 | 13 passed, 2 failed (HTTP replay unequal: `retrievedAt` and log chunking; mutation: `evidence_object_kind_ck`) |
+| 21 | same, after the final 3d helper and the 3e evidence parent | 1 | 13 passed, 2 failed (HTTP replay: `retrievedAt` only; mutation: `PROOF_INVALID`) |
+| 22 | same, `-t "successful mutations"`, after scope_progress | 1 | 1 failed: `publicRows` differs, only `watchdog_command_identity.claimed_xact` |
+| 23 | same, whole file, after 3f (final) | 1 | 1 file, 14 passed, 1 failed (P1: HTTP replay, `retrievedAt`) |
+| 24 | `HS pnpm typecheck` (twice; second after the last test edits) | 0 | 7 of 7 tasks |
+| 25 | `LANE_BASE_REF=origin/main HS pnpm lint` | 1 | core purity passed (135 TypeScript files), then `Lane boundary FAILED: Lane sv-3 cannot edit:` followed by SV-4's files only (EXPECTED for a branch carrying two lanes): `apps/api/openapi.json`, `app.module.ts`, `final-account-lock.*` (application, contracts, controller, tests), `workspace/application.ts`, `workspace/index.ts`, the three `apps/web/app/api/jobs/[id]/final-account/*/route.ts`, `apps/web/app/ui/customer-invoices.tsx`, `final-account-lock.tsx`, `job-final-account.tsx`, `apps/web/e2e/SV-4.spec.ts` and its helper, `docs/contracts/final-account-lock-v1.md`, `docs/verdicts/SV-4/*`, `packages/core/src/final-account-lock*.ts`, `shadow-domain/lock*.ts`, `watchdog.ts`, `packages/db/migrations/0130_final_account_lock.sql`, `final-account-lock-repository.ts`, `variation-repository.ts` and the four `final-account-lock*.integration.test.ts` files |
+| 26 | `node tools/core-purity-lint.mjs`; `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` (each with `LANE_BASE_REF=origin/main`) | 0 each | passed |
+| 27 | `LANE_BASE_REF=origin/main HS pnpm turbo run lint` | 0 | 7 of 7 tasks |
+| 28 | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1 | same SV-4-only list as row 25 (expected) |
+| 29 | `HS pnpm openapi:check` | 0 | passed |
+| 30 | `cd apps/web; CI=1 PLAYWRIGHT_SKIP_BROWSER_GC=1 HS pnpm exec playwright test --config ~/.local/share/full-steam/jg-runs/pw-local-channel-sv-3.config.ts --workers=1 --project=mobile-360 --project=desktop e2e/SV-3.spec.ts` (first) | 1 | 4 failed (4b: Preview immutable quote never enabled) |
+| 31 | same, after 4a and 4b | 1 | 2 passed (I, both projects), 2 failed (Q: `.quote-editor` not visible, 4c) |
+| 32 | same, after 4c (final) | 1 | 2 passed, 2 failed (Q both projects: P1 `responseShape`) |
+| 33 | same, two temporary diagnostics (reverted, not committed) | 1, then 0 | the second, with `responseShape` and `cacheHeaders` skipped: 4 passed |
+
+The wrapper `~/.local/share/full-steam/jg-runs/pw-local-channel-sv-3.config.ts` is out of repo: a copy of the SV-4 wrapper pointing at this worktree (`channel: "chromium"`). `CI=1` makes the repo config use `next start` on the production build.
+
+### Done-when lines now backed by an executed run
+
+DW3 database half (query-log, row 7): PASS. DW4 J/P, DW5 I (database half), DW6, atomic rollback, C4 catalogue, C5 boundary, reader, audit contract, 0129 own-step upgrade proof with its rolled-back controls and the terms-gated early alert (row 2): PASS. DW5 browser half, test I, both projects (row 32): PASS. Catalogue, tenancy, small-builder-origin (SV-2), shared-money-origin (SH-1), extra-origin-upgrade (ENT-4b), recovery-timing-pin and the four SV-4 database files (rows 8-13): PASS. DW3 application proof of Test Q: mutation, export, notification, telemetry, cache, count, badge and error channels PASS (row 23); the GET replay and the browser Q test are RED only for P1.
+
+### NOT RUN
+
+`pnpm test:db` and `pnpm test:migrations` as aggregates (the files named above were run singly; `test/demo-bootstrap.integration.test.ts` and `test/UIWIRE-12.integration.test.ts` were NOT run); the whole API vitest suite; the full-repository `pnpm build` (packages, api and web were built singly); `apps/web/e2e/SV-4.spec.ts` and every retained browser regression; live-model run (separate release item); anything that needs a real provider, real data or a deployment.
+
+Mac verification record only — not an independent review, not acceptance.

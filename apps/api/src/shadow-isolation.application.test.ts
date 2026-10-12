@@ -9,7 +9,8 @@ import { Pool, type PoolClient } from "pg";
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, migrate } from "@jobguard/db";
-import { AppModule } from "./app.module.js";
+// The compiled application: dependency injection here relies on tsc's emitDecoratorMetadata, which vitest's transform does not emit (a source import leaves every controller's pool undefined).
+const {AppModule}=await import(new URL("../dist/app.module.js",import.meta.url).href);
 const requireDb=createRequire(new URL("../../../packages/db/package.json",import.meta.url));
 const EmbeddedPostgres=requireDb("embedded-postgres").default;
 const {withTenant}=await import(new URL("../../../packages/db/src/tenant-context.ts",import.meta.url).href);
@@ -26,6 +27,8 @@ async function nextRoutes(path:string,prefix="/api",method:"GET"|"POST"="GET"):P
  else if(e.name==="route.ts" && new RegExp(`export\\s+(?:(?:async\\s+)?function\\s+${method}\\b|const\\s+${method}\\b)`,"u").test(await readFile(join(path,e.name),"utf8")))routes.push(prefix);
 }return routes;}
 function pathFor(route:string){return route.replace(/\{(?:id|jobId)\}|\[(?:id|jobId)\]/gu,jobId).replace(/\{[^}]+\}|\[[^\]]+\]/gu,"10000000-0000-4000-8000-000000000099");}
+// PostgreSQL log entries start at a "LOG:" line; DETAIL (bound parameters) and continuation lines belong to the entry before them. onLog delivers raw stderr chunks cut anywhere, so entries are rebuilt from the joined text, and the database name in the log prefix (which differs by construction between the zero and many databases) is made neutral before the lists are compared.
+function runtimeStatements(logStart:number,database:string){return statementsLog.slice(logStart).join("").split(/\n(?=SV3:[^\n]*?: LOG:  )/u).filter(s=>s.includes(`SV3:sv3_isolation_runtime:${database}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,"").replaceAll(`SV3:sv3_isolation_runtime:${database}:`,"SV3:sv3_isolation_runtime:DB:"));}
 function stableHeaders(headers:Record<string,string>){return Object.fromEntries(Object.entries(headers).filter(([k])=>k!=="date").sort(([a],[b])=>a.localeCompare(b)));}
 async function startNext(database:string):Promise<{child:ChildProcess;base:string}>{
  const httpPort=await freePort(31000,500),base=`http://127.0.0.1:${httpPort}`;
@@ -44,14 +47,15 @@ beforeAll(async()=>{
  await p.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[DEMO_TENANT_ID]);await p.query("INSERT INTO identity.identity_user(id) VALUES($1)",[DEMO_IDENTITY_USER_ID]);
  await p.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional SV-3 builder')",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
  await p.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
- await p.query("INSERT INTO control_plane.practice_session(token_digest,created_at,expires_at) VALUES($1,$2,'2099-10-01')",[digest,fixed]);
+ // Issue the session through the product's own SECURITY DEFINER routine: the seed trigger on practice_session refuses a direct insert by any other role (no guard is switched off).
+ await p.query("SELECT app.issue_practice_session($1)",[digest]);
  await p.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,created_at,updated_at) VALUES($1,$2,'Fictional SV-3 isolation job','live',$3,'home',$4,$4)",[jobId,DEMO_TENANT_ID,digest,fixed]);
  await p.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state,created_at) VALUES($1,$2,$3,'confirmed',$4)",[baselineScopeId,DEMO_TENANT_ID,jobId,fixed]);
  await withTenant(p,testTenantContext(DEMO_TENANT_ID),async (db:{$client:PoolClient})=>{
   for(let n=0;n<25;n++){
    const evidenceId=`20000000-0000-4000-8000-${String(100+n).padStart(12,"0")}`,uploadId=`30000000-0000-4000-8000-${String(100+n).padStart(12,"0")}`;
-   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$1::text,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[uploadId,DEMO_TENANT_ID,jobId]);
-   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo',$3::text,'synthetic-v1',repeat('a',64),100,'image/png','standard_evidence',$5,$5)",[evidenceId,DEMO_TENANT_ID,uploadId,jobId,fixed]);
+   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[uploadId,DEMO_TENANT_ID,jobId,uploadId]);
+   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo',$6,'synthetic-v1',repeat('a',64),100,'image/png','standard_evidence',$5,$5)",[evidenceId,DEMO_TENANT_ID,uploadId,jobId,fixed,uploadId]);
   }
  });
  }finally{await closeTestPools(p)}
@@ -87,7 +91,7 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
      output.push({route:path,status:response.status,headers:stableHeaders(Object.fromEntries(response.headers)),body:Buffer.from(await response.arrayBuffer()).toString("base64")});
     }
     await new Promise<void>(resolve=>setTimeout(resolve,25));
-    const statements=statementsLog.slice(logStart).filter(s=>s.includes(`SV3:sv3_isolation_runtime:${database}:`) && /(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,""));
+    const statements=runtimeStatements(logStart,database);
     expect(statements.length).toBeGreaterThan(0);
     expect(statements.join("\n")).not.toMatch(/\b(?:shadow_commercial_signal|shadow_signal_\w+|shadow_reconciliation_run|shadow_disclosure_event|shadow_break_glass_access|shadow_must_surface_firing|reveal_shadow_signals|record_shadow_disclosure|surface_shadow_signal_early)\b/u);
     return {output,statements};
@@ -132,14 +136,18 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
  const {createWorkspaceApplication}=await import("./workspace/application.js"),{ActionExecutor}=await import(new URL("../../../packages/db/src/outbox.ts",import.meta.url).href);
  // A fresh public fixture and two exact clones. No prior HTTP test can change the compared history.
  const initial=pool("postgres","sv3_isolation_zero"),a=await seedAccount(initial,DEMO_TENANT_ID,100000);
- const signalEvidence=randomUUID(),queued=randomUUID(),authority=randomUUID(),approval=randomUUID(),decision=randomUUID(),artifact="Fictional approved notification";
+ const signalEvidence=randomUUID(),signalUpload=randomUUID(),queued=randomUUID(),authority=randomUUID(),approval=randomUUID(),decision=randomUUID(),artifact="Fictional approved notification";
  try{await withTenant(initial,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
   await db.$client.query("SET LOCAL session_replication_role='replica'"); // Fixture ownership binding only, as in SV-4's exported fixture.
-  await db.$client.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='home',baseline_quote_version_id=$2 WHERE tenant_id=$3 AND id=$4",[digest,a.baselineId,DEMO_TENANT_ID,a.jobId]);
+  await db.$client.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='home',baseline_quote_version_id=$2,accepted_net_value_pence=100000,fee_policy_version='reference_fee_policy_v3' WHERE tenant_id=$3 AND id=$4",[digest,a.baselineId,DEMO_TENANT_ID,a.jobId]); // job_baseline_shape needs the accepted value and fee policy beside the baseline id
   await db.$client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING",[DEMO_TENANT_ID,a.jobId]);
+  // proof completion reads the scope item's progress row, which review confirmation creates and the exported lock fixture does not.
+  await db.$client.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID,a.jobId,a.scopeItemId]);
  });
  await withTenant(initial,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
-  await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence',$5,$5)",[signalEvidence,DEMO_TENANT_ID,a.jobId,a.scopeItemId,fixed]);
+  // An original evidence object needs its upload parent row (evidence_object_kind_ck, evidence_object_upload_fk).
+  await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[signalUpload,DEMO_TENANT_ID,a.jobId,signalUpload]);
+  await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$6,$3,$4,'original','photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence',$5,$5)",[signalEvidence,DEMO_TENANT_ID,a.jobId,a.scopeItemId,fixed,signalUpload]);
   await db.$client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'synthetic_notification')",[decision,DEMO_TENANT_ID,a.jobId]);
   await db.$client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[approval,DEMO_TENANT_ID,decision,DEMO_MEMBERSHIP_ID]);
   const hash=createHash("sha256").update(artifact).digest("hex");
@@ -232,11 +240,14 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    }
    for(const table of ["action_outbox","action_attempt"])trace.outbox.push({table,rows:(await inspect.query(`SELECT row_to_json(t)::text bytes FROM app.${table} t ORDER BY row_to_json(t)::text`)).rows});
    const tables=(await inspect.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','infrastructure') AND tablename NOT LIKE 'shadow_%' ORDER BY schemaname,tablename")).rows;
-   for(const table of tables){const name=`"${table.schemaname}"."${table.tablename}"`;trace.publicRows.push({table:name,rows:(await inspect.query(`SELECT row_to_json(t)::text bytes FROM ${name} t ORDER BY row_to_json(t)::text`)).rows})}
+   for(const table of tables){const name=`"${table.schemaname}"."${table.tablename}"`;
+    // claimed_xact stores the cluster-wide PostgreSQL transaction number, which differs between any two replays in one cluster whatever the signals; every other byte of every row is compared.
+    const bytes=table.tablename==="watchdog_command_identity"?"(to_jsonb(t)-'claimed_xact')::text":"row_to_json(t)::text";
+    trace.publicRows.push({table:name,rows:(await inspect.query(`SELECT ${bytes} bytes FROM ${name} t ORDER BY 1`)).rows})}
    // Analytics has no separate persisted or network emitter in the current builder composition; public facts cover its inputs.
    trace.analytics.push(relevance);
    await new Promise<void>(resolve=>setTimeout(resolve,25));
-   trace.statements=statementsLog.slice(logStart).filter(s=>s.includes(`SV3:sv3_isolation_runtime:${database}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,""));
+   trace.statements=runtimeStatements(logStart,database);
    expect(trace.statements.length).toBeGreaterThan(0);expect(trace.statements.join("\n")).not.toMatch(/\b(?:shadow_\w+|surface_shadow_signal_early|record_shadow_disclosure)\b/u);
    return trace;
   }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await nest?.close();await closeTestPools(runtime,inspect);uuidMock.mockRestore();syncBuiltinESMExports();expect(crypto.randomUUID).toBe(originalUuid);vi.useRealTimers()}

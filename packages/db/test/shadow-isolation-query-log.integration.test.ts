@@ -21,7 +21,9 @@ beforeAll(async()=>{
  await admin.query("ALTER ROLE sv3_log_runtime SET log_statement='all'");runtime=pool("sv3_log_runtime");shadow=pool("sv3_log_shadow");
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[DEMO_TENANT_ID]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[DEMO_IDENTITY_USER_ID]);
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional query-log builder')",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
- const digest=createHash("sha256").update(session).digest("hex");await admin.query("INSERT INTO control_plane.practice_session(token_digest,expires_at) VALUES($1,'2099-10-01')",[digest]);
+ const digest=createHash("sha256").update(session).digest("hex");
+ // Issue the session through the product's own SECURITY DEFINER routine: the seed trigger on practice_session refuses a direct insert by any other role (no guard is switched off).
+ await admin.query("SELECT app.issue_practice_session($1)",[digest]);
  await admin.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional isolation job','live',$3,'home')",[J,DEMO_TENANT_ID,digest]);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,shadow,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true})});
@@ -38,7 +40,11 @@ describe("SV-3 structural timing and runtime query logging",()=>{
    expect(statements.length).toBeGreaterThan(0);expect(statements.join("\n")).not.toMatch(/\b(?:shadow_commercial_signal|shadow_signal_\w+|shadow_reconciliation_run|shadow_disclosure_event|shadow_break_glass_access|shadow_must_surface_firing|reveal_shadow_signals|record_shadow_disclosure|surface_shadow_signal_early)\b/u);
    return{out,statements};
   }
-  const evidence=randomUUID();await withTenant(admin,testTenantContext(DEMO_TENANT_ID),db=>db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,'original','completion_photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,DEMO_TENANT_ID,J]));
+  const evidence=randomUUID(),upload=randomUUID();await withTenant(admin,testTenantContext(DEMO_TENANT_ID),async db=>{
+   // An original evidence object needs its upload parent row (evidence_object_kind_ck, evidence_object_upload_fk).
+   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[upload,DEMO_TENANT_ID,J,upload]);
+   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,DEMO_TENANT_ID,upload,J]);
+  });
   const zero=await replay();await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),async db=>{for(let n=0;n<25;n++){
    const signal=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',clock_timestamp(),'Fictional held extra','low','held_for_final_check')",[DEMO_TENANT_ID,J,signal]);
    await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),'2026-10-01')",[DEMO_TENANT_ID,J,signal,evidence]);

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, test } from "@playwright/test";
-import { openQuote, startWatchdogJob } from "./helpers/capture-journey";
+import { openLiveWatchdogJob } from "./helpers/capture-journey";
 import { testTenantContext } from "../../../packages/db/test/tenant-context-test-utils";
 import { withTenant } from "../../../packages/db/src/tenant-context";
 const T="11111111-1111-4111-8111-111111111111";
 test("I: mandatory must-surface Decision survives reload and return through Jobs",async({page})=>{
- await openQuote(page);await startWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
+ await openLiveWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
  const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
  const terms=await page.request.post(`/api/jobs/${jobId}/final-account/terms`,{data:{version:"final-check-terms.accept.v1",commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"}});expect(terms.status()).toBe(200);
@@ -16,8 +16,8 @@ test("I: mandatory must-surface Decision survives reload and return through Jobs
   await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_shadow TO ${login}`);
   shadow=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:login,password:value,max:1});
   await withTenant(admin,testTenantContext(T),async db=>{
-   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$1::text,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[upload,T,jobId]);
-   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo',$3::text,'synthetic-v1',repeat('a',64),100,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,T,upload,jobId]);
+   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[upload,T,jobId,upload]);
+   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo',$5,'synthetic-v1',repeat('a',64),100,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,T,upload,jobId,upload]);
   });
   await withTenant(shadow,testTenantContext(T),async db=>{
    await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,estimated_value_pence,must_surface_now) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:I','2026-10-01','Fictional significant extra','low',800000,true)",[T,jobId,signal]);
@@ -34,7 +34,7 @@ test("I: mandatory must-surface Decision survives reload and return through Jobs
 });
 
 test("Q: every visible count/badge/error, cache key, storage and notification surface ignores 25 linked held signals",async({page})=>{
- await openQuote(page);await startWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
+ await openLiveWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
  const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
  const login=`sv3_q_browser_${randomUUID().replaceAll('-','')}`,value=randomUUID(),evidence=randomUUID(),upload=randomUUID();let shadow:Pool|undefined;
@@ -43,8 +43,8 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
   await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_shadow TO ${login}`);
   shadow=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:login,password:value,max:1});
   await withTenant(admin,testTenantContext(T),async db=>{
-   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$1::text,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[upload,T,jobId]);
-   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo',$3::text,'Q:v1',repeat('a',64),100,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,T,upload,jobId]);
+   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[upload,T,jobId,upload]);
+   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo',$5,'Q:v1',repeat('a',64),100,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,T,upload,jobId,upload]);
   });
   await page.addInitScript(()=>{
    const state={notifications:[] as unknown[],cacheKeys:[] as unknown[],analytics:[] as unknown[]};Object.assign(window,{__sv3Trace:state});
@@ -68,7 +68,7 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    const views:Array<{responseShape:string;counts:(string|null)[];badges:(string|null)[];errors:(string|null)[];cacheKeys:string[];notifications:unknown[];analytics:unknown[];storage:Array<Array<Array<string|null>>>}>=[];
    try{for(const route of ['/',`/jobs/${jobId}`]){
     await page.goto(route);if(route==='/'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
-    else await expect(page.locator('.quote-editor')).toBeVisible();
+    else{const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();await price.click();await expect(page.locator('.quote-editor')).toBeVisible()} // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
     await page.waitForLoadState('networkidle');await Promise.all(pending);
     views.push(await page.evaluate(()=>{
      const read=(selector:string)=>[...document.querySelectorAll(selector)].map(n=>n.textContent);
