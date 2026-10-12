@@ -4,6 +4,8 @@ import { compareServerInstants, covers, enterpriseActorV1, enterpriseExtraV1, pa
   type EnterpriseActor, type EnterpriseExtra, type EnterpriseGroup } from "./contracts.js";
 
 const senior = ["supervisor", "surveyor", "commercial_manager"] as const;
+// Who may un-link a duplicate before export: the five roles the founder named on 12 Oct 2026 (BUILD_PLAN §9.1.6; card jobguard-who-may-unlink-duplicates-2026-10-11). "senior" above still decides who may confirm a prompt and is not changed.
+const unlinkRoles = ["supervisor", "surveyor", "commercial_manager", "admin", "owner"] as const;
 const billedStates = ["billed", "part_paid", "paid"] as const;
 // Fee rule for a site extra, by who logged it. Founder, 12 Oct 2026 (card jobguard-fee-on-surveyor-extras-2026-10-12, 'charge on both'): a supervisor's or a surveyor's counts whether or not that person is named on the job; an operative's counts only when the operative is named on the job; no other role's counts.
 const siteFeeRolesWithoutNaming = ["supervisor", "surveyor"] as const satisfies readonly EnterpriseExtra["raisingCommand"]["role"][];
@@ -123,7 +125,7 @@ export function assertDuplicateRepair(raw: unknown, suppliedActor: EnterpriseAct
   const g = parseEnterpriseGroup(raw); assertDuplicateGroup(g);
   const actor = readEnterprise(enterpriseActorV1, suppliedActor), repair = readEnterprise(repairV1, rawRepair), exported = g.members.some(e => e.exportLineId !== null);
   if (repair.kind === "unlink") {
-    if (exported || !covers(actor, g, senior)) return refuse("PERMISSION_DENIED");
+    if (exported || !covers(actor, g, unlinkRoles)) return refuse("PERMISSION_DENIED");
   } else {
     const a = repair.authorization;
     if (!exported || !a || !repair.reconciliationId || !covers(actor, g, ["finance", "commercial_manager"]) || a.resolution !== "approved" || !a.current || a.expired ||

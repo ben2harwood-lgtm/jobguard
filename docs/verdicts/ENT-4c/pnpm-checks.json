@@ -1,0 +1,70 @@
+[
+  {
+    "command": [
+      "node",
+      "/Users/benharwood/Library/pnpm/.tools/pnpm/11.8.0/node_modules/pnpm/bin/pnpm.mjs",
+      "--pm-on-fail=error",
+      "lint"
+    ],
+    "exit": 1,
+    "log": "lint.log"
+  },
+  {
+    "command": [
+      "node",
+      "/Users/benharwood/Library/pnpm/.tools/pnpm/11.8.0/node_modules/pnpm/bin/pnpm.mjs",
+      "--pm-on-fail=error",
+      "lint:lanes"
+    ],
+    "exit": 1,
+    "log": "lint-lanes.log"
+  },
+  {
+    "command": [
+      "node",
+      "/Users/benharwood/Library/pnpm/.tools/pnpm/11.8.0/node_modules/pnpm/bin/pnpm.mjs",
+      "--pm-on-fail=error",
+      "build"
+    ],
+    "exit": 1,
+    "log": "build.log"
+  },
+  {
+    "command": [
+      "node",
+      "/Users/benharwood/Library/pnpm/.tools/pnpm/11.8.0/node_modules/pnpm/bin/pnpm.mjs",
+      "--pm-on-fail=error",
+      "--filter",
+      "@jobguard/api",
+      "exec",
+      "vitest",
+      "run",
+      "--maxWorkers=2",
+      "src/auth/context-boundary.test.ts"
+    ],
+    "exit": 1,
+    "log": "scanner-pnpm.log"
+  },
+  {
+    "command": [
+      "node",
+      "/Users/benharwood/Library/pnpm/.tools/pnpm/11.8.0/node_modules/pnpm/bin/pnpm.mjs",
+      "--pm-on-fail=error",
+      "openapi:check"
+    ],
+    "exit": 1,
+    "log": "openapi-pnpm.log"
+  },
+  {
+    "command": [
+      "node",
+      "/Users/benharwood/Library/pnpm/.tools/pnpm/11.8.0/node_modules/pnpm/bin/pnpm.mjs",
+      "--pm-on-fail=error",
+      "turbo",
+      "run",
+      "lint"
+    ],
+    "exit": 1,
+    "log": "turbo-lint-pnpm.log"
+  }
+]
