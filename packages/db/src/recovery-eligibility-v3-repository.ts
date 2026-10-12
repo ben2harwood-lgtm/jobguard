@@ -37,7 +37,7 @@ export class RecoveryEligibilityV3Repository {
    if(definition.credit&&input.fixture!=="F15")throw new RecoveryEligibilityV3Error("ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE");
    // Fixed M4-7-S facts only; prefer the ORIGINAL settled event, never a statement replay.
    const event= ["F15","F21","F22"].includes(input.fixture)?undefined:(await db.$client.query<{id:string;state:string;settled_before_opening:boolean;duplicate_held:boolean}>(`SELECT e.id,e.state,
-    -- Decided once, here, on the original timestamptz values (microseconds); the 0119 guard makes the same comparison.
+    -- Decided once, here, on the original timestamptz values (microseconds); the 0119 guard restated in 0130 shares this decision for customer payments and F17 refunds.
     (e.state='settled' AND e.created_at<=(SELECT k.created_at FROM app.recovery_case_current k WHERE k.tenant_id=e.tenant_id AND k.job_id=e.job_id AND k.id=$4)) settled_before_opening,
     EXISTS(SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=e.tenant_id AND u.account_id=e.account_id AND u.movement_key=e.movement_key AND u.identity='unidentified'
       AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate')) duplicate_held

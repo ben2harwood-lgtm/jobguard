@@ -1,0 +1,6 @@
+
+> jobguard@ lint:lanes /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open
+> node tools/agent-lane-boundary-lint.mjs
+
+Lane boundary FAILED: Missing branch or self-comparison range; refusing a misleading pass.
+ ELIFECYCLE  Command failed with exit code 1.

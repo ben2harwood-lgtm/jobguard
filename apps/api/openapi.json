@@ -1,6 +1,157 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/auth/sso-required": {
+      "get": {
+        "operationId": "SsoRequiredController_view",
+        "parameters": [
+          {
+            "name": "requested_tenant_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "sso-required-view.v1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "sso-required-state.v1; administrator, origin and CSRF required"
+          }
+        },
+        "summary": "Read persisted synthetic single sign-on requirement",
+        "tags": [
+          "sso-required"
+        ]
+      },
+      "post": {
+        "operationId": "SsoRequiredController_command",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "required",
+                  "expectedRevision",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-required-command.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483646
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Persisted switch and audit in one transaction; synthetic only"
+          }
+        },
+        "summary": "Append an SSO requirement revision from a bound administrator session",
+        "tags": [
+          "sso-required"
+        ]
+      }
+    },
+    "/auth/sso-required/emergency": {
+      "post": {
+        "operationId": "SsoRequiredController_emergency",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "email",
+                  "code",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-emergency.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{8}$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "403": {
+            "description": "SSO_EMERGENCY_REFUSED; identical for every cause; no session"
+          }
+        },
+        "summary": "Mailbox-proven emergency access; approver rule held, every request refused",
+        "tags": [
+          "sso-required"
+        ]
+      }
+    },
     "/auth/sso/{connectionId}/start": {
       "get": {
         "operationId": "SsoController_view",
@@ -2675,76 +2826,249 @@
         ]
       }
     },
-    "/jobs/{id}/final-account/lock": {
+    "/jobs/{id}/practice-facts": {
       "get": {
-        "operationId": "FinalAccountLockController_get",
-        "parameters": [],
+        "operationId": "PracticeFactsController_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Persisted practice-facts-view.v1; synthetic movement facts only, never an allocation"
+          },
+          "401": {
+            "description": "No practice session"
+          },
+          "403": {
+            "description": "Synthetic environment or client-selected tenant forbidden"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
           }
         },
-        "summary": "Read final-account completion without shadow content",
+        "summary": "Read session-owned synthetic settled movement facts without connecting any provider",
         "tags": [
-          "final-account lock"
+          "practice-facts"
         ]
       },
       "post": {
-        "operationId": "FinalAccountLockController_lock",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
+        "operationId": "PracticeFactsController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "step"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-facts-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "advance"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-12000",
+                          "receipt-14640",
+                          "supplier-payment-600",
+                          "supplier-payment-840",
+                          "receipt-interest-120",
+                          "receipt-compensation-70"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "settled",
+                          "replay",
+                          "page_overlap",
+                          "alternate_representation",
+                          "unknown_duplicate"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-facts-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reconcile_duplicate"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-12000",
+                          "receipt-14640",
+                          "supplier-payment-600",
+                          "supplier-payment-840",
+                          "receipt-interest-120",
+                          "receipt-compensation-70"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "paymentId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-facts-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "match_receipt"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-12000",
+                          "receipt-14640",
+                          "receipt-interest-120",
+                          "receipt-compensation-70"
+                        ]
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
           }
         },
-        "summary": "Complete final account or issue an exact lock-bound synthetic invoice",
-        "tags": [
-          "final-account lock"
-        ]
-      }
-    },
-    "/jobs/{id}/final-account/dispositions": {
-      "post": {
-        "operationId": "FinalAccountLockController_disposition",
-        "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "Persisted practice-facts-view.v1; settlement never allocates money"
+          },
+          "400": {
+            "description": "Invalid or forged command"
+          },
+          "401": {
+            "description": "No authenticated practice session"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
+          },
+          "409": {
+            "description": "Stale revision, conflicting replay, unsettled or mismatched receipt, or disconnected feed"
           }
         },
-        "summary": "Record baseline scope disposition",
+        "summary": "Advance an extra synthetic movement, reconcile its duplicate or match an exact customer receipt",
         "tags": [
-          "final-account lock"
-        ]
-      }
-    },
-    "/jobs/{id}/final-account/terms": {
-      "post": {
-        "operationId": "FinalAccountLockController_terms",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Accept the closed synthetic Final Check terms",
-        "tags": [
-          "final-account lock"
-        ]
-      }
-    },
-    "/jobs/{id}/final-account/review-extras": {
-      "post": {
-        "operationId": "FinalAccountLockController_extra",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Add a builder capture during final review",
-        "tags": [
-          "final-account lock"
+          "practice-facts"
         ]
       }
     }

@@ -24,7 +24,7 @@ export class IdentityRepository {
   async latest(client: PoolClient, email: string, purpose: string): Promise<IdentityChallenge | undefined> {
     return (await client.query<IdentityChallenge>("SELECT * FROM identity.challenge WHERE email=$1 AND purpose=$2 ORDER BY requested_at DESC,id DESC LIMIT 1 FOR UPDATE", [email, purpose])).rows[0];
   }
-  async memberships(userId: string): Promise<IdentityMembership[]> {
-    return (await this.pool.query<IdentityMembership>("SELECT * FROM identity.current_memberships($1)", [userId])).rows;
+  async memberships(userId: string, sessionId: string): Promise<IdentityMembership[]> {
+    return (await this.pool.query<IdentityMembership>("SELECT * FROM identity.sso_session_memberships($1,$2)", [userId, sessionId])).rows;
   }
 }
