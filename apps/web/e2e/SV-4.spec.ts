@@ -94,13 +94,16 @@ test("DW7: pending and failed reconciliation refuse both invoice kinds in comman
 });
 
 
-test("DW7: another lock or cutoff cannot complete this job's check in commands or UI",async({page})=>{
+test("DW7: another lock or cutoff cannot complete this job's check in commands or UI",async({page,browser})=>{
  const fixture=await prepareLockJob(page);await finishDispositionsAndTerms(page);
  await page.getByRole('button',{name:'Complete final account',exact:true}).click();
  await expect(page.getByTestId('lock-state')).toHaveText('Final account completed');
- const other=await prepareLockJob(page);await finishDispositionsAndTerms(page);
- await page.getByRole('button',{name:'Complete final account',exact:true}).click();
- await expect(page.getByTestId('lock-state')).toHaveText('Final account completed');
+ // The demo start screen only exists before a session starts, so the second job is prepared in a fresh browser context (same tenant).
+ const foreignContext=await browser.newContext(),foreignPage=await foreignContext.newPage();
+ const other=await prepareLockJob(foreignPage);await finishDispositionsAndTerms(foreignPage);
+ await foreignPage.getByRole('button',{name:'Complete final account',exact:true}).click();
+ await expect(foreignPage.getByTestId('lock-state')).toHaveText('Final account completed');
+ await foreignContext.close();
  await withSyntheticShadow(fixture.tenantId,async(shadow,admin)=>{
   const locks=(await admin.query("SELECT job_id,id,locked_at::text cutoff,(locked_at+interval '1 microsecond')::text wrong_cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=ANY($2::uuid[])",[fixture.tenantId,[fixture.jobId,other.jobId]])).rows;
   const own=locks.find(row=>row.job_id===fixture.jobId)!,foreign=locks.find(row=>row.job_id===other.jobId)!;

@@ -72,6 +72,16 @@ export async function addFixtureCapture(f: LockFixture, a: Awaited<ReturnType<ty
  else await repo.logBuilderExtra(a.context,{version:"log-builder-extra.v1",proposal,actorMembershipId:LOCK_OWNER,price,deviceId:null,deviceCapturedAt:null});
  return proposal.id;
 }
+/** Fixture-only: an `original` evidence_object needs its upload parent row (migration 0002, evidence_object_kind_ck);
+ * the upload is inserted first in the same transaction, the way the merged shadow-persistence fixtures do. */
+export async function insertFixtureOriginalEvidence(pool: Pool, tenantId: string, jobId: string, scopeItemId: string, evidence: string, objectVersion: string) {
+ const upload = randomUUID();
+ await asFixtureTenant(pool, tenantId, async db => {
+  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')`, [upload, tenantId, jobId, scopeItemId, `synthetic/${evidence}`, LOCK_HASH]);
+  await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+   VALUES($1,$2,$3,$4,$5,'original','photo',$6,$7,$8,0,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidence, tenantId, upload, jobId, scopeItemId, `synthetic/${evidence}`, objectVersion, LOCK_HASH]);
+ });
+}
 export async function lockRow(f: LockFixture, tenantId: string, jobId: string) { return (await f.admin.query("SELECT * FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows[0]!; }
 
 /** Two real, identical database copies, differing only in private evidence-linked signals.
@@ -83,15 +93,15 @@ export async function createApplicationIsolationFixture() {
  const actor='d1500000-0000-4000-8000-000000000003',user='d1500000-0000-4000-8000-000000000001';
  await zero.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
  await zero.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4",[actor,user,a.tenantId,LOCK_OWNER]);
- await zero.admin.query("INSERT INTO control_plane.practice_session(token_digest) VALUES($1)",[sessionDigest]);
+ // Issue the session through the product's own SECURITY DEFINER routine: the seed trigger on practice_session refuses a direct insert by any other role.
+ await zero.admin.query("SELECT app.issue_practice_session($1)",[sessionDigest]);
  await asFixtureTenant(zero.admin,a.tenantId,async db=>{
   await db.query("SET LOCAL session_replication_role='replica'");
   await db.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='capture' WHERE tenant_id=$2 AND id=$3",[sessionDigest,a.tenantId,a.jobId]);
  });
  await prepareLock(zero,a);
  const evidence=randomUUID(),objectVersion=randomUUID();
- await asFixtureTenant(zero.admin,a.tenantId,db=>db.query(`INSERT INTO app.evidence_object(id,tenant_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-  VALUES($1,$2,$3,$4,'original','photo',$5,$6,$7,0,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`,[evidence,a.tenantId,a.jobId,a.scopeItemId,`synthetic/${evidence}`,objectVersion,LOCK_HASH]));
+ await insertFixtureOriginalEvidence(zero.admin,a.tenantId,a.jobId,a.scopeItemId,evidence,objectVersion);
  const copyPublicHistory=async()=>{
   const tables=(await zero.admin.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('identity','control_plane','app','audit_control') AND tablename NOT LIKE 'shadow_%' ORDER BY schemaname,tablename")).rows;
   const db=await many.admin.connect();
@@ -213,8 +223,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
  });
  it("DW8 zero versus 25 held signals with evidence links leaves persisted lock views and replay byte-identical",async()=>{
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a),evidence=randomUUID(),objectVersion=randomUUID();
-  await asFixtureTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.evidence_object(id,tenant_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   VALUES($1,$2,$3,$4,'original','photo',$5,$6,$7,0,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`,[evidence,a.tenantId,a.jobId,a.scopeItemId,`synthetic/${evidence}`,objectVersion,LOCK_HASH]));
+  await insertFixtureOriginalEvidence(f.admin,a.tenantId,a.jobId,a.scopeItemId,evidence,objectVersion);
   const first=await repo.lock(a.context,a.input),zeroLocked=JSON.stringify(await repo.read(a.context,a.jobId));
   const received=(await f.admin.query("SELECT server_received_at::text time FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[a.tenantId,evidence])).rows[0].time;
   await asFixtureTenant(f.shadow,a.tenantId,async db=>{for(let index=0;index<25;index++){
@@ -229,8 +238,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   }finally{queries.mockRestore();release.mockRestore();connect.mockRestore();client.release()}
   // Independently exercise the pre-lock read boundary with 25 held, evidence-linked rows.
   const unlocked=await seedAccount(f.admin,a.tenantId),unlockedRepo=await prepareLock(f,unlocked);const review=JSON.stringify(await unlockedRepo.read(unlocked.context,unlocked.jobId)),ownEvidence=randomUUID(),ownVersion=randomUUID();
-  await asFixtureTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.evidence_object(id,tenant_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-   VALUES($1,$2,$3,$4,'original','photo',$5,$6,$7,0,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`,[ownEvidence,a.tenantId,unlocked.jobId,unlocked.scopeItemId,`synthetic/${ownEvidence}`,ownVersion,LOCK_HASH]));
+  await insertFixtureOriginalEvidence(f.admin,a.tenantId,unlocked.jobId,unlocked.scopeItemId,ownEvidence,ownVersion);
   const ownReceived=(await f.admin.query("SELECT server_received_at::text time FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[a.tenantId,ownEvidence])).rows[0].time;
   await asFixtureTenant(f.shadow,a.tenantId,async db=>{for(let index=0;index<25;index++){
    const signal=randomUUID();await db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)

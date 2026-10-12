@@ -1,5 +1,6 @@
 import { afterEach,afterAll,beforeAll,describe,expect,it,vi } from "vitest";
 import type { Pool } from "pg";
+import { fileURLToPath } from "node:url";
 import { DEMO_IDENTITY_USER_ID,DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,practiceOwnedJobsSql } from "@jobguard/db";
 import { FinalAccountLockApplication } from "./final-account-lock.application.js";
 const session="18000000-0000-4000-8000-000000000001",job="18000000-0000-4000-8000-000000000002";
@@ -31,7 +32,7 @@ describe("DW8 real database application isolation",()=>{
  let fixture:{zero:Pool;many:Pool;session:string;jobId:string;command:unknown;copyLockedHistory:()=>Promise<void>;close:()=>Promise<void>};
  beforeAll(async()=>{
   // Dynamic path keeps test infrastructure out of the API build's rootDir and public exports.
-  const fixturePath="../../../packages/db/test/final-account-lock.integration.test.ts";
+  const fixturePath=fileURLToPath(new URL("../../../packages/db/test/final-account-lock.integration.test.ts",import.meta.url));
   const helpers=await import(fixturePath);
   fixture=await helpers.createApplicationIsolationFixture();
  },60000);

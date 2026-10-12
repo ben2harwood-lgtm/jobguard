@@ -173,3 +173,62 @@ All changed implementation/test paths are the issued 38-file saved draft paths; 
 - `packages/db/test/tenancy.integration.test.ts`
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (12 Oct)
+
+Run by the JobGuard dispatcher's Mac helper (Claude Sonnet 5.5), 12 Oct 2026, in the worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-4`, branch `codex/sandbox/sv-4`. This is the first time any SV-4 database, API-with-database or browser test ran. Start: 8d176a9 (clean). Step 1: `git fetch origin`, then `git merge origin/main` (17c82ee) made merge commit 860d34b with NO conflicts; migration 0130 kept and registered after 0128 in `migrate.ts` (0127 and 0128 now precede it; 0129 untouched). No product file was changed. Every edit below is in SV-4's own test or e2e files.
+
+### Fixture fixes (all four test-only; no assertion, deadline or timeout changed or removed)
+
+1. `packages/db/test/final-account-lock.integration.test.ts`, three `app.evidence_object` inserts (old lines ~93 in `createApplicationIsolationFixture`, ~216 and ~232 in the DW8 test). Before: `INSERT INTO app.evidence_object(... kind 'original' ...)` with no `upload_id`. Migration 0002 `evidence_object_kind_ck` requires an `upload_id` for kind `original`, and `upload_id` references `app.evidence_upload`. Error seen: `new row for relation "evidence_object" violates check constraint "evidence_object_kind_ck"`. After: a new exported helper `insertFixtureOriginalEvidence(pool, tenantId, jobId, scopeItemId, evidence, objectVersion)` inserts the `evidence_upload` parent (same transaction, same object key, `synthetic/<id>`) and then the same `evidence_object` row with `upload_id`; the three sites call it. Same parent-first pattern as the merged `shadow-persistence.integration.test.ts` fixtures. Fixture-only: it only creates the parent row the product schema requires; the evidence values, hashes, signals and every `expect` are unchanged.
+2. `packages/db/test/final-account-lock.integration.test.ts`, `createApplicationIsolationFixture` (used by the API isolation test). Before: `INSERT INTO control_plane.practice_session(token_digest)` run directly as the superuser. Error: `session fixture requires migration owner` (SQLSTATE 42501, raised by the merged trigger `app.seed_saved_v1_sample` from migration 0109, which insists on `current_user = 'jobguard_migration'`). After: `SELECT app.issue_practice_session($1)`, the product's own SECURITY DEFINER routine (migration 0094; the fixture already created the exact membership it checks). Fixture-only: it changes how the test session is created, not what is asserted.
+3. `apps/api/src/final-account-lock.isolation.test.ts`. Before: `const fixturePath = "../../../packages/db/test/final-account-lock.integration.test.ts"; await import(fixturePath)`. Vite resolves a variable dynamic import against the API root, so `../../../` clamped to `/` and the suite failed with `Cannot find module '/packages/db/test/final-account-lock.integration.test.ts'` (the real-database test was SKIPPED, not run). After: `fileURLToPath(new URL("../../../packages/db/test/final-account-lock.integration.test.ts", import.meta.url))` (plus the `node:url` import). Fixture-only wiring.
+4. `apps/web/e2e/helpers/final-account-lock-journey.ts` and `apps/web/e2e/SV-4.spec.ts` (three e2e fixture defects):
+   a. `finishDispositionsAndTerms` counted the disposition dropdowns with the non-waiting `count()` right after `page.reload()` while the panel still read "Loading final account…", so it chose no dispositions and "Complete final account" stayed disabled (both `DW8` tests, both projects). Added one wait first: `expect(panel.getByTestId("lock-state")).toHaveText("Final account review")`. Waits for a condition; no timeout changed.
+   b. `DW7: another lock or cutoff...` called `prepareLockJob(page)` a second time on the same page; `openCapture` does `goto("/")` and waits for the "Start the demo" button, which does not exist once a session has started (30 s timeout). The second job is now prepared in a fresh `browser.newContext()` page (same demo tenant), closed after it is locked; the rest of the test is unchanged.
+   c. `withSyntheticShadow` set `app.tenant_id` once on the single connection of a `max: 1` pool. `pg` discards a connection after a failed `pool.query`, so after the first expected foreign-key refusal the second insert ran on a new connection with no tenant context and the product's guard trigger correctly refused it (`FORBIDDEN`, 42501) instead of reaching the composite foreign key (23503). The tenant context now travels with every new connection (Pool `options: "-c app.tenant_id=<tenant>"`). The expected `23503` assertions are untouched and now pass for both the wrong-lock and the wrong-cutoff insert.
+   While diagnosing 4c I changed the spec's matcher twice and restored it from a saved copy straight after each run; the committed spec diff is only the 4b change.
+
+### Product defects found
+
+None. Every failure was one of the fixture defects above. (The product behaved correctly in 4c: with no tenant context the shadow insert into `final_account_lock_check` fails closed.)
+
+### Commands as run (cwd = worktree root unless shown; `HS` = `~/.local/bin/heavy-slot <label>`; `memory_pressure` was 67-76% free before every heavy run)
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `git fetch origin`; `git merge origin/main` | 0 | merge 860d34b, no conflicts |
+| 2 | `HS pnpm --filter @jobguard/core build`, then `@jobguard/storage`, `@jobguard/db`, `@jobguard/config`, `@jobguard/ai` (each alone) | 0 each | dist built |
+| 3 | `HS pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/final-account-lock.integration.test.ts` (first, before step 4) | 1 | PostgreSQL would not start (`Postgres init script exited with code null`); 14 skipped |
+| 4 | `node scripts/hydrate-symlinks.js` in `node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64` | 0 | node_modules only |
+| 5 | same command as 3, again | 1 | 13 passed, 1 failed (DW8, `evidence_object_kind_ck`) = the sibling helper's result |
+| 6 | same, after fixture fix 1 | 0 | 14/14 |
+| 7 | `... vitest run ... test/final-account-lock-invoice.integration.test.ts` | 0 | 10/10 |
+| 8 | `... test/final-account-lock-reveal.integration.test.ts` | 0 | 2/2 |
+| 9 | `... test/final-account-lock-upgrade.integration.test.ts` | 0 | 1/1 |
+| 10 | `... test/shadow-catalog.integration.test.ts test/tenancy.integration.test.ts test/small-builder-origin.integration.test.ts` | 0 | 3 files, 25/25 |
+| 11 | `... test/shared-money-origin.integration.test.ts test/recovery-timing-pin.integration.test.ts test/extra-origin-upgrade.integration.test.ts` | 0 | 3 files, 40/40 |
+| 12 | `HS pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 --reporter=verbose src/final-account-lock.application.test.ts src/final-account-lock.controller.test.ts src/final-account-lock.isolation.test.ts` | 1 | application 14/14, controller 5/5, isolation 2 passed + real-database suite 1 skipped, suite error `Cannot find module` (fix 3) |
+| 13 | `... src/final-account-lock.isolation.test.ts` (after fix 3) | 1 | real-database suite ran, `session fixture requires migration owner` (fix 2) |
+| 14 | `... src/final-account-lock.isolation.test.ts` (after fix 2) | 0 | 3/3 including the real-database zero-versus-25-signals byte-identity test (DW8) |
+| 15 | step 6 command re-run after fix 2 | 0 | 14/14 |
+| 16 | `HS pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/final-account-lock.test.ts src/shadow-domain/lock.test.ts src/watchdog.test.ts` | 0 | 3 files, 16/16 |
+| 17 | `HS pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/watchdog-registry.test.ts` | 0 | 121/121 |
+| 18 | `HS pnpm typecheck` (re-run after the e2e edits) | 0 | 7 of 7 tasks |
+| 19 | `HS env LANE_BASE_REF=origin/main pnpm lint` (re-run after the e2e edits) | 0 | 7 of 7 tasks |
+| 20 | `HS env LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | "Lane boundary passed" (lane `sv-4`, run on committed head 860d34b; all four edited files are in the lane allow-list) |
+| 21 | `HS pnpm openapi:check` | 0 | pass |
+| 22 | `HS pnpm build` (alone) | 0 | 7 of 7 tasks |
+| 23 | `cd apps/web; CI=1 PLAYWRIGHT_SKIP_BROWSER_GC=1 HS pnpm exec playwright test --config ~/.local/share/full-steam/jg-runs/pw-local-channel-sv-4.config.ts --workers=1 --project=mobile-360 --project=desktop e2e/SV-4.spec.ts` (first) | 1 | 4 passed, 6 failed (DW8 x4 helper race; DW7 "another lock" x2 timeout) |
+| 24 | same, after fixes 4a and 4b | 1 | 8 passed, 2 failed (DW7 "another lock": 42501 instead of 23503, fix 4c) |
+| 25 | same, after fix 4c | 0 | **10 passed** (5 tests x mobile-360 and desktop), 50.7 s |
+
+The wrapper config is out of repo: `~/.local/share/full-steam/jg-runs/pw-local-channel-sv-4.config.ts` (copy of the ent-3a wrapper with `channel: "chromium"`, pointing at this worktree). `CI=1` makes the repo's own config start `next start` on the production build from step 22 instead of `pnpm dev`.
+
+### NOT RUN
+
+- The existing browser specs the issued order lists for the integrator (`UIWIRE-9`, `UIWIRE-10`, `customer-invoice`, `final-account`) although `job-final-account.tsx` and `customer-invoices.tsx` changed; not part of this brief.
+- `pnpm test:db`, `pnpm test:migrations` and any whole-package suite (memory rule); the other `demo-bootstrap` and `UIWIRE-12` catalogue files.
+- `ENT-2.spec.ts` (known failing on plain main on this Mac; not this piece's file).
+
+Mac verification record only; the builder receipt above is still "not independently verified, not accepted".
