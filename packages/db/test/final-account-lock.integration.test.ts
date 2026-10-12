@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createLockSnapshot, hashLockCaptureRegister, hashLockLineSet, hashLockScopeDispositions, verifyFinalAccountLockSnapshot, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
+import { createLockSnapshot, hashLockCaptureRegister, hashLockLineSet, hashLockScopeDispositions, verifyFinalAccountLockSnapshot, captureRegisterNetPence, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { VariationRepository } from "../src/variation-repository.js";
@@ -74,6 +74,54 @@ export async function addFixtureCapture(f: LockFixture, a: Awaited<ReturnType<ty
 }
 export async function lockRow(f: LockFixture, tenantId: string, jobId: string) { return (await f.admin.query("SELECT * FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows[0]!; }
 
+/** Two real, identical database copies, differing only in private evidence-linked signals.
+ * Server-generated lock identities/times are copied as immutable history before replay comparison. */
+export async function createApplicationIsolationFixture() {
+ const zero=await createLockFixture(),many=await createLockFixture();
+ const a=await seedAccount(zero.admin,'11111111-1111-4111-8111-111111111111');
+ const session=randomUUID(),sessionDigest=(await import('node:crypto')).createHash('sha256').update(session).digest('hex');
+ const actor='d1500000-0000-4000-8000-000000000003',user='d1500000-0000-4000-8000-000000000001';
+ await zero.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
+ await zero.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4",[actor,user,a.tenantId,LOCK_OWNER]);
+ await zero.admin.query("INSERT INTO control_plane.practice_session(token_digest) VALUES($1)",[sessionDigest]);
+ await asFixtureTenant(zero.admin,a.tenantId,async db=>{
+  await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='capture' WHERE tenant_id=$2 AND id=$3",[sessionDigest,a.tenantId,a.jobId]);
+ });
+ await prepareLock(zero,a);
+ const evidence=randomUUID(),objectVersion=randomUUID();
+ await asFixtureTenant(zero.admin,a.tenantId,db=>db.query(`INSERT INTO app.evidence_object(id,tenant_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+  VALUES($1,$2,$3,$4,'original','photo',$5,$6,$7,0,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`,[evidence,a.tenantId,a.jobId,a.scopeItemId,`synthetic/${evidence}`,objectVersion,LOCK_HASH]));
+ const copyPublicHistory=async()=>{
+  const tables=(await zero.admin.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('identity','control_plane','app','audit_control') AND tablename NOT LIKE 'shadow_%' ORDER BY schemaname,tablename")).rows;
+  const db=await many.admin.connect();
+  try{
+   await db.query('BEGIN');await db.query("SET LOCAL session_replication_role='replica'");
+   for(const table of tables){
+    const name=`"${table.schemaname}"."${table.tablename}"`;
+    await db.query(`DELETE FROM ${name}`);
+    const rows=(await zero.admin.query(`SELECT row_to_json(t)::text bytes FROM ${name} t`)).rows;
+    for(const row of rows)await db.query(`INSERT INTO ${name} SELECT (jsonb_populate_record(NULL::${name},$1::jsonb)).*`,[row.bytes]);
+   }
+   await db.query('COMMIT');
+  }catch(error){await db.query('ROLLBACK');throw error}finally{db.release()}
+ };
+ await copyPublicHistory();
+ const received=(await zero.admin.query("SELECT server_received_at::text time FROM app.evidence_object WHERE id=$1",[evidence])).rows[0].time;
+ await asFixtureTenant(many.shadow,a.tenantId,async db=>{for(let n=0;n<25;n++){
+  const signal=randomUUID();await db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
+   VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-sv4.v1',clock_timestamp(),'Fictional private extra','low','held_for_final_check')`,[a.tenantId,a.jobId,signal,randomUUID()]);
+  await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)",[a.tenantId,a.jobId,signal,evidence,objectVersion,LOCK_HASH,received]);
+ }});
+ expect((await many.admin.query('SELECT count(*)::int n FROM app.shadow_signal_evidence')).rows[0].n).toBe(25);
+ expect((await zero.admin.query('SELECT count(*)::int n FROM app.shadow_commercial_signal')).rows[0].n).toBe(0);
+ return {zero:zero.runtime,many:many.runtime,session,jobId:a.jobId,
+  command:{version:'final-account.lock.v1',commandId:a.input.commandId,finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:a.input.declarationVersion},
+  copyLockedHistory:copyPublicHistory,
+  close:async()=>{await closeLockFixture(many);await closeLockFixture(zero)},
+ };
+}
+
 // Export the fixture without registering this suite when another proof imports it.
 if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-4 final-account lock: DW1–DW5 and tenant authority", () => {
  let f: LockFixture;
@@ -90,6 +138,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   expect((await repo.read(a.context,a.jobId)).captures.map(c=>c.id)).toEqual(expect.arrayContaining([logged,reviewed,...ids]));
   await repo.lock(a.context,a.input);const row=await lockRow(f,a.tenantId,a.jobId),captures=createLockSnapshot(row.snapshot).snapshot.captureRegister;
   const extras=captures.filter(c=>c.kind!=='baseline'); expect(extras.reduce((n,c)=>n+(c.valuePence??0),0)).toBe(360000);
+  expect(captures.every(c=>c.kind!=='baseline')).toBe(true);expect(captureRegisterNetPence(row.snapshot)).toBe(360000);
   expect(extras.map(c=>c.id)).toEqual(expect.arrayContaining([logged,reviewed,...ids]));
   expect(extras.filter(c=>ids.includes(c.id)).map(c=>c.state).sort()).toEqual(['approved','draft','priced','rejected','withdrawn']);
   expect((await f.admin.query("SELECT variation_id,kind FROM app.extra_origin WHERE variation_id=ANY($1) ORDER BY kind",[[logged,reviewed]])).rows).toEqual([{variation_id:logged,kind:'builder_logged'},{variation_id:reviewed,kind:'final_review'}]);
@@ -142,6 +191,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
    ['variation',"description='Tampered synthetic capture'",'capture_register_hash'],
    ['final_account_line',"net_pence=net_pence+1",'line_set_hash'],
    ['final_account_scope_disposition',"disposition='deferred'",'scope_disposition_hash'],
+   ['final_account_revision',"source_hash=repeat('d',64)",'line_set_hash'],
   ] as const) {
    const db=await f.admin.connect(); try { await db.query('BEGIN'); await db.query("SET LOCAL session_replication_role='replica'"); await db.query(`UPDATE app.${table} SET ${mutation} WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId]);
     // Verify on the same transaction so corruption is rolled back rather than persisted.
@@ -172,7 +222,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
     VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-sv4.v1',$5::timestamptz,'Fictional held evidence','low','held_for_final_check')`,[a.tenantId,a.jobId,signal,randomUUID(),first.lockedAt]);
    await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[a.tenantId,a.jobId,signal,evidence,objectVersion,LOCK_HASH,received]);
   }});
-  const client=await f.runtime.connect(),connect=vi.spyOn(f.runtime,'connect').mockResolvedValue(client),release=vi.spyOn(client,'release').mockImplementation(()=>undefined),queries=vi.spyOn(client,'query');
+  const client=await f.runtime.connect(),connect=vi.spyOn(f.runtime,'connect').mockImplementation(async()=>client),release=vi.spyOn(client,'release').mockImplementation(()=>undefined),queries=vi.spyOn(client,'query');
   try{
    expect(JSON.stringify(await repo.read(a.context,a.jobId))).toBe(zeroLocked);expect(await repo.lock(a.context,a.input)).toEqual(first);
    const statements=queries.mock.calls.map(call=>typeof call[0]==='string'?call[0]:JSON.stringify(call[0])).join('\n');expect(statements).not.toMatch(/\b(?:shadow_commercial_signal|shadow_signal_evidence|shadow_reconciliation_run)\b/);
@@ -231,4 +281,30 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   try{await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:'42501',message:'FORBIDDEN'})}finally{await f.admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2",[a.tenantId,LOCK_OWNER])}
   await expect(repo.lock(a.context,{...a.input,actorMembershipId:randomUUID()})).rejects.toMatchObject({code:'42501',message:'FORBIDDEN'});
  });
+ it("C4 actual logins cannot insert or mutate protected facts, even empty tables; owner triggers reject mutation",async()=>{
+  const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input);
+  for(const table of ['final_account_lock','final_account_scope_disposition','final_check_terms_acceptance','final_account_lock_check','final_account_invoice_binding','final_account_invoiced_line']){
+   await expect(asFixtureTenant(f.runtime,a.tenantId,db=>db.query(`INSERT INTO app.${table} SELECT * FROM app.${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
+   for(const pool of [f.runtime,f.shadow,f.owner])for(const sql of [`UPDATE app.${table} SET tenant_id=tenant_id`,`DELETE FROM app.${table}`,`TRUNCATE app.${table} CASCADE`])
+    await expect(asFixtureTenant(pool,a.tenantId,db=>db.query(sql))).rejects.toMatchObject({code:pool===f.owner?'55000':'42501'});
+  }
+ });
+ it("C4 lock and disposition composite keys reject foreign tenants and same-tenant wrong jobs",async()=>{
+  const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input);
+  const same=await seedAccount(f.admin,a.tenantId),foreign=await seedAccount(f.admin);
+  for(const target of [same,foreign]){
+   await expect(asFixtureTenant(f.admin,target.tenantId,db=>db.query(`INSERT INTO app.final_account_lock SELECT (jsonb_populate_record(NULL::app.final_account_lock,to_jsonb(l)||jsonb_build_object('id',$3::uuid,'tenant_id',$4::uuid,'job_id',$5::uuid))).* FROM app.final_account_lock l WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),target.tenantId,target.jobId]))).rejects.toMatchObject({code:'23503'});
+   await expect(asFixtureTenant(f.admin,target.tenantId,db=>db.query(`INSERT INTO app.final_account_scope_disposition SELECT (jsonb_populate_record(NULL::app.final_account_scope_disposition,to_jsonb(d)||jsonb_build_object('id',$3::uuid,'command_id',$4::uuid,'tenant_id',$5::uuid,'job_id',$6::uuid))).* FROM app.final_account_scope_disposition d WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),randomUUID(),target.tenantId,target.jobId]))).rejects.toMatchObject({code:'23503'});
+  }
+ });
+
+ it("synthetic-only lock and final-review routines refuse a pilot track without writes",async()=>{
+  const a=await seedAccount(f.admin),repo=await prepareLock(f,a);
+  await asFixtureTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL session_replication_role='replica'");await db.query("UPDATE app.job_commercial_track SET environment='pilot_no_charge' WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])});
+  await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:'42501',message:'FORBIDDEN'});
+  await expect(addFixtureCapture(f,a,40000,true)).rejects.toMatchObject({code:'42501',message:'FORBIDDEN'});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.variation WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+ });
+
 });

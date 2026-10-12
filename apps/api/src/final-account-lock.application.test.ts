@@ -28,3 +28,14 @@ it("final-review proposal uses the server origin and existing exact price contra
  await f.app.reviewExtra(job,{version:"final-review-extra.v1",commandId,scopeItemId,description:"Fictional tap",captureText:"Fictional tap",price:{quantity:"1",unit:"item",unitRatePence:40000,direction:"addition"}});
  expect(extra).toHaveBeenCalledWith(expect.objectContaining({tenantId:DEMO_TENANT_ID}),expect.objectContaining({version:"final-review-extra.v1",proposal:expect.objectContaining({id:commandId,jobId:job,scopeItemId}),price:expect.objectContaining({unitRatePence:40000,confirmedByMembershipId:DEMO_MEMBERSHIP_ID})}));
 });
+
+it.each(["get","lock","disposition","acceptTerms","reviewExtra","issueInvoice"] as const)("%s rejects an unauthenticated caller before any business query",async method=>{
+ const f=fixture(true,false);
+ await expect(method==='get'?f.app.get(job):f.app[method](job,{})).rejects.toMatchObject({code:'UNAUTHENTICATED'});
+ expect(f.query.mock.calls.every(([sql])=>sql.includes('authenticate_practice_session'))).toBe(true);
+});
+it("the new application rejects production mode before reading or writing business data",async()=>{
+ const f=fixture();vi.stubEnv('JOBGUARD_ENV','production');
+ await expect(f.app.lock(job,{})).rejects.toMatchObject({code:'SYNTHETIC_MODE_REQUIRED'});
+ expect(f.query).not.toHaveBeenCalled();
+});

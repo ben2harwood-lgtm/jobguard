@@ -1,0 +1,175 @@
+# SV-4 — builder receipt, continuation round 1
+
+Builder: Codex GPT-6.1 Sol. Issued 12 October 2026 by the dispatcher. Branch `codex/sandbox/sv-4`, LOCAL. SV-2 base `262f939`; resumed saved draft head `cac7c15`. That saved head was the builder's interrupted draft, not acceptance. No commit/add/checkout/fetch/push was performed. Dispatcher owns committing the working tree; intended message: `/private/tmp/jg-msg-sv-4.txt`.
+
+Builder receipt only — not independently verified, not accepted.
+
+## Audit of the interrupted session and continuation edits
+
+The criterion-by-criterion initial checklist is [DRAFT_AUDIT.md](DRAFT_AUDIT.md). The interrupted session left 38 files/1,923 inserted lines/4 deleted lines but no builder receipt, no self-review and no trustworthy final verification record. Most requested behavior and tests existed. Missing: real two-database API isolation (the existing API test was scripted only); actual protected INSERT/mutation and lock/disposition composite-key attacks across every new table. Wrong: the new SQL lock/review path also admitted `pilot_no_charge`; the lane note was abbreviated rather than the issued line. Self-review also found baseline rows included in the extras capture register (contrary to the exact F12 register total) and a Vitest Pool.connect overload typing error in an uncompiled DB test. This continuation adds coverage, restricts that new path to synthetic mode, restores the exact issued lane line, fixes the test spy overload and excludes baseline entries from the extras register. The complete account-revision fingerprint remains bound through each line source; the corruption proof now also mutates that revision. The F12 proof adds assertions on the entire register (not merely a filtered subset). It does not weaken or delete any existing assertion.
+
+## Criteria and named evidence
+
+BUILT below means implemented with test assertions, not a claim that PostgreSQL or Playwright passed. Paths under `packages/db/test` are real PostgreSQL tests and are NOT RUN here. API isolation now also needs PostgreSQL.
+
+| Criterion | Status | Files and named tests |
+|---|---|---|
+| B1 baseline/capture-only account | BUILT | Existing `FinalAccountCommandService` assembler/read reused by `final-account-lock.application.ts`; lock review also lists every capture state. DB: `DW1 capture includes every state, £3,200 logged and £400 reviewed; post-lock review writes nothing`; API real isolation compares the full account projection. |
+| B2 review prompt | BUILT | `core/src/final-account-lock.ts`, web `final-account-lock.tsx`; core `preserves exact declaration, prompt, check text and only the four terms statements`; browser `DW2/DW4/DW9: persisted completion survives reload, Jobs and a second browser`. |
+| B3 final_review extras | BUILT | Additive `VariationRepository.addFinalReviewExtra`, shared SH-1 identity/price/origin contract; API `final-review proposal uses the server origin and existing exact price contract`; DB DW1 and `synthetic-only lock and final-review routines refuse a pilot track without writes`. |
+| B4 dispositions | BUILT | `0130` append-only `final_account_scope_disposition`, `record_final_account_disposition`; DB DW2 and `C4 lock and disposition composite keys reject foreign tenants and same-tenant wrong jobs`. Removed/deferred change no money. |
+| B5 declaration | BUILT | Closed declaration/version and exact button text; core strict commands and fixed text test; DB controlled lock routine. |
+| B6 atomic lock | BUILT | `0130 lock_final_account`, repository/application/controller/Next route; DB DW4 replay/concurrency and `audit failure rolls back lock and its command receipt atomically`. |
+| B7 final/supplementary invoice | BUILT within Q1 | New routine/command/UI with invoice and line side bindings. DB `F7 main £40,320 and supplementary £960 bind exact source lines, replay once and never rebill the baseline`. Catch revision is a test-only fixture; real catch flow HELD for SV-5. |
+| DW1 every pre-lock capture | BUILT | `final-account-lock.integration.test.ts` DW1 records all five states, exact 360000 pence for the entire extras register, no baseline entries, both origins, and post-lock review no-write refusal; core `sums exact F12 captures and retains unknown values and all states in the digest`. |
+| DW2 disposition/terms | BUILT | DB `DW2 refuses missing dispositions and terms through repository and runtime routine without side effects`; strict schema and browser refused lock. |
+| DW3 immutable hash reconstruction | BUILT | Delegates to SV-1 snapshot plus three additive component hashes; DB `DW3 recomputes all source hashes and detects separate capture, line and disposition corruption` also tests account-revision corruption; core `delegates to the SV-1 snapshot and verifies all source bindings`. |
+| DW4 replay/double/second browser | BUILT | DB `DW4 replay, altered payload and two concurrent commands create one lock and one matching audit event`; `capture and lock sharing one command identity serialize before receipt claim without deadlock`; browser persisted completion/second context. |
+| DW5 immutable lock | BUILT | DB `DW5 runtime, shadow and migration owner cannot mutate the lock; later revisions do not change it`; additional all-table SQL mutation tests. |
+| DW6 locked-job reveal | BUILT | `final-account-lock-reveal.integration.test.ts`: `a genuinely locked job reveals only revealed rows for that tenant and job; unlocked and cross-tenant jobs yield none`, `the reveal function's EXECUTE grantees stay migration owner and runtime only`. This implements the positive half SV-2 deferred; execution/verification remains owed on Mac/CI. |
+| DW7 fail-closed issue and races | BUILT within Q1 | `final-account-lock-invoice.integration.test.ts`: missing lock/no completion/pending/failed repository AND direct routine refusals; exact lock/microsecond-cutoff FK; foreign-tenant completion; latest failed overrides completion; concurrent completed/pending/failed facts; F7; interim side row no lock. Core `guards final and supplementary issue against absent, pending, failed and misbound checks`; controller typed errors; browser `DW7: pending and failed reconciliation refuse both invoice kinds in commands and UI` and `DW7: another lock or cutoff cannot complete this job's check in commands or UI`. |
+| DW8 identical builder boundary | BUILT | Scripted API read test retained and labelled. Added API `identical seeded databases with zero/25 evidence-linked held signals have identical review, lock replay and post-lock bytes; runtime statements never name shadow tables`; real DB fixture copies exact public history and retains 25 private evidence links. Generated lock identity/time is copied as immutable history before comparing replay bytes; independent first creations are not falsely claimed byte-identical. DB zero/25 persisted-view/replay test and browser fixed-view fixtures retained. |
+| DW9 refresh/Jobs authoritative state | BUILT | Browser persisted-completion test asserts `V('lock-state','Final account completed')` after reload/Jobs, second context, banner, keyboard focus, 44px target, no overflow, pounds to two decimals. Both configured projects owed. |
+| C1/C2 vertical/service seam | BUILT | One shared application, four Next routes, Nest controller, appended exports/registrations/generated OpenAPI; controller `all four lock commands and read use the shared application`. Invoice command uses the new `/final-account/lock` POST with closed version `lock-bound-invoice.issue.v1`; no new legacy invoice transport implementation. |
+| C3 synthetic | BUILT | PracticeAccess verifies synthetic principal/job; application production and unauthenticated refusals; SQL synthetic-only track test; `.invalid` recipient, fixed sandbox banner, no external send/provider/fee. |
+| C4 catalogue/tenant/money | BUILT | Six owned tables, FORCE RLS, exact grants/owners/routine grantees; actual runtime INSERT/mutation refusal; composite FK tests; upgrade/fingerprint/grant proof; exact F7/F12 sums with merged primitives. |
+| C5 boundaries/authorization | BUILT | Core strict versioned input/server-fact rejection; API unowned-job, unauthenticated/production rejection; DB owner/tenant/wrong-job/missing-context tests; inline approved exact invoice Decision; receipts and audit atomic. |
+| C6 executed evidence | HELD for DB/browser | Only allowable local checks can run here; exact results recorded below. No mocked test is a database proof. |
+| C7 specified UI | BUILT | Requested strings/states and browser accessibility/money/persistence assertions only; polish parked. |
+| C8 verdict/acceptance | HELD | Lane present. Fresh independent Claude Opus verdict AND separate Sol check on dispatcher commit, separate technical acceptance, green CI, then founder-authorized merge/release. Builder does not accept its own work. |
+
+## HELD and owed work
+
+The older invoice-without-lock path is NOT guarded yet; 'no unguarded final-invoice path remains' is HELD and owed by SV-5.
+
+Q1: existing practice invoice routine/repository/transport and roughly ten existing unlocked-invoice tests remain unchanged. The legacy UI body is preserved inside an additive wrapper; lock-flow buttons use only the new path. Q2: SV-5 owes evidence-complete runs and completion writing, including zero-result processing; this leaf stores facts only. Q3: only four exact §10.2.10 statements and synthetic version are used; other terms, real onboarding/pilot disclosures are founder-held D12/D13. Q4 adopted: only three appended SV-1 hash exports/tests; no replacement canonicaliser in core. Q5: later catch revision fixture only, real confirmation/reveal/catch path is SV-5. Q6: interim kind is a side-table value only, no interim issue route. Q7: no financial effect of removed/deferred. Q8: owner only; widening held. Q9: fixed running-check text/pending disabled state; failed displays typed error. UI polish, work-state/post-lock rules (CH-4), detector (SV-3), fees/allocations and production work remain outside this lane. D12, D13, G1 and applicable real-data/release gates remain unresolved.
+
+## Migration 0130 and integrator ledger
+
+`packages/db/migrations/0130_final_account_lock.sql` registers after 0128 (and any lower migration integrated before merge). Adds SIX tables: `final_account_lock`, `final_account_scope_disposition`, `final_check_terms_acceptance`, `final_account_lock_check`, `final_account_invoice_binding`, `final_account_invoiced_line`. Six tables rather than the older five-table draft implements the issued fingerprinted-table side-binding rule. It alters NO existing table columns/constraints, rewrites NO existing rows, changes NO existing grant/policy/role/routine. Adds serialization triggers on existing `command_receipt`, `variation`, `final_account_revision`, `final_account_line`; mutation/check/line-validation triggers on its own tables. Fingerprinted tables, including customer_invoice, retain their full shape.
+
+Runtime SELECT only on all six. Shadow INSERT only on `final_account_lock_check`, with a tenant policy and INVOKER trigger; no SELECT, new callable helper, or other grant for that role. All six migration-owned/FORCE RLS/append-only. Tenant-only terms acceptance intentionally has no job key. EXECUTE: migration owner + runtime only on `accept_final_check_terms`, `record_final_account_disposition`, `lock_final_account`, `issue_lock_bound_customer_invoice`, `read_final_account_lock_verification`, `prepare_final_review_extra`. Migration owner only on `guard_final_account_lock_check`, `guard_final_account_invoiced_line`, `final_lock_canonical`, `final_lock_hash`, `final_lock_require_owner`, `append_final_lock_audit`, `read_final_account_lock_sources`, `serialize_final_account_source`, `serialize_final_review_receipt`. No new function has PUBLIC EXECUTE. SV-2 routines/grantees are unchanged. Source/job locks precede receipt/audit head; check append/issue shares advisory serialization. No business network call occurs in a transaction.
+
+Rule 9 proof: install before 0130, seed existing invoices, snapshot named columns/types/PK identities and canonical row text, apply 0130 alone/compare, apply later migrations twice/compare. Rolled-back controls: one-microsecond change and pre-existing column retype fail; nullable column, replaced fixture function and later inserted row pass. At least one pre-existing row is required per compared table. Fingerprinted-column guard is separate. Catalog compares pre-existing grants, schemas, role posture and membership around 0130; new objects tested separately. Forward-fix with an additive migration; never delete immutable locks/invoices/history. No data backfill.
+
+Integrator-owned BUILD_PLAN §12.2 ledger sentence (builder does not edit BUILD_PLAN): **Ledger amendment — SV-4, 12 October 2026 (issued migration allocation).** `codex/sandbox/sv-4` takes **0130** (`0130_final_account_lock.sql`), after SV-2 **0128** and SV-3 **0129** when integrated; M4-8-S holds **0131**. It adds immutable final-account lock/disposition/terms/check facts and invoice/line side bindings, without changing fingerprinted-table columns or the older practice invoice guard. Register in numeric order; a piece landing after a higher merged number renumbers under the standing merge-ahead rule.
+
+Shared overlaps serialize with integrator: lane registry, `migrate.ts`, MIGRATIONS, core/db indexes, tenancy catalogue rows (SV-3/M4-8-S); watchdog registry, app.module/workspace registrations and OpenAPI (M4-8-S). No other lane's owned file changes. Regenerate OpenAPI after integration/rebase.
+
+## Exact edits to existing tests
+
+Relative to SV-2 base 262f939: `packages/core/src/shadow-domain/lock.test.ts` adds one describe block with two tests after the existing final byte; no pre-existing statement/assertion changed. `packages/db/test/tenancy.integration.test.ts` adds six catalogue rows in each of the RLS/guard and ownership arrays (12 rows total), with no assertion changed. UIWIRE-12 and demo-bootstrap tests require no count change because they already use MIGRATION_URLS length. No other pre-existing test changes, including authentication context-boundary, its pinned files, SV-2 catalogue/allowed-routines list and legacy unlocked invoice tests. Continuation edits only new SV-4 tests. Preservation hashes/stat audit recorded in self-review below.
+
+## Commands and results
+
+All primary commands ran from `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-4`. Filtered Vitest reports its package working directory (`packages/core` or `apps/api`). Dependencies were already installed; no clean install was claimed and no package download was requested. Node v24.17.0 observed; .nvmrc says v24.15.0 (engine permits Node 24). Cached pnpm **10.28.1** confirmed.
+
+The system `pnpm --version` probe stalled in the pnpm 11 wrapper, emitted its existing package-field warning and was interrupted (exit 130). A second early read-only version probe returned only that warning and no version; no previous-session command result is adopted. To prevent manager auto-selection/network behavior, a temporary `/private/tmp/jg-sv4-bin/pnpm` invokes the already-cached `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs "$@"`. All subsequent pnpm commands have the exact common prefix `PATH=/private/tmp/jg-sv4-bin:$PATH COREPACK_ENABLE_NETWORK=0`; no package/script/lockfile changed. `pnpm --version` with that prefix: exit 0, 10.28.1.
+
+| Actual command after common prefix | Exit | Observed result/count |
+|---|---:|---|
+| `pnpm typecheck` | 0 | 7/7 Turbo tasks successful; 2 cached; 48.413s |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | Core purity 131 TS files; lane sv-4 passed; money/commercial boundary checks; 7/7 package tasks, 2 cached; 43.219s |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | sv-4 lane passed; merge-base comparison, head cac7c15 plus working tree/untracked paths |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/final-account-lock.test.ts src/shadow-domain/lock.test.ts` | 0 | 2 files, **9 tests passed**, 0 failures; 759ms |
+| `pnpm turbo run build --filter=@jobguard/api...` | 0 | 6/6 tasks, 2 cached; 27.282s |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/final-account-lock.controller.test.ts src/final-account-lock.application.test.ts` | 0 | 2 files, **19 tests passed**, 0 failures; 1.43s; scripted service/controller evidence only |
+| `pnpm build` | 0 | 7/7 tasks, 2 cached; Next production build generated 27/27 static pages and dynamic lock routes; 1m21.856s |
+| `pnpm openapi:check` | **1** | Sandbox failure before checker execution: tsx CLI `listen EPERM` on its local IPC pipe. Not a stale-contract result. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | The **same existing OpenAPI checker** via Node loader, avoiding the tsx CLI IPC socket; committed document matched, no source/script changed. |
+
+28 bounded unit tests passed; zero DB or browser tests executed. Non-fatal build/check warnings: shared Turbo cache writes outside the sandbox were denied; existing Next workspace-root/multiple-lockfile warning; existing `practice-receipts.module.css` autoprefixer `end` warning. Those files are untouched. The final self-review SQL/register correction does not change TypeScript application code or the unit-tested pure core; its new DB assertions were statically compiled after the correction, and SQL execution remains explicitly NOT RUN.
+
+Additional static commands from the same root (not database execution): `git diff --check 262f939` exit 0, no whitespace diagnostics; the one-off Python preservation audit exit 0 (14 byte-identical protected/dependency files, additive SV-1 prefix checks, unchanged legacy UI body, only two pre-existing tests changed); hashes retained in [PRESERVATION.json](PRESERVATION.json). No standing test freezes other leaves' files. A TypeScript createProgram check found 1 draft diagnostic (Pool.connect spy overload); after changing `mockResolvedValue(client)` to `mockImplementation(async()=>client)` the same three-entry check returned 0 diagnostics. A second three-entry upgrade/browser check returned 0 diagnostics. A final one-entry F12/source-revision check returned 0 diagnostics. All commands below were `node --input-type=module` here-doc invocations, exit sequence **1, 0, 0, 0**, and no test/runtime database operation occurred:
+
+```js
+import ts from 'typescript';
+// Runs 1/2 (same files):
+const files=['packages/db/test/final-account-lock.integration.test.ts','packages/db/test/final-account-lock-invoice.integration.test.ts','packages/db/test/final-account-lock-reveal.integration.test.ts'];
+// Run 3 substitutes:
+// ['packages/db/test/final-account-lock-upgrade.integration.test.ts','apps/web/e2e/SV-4.spec.ts','apps/web/e2e/helpers/final-account-lock-journey.ts']
+// Run 4 substitutes: ['packages/db/test/final-account-lock.integration.test.ts']
+const config=ts.readConfigFile('tsconfig.json',ts.sys.readFile);
+const options=ts.parseJsonConfigFileContent(config.config,ts.sys,'.').options;
+const diagnostics=ts.getPreEmitDiagnostics(ts.createProgram(files,{...options,noEmit:true}));
+if(diagnostics.length)process.stdout.write(ts.formatDiagnosticsWithColorAndContext(diagnostics,{getCurrentDirectory:ts.sys.getCurrentDirectory,getCanonicalFileName:f=>f,getNewLine:()=> '\n'}));
+// Each run printed its entry-file count/diagnostic count and that it executed no DB/browser test.
+process.exitCode=diagnostics.length?1:0;
+```
+
+## NOT RUN
+
+Each database/browser item: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+
+- `packages/db/test/final-account-lock.integration.test.ts`
+- `packages/db/test/final-account-lock-reveal.integration.test.ts`
+- `packages/db/test/final-account-lock-invoice.integration.test.ts`
+- `packages/db/test/final-account-lock-upgrade.integration.test.ts`
+- `apps/api/src/final-account-lock.isolation.test.ts` (now includes real PostgreSQL; retained scripted assertions are not an integration substitute)
+- `packages/db/test/tenancy.integration.test.ts`, `UIWIRE-12.integration.test.ts`, `demo-bootstrap.integration.test.ts`, `shadow-catalog.integration.test.ts` and remaining mandatory DB regressions via `pnpm test:db` / `pnpm test:migrations`
+- Playwright `SV-4.spec.ts`, `UIWIRE-9.spec.ts`, `UIWIRE-10.spec.ts`, `customer-invoice.spec.ts`, `final-account.spec.ts`, both mobile-360/desktop, plus existing mandatory browser regressions.
+
+Whole repository/package Vitest suites not run under binding memory rule: only new/changed test files, at most three, maxWorkers=2, one run at a time. Unchanged `watchdog.test.ts` and `watchdog-registry.test.ts` are not run under that more specific rule; their checks remain owed on Mac/CI, with no test edits to evade the limit. `pnpm eval` inapplicable: no prompt/model/parser/AI policy change. No live provider, browser screenshot or professional approval claimed.
+
+## Self-review
+
+Builder self-review, source-inspected against **the whole 262f939-to-working-tree diff**, including the initial 38-file saved draft and every continuation edit. This is not an independent model verdict.
+
+- Re-read the issued addendum/header/draft, applicable AGENTS/plan contracts and test names. Checked B1–B7/DW1–DW9, F7/F12 exact pence and fixed review/declaration/terms/check strings. Corrected F12's baseline-in-register error with stronger whole-register assertions; preserved all existing assertions.
+- Checked strict command boundaries, synthetic principal/job ownership, owner re-check after the job lock, inline exact invoice approval, receipt identity/payload conflicts, audit rollback and source/job-before-audit ordering. No business network call/provider adapter is added. New SQL lock/review paths now admit only synthetic_demo; earlier LogBuilderExtra behavior remains unchanged.
+- Inspected all six new table DDL, tenant/job-qualified FKs, non-null tenant IDs, FORCE RLS, migration ownership, append-only statement triggers, exact callable/private routine grantees and shadow INVOKER check guard. Invoice issue re-checks latest completed fact under its advisory lock; supplementary source selection excludes prior invoiced identities and rejects source corrections. Actual SQL denial/race/constraint behavior still needs PostgreSQL.
+- Checked canonical hashes delegate to SV-1 in core, component stable-ID ordering, source-row fingerprints, UTC/microsecond timestamps, immutable lock reconstruction and privileged-bypass corruption tests. Account revision now participates in the line-set hash; baseline is separately bound instead of counted as extra capture. SQL/core parity is asserted before transaction commit, but its database execution remains unverified.
+- Checked Rule 9 step boundary, canonical named-column text/full types/PK identities, seeded-row guards, later-migrations-twice behavior, all rolled-back controls and separate fingerprinted-column guard. No later-functions/all-whole-row freeze added.
+- Checked no private signal read in builder source/routines and real zero/25 evidence-linked isolation setup. Exact lock replay compares the same copied persisted history, since independent random IDs/time naturally differ. Runtime-client statements are traced; this is not an assertion that PostgreSQL internal statement logging was executed here.
+- Checked UI persistence/reload/Jobs/second context and requested refusal/accessibility/money assertions in the browser source only. No UI polish added. Added wrong-lock/cutoff refusal assertions; DOM rendering/layout/focus/timing/browser state remains unverified.
+- One-off preservation audit recorded byte hashes of authentication scanner and seven pinned bridges, practice invoice repository, 0095/0128 migrations, SV-2 catalogue, UIWIRE-12 and demo-bootstrap tests, and legacy practice UI body. No protected or earlier invoice test changed. SV-1 source and test retain exact prefixes, with only appended exports/tests. Tenancy changes are precisely twelve catalogue rows. BUILD_PLAN, packages/lockfile, provider/config/decision files and other lanes are untouched.
+- Checked lane scope, registration append behavior, Rule 11 generated credentials, Rule 12 absence of permanent other-file pinning tests, no held detector/catch/reconciliation completion/policy/fee feature built. Shared overlaps and owed ledger/independent review/acceptance are listed above.
+- Local checks and their limitations are separated from source inspection; standard OpenAPI command failure remains recorded alongside the successful same-checker loader run. Real PG16 grants/RLS/catalogues/migrations, SQL hash parity, rollback/concurrency, browser projects/regressions and release approvals are NOT independently verified. **Technical acceptance remains HOLD pending those external checks and the issued independent verdicts.**
+
+## Changed files and cleanup
+
+All changed implementation/test paths are the issued 38-file saved draft paths; continuation updates only its owned SQL/contract/tests/lane entry and adds this receipt, initial audit and preservation evidence. Full path list follows (relative to 262f939; receipt evidence is untracked until dispatcher commit). No generated binary or screenshot artifact is included. Generated dist/.next/Turbo logs, tsbuildinfo, .pnpm-store and test-results artifacts are removed before handoff; installed node_modules is retained. Cleanup executed successfully (exit 0). The final one-off path audit initially hit an assertion because Python fnmatch treats [id] as glob syntax; its corrected comparison accepts exact path matches first. Final lane/preservation/credential-text/artifact inspection passed (exit 0), and final git diff --check returned 0. Final tracked diff versus 262f939: **38 files, 2,079 insertions, 4 deletions**, plus the three new receipt/audit/preservation files (41 paths total). Continuation touched eight saved-draft paths; no commit was created.
+
+- `apps/api/openapi.json`
+- `apps/api/src/app.module.ts`
+- `apps/api/src/final-account-lock.application.test.ts`
+- `apps/api/src/final-account-lock.application.ts`
+- `apps/api/src/final-account-lock.contracts.ts`
+- `apps/api/src/final-account-lock.controller.test.ts`
+- `apps/api/src/final-account-lock.controller.ts`
+- `apps/api/src/final-account-lock.isolation.test.ts`
+- `apps/api/src/workspace/application.ts`
+- `apps/api/src/workspace/index.ts`
+- `apps/web/app/api/jobs/[id]/final-account/dispositions/route.ts`
+- `apps/web/app/api/jobs/[id]/final-account/lock/route.ts`
+- `apps/web/app/api/jobs/[id]/final-account/review-extras/route.ts`
+- `apps/web/app/api/jobs/[id]/final-account/terms/route.ts`
+- `apps/web/app/ui/customer-invoices.tsx`
+- `apps/web/app/ui/final-account-lock.tsx`
+- `apps/web/app/ui/job-final-account.tsx`
+- `apps/web/e2e/SV-4.spec.ts`
+- `apps/web/e2e/helpers/final-account-lock-journey.ts`
+- `config/agent-lane-assignments.json`
+- `docs/contracts/final-account-lock-v1.md`
+- `docs/verdicts/SV-4/BUILDER_RECEIPT.md`
+- `docs/verdicts/SV-4/DRAFT_AUDIT.md`
+- `docs/verdicts/SV-4/PRESERVATION.json`
+- `packages/core/src/final-account-lock.test.ts`
+- `packages/core/src/final-account-lock.ts`
+- `packages/core/src/index.ts`
+- `packages/core/src/shadow-domain/lock.test.ts`
+- `packages/core/src/shadow-domain/lock.ts`
+- `packages/core/src/watchdog.ts`
+- `packages/db/MIGRATIONS.md`
+- `packages/db/migrations/0130_final_account_lock.sql`
+- `packages/db/src/final-account-lock-repository.ts`
+- `packages/db/src/index.ts`
+- `packages/db/src/migrate.ts`
+- `packages/db/src/variation-repository.ts`
+- `packages/db/test/final-account-lock-invoice.integration.test.ts`
+- `packages/db/test/final-account-lock-reveal.integration.test.ts`
+- `packages/db/test/final-account-lock-upgrade.integration.test.ts`
+- `packages/db/test/final-account-lock.integration.test.ts`
+- `packages/db/test/tenancy.integration.test.ts`
+
+Builder receipt only — not independently verified, not accepted.

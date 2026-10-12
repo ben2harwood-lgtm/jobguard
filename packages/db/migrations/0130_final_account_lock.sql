@@ -161,16 +161,11 @@ BEGIN
   LEFT JOIN app.variation_revision r ON(r.tenant_id,r.job_id,r.id)=(v.tenant_id,v.job_id,v.current_revision_id)
   LEFT JOIN app.variation_withdrawal w ON(w.tenant_id,w.job_id,w.variation_id)=(v.tenant_id,v.job_id,v.id)
   WHERE v.tenant_id=p_tenant AND v.job_id=p_job AND o.kind IN ('builder_logged','final_review')
-  UNION ALL
-  SELECT jsonb_build_object('version','shadow-capture.v1','tenantId',p_tenant,'jobId',p_job,'id',l.source_id,'scopeItemId',l.scope_item_id,
-   'revisionId',l.commercial_revision_id,'serverRecordedAt',to_char(r.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-   'valuePence',l.net_pence,'kind','baseline','state',NULL,'scopeArea','job','description',l.description,'recordedPhase','pre_lock','aiStructured',false,'sourceRef',l.source_id::text||':'||app.final_lock_hash(jsonb_build_object('line',to_jsonb(l),'accountRevision',to_jsonb(r))))
-  FROM app.final_account_line l JOIN app.final_account_revision r ON(r.tenant_id,r.job_id,r.id)=(l.tenant_id,l.job_id,l.final_account_revision_id)
-  WHERE l.tenant_id=p_tenant AND l.job_id=p_job AND l.final_account_revision_id=p_revision AND l.line_kind='baseline'
+
  ) s;
- SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'scopeItemId',scope_item_id,'revisionId',commercial_revision_id,'netPence',abs(net_pence),'sourceRef',source_id::text||':'||app.final_lock_hash(to_jsonb(l))) ORDER BY id),'[]'),
+ SELECT coalesce(jsonb_agg(jsonb_build_object('id',l.id,'scopeItemId',l.scope_item_id,'revisionId',l.commercial_revision_id,'netPence',abs(l.net_pence),'sourceRef',l.source_id::text||':'||app.final_lock_hash(jsonb_build_object('line',to_jsonb(l),'accountRevision',to_jsonb(r)))) ORDER BY l.id),'[]'),
   coalesce(jsonb_agg(DISTINCT scope_item_id ORDER BY scope_item_id) FILTER(WHERE line_kind='baseline'),'[]') INTO lines,baseline
- FROM app.final_account_line l WHERE tenant_id=p_tenant AND job_id=p_job AND final_account_revision_id=p_revision;
+ FROM app.final_account_line l JOIN app.final_account_revision r ON(r.tenant_id,r.job_id,r.id)=(l.tenant_id,l.job_id,l.final_account_revision_id) WHERE l.tenant_id=p_tenant AND l.job_id=p_job AND l.final_account_revision_id=p_revision;
  SELECT coalesce(jsonb_agg(jsonb_build_object('scopeItemId',d.scope_item_id,'disposition',d.disposition,'sourceRef',d.id::text||':'||app.final_lock_hash(to_jsonb(d))) ORDER BY d.scope_item_id),'[]') INTO dispositions FROM (
   SELECT DISTINCT ON (s.scope_item_id) s.* FROM app.final_account_scope_disposition s
   WHERE s.tenant_id=p_tenant AND s.job_id=p_job AND s.scope_item_id IN(SELECT value::text::uuid FROM jsonb_array_elements_text(baseline))
@@ -203,7 +198,7 @@ CREATE FUNCTION app.prepare_final_review_extra(p_tenant uuid,p_job uuid,p_actor 
 BEGIN
  PERFORM app.final_lock_require_owner(p_tenant,p_actor);
  PERFORM 1 FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id)
- WHERE j.tenant_id=p_tenant AND j.id=p_job AND j.status='live' AND t.job_track='small_builder' AND t.environment IN('synthetic_demo','pilot_no_charge') FOR UPDATE OF j;
+ WHERE j.tenant_id=p_tenant AND j.id=p_job AND j.status='live' AND t.job_track='small_builder' AND t.environment='synthetic_demo' FOR UPDATE OF j;
  IF NOT FOUND THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM app.final_lock_require_owner(p_tenant,p_actor);
  IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=p_tenant AND job_id=p_job) THEN RAISE EXCEPTION 'FINAL_REVIEW_CLOSED'; END IF;
@@ -264,7 +259,7 @@ BEGIN
  -- Always the job first, as in SV-2 reveal/disclosure; audit allocation is last.
  PERFORM 1 FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id)
  WHERE j.tenant_id=p_tenant AND j.id=p_job AND j.status IN ('live','invoiced','paid') AND t.job_track='small_builder'
- AND t.environment IN ('synthetic_demo','pilot_no_charge') FOR UPDATE OF j;
+ AND t.environment='synthetic_demo' FOR UPDATE OF j;
  IF NOT FOUND THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM app.final_lock_require_owner(p_tenant,p_actor);
  IF p_command IS NULL OR p_revision IS NULL OR p_expected IS NULL OR p_expected<0 OR p_declaration IS DISTINCT FROM 'final_account_declaration.v1' THEN RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_LOCK_INPUT'; END IF;

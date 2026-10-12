@@ -92,3 +92,27 @@ test("DW7: pending and failed reconciliation refuse both invoice kinds in comman
   await appendCheck("pending"); await assertBlocked("FINAL_CHECK_NOT_COMPLETE");
   await appendCheck("failed"); await assertBlocked("FINAL_CHECK_FAILED");
 });
+
+
+test("DW7: another lock or cutoff cannot complete this job's check in commands or UI",async({page})=>{
+ const fixture=await prepareLockJob(page);await finishDispositionsAndTerms(page);
+ await page.getByRole('button',{name:'Complete final account',exact:true}).click();
+ await expect(page.getByTestId('lock-state')).toHaveText('Final account completed');
+ const other=await prepareLockJob(page);await finishDispositionsAndTerms(page);
+ await page.getByRole('button',{name:'Complete final account',exact:true}).click();
+ await expect(page.getByTestId('lock-state')).toHaveText('Final account completed');
+ await withSyntheticShadow(fixture.tenantId,async(shadow,admin)=>{
+  const locks=(await admin.query("SELECT job_id,id,locked_at::text cutoff,(locked_at+interval '1 microsecond')::text wrong_cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=ANY($2::uuid[])",[fixture.tenantId,[fixture.jobId,other.jobId]])).rows;
+  const own=locks.find(row=>row.job_id===fixture.jobId)!,foreign=locks.find(row=>row.job_id===other.jobId)!;
+  for(const [lockId,cutoff] of [[foreign.id,foreign.cutoff],[own.id,own.wrong_cutoff]])
+   await expect(shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,fixture.jobId,randomUUID(),lockId,cutoff])).rejects.toMatchObject({code:'23503'});
+  await shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,other.jobId,randomUUID(),foreign.id,foreign.cutoff]);
+ });
+ await page.goto(`/jobs/${fixture.jobId}#final-account-title`);
+ const panel=page.getByTestId('lock-bound-invoices');await expect(panel.getByRole('alert')).toHaveText('FINAL_CHECK_NOT_COMPLETE');
+ for(const kind of ['final','supplementary'] as const){
+  await expect(panel.getByRole('button',{name:`Issue ${kind} invoice`,exact:true})).toBeDisabled();
+  const refusal=await page.request.post(`/api/jobs/${fixture.jobId}/final-account/lock`,{data:{version:'lock-bound-invoice.issue.v1',commandId:randomUUID(),finalAccountRevisionId:fixture.account.id,expectedSourceHash:fixture.account.sourceHash,invoiceKind:kind,recipient:'practice-customer@example.invalid',issuedOn:'2026-10-12'}});
+  expect(refusal.ok()).toBe(false);expect((await refusal.json()).code).toBe('FINAL_CHECK_NOT_COMPLETE');
+ }
+});

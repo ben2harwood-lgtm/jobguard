@@ -88,4 +88,13 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
   await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,revision_id) VALUES($1,$2,$3,'interim',$4)",[a.tenantId,a.jobId,invoice.id,a.revisionId]));
   expect((await f.admin.query("SELECT invoice_kind,lock_id,check_id FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{invoice_kind:'interim',lock_id:null,check_id:null}]);
  });
+ it("a completion belonging to a foreign tenant cannot be bound or authorize either invoice kind",async()=>{
+  const a=await seedAccount(f.admin),b=await seedAccount(f.admin);
+  for(const account of [a,b]){const repo=await prepareLock(f,account);await repo.lock(account.context,account.input)}
+  const foreign=await lockRow(f,b.tenantId,b.jobId);
+  await expect(appendCheck(f,a,'completed',{lockId:foreign.id,jobId:b.jobId})).rejects.toMatchObject({code:'23503'});
+  await appendCheck(f,b,'completed');const repo=new FinalAccountLockRepository(f.runtime);
+  for(const kind of ['final','supplementary']as const){const input=invoiceInput(a,kind);await expect(repo.issueInvoice(a.context,input)).rejects.toMatchObject({code:'FINAL_CHECK_NOT_COMPLETE'});await expect(direct(a,input)).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE')}
+ });
+
 });
