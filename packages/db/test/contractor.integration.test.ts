@@ -7,12 +7,12 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorPermissions, contractorRoles, contractorPermissionMatrix, contractorPermits, referenceApprovalRulesV1, type ContractorCommand, type ContractorGrant, type ContractorRole } from "@jobguard/core";
 import { ContractorRepository, ContractorPartyRepository, JobSchedulingRepository, SorRepository, WorkOrderRepository, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, addBranchClient, demoFile, demoRow, prepareWorkOrderDemo, type WorkOrderDemo, type AuthenticatedMembership, verifiedTenantContextFromMembership } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres:EmbeddedPostgres, admin:Pool,runtime:Pool,dir:string,repo:ContractorRepository;
 const tables=['commercial_track_assignment','org_unit','team','client_organisation','client_contract','approval_rule_version','client_contract_version','contractor_member','role_grant','role_grant_revocation','contractor_membership_revocation','team_membership'];
 const document={version:'client-contract.v1',reference:'FICTIONAL',startsOn:'2026-10-01',endsOn:null,sorVersionIds:[],tenderedAdjustment:{numerator:'-35',denominator:'1000'},photoRule:'required',vatCode:'synthetic-unreviewed',exportedNotBilledAlertDays:30};
 beforeAll(async()=>{
- dir=await mkdtemp(join(tmpdir(),'jg-ent1-'));const port=58000+Math.floor(Math.random()*500);
+ dir=await mkdtemp(join(tmpdir(),'jg-ent1-'));const port=await freePort(58000,500);
  postgres=new EmbeddedPostgres({databaseDir:dir,port,user:'postgres',password:'synthetic',persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C','--encoding=UTF8'],onLog:()=>undefined});await postgres.initialise();await postgres.start();
  const control=new Pool({host:'127.0.0.1',port,user:'postgres',password:'synthetic',database:'postgres'});await control.query('CREATE DATABASE jobguard_synthetic_demo');await control.end();
  admin=new Pool({host:'127.0.0.1',port,user:'postgres',password:'synthetic',database:'jobguard_synthetic_demo'});

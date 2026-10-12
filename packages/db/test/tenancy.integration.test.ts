@@ -1,5 +1,5 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,7 +27,7 @@ let port: number;
 
 beforeAll(async () => {
   databaseDir = await mkdtemp(join(tmpdir(), "jobguard-pg16-"));
-  port = 55432 + Math.floor(Math.random() * 500);
+  port = await freePort(55432, 500);
   postgres = new EmbeddedPostgres({
     databaseDir,
     port,
@@ -195,6 +195,8 @@ describe("migration and privilege catalog", () => {
       { relname: "action_outbox", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "approval_rule_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "audit_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "audit_export", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "audit_export_checkpoint", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "cap_snapshot", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "capture_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "client_contract", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -230,6 +232,9 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_pack_attachment_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_pack_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_upload", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_duplicate_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_order_line_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "extra_origin", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "fee_illustration_source", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "final_account_draft", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -300,9 +305,11 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_case", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_case_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_claim_line", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_claim_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_demo_selection", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_eligibility_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "recovery_eligibility_v3_review", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_fee_derivation", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_fee_journal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "recovery_follow_up", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -344,6 +351,7 @@ describe("migration and privilege catalog", () => {
       { relname: "stage_completion", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "stage_review_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_bill_supersession", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "supplier_credit_consumption", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_document", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_document_intake", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "supplier_document_version", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -410,6 +418,8 @@ describe("migration and privilege catalog", () => {
       { relname: "action_outbox", owner: "jobguard_migration" },
       { relname: "approval_rule_version", owner: "jobguard_migration" },
       { relname: "audit_event", owner: "jobguard_migration" },
+      { relname: "audit_export", owner: "jobguard_migration" },
+      { relname: "audit_export_checkpoint", owner: "jobguard_migration" },
       { relname: "cap_snapshot", owner: "jobguard_migration" },
       { relname: "capture_source", owner: "jobguard_migration" },
       { relname: "client_contract", owner: "jobguard_migration" },
@@ -445,6 +455,9 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_pack_attachment_approval", owner: "jobguard_migration" },
       { relname: "evidence_pack_revision", owner: "jobguard_migration" },
       { relname: "evidence_upload", owner: "jobguard_migration" },
+      { relname: "extra_duplicate_link", owner: "jobguard_migration" },
+      { relname: "extra_event", owner: "jobguard_migration" },
+      { relname: "extra_order_line_link", owner: "jobguard_migration" },
       { relname: "extra_origin", owner: "jobguard_migration" },
       { relname: "fee_illustration_source", owner: "jobguard_migration" },
       { relname: "final_account_draft", owner: "jobguard_migration" },
@@ -515,9 +528,11 @@ describe("migration and privilege catalog", () => {
       { relname: "recovery_approval", owner: "jobguard_migration" },
       { relname: "recovery_case", owner: "jobguard_migration" },
       { relname: "recovery_case_event", owner: "jobguard_migration" },
+      { relname: "recovery_claim_line", owner: "jobguard_migration" },
       { relname: "recovery_claim_revision", owner: "jobguard_migration" },
       { relname: "recovery_demo_selection", owner: "jobguard_migration" },
       { relname: "recovery_eligibility_revision", owner: "jobguard_migration" },
+      { relname: "recovery_eligibility_v3_review", owner: "jobguard_migration" },
       { relname: "recovery_fee_derivation", owner: "jobguard_migration" },
       { relname: "recovery_fee_journal", owner: "jobguard_migration" },
       { relname: "recovery_follow_up", owner: "jobguard_migration" },
@@ -559,6 +574,7 @@ describe("migration and privilege catalog", () => {
       { relname: "stage_completion", owner: "jobguard_migration" },
       { relname: "stage_review_event", owner: "jobguard_migration" },
       { relname: "supplier_bill_supersession", owner: "jobguard_migration" },
+      { relname: "supplier_credit_consumption", owner: "jobguard_migration" },
       { relname: "supplier_document", owner: "jobguard_migration" },
       { relname: "supplier_document_intake", owner: "jobguard_migration" },
       { relname: "supplier_document_version", owner: "jobguard_migration" },

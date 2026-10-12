@@ -721,9 +721,71 @@ Existing objects it touches: the three M4-5-S guards (`guard_recovery_message`, 
 
 Expand-compatible: new tables, functions and one trigger; the preceding application ignores them. Corrections ship as a new migration: events, due rows and links are historical facts, so there is no destructive rollback. Proof: `packages/db/test/recovery-follow-up.integration.test.ts` (including the same-transaction proof by `xmin` and by injected failure).
 
-## 0118 — SV-2 shadow persistence and isolation
+## 0115_recovery_follow_up_repair.sql (M4-6-S-R1)
 
-Renumbered from 0100 to 0118 on 11 October under Ben's 5 October merge-ahead ruling: 0112 (M4-6-S) and lower have merged, 0113 (CH-7), 0114 (ENT-10a), 0115 (M4-6-S-R1), 0116 (ENT-10b) and 0117 (ENT-4b) are reserved, so 0118 is the next free number; the SQL bytes are unchanged.
+Allocated by the integrator on 11 October 2026; registered in numeric order after 0112, leaving the reserved 0113/0114 slots alone. Fix-forward only: `CREATE OR REPLACE` of 0112's `guard_recovery_follow_up` and `evaluate_recovery_follow_ups`. No table, column, policy, grant, role, trigger or existing row changes. Existing function ownership, invoker rights and EXECUTE privileges remain intact. The three M4-5-S guards restated in 0112 remain byte-identical.
+
+The source-message selection accepts the newest delivered message (sink plus succeeded outbox) only when every later approved attempt has a cancelled outbox action. Revoked/blocked history therefore permits a fresh reviewed follow-up after reopening. A later preview without an approval is ignored, as in 0112; a queued, executing, retryable, failed, unknown or succeeded-but-not-recorded-as-delivered action continues to refuse. All other scheduling checks stay as in 0112.
+
+Due evaluation now finishes every intent mutation and business lock before taking the existing follow-up audit serialization key and audit head. It appends the due row's persisted `audit_event_id` using the same canonical SHA-256/UTC millisecond representation as `audit.ts`, within SBOX-2's own advance transaction. Where a persisted clock event caused the transition, its identifier-only `time_advanced` fact precedes `became_due`, preserving the existing history order. These clock facts name the system actor and hash the persisted clock payload; they do not imply human consent. The repository suppresses a later duplicate `time_advanced` append for that command. Its existing catch-up remains for old 0112 due rows and becomes a no-op for newly audited transitions. No SBOX-2 code or routine changes; no new privileged helper. Audit writes or head failures roll back the clock and due records together.
+
+Upgrade coverage: `test/recovery-follow-up-upgrade.integration.test.ts` installs through 0111, populates approved, queued, revoked, delivered and unknown messages via M4-5-S, compares the complete textual row representation of every pre-existing table after 0112 and 0115, compares catalog privileges/policies/owners, verifies audit hashes, then exercises preview/approve/revoke/deliver/reconcile on that upgraded history. `test/recovery-follow-up.integration.test.ts` adds direct SBOX-2 transaction-ID and late-failure rollback proofs, exact reviewed continuation after revocation/reopening, and raw-SQL/application refusals. **PostgreSQL suites NOT RUN in the builder sandbox (cannot start PostgreSQL); CI and the integrator must execute them.**
+
+Forward fix: preserve immutable history and replace only the affected routines in another reviewed migration. Application rollback remains schema-compatible, but must not be treated as a rollback of the atomic audit guarantee; the old application may still append its additional clock audit. Do not revert to 0112's delayed due-audit routine, drop history, or rewrite audit rows. Release/acceptance requires green database/migration/browser suites, fresh Claude Opus review and a separate Sol check on the exact dispatcher commit.
+
+## 0119 — CH-7 recovery eligibility v3
+
+Renumbered from 0113 to 0119 on 11 October 2026 under the merge-ahead ruling because 0115 merged first.
+
+The new `practice_feed_event_job_identity` unique key on `app.practice_feed_event` covers `(tenant_id,job_id,id)`.
+The new `recovery_eligibility_v1_duplicate_payment_refusal` trigger on `app.recovery_eligibility_revision` calls `app.refuse_v1_eligibility_for_duplicate_payment()` to refuse new v1 review rows for a `duplicate_supplier_payment` case.
+
+Expand-only synthetic candidate reviews, tenant/job/case-qualified claim components and a typed supplier-credit link; adds `duplicate_supplier_payment` without changing old cases/reviews. Runtime tables are FORCE RLS, owned by `jobguard_migration`, SELECT/INSERT only, with invoker write guards and deferred audit/component completeness. No fee/posting, terms or pursuit routine changes. The consumed-credit positive path fails closed because merged 0106 has no supplier-invoice payment movement; see `docs/contracts/recovery-eligibility-v3.md`. Keep v1 data byte-for-byte. Forward fix with a new migration; any application rollback must retain a reader compatible with the new category after such cases exist. Never drop populated history or narrow a used category. PostgreSQL fresh/upgrade/catalog tests are written but NOT RUN in the builder sandbox. Round 1 (11 October 2026) adds, inside 0119 only, a new trigger `recovery_eligibility_v1_duplicate_payment_refusal` (function `app.refuse_v1_eligibility_for_duplicate_payment`, invoker rights) that refuses any new v1 review or approval row for a `duplicate_supplier_payment` case, and makes the stored v3 result guard require every result key with the right JSON type (an absent `reason` is no longer accepted as null). No merged routine is replaced and no merged column, policy or grant changes.
+
+## 0120 — ENT-10a synthetic SAML identity
+
+Renumbered 0114 → 0120 on 11 October 2026 under the merge-ahead ruling because 0115 merged first.
+
+Adds only new identity/control-plane tables and narrowly scoped routines. Eight
+scoped tables have tenant-qualified keys, enabled/FORCE RLS and migration ownership;
+`identity.sso_refusal_event` is an INSERT-only global identity-bootstrap exception.
+Business runtime/infrastructure gain no identity privileges. Existing schemas,
+tables, policies, roles, grants and auth/session routines are unchanged. Sessions
+and JIT memberships are inserted through the existing persisted mechanism, with
+an additional 900-second bound; SSO-derived grant/session revocations retain history.
+
+Upgrade is additive with no data backfill. `migrate` registers 0120 after the merged
+0115 (0116–0119 reserved by other pieces); tests compare migration names and increasing order.
+Fresh bootstrap and upgrade suites plus the new PostgreSQL identity tests are required
+in CI; they were NOT RUN in the socket-restricted builder sandbox.
+
+Rollback strategy: disable SSO and allow issued sessions to expire; preserve tables,
+request/assertion identities, links, revocations and audit records. Repair forward
+with a separately numbered migration. Do not drop identity/audit history or rewrite
+an already applied migration. No real-provider rollout or D04/G5 approval follows
+from migration success.
+
+## 0121 — audit export (ENT-10b)
+
+Renumbered 0116 → 0121 on 11 October under the merge-ahead ruling.
+
+Adds `app.audit_export` and `app.audit_export_checkpoint`, tenant-qualified audit/membership/checkpoint FKs, FORCE RLS, migration ownership and append-only triggers. Runtime gets SELECT/INSERT on the new export table and SELECT only on the new checkpoint handoff; existing objects and privileges are unchanged. Existing restricted assurance credentials copy existing checkpoints; no runtime access to `audit_control` or new elevated routine. No backfill. Previous application remains compatible. Disable new routes and fix forward on failure; never rewrite/delete audit history or exports as rollback. Live signing/rotation remains HELD. Fresh install is covered by the existing migration/bootstrap suites; upgrade and catalogue/runtime attacks by `test/audit-export.integration.test.ts`. Database suites were NOT RUN in the builder sandbox.
+
+## 0122 — ENT-4b origin persistence and audit
+
+Renumbered 0117 → 0122 on 11 October 2026 under the merge-ahead ruling.
+
+Adds `app.extra_event`, `app.extra_duplicate_link` and `app.extra_order_line_link`, owned by `jobguard_migration`, with enabled/FORCE RLS, tenant policy, SELECT/INSERT-only runtime grants and immutable UPDATE/DELETE guards. Adds four SECURITY INVOKER trigger functions, all revoked from PUBLIC/runtime; no callable helper or SECURITY DEFINER routine.
+
+Existing objects extended by addition only: `app.extra_origin` (ten nullable provenance columns, six composite FKs, two CHECKs, partial capture-ID unique index, insert provenance trigger and deferred audit trigger); `app.variation` (four nullable reference columns, two FKs, one CHECK). B5 pricing basis is HELD: a column on a fingerprinted table would change approved evidence packs and needs its own decision. No fingerprinted table is extended. SH-1's command-receipt FK, command map, immutability and `variation_requires_origin` are reused unchanged. Every pre-existing row retains its old values; no backfill, defaults, policy/grant changes or routine replacement.
+
+References existing keys on command receipts, memberships, role grants, work orders/revisions/lines, visits, SoR items, evidence, variations and revisions without altering those objects. Fixture contractor origins retain all-NULL new columns and are exempt from the new audit/logged requirement. Work-order contractor origins require structural provenance and the exact raised audit plus logged event at commit. Prompt provenance and unlink command/authorization remain held.
+
+Forward fix: disable callers of this new repository, preserve all appended records and deploy an additive corrective migration after review. Do not drop populated history or rewrite origins. No destructive rollback SQL is supplied. Database fresh/upgrade/catalog checks were written; sandbox execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). Dispatcher/CI must execute them before acceptance.
+
+## 0128 — SV-2 shadow persistence and isolation
+
+Renumbered from 0100 to 0118 on 11 October and from 0118 to 0128 on 12 October under Ben's 5 October merge-ahead ruling. 0119 (CH-7), 0120 (ENT-10a), 0121 (ENT-10b), 0122 (ENT-4b) and everything lower have merged; 0123 (CH-7-F17-BEFORE-OPEN), 0124 (PRACTICE-FACTS-1), 0125 (ENT-10d), 0126 (ENT-3a) and 0127 (STORED-TIMES-1) are reserved, so 0128 is the next free number. The SQL bytes are unchanged by both renumberings (sha256 recorded in the refresh receipt); the runner lists it last.
 
 Expand-only after 0094. Adds eight restricted shadow tables and one append-only
 variation-withdrawal fact, qualified evidence/version/hash/receive-time identity,
@@ -741,7 +803,7 @@ granted by the bootstrap superuser). The owner cannot revoke it, so it stays; th
 bootstrap accepts exactly that shape, fails closed on any other holder, and the
 support route checks `USAGE` (not `MEMBER`) so the leftover membership grants no
 support authority. No support holder is appointed. Because the schema `app` is
-now usable by these two roles, 0118 revokes PUBLIC EXECUTE from the four older
+now usable by these two roles, 0128 revokes PUBLIC EXECUTE from the four older
 SECURITY DEFINER routines that never had it revoked (`advance_final_account_draft`,
 `invalidate_stale_final_account_authorizations`, `reserve_customer_invoice_number`,
 `issue_practice_customer_invoice`); `jobguard_runtime` keeps its explicit grants.

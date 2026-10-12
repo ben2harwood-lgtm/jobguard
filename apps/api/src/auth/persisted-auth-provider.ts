@@ -1,10 +1,13 @@
 import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
-import { IdentityRepository } from "@jobguard/db";
+import { EnterpriseIdentityRepository, IdentityRepository } from "@jobguard/db";
 import { AuthError, roles, type ActiveMembership, type AuthPrincipal, type AuthProvider, type ChallengeRequest, type Role, type VerificationResult } from "./auth-provider.js";
 import { challengeRequestV1, verifyCodeV1 } from "./auth-schemas.js";
 import { FixtureIdentityEmail } from "./identity-email.js";
 
 export class PersistedAuthProvider implements AuthProvider {
+  // Nest and Next both compose this provider. Binding belongs here so every consumer,
+  // including the ordinary identity principal bridge, sees the same session authority.
+  private readonly enterpriseIdentity: EnterpriseIdentityRepository;
   constructor(
     readonly repository: IdentityRepository,
     private readonly secret: string,
@@ -12,7 +15,10 @@ export class PersistedAuthProvider implements AuthProvider {
     private readonly environment = "synthetic_demo",
     private readonly now: () => number = Date.now,
     private readonly makeCode: () => string = () => randomInt(100_000_000).toString().padStart(8, "0"),
-  ) { if (secret.length < 32) throw new Error("Identity code key is missing"); }
+  ) {
+    if (secret.length < 32) throw new Error("Identity code key is missing");
+    this.enterpriseIdentity = new EnterpriseIdentityRepository(repository.pool);
+  }
   assertRecipient(email:string):void { this.emailAdapter.assertRecipient(email,this.environment); }
   digest(value: string): string { return createHmac("sha256", this.secret).update(value).digest("hex"); }
   async requestCode(raw: ChallengeRequest): Promise<{ accepted: true; fixtureCode?: string }> {
@@ -65,12 +71,22 @@ export class PersistedAuthProvider implements AuthProvider {
   }
   async authenticate(sessionToken: string): Promise<AuthPrincipal | undefined> {
     const row = (await this.repository.pool.query<{id:string;user_id:string;csrf_token:string}>("SELECT id,user_id,csrf_token FROM identity.session WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2 AND environment=$3", [this.digest(`session:${sessionToken}`),new Date(this.now()),this.environment])).rows[0];
-    return row ? {sessionId:row.id,identityUserId:row.user_id,csrfToken:row.csrf_token} : undefined;
+    if (!row || (await this.enterpriseIdentity.sessionScope(row.id))?.revoked) return undefined;
+    return {sessionId:row.id,identityUserId:row.user_id,csrfToken:row.csrf_token};
   }
   async memberships(principal: AuthPrincipal): Promise<(ActiveMembership & { name: string })[]> {
-    return (await this.repository.memberships(principal.identityUserId)).filter(row => roles.includes(row.role as Role)).map(row => ({id:row.id,identityUserId:row.identity_user_id,tenantId:row.tenant_id,role:row.role as Role,email:row.email,name:row.name}));
+    const scope = await this.enterpriseIdentity.sessionScope(principal.sessionId);
+    if (scope?.revoked) return [];
+    return (await this.repository.memberships(principal.identityUserId)).filter(row => roles.includes(row.role as Role)
+      && (!scope || (row.tenant_id === scope.tenantId && row.id === scope.membershipId)))
+      .map(row => ({id:row.id,identityUserId:row.identity_user_id,tenantId:row.tenant_id,role:row.role as Role,email:row.email,name:row.name}));
   }
   async findMembership(principal: AuthPrincipal, tenantId: string): Promise<ActiveMembership | undefined> {
-    return (await this.memberships(principal)).find(row => row.tenantId===tenantId);
+    const membership = (await this.memberships(principal)).find(row => row.tenantId===tenantId);
+    if (!membership) {
+      const scope = await this.enterpriseIdentity.sessionScope(principal.sessionId);
+      if (scope) await this.enterpriseIdentity.refusal(scope.connectionId ?? "identity", "TENANT_FORBIDDEN");
+    }
+    return membership;
   }
 }

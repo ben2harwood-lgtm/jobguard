@@ -11,7 +11,7 @@ import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
-const migrationURL=new URL("../migrations/0118_shadow_persistence.sql",import.meta.url);
+const migrationURL=new URL("../migrations/0128_shadow_persistence.sql",import.meta.url);
 // CH-2's live-job input guard reads the tenant from the session: fixture writes to guarded evidence tables run in a
 // transaction with app.tenant_id set, the way main's own fixtures do.
 async function asTenant<R>(tenant:string,work:(db:PoolClient)=>Promise<R>):Promise<R> {

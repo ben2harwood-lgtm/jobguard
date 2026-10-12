@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { money } from "./money.js";
 
-export const recoveryCaseTypeV1 = z.enum(["merchant_overcharge", "withheld_customer_payment", "prevention"]);
+export const recoveryCaseTypeV1 = z.enum(["merchant_overcharge", "withheld_customer_payment", "prevention", "duplicate_supplier_payment"]);
 export const recoveryCaseStateFullV1 = z.enum([
   "identified", "evidence_assembled", "pursuing", "negotiating", "partially_landed", "landed",
   "closed_recovered", "closed_no_recovery", "prevented",
@@ -188,7 +188,7 @@ export function assertRecoverySources(input: Readonly<{
   sourceType: "supplier_documents" | "customer_invoice"; sourceRefs: readonly string[];
 }>): void {
   const bookMatches = input.book === (input.sourceType === "supplier_documents" ? "supplier_cost" : "builder_customer");
-  const caseMatches = input.caseType === "prevention"
+  const caseMatches = (input.caseType === "duplicate_supplier_payment" && input.sourceType === "supplier_documents") || input.caseType === "prevention"
     || input.caseType === (input.sourceType === "supplier_documents" ? "merchant_overcharge" : "withheld_customer_payment");
   const unique = new Set(input.sourceRefs);
   const shaped = input.sourceRefs.every(ref => describeRecoverySource(ref)?.sourceType === input.sourceType || isRecordedSourceId(ref));

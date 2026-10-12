@@ -8,7 +8,7 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
-import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { SwitchJobLiveMutation } from "../src/activation-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
@@ -32,7 +32,7 @@ async function insertVariation(client:Pick<PoolClient,"query">,id:string,jobId:s
  await client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,job_track,origin) VALUES($1,$2,$3,$4,'text','Fictional capture','Synthetic extra',$5,$6)",[id,tenant,jobId,scope,track,kind]);
 }
 beforeAll(async()=>{
- dir=await mkdtemp(join(tmpdir(),"sh-1-pg-"));port=59600+Math.floor(Math.random()*100);
+ dir=await mkdtemp(join(tmpdir(),"sh-1-pg-"));port=await freePort(59600,100);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");

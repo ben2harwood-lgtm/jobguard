@@ -11,7 +11,7 @@ import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
-const migrationURL=new URL("../migrations/0118_shadow_persistence.sql",import.meta.url);
+const migrationURL=new URL("../migrations/0128_shadow_persistence.sql",import.meta.url);
 async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
  const id=randomUUID();await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
  VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low',$5)`,[tenantId,jobId,id,randomUUID(),state]);return id;
@@ -65,8 +65,8 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
   expect(helpers).toEqual([]);
  });
  it("closes inherited PUBLIC EXECUTE: neither new role can run an app routine beyond SV-2's explicit grants",async()=>{
-  // 0118 gives both roles USAGE on schema app for the first time. Four older SECURITY DEFINER routines there had
-  // PUBLIC EXECUTE; 0118 revokes it. Runtime keeps its own explicit grant on each, exactly as before.
+  // 0128 gives both roles USAGE on schema app for the first time. Four older SECURITY DEFINER routines there had
+  // PUBLIC EXECUTE; 0128 revokes it. Runtime keeps its own explicit grant on each, exactly as before.
   const older=["advance_final_account_draft","invalidate_stale_final_account_authorizations","issue_practice_customer_invoice","reserve_customer_invoice_number"];
   expect((await admin.query(`SELECT p.proname,p.prosecdef,r.rolname AS owner,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') AS runtime,
    ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END FROM aclexplode(p.proacl) a WHERE a.privilege_type='EXECUTE' ORDER BY 1)::text[] AS grantees

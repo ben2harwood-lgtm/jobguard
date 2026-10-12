@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { customerTypes } from "@jobguard/core";
 import { migrate, MIGRATION_URLS, JobPartiesRepository, PreventionCheckRepository, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type VerifiedTenantContext } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, port: number, context: VerifiedTenantContext;
 const tenant = randomUUID(), other = randomUUID(), member = randomUUID(), user = randomUUID(), account = randomUUID();
@@ -24,7 +24,7 @@ async function job(type = "person", number: string | undefined = undefined) {
 }
 beforeAll(async () => {
   process.env.JOBGUARD_ENV="synthetic_demo";
-  dir=await mkdtemp(join(tmpdir(),"mon7a-pg16-"));port=59700+Math.floor(Math.random()*100);
+  dir=await mkdtemp(join(tmpdir(),"mon7a-pg16-"));port=await freePort(59700,100);
   pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
   await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)",[tenant,other]);
@@ -196,5 +196,5 @@ describe("MON-7a real PostgreSQL guarantees", () => {
       expect((await upgrade.query("SELECT * FROM app.job WHERE id=$1",[id])).rows).toEqual(before);
       expect((await upgrade.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0103_prevention_checks.sql'")).rowCount).toBe(1);
     }finally{await upgrade.end();}
-  });
+  }, 60_000);
 });

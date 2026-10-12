@@ -11,7 +11,7 @@ import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
-const migrationURL=new URL("../migrations/0118_shadow_persistence.sql",import.meta.url);
+const migrationURL=new URL("../migrations/0128_shadow_persistence.sql",import.meta.url);
 // CH-3a/CH-2 row-level guards read the tenant from the session: fixture writes that touch live-job state run in a
 // transaction with app.tenant_id set, the way main's own fixtures do.
 async function asTenant<R>(tenant:string,work:(db:PoolClient)=>Promise<R>):Promise<R> {
@@ -203,13 +203,13 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
  it("upgrades seeded SH-1 backfill with no second backfill and preserves exact labels and counts",async()=>{
   const client=await admin.connect(),schema=`sv2_upgrade_${randomUUID().replaceAll('-','')}`;
   // Isolated real database: apply the exact supported predecessor, seed before SH-1,
-  // and compare origins before/after 0118. No second hand-written backfill.
+  // and compare origins before/after 0128. No second hand-written backfill.
   await client.query(`CREATE DATABASE ${schema}`);client.release();
   // Pass every connection field explicitly: spreading admin.options drops pg-pool's non-enumerable password.
   const upgrade=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:schema});
   try{
-   // The supported predecessor is every migration listed before 0118, selected by name: later migrations may follow it.
-   const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0118_shadow_persistence.sql"));expect(own).toBeGreaterThan(0);
+   // The supported predecessor is every migration listed before 0128, selected by name: later migrations may follow it.
+   const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0128_shadow_persistence.sql"));expect(own).toBeGreaterThan(0);
    const urls=MIGRATION_URLS.slice(0,own),sh1=urls.findIndex(u=>u.pathname.endsWith("0053_shared_money_origin.sql"));expect(sh1).toBeGreaterThan(-1);
    for(const url of urls.slice(0,sh1))await upgrade.query(await readFile(url,"utf8"));
    const t=randomUUID(),j=randomUUID(),s=randomUUID(),v=randomUUID();
@@ -221,7 +221,7 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
    const before=(await upgrade.query("SELECT * FROM app.extra_origin")).rows;
    expect(before).toHaveLength(1);expect(before[0]).toMatchObject({kind:"builder_logged",provenance:"backfilled_synthetic_fixture",raising_role:"legacy_unrecorded",raising_membership_id:null,command_id:null});
    // Snapshot SBOX's exact ownership boundary on the supported predecessor.
-   // 0118 must leave its policies, grants, bindings, triggers and routines intact.
+   // 0128 must leave its policies, grants, bindings, triggers and routines intact.
    const sboxCatalog=async()=>({
     policies:(await upgrade.query("SELECT schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check FROM pg_policies WHERE policyname LIKE 'practice_%' ORDER BY schemaname,tablename,policyname")).rows,
     bindings:(await upgrade.query("SELECT table_schema,table_name,column_name,data_type,column_default,is_nullable FROM information_schema.columns WHERE column_name IN ('practice_session_digest','practice_scenario') ORDER BY table_schema,table_name,column_name")).rows,
@@ -231,7 +231,7 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
    });
    const sboxBefore=await sboxCatalog();
    expect(sboxBefore.policies.filter(row=>row.policyname==='practice_material_isolation')).toHaveLength(5);
-   // The exact SBOX routines on the predecessor, by name: the five SBOX-SESSION-1 routines plus 0106's guard_practice_feed, which now precedes 0118.
+   // The exact SBOX routines on the predecessor, by name: the five SBOX-SESSION-1 routines plus 0106's guard_practice_feed, which now precedes 0128.
    expect(sboxBefore.routines.map(row=>row.proname).sort()).toEqual(["authenticate_practice_session","guard_practice_feed","guard_practice_material_owner","guard_practice_material_requirement","guard_practice_owner","issue_practice_session"]);
    await upgrade.query(await readFile(migrationURL,"utf8"));
    const after=(await upgrade.query("SELECT * FROM app.extra_origin")).rows;
