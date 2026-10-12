@@ -369,3 +369,9 @@ that existing supplied-fact gap. No database rule or cross-layer test was inspec
 - The full diff was read as a builder self-review. This is not independent verification.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Dispatcher's additions and Mac run (12 Oct 2026)
+
+- Commit f8df7f8 (dispatcher): one BUILD_PLAN.md section 12.2 ledger paragraph ("Ledger amendment — ENT-4a-ALIGN, 12 October 2026") and the lane line widened by `BUILD_PLAN.md` for that sentence only. `git diff 9488a35..HEAD -- packages/core/src/enterprise-domain/transitions.ts` is empty (the coordinator's rule change is untouched), and the builder's test commit removed no line of any existing test (`git diff 9488a35..HEAD -- transitions.test.ts` has no '-' lines).
+- Mac, through `~/.local/bin/heavy-slot`, working directory `.worktrees/ent-4a-align`: `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/enterprise-domain/transitions.test.ts src/enterprise-domain/origin.test.ts src/enterprise-domain/boundaries.test.ts`: exit 0, 3 files, 276 tests passed (log `jg-runs/ent-4a-align-mac-core.log`); `pnpm typecheck`: exit 0 (log `jg-runs/ent-4a-align-mac-typecheck.log`); `LANE_BASE_REF=origin/main pnpm lint:lanes`: passed.
+- Not run: database, browser, whole suites (pure core; GitHub's run is the whole-suite proof).
