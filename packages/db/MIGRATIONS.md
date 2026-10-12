@@ -765,6 +765,24 @@ with a separately numbered migration. Do not drop identity/audit history or rewr
 an already applied migration. No real-provider rollout or D04/G5 approval follows
 from migration success.
 
+## 0121 — audit export (ENT-10b)
+
+Renumbered 0116 → 0121 on 11 October under the merge-ahead ruling.
+
+Adds `app.audit_export` and `app.audit_export_checkpoint`, tenant-qualified audit/membership/checkpoint FKs, FORCE RLS, migration ownership and append-only triggers. Runtime gets SELECT/INSERT on the new export table and SELECT only on the new checkpoint handoff; existing objects and privileges are unchanged. Existing restricted assurance credentials copy existing checkpoints; no runtime access to `audit_control` or new elevated routine. No backfill. Previous application remains compatible. Disable new routes and fix forward on failure; never rewrite/delete audit history or exports as rollback. Live signing/rotation remains HELD. Fresh install is covered by the existing migration/bootstrap suites; upgrade and catalogue/runtime attacks by `test/audit-export.integration.test.ts`. Database suites were NOT RUN in the builder sandbox.
+
+## 0122 — ENT-4b origin persistence and audit
+
+Renumbered 0117 → 0122 on 11 October 2026 under the merge-ahead ruling.
+
+Adds `app.extra_event`, `app.extra_duplicate_link` and `app.extra_order_line_link`, owned by `jobguard_migration`, with enabled/FORCE RLS, tenant policy, SELECT/INSERT-only runtime grants and immutable UPDATE/DELETE guards. Adds four SECURITY INVOKER trigger functions, all revoked from PUBLIC/runtime; no callable helper or SECURITY DEFINER routine.
+
+Existing objects extended by addition only: `app.extra_origin` (ten nullable provenance columns, six composite FKs, two CHECKs, partial capture-ID unique index, insert provenance trigger and deferred audit trigger); `app.variation` (four nullable reference columns, two FKs, one CHECK). B5 pricing basis is HELD: a column on a fingerprinted table would change approved evidence packs and needs its own decision. No fingerprinted table is extended. SH-1's command-receipt FK, command map, immutability and `variation_requires_origin` are reused unchanged. Every pre-existing row retains its old values; no backfill, defaults, policy/grant changes or routine replacement.
+
+References existing keys on command receipts, memberships, role grants, work orders/revisions/lines, visits, SoR items, evidence, variations and revisions without altering those objects. Fixture contractor origins retain all-NULL new columns and are exempt from the new audit/logged requirement. Work-order contractor origins require structural provenance and the exact raised audit plus logged event at commit. Prompt provenance and unlink command/authorization remain held.
+
+Forward fix: disable callers of this new repository, preserve all appended records and deploy an additive corrective migration after review. Do not drop populated history or rewrite origins. No destructive rollback SQL is supplied. Database fresh/upgrade/catalog checks were written; sandbox execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). Dispatcher/CI must execute them before acceptance.
+
 ## 0123_recovery_eligibility_v3_f17_timing.sql (CH-7-F17-BEFORE-OPEN)
 
 Renumbered from 0125 to 0123 on 11 October 2026 under the merge-ahead ruling because 0120 merged first and 0121 and 0122 are taken by open pull requests (0124 is reserved by PRACTICE-FACTS-1); registered after 0120 in numeric order. Restates only 0119's `app.guard_recovery_eligibility_v3` with `CREATE OR REPLACE`: the existing `paid_before` exclusion now also applies to `duplicate_supplier_payment`. The stored original settlement timestamp at or before (`<=`) case opening gives an excluded F17 candidate, 0p and exactly `Paid before you opened this case`. After opening, settled F17 remains 45,000p with a null reason. No second timing comparison, table/column/policy/grant/trigger change, backfill or row rewrite; function ownership, invoker rights and EXECUTE privileges remain intact. No routine from another migration is replaced.
@@ -772,3 +790,13 @@ Renumbered from 0125 to 0123 on 11 October 2026 under the merge-ahead ruling bec
 Upgrade coverage is appended to `test/recovery-eligibility-v3.integration.test.ts`: a separate database installed through 0119 saves an F17 candidate for already-settled cash, then runs the migration runner twice and compares complete textual review, claim-line and audit rows byte-for-byte before appending a corrected review. Fresh-install coverage, microsecond boundaries, equal-instant exclusion, complete raw runtime refusal transactions and an after-opening raw-write control are in that same file. **NOT RUN (sandbox cannot start PostgreSQL / a browser).**
 
 Forward fix only: retain immutable saved candidates and audit history, replace the affected routine in a reviewed later migration. An application rollback must keep the timing rule or fail closed against this guard; do not revert the guard to 0119 or rewrite historical Q. CI database/browser execution, fresh Claude Opus review and a separate Sol check on the exact dispatcher commit remain required before acceptance. Synthetic only; no new fee derivation, posting, statement, provider or operational alert.
+
+## 0127 — STORED-TIMES-1 recovery timing pin
+
+Adds one SECURITY INVOKER function, `app.pin_recovery_timing_created_at()`, owned by `jobguard_migration`, `search_path=pg_catalog`, EXECUTE revoked from PUBLIC/runtime, and ordinary BEFORE INSERT row triggers named `a_recovery_timing_pin` on `app.recovery_case` and `app.practice_feed_event`. Every role's insert stores `transaction_timestamp()` instead of a chosen time; the pin fires before the existing source/feed guards. A raw writer's back-dating attempt cannot supply either stored time. No existing routine/hash, column, default, grant, policy or constraint changes; no backfill. Earlier stored times and all history remain unchanged. `CREATE TRIGGER` takes a short table lock.
+
+Runtime UPDATE/DELETE remains denied by 0018/0034 (case) and 0106 (feed), SQLSTATE 42501. The case's merged append-only trigger also refuses owner UPDATE/DELETE with 55000. Infrastructure/identity lack app-schema access (0000/0111). The feed's privilege-only guard suffices at the non-owner business-runtime boundary: runtime cannot grant itself rights, and the merged catalog test pins SELECT/INSERT-only grants. The owner CAN update feed rows; privileged actors can remove triggers. No UPDATE guard is added. Ordinary triggers permit the existing superuser replica-mode UPDATE fixtures; cold whole-cluster restore retains the stored times.
+
+After this pin a raw writer can still back-date by as long as it keeps its own transaction open, because the stored time is the transaction's start. That is bounded, needs raw database access, and is not closed by this order.
+
+Forward fix: never drop or rewrite history; correct by a later reviewed migration. Prior product paths omit these times and retain the same transaction clock. `extra-origin-upgrade.integration.test.ts` must still pass unedited for this change: 0127 only CREATES a new function and preserves every earlier definition. Fresh/upgrade, privilege and F18/F19 coverage is in `test/recovery-timing-pin.integration.test.ts`; database/browser execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). See `docs/contracts/recovery-timing-pin-v1.md` and the builder receipt. Independent RED-lane reviews and acceptance remain pending.

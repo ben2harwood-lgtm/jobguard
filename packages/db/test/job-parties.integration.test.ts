@@ -7,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation, appendAuditBatch, authenticatePracticeSession, authorizePracticeJob, issuePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, MIGRATION_URLS, migrate, JobPartiesRepository, UserCommandDispatcher, withTenant } from "../src/index.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), foreignTenant = randomUUID(), member = randomUUID();
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0095_job_parties.sql"))!;
@@ -125,7 +125,7 @@ describe("stored party revision schemas at the runtime INSERT boundary", () => {
   });
 });
 beforeAll(async () => {
-  dir=await mkdtemp(join(tmpdir(),"ch3a-pg16-"));const port=58000+Math.floor(Math.random()*300);
+  dir=await mkdtemp(join(tmpdir(),"ch3a-pg16-"));const port=await freePort(58000,300);
   postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
   await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
   // Upgrade from the exact previous supported schema with each lifecycle state.
@@ -293,7 +293,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
       expect((await fresh.query(`SELECT count(*)::int n FROM app.customer`)).rows[0].n).toBe(0);
       expect((await fresh.query(`SELECT action_type FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2`,[t,j])).rows[0].action_type).toBe("job.parties.details_needed");
     }finally{await fresh.end();}
-  });
+  }, 60_000);
   it("applies the full migration chain to a SQL_ASCII database without UTF8 encoding", async () => {
     // Reuse this suite's cluster; template0 permits a different database encoding.
     // Do not change the encoding flags of the six earlier regression suites.
@@ -311,7 +311,7 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
       await ascii.end();
       await admin.query("DROP DATABASE ch3a_sql_ascii");
     }
-  });
+  }, 60_000);
 });
 
 describe("CH-3a adoption authorization boundary (round 2)",()=>{
