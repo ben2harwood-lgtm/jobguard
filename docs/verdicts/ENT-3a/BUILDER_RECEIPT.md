@@ -1164,3 +1164,41 @@ Independent recorded exact-commit verdicts, separate acceptance and CI remain
 owed. Builder self-review and deterministic/test-executed evidence only;
 not independently verified, not accepted. F2, UI, D16/G1/ENT-14 and the other
 existing held items remain open.
+
+
+## Mac verification (12 Oct, final)
+
+Mac-side helper, 12 October 2026, worktree `.worktrees/ent-3a`, branch `codex/sandbox/ent-3a`. Starting head `9afb519` (clean, local only, never pushed). No review, no verdict, no merge to main, and no product code changed beyond the merge itself. **Head tested: `6aef5a6759092ec8145281802b7da546467719eb`** ("Merge main (ad1bad2) into ENT-3a", working tree clean at test time). This receipt is committed on top of that head as the only change after the tests; the push is that receipt commit.
+
+**Merge.** `git fetch origin`; `git merge origin/main` (ad1bad2) as a plain merge commit. Auto-merged: `BUILD_PLAN.md` (ENT-3a ledger paragraphs sit after main's PRACTICE-FACTS-1 paragraphs), `config/agent-lane-assignments.json` (parses), `packages/core/src/watchdog.ts`, `apps/api/src/workspace/index.ts`. Conflicted and resolved by keeping both sides, main's lines first:
+
+- `packages/db/src/migrate.ts`: list now ends `... 0129, 0130, 0131, 0135` (0132 SV-4, 0133 SV-3 and 0134 CH-7-TERMS are reserved by other open pieces and are not listed).
+- `packages/core/src/index.ts`: main's `practice-facts.js` export, then `site-extra.js`.
+- `packages/db/MIGRATIONS.md`: main's `## 0131 — PRACTICE-FACTS-1 part A` section, then `## 0135 — site extra authority (ENT-3a)`.
+- `apps/api/src/app.module.ts` (the one long `@Module` line): started from main's line (which has `PracticeFactsController`) and inserted `SiteExtraController,` in front of `SsoRequiredController,`. Character-level diff of the resolved line against main's line: exactly one insertion, `SiteExtraController,`. Against this branch's previous line: exactly one change, main's `PracticeFactsController` appended after `IdentityController`. Each addition appears once.
+- `apps/api/src/workspace/application.ts` (the one long `return Object.freeze({...})` line): started from main's line (which has `practiceFacts:Object.freeze({...})`) and inserted ` siteExtras: Object.freeze({ log: (jobId: string, raw: unknown) => siteExtras.log(contractorPrincipal, jobId, raw) }),` directly after `ssoRequired,`; the line `const siteExtras = new SiteExtraApplication(dependencies.pool);` sits just above it. Character-level diff against main's line: exactly one insertion, the `siteExtras` entry above. Against this branch's previous line: exactly one insertion, main's `practiceFacts` entry.
+- `apps/api/openapi.json` was NOT hand-merged: main's file was taken (`git checkout origin/main -- apps/api/openapi.json`) and regenerated with `pnpm openapi:generate` in `apps/api` (exit 0). The result is main's file plus 91 added lines and no removed lines; the site-extras operation documents 200, 201 and 409. JSON parses.
+
+Migration 0135 file sha256 after the merge: `1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab` (unchanged).
+
+**Set-up.** `@jobguard/core`, `db`, `storage`, `config`, `ai` each built alone (all exit 0), then `@jobguard/api` (`nest build`, exit 0), all after conflict resolution and before the openapi regeneration. Every heavy command ran through `~/.local/bin/heavy-slot`; vitest used `--maxWorkers=2` (db files `--maxWorkers=1`), at most three test files per run, one heavy step at a time. Embedded PostgreSQL started normally.
+
+**Commands, exits and counts (head `6aef5a6`).**
+
+| Check | Exit | Result |
+|---|---|---|
+| core `src/site-extra.test.ts` | 0 | 1 file, 35 passed |
+| db `test/site-extra-authority.integration.test.ts` (includes the upgrade proof), `test/site-extra.integration.test.ts`, `test/contractor-session-context.integration.test.ts` | 0 | 3 files, 78 passed |
+| api `src/contractor/site-extra.application.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/watchdog-registry.test.ts` | 0 | 3 files, 178 passed (registry 121, as expected) |
+| api `src/auth/context-boundary.test.ts` | 0 | 1 file, 145 passed |
+| api `src/audit-export` | 0 | 2 files, 30 passed |
+| web `app/api/contractor/jobs/[id]/site-extras/route.test.ts` | 0 | 1 file, 30 passed |
+| `pnpm test:migrations` (db `tenancy`, `demo-bootstrap`) | 0 | 2 files, 13 passed |
+| db neighbours that install the whole registry: `audit-export.integration`, `extra-origin-upgrade.integration` (the only file matching `extra-origin-upgrade*`), `sso-required.integration` | 0 | 3 files, 29 passed |
+| `pnpm typecheck --concurrency=2` | 0 | 7 of 7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | 0 | core purity (133 TypeScript files), lane boundary (lane ent-3a, branch registered, 26 files, includes `0135_site_extra_authority.sql`), money arithmetic, 7 of 7 package tasks |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane boundary passed, base ad1bad2 |
+| `pnpm openapi:check` (in `apps/api`) | 0 | committed `openapi.json` matches the generator |
+| `git grep -n "resolveVerifiedTenantContext\|verifiedTenantContextFromMembership\|bridgeMarker" -- 'apps/api/src/contractor/site-extra*' 'packages/db/src/site-extra*'` | 1 | no output (no match) |
+
+**NOT run.** The full root `pnpm test`; the full `packages/db` suite (only the files in the table); the rest of the `apps/api` and `apps/web` suites; `pnpm test:e2e` and any browser run; GitHub CI and the 45-minute CI job; the db unit file `contractor-session-context.test.ts` (only the integration file was assigned); any independent Claude or Sol review. No deployment. Nothing here is an independent verdict. Not independently verified, not accepted, not released.
