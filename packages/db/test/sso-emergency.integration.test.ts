@@ -35,10 +35,10 @@ beforeAll(async()=>{
  await control.query("CREATE DATABASE jobguard_synthetic_demo");await control.end();
  admin=new Pool({...base,user:"postgres",password:"synthetic"});
  const names=MIGRATION_URLS.map(x=>x.pathname.split("/").at(-1)!);
- expect(names.indexOf("0125_sso_required.sql")).toBeGreaterThan(names.indexOf("0120_enterprise_identity.sql"));
+ expect(names.indexOf("0129_sso_required.sql")).toBeGreaterThan(names.indexOf("0120_enterprise_identity.sql"));
  for(let i=1;i<names.length;i++)expect(names[i]!>names[i-1]!).toBe(true);
  // Real upgrade from the previous supported schema, followed by idempotent migration application.
- const index=names.indexOf("0125_sso_required.sql");
+ const index=names.indexOf("0129_sso_required.sql");
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,index)) {await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
  await migrate(admin);await migrate(admin);
@@ -116,7 +116,7 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
  it("[S10c] held constraint refuses owner rule insertion; identity and runtime cannot insert approvals; no approval writer exists",async()=>{
   await expect(admin.query("INSERT INTO identity.sso_emergency_approver_rule(id,version,definition) VALUES($1,'fixture.v1','{}')",[randomUUID()])).rejects.toMatchObject({code:"23514",constraint:"sso_emergency_approver_rule_held"});
   for(const pool of [identity,runtime])await expect(pool.query("INSERT INTO identity.sso_emergency_approval DEFAULT VALUES")).rejects.toMatchObject({code:"42501"});
-  const sql=await readFile(new URL("../migrations/0125_sso_required.sql",import.meta.url),"utf8");
+  const sql=await readFile(new URL("../migrations/0129_sso_required.sql",import.meta.url),"utf8");
   expect(sql).not.toMatch(/INSERT INTO identity\.sso_emergency_(?:approver_rule|approval)\b/iu);
  });
  it("[S10d] one owner-run rolled-back fixture proves sequential single use, expiry, wrong member and tenant",async()=>{

@@ -783,12 +783,6 @@ References existing keys on command receipts, memberships, role grants, work ord
 
 Forward fix: disable callers of this new repository, preserve all appended records and deploy an additive corrective migration after review. Do not drop populated history or rewrite origins. No destructive rollback SQL is supplied. Database fresh/upgrade/catalog checks were written; sandbox execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). Dispatcher/CI must execute them before acceptance.
 
-## 0125 — Single sign-on required (ENT-10d)
-
-Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces).
-
-Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
-
 ## 0127 — STORED-TIMES-1 recovery timing pin
 
 Adds one SECURITY INVOKER function, `app.pin_recovery_timing_created_at()`, owned by `jobguard_migration`, `search_path=pg_catalog`, EXECUTE revoked from PUBLIC/runtime, and ordinary BEFORE INSERT row triggers named `a_recovery_timing_pin` on `app.recovery_case` and `app.practice_feed_event`. Every role's insert stores `transaction_timestamp()` instead of a chosen time; the pin fires before the existing source/feed guards. A raw writer's back-dating attempt cannot supply either stored time. No existing routine/hash, column, default, grant, policy or constraint changes; no backfill. Earlier stored times and all history remain unchanged. `CREATE TRIGGER` takes a short table lock.
@@ -841,3 +835,9 @@ Before acceptance CI must execute real PostgreSQL fresh/upgrade, least-privilege
 catalog, support disclosure, rollback, immutable metadata, source-FK/probe and
 non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
 and browser regressions. Local sandbox initialization errors are not DB passes.
+
+## 0129 — Single sign-on required (ENT-10d)
+
+Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces). Renumbered from 0125 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
+
+Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.

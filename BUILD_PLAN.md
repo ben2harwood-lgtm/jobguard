@@ -3371,6 +3371,8 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — SV-2, 12 October 2026 (final refresh after plan PR #118, merge-ahead ruling).** Ben merged plan PR #118 on 12 October 2026, which releases SV-2 (PR #119). SV-2 moves from **0118** to **0128** (`shadow_persistence`), the next number neither merged nor reserved (merged through 0122; 0123 CH-7-F17-BEFORE-OPEN, 0124 PRACTICE-FACTS-1, 0125 ENT-10d and 0126 ENT-3a are reserved; 0127 STORED-TIMES-1, PR #142, precedes it in this branch's base), under Ben's 5 October merge-ahead ruling. The SQL is byte-identical to the 0118 file; the runner lists it after 0122. The lane path was swapped on SV-2's own line only. This replaces the 0118 number in the 11 October amendment above. A PR whose number is not above every merged number when it lands renumbers again.
 
+**Ledger amendment — ENT-10d, 12 October 2026 (catch-up, merge-ahead ruling).** ENT-10d (PR #146) moves from **0125** to **0129** (`sso_required`), the next number neither merged nor reserved at that time (merged through 0128: 0127 STORED-TIMES-1 and 0128 SV-2 landed on main ahead of it; 0123 CH-7-F17-BEFORE-OPEN, 0124 PRACTICE-FACTS-1 and 0126 ENT-3a stay reserved for their pieces), under Ben's 5 October merge-ahead ruling. The SQL is byte-identical to the 0125 file (sha256 recorded in the builder receipt); the runner lists it last, after 0128. The lane path was swapped on ENT-10d's own line only. This replaces the 0125 number in the 11 October amendment above. A PR whose number is not above every merged number when it lands renumbers again.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |

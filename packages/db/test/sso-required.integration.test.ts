@@ -29,10 +29,10 @@ beforeAll(async()=>{
  await control.query("CREATE DATABASE jobguard_synthetic_demo");await control.end();
  admin=new Pool({...base,user:"postgres",password:"synthetic"});
  const names=MIGRATION_URLS.map(x=>x.pathname.split("/").at(-1)!);
- expect(names.indexOf("0125_sso_required.sql")).toBeGreaterThan(names.indexOf("0120_enterprise_identity.sql"));
+ expect(names.indexOf("0129_sso_required.sql")).toBeGreaterThan(names.indexOf("0120_enterprise_identity.sql"));
  for(let i=1;i<names.length;i++)expect(names[i]!>names[i-1]!).toBe(true);
  // Real upgrade from the previous supported schema, followed by idempotent migration application.
- const index=names.indexOf("0125_sso_required.sql");
+ const index=names.indexOf("0129_sso_required.sql");
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,index)) {await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)]);}
  await migrate(admin);await migrate(admin);
@@ -151,7 +151,7 @@ describe("ENT-10d PostgreSQL switch and session boundary",()=>{
   await expect(empty.service.command(empty.command(true,0),empty.ordinary)).rejects.toMatchObject({code:"SSO_REQUIRED_NO_CONNECTION"});
   // Verified domains are immutable: a successful bound session necessarily has one. Source inspection
   // pins the redundant SQL domain guard without altering any merged object in a fixture.
-  const sql=await readFile(new URL("../migrations/0125_sso_required.sql",import.meta.url),"utf8");
+  const sql=await readFile(new URL("../migrations/0129_sso_required.sql",import.meta.url),"utf8");
   expect(sql).toContain("NOT EXISTS(SELECT 1 FROM identity.verified_domain d WHERE d.tenant_id=t AND d.connection_id=c)");
  });
  it("[S6d] unlinked active member and reinvited replacement pointing at retired SAML membership prevent ON",async()=>{
