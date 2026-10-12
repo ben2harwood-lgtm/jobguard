@@ -2825,6 +2825,79 @@
           "identity"
         ]
       }
+    },
+    "/jobs/{id}/final-account/lock": {
+      "get": {
+        "operationId": "FinalAccountLockController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read final-account completion without shadow content",
+        "tags": [
+          "final-account lock"
+        ]
+      },
+      "post": {
+        "operationId": "FinalAccountLockController_lock",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Complete final account or issue an exact lock-bound synthetic invoice",
+        "tags": [
+          "final-account lock"
+        ]
+      }
+    },
+    "/jobs/{id}/final-account/dispositions": {
+      "post": {
+        "operationId": "FinalAccountLockController_disposition",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record baseline scope disposition",
+        "tags": [
+          "final-account lock"
+        ]
+      }
+    },
+    "/jobs/{id}/final-account/terms": {
+      "post": {
+        "operationId": "FinalAccountLockController_terms",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Accept the closed synthetic Final Check terms",
+        "tags": [
+          "final-account lock"
+        ]
+      }
+    },
+    "/jobs/{id}/final-account/review-extras": {
+      "post": {
+        "operationId": "FinalAccountLockController_extra",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Add a builder capture during final review",
+        "tags": [
+          "final-account lock"
+        ]
+      }
     }
   },
   "info": {
