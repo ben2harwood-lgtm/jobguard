@@ -7,12 +7,12 @@ function expectRefusal(input:unknown,code:EnterpriseDomainError["code"],label:st
  try {transitionExtra(input);}catch(caught){error=caught;}
  expect(error,label).toBeInstanceOf(EnterpriseDomainError);expect(error,label).toHaveProperty("code",code);
 }
-// Independent normative rows from BUILD_PLAN §9.1.4; no implementation-generated expectation.
+// Independent hand-written rows, never generated from the implementation: BUILD_PLAN §9.1.4, except the roles of LogSiteExtra, RecordOfficeExtra and RecordClientInstruction, which follow the founder's answer of 11 Oct 2026 (card jobguard-ent4b-who-records-extras-2026-10-11).
 const edges: Record<string, { from: readonly string[]; roles: readonly string[]; to: string }> = {
- LogSiteExtra:{from:["absent"],roles:["operative","supervisor"],to:"logged"},
+ LogSiteExtra:{from:["absent"],roles:["operative","supervisor","surveyor"],to:"logged"},
  ConfirmPrompt:{from:["absent"],roles:["supervisor","surveyor","commercial_manager"],to:"logged"},
- RecordOfficeExtra:{from:["absent"],roles:["supervisor","surveyor","commercial_manager","admin"],to:"logged"},
- RecordClientInstruction:{from:["absent"],roles:["surveyor","commercial_manager","connector"],to:"logged"},
+ RecordOfficeExtra:{from:["absent"],roles:["finance","admin","owner"],to:"logged"},
+ RecordClientInstruction:{from:["absent"],roles:["commercial_manager","admin","owner"],to:"logged"},
  ImportOrderLine:{from:["absent"],roles:["surveyor","commercial_manager","connector"],to:"logged"},
  SubmitExtra:{from:["logged"],roles:["supervisor","surveyor","operative"],to:"awaiting_approval"},
  PriceExtra:{from:["logged"],roles:["supervisor","surveyor","operative"],to:"awaiting_approval"},
