@@ -384,3 +384,45 @@ Only typechecking is run under the round's tighter memory limit. No unit test ap
 **PostgreSQL database tests: NOT RUN in this sandbox (cannot bind localhost or start PostgreSQL).** Database, migration and browser suites remain for the Mac helper/CI; no database or browser startup was attempted. No model/prompt/schema implementation changed, so no evaluation applies.
 
 The intended conventional-commit subject and body are written to `/private/tmp/jg-msg-ch-7-terms.txt`. No Git write, commit or push was performed. The dispatcher owns committing and pushing; independent recorded verdicts bound to that exact commit and separate acceptance remain owed. This receipt is builder evidence only.
+
+
+## Mac verification (12 Oct, round 4)
+
+Run by the Mac helper (Claude Sonnet 5.5), 13 October 2026, just after midnight (record heading keeps the 12 Oct round label). The helper reviewed nothing, gave no verdict and changed no product or test code. **Result: GREEN.** Logs: `~/.local/share/full-steam/jg-runs/ch-7-terms-mac3/`.
+
+**Head tested:** merge commit `eab134f` ("Merge main (dfd0557) into CH-7-TERMS"; parents `ed2b5f5` Codex round 4 and `dfd0557` main, PR #152, SV-4 with migration 0132) plus the regenerated `apps/api/openapi.json` (15 added lines, the new `/jobs/{id}/recovery-cases/terms` route), which the merge commit does not yet hold. The commit that records this section adds exactly that file and this text. Conflicts: four append-only files (`packages/core/src/index.ts` and `packages/db/src/index.ts` export lists, `packages/db/src/migrate.ts` migration list, `packages/db/MIGRATIONS.md`); both sides kept, main first. `migrate.ts` now lists ... 0129, 0130, 0131, 0132, 0134 (0134 last of this branch). `apps/api/openapi.json` was taken from main and regenerated (`pnpm openapi:generate`, then `pnpm openapi:check`), never hand-merged. `git diff origin/main --stat` showed only this piece's 26 files before regeneration (27 with `openapi.json`; the lane boundary lint lists the same 27).
+
+**Round-4 fixture fixes confirmed in effect.** `git diff HEAD~1 -- packages/db/test` on `ed2b5f5` changes exactly the same lines as the probe's scratch diff (`ch-7-terms-mac2/probe-diffs/ch-7-terms-scratch-all.diff`): `expectedRevision:0` added to the `open` command in `newCase` and `seed`, and T7 split into COMMAND_CONFLICT on the already-approved case plus FORBIDDEN on a fresh case (sorted comparison of all added and removed lines: identical).
+
+**Two new database files** (`vitest --maxWorkers=1`, exit 0): 2 files passed, **49 tests passed (49)**, none skipped. Result lines quoted from the verbose log:
+
+- T2, non-owner: `✓ [T2] dispatcher refuses non-owner {admin, estimator, foreman, operative, finance, read_only, supervisor, surveyor, commercial_manager, client_approver, member, arbitrary_schema_role} with zero writes` (12 lines, each passed).
+- T2, revoked and expired owner: `✓ [T2] dispatcher refuses revoked owner with zero writes 12ms`; `✓ [T2] dispatcher refuses expired owner with zero writes 12ms`.
+- T2, direct runtime and positive control: `✓ [T2] direct runtime forged exact inputs refuse member/active and roll back everything 29ms`; `... refuse owner/revoked and roll back everything 16ms`; `... refuse owner/expired and roll back everything 17ms`; `✓ [T2] direct active-owner positive control accepts the same hand-made inputs; runtime cannot INSERT 16ms`.
+- T7 (both assertions, COMMAND_CONFLICT on the approved case and FORBIDDEN on the fresh case, then nothing-committed): `✓ [T7] tenant B cannot read or approve A, and A approval cannot satisfy B's same-UUID case guard 53ms`; also `✓ [T7] even the migration owner cannot mislink tenant/job/case identity 25ms`.
+- Amended T8: `✓ [T8] approval and both audit events share one writing transaction, ordered times and a verified chain 27ms`; `✓ [T8] private audit failure rolls back approval and dispatcher records, then the same command succeeds 1176ms`.
+- Rule-9 upgrade proof [T11]: `✓ [T11] populated before N, apply N alone, compare canonical named columns, then later migrations succeed twice 163ms`; `✓ [T11] fresh catalog has only the new forced-RLS table, controlled functions and additive ordinary triggers 10ms`.
+
+| Check | Command (short) | Exit | Result |
+| --- | --- | --- | --- |
+| Builds, each alone | `pnpm --filter @jobguard/{core,db,storage,config,ai,api} build` | 0 each | built |
+| OpenAPI | `pnpm openapi:generate` in apps/api, then `pnpm openapi:check` | 0, 0 | +15 lines; check passes |
+| New DB tests | vitest, 2 new files, `--maxWorkers=1` | 0 | 49 passed |
+| Core unit | `src/recovery-case-terms.test.ts` | 0 | 16 passed |
+| API units | `recovery-case-terms.application`, `watchdog-registry` | 0 | 139 passed, 2 files (18 + 121) |
+| Boundary scanner | `src/auth/context-boundary.test.ts` (untouched) | 0 | 145 passed |
+| Replay contract | `command-replay-contract.integration.test.ts` | 0 | 53 passed |
+| Merged DB group 1 | recovery-cases, recovery-cases.workbench, recovery-eligibility-v3 | 0 | 84 passed |
+| Merged DB group 2 | recovery-timing-pin, recovery.integration, recovery-follow-up | 0 | 103 passed |
+| Merged DB group 3 | recovery-follow-up-upgrade, recovery-messages, job-activation-terms | 0 | 112 passed |
+| Merged DB group 4 | evidence-packs, fingerprinted-row-shape, extra-origin-upgrade | 0 | 27 passed |
+| Merged DB group 5 | audit-export | 0 | 11 passed |
+| `pnpm test:migrations` | tenancy + demo-bootstrap | 0 | 13 passed |
+| `pnpm typecheck` | | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | | 0 | purity 136 files, lane boundary (27 files), 7/7 tasks |
+| `pnpm --filter @jobguard/web build` | production build for the browser run | 0 | built |
+| Browser, CH-7 + CH-1 + M4-5-S + M4-6-S | Playwright, channel chromium, `CI=1`, `--workers=1`, projects mobile-360 and desktop | 0 | 44 passed |
+
+Vitest ran with `--maxWorkers=1` for database files and `--maxWorkers=2` otherwise, at most three files per run, one heavy step at a time through `heavy-slot`. Ports 3000 and 55432 were free before the browser run; one browser run only. Wrapper config: `~/.local/share/full-steam/jg-runs/ch-7-terms-mac3/pw-ch-7-terms-mac3.config.ts`. The known Mac-only `[mobile-360] ENT-2.spec.ts:19` failure was not in scope and did not appear. There is no WebKit project in the Playwright config. Free disk 100 GB, free memory 69% throughout.
+
+Mac helper record only. Not independently verified, not accepted. No fresh Opus or Sol review exists. No pull request opened.
