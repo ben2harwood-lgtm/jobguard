@@ -98,3 +98,12 @@ No product code and no test was changed by this refresh except the filename/numb
 This verification itself changed no tracked file; its only repository change is this receipt. Local environment changes (all
 untracked): an offline install of 15 packages into `node_modules`, and rebuilt `packages/core/dist` and `packages/db/dist`.
 Nothing was pushed, and no GitHub read or write was made.
+
+## Combined state with STORED-TIMES-1 (#142), added by the dispatcher, 12 Oct 2026
+
+To test one combined state on GitHub, this branch also merged the head of PR #142 (`d50f1e114d19161c9ea8aca0d0e67c39bc23e593`, which already contains main 459ec87). Conflicts were append-only lists (`migrate.ts`, `MIGRATIONS.md`, `BUILD_PLAN.md`); both sides kept, 0127 then 0128. SV-2's own diff is `git diff d50f1e1..HEAD` (26 files). Wording about 0127 changed from "reserved" to "precedes it in this branch's base" in the ledger paragraph and the 0128 section.
+
+Mac runs on the merged tree, each through `~/.local/bin/heavy-slot`, working directory `.worktrees/sv-2`, `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 <three files>`:
+- `shadow-catalog`, `small-builder-origin`, `recovery-timing-pin` integration files: exit 0, 3 of 3 files, 43 of 43 tests (`jg-runs/sv-2-combined-a.log`).
+- `shared-money-origin`, `extra-origin-upgrade`, `recovery-follow-up-upgrade` integration files: exit 0, 3 of 3 files, 16 of 16 tests (`jg-runs/sv-2-combined-b.log`).
+Not run on the merged tree: everything else; GitHub's run is the proof for the rest.
