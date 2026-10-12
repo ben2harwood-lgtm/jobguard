@@ -595,3 +595,106 @@ No .pnpm-store, dist, .next, .turbo, tsbuildinfo or test-results output from the
 
 
 Final one-off AST source inspection: exit **0**, no decimal literal or numeric multiplication/division, no skipped test or approximate money comparison; only the permitted identifier offset and bigint money-sum additions. Final working-tree/wording/artifact audit: exit **0**, exactly two new files, all locked files equal HEAD, no generated outputs. No sub-agent or independent reviewer was spawned by this builder.
+
+## Mac verification (12 Oct)
+
+Run by the Mac-side helper (Claude Sonnet 5.5) on Monday 12 October 2026, 21:17 to 21:45 BST, in
+`.worktrees/fee-both-1` on the real Mac (macOS 26.4, Node v24.17.0, pnpm 10.28.1, Vitest 4.1.11, git 2.50.1).
+This is a build-side verification record. It is not a review, not a verdict and not an acceptance:
+**Not independently verified or accepted.** No product code was changed by the helper; the only file
+edit outside this receipt is the one BUILD_PLAN.md ledger paragraph, its own commit `163e4fd`.
+
+Every heavy command ran inside `~/.local/bin/heavy-slot <label> <script>`, one heavy step at a time, with
+`VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` and `--maxWorkers=2`; never more than one file per vitest run, apart from the
+one whole-`@jobguard/core` run the helper's brief allowed. Free disk 119 GiB at the start, 112 GiB at the end.
+
+### Heads tested and merges
+
+| Step | Commit | What it is |
+|---|---|---|
+| Builder head | `eb847b6` | cut from main d58560e: coordinator's 58066db, dispatcher's lane line e11e9db, builder's test file and receipt |
+| Merge 1 | `07882b7` | `origin/main` 96c0cb8 merged in; no conflicts |
+| Ledger commit | `163e4fd` | `docs(fee-both-1): section 12.2 ledger sentence` (BUILD_PLAN.md only, +2 lines) |
+| Merge 2 | `f03ccbb` | `origin/main` moved to ad1bad2 (pull request #139, PRACTICE-FACTS-1) while the tests ran; merged in; no conflicts; `config/agent-lane-assignments.json` still parses |
+
+All results below were produced twice: on `07882b7` (before the ledger commit and before main moved) and again
+on **`f03ccbb`**, the head the checks are bound to. The pushed head is `f03ccbb` plus this receipt commit (documentation only).
+The helper did not touch 58066db, `origin.ts` or the three AL-6 rows of `transitions.test.ts` (lines 276, 280-282).
+
+### Step 1: what differs from main
+
+`git diff origin/main --stat` (at f03ccbb) shows exactly the six expected paths and nothing else:
+`BUILD_PLAN.md` (+2, the ledger paragraph only), `config/agent-lane-assignments.json` (+1, the lane line),
+`docs/verdicts/FEE-BOTH-1/BUILDER_RECEIPT.md`, `packages/core/src/enterprise-domain/fee-both.test.ts`,
+`packages/core/src/enterprise-domain/origin.ts` (4 lines changed), `packages/core/src/enterprise-domain/transitions.test.ts` (8 lines changed).
+(Before the ledger commit the list was the same five paths without BUILD_PLAN.md.)
+
+### Step 2: tests and lints, with exit codes and counts
+
+| Check | Command (inside `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 ...` unless stated) | Exit | At 07882b7 | At f03ccbb |
+|---|---|---|---|---|
+| transitions | `src/enterprise-domain/transitions.test.ts` | 0 | 96 passed | 96 passed |
+| origin | `src/enterprise-domain/origin.test.ts` | 0 | 175 passed | 175 passed |
+| fee | `src/enterprise-domain/fee.test.ts` | 0 | 64 passed | 64 passed |
+| fee-both | `src/enterprise-domain/fee-both.test.ts` | 0 | 71 passed | 71 passed |
+| boundaries | `src/enterprise-domain/boundaries.test.ts` | 0 | 5 passed | 5 passed |
+| whole `@jobguard/core` suite | no file argument | 0 | 130 files, 3,864 passed | 131 files, 3,886 passed |
+| typecheck | `pnpm typecheck` | 0 | 7 of 7 tasks successful (2 cached) | 7 of 7 successful (2 cached) |
+| lint | `LANE_BASE_REF=origin/main pnpm lint` | 0 | see below | see below |
+
+The five enterprise-domain files are every file in that folder that holds tests (the others are `contracts.ts`, `fee.ts`, `index.ts`,
+`origin.ts`, `transitions.ts`). Outside the folder only `index.ts` and `extra-persistence.ts` import it, and the whole-package run covers them.
+The difference between the two whole-package counts (one file, 22 tests) is the new `practice-facts.test.ts` that arrived with main.
+
+`pnpm lint` at f03ccbb printed: "Core purity passed (132 TypeScript files)"; "Lane boundary passed" for lane `fee-both-1`
+(base ad1bad2, six changed paths, all inside the six-path allow list); "Money arithmetic boundary check passed"; then 7 of 7
+package lint tasks successful. The commercial-boundary step also ran without error. At 07882b7 the same lint passed with base 96c0cb8 and five paths.
+`LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` was also run directly right after the ledger commit and passed with the six paths.
+The 244 (175 + 64 + 5) and 167 (96 + 71) counts the builder recorded are reproduced exactly.
+
+### Step 3: the eight-extra mixed statement, reproduced
+
+Through the real kernel, the committed `fee-both.test.ts` `[FB-5]` tests assert exactly the order's figures (they passed in the 71): cumulative
+fee 4,541p after, principal 1,407,695/31, lines 1,500 / 1,000 / 1,235 / 806 / 0 / 0 / 0 / 0, summing to 4,541 (`fee-both.test.ts` lines 69-86).
+
+To check the BEFORE side without editing any tracked file, the helper made two uncommitted scratch copies of `packages/core` under the session
+scratch folder (outside the repository), with `node_modules` linked read-only. In the "old rule" copy only `origin.ts` was replaced by
+`git show d58560e:packages/core/src/enterprise-domain/origin.ts` (blob `290c563153e62413d5b7720e9a7fb031a4933c2d`, equal to `git rev-parse d58560e:...`).
+A throwaway printing test built statement M with the new test file's own fixtures and wrote the derivation's numbers to a file:
+
+| Statement M (reference derivation, 10/100) | Qualifying principal | Cumulative fee | Posting delta | Line fees |
+|---|---|---|---|---|
+| Old rule (d58560e `origin.ts`) | 24995/1 | **2,500p** | 2,500p | 1,500 / 1,000 / 0 / 0 / 0 / 0 / 0 / 0 |
+| New rule (this branch) | 1407695/31 | **4,541p** | 4,541p | 1,500 / 1,000 / 1,235 / 806 / 0 / 0 / 0 / 0 |
+
+Both match the order's statement to the penny (2,500p before, 4,541p after, the same eight lines).
+
+The same old-rule copy also gave the order's tests-first picture (FB-0), which the builder could not record because of the locked-commit procedure:
+
+| Old-rule scratch run | Result |
+|---|---|
+| `transitions.test.ts` | 3 failed, 93 passed: the three `[AL-6] merged fee rule` rows (surveyor named=true, surveyor named=false, supervisor named=false) |
+| `fee-both.test.ts` | 40 failed, 31 passed: FB-1 three cells, FB-2 three, FB-3 twenty-four, FB-4 one, FB-5 two, FB-6 one, FB-7 three (a, b, d), FB-9 three |
+| Together | 43 not passing and 124 passing of 167, exactly the draft order's expected count and its expected list |
+
+With the real new rule the same 167 pass (above). The scratch copies were not committed and nothing tracked changed
+(`git status --porcelain` was empty after every run).
+
+### Step 4: ledger sentence
+
+`BUILD_PLAN.md` section 12.2 gained one paragraph, "Ledger amendment — FEE-BOTH-1, October 2026 (fee rule, no migration).", copied from
+the order's "Ledger sentence" (Q10(a)) in the form of the ENT-4a-ALIGN paragraph above it (blank line before, one paragraph, before the 12.3 heading).
+Its own commit `163e4fd`, +2 lines, nothing else in the file.
+
+### NOT run
+
+`pnpm build` and `pnpm openapi:check` (the builder recorded the latter as refused in its sandbox; this helper did not retry it), all of `packages/db`
+(PostgreSQL) and `apps/api`, `apps/web` unit tests, every browser/e2e test, root `pnpm test`, a fresh pinned install, and GitHub's run on the pushed head.
+Reviews: the two RED checks (fresh Claude Opus and Codex Sol) are outstanding; neither has been given anything by this helper.
+
+### Observations for the checkers
+
+- The lane line sits at line 28 of `config/agent-lane-assignments.json`, before `"ent-4b"` (line 29), not after it as the order's lane paragraph describes. This is the dispatcher's e11e9db placement; the registry is read by name, so nothing depends on the order. Left untouched.
+- Main moved twice during the run (96c0cb8 then ad1bad2). Both catch-up merges were clean. ENT-4c (the other piece that edits `origin.ts`) is still not on main.
+
+Mac verification only. Not independently verified or accepted.
