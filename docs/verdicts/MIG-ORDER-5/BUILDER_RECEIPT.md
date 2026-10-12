@@ -22,13 +22,13 @@ All line references below refer to `packages/db/test/audit-export.integration.te
 | 6 | 0121 is not recorded exactly once | :242 (original :64, byte-identical) | Yes: unchanged assertion, plus exact own/all registry assertions :243, :263. |
 | 7 | A migration fails or runner replay is not repeatable | :205 (original :40, byte-identical) | Yes: later migrations run twice in production order, with complete registry :263. |
 | 8 | 0121 changes a catalogue row that a later migration created before the old snapshot | No longer compared; the before-N install is :130–134 and isolated 0121 is :137–138 | Deliberately different, not a real failure lost: those objects do not exist at 0121 in production order. A statement naming them fails at 0121's own step. |
-| 9 | Runner's second pass changes the catalogue | :268 [MO5-e] detects widening/loosening, not an equal-or-narrower change | Deliberately different, not a real failure lost: `migrate.ts:79–80` skips a recorded file without executing its SQL. Both passes must succeed. |
+| 9 | Runner's second pass changes the catalogue | :277 [MO5-e] detects widening/loosening, not an equal-or-narrower change (Round 1: the reading is taken in the set-up at :211, directly after the pair at :209, and asserted at :277) | Deliberately different, not a real failure lost: `migrate.ts:79–80` skips a recorded file without executing its SQL. Both passes must succeed. |
 
-New enforcement: :268 compares only named permission facts of older objects against the empty list, through :117–118 and :93–116. Matching is kind plus object id first, name second. Appearing facts stop it; disappearing facts do not. Existing-column grants are compared separately. Older policy text changes always stop it; new permissive policies on older row-secured tables and removed restrictive policies stop it; new restrictive policies and removed permissive policies pass. New objects and later columns are ignored. No accepted-widening list exists.
+New enforcement: :277 asserts the empty list for the named permission facts of older objects, read at :211 through :121–123 and :97–120 (Round 1 repair: a `jobguard_` role's memberships are read in both directions, `member of X` and `has member X`, so any role that joins an older `jobguard_` role shows up on the older role). Matching is kind plus object id first, name second. Appearing facts stop it; disappearing facts do not. Existing-column grants are compared separately. Older policy text changes always stop it; new permissive policies on older row-secured tables and removed restrictive policies stop it; new restrictive policies and removed permissive policies pass. New objects and later columns are ignored. No accepted-widening list exists.
 
 ## Controls [MO5-d] — expected outcomes, all database execution NOT RUN
 
-Definitions :146–173; one sequential loop :175–195. Every control, including N1, uses `upgradeProof.rolledBack(admin, client => ...)` on the existing admin pool. Every statement and read stays on that client. No new pool, login, database, fixture or replication-mode setting. Refused statements become `{ error: <message> }`; :250 then fails with the control id and exact recorded message. No weaker replacement or fallback. The shared helper guarantees rollback and release even on refusal. The full merged comparison's changed parts are recorded using `isDeepStrictEqual` at :190, then asserted separately from the named differences.
+Definitions :150–178 (27 controls after Round 1; S16 added at :166); one sequential loop :180–200. Every control, including N1, uses `upgradeProof.rolledBack(admin, client => ...)` on the existing admin pool. Every statement and read stays on that client. No new pool, login, database, fixture or replication-mode setting. Refused statements become `{ error: <message> }`; :250 then fails with the control id and exact recorded message. No weaker replacement or fallback. The shared helper guarantees rollback and release even on refusal. The full merged comparison's changed parts are recorded using `isDeepStrictEqual` at :190, then asserted separately from the named differences.
 
 `<half>` below is the name read from the before-N subject matched by the text OID of `app.half_even_ratio(bigint,bigint,bigint)` (:143–145). It is not a hand-written expected name. S15 replaces only `half_even_ratio` in that recorded name.
 
@@ -47,8 +47,9 @@ Definitions :146–173; one sequential loop :175–195. Every control, including
 | S11 routine grant | `routine <half>: + grant mo5_scratch_role EXECUTE` | routines |
 | S12 routine runs as owner | `routine <half>: + runs as owner` | routines |
 | S13 role attribute | `role jobguard_runtime: + rolcreatedb` | roles |
-| S14 role membership | `role jobguard_runtime: + member of jobguard_migration` | none |
+| S14 role membership, older role joins older role (Round 1: now two sorted lines) | `role jobguard_migration: + has member jobguard_runtime`; `role jobguard_runtime: + member of jobguard_migration` | none |
 | S15 renamed routine, widened grant | `routine <half with half_even_ratio replaced by mo5_half_renamed>: + grant mo5_scratch_role EXECUTE` | routines |
+| S16 (Round 1) a new role joins an older role: `CREATE ROLE mo5_scratch_role NOLOGIN`; `GRANT jobguard_runtime TO mo5_scratch_role` | `role jobguard_runtime: + has member mo5_scratch_role` | none |
 | N1 list-form identity/name matching | `table app.job: + grant jobguard_runtime SELECT` | not read |
 
 S1 and S4 read and record their privilege preconditions before the scratch statement and assert each is false at :257. N1 deep-copies the snapshot, changes only app.job's OID to `"0"` and removes only its runtime SELECT fact; it calls the same pure `compare` against client-read live facts. S5's expectation intentionally allows other owner-related grants, exactly as issued.
@@ -66,7 +67,7 @@ S1 and S4 read and record their privilege preconditions before the scratch state
 | P9 | Remove old permissive tenant policy | `[]` | policies |
 | P10 | Change routine search_path setting | `[]` | routines |
 
-Controls use the same `privilegeDifferences` as [MO5-c] and [MO5-e]; N1 uses its one underlying pure `compare`. All 26 expectations are asserted at :248–259. No fingerprinted table gains a column, even temporarily. The scratch columns only target app.job; app.merchant only has its restrictive policy dropped in a rolled-back transaction. After controls :196–204 record the full catalogue, named differences and a text count across tables, routines, policies and roles containing mo5. [MO5-f] :260–262 requires exact catalogue restoration, `[]` and `"0"` respectively.
+Controls use the same `privilegeDifferences` as [MO5-c] and [MO5-e]; N1 uses its one underlying pure `compare`. All 27 expectations (26 before Round 1) are asserted at :255–266. No fingerprinted table gains a column, even temporarily. The scratch columns only target app.job; app.merchant only has its restrictive policy dropped in a rolled-back transaction. After controls :196–204 record the full catalogue, named differences and a text count across tables, routines, policies and roles containing mo5. [MO5-f] :260–262 requires exact catalogue restoration, `[]` and `"0"` respectively.
 
 ## Scope, representations and stated limits
 
@@ -74,7 +75,7 @@ The four merged SQL strings are byte-identical; only their query receiver change
 
 The new query assembles SQL text facts and text OIDs, then returns each selected Subject as `row_to_json(s)::text`. Application-side JSON decoding reconstructs those SQL-built text facts and policy booleans; no driver timestamp/array/JSON parser participates in the comparison. Both table and routine NULL ACLs use `acldefault` before `aclexplode`; column ACLs use `aclexplode(a.attacl)`. Policy text is `row_to_json(x)::text` over exactly permissive, roles, cmd, qual and with_check. Mixed SQL predicates are bracketed.
 
-Not compared at any step: grants on schemas, sequences, views and types, or default privileges. After later migrations only: routine bodies and routine settings; whether a policy got tighter (any older policy text change stops it). An older object dropped with no same-id/name replacement is no longer compared. Renamed older objects still match by id; re-created objects with the same name still match by name. Names/full column types and the one-microsecond/retype controls are **not applicable**: this proof compares no stored data row or column type, and 0121 creates two tables without altering an older one. Their catalogue equivalents are S1–S15 and N1; P3/P4 retain the literal function-replacement/nullable-column pass controls.
+Not compared at any step: grants on schemas, sequences, views and types, or default privileges; (Round 1) the admin, inherit and set flags of a membership that already existed, and role-level settings. After later migrations only: routine bodies and routine settings; whether a policy got tighter (any older policy text change stops it). An older object dropped with no same-id/name replacement is no longer compared. Renamed older objects still match by id; re-created objects with the same name still match by name. Names/full column types and the one-microsecond/retype controls are **not applicable**: this proof compares no stored data row or column type, and 0121 creates two tables without altering an older one. Their catalogue equivalents are S1–S15 and N1; P3/P4 retain the literal function-replacement/nullable-column pass controls.
 
 Only the issued three paths are working-tree changes. The lane entry was the first edit, one compact line after mig-order-4 and before mon-7a. Shared registration overlap: the lane registry, integration serialized by the dispatcher. Shared helper read/imported, never edited. No migration, product code, BUILD_PLAN, MIGRATIONS, scanner or pinned file is edited. No standing test checks another file's bytes or hashes.
 
@@ -118,11 +119,12 @@ The Mac helper must run each through `~/.local/bin/heavy-slot`, sequentially, vi
 
 | Run | Exact Vitest command / scratch statement directly after the runner pair | Required result | Observed here |
 |---|---|---|---|
-| A | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-export.integration.test.ts` | Whole file passes, same test count, all 26 controls and real later migrations pass | NOT RUN (sandbox cannot start PostgreSQL / a browser) |
+| A | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-export.integration.test.ts` | Whole file passes, same test count, all 27 controls (26 before Round 1) and real later migrations pass | NOT RUN (sandbox cannot start PostgreSQL / a browser) |
 | X1 | Same command with `-t "leaves every existing table"`; scratch `GRANT TRUNCATE ON app.job TO jobguard_runtime` | Stops only at [MO5-e] with exactly S1's line | NOT RUN (sandbox cannot start PostgreSQL / a browser) |
 | X2 | Same filtered command; scratch `ALTER POLICY tenant_isolation ON app.job USING (true)` | Stops only at [MO5-e] with exactly S7's line | NOT RUN (sandbox cannot start PostgreSQL / a browser) |
 | X3 | Same filtered command; scratch `ALTER ROLE jobguard_runtime CREATEDB` | Stops only at [MO5-e] with exactly S13's line | NOT RUN (sandbox cannot start PostgreSQL / a browser) |
 | X4 | Same filtered command; scratch `REVOKE INSERT ON app.job FROM jobguard_runtime` | Passes | NOT RUN (sandbox cannot start PostgreSQL / a browser) |
+| X5 (Round 1) | Same filtered command; scratch `CREATE ROLE mo5_x NOLOGIN; GRANT jobguard_runtime TO mo5_x`, placed after the pair and before the new reading | Stops only at [MO5-e] with exactly `role jobguard_runtime: + has member mo5_x` | not run by the builder; run on the Mac in Round 1, see the last section |
 
 For each experiment remove the one uncommitted scratch line by hand, show `git diff --stat` empty against the committed candidate, record exact output and measured setup-hook time. If today's final comparison produces a line, STOP and report the exact line; never change the expectation to hide it. A refused statement, wrong `after` or time budget failure is also a stop/report item. If only a `merged` cell differs, report the observed value for the dispatcher's decision. No statements, expectations or budgets are adjusted in anticipation of those runs.
 
@@ -136,7 +138,7 @@ Dispatcher FIX-LATER follow-up only: schema-level grants remain outside upgrade 
 
 Re-read the entire own diff and the direct origin/main diff against the issued order. The nine-row table above answers failure preservation row by row; these remain source-inspection claims. A read-only deterministic diff check found original removed/replaced ranges only :8, :18, :20–23, :36 and :65; all other original lines are byte-identical. The four SQL strings, import/freePort lines, complete suffix beginning with the second test, every test title/declaration and budgets were checked unchanged. The install is slice(0, own) with own found by name; one file and one registry row applies 0121; exact own registry and both tables are captured before later migrations. Complete equality stays at 0121 alone; after all migrations the assertion is the shared named-fact comparison against [] only.
 
-Checked the subset rule, NULL ACL defaults, grant-option facts, old-column grant filtering, same-kind id/name matching, role attributes/memberships and every policy rule. Controls run before the runner pair, on one existing pool/client each, sequentially and always rolled back. Errors are recorded and asserted as failures; nothing is skipped, retry-wrapped or given more time. All 26 control ids are present, and both preconditions and P3/P4 confirmations are asserted. The post-control catalogue, differences and mo5 count must be restored. New text follows the issued scratch/stop/pass wording and adds no credential-shaped literal. No file outside the lane was edited, no helper changed, no standing bytes/hashes pin was added.
+Checked the subset rule, NULL ACL defaults, grant-option facts, old-column grant filtering, same-kind id/name matching, role attributes/memberships and every policy rule. Controls run before the runner pair, on one existing pool/client each, sequentially and always rolled back. Errors are recorded and asserted as failures; nothing is skipped, retry-wrapped or given more time. All 27 control ids are present (26 before Round 1), and both preconditions and P3/P4 confirmations are asserted. The post-control catalogue, differences and mo5 count must be restored. New text follows the issued scratch/stop/pass wording and adds no credential-shaped literal. No file outside the lane was edited, no helper changed, no standing bytes/hashes pin was added.
 
 Builder receipt only — not independently verified, not accepted.
 
@@ -507,3 +509,119 @@ So each of the 16 stop controls goes red under a comparator that is blind to the
 - Anything on GitHub other than the push of this record to the branch; no pull request was opened.
 
 Mac helper record only; independent verification and acceptance remain pending.
+
+## Round 1 repair (12 Oct)
+
+Repair by the Mac helper (Claude Sonnet, for the JobGuard dispatcher), 12 Oct 2026, about 19:05-20:05 local, for the fresh Opus verdict `REPAIR d68fa4f9b6ae3c967de49e3be978b014a7b0158a` (`~/.local/share/full-steam/jg-runs/mig-order-5-opus-d68fa4f.md`). Test-only. Code under test: commit `48db877402987f607b7730fd8f70b2b940288d7e` ("test(db): MIG-ORDER-5 after-all check also sees roles that GAIN members; control S16 and scratch X5"), on top of `d68fa4f`; this receipt is committed after it. Test file SHA256 at 48db877: `1d88819cd3b8bc05842dbf74cb496958619e1c74bd943908ae558fecd2c3a4b9`. Logs: `~/.local/share/full-steam/jg-runs/mig-order-5-mac/round1/`. Every test command went through `~/.local/bin/heavy-slot`, one at a time, vitest `--maxWorkers=2`, memory free 70-71% before each. This is a repair-and-verification record by a helper, not an independent review and not acceptance.
+
+### The verdict point
+
+B1: a later migration could give a NEW role everything an OLD role can do with `GRANT jobguard_runtime TO <new role>` and the after-all check stayed green, because a role's memberships were recorded in one direction only (the roles it is a member of). The dispatcher's answer to the verdict's point 4: YES, take the after-all reading in the set-up directly after the `migrate()` pair and assert it at [MO5-e] in the same capture-then-assert shape as [MO5-c]; merged line 206 (`GRANT jobguard_runtime TO audit_export_login`) stays untouched; role names are NOT filtered.
+
+### The changes (one test file, plus the lane note)
+
+1. `privilegeFacts`, role part (:89-90): a second fact per `jobguard_` role, `has member <role>`, for every `pg_auth_members` row whose `roleid` is this role, `DISTINCT`, same style as the existing `member of` line. `compare` is unchanged: the subset rule turns a new fact into `role jobguard_runtime: + has member <x>`.
+2. S14 (:164) now expects two sorted lines: `role jobguard_migration: + has member jobguard_runtime` and `role jobguard_runtime: + member of jobguard_migration`.
+3. New stop control S16 (:166): `CREATE ROLE mo5_scratch_role NOLOGIN`; `GRANT jobguard_runtime TO mo5_scratch_role` gives exactly `role jobguard_runtime: + has member mo5_scratch_role`; `merged` is none (the old roles query never saw memberships).
+4. Reading timing: the `migrate()` pair (:209, text unchanged) is now followed by `const afterAllDifferences = await privilegeDifferences(admin, before);` (:211), stored in `upgrade` (new field, :23, set at :212), and [MO5-e] asserts `upgrade.afterAllDifferences` against `[]` (:277, same message). The `upgrade = {...}` assignment moved from before the pair to after the reading so the field exists; nothing else in it changed. The test-login line (now :213) is untouched.
+5. The limits comment above `privilegeFacts` (:47-49), the comment at [MO5-e] (:274-276), this receipt's tables (S14 row, S16 row, 27 controls, new enforcement text, limits, line references in the rows that changed) and the lane note in `config/agent-lane-assignments.json` (now: "... new role attribute, membership an older role gains, or any role (new or old) joining an older role stops it ...") were updated. No budget, title, skip, retry or other assertion changed. Not touched: `packages/db/test/upgrade-proof-utils.ts` (SHA256 `9c0db8b4...` unchanged), `apps/api/src/auth/context-boundary.test.ts` (`7f191484...` unchanged), `pool-test-utils.ts`, `migrate.ts`, any migration or product file.
+
+Literal changed lines of this round (`git diff -U0 d68fa4f 48db877`, test file; the lane file differs only in the words quoted in item 5):
+
+```diff
+@@ -23 +23 @@ let upgrade: {
+-  afterControlsCatalog: SecurityCatalog; afterControlsDifferences: string[]; scratchCount: string;
++  afterControlsCatalog: SecurityCatalog; afterControlsDifferences: string[]; scratchCount: string; afterAllDifferences: string[];
+@@ -46,0 +47,3 @@ type ControlResult = Control & { result: ControlReading };
++// Memberships of an older jobguard_ role are read in both directions ("member of X" and "has member X"), so any role, new or
++// old, jobguard_ or not, that joins an older jobguard_ role is seen on that older role. Not read: admin, inherit and set flags
++// of a membership that already existed, and role-level settings.
+@@ -86 +89,2 @@ async function privilegeFacts(db: Queryable): Promise<Subject[]> {
+-          || ARRAY(SELECT DISTINCT 'member of '||pg_get_userbyid(m.roleid) FROM pg_auth_members m WHERE m.member=r.oid) AS facts,
++          || ARRAY(SELECT DISTINCT 'member of '||pg_get_userbyid(m.roleid) FROM pg_auth_members m WHERE m.member=r.oid)
++          || ARRAY(SELECT DISTINCT 'has member '||pg_get_userbyid(m.member) FROM pg_auth_members m WHERE m.roleid=r.oid) AS facts,
+@@ -160 +164 @@ beforeAll(async () => {
+-    { id: "S14", statements: ["GRANT jobguard_migration TO jobguard_runtime"], expected: ["role jobguard_runtime: + member of jobguard_migration"], merged: [] },
++    { id: "S14", statements: ["GRANT jobguard_migration TO jobguard_runtime"], expected: ["role jobguard_migration: + has member jobguard_runtime", "role jobguard_runtime: + member of jobguard_migration"], merged: [] },
+@@ -161,0 +166 @@ beforeAll(async () => {
++    { id: "S16", statements: ["CREATE ROLE mo5_scratch_role NOLOGIN", "GRANT jobguard_runtime TO mo5_scratch_role"], expected: ["role jobguard_runtime: + has member mo5_scratch_role"], merged: [] },
+@@ -204 +208,0 @@ beforeAll(async () => {
+-  upgrade = { before, names, own, halfOid, ownRegistry, ownTables: [ownTables.exports, ownTables.checkpoints], ownStepSecurityCatalog, ownStepDifferences, controls, afterControlsCatalog, afterControlsDifferences, scratchCount };
+@@ -205,0 +210,3 @@
++  // [MO5-e] The reading is taken here, before the test's own login below joins jobguard_runtime, and asserted in the test.
++  const afterAllDifferences = await privilegeDifferences(admin, before);
++  upgrade = { before, names, own, halfOid, ownRegistry, ownTables: [ownTables.exports, ownTables.checkpoints], ownStepSecurityCatalog, ownStepDifferences, controls, afterControlsCatalog, afterControlsDifferences, scratchCount, afterAllDifferences };
+@@ -267,2 +274,4 @@ describe("ENT-10b PostgreSQL audit exports", () => {
+-    // older row-secured table, remove an older restrictive policy, or give an older jobguard_ role an attribute or membership.
+-    expect(await privilegeDifferences(admin, upgrade.before), "[MO5-e] later migrations did not widen older permission facts").toEqual([]);
++    // older row-secured table, remove an older restrictive policy, give an older jobguard_ role an attribute or a membership, or
++    // give any role (new or old) membership of an older jobguard_ role. The reading was taken in the set-up directly after the
++    // migrate() pair, before the test's own login joined jobguard_runtime, and is asserted here.
++    expect(upgrade.afterAllDifferences, "[MO5-e] later migrations did not widen older permission facts").toEqual([]);
+```
+
+Line numbers in the older sections of this receipt are those of 382ec29 / d68fa4f unless this round's text gives the new number; the key current lines are: `privilegeFacts` :50, `compare` :97-120, `privilegeDifferences` :121-123, definitions :150-178, control loop :180-200, `migrate()` pair :209, after-all reading :211, [MO5-c] :252, [MO5-d] assertions :255-266, [MO5-f] :267-269, [MO5-e] :270 (registry) and :277 (empty list).
+
+### Tests first: S16 and the new S14 shape RED against the old fact function, then green
+
+With only the control, timing and assertion edits in place and `privilegeFacts` still the old one-direction version (the loop's `expect(control.result.after ...)` temporarily `expect.soft(...)` so every red control is listed once; reverted to the plain `expect(` before the commit), the filtered first test failed with exactly two red controls and no other:
+
+- S14: received `["role jobguard_runtime: + member of jobguard_migration"]`, expected the two sorted lines (the `role jobguard_migration: + has member jobguard_runtime` line was missing).
+- S16: received `[]`, expected `["role jobguard_runtime: + has member mo5_scratch_role"]`. This is the verdict's hole shown directly: the old comparison does not see a new role joining an older one.
+
+After the `has member` fact was added: green (below).
+
+### Results
+
+| ID | observed `after` (from a scratch dump of all 27 results, `round1/T-dump.json`) | observed `merged` |
+|---|---|---|
+| S14 | `role jobguard_migration: + has member jobguard_runtime`; `role jobguard_runtime: + member of jobguard_migration` | none |
+| S16 | `role jobguard_runtime: + has member mo5_scratch_role` | none |
+| S1-S13, S15, N1, P1-P10 | all equal the previous round's table, unchanged (S5 prints the same six lines; S11, S12 and S15 print routine names with spaces after the commas, as before) | as before |
+
+The dump printed `n=27` controls; no `merged` or `after` cell differed from the order's table; no statement was refused. Today's after-all result: `afterAllDifferences = []` (also asserted by Run A at [MO5-e]). No membership grant exists in any migration, as the verdict found.
+
+Scratch experiments, all uncommitted on the committed candidate 48db877, each a single `await admin.query("<statement>");` line placed directly after the `migrate()` pair and before the new reading (`-t "leaves every existing table"`), each restored with `git checkout -- packages/db/test/audit-export.integration.test.ts`; `git status --short` and `git diff --stat` were empty after every one:
+
+| Exp | Scratch statement | Exit | Result |
+|---|---|---:|---|
+| X1 | `GRANT TRUNCATE ON app.job TO jobguard_runtime` | 1 | 1 failed / 10 skipped; only at [MO5-e]; received exactly `["table app.job: + grant jobguard_runtime TRUNCATE"]` |
+| X2 | `ALTER POLICY tenant_isolation ON app.job USING (true)` | 1 | only at [MO5-e]; exactly `["policy app.job.tenant_isolation: changed"]` |
+| X3 | `ALTER ROLE jobguard_runtime CREATEDB` | 1 | only at [MO5-e]; exactly `["role jobguard_runtime: + rolcreatedb"]` |
+| X4 | `REVOKE INSERT ON app.job FROM jobguard_runtime` | 0 | 1 passed / 10 skipped |
+| X5 | `CREATE ROLE mo5_x NOLOGIN; GRANT jobguard_runtime TO mo5_x` | 1 | 1 failed / 10 skipped; only at [MO5-e]; received exactly `["role jobguard_runtime: + has member mo5_x"]` |
+
+In each red experiment the failing assertion is the last one in the test body (the [MO5-e] empty-list line, :277 in the committed file); every earlier assertion ([MO5-a] to [MO5-d], [MO5-f], the registry check) passed.
+
+Time: the dump run measured 8843 ms from the first line of `beforeAll` to just after the pair and the new reading. That figure includes starting a fresh PostgreSQL (initdb and start), so it is not comparable to the 1.7 s of the earlier Mac record, which started its clock later. The budget (120000 ms) is unchanged and not at risk. The first test itself took 17 ms in Run A.
+
+### Commands as run
+
+Working directory is the worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mig-order-5` (root) unless the row says `packages/db`. No build was needed: the gitignored dist folders of core, db, storage, config and ai were present and the PostgreSQL libraries were already linked.
+
+| # | Command | cwd | Exit | Result |
+|---|---|---|---:|---|
+| 1 | RED: `~/.local/bin/heavy-slot mo5r1-red pnpm exec vitest run --maxWorkers=2 --reporter=verbose -t "leaves every existing table" test/audit-export.integration.test.ts` (old `privilegeFacts`, soft control expectation) | packages/db | 1 | 1 failed / 10 skipped (11); S14 and S16 red, nothing else; 9.68 s |
+| 2 | **Run A** `~/.local/bin/heavy-slot mo5r1-runA pnpm exec vitest run --maxWorkers=2 --reporter=verbose test/audit-export.integration.test.ts` (working tree = 48db877 content) | packages/db | 0 | 1 file passed; **11 passed (11)**, same 11 titles as on main; 12.59 s |
+| 3 | `node ~/.local/share/full-steam/jg-runs/mig-order-4-scratch/round1-tsc-one-file.cjs <worktree> packages/db/test/audit-export.integration.test.ts` | root | 0 | 0 diagnostics in the changed file, 0 in other files |
+| 4 | dump run: same command as row 1 with a scratch `console.log` and a start-time line (restored with `git checkout`) | packages/db | 0 | 1 passed / 10 skipped; 27 controls; `afterAllDifferences` `[]` |
+| 5 | X1-X5, each the row 1 command with one scratch line (table above) | packages/db | 1, 1, 1, 0, 1 | as the table |
+| 6 | neighbours: `~/.local/bin/heavy-slot mo5r1-neighbours pnpm exec vitest run --maxWorkers=2 --reporter=verbose test/audit.integration.test.ts test/verify-audit-export-cli.test.ts test/tenancy.integration.test.ts` | packages/db | 0 | 3 files passed, **28 passed (28)**, 11.74 s |
+| 7 | `~/.local/bin/heavy-slot mo5r1-typecheck pnpm typecheck` | root | 0 | 7 successful / 7 total, 4 cached; 46.8 s. It does not cover `packages/db/test` (row 3 does) |
+| 8 | `git fetch origin` (read only; `origin/main` is now `18743cb`, CI-TIME-2, one commit past the PR base `80d4a06`) | root | 0 | |
+| 9 | `LANE_BASE_REF=origin/main pnpm lint` | root | 0 | core purity passed (129 files); **lane boundary passed** (merge-base `80d4a06`, own files exactly the lane registry, this receipt and the audit-export test); money arithmetic passed; turbo 7 successful / 7 total, 4 cached; 40.6 s. (The five inherited MIG-ORDER-4 paths of the earlier round are gone: #145 is on main.) |
+| 10 | `LANE_BASE_REF=origin/main pnpm lint:lanes` | root | 0 | "Lane boundary passed" for lane `mig-order-5`, head 48db877 |
+
+### NOT RUN
+
+- Fresh Opus delta review, the separate Codex Sol check, acceptance, and GitHub CI on the new head: not part of this task.
+- The broken-comparator series V1-V17 of the earlier record was not repeated. This round showed the one new thing directly instead: S14 and S16 red against the old fact function, green against the new.
+- X5 was not run against the old fact function; S16 (inside a rolled-back control) shows the same gap there.
+- `pnpm build` of the whole repository, `pnpm openapi:check` and the compiled OpenAPI comparison (not in this lane; the earlier builder record still stands), browser suites (no screen touched; UI parked), a run on a merge of the current `origin/main` into this branch (the dispatcher merges main).
+- Whole-package or whole-repository vitest suite (only the files named above ran).
+
+### Superseded wording above
+
+The earlier text in this receipt that says database execution is pending, that the Mac run was on 382ec29 with 26 controls, and that [MO5-e] reads the catalogue live, is history; the current facts are in this section. Limits added by this round: the admin, inherit and set flags of a membership that already existed, and role-level settings, are not read (the verdict's L5).
+
+Builder-and-helper receipt only — not independently verified, not accepted.
