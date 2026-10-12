@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { transitionExtra, EnterpriseDomainError, enterpriseStates, enterpriseCommands, enterpriseRoles } from "./index.js";
 import { extra, actor, group, id, hash, revision, grant, approval, requirement, withKind } from "./origin.test.js";
+import { siteOriginated, qualifyingPrincipal, feeBearing } from "./index.js";
 
 function expectRefusal(input:unknown,code:EnterpriseDomainError["code"],label:string) {
  let error:unknown;
@@ -145,4 +146,149 @@ it("enterprise approval/export lifecycle cannot operate on a small-builder job",
 it.each(["paid","part_paid"])("round2 P2-3/P3-5 invoiced refuses %s with the exact transition code",state=>{
  const input=request("ImportBillingStatus",state,"finance"),before=structuredClone(input);
  expectRefusal(input,"INVALID_TRANSITION",state);expect(input).toEqual(before);
+});
+
+describe("ENT-4a-ALIGN: who may record each kind of extra (founder, 11 Oct 2026)", () => {
+ const recordingRows = [
+  {command:"LogSiteExtra",kind:"site_user",role:"operative",permitted:true},
+  {command:"LogSiteExtra",kind:"site_user",role:"supervisor",permitted:true},
+  {command:"LogSiteExtra",kind:"site_user",role:"surveyor",permitted:true},
+  {command:"LogSiteExtra",kind:"site_user",role:"commercial_manager",permitted:false},
+  {command:"LogSiteExtra",kind:"site_user",role:"finance",permitted:false},
+  {command:"LogSiteExtra",kind:"site_user",role:"admin",permitted:false},
+  {command:"LogSiteExtra",kind:"site_user",role:"owner",permitted:false},
+  {command:"LogSiteExtra",kind:"site_user",role:"read_only",permitted:false},
+  {command:"LogSiteExtra",kind:"site_user",role:"client_approver",permitted:false},
+  {command:"LogSiteExtra",kind:"site_user",role:"connector",permitted:false},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"operative",permitted:false},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"supervisor",permitted:false},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"surveyor",permitted:false},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"commercial_manager",permitted:false},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"finance",permitted:true},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"admin",permitted:true},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"owner",permitted:true},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"read_only",permitted:false},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"client_approver",permitted:false},
+  {command:"RecordOfficeExtra",kind:"office_entry",role:"connector",permitted:false},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"operative",permitted:false},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"supervisor",permitted:false},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"surveyor",permitted:false},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"commercial_manager",permitted:true},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"finance",permitted:false},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"admin",permitted:true},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"owner",permitted:true},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"read_only",permitted:false},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"client_approver",permitted:false},
+  {command:"RecordClientInstruction",kind:"client_instruction",role:"connector",permitted:false},
+ ] as const;
+
+ it("[AL-2] the hand-written table covers every role exactly once for each kind", () => {
+  expect(recordingRows).toHaveLength(3 * enterpriseRoles.length);
+  expect(recordingRows).toHaveLength(30);
+  for (const kind of ["site_user","office_entry","client_instruction"] as const) {
+   const rows = recordingRows.filter(row => row.kind === kind);
+   expect(rows).toHaveLength(enterpriseRoles.length);
+   for (const role of enterpriseRoles) expect(rows.filter(row => row.role === role)).toHaveLength(1);
+  }
+ });
+
+ it.each(recordingRows)("[AL-2] $command / $role permitted=$permitted", ({command,kind,role,permitted}) => {
+  const input = request(command,"absent",role), before = structuredClone(input);
+  if (permitted) {
+   const result = transitionExtra(input);
+   expect(result.state).toBe("logged");
+   expect(result.origin.origin.kind).toBe(kind);
+   expect(result.origin.raisingRole).toBe(role);
+   expect(result.raisingCommand.role).toBe(role);
+  } else expectRefusal(input,"PERMISSION_DENIED",`${command}/${role}`);
+  expect(input).toEqual(before);
+ });
+
+ const permittedPairs = [
+  {command:"LogSiteExtra",role:"operative"},
+  {command:"LogSiteExtra",role:"supervisor"},
+  {command:"LogSiteExtra",role:"surveyor"},
+  {command:"RecordOfficeExtra",role:"finance"},
+  {command:"RecordOfficeExtra",role:"admin"},
+  {command:"RecordOfficeExtra",role:"owner"},
+  {command:"RecordClientInstruction",role:"commercial_manager"},
+  {command:"RecordClientInstruction",role:"admin"},
+  {command:"RecordClientInstruction",role:"owner"},
+ ] as const;
+ it.each(permittedPairs)("[AL-3] $command / $role requires a covering grant", ({command,role}) => {
+  expect(transitionExtra(request(command,"absent",role)).state).toBe("logged");
+  for (const person of [
+   actor(role,{grants:[]}),
+   actor(role,{grants:[grant(role,{jobId:id(99)})]}),
+   actor(role,{grants:[grant(role,{tenantId:id(98)})]}),
+   actor(role,{grants:[grant(role,{membershipId:id(99)})]}),
+  ]) {
+   const input = {...request(command,"absent",role),actor:person}, before = structuredClone(input);
+   expectRefusal(input,"PERMISSION_DENIED",`${command}/${role}`);
+   expect(input).toEqual(before);
+  }
+ });
+
+ it.each(["owner","admin"])("[AL-4] %s has no blanket override across states and commands", role => {
+  const successes: {state:string;command:string}[] = [];
+  for (const state of ["absent",...enterpriseStates]) for (const command of enterpriseCommands) {
+   const input = request(command,state,role);
+   if (state === "absent" && ["RecordOfficeExtra","RecordClientInstruction"].includes(command)) {
+    expect(transitionExtra(input).state).toBe("logged");
+    successes.push({state,command});
+   } else expect(() => transitionExtra(input)).toThrow(EnterpriseDomainError);
+  }
+  expect(successes).toEqual([
+   {state:"absent",command:"RecordOfficeExtra"},
+   {state:"absent",command:"RecordClientInstruction"},
+  ]);
+ });
+ it.each([
+  {role:"operative",permitted:false},
+  {role:"supervisor",permitted:false},
+  {role:"surveyor",permitted:true},
+  {role:"commercial_manager",permitted:true},
+  {role:"finance",permitted:false},
+  {role:"admin",permitted:false},
+  {role:"owner",permitted:false},
+  {role:"read_only",permitted:false},
+  {role:"client_approver",permitted:false},
+  {role:"connector",permitted:true},
+ ])("[AL-4] ImportOrderLine / $role permitted=$permitted", ({role,permitted}) => {
+  const input = request("ImportOrderLine","absent",role), before = structuredClone(input);
+  if (permitted) expect(transitionExtra(input).state).toBe("logged");
+  else expectRefusal(input,"PERMISSION_DENIED",`ImportOrderLine/${role}`);
+  expect(input).toEqual(before);
+ });
+
+ // Merged guard at transitions.ts line 21, unchanged by ENT-4a-ALIGN. For supervisor and surveyor it is stricter than the database rule of ENT-3a, which requires only an operative to be named on the job. Not a founder rule; see the receipt, residual R1.
+ it.each(["operative","supervisor","surveyor"])("[AL-5] site capture by %s not named on the job is refused", role => {
+  const input = {...request("LogSiteExtra","absent",role),actor:actor(role,{assigned:false})};
+  expectRefusal(input,"INVALID_TRANSITION",role);
+ });
+ it("[AL-5] surveyor site capture without a note or verified photo is refused", () => {
+  const input = request("LogSiteExtra","absent","surveyor");
+  input.creation.captureNote = null;
+  input.creation.photo.status = "pending";
+  expectRefusal(input,"INVALID_TRANSITION","surveyor capture");
+ });
+
+ // Merged fee rule, unchanged by ENT-4a-ALIGN. Whether a site extra logged by a surveyor, or by a supervisor not named on the job, should carry a fee is an open founder question (F1). These rows record today's rule; they decide nothing.
+ it.each([
+  {role:"operative",assigned:true,site:true,principal:{numerator:15000n,denominator:1n},fee:true},
+  {role:"supervisor",assigned:true,site:true,principal:{numerator:15000n,denominator:1n},fee:true},
+  {role:"surveyor",assigned:true,site:false,principal:{numerator:0n,denominator:1n},fee:false},
+  {role:"surveyor",assigned:false,site:false,principal:{numerator:0n,denominator:1n},fee:false},
+  {role:"supervisor",assigned:false,site:false,principal:{numerator:0n,denominator:1n},fee:false},
+  {role:"operative",assigned:false,site:false,principal:{numerator:0n,denominator:1n},fee:false},
+ ] as const)("[AL-6] merged fee rule / $role named=$assigned", ({role,assigned,site,principal,fee}) => {
+  const e = extra();
+  e.origin.raisingRole = role;
+  e.raisingCommand.role = role;
+  e.raisingCommand.grant = grant(role,{membershipId:e.origin.raisingMembershipId});
+  e.raisingCommand.assigned = assigned;
+  expect(siteOriginated(group([e]))).toBe(site);
+  expect(qualifyingPrincipal(group([e]),{reference:true})).toEqual(principal);
+  expect(feeBearing(group([e],{mode:"production_billing",feeGate:true}))).toBe(fee);
+ });
 });
