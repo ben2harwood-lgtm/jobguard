@@ -426,3 +426,56 @@ No failing merged test. No test or product file was touched to obtain any of the
 - `node --test tools/*.test.mjs`, `pnpm eval`, restore and deploy-smoke checks.
 - GitHub checks (no run existed for the old head because the PR was conflicted); see the pull request after this push.
 - No new independent Claude review: the two checker PASS verdicts of 11 October bind to head `f553d80`, which this catch-up does not alter in code (merge of main plus the renumber swaps above); that binding is the dispatcher's to judge.
+
+## Catch-up onto main 80d4a06 (12 Oct)
+
+Claude Sonnet 5.5, run on the Mac, 12 October 2026 (about 18:40 to 18:55 BST). Own code unchanged: no product or test file of ENT-10d was edited. Starting point: head `6243ae4479dcbf69a8a46de7ea13ed36496f9e29`, clean tree, branch `codex/sandbox/ent-10d`; `origin/main` was `80d4a06c1fb0c9afd1edf2aadd069b4b56e232af` (it had merged #144, #148, #149 SCAN-EXCEPT-1, #143, #147 ENT-10b-OPS and #145 MIG-ORDER-4 since the last catch-up).
+
+### The merge and the one conflict
+
+`git fetch origin`, then `git merge origin/main` (merge commit, no rebase, no force), commit `56bb798279576f54223c821fb0d05c8875d62229` (parents `6243ae4` and `80d4a06`). One conflict, none inside ENT-10d's own code or tests:
+
+- `config/agent-lane-assignments.json`: two adjacent lane lines. Kept both: `ent-10b-ops` (from main), then `ent-10d` (this piece), in name order (`ent-10b`, `ent-10b-ops`, `ent-10d`, `ent-2`). Parsed afterwards: valid JSON, 126 lanes, keys sorted, no conflict markers. The `ent-10d` line is byte for byte the line from head `6243ae4`.
+
+Auto-merged without conflict: `BUILD_PLAN.md` (main's `MarkDuplicate` text in 9.1.6 and a 12 October row in section 12.2; ENT-10d's two ledger paragraphs kept), `package.json`, `DEPLOY.md`, `.gitleaksignore`, and the db sources and tests that main changed. `packages/db/src/migrate.ts` and `packages/db/MIGRATIONS.md` needed no edit: `migrate.ts` lists `0127_recovery_timing_pin.sql` (line 68), `0128_shadow_persistence.sql` (69) and `0129_sso_required.sql` (70), once each; `MIGRATIONS.md` holds sections 0127, 0128 and 0129 once each. The migration stays 0129; nothing was renumbered.
+
+### Own code unchanged: proof
+
+- `git diff 6243ae4 HEAD -- packages/db/migrations/0129_sso_required.sql` is empty (0 lines).
+- `git diff --stat 6243ae4 HEAD` lists 53 files, all of them files that came in from main (`.gitleaksignore`, `DEPLOY.md`, `package.json`, `docs/contracts/audit-export-v1.md`, `docs/verdicts/{ENT-4b,ENT-10b-OPS,FIXLATER-3,FIXLATER-4,MIG-ORDER-2,MIG-ORDER-3,MIG-ORDER-4,PLAN-ENT4C-UNLINK-ROLES,SCAN-EXCEPT-1,STORED-TIMES-1,SV-2}/*`, `packages/db/src/audit-checkpoint-handoff*.ts`, `audit-export-repository.ts`, `audit.ts`, and nine db integration test files and `upgrade-proof-utils.ts` that main changed), plus the lane file (`config/agent-lane-assignments.json`, +6 lines, the `ent-10b-ops` line) and `BUILD_PLAN.md` (main's 9.1.6 line and 12.2 row). No `apps/`, `packages/core`, `packages/storage`, `packages/ai`, SSO source or SSO test file is listed.
+- The 32 files ENT-10d changed against its old merge-base `a0963f4` are the same 32 files that it changes against `origin/main` now, and for 31 of them the added and removed lines are identical (compared line for line). The one difference is `BUILD_PLAN.md`: ENT-10d's two ledger paragraphs are unchanged, only the blank lines between them differ by one.
+
+### Commands as run
+
+All from the worktree root `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-10d`, through `~/.local/bin/heavy-slot <label> ...`, one at a time, `memory_pressure | tail -1` 66 to 71% free before each, vitest `--maxWorkers=2` (with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`), at most three test files per run, no build and test together. Logs: `~/.local/share/full-steam/jg-runs/ent-10d-catchup2-*.log`.
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `pnpm --filter @jobguard/core build` | 0 | tsc, no output |
+| 2 | `pnpm --filter @jobguard/db build` | 0 | tsc, no output; PostgreSQL started, `hydrate-symlinks.js` not needed |
+| 3 | `pnpm --filter @jobguard/storage build` | 0 | tsc, no output |
+| 4 | `pnpm --filter @jobguard/config build` | 0 | tsc, no output |
+| 5 | `pnpm --filter @jobguard/ai build` | 0 | tsc, no output |
+| 6 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/sso-required.integration.test.ts test/sso-emergency.integration.test.ts test/sso-emergency-concurrency.integration.test.ts` | 0 | 3 files, 23 tests passed |
+| 7 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/enterprise-identity.integration.test.ts test/audit-export.integration.test.ts test/tenancy.integration.test.ts` | 0 | 3 files, 39 tests passed |
+| 8 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/shadow-catalog.integration.test.ts test/small-builder-origin.integration.test.ts test/recovery-timing-pin.integration.test.ts` | 0 | 3 files, 43 tests passed |
+| 9 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/sso/sso-emergency.test.ts src/auth/sso/sso-required-disclosure.test.ts src/auth/sso/sso-required-paths.test.ts` | 0 | 3 files, 41 tests passed |
+| 10 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/sso/sso-required.test.ts src/auth/context-boundary.test.ts` (`context-boundary.test.ts` unedited) | 0 | 2 files, 154 tests passed |
+| 11 | `pnpm typecheck` | 0 | 7 of 7 tasks successful (4 from the turbo cache) |
+| 12 | `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7 of 7 tasks successful (4 from cache); `Lane boundary passed`, lane `ent-10d`, head `56bb798`, base `80d4a06c1fb0c9afd1edf2aadd069b4b56e232af`, 32 files |
+| 13 | `pnpm lint:lanes` | 0 | `Lane boundary passed`, lane `ent-10d`, head `56bb798`, 32 files. Its base was `18743cb5aad8578960296ad2fd60c104cb16e90e` because `origin/main` had moved by then (see below) |
+
+No failing merged test. No test or product file was touched to obtain any of these results. `git status` was clean before and after the runs.
+
+### origin/main moved during the round
+
+While the runs were going, `origin/main` advanced from `80d4a06` to `18743cb5aad8578960296ad2fd60c104cb16e90e` (CI-TIME-2, #150: `.github/workflows/ci.yml` one line, one `config/agent-lane-assignments.json` line, a receipt). This catch-up was not merged onto it (the order was one round onto 80d4a06). `git merge-tree --write-tree HEAD 18743cb` reports a clean merge (exit 0), so GitHub should be able to build the combined state without another conflict.
+
+### NOT RUN
+
+- The browser suite (`apps/web/e2e/ENT-10d.spec.ts`, `ENT-10a.spec.ts`, `M0-6L.spec.ts`) and any `next build`.
+- `pnpm openapi:check` and the whole `apps/api` test run; the other `apps/api/src/auth/sso/*` files (`action-paths`, `linking`, `role-mapping`, `saml`).
+- The rest of the `packages/db` suite, including `extra-origin-upgrade`, `shadow-persistence`, `watchdog-migration-owner`, `demo-bootstrap` and the new `audit-checkpoint-handoff` integration files, `pnpm test:db`, `pnpm test:migrations`, `pnpm test:regression`.
+- `node --test tools/*.test.mjs`, `pnpm eval`, restore and deploy-smoke checks.
+- GitHub checks for the new head (see the pull request after this push).
+- No new independent Claude review: the Opus PASS at `6243ae4` (`ent-10d-opus-delta-6243ae4.md`) binds to ENT-10d's own code, which this catch-up does not alter (merge of main plus the one lane-line resolution); whether that binding carries over is the dispatcher's to judge.
