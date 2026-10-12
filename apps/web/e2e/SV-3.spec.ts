@@ -9,6 +9,7 @@ test("I: mandatory must-surface Decision survives reload and return through Jobs
  await openQuote(page);await startWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
  const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
+ const terms=await page.request.post(`/api/jobs/${jobId}/final-account/terms`,{data:{version:"final-check-terms.accept.v1",commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"}});expect(terms.status()).toBe(200);
  const signal=randomUUID(),evidence=randomUUID(),upload=randomUUID(),firing=randomUUID(),decision=randomUUID(),disclosure=randomUUID(),login=`sv3_browser_${randomUUID().replaceAll('-','')}`,value=randomUUID();
  let shadow:Pool|undefined;
  try{
@@ -29,5 +30,63 @@ test("I: mandatory must-surface Decision survives reload and return through Jobs
   await verify();await page.reload();await verify();await page.getByRole('button',{name:'← Jobs',exact:true}).click();await verify();
   await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
   expect((await admin.query("SELECT state,disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1",[signal])).rows).toEqual([{state:'surfaced_early',disclosed_before_lock:true}]);
+ }finally{await shadow?.end();await admin.query(`DROP OWNED BY ${login};DROP ROLE ${login}`);await admin.end()}
+});
+
+test("Q: every visible count/badge/error, cache key, storage and notification surface ignores 25 linked held signals",async({page})=>{
+ await openQuote(page);await startWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
+ const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
+ const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
+ const login=`sv3_q_browser_${randomUUID().replaceAll('-','')}`,value=randomUUID(),evidence=randomUUID(),upload=randomUUID();let shadow:Pool|undefined;
+ const surfaces=["responseShape","counts","badges","errors","cacheKeys","cacheHeaders","notifications","analytics","storage"] as const;
+ try{
+  await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_shadow TO ${login}`);
+  shadow=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:login,password:value,max:1});
+  await withTenant(admin,testTenantContext(T),async db=>{
+   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$1::text,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[upload,T,jobId]);
+   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo',$3::text,'Q:v1',repeat('a',64),100,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,T,upload,jobId]);
+  });
+  await page.addInitScript(()=>{
+   const state={notifications:[] as unknown[],cacheKeys:[] as unknown[],analytics:[] as unknown[]};Object.assign(window,{__sv3Trace:state});
+   if(window.Notification){const Original=window.Notification;window.Notification=new Proxy(Original,{construct(target,args){state.notifications.push(args);return Reflect.construct(target,args)}});}
+   const originalOpen=CacheStorage.prototype.open;CacheStorage.prototype.open=function(key){state.cacheKeys.push(key);return originalOpen.call(this,key)};
+   const originalFetch=window.fetch;window.fetch=function(input,init){const url=String(input instanceof Request?input.url:input);state.cacheKeys.push({url,cache:init?.cache??"default"});if(/analytics|telemetry|beacon/u.test(url))state.analytics.push({url});return originalFetch.call(this,input,init)};
+   const originalBeacon=navigator.sendBeacon.bind(navigator);navigator.sendBeacon=(url,data)=>{state.analytics.push({url:String(url),bytes:data instanceof Blob?data.size:null});return originalBeacon(url,data)};
+  });
+  async function replay(){
+   const responses=new Map<string,{body:string;headers:Record<string,string>}>(),pending:Promise<void>[]=[];
+   const listener=(response:import('@playwright/test').Response)=>{
+    if(new URL(response.url()).pathname.startsWith('/api/'))pending.push((async()=>{
+     const headers=await response.allHeaders();
+     responses.set(new URL(response.url()).pathname+new URL(response.url()).search,{
+      body:(await response.body()).toString('base64'),
+      headers:Object.fromEntries(Object.entries(headers).filter(([key])=>['cache-control','etag','vary'].includes(key))),
+     });
+    })());
+   };
+   page.on('response',listener);
+   const views:Array<{responseShape:string;counts:(string|null)[];badges:(string|null)[];errors:(string|null)[];cacheKeys:string[];notifications:unknown[];analytics:unknown[];storage:Array<Array<Array<string|null>>>}>=[];
+   try{for(const route of ['/',`/jobs/${jobId}`]){
+    await page.goto(route);if(route==='/'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
+    else await expect(page.locator('.quote-editor')).toBeVisible();
+    await page.waitForLoadState('networkidle');await Promise.all(pending);
+    views.push(await page.evaluate(()=>{
+     const read=(selector:string)=>[...document.querySelectorAll(selector)].map(n=>n.textContent);
+     const storage=(s:Storage)=>Object.keys(s).sort().map(key=>[key,s.getItem(key)]);
+     const trace=(window as unknown as {__sv3Trace:{notifications:unknown[];cacheKeys:unknown[];analytics:unknown[]}}).__sv3Trace;
+     return {responseShape:document.body.innerText,counts:read('[data-testid*="count"]'),badges:read('.nav-count,.decision-count,[class*="badge"]'),errors:read('[role="alert"]'),cacheKeys:[...new Set(trace.cacheKeys.map(v=>JSON.stringify(v)))].sort(),notifications:trace.notifications,analytics:trace.analytics,storage:[storage(localStorage),storage(sessionStorage)]};
+    }));
+   }}finally{page.off('response',listener)}
+   expect(responses.size).toBeGreaterThan(0);
+   return Object.fromEntries(surfaces.map(channel=>[channel,channel==='cacheHeaders'?[...responses].map(([url,data])=>({url,headers:data.headers})).sort((a,b)=>a.url.localeCompare(b.url)):channel==='responseShape'?{views:views.map(v=>v.responseShape),responses:[...responses].map(([url,data])=>({url,body:data.body})).sort((a,b)=>a.url.localeCompare(b.url))}:views.map(v=>v[channel])])) as Record<typeof surfaces[number],unknown>;
+  }
+  const zero=await replay();
+  await withTenant(shadow,testTenantContext(T),async db=>{for(let n=0;n<25;n++){
+   const signal=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q','2026-10-01','Private fictional extra','low','held_for_final_check')",[T,jobId,signal]);
+   await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),'2026-10-01')",[T,jobId,signal,evidence]);
+  }});
+  expect((await admin.query("SELECT count(*)::int n FROM app.shadow_signal_evidence WHERE job_id=$1 AND evidence_id=$2",[jobId,evidence])).rows).toEqual([{n:25}]);
+  const many=await replay();
+  for(const channel of surfaces){expect(JSON.stringify(many[channel]),channel).toBe(JSON.stringify(zero[channel]));const poisoned={...many,[channel]:{signalCount:25}};expect(()=>expect(JSON.stringify(poisoned[channel])).toBe(JSON.stringify(zero[channel]))).toThrow()}
  }finally{await shadow?.end();await admin.query(`DROP OWNED BY ${login};DROP ROLE ${login}`);await admin.end()}
 });

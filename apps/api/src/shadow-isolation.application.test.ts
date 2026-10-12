@@ -1,13 +1,13 @@
 import "reflect-metadata";
-import { createHash, randomUUID } from "node:crypto";
-import { createRequire } from "node:module";
+import crypto, { createHash, randomUUID } from "node:crypto";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Pool, type PoolClient } from "pg";
 import { Test } from "@nestjs/testing";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, migrate } from "@jobguard/db";
 import { AppModule } from "./app.module.js";
 const requireDb=createRequire(new URL("../../../packages/db/package.json",import.meta.url));
@@ -21,9 +21,9 @@ const credential=randomUUID(),session=randomUUID(),jobId=randomUUID(),digest=cre
 let postgres:InstanceType<typeof EmbeddedPostgres>,owner:Pool,dir:string,port:number;
 const pool=(user:string,database:string)=>new Pool({host:"127.0.0.1",port,database,user,password:credential,max:2});
 function connection(user:string,database:string){const u=new URL("postgresql://127.0.0.1");u.username=user;u.password=credential;u.port=String(port);u.pathname=database;return u.href;}
-async function nextRoutes(path:string,prefix="/api"):Promise<string[]>{const routes:string[]=[];for(const e of await readdir(path,{withFileTypes:true})){
- if(e.isDirectory())routes.push(...await nextRoutes(join(path,e.name),`${prefix}/${e.name}`));
- else if(e.name==="route.ts" && /export async function GET/u.test(await readFile(join(path,e.name),"utf8")))routes.push(prefix);
+async function nextRoutes(path:string,prefix="/api",method:"GET"|"POST"="GET"):Promise<string[]>{const routes:string[]=[];for(const e of await readdir(path,{withFileTypes:true})){
+ if(e.isDirectory())routes.push(...await nextRoutes(join(path,e.name),`${prefix}/${e.name}`,method));
+ else if(e.name==="route.ts" && new RegExp(`export\\s+(?:(?:async\\s+)?function\\s+${method}\\b|const\\s+${method}\\b)`,"u").test(await readFile(join(path,e.name),"utf8")))routes.push(prefix);
 }return routes;}
 function pathFor(route:string){return route.replace(/\{(?:id|jobId)\}|\[(?:id|jobId)\]/gu,jobId).replace(/\{[^}]+\}|\[[^\]]+\]/gu,"10000000-0000-4000-8000-000000000099");}
 function stableHeaders(headers:Record<string,string>){return Object.fromEntries(Object.entries(headers).filter(([k])=>k!=="date").sort(([a],[b])=>a.localeCompare(b)));}
@@ -114,3 +114,132 @@ describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
   expect(responses[1]).toBe(responses[0]);
  });
 });
+
+/** Observable channels are compared independently, so absence/shape/extra fields cannot hide a leak. */
+const channels=["responses","notifications","outbox","exports","counts","badges","errors","cache","analytics","telemetry","statements","publicRows"] as const;
+type IsolationTrace=Record<typeof channels[number],unknown[]>;
+function emptyTrace():IsolationTrace{return {responses:[],notifications:[],outbox:[],exports:[],counts:[],badges:[],errors:[],cache:[],analytics:[],telemetry:[],statements:[],publicRows:[]}}
+function assertIsolation(zero:IsolationTrace,many:IsolationTrace){for(const channel of channels)expect(JSON.stringify(many[channel]),channel).toBe(JSON.stringify(zero[channel]));}
+
+// Every comparator has an explicit negative control, including otherwise quiet notification/analytics paths.
+it.each(channels)("Test Q monitor rejects a signal-dependent %s path",channel=>{
+ const zero=emptyTrace(),many=structuredClone(zero);
+ many[channel].push({heldSignalCount:25});expect(()=>assertIsolation(zero,many)).toThrow();
+});
+
+it("Test Q: successful mutations, exports, delivery/retry telemetry and every mutation error surface are identical",async()=>{
+ const {seedAccount}=await import(new URL("../../../packages/db/test/final-account-lock.integration.test.ts",import.meta.url).href);
+ const {createWorkspaceApplication}=await import("./workspace/application.js"),{ActionExecutor}=await import(new URL("../../../packages/db/src/outbox.ts",import.meta.url).href);
+ // A fresh public fixture and two exact clones. No prior HTTP test can change the compared history.
+ const initial=pool("postgres","sv3_isolation_zero"),a=await seedAccount(initial,DEMO_TENANT_ID,100000);
+ const signalEvidence=randomUUID(),queued=randomUUID(),authority=randomUUID(),approval=randomUUID(),decision=randomUUID(),artifact="Fictional approved notification";
+ try{await withTenant(initial,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+  await db.$client.query("SET LOCAL session_replication_role='replica'"); // Fixture ownership binding only, as in SV-4's exported fixture.
+  await db.$client.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='home',baseline_quote_version_id=$2 WHERE tenant_id=$3 AND id=$4",[digest,a.baselineId,DEMO_TENANT_ID,a.jobId]);
+  await db.$client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING",[DEMO_TENANT_ID,a.jobId]);
+ });
+ await withTenant(initial,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+  await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence',$5,$5)",[signalEvidence,DEMO_TENANT_ID,a.jobId,a.scopeItemId,fixed]);
+  await db.$client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'synthetic_notification')",[decision,DEMO_TENANT_ID,a.jobId]);
+  await db.$client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[approval,DEMO_TENANT_ID,decision,DEMO_MEMBERSHIP_ID]);
+  const hash=createHash("sha256").update(artifact).digest("hex");
+  await db.$client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'synthetic_notification','fixture@example.invalid',$6,1,'synthetic:Q','2099-10-01')",[authority,DEMO_TENANT_ID,decision,approval,DEMO_MEMBERSHIP_ID,hash]);
+  await db.$client.query("INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at,created_at) VALUES($1,$2,$3,'fake_capture','synthetic:Q','synthetic_notification','fixture@example.invalid',$4,$5,1,'synthetic:Q','2099-10-01',$6)",[queued,DEMO_TENANT_ID,authority,hash,artifact,fixed]);
+ });
+ }finally{await closeTestPools(initial)}
+ const databases=["sv3_effect_zero","sv3_effect_many"];
+ for(const name of databases)await owner.query(`CREATE DATABASE ${name} TEMPLATE sv3_isolation_zero`);
+ const manyAdmin=pool("postgres",databases[1]!);
+ try{const hidden=pool("sv3_isolation_shadow",databases[1]!);try{await withTenant(hidden,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+  for(let n=0;n<25;n++){const id=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',$4,'Private fictional extra','low','held_for_final_check')",[DEMO_TENANT_ID,a.jobId,id,fixed]);
+   await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),$5)",[DEMO_TENANT_ID,a.jobId,id,signalEvidence,fixed]);}
+ })}finally{await closeTestPools(hidden)}
+ expect((await manyAdmin.query("SELECT count(*)::int n FROM app.shadow_signal_evidence WHERE job_id=$1",[a.jobId])).rows).toEqual([{n:25}]);
+ }finally{await closeTestPools(manyAdmin)}
+ const originalUuid=crypto.randomUUID;
+ async function replay(database:string):Promise<IsolationTrace>{
+  const inspect=pool("postgres",database),runtime=pool("sv3_isolation_runtime",database),trace=emptyTrace();
+  let sequence=0;const uuidMock=vi.spyOn(crypto,"randomUUID").mockImplementation(()=>`80000000-0000-4000-8000-${String(++sequence).padStart(12,"0")}` as ReturnType<typeof randomUUID>);
+  syncBuiltinESMExports();vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(new Date("2026-10-13T00:00:00Z"));
+  let app:ReturnType<typeof createWorkspaceApplication>,nest:import('@nestjs/common').INestApplication|undefined,next:Awaited<ReturnType<typeof startNext>>|undefined;
+  try{
+   // Test-local clocks/identities in these disposable databases only. The compared rows retain every byte.
+   for(const name of ["now","transaction_timestamp","statement_timestamp","clock_timestamp"])
+    await inspect.query(`CREATE OR REPLACE FUNCTION pg_catalog.${name}() RETURNS timestamptz LANGUAGE sql AS 'SELECT ''2026-10-13T00:00:00Z''::timestamptz'`);
+   await inspect.query("CREATE SEQUENCE public.sv3_uuid_counter");await inspect.query("GRANT USAGE ON SEQUENCE public.sv3_uuid_counter TO PUBLIC");
+   await inspect.query("CREATE OR REPLACE FUNCTION pg_catalog.gen_random_uuid() RETURNS uuid LANGUAGE sql VOLATILE AS $$ SELECT ('90000000-0000-4000-8000-'||lpad(nextval('public.sv3_uuid_counter')::text,12,'0'))::uuid $$");
+   app=createWorkspaceApplication({pool:runtime,sessionId:session});
+   const logStart=statementsLog.length;
+   async function success(name:string,work:()=>Promise<unknown>){const result=await work();trace.responses.push({name,result});return result as any}
+   const price={quantity:"1",unit:"item",unitRatePence:12000,direction:"addition"};
+   const extra={version:"variation-command.v1",action:"propose",proposalId:randomUUID(),scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:null,description:"Fictional captured tap",captureText:"Fictional captured tap",price};
+   const proposed=await success("Log an extra: priced",()=>app.variation.command(a.jobId,extra));
+   await success("Log an extra: retry",()=>app.variation.command(a.jobId,extra));
+   const revision=proposed.variations.find((v:any)=>v.id===extra.proposalId).currentRevisionId;
+   await success("approve captured extra",()=>app.variation.command(a.jobId,{version:"variation-command.v1",action:"approve",variationId:extra.proposalId,revisionId:revision,approvalId:randomUUID(),attestation:"Builder-recorded practice acceptance — not an authenticated customer signature"}));
+   await success("Log an extra: unpriced",()=>app.variation.command(a.jobId,{...extra,proposalId:randomUUID(),scopeItemId:randomUUID(),price:null}));
+   const rate=await success("save rate",()=>app.materials.addRate({version:"material-rate-command.v1",merchantName:"Fictional Q merchant",sku:"Q-TAP",description:"Fictional tap",pricePence:2000,priceUnit:"each",taxBasis:"net",effectiveFrom:"2026-10-01",sourceLabel:"synthetic:Q",expectedVersion:0}));
+   await success("save requirement",()=>app.materials.addRequirement(a.jobId,{version:"material-requirement-command.v1",scopeItemId:a.scopeItemId,skuId:rate.skuId,quantity:"2",unit:"each",expectedRevision:0}));
+   await success("plan",()=>app.readiness.record(a.jobId,{version:"readiness-plan.v1",commandId:randomUUID(),scenarioNow:"2026-10-13T00:00:00Z"}));
+   await success("advance",()=>app.readiness.advance(a.jobId,{version:"readiness-clock.v1",commandId:randomUUID(),scenarioNow:"2026-10-13T00:00:00Z"}));
+   await success("seed inbox",()=>app.inboxRelevance.seed(a.jobId,{version:"inbox-seed.v1",commandId:randomUUID()}));
+   await success("budget",()=>app.inboxRelevance.budget(a.jobId,{version:"inbox-budget.v1",commandId:randomUUID(),advisoryBudget:3}));
+   const advisory=(await inspect.query("SELECT id FROM app.inbox_decision_revision WHERE job_id=$1 AND lane='advisory' ORDER BY id LIMIT 1",[a.jobId])).rows[0].id;
+   await success("dismiss advisory",()=>app.inboxRelevance.dismiss(a.jobId,advisory,{version:"inbox-dismiss.v1",commandId:randomUUID()}));
+   const evaluated=await success("evaluate decisions",()=>app.decisions.evaluate({version:"finding-evaluation-command.v1",commandId:randomUUID(),tenantId:DEMO_TENANT_ID,jobId:a.jobId}));
+   const dismissible=evaluated.decisions.find((d:any)=>d.classification==="advisory");expect(dismissible).toBeDefined();
+   await success("dismiss decision",()=>app.decisions.dismiss({version:"decision-resolution-command.v1",commandId:randomUUID(),tenantId:DEMO_TENANT_ID,decisionId:dismissible.id,findingFingerprint:dismissible.fingerprint,resolution:"dismissed",expectedSnapshotRevision:dismissible.source.snapshotRevision}));
+   await success("terms",()=>app.finalAccountLock.acceptTerms(a.jobId,{version:"final-check-terms.accept.v1",commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"}));
+   await success("review extra",()=>app.finalAccountLock.reviewExtra(a.jobId,{version:"final-review-extra.v1",commandId:randomUUID(),scopeItemId:randomUUID(),description:"Fictional reviewed extra",captureText:"Fictional reviewed extra",price:null}));
+   await success("disposition",()=>app.finalAccountLock.disposition(a.jobId,{version:"final-account.disposition.v1",commandId:randomUUID(),scopeItemId:a.scopeItemId,disposition:"done"}));
+   const proofScope=(await app.proof.get(a.jobId)).scopeItemId;
+   const selected=await success("proof select",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"select_generated",commandId:randomUUID(),scopeItemId:proofScope,fixture:"completion-photo"}));
+   const verified=await success("proof finalize",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"finalize",commandId:randomUUID(),uploadId:selected.upload.id,objectVersionId:selected.upload.objectVersionId}));
+   await success("proof complete",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"complete",commandId:randomUUID(),scopeItemId:proofScope,evidenceId:verified.upload.evidenceId}));
+   await success("final-account lock",()=>app.finalAccountLock.lock(a.jobId,{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"}));
+   await success("final-account lock projection",()=>app.finalAccountLock.get(a.jobId));
+   // Real authorized delivery exercises notification content and retry telemetry, with no external provider.
+   let attempts=0;const adapter:import("@jobguard/db").OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async action=>{trace.notifications.push(action);return ++attempts===1?{kind:"retryable",code:"SYNTHETIC_RETRY"}:{kind:"succeeded",providerReference:"synthetic:Q"}},reconcile:async()=>"unknown"};
+   const executor=new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:(name:Parameters<import("@jobguard/db").SafeTelemetry["emit"]>[0],fields:Readonly<Record<string,string|number>>)=>trace.telemetry.push({name,fields})});
+   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   expect(trace.notifications).toHaveLength(2);expect(trace.telemetry).toContainEqual(expect.objectContaining({name:"outbox.retry"}));
+   await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:"a".repeat(64),recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
+   const invoice=(await app.customerInvoice.get(a.jobId)).invoices[0]!;
+   const pdf=await app.customerInvoice.pdf(a.jobId,invoice.id);expect(pdf.byteLength).toBeGreaterThan(0);trace.exports.push(Buffer.from(pdf).toString("base64"));
+   const receipt=await success("record receipt",()=>app.customerInvoice.recordReceipt(a.jobId,{version:"practice-customer-receipt.record.v1",commandId:randomUUID(),invoiceId:invoice.id,paidOn:"2026-10-13",amountPence:1000,method:"bank_transfer",reference:"Fictional payment"}));
+   const payment=(await inspect.query("SELECT id FROM app.customer_payment WHERE invoice_id=$1",[invoice.id])).rows[0].id;expect(receipt).toBeDefined();
+   await success("reverse receipt",()=>app.customerInvoice.reverseReceipt(a.jobId,{version:"practice-customer-receipt.reverse.v1",commandId:randomUUID(),invoiceId:invoice.id,paymentId:payment,reason:"Fictional correction"}));
+   const credit=await success("preview credit",()=>app.customerInvoice.previewCredit(a.jobId,{version:"practice-credit-note.preview.v1",invoiceId:invoice.id,netPence:1000,reason:"Fictional credit"}));
+   await success("issue credit",()=>app.customerInvoice.issueCredit(a.jobId,{version:"practice-credit-note.issue.v1",commandId:randomUUID(),invoiceId:invoice.id,netPence:1000,reason:"Fictional credit",previewHash:credit.previewHash}));
+   const inbox=await app.decisions.list({tenantId:DEMO_TENANT_ID,jobId:a.jobId}),relevance=await app.inboxRelevance.view(a.jobId),proof=await app.proof.get(a.jobId);
+   trace.counts.push(inbox.counts,relevance,proof,await app.value.read(a.jobId),await app.practiceFeed.view(session,a.jobId,{version:"practice-feed-query.v1",limit:50}));trace.badges.push(inbox.counts,relevance,proof.mandatoryDecisionCount);
+   // Every mutating HTTP boundary is replayed with the same malformed command; no omitted error/cache path.
+   const module=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(Pool).useValue(runtime).compile();nest=module.createNestApplication({logger:false});await nest.init();await nest.listen(await freePort(33000,500),"127.0.0.1");
+   const api=JSON.parse(await readFile(new URL("../openapi.json",import.meta.url),"utf8")) as {paths:Record<string,Record<string,unknown>>};
+   for(const [path,ops] of Object.entries(api.paths))if(ops.post&&!path.startsWith("/auth/")&&!path.startsWith("/contractor")){
+    const url=new URL(pathFor(path).replaceAll(jobId,a.jobId),await nest.getUrl());
+    const response=await fetch(url,{method:"POST",headers:{cookie:`jg_session=${session}`,"content-type":"application/json"},body:JSON.stringify({version:"invalid"})});
+    expect(response.status,path).toBeGreaterThanOrEqual(400);
+    trace.errors.push({path,status:response.status,body:Buffer.from(await response.arrayBuffer()).toString("base64")});trace.cache.push({path,headers:stableHeaders(Object.fromEntries(response.headers))});
+   }
+   next=await startNext(database);
+   const webMutations=(await nextRoutes(new URL("../../web/app/api",import.meta.url).pathname,"/api","POST")).filter(path=>/^\/api\/(?:jobs|decisions|material-rates|recovery-cases|sandbox|quotes)(?:\/|$)/u.test(path));
+   expect(webMutations.length).toBeGreaterThan(0);
+   for(const path of webMutations){
+    const response=await fetch(new URL(pathFor(path).replaceAll(jobId,a.jobId),next.base),{method:"POST",headers:{cookie:`jg_session=${session}`,"content-type":"application/json"},body:JSON.stringify({version:"invalid"})});
+    expect(response.status,path).toBeGreaterThanOrEqual(400);
+    trace.errors.push({path,status:response.status,body:Buffer.from(await response.arrayBuffer()).toString("base64")});trace.cache.push({path,headers:stableHeaders(Object.fromEntries(response.headers))});
+   }
+   for(const table of ["action_outbox","action_attempt"])trace.outbox.push({table,rows:(await inspect.query(`SELECT row_to_json(t)::text bytes FROM app.${table} t ORDER BY row_to_json(t)::text`)).rows});
+   const tables=(await inspect.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','infrastructure') AND tablename NOT LIKE 'shadow_%' ORDER BY schemaname,tablename")).rows;
+   for(const table of tables){const name=`"${table.schemaname}"."${table.tablename}"`;trace.publicRows.push({table:name,rows:(await inspect.query(`SELECT row_to_json(t)::text bytes FROM ${name} t ORDER BY row_to_json(t)::text`)).rows})}
+   // Analytics has no separate persisted or network emitter in the current builder composition; public facts cover its inputs.
+   trace.analytics.push(relevance);
+   await new Promise<void>(resolve=>setTimeout(resolve,25));
+   trace.statements=statementsLog.slice(logStart).filter(s=>s.includes(`SV3:sv3_isolation_runtime:${database}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,""));
+   expect(trace.statements.length).toBeGreaterThan(0);expect(trace.statements.join("\n")).not.toMatch(/\b(?:shadow_\w+|surface_shadow_signal_early|record_shadow_disclosure)\b/u);
+   return trace;
+  }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await nest?.close();await closeTestPools(runtime,inspect);uuidMock.mockRestore();syncBuiltinESMExports();expect(crypto.randomUUID).toBe(originalUuid);vi.useRealTimers()}
+ }
+ try{const zero=await replay(databases[0]!),many=await replay(databases[1]!);assertIsolation(zero,many)}finally{for(const name of databases)await owner.query(`DROP DATABASE ${name}`)}
+},180000);

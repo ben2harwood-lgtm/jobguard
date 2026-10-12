@@ -5,7 +5,7 @@ Branch: `codex/sandbox/sv-3`.
 Base: `262f939514383df28d6811e889650d0571a70145` (SV-2 refreshed head, supplied by the dispatcher and treated as merged).
 No fetch, GitHub operation, add, commit, push, merge, package/dependency change, download or release was performed.
 
-**Status: HOLD. This is a reviewable implementation with explicit incomplete parts; it is not technical acceptance or a completed SV-3 verdict.** Missing source integrations and the exhaustive mutation/export/notification/telemetry isolation proof remain work. PostgreSQL and browser proofs are authored, never claimed executed. The shared outbox composition cannot start before SV-4's terms relation exists.
+**Status: HOLD — only the issued external integrations (B) and ruling/release gates (C) remain. Nothing owed inside the SV-3 lane remains.** Continuation round 1 below supersedes the first round's HOLD reasons. This is builder evidence, not independent verification or technical acceptance. PostgreSQL and browser proofs are authored and NOT RUN.
 
 ## Changed files
 
@@ -194,3 +194,120 @@ Tracked-file diff (new files are listed in the inventory above):
 Build outputs and test-results were removed before dispatch. Initial cleanup detected an existing workspace `.pnpm-store`; its ignored cache was then removed successfully. No tracked file was removed. No `.pnpm-store` left in the worktree. Intended conventional commit message is in `/private/tmp/jg-msg-sv-3.txt`.
 
 **Builder receipt only — not independently verified, not accepted.**
+
+## Continuation round 1
+
+Issued 12 October 2026. Continuation base: `87eb31ea85301af04bb0b38059fbe17f6773d278` (dispatcher merge of SV-4 `8d176a9`; SV-3 migration stays 0129). This section supersedes the earlier round's owed-status statements; its command history remains historical evidence.
+
+Early receipt saved before final verification; completed with the evidence below. The exact SV-4 terms version is now checked by the runtime port and by the migration-owned early-alert routine before new commercial/disclosure effects. Dynamic relation resolution preserves install-before-0130 compatibility. Tests exercise the real worker composition's startup failure and successful registration/outbox dispatch, plus refused detection without tenant acceptance.
+
+| Owed item | Classification and continuation result |
+| --- | --- |
+| SV-4 terms record, version, authorization, worker startup and shared outbox composition | A — BUILT; real-record reader port test, actual composition test, PostgreSQL direct-alert missing/hidden terms controls. No SV-4 file edited. |
+| DW3 successful mutation/export/notification/cache/badge/analytics/telemetry paths | A — BUILT. Whole-request/UI/repository capability isolation; exhaustive current GET inventory and mutation error inventory; fixed successful command/effect script; browser cache/count/badge/notification/analytics/storage observations; negative control per observable channel. Execution of PostgreSQL/HTTP/browser proofs belongs to the helper/CI, not this sandbox. |
+| Real DB, browser and upgrade proof execution | B — HELD for dispatcher Mac helper / GitHub CI. Every such suite is NOT RUN (sandbox cannot start PostgreSQL / a browser). Rule 9 own-step upgrade proof retained. |
+| Finalized supplier/order source bindings and captions | B — HELD for supplier-document/purchase-order/evidence adapter owners (M2-2/M2-3/M2-1 source integration); files outside SV-3. |
+| Imported baseline-to-scope and pre-adoption timing adapter | B — HELD for CH-5 import/adoption integration. Reader continues to refuse unsupported imports. |
+| Diary/customer-request adapters | B — HELD for SV-7A / MON-5. Contract/fixtures remain built; no invented live adapter. |
+| Post-lock orchestration | B — HELD for SV-5 / CH-4. No post-lock detector/reveal capability added. |
+| Recovery/fee half of Test J | B — HELD for SV-6. One surviving signal remains this lane's assertion. |
+| Q4 wording/action mapping | C — HELD for founder/integrator ruling as issued. Stored description and empty detail unchanged; UI parked. |
+| Approved-region live-model evaluation and recall/precision pass bar | C — HELD for live-model release item / M0-12a. No threshold or approval invented. |
+| Separate shadow login / SHADOW_DATABASE_URL deployment configuration | B — HELD for deployment/operations owner M0-13a; worker configuration/posture checks already built. |
+| D12/D13/G1/G2/G4-S | C — HELD for their release/policy owners. No real-data or production capability enabled. |
+| Exact-commit independent verdicts and acceptance | B — dispatcher obtains fresh Claude Opus review and separate Sol check, then a separate acceptance actor; builder cannot accept this work. |
+
+**Continuation status: HOLD (B/C only). Nothing owed inside this lane remains.** All A work is implemented or authored as executable proofs. The external execution/release/owner holds are listed above. No commit made.
+
+### Continuation implementation and proof boundaries
+
+Q5 now consumes the actual SV-4 contract: `FINAL_CHECK_TERMS_VERSION`, matching tenant under runtime RLS, and the existing owner-authorized `accept_final_check_terms` command. No acceptance is inferred. The unit port test proves the exact parameter binding and refuses read/proposal/persist without it. The actual `worker.ts` module is imported with only external infrastructure/executor fakes: an absent relation prevents Graphile registration; its presence registers the existing outbox tasks and the detection task; existing outbox dispatch still receives verified queue scope; unaccepted detection refuses before evidence queries. This is a composition test, not a live Graphile integration.
+
+The new 0129 routine reads SV-4's relation under its migration-owned, FORCE-RLS context before any new Decision/finding/firing/disclosure effects. A completed immutable replay retains its original result. The PostgreSQL test uses rolled-back missing-relation and restrictive-visibility controls, asserts no new Decision/finding/firing/disclosure or signal disclosure flag, verifies another tenant's acceptance is invisible, rejects direct runtime insertion of terms, and permits a real accepted-term firing. The original I/browser fixture now obtains terms through SV-4's real command. No SV-4 relation, routine, grant, policy or file is edited.
+
+DW3 uses complementary proofs, with explicit scopes:
+
+- The source policy covers all current request adapters, UI code (including caches and badges), and ordinary DB repositories. It denies imports/uses of executing shadow capabilities and shadow SQL tokens, including template fragments and identifiers; inert barrels remain allowed. It applies to every success/error branch, including routes not visited by the fixed script. It reads current source semantically; it pins no unowned file bytes, hashes or whole-file snapshots. A candidate filter avoids parsing files in which none of the forbidden names occurs; token assertions and the default five-second timeout remain intact.
+- The retained HTTP inventory covers every current non-auth/non-health OpenAPI GET and every Next job GET. It now recognizes both function exports and `export const GET` (the parties route). The added matrix dynamically inventories non-auth/non-contractor Nest POSTs and builder Next POSTs for error/status/body/header/cache comparisons. Dynamic action routes get their invalid-action path; their successful branches are covered by the source policy and applicable command script.
+- The fixed successful script uses exact cloned public history, actual runtime/shadow logins and 25 evidence-linked held signals for the tested job. It runs priced/unpriced/retried Log an extra, captured-extra approval, material rates/requirements, readiness plan/advance, relevance seed/budget/dismiss, finding evaluate/dismiss, terms, final-review addition, disposition, proof selection/finalization/completion, final-account lock/read, invoice issue/PDF, receipt/reversal, credit preview/issue and public projections. No success application response is mocked. Disposable DB clocks/UUID functions and Node time/UUID generation make the compared bytes deterministic; they are restored or the databases dropped. This is a fixed isolation script, not a claim that every feature's successful journey was executed here.
+- Notification content comes from the actual authorized `ActionExecutor`, with a fake external adapter returning retryable then succeeded. Outbox/attempt rows, queue/retry telemetry, exported PDF bytes, public rows and audit facts are compared. The script itself logs the runtime statement sequence/count and forbids shadow statements. The separate eight-read query-log test now inserts all 25 signals with real evidence links.
+- Browser Q observes actual API bodies, visible counts/badges/errors, cache headers and fetch/cache keys, notification construction, beacon/analytics events, and local/session storage on Jobs/Decisions and the saved job. Neither API success responses nor business state are browser-intercepted. Analytics has no separate current builder service; the test observes its actual browser/network hooks and public relevance inputs rather than inventing an analytics provider.
+- Each of the 12 application trace channels and each of the nine browser channels has an injected signal-dependent negative control that must fail its comparator. Must-surface fixtures are excluded from Q.
+
+These are source-inspected and, for the worker/source policy only, unit-test-executed. HTTP/PostgreSQL/browser byte comparisons remain **NOT RUN (sandbox cannot start PostgreSQL / a browser)**. No wall-clock timing equality, live notification delivery, live model quality, production safety approval or independent verdict is claimed.
+
+### Continuation commands and actual outcomes
+
+All validation commands below ran from `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/sv-3` (root); `pnpm --filter … exec` runs its payload from the named package directory. Runtime: Node `v24.17.0`; pnpm `10.28.1` from its existing Corepack cache. A temporary PATH shim at `/private/tmp/jg-sv3-bin/pnpm` selects that exact installed JS; no download/install. Every pnpm command below used `PATH=/private/tmp/jg-sv3-bin:$PATH`. Counts are actual test/task counts, or “compiler only”; cached Turbo tasks are distinguished.
+
+| Command | CWD for payload | Exit / result |
+| --- | --- | --- |
+| `pnpm --version` | root | 0; 10.28.1 |
+| `pnpm --filter @jobguard/api exec vitest run src/shadow-detection.worker.test.ts --maxWorkers=2` | `apps/api` | Initial 0, 7/7 tests, one file. Final strengthened token scan initially 1: 6 passed, 1 default-timeout failure. Optimized candidate filtering without raising timeout or removing assertions; final 0, 7/7 tests, one file (6.13s total; tests 3.57s). Runs serial, never more than one test run active. |
+| `pnpm --filter @jobguard/api exec tsc -p tsconfig.json --noEmit` | `apps/api` | Initial wrapper 1 (tsc 2): trace typing and telemetry callback typing. Fixed. Subsequent and final wrapper 0; compiler only. Final run includes the added Next mutation inventory. |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --module nodenext --target es2023 --skipLibCheck --esModuleInterop --exactOptionalPropertyTypes test/shadow-detection.integration.test.ts test/shadow-isolation-query-log.integration.test.ts` | `packages/db` | Initial 0 and final 0; compiler only, exactly two integration source files; no PostgreSQL execution. |
+| `pnpm --filter @jobguard/web exec tsc -p tsconfig.json --noEmit` | `apps/web` | First wrapper 1 (tsc 2): response-listener syntax. Second wrapper 1 (tsc 2): browser trace array type. Both repaired before root typecheck/build; those pass including the browser source. No browser execution. |
+| `pnpm typecheck` | root | 0; 7/7 successful, 4 cached; 8.061s. |
+| `LANE_BASE_REF=origin/main pnpm lint` | root | 1; core purity passed (135 files), then lane scanner refused the inherited SV-4 diff. It never reached the compiler lint phase. No own-lane violation was listed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | root | 1; lists 35 inherited SV-4 paths because SV-4 is absent from this local `origin/main`. Those files are preserved, not edited by this continuation. |
+| `LANE_BASE_REF=HEAD node tools/lint.mjs` | root | 1; scanner correctly refuses a self-comparison range. No configuration/check weakening. |
+| `LANE_BASE_REF=8d176a9 node tools/lint.mjs` | root | 0; source purity, complete SV-3 lane against the dispatcher-supplied SV-4 head, and money boundary pass. This does not relabel either main-based failure as a pass. |
+| `pnpm turbo run lint` | root | 0; the otherwise-unreached compiler lint phase: 7/7 successful, 2 cached; 13.596s. |
+| `pnpm build` | root | 0; 7/7 successful, 2 cached; 46.453s. Existing Next workspace-root/CSS and Turbo cache-write warnings; no error. Root typecheck/lint/build each invoked once. Final later source refinements affect tests only and received targeted compiler/unit checks. |
+| `pnpm openapi:check` | root | 1; tsx CLI IPC `listen EPERM`, before comparison. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | `apps/api` | 0; identical generator/check without the prohibited tsx CLI IPC server. OpenAPI unchanged from continuation base. |
+| `pnpm --filter @jobguard/ai exec node --import tsx src/evaluation-cli.ts` | `packages/ai` | 1; `tsx` is not a dependency resolvable from this package. No install attempted. |
+| `pnpm --filter @jobguard/api exec node --import tsx ../../packages/ai/src/evaluation-cli.ts` | `apps/api` | 0; current source CLI through the installed API loader. Capture fixture PASS; 11 shadow classes/cases, TP 3 / FP 0 / FN 0, recall 1 and false-positive precision 1 separately; 0 invalid citations dropped / 0 network clients. Live model `not_run`. JSON saved to `/private/tmp/jg-sv3-eval-cont1.json`. |
+| `git diff --check` | root | 0; no whitespace errors. |
+| One-off preserved-file, assertion and credential-shape inspections | root | 0; nine continuation paths, no SV-4 intersection; 41 inherited SV-4-branch paths byte-identical to continuation base. All 84 prior complete assertions in the five changed test files remain verbatim (13 + 7 + 11 + 49 + 4). No credential-shaped literal in changed files. These are receipt inspections, not permanent file-pinning tests. |
+
+Main-based lane lint remains the dispatcher/merge-state item: compare again after SV-4 is on main (or use the supplied SV-4 head for packet inspection). No allowlist widening, unowned edit, fetch or Git write was used to make it pass. The failed wrapper commands are preserved above alongside their successful applicable checks.
+
+Only the changed runnable unit file was executed. No whole repository/package unit suite or unchanged core/AI test file was run. The evaluation CLI executed the unchanged committed fixture corpus; no prompt/model/detector/schema changed in this continuation.
+
+### Continuation NOT RUN
+
+Each following suite/item: **NOT RUN (sandbox cannot start PostgreSQL / a browser)**.
+
+- `packages/db/test/shadow-detection.integration.test.ts`: retained J/P/I, grants/keys/RLS/audit/rollback, 0129 upgrade/control proof and new direct-alert terms gate.
+- `packages/db/test/shadow-isolation-query-log.integration.test.ts`: actual PostgreSQL statement logs and evidence-linked signals.
+- `apps/api/src/shadow-isolation.application.test.ts`: real Nest/Next HTTP inventory, successful command script, public effects/rows, query log and comparator controls.
+- `apps/web/e2e/SV-3.spec.ts` on `mobile-360` and `desktop`: existing I and new browser Q.
+- `pnpm test:db`, `pnpm test:migrations`, unchanged catalogue/tenancy/UIWIRE-12/demo-bootstrap regressions and prior browser suites: dispatcher Mac helper / full GitHub CI.
+
+Live model: **NOT RUN (separate release item)**. No real data, provider/model call, spending, deployment, production mode or policy approval.
+
+### Continuation preservation, catalogue and migration
+
+The SV-2 catalogue receives no continuation edit. A one-off comparison against the supplied SV-2 base confirmed that its only task-wide byte change remains exactly this one line:
+
+Before:
+```ts
+  const explicit:Record<string,string[]>={jobguard_shadow:["record_shadow_disclosure"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
+```
+After:
+```ts
+  const explicit:Record<string,string[]>={jobguard_shadow:["record_shadow_disclosure","surface_shadow_signal_early"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
+```
+
+`apps/api/src/auth/context-boundary.test.ts` remains byte-identical: SHA-256 `7f1914846f763c3534ffafc79701fc6f768e8e1546be2fe98e27bc32a99e0e8d`. All SV-4 files and all its shared registrations remain byte-identical to the supplied continuation base. No registration, lane permission, fingerprinted-table column or package/lockfile changed in this continuation. Changes are the reader's version predicate, the owned 0129 routine's terms gate, owned tests, contract and receipt.
+
+An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
+
+The existing 0129 proof still installs earlier migrations, snapshots nonempty pre-existing rows by named columns/full types and captured PKs, applies 0129 alone, compares, and applies all later migrations (now including 0130) successfully twice. Rolled-back one-microsecond/retype failures and nullable-column/replaced-function/later-insert passing controls remain unchanged. No schema backfill or new migration number. The routine's dynamic terms lookup is intentionally inactive at install. Forward fix remains: disable the worker and retain immutable facts; issue an additive correction, never rewrite disclosures.
+
+### Continuation self-review
+
+Re-read the full continuation diff and the task-wide SV-3 implementation against the issued order and applicable plan/contracts. Checked exact terms version, owner-command acceptance rather than manufactured approval, per-call stamped tenant contexts, actual module startup ordering, direct-alert refusal before inserts, FORCE RLS visibility, same transaction disclosure/Decision/audit, completed replay, unchanged lock order, runtime/shadow pool separation, stable capture/coalescing behavior, inference/injection boundaries, no new production/model policy, and no source adapter outside this lane.
+
+For DW3 checked all request/UI/repository capability paths, GET/POST export syntax, route inventories, deterministic clone history, successful command identities/revisions, public rows/outbox/attempt/artifact bytes, actual executor authorization/retry telemetry, evidence links on all many-signal fixtures, browser storage/cache/count/badge/notification/beacon observations, and explicit poison controls per channel. Fixed the missed `export const GET` inventory, trace/listener typings, the source-vs-built-context module mismatch in test ports/executor, the reader fixture's missing commercial track, missing terms in the older I fixture, and source-scan runtime cost. No timeout increase, retry wrapper, skipped assertion, API success interception or DW3 business behavior stub.
+
+Preservation checks establish unchanged prior complete assertions and unchanged SV-4/scanner/catalogue files as receipt evidence only; no standing test freezes them. Rechecked rule 9 upgrade controls, rule 11 credential shapes, rule 12 semantic rather than byte-pinning tests, exact lane, and unchanged shared registrations. No UI/product wording change.
+
+Could not verify physical PostgreSQL grants/RLS/FKs/rollback/concurrency, SQL clock/identity controls, actual cloned command/HTTP output, Next process/query-log behavior, or either browser viewport. Their executable tests need the helper/CI; type/source checks are not those results. Could not run or approve live-model quality/residency, unowned adapters, post-lock orchestration, attribution/fee integration, professional/security/commercial policy, or independent acceptance. The main-based lane failure reflects inherited SV-4 merge state and is explicitly reported, not bypassed by editing policy.
+
+Intended conventional commit message: `/private/tmp/jg-msg-sv-3.txt`. Dispatcher commits; no Git write, push or merge performed. Build/cache/test output cleanup is recorded below after final inspection.
+
+**Builder receipt only — not independently verified, not accepted.**
+
+Cleanup completed: removed generated `dist`, `.next`, `.turbo`, local Vitest caches and TypeScript build-info files; no `.pnpm-store`, build output or `test-results` remains in the worktree. Installed dependencies and all tracked files retained. Cleanup and final `git diff --check` exited 0.

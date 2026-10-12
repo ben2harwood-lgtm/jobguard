@@ -41,7 +41,7 @@ CREATE FUNCTION app.surface_shadow_signal_early(
 ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE s app.shadow_commercial_signal; prior app.shadow_must_surface_firing;
  request_hash text;finding uuid:=p_firing;audit_id uuid:=p_firing;locked boolean:=false;
- seq bigint;prev text;ts timestamptz;payload_text text;ph text;eh text;actor text:='role:'||session_user;fired boolean;
+ seq bigint;prev text;ts timestamptz;payload_text text;ph text;eh text;actor text:='role:'||session_user;fired boolean;terms_accepted boolean;
 BEGIN
  IF p_tenant IS NULL OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
   RAISE EXCEPTION 'tenant context mismatch' USING ERRCODE='42501';
@@ -75,6 +75,14 @@ BEGIN
   IF prior.request_hash<>request_hash THEN RAISE EXCEPTION 'must-surface replay conflict' USING ERRCODE='23505'; END IF;
   RETURN prior.decision_id;
  END IF;
+ -- 0129 installs before SV-4 (0130); resolve its relation only at execution.
+ -- No new privilege for the shadow login: only this migration-owned routine reads terms.
+ IF to_regclass('app.final_check_terms_acceptance') IS NULL THEN
+  RAISE EXCEPTION 'TERMS_RELATION_UNAVAILABLE' USING ERRCODE='55000';
+ END IF;
+ EXECUTE 'SELECT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1 AND terms_version=$2)'
+  INTO terms_accepted USING p_tenant,'synthetic_final_check_terms.v1';
+ IF terms_accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'TERMS_NOT_ACCEPTED' USING ERRCODE='55000'; END IF;
  IF to_regclass('app.final_account_lock') IS NOT NULL THEN
   EXECUTE 'SELECT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2)' INTO locked USING p_tenant,p_job;
  END IF;

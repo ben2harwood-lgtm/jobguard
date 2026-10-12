@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Pool } from "pg";
-import { observationV1, parseObservation, shadowCaptureV1, type Observation, type ShadowCapture } from "@jobguard/core";
+import { FINAL_CHECK_TERMS_VERSION, observationV1, parseObservation, shadowCaptureV1, type Observation, type ShadowCapture } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 const readV1 = z.object({ version: z.literal("shadow-observation-read.v1"), jobId: z.string().uuid() }).strict();
 export class ShadowObservationReadError extends Error {
@@ -29,7 +29,7 @@ export class ShadowObservationReader {
   async hasAcceptedTerms(context: VerifiedTenantContext): Promise<boolean> {
     // SV-4 owns this append-only record. An absent relation is a startup error, never a permissive fallback.
     await this.assertTermsRelation();
-    return withTenant(this.pool, context, async db => (await db.$client.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1 LIMIT 1", [context.tenantId])).rowCount === 1);
+    return withTenant(this.pool, context, async db => (await db.$client.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1 AND terms_version=$2 LIMIT 1", [context.tenantId, FINAL_CHECK_TERMS_VERSION])).rowCount === 1);
   }
   async read(context: VerifiedTenantContext, raw: unknown): Promise<{ observations: readonly Observation[]; captures: readonly ShadowCapture[] }> {
     const parsed = readV1.safeParse(raw); if (!parsed.success) throw new ShadowObservationReadError("INVALID_OBSERVATION_READ");

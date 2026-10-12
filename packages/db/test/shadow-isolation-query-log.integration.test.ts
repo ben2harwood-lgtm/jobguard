@@ -38,7 +38,12 @@ describe("SV-3 structural timing and runtime query logging",()=>{
    expect(statements.length).toBeGreaterThan(0);expect(statements.join("\n")).not.toMatch(/\b(?:shadow_commercial_signal|shadow_signal_\w+|shadow_reconciliation_run|shadow_disclosure_event|shadow_break_glass_access|shadow_must_surface_firing|reveal_shadow_signals|record_shadow_disclosure|surface_shadow_signal_early)\b/u);
    return{out,statements};
   }
-  const zero=await replay();await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),async db=>{for(let n=0;n<25;n++)await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',clock_timestamp(),'Fictional held extra','low','held_for_final_check')",[DEMO_TENANT_ID,J,randomUUID()])});
+  const evidence=randomUUID();await withTenant(admin,testTenantContext(DEMO_TENANT_ID),db=>db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,'original','completion_photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,DEMO_TENANT_ID,J]));
+  const zero=await replay();await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),async db=>{for(let n=0;n<25;n++){
+   const signal=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',clock_timestamp(),'Fictional held extra','low','held_for_final_check')",[DEMO_TENANT_ID,J,signal]);
+   await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),'2026-10-01')",[DEMO_TENANT_ID,J,signal,evidence]);
+  }});
+  expect((await admin.query("SELECT count(*)::int n FROM app.shadow_signal_evidence WHERE job_id=$1",[J])).rows).toEqual([{n:25}]);
   const many=await replay();expect(many.out).toEqual(zero.out);expect(many.statements).toEqual(zero.statements);
  });
 });
