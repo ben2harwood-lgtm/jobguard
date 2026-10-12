@@ -787,3 +787,127 @@ Builder receipt only — not independently verified, not accepted.
 Removed only local build/cache output after completed checks: `.pnpm-store`, `packages/core/dist`, `packages/core/.turbo`, `packages/config/dist`, `packages/config/.turbo`, `packages/storage/dist`, `packages/storage/.turbo`, `packages/ai/dist`, `packages/ai/.turbo`, `packages/db/dist`, `packages/db/.turbo`, `apps/web/.next`, `apps/web/.turbo`, `apps/api/dist`, `apps/api/.turbo`, `apps/web/tsconfig.tsbuildinfo`. Installed dependencies, .git and shared worktrees were untouched. Rechecked the scanner and its eight pinned files against 96c0cb8, every tracked DB test and auth file against local head, and the old extra-origin test against 96c0cb8: all byte-equal. No new credential-shaped literal found in builder files. All 26 acceptance IDs are recorded.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (12 Oct)
+
+Run by the Mac-side helper (Claude Sonnet 5.5) on 12 to 13 Oct 2026 after midnight, macOS 26.4, Node v24.17.0, pnpm 10.28.1, embedded PostgreSQL 16, vitest 4.1.11, Playwright 1.55.1 (channel chromium). This is test execution only. It is not a review, not a verdict and not acceptance. Nothing in the code was changed except by the merge of main below. Raw logs: `~/.local/share/full-steam/jg-runs/harden-1-mac/`.
+
+**Result: RED. One database test in the builder's own new upgrade file fails intermittently (2 of 5 runs). Everything else is green. The branch was NOT pushed.**
+
+### Merge of main
+
+Merge commit `f2b822bfde1a7e90612a6fd53b9a2ca213dd7892`, "Merge main (96f051f) into PRACTICE-SESSION-HARDEN-1" (main `96f051f61cbb64081aba8881afe29ca74cd32155`, 38 commits ahead of the branch cut 96c0cb8). Conflicts were only in append-only files; both sides kept, main's lines first: `packages/db/src/migrate.ts` (now ends 0129, 0130, 0131, 0138), `packages/db/MIGRATIONS.md` (0131 section, then 0138), `config/agent-lane-assignments.json` (`fee-both-1` line, then ours), `packages/core/src/index.ts` (`practice-facts`, then ours), `apps/api/src/app.module.ts` (`PracticeFactsController` from main, `ContractorPracticeSessionController` kept). `apps/api/openapi.json` was not hand-merged: main's file was taken, then `pnpm openapi:generate` and `pnpm openapi:check` (exit 0). The only difference from main's OpenAPI is the one added path `/contractor/practice/session/revoke`; no existing path changed. `git diff origin/main --stat` shows 25 files: the 24 lane paths and the coordinator's one-file prerequisite `packages/db/test/audit-export.integration.test.ts`. `LANE_BASE_REF=origin/main pnpm lint:lanes` passes. No merged integration test other than that prerequisite differs from main.
+
+### Counts before the upgrade (Q13 and Q7)
+
+**No kept practice database exists on this Mac, so no count was run and none is invented.** Searched: running PostgreSQL processes and listening ports, embedded-cluster data directories (`PG_VERSION` files) under the repository, `~/.local/share`, `~/Library` and the temporary folders, launch agents, Docker (not installed). The only running cluster was another agent's throwaway browser-test cluster in a temporary folder (not counted). The only other data directories found were stray throwaway test and debug clusters in the temporary folder, not stopped-and-kept practice databases. Q13 no_home_record, home_record_ended, home_record_live: not available (no database). Q7 owner-grant count: not available (no database). So no card to Ben is triggered by this run; the founder's own browser, if it holds an old cookie, is covered by the cookie paragraph at the top.
+
+### Runs (all after rebuilding core, db, storage, config, ai each alone, then api)
+
+| Step | Command (short) | Exit | Result |
+| --- | --- | --- | --- |
+| 1 | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane boundary passed |
+| 3a | core `contractor-practice-session.test.ts` + `contractor.test.ts` | 0 | 2 files, 747/747 (22 + 725) |
+| 3b-1 | db new: practice-session, owner-grant, practice-session-upgrade (3 files, maxWorkers 2) | 1 | 76 passed, 1 FAILED: `[PH23] rolled-back session comparison refuses membership` |
+| 3b-2 | upgrade file alone (maxWorkers 1) | 0 | 11/11 |
+| 3b-3, 3b-4, 3b-5 | same three files again, three times | 0, 1, 0 | 77/77; 76 + 1 FAILED (same test); 77/77 |
+| 3c-1 | api `contractor-practice-session.http.test.ts`, `watchdog-registry.test.ts`, `auth/context-boundary.test.ts` | 0 | 3 files, 305/305 (39 + 121 + 145) |
+| 3c-2 | web `revoke/route.test.ts` | 0 | 42/42 |
+| 3d | 27 merged database suites, 9 runs of 3 files, none edited | 0 each | 9 runs, 27 files, 424/424 (41, 52, 71, 24, 23, 36, 49, 19, 109) |
+| 3e-1 | `pnpm test:migrations` | 0 | 2 files, 13/13 |
+| 3e-2 | `pnpm typecheck` | 0 | 7/7 tasks |
+| 3e-3 | `LANE_BASE_REF=origin/main pnpm lint` | 0 | core purity, lane boundary, money check passed, 7/7 tasks |
+| 3e-4 | `pnpm openapi:check` | 0 | up to date |
+| 3f-1 | `SBOX-SESSION-1.spec.ts`, both projects, workers 1 | 0 | 2/2 |
+| 3f-2 | contractor and session specs (ENT-1, ENT-2, ENT-10b, CH-3a, CH-7, M4-2-S, M4-5-S, M4-6-S, M4-7-S, MON-7), both projects | 1 | 127 passed, 1 failed: `[mobile-360] ENT-2.spec.ts:19`, the known Mac-only failure (not a finding) |
+| 3f-3 | the other 42 spec files that mention practice (CH-1, CH-2, ENT-10d, M0-6L, M1-16-S, M2-1A-S to M2-7-S, M4-1-S, M4-3-S, PRACTICE-FACTS-1, SBOX-1, SBOX-2, SBOX-resume, UIWIRE-1 to 15, VALUE-1, VOICE-1, capture, fee-statement, m1-15-complete-journey, quote-acceptance, review-confirm, switch-live; the pattern for `capture` also ran `proof-capture`), both projects | 0 | 172/172 |
+
+Production build of the web app was made first (`next build`, exit 0). Merged database suites run: contractor, contractor-parties, contractor-session-context, audit-export, audit-checkpoint-handoff, enterprise-identity, identity, practice-session, work-order-import, work-order-concurrency, job-scheduling, sor-pricing, sso-emergency, sso-emergency-concurrency, sso-required, extra-origin, extra-origin-upgrade, recovery-follow-up-upgrade, recovery-timing-pin, prevention-checks, job-activation-terms, tenancy, shadow-catalog, demo-bootstrap, fingerprinted-row-shape, job-parties, small-builder-origin. All byte-identical to main (audit-export carries only the coordinator's prerequisite line) and all passed; none skipped.
+
+### The failing test (not fixed; owner is the builder's test)
+
+First failing assertion, in the first run and again in one of the three repeats:
+
+`packages/db/test/contractor-practice-session-upgrade.integration.test.ts:118` (called from `:115`, through `rolledBack` in `upgrade-proof-utils.ts:53`), test `[PH23] rolled-back session comparison refuses membership`. Expected: the control UPDATE succeeds inside the rolled-back transaction so that `sessionDifferences(client)` can be asserted non-empty. Actual: PostgreSQL error 23503, "insert or update on table contractor_practice_session violates foreign key constraint contractor_practice_session_tenant_id_membership_id_fkey", detail "Key (tenant_id, membership_id) ... is not present in table membership".
+
+Cause (read from the test source; the database behaved correctly): the test picks its row with `sessions.find(x => x.class === "A")` from a query with no ORDER BY, but there are two class-A rows (fixtures 0 and 1, each in its own tenant) and the membership it writes (`ownerCommand.membershipId`) belongs only to fixture 0's tenant. When the unordered query returns fixture 1's row first, the foreign key on (tenant_id, membership_id) refuses the control UPDATE. So the failure is in the builder's new D3 test (non-deterministic choice of row), not in the migration, the product code or any merged code. It failed in 2 of 5 runs (both times in the three-file run; the file passed alone and in two other three-file runs). A repair would be to order the query (or choose the row by fixture) in that test only. It is not repaired here.
+
+### Quoted results, step 3(b) (all-green repeat, test titles as printed by vitest verbose; `PH` numbers are the order's acceptance IDs)
+
+Upgrade proof for 0138 (rule 9), conversion, and replacement checks:
+
+```text
+✓ [PH22] replacement attributes at N alone are unchanged
+✓ [PH23] populated conversion preserves live home sessions and ends B, C and D without touching other rows
+✓ [PH24] only three old function texts differ at N alone and home is unchanged
+✓ [PH23] rolled-back session comparison refuses membership   (FAILED in 2 of 5 runs; see above)
+✓ [PH23] rolled-back session comparison refuses raw-row-number
+✓ [PH23] rolled-back session comparison refuses D-cap
+✓ [PH23] rolled-back session comparison refuses B-cap
+✓ [PH23] rolled-back session comparison refuses A-home-cap
+✓ [PH23] microsecond and pre-existing type changes fail the same helper comparison
+✓ [PH23] later nullable columns, changed function and inserted rows pass
+✓ [PH23] successors and repeated migrate preserve named existing rows and full types
+```
+
+Home record and deadline (every title that mentions home or deadline):
+
+```text
+✓ [PH1] issued sessions take the unchanged home record's remaining deadline
+✓ [PH2] a new session with no home record keeps its fixed cap and concurrent starts share one company
+✓ [PH3] expiry and the copied cap refuse access even if home is lengthened
+✓ [PH4] home revoked refuses every contractor path without changing its row
+✓ [PH4] home expired refuses every contractor path without changing its row
+✓ [PH5] contractor revoke leaves home and home jobs unchanged and cannot be revived by the live home
+✓ [PH6] holder activity never moves a deadline with home=false
+✓ [PH6] holder activity never moves a deadline with home=true
+✓ [PH7] never-issued, cap-expired, revoked and both home-ended values have one public answer
+✓ [PH8] home-expired stays ended and a fresh value starts a separate company
+✓ [PH8] home-revoked stays ended and a fresh value starts a separate company
+✓ [PH8] home-without-row stays ended and a fresh value starts a separate company
+✓ [PH8] a home record appearing later keeps the earlier cap and its end refuses the session
+✓ [PH9] owner insert refuses beyond-home
+✓ [PH9] owner insert refuses home-ended
+✓ [PH10] revoke is timestamped, audited, and leaves company unchanged with home=false
+✓ [PH10] revoke is timestamped, audited, and leaves company unchanged with home=true
+✓ [PH13] two revokes produce one event; open revoke and home ending read the committed state
+✓ [PH16] canonical uuid case and the home digest bind the same row
+```
+
+Digest storage (no session value in any table), catalogue and permissions:
+
+```text
+✓ [PH15] catalogue scan finds no stored session values and exactly one new digest place
+✓ [PH16] canonical uuid case and the home digest bind the same row
+✓ [PH22] catalogue proves columns, constraints, non-internal triggers and exact routine grants
+✓ [PH9] runtime cannot access either session table directly
+✓ [PH9] owner writes cannot move authority fields, undo a revoke, remove or truncate rows
+```
+
+Revoke (holder-only, indistinguishable refusals, audited, race-safe):
+
+```text
+✓ [PH10] revoke is timestamped, audited, and leaves company unchanged with home=false / home=true
+✓ [PH11] all revoke refusals are indistinguishable and write nothing
+✓ [PH11] a holder can end their own session after membership revoke without additional permission
+✓ [PH12] failures at routine, audit insert and commit roll back both versions and audit head
+✓ [PH12] deferred audit refuses routine and owner revocations at commit without an event
+✓ [PH12] the audit append takes the final contending lock
+✓ [PH13] two revokes produce one event; open revoke and home ending read the committed state
+✓ [PH13] a start concurrent with an open revoke cannot create a second company
+```
+
+Owner grant refusal (`grant.create` with `owner`), 10 + 7 + 1 + 9 results:
+
+```text
+✓ [PH18] refuses owner grant in otherwise open cell P-O-tenant / P-O-region / P-O-branch / P-O-team / P-A1-tenant / P-P-tenant / A1-O-tenant / A1-O-team / A2-O-branch / A2-O-team   (10 of 10)
+✓ [PH19] preserves the earlier refusal for operative / read-only / other-branch / unknown-member / revoked-member / stale   (6 of 6)
+✓ [PH19] mode is refused before the new owner rule in direct SQL
+✓ [PH20] direct runtime routine refuses owner without any layer above it
+✓ [PH21] invitation and grant still permit role admin / operative / supervisor / surveyor / commercial_manager / finance / read_only / client_approver   (8 of 8)
+✓ [PH21] generator, direct owner insert, team move and revocations retain their behavior
+```
+
+Other new database results in the same files that passed: [PH14] a different database name refuses all session routines; [PH8] cap stays ended and a fresh value starts a separate company; [PH8] contractor-revoked stays ended and a fresh value starts a separate company; [PH9] owner insert refuses backdated / forwarddated / revoked / invalid-digest / before-created / beyond-seven / duplicate. Total in the three new files: 77 tests; 77 passed in 3 of 5 runs and 76 passed with the one failure above in 2 of 5 (the single-file run counts as one of the five).
+
+Not pushed. No pull request opened. Status: merged with main, tested on the Mac, NOT green.
