@@ -303,3 +303,32 @@ Final repository SHA-256: `db847bbc3cd003c56b5df375c53ff1ab6f8fa3b9d17fdc5ad57c4
 Intended commit message: `/private/tmp/jg-msg-m4-8-s-pre.txt`.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (12 Oct)
+
+Run by the Mac-side helper (Claude Sonnet 5.5) on 12 October 2026, 19:2x–19:5x local, on this Mac with real embedded PostgreSQL (`embedded-postgres` 16.10.0-beta.15, Node v24.17.0, pnpm 10.28.1, Vitest 4.1.11). Not a review, verdict or acceptance: the helper ran the commands and recorded what they printed, and changed no product code.
+
+**Code tested:** merge commit `a07ec0741e79763228883b2d86a824d5ed2bbac1` ("Merge main (18743cb) into M4-8-S-PRE"), parents builder commit `0c9eb069794f2b5de066ba5955069e915c13d111` and `origin/main` `18743cb5aad8578960296ad2fd60c104cb16e90e`. The merge had no conflicts (the lane line merged cleanly; `config/agent-lane-assignments.json` parses). After the merge `git diff origin/main --stat` lists only this piece: the lane line, this receipt, `packages/db/src/recovery-case-repository.ts` and the two new test files. SHA-256 of the repository file (`db847bbc…8522`), the unedited outcome test (`1c3efa3a…51dd5`) and the untouched `context-boundary.test.ts` (`7f191484…a99e0e8d`) match the builder's figures. The commit that adds this section sits on top of `a07ec07`; it changes only this receipt.
+
+**Set-up.** The first attempt at run 1 failed before any test ran: all three files stopped with "Postgres init script exited with code null" (the embedded PostgreSQL dyld `libicudata` short-name links were missing). Fixed by running the package's own `node scripts/hydrate-symlinks.js` inside `@embedded-postgres/darwin-arm64` (it only creates the two missing symlinks, `libicudata.68.dylib` and `libicudata.dylib`, in `node_modules`, which is not tracked). The run was then repeated and passed. `@jobguard/core`, `db`, `storage`, `config`, `ai` were each rebuilt alone with `pnpm --filter @jobguard/<name> build` (all exit 0, 3–13 s each) so no stale `dist` folder was used. Every command below went through `~/.local/bin/heavy-slot`; test files were run with `--maxWorkers=2`, at most three files per run, one run at a time.
+
+| Run | Command (all via heavy-slot) | Exit | Result | Run time |
+| --- | --- | --- | --- | --- |
+| 1 (first try, before the symlink fix) | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/recovery-case-join.integration.test.ts test/recovery-cases.integration.test.ts test/recovery-cases.workbench.integration.test.ts` | 1 | Set-up failure only: 3 suites failed to start PostgreSQL, 69 tests skipped, none executed. Not a test result. | 9 s |
+| 1 | same command, repeated after the symlink fix | 0 | 3 files passed; 69 tests passed (join integration 16, `recovery-cases.integration` 12, `recovery-cases.workbench.integration` 41) | 26 s (30 s wall) |
+| 2 | `… vitest run --maxWorkers=2 test/recovery.integration.test.ts test/recovery-eligibility-v3.integration.test.ts test/recovery-timing-pin.integration.test.ts` | 0 | 3 files passed; 66 tests passed | 23 s (49 s wall) |
+| 3 | `… vitest run --maxWorkers=2 test/recovery-follow-up.integration.test.ts test/recovery-messages.integration.test.ts` | 0 | 2 files passed; 159 tests passed | 50 s (275 s wall, mostly waiting for a free slot) |
+| Unit pair | `… vitest run --maxWorkers=2 test/recovery-case-join.test.ts test/recovery-case-outcome.test.ts` | 0 | 2 files passed; 17 tests passed (13 new, 4 merged) | 2 s |
+| 4 build | `pnpm turbo run build --filter=@jobguard/api...` | 0 | 6 tasks successful (4 cached, API built fresh) | 39 s |
+| 4 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/recovery-case.application.test.ts src/recovery-case.command.application.test.ts src/recovery-case.controller.test.ts` | 0 | 3 files passed; 89 tests passed | 6 s (353 s wall, mostly waiting for a free slot) |
+| typecheck | `pnpm typecheck` | 0 | 7 of 7 tasks successful (4 cached) | 115 s |
+| lint | `LANE_BASE_REF=origin/main pnpm lint` on branch `codex/sandbox/m4-8-s-pre` | 0 | Core purity passed (129 files); lane boundary passed (lane `m4-8-s-pre`, comparison `merge-base`, the five files above); money-arithmetic check passed; 7 of 7 turbo lint tasks successful (4 cached) | 27 s (70 s wall) |
+| openapi | `pnpm openapi:check` (in `apps/api`) | 0 | Passed, no output | 7 s |
+
+One further oddity: the first `pnpm lint` invocation through `heavy-slot` exited 2 with an empty log before the command ran (the slot wrapper itself, not lint); the identical command repeated at once passed. Both attempts are listed here for completeness.
+
+The 16 integration cases in `recovery-case-join.integration.test.ts` (U3, J1–J11 including J6d and the four J10 cases) therefore ran for the first time on real PostgreSQL and passed, as did all seven named merged database files and the three named merged `apps/api` files. The unedited `recovery-case-outcome.test.ts` still passes (4 tests).
+
+**Not run here:** the red experiment (the order does not ask for one); `recovery-eligibility-v3.application.test.ts` and `apps/web/app/lib/recovery-case-routes.test.ts` (named as merged no-database tests but not in the order's four Mac runs); `pnpm lint:lanes` on its own (the lane guard ran inside `pnpm lint`); `pnpm build` of the whole repository; `pnpm test`, `pnpm test:db`, `pnpm test:migrations`; the whole API suite; every browser suite (`pnpm test:e2e`); `pnpm eval` (inapplicable). Exact-head GitHub CI, fresh Claude Opus and Codex Sol checks (check lane RED), separate acceptance and the founder's merge all remain outstanding.
+
+Mac verification record only — not independently verified, not accepted.
