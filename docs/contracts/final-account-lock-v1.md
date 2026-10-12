@@ -1,6 +1,6 @@
 # SV-4 final-account lock v1
 
-Synthetic only. Dispatch addendum of 12 October 2026 overrides the older invoice-column proposal and uses migration `0130_final_account_lock.sql` after SV-2 `0128`. D12, D13 and G1 remain pending; this implements no detector, catch confirmation, reconciliation completion writer, fee or production send.
+Synthetic only. Dispatch addendum of 12 October 2026 overrides the older invoice-column proposal and uses migration `0132_final_account_lock.sql` after SV-2 `0128`. D12, D13 and G1 remain pending; this implements no detector, catch confirmation, reconciliation completion writer, fee or production send.
 
 ## Review and lock
 
@@ -43,6 +43,6 @@ Invoice issue creates exact inline Decision approval, authorization, artifact, s
 
 An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
 
-The proof uses named-column `row_to_json(t)::text`, exact column types and captured primary-key identities, with seeded-row guards and rolled-back controls. A microsecond mutation/retype fails; a nullable column, replaced function and later inserted row pass the same comparator. Separate guards protect the fingerprinted tables. No existing row is backfilled or rewritten by 0130. Repair by an additive forward migration; never delete locks, commercial history or issued invoices to roll back.
+The proof uses named-column `row_to_json(t)::text`, exact column types and captured primary-key identities, with seeded-row guards and rolled-back controls. A microsecond mutation/retype fails; a nullable column, replaced function and later inserted row pass the same comparator. Separate guards protect the fingerprinted tables. No existing row is backfilled or rewritten by 0132. Repair by an additive forward migration; never delete locks, commercial history or issued invoices to roll back.
 
 SV-5 owns completion runs, catch confirmation/reveal screens, links for real catch revisions and closure of Q1's older issue path. Founder decisions remain owed for any other terms wording, widening the owner role, and monetary effects of removed/deferred dispositions. Real-data/release gates and independent Claude/Sol checks remain separate from this builder receipt.

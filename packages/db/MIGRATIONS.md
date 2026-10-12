@@ -849,4 +849,9 @@ and browser regressions. Local sandbox initialization errors are not DB passes.
 Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces). Renumbered from 0125 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
 
 Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
-- `0130_final_account_lock.sql` — SV-4 immutable lock, dispositions, synthetic terms, append-only check facts and invoice/line side bindings; only new lock-bound issue is guarded. No fingerprinted-table columns or existing grants change. Forward-fix by additive migration; do not delete locks or issued invoices.
+
+## 0132 — SV-4 final-account lock
+
+Renumbered from 0130 to 0132 on 12 October 2026 under the merge-ahead ruling because ENT-10d (0129) and CH-7-F17-BEFORE-OPEN (0130) merged first and 0131 is reserved for PRACTICE-FACTS-1; the SQL bytes are unchanged (sha256 543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7).
+
+`0132_final_account_lock.sql`: SV-4 immutable lock, dispositions, synthetic terms, append-only check facts and invoice/line side bindings; only new lock-bound issue is guarded. No fingerprinted-table columns or existing grants change. Forward-fix by additive migration; do not delete locks or issued invoices.

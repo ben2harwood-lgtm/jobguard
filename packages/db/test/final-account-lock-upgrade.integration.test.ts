@@ -7,7 +7,7 @@ import { createLockFixture, closeLockFixture, seedAccount, asFixtureTenant, LOCK
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 /* An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'. */
-const OWN = "0130_final_account_lock.sql";
+const OWN = "0132_final_account_lock.sql";
 const tables = ["customer_invoice","final_account_revision","final_account_line","final_account_draft","job"] as const;
 const fingerprinted = ["quote_document_version","quote_acceptance","evidence_object","variation_revision","variation_approval","recovery_claim_revision","recovery_case_event","material_rate_revision","supplier_document_version","supplier_document","customer_invoice","discrepancy_review_outcome"];
 const ident = (name:string) => `"${name.replaceAll('"','""')}"`;
@@ -39,7 +39,7 @@ async function issueLegacy(db:LockFixture['admin'],a:Awaited<ReturnType<typeof s
 describe("SV-4 own-migration upgrade proof and fingerprint/grant catalogue",()=>{
  let f:LockFixture;
  beforeAll(async()=>{f=await createLockFixture(false)},60000);afterAll(async()=>closeLockFixture(f));
- it("installs before 0130, compares 0130 alone, all later twice, and exercises the same comparator's rolled-back controls",async()=>{
+ it("installs before 0132, compares 0132 alone, all later twice, and exercises the same comparator's rolled-back controls",async()=>{
   const own=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith(OWN));expect(own).toBeGreaterThan(0);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS.slice(0,own)){
@@ -52,7 +52,7 @@ describe("SV-4 own-migration upgrade proof and fingerprint/grant catalogue",()=>
   await f.admin.query(await readFile(MIGRATION_URLS[own]!,'utf8'));await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[OWN]);
   await compare(f.admin,before);
   const after=await grants(f.admin);
-  // Only pre-existing objects are compared; 0130 owns every new object and grants only on them.
+  // Only pre-existing objects are compared; 0132 owns every new object and grants only on them.
   for(const key of ['tables','columns','functions']as const){const names=new Set(catalog[key].map(r=>JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>k!=='grants')))));expect(after[key].filter(r=>names.has(JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>k!=='grants')))))).toEqual(catalog[key]);}
   for(const key of ['schemas','roles','memberships']as const)expect(after[key]).toEqual(catalog[key]);
   await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);
