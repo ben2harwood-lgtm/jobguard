@@ -1,14 +1,28 @@
 import "reflect-metadata";
 import crypto, { createHash, randomUUID } from "node:crypto";
 import { createRequire, syncBuiltinESMExports } from "node:module";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn, type ChildProcess } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { Pool, type PoolClient } from "pg";
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, migrate } from "@jobguard/db";
+// Build what this file needs when it is absent (repair round 5, 13 Oct 2026). CI runs `pnpm test` BEFORE `pnpm build`, and turbo's test task depends only on the packages' builds (^build), so on a clean checkout neither apps/api/dist nor apps/web/.next exists when this file starts (CI run 38322571867: ERR_MODULE_NOT_FOUND on the import below).
+// Each output is built at most once per run of this file, with the command CI itself uses, from the repository root, and only when its marker file is absent (nothing is rebuilt when it is present). A failed build fails the file with the build's own output. The environment is CI's build environment: vitest's NODE_ENV=test and this file's own JOBGUARD_ENV/DATABASE_URL are not passed to a build.
+const repoRoot=fileURLToPath(new URL("../../../",import.meta.url)),BUILD_TIMEOUT_MS=8*60_000,BUILD_HOOK_TIMEOUT_MS=10*60_000;
+const present=(file:URL)=>access(file).then(()=>true,()=>false);
+function buildEnvironment(){const env={...process.env};for(const key of Object.keys(env))if(key==="NODE_ENV"||key==="JOBGUARD_ENV"||key==="DATABASE_URL"||key.startsWith("VITEST"))delete env[key];return env}
+async function buildIfAbsent(label:string,filter:string,marker:URL){
+ if(await present(marker))return;
+ const built=spawnSync("pnpm",["--filter",filter,"build"],{cwd:repoRoot,env:buildEnvironment(),encoding:"utf8",timeout:BUILD_TIMEOUT_MS,maxBuffer:64*1024*1024});
+ const tail=`${built.stdout??""}${built.stderr??""}`.slice(-6000);
+ if(built.error||built.status!==0)throw new Error(`${label} build failed: pnpm --filter ${filter} build (exit ${built.status}, signal ${built.signal}${built.error?`, ${built.error.message}`:""}). This test needs it and CI runs tests before builds. Build output (last 6000 characters):\n${tail}`);
+ if(!await present(marker))throw new Error(`${label} build finished but ${fileURLToPath(marker)} is still missing. Build output (last 6000 characters):\n${tail}`);
+}
+await buildIfAbsent("API","@jobguard/api",new URL("../dist/app.module.js",import.meta.url));
 // The compiled application: dependency injection here relies on tsc's emitDecoratorMetadata, which vitest's transform does not emit (a source import leaves every controller's pool undefined).
 const {AppModule}=await import(new URL("../dist/app.module.js",import.meta.url).href);
 const requireDb=createRequire(new URL("../../../packages/db/package.json",import.meta.url));
@@ -58,6 +72,8 @@ async function startNext(database:string):Promise<{child:ChildProcess;base:strin
  await new Promise<void>((resolve,reject)=>{child.once("exit",()=>reject(new Error("NEXT_START_FAILED")));child.stdout?.on("data",chunk=>{if(String(chunk).includes("Ready in"))resolve()});child.stderr?.on("data",()=>undefined)});
  return {child,base};
 }
+// The production web build that startNext serves (`next start` needs apps/web/.next/BUILD_ID); built once for the file, before the database hook, when absent.
+beforeAll(()=>buildIfAbsent("Web production","@jobguard/web",new URL("../../web/.next/BUILD_ID",import.meta.url)),BUILD_HOOK_TIMEOUT_MS);
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"sv3-isolation-"));port=await freePort(58000,500);
  postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:(line:string)=>statementsLog.push(line)});await postgres.initialise();await postgres.start();owner=pool("postgres","postgres");

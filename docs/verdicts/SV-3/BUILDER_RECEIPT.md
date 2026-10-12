@@ -846,3 +846,42 @@ Wrapper `pw-local-channel-sv-3-r4.config.ts` (a copy of the round-3 wrapper with
 `pnpm test:db`, `pnpm test:migrations`, any whole-package suite (memory rule), the other retained browser specs (ENT-2 and SV-4 not rerun beyond the accidental full run described above), any live-model run, the shadow-detection and worker test files (unchanged by round 4; run in round 3), and the scratch negative controls (done by the builder).
 
 **Pushed to `origin codex/sandbox/sv-3` after this record (plain push). No pull request opened** (SV-3 carries SV-4's files, so its lane check against main fails until SV-4 merges; the dispatcher opens the PR later). Local head after this record is the commit that adds it.
+
+## Repair round 5 (13 Oct): CI-order build dependency of the isolation test, built by Claude, Codex unavailable
+
+Issued 13 October 2026 at about 01:30 by the JobGuard dispatcher. Base: clean `97e013b`, branch `codex/sandbox/sv-3`, worktree `.worktrees/sv-3`. Built by a Claude Sonnet builder (Codex out of budget); a builder never reviews its own piece, and this record gives no verdict. Orders `SV-3-issued` and repair rounds 1 to 4 stay in force. Tests only: one test file plus this receipt. No product code, migration, package script, workflow, turbo configuration or other test changed. `apps/api/src/auth/context-boundary.test.ts` was not touched.
+
+### The defect (found by GitHub CI, invisible on the Mac)
+
+CI run **38322571867** on `97e013b`, job `checks`, step `pnpm test` (turbo, `@jobguard/api#test`, 23:34:30Z): `src/shadow-isolation.application.test.ts` line 13, `await import(new URL("../dist/app.module.js",import.meta.url).href)`, failed with `Cannot find module '.../apps/api/dist/app.module.js'` (`ERR_MODULE_NOT_FOUND`); 54 of 55 api files passed. CI order is `pnpm typecheck`, `pnpm lint`, `pnpm test`, then `pnpm build`, then Playwright (`.github/workflows/ci.yml` lines 24-32), and turbo's `test` task depends only on `^build` (the packages the app uses, not the app), so a clean checkout has no `apps/api/dist` and no `apps/web/.next` when the test starts. The same file runs the production web server (`next start`, old line 57; `startNext` calls at old lines 109 and 282), which needs `apps/web/.next/BUILD_ID`. On the Mac both folders existed from earlier builds. CI also showed `@jobguard/api#build` finishing at 23:34:11, after `@jobguard/api#test` had started at 23:33:38: the two run side by side.
+
+### Lines changed, before/after (file total +18/-2)
+
+- Old line 4 `import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";` becomes the same with `access` added. Old line 7 `import { spawn, type ChildProcess } from "node:child_process";` becomes the same with `spawnSync` added, and one new line `import { fileURLToPath } from "node:url";` sits above it.
+- New lines 13-25 (two comment lines and eleven code lines) go between the `@jobguard/db` import and the unchanged comment and import: `repoRoot`, `BUILD_TIMEOUT_MS` (8 minutes), `BUILD_HOOK_TIMEOUT_MS` (10 minutes), `present(file)` (async `access` check), `buildEnvironment()` (a copy of `process.env` without `NODE_ENV`, `JOBGUARD_ENV`, `DATABASE_URL` and anything starting `VITEST`, so a build sees CI's own build environment and not vitest's `NODE_ENV=test`), and `buildIfAbsent(label, filter, marker)`: if the marker file exists it returns at once; otherwise it runs `pnpm --filter <filter> build` with `spawnSync` from the repository root (output captured, 8 minute timeout) and throws a clear error carrying the exit code, signal and the last 6000 characters of the build output if the build fails or if the marker is still missing afterwards. Line 25 is the one call before the import: `await buildIfAbsent("API","@jobguard/api",new URL("../dist/app.module.js",import.meta.url));`.
+- Old line 13 (now line 27), the compiled-module import and the comment above it (the `emitDecoratorMetadata` reason) are byte-identical: the test still imports the compiled module.
+- New lines 75-76 (one comment, one hook) before the existing `beforeAll`: `beforeAll(()=>buildIfAbsent("Web production","@jobguard/web",new URL("../../web/.next/BUILD_ID",import.meta.url)),BUILD_HOOK_TIMEOUT_MS);`. It runs once per file, before the database hook. The existing hook, its 60000 ms limit, every `it` timeout (180000) and every assertion are unchanged; nothing is skipped, loosened or re-worded; the named limit on `retrievedAt` and the etag is untouched.
+
+### Proof runs (Mac; `~/.local/bin/heavy-slot`, at most two heavy steps at once; logs in `~/.local/share/full-steam/jg-runs/sv-3-r5/`)
+
+Conditions: `apps/api/dist` and `apps/web/.next` renamed aside (not deleted; later moved to `.../sv-3-r5/aside/`), `@jobguard/core`, `storage`, `config`, `db`, `ai` each rebuilt alone first (`00-package-builds.log`). Command each time: `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/shadow-isolation.application.test.ts`.
+
+| # | Condition | Exit | Result | Log |
+|---|---|---|---|---|
+| 1 | UNMODIFIED file, both folders absent | 1 | 0 tests; `Error: Cannot find module 'file:///.../apps/api/dist/app.module.js'` at test file line 13:19: the CI failure, for the stated reason | `01-baseline-unmodified-aside.log` |
+| 2 | FIXED file, both folders still absent | 0 | 1 file, **15/15** passed, 114.3 s; the test built `apps/api/dist` (app.module.js written 00:42) and `apps/web/.next` (BUILD_ID written 00:43) itself | `02-fixed-aside-folders.log` |
+| 3 | FIXED file, build outputs present | 0 | 1 file, **15/15** passed, 36.5 s; no rebuild: `dist/app.module.js` and `.next/BUILD_ID` modification times identical before and after | `03-fixed-outputs-present.log`, `03-mtimes-before.txt`, `03-mtimes-after.txt` |
+
+(The Nest `ERROR [ExceptionsHandler] INVOICE_NOT_FOUND` lines in the logs of runs 2 and 3 are the test's own expected malformed-request replays.)
+
+### What else was checked
+
+- `pnpm typecheck`: exit 0, 7/7 tasks (`04-typecheck.log`).
+- `LANE_BASE_REF=origin/main pnpm lint`: exit 0, "Lane boundary passed" (lane sv-3, merge-base `eb1e616`), 7/7 tasks (`05-lint.log`). A first attempt exited 1 only because the renamed aside folders (1346 untracked build files) sat inside the worktree and the lane check counts untracked files; they were moved outside the worktree and the check repeated (`05a-lint-failed-because-aside-folders-were-inside-worktree.log`). That first failure is not a product finding.
+- Other packages, looking for CI-only failures hidden behind the stopped turbo run: `@jobguard/web` unit tests (`vitest run --maxWorkers=2`): exit 0, 22 files, 462 tests, the same counts CI printed for web (`06-web-test.log`). `pnpm --filter @jobguard/api openapi:check` (the step CI runs after api vitest and never reached): exit 0 (`07-openapi-check.log`).
+- Read from the CI log: `@jobguard/db#test` was running side by side with the api tests and was cancelled by the api failure, so the full db suite has still never run in CI on this head. Two SV-3 db test files import another package's compiled output at run time: `packages/db/test/shadow-isolation-query-log.integration.test.ts:32` (`apps/api/dist/workspace/application.js`) and `packages/db/test/shadow-detection.integration.test.ts:71` (`packages/ai/dist/shadow-proposal.js`). turbo does not make `db#test` wait for the api or ai builds; in CI those builds finish early in the run and the db suite is long, so these probably find the files, but this is unproven and is the first place to look if CI shows a new failure. Not changed here (outside this round's one file).
+- Possible overlap noted, not proven harmful: in CI turbo's own `@jobguard/api#build` runs while this test starts; if the test finds `dist` absent it starts its own build, so two builds can write the same files with the same content. The test checks the marker only before building and imports straight after its own build finishes; a read of a file the other build is rewriting at that instant is theoretically possible. In the failing run the turbo build ended 33 seconds after the test began; the test's own build should end later, after turbo's has finished writing.
+
+### NOT RUN
+
+`@jobguard/db#test` and any database package suite (heavy; beyond this round's order), the whole repository test suite, Playwright, `pnpm build`, and GitHub CI itself (it starts again when this commit is pushed).
