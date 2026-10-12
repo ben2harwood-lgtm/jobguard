@@ -33,6 +33,12 @@ export class RecoveryEligibilityError extends Error {
  constructor(readonly code: "ELIGIBILITY_REVIEW_REQUIRED" | "ELIGIBILITY_REVIEWER_FORBIDDEN") { super(code); }
 }
 
+export type RecoveryJoinedCommandResult = Readonly<{ caseId: string; replayed: boolean }>;
+
+export class RecoveryJoinError extends Error {
+ constructor(readonly code: "RECOVERY_JOIN_ACTION_FORBIDDEN" | "RECOVERY_JOIN_TRANSACTION_REQUIRED" | "RECOVERY_JOIN_TENANT_MISMATCH") { super(code); }
+}
+
 export class RecoveryCaseRepository{
  constructor(private readonly pool:Pool){}
  // The answer after a committed command is itself a read, so it is authorised exactly like one (Codex P2 4196319730).
@@ -87,6 +93,31 @@ export class RecoveryCaseRepository{
   if(!reviewer?.membershipId||!reviewer?.identityUserId)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
   // The caller supplies the server-selected principal; any client reviewer field is ignored and replaced below.
   const sent=recoveryCaseCommandV1.parse(raw),parsed=canonicalIds(sent);let caseId="";await withTenant(this.pool,context,async db=>{
+   caseId=(await this.commandBody(db,context,jobId,sent,parsed,reviewer)).caseId;
+  });return this.committedCase(context,jobId,caseId,reviewer)}
+
+ /**
+  * (i) the caller opens the transaction with withTenant (through practiceMaterialPool when it needs the practice setting; the joined call installs no setting of its own) and ends it;
+  * (ii) call it AFTER every other lock and write of your transaction: it takes the membership row FOR SHARE, then the case advisory key, then, through its audit append, the tenant's audit head, and it takes no job-row lock;
+  * (iii) after it returns you may only append your own audit batch (the head is already held by your transaction, so that takes no new lock) and commit;
+  * (iv) at most ONE joined command per caller transaction (a second would take a case lock after the audit head);
+  * (v) if it rejects, roll the whole transaction back: never commit after a rejection;
+  * (vi) use the client for one thing at a time while the call is running.
+  */
+ async commandInTransaction(db:TenantTransaction,context:VerifiedTenantContext,jobId:string,raw:unknown,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryJoinedCommandResult>{
+  if(!reviewer?.membershipId||!reviewer?.identityUserId)throw new RecoveryReviewerError("RECOVERY_REVIEWER_FORBIDDEN");
+  const sent=recoveryCaseCommandV1.parse(raw),parsed=canonicalIds(sent);
+  if(parsed.action!=="transition"||(parsed.eventType!=="record_landing"&&parsed.eventType!=="reverse_landing"))throw new RecoveryJoinError("RECOVERY_JOIN_ACTION_FORBIDDEN");
+  const first=await db.$client.query<{x:string|null}>("SELECT pg_current_xact_id()::text AS x");
+  const second=await db.$client.query<{x:string|null}>("SELECT pg_current_xact_id_if_assigned()::text AS x");
+  if(first.rows[0]?.x==null||second.rows[0]?.x==null||first.rows[0].x!==second.rows[0].x)throw new RecoveryJoinError("RECOVERY_JOIN_TRANSACTION_REQUIRED");
+  const tenant=await db.$client.query<{same:boolean|null}>("SELECT nullif(current_setting('app.tenant_id', true), '')::uuid = $1::uuid AS same",[context.tenantId]);
+  if(tenant.rows[0]?.same!==true)throw new RecoveryJoinError("RECOVERY_JOIN_TENANT_MISMATCH");
+  return this.commandBody(db,context,jobId,sent,parsed,reviewer);
+ }
+
+ private async commandBody(db:TenantTransaction,context:VerifiedTenantContext,jobId:string,sent:ReturnType<typeof recoveryCaseCommandV1.parse>,parsed:ReturnType<typeof recoveryCaseCommandV1.parse>,reviewer:Readonly<{membershipId:string;identityUserId:string}>):Promise<RecoveryJoinedCommandResult>{
+  let caseId="";
   // Recheck the principal INSIDE the write transaction, before replay, the advisory lock or any write, and hold the membership against
   // revocation until the case, claim, event and audit commit (FOR SHARE needs UPDATE on app.membership, which jobguard_runtime already holds; do not tighten that grant without replacing this lock).
   const membership=await db.$client.query<{id:string}>(`SELECT id FROM app.membership
@@ -101,7 +132,7 @@ export class RecoveryCaseRepository{
   await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,(input.action==="open"?jobId:input.caseId).toLowerCase()]);
   const replay=await db.$client.query<any>("SELECT case_id,payload_hash,job_id,reviewer_ref FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId]);
   // A replay must target the job the command was first recorded for; the same id and body against another job is a conflict, never that job's case list.
-  if(replay.rowCount){if(!sameCommand({hash:replay.rows[0].payload_hash,reviewer:replay.rows[0].reviewer_ref},hash,legacy)||replay.rows[0].job_id!==jobId.toLowerCase())throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");caseId=replay.rows[0].case_id;return;}
+  if(replay.rowCount){if(!sameCommand({hash:replay.rows[0].payload_hash,reviewer:replay.rows[0].reviewer_ref},hash,legacy)||replay.rows[0].job_id!==jobId.toLowerCase())throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");caseId=replay.rows[0].case_id;return {caseId,replayed:true};}
   const job=await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2",[context.tenantId,jobId]);if(!job.rowCount)throw new Error("RECOVERY_JOB_NOT_FOUND");
   if(input.action==="open"){
    assertRecoverySources(input);
@@ -122,5 +153,6 @@ export class RecoveryCaseRepository{
    if(input.action==="amend_claim")await db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash,previous_hash) VALUES($1,$2,$3,$4,$5,'claim_amended',$6,$7,$8,$9,$10,$11)",[randomUUID(),context.tenantId,jobId,caseId,Number(x.event_count)+1,x.state,stateAfterAmendment,input.reviewerRef,input.commandId,hash,x.previous_hash]);
   }
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:input.reviewerRef,eventType:`recovery.${input.action}`,subjectType:"recovery_case",subjectRef:caseId,payload:{references:{jobId,commandId:input.commandId},hashes:{command:hash},classifications:{recovery:"financial"}}}]);
- });return this.committedCase(context,jobId,caseId,reviewer)}
+  return {caseId,replayed:false};
+ }
 }
