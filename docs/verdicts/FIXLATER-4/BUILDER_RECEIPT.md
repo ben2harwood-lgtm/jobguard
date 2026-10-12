@@ -472,3 +472,69 @@ Shared-file coordination: tenancy and bootstrap are shared with SV-3, SV-4 and M
 Remaining gates: Mac PostgreSQL runs for F1–F6, committed-head lint/lane checks, OpenAPI in an environment permitting tsx IPC, green CI on the exact head, fresh Opus + Sol RED checks, and separate acceptance. No independent verdict or acceptance is claimed. Generated ignored dist, .next, .turbo and web tsbuildinfo outputs/caches were removed after validation (cleanup exit 0, with a tracked-file guard); a final cleanup inspection also found an untracked .pnpm-store/v11 directory, removed it with the same tracked-file guard, and confirmed no .pnpm-store, test-results, root .turbo or web .next remains (exit 0). Intended conventional commit subject/body is written to `/private/tmp/jg-msg-fixlater-4.txt`.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (12 Oct)
+
+Done by the Mac-side verification helper (Claude Sonnet 5.5) on 12 Oct 2026, 14:47 to 15:45 BST, in the worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/fixlater-4`, branch `codex/sandbox/fixlater-4`, head `d2dbb8928f7c43c943d2420227e09d3b4a85822d` (d2dbb89), base `origin/main` a0963f405fee263cf2bfe8effe68bbeaa9ae1ff6. No test file, product file or migration was edited (one throwaway edit was made and reverted, see item 7). Mac: Darwin 25.4.0, Node and pnpm as installed in the worktree, memory free 79 to 81 percent before every heavy run. Every database or build command ran through `~/.local/bin/heavy-slot <label> ...` with the working directory above. Three small additions to the commands as written in the order: `--reporter=verbose` on every vitest run (to get per-test names and times); `LANE_BASE_REF=origin/main` on `pnpm lint:lanes` (as the order's own list has it); and `-t "Round 1 B"` on the mutation run.
+
+### 1. Shape checks (exit 0 unless stated)
+
+- `git status --short` printed nothing (clean); `git rev-parse HEAD` printed the sha above.
+- `git diff --stat origin/main..HEAD` lists exactly the seven expected paths and nothing else: `config/agent-lane-assignments.json`, `docs/verdicts/FIXLATER-4/BUILDER_RECEIPT.md`, and the five test files `audit-export`, `demo-bootstrap`, `recovery-follow-up`, `recovery-timing-pin`, `tenancy` (all `.integration.test.ts` under `packages/db/test/`).
+- `git diff origin/main --numstat`: lane file `1 0`; receipt `474 0`; audit-export `2 2`; demo-bootstrap `10 4`; recovery-follow-up `51 4`; recovery-timing-pin `2 2`; tenancy `1 1`.
+- F6 diff-shape check (the order's command, run as written): printed nothing (the last grep exited 1, meaning no line left).
+- Credential-shape check over the whole diff (the order's command, run as written): printed nothing (grep exit 1).
+
+### 2. Builds (all exit 0)
+
+- `~/.local/bin/heavy-slot fl4-core-build pnpm --filter @jobguard/core build`, exit 0.
+- `~/.local/bin/heavy-slot fl4-db-build pnpm --filter @jobguard/db build`, exit 0.
+- `~/.local/bin/heavy-slot fl4-storage-build pnpm --filter @jobguard/storage build`, exit 0. Added after the first database run (item 3a): `@jobguard/db` imports `@jobguard/storage`, whose gitignored `dist` was missing in this worktree.
+
+### 3. Database test runs
+
+Common form (working directory `.../.worktrees/fixlater-4`): `~/.local/bin/heavy-slot <label> pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose <files>`.
+
+| Run | Files | Exit | Result |
+|---|---|---|---|
+| 1a (first try, environment failure, not a test result) | audit-export, demo-bootstrap, tenancy | 1 | audit-export and tenancy: "Failed to resolve entry for package @jobguard/storage" (no dist); demo-bootstrap: "Postgres init script exited with code null" (missing dylib symlinks); 1 passed (the SQL-trace test), 3 skipped |
+| 1b (after the environment fix) | audit-export, demo-bootstrap, tenancy | 0 | 3 files passed, 24 tests passed (11 + 4 + 9); 30.26 s |
+| 2 | recovery-follow-up | 0 | 1 file, 61 passed (60 on main plus the F5 test); 17.03 s |
+| 3 | recovery-timing-pin, free-port.test.ts | 0 | 2 files, 29 passed (27 + 2); 7.43 s (tests figure 6.86 s) |
+| 3b (extra, one file, timing only) | recovery-timing-pin | 0 | 27 passed; 3.08 s (tests figure 2.34 s) |
+
+3a. Environment fix, node_modules only (no tracked file touched), as the standing Mac practice for this machine: `cd node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64 && node scripts/hydrate-symlinks.js`, exit 0, created the package's own short-name dylib symlinks (17 links in `native/lib`); `ipcs -m` showed no leaked shared-memory segments; then the storage build above.
+
+3b. Test names that matter (run 1b, 2, 3), time as printed by vitest:
+
+- F1, audit-export: all 11 passed (6, 56, 9, 15, 87, 102, 17, 5, 18, 8 and 131 ms).
+- F2, demo-bootstrap: all 4 passed: "binds the synthetic small-builder track in the fixture transaction before going live" 2 ms; "creates roles, applies every registered migration, reports the actual total, seeds once, and keeps pooled RLS local" 623 ms; "creates and commits the subsequent builder origin using the actual runtime role" 3 ms; "refuses an environment or database not explicitly synthetic" 0 ms.
+- F3, tenancy: all 9 passed (14, 2, 1, 1, 1, 1, 5, 1 and 24 ms).
+- F4, "Round 1 B: an interrupted 0112 advance retry waits for due-signal audit serialization before checking the clock fact": PASS, 177 ms (the `gaveUp === false` side, which is today's code).
+- F5, new test "R1 parity (first entry): database-written audit entries that start an empty chain hash exactly as audit.ts hashes them": PASS, 120 ms, against the merged code unchanged. It did NOT fail in its own set-up, so F5 stands. Its neighbour "R1 parity: audit entries written by the database hash exactly as audit.ts hashes them" passed in 117 ms.
+- F6 test budget (15_000): "[AC9] populated upgrade preserves every stored row, earlier routine and table shape; reapply is inert" PASS in 502 ms (run 3) and 523 ms (run 3b); the budget is about 29 times the measured time.
+- F6 hook budget (40_000): vitest does not print hook times. Measured indirectly: the whole file's "tests" figure (hook included) was 2.34 s in run 3b and 6.86 s in run 3 (the cold first run, two files together); the 27 tests alone summed to 791 ms in run 3b, so the hook took about 1.5 s. The 40 s budget is about 26 times that, and 5.8 times the slowest whole-file figure seen.
+- free-port.test.ts: both tests passed: "skips a port another process is listening on (other tools sit inside the test port ranges)" 6 ms; "gives up with a clear error when every port in the range is in use" 1 ms.
+
+### 4. F4 give-up mutation (optional, throwaway, never committed)
+
+Edit: in `packages/db/test/recovery-follow-up.integration.test.ts`, the loop line `blocked = activity?.wait_event_type === "Lock" && activity.blockers.includes(pidA);` was replaced by `blocked = false;` (one line, in the working tree only). Command: `~/.local/bin/heavy-slot fl4-mutation pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/recovery-follow-up.integration.test.ts -t "Round 1 B"`, exit 1 as expected. Result: "Round 1 B" failed after 20,205 ms with the named message `retry neither waited on the audit key nor finished within 20 s`; the run reported that message, not a bare time-out at 60 s (whole run 22.35 s, 1 failed, 60 skipped by the filter). So the give-up path keeps its named error and its clean-up finished within the 5-second limit. The edit was then reverted with `git checkout -- packages/db/test/recovery-follow-up.integration.test.ts` (exit 0); `git status --short` printed nothing afterwards, and `git diff origin/main --numstat` for that file is back to `51 4`.
+
+### 5. Static checks (each run alone, through heavy-slot)
+
+- `pnpm typecheck`: exit 0 (7 tasks successful, 4 cached). As the order notes, it does not read `packages/db/test`, so it does not vouch for the test edits.
+- `LANE_BASE_REF=origin/main pnpm lint`: exit 0 (7 tasks successful, 4 cached).
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: exit 0, "Lane boundary passed" for lane `fixlater-4`, branch `codex/sandbox/fixlater-4`, head d2dbb89, comparison merge-base, the seven files above.
+
+### 6. Q4 overlap check (read-only)
+
+`codex/sandbox/sv-3` and `codex/sandbox/sv-4` have no commits beyond their merge base 262f939, so they change none of these files. `codex/sandbox/m4-8-s-r2` changes only the lane file (1 added line). `codex/sandbox/m4-8-s` is 618 commits behind `origin/main`; against its own merge base it edits `demo-bootstrap` only on test-name and migration-count lines (hunks at old lines 27, 29-30, 34) and `tenancy` only by two 3-line additions near old lines 248 and 401, plus one lane-file line. None of those is the port line, the address lines, the import line or `tenancy` line 30. Conflict, if any, would be only the usual catch-up merge of that stale branch.
+
+### 7. NOT RUN (by this helper)
+
+- GitHub's CI run on this head; `pnpm test:migrations`, `pnpm test:deploy`, `pnpm test`, `pnpm test:db` and every other test file or package suite; every browser spec.
+- The F4 give-up side is exercised only by the throwaway mutation in item 4 (not committed), not by any committed test; a passing committed run exercises only the `gaveUp === false` side.
+- F6 hook time is derived (item 3b), not printed by vitest.
+- The F1 to F3 probe-to-bind gap (the stated limit) was not tested and cannot be.
+
+Mac verification only. No product code or migration was touched. This is a verification record, not an acceptance: the independent checks (fresh Opus verdict plus Sol check, RED lane) are still owed.
