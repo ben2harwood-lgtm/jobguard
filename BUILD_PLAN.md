@@ -1797,7 +1797,7 @@ The exact allocation and cumulative-rounding module is shared with the contracto
 
 - Catalog tests prove `jobguard_runtime` has no privilege on shadow tables, directly or through views.
 - `jobguard_shadow` cannot read identity or credential tables, alter policies, assume roles or bypass RLS.
-- The reveal routine returns nothing for an unlocked job, and returns only `revealed` rows for the right tenant and job. Its EXECUTE grant is specific and catalog-tested.
+- The reveal routine sits behind a lock check that returns nothing while no lock exists; with real `revealed` rows present it returns nothing for an unlocked job. Its EXECUTE grant is specific and catalog-tested. SV-2 introduces the guarded routine; SV-4 proves the locked-job half (Ben, 7 October 2026: "split the test").
 - No runtime role can update or delete links, receive times, disclosures, classifications, dispositions or origins. `disclosed_before_lock` never returns to false.
 - Links across tenants, or across jobs in one tenant, fail on composite foreign keys.
 - Break-glass reads need a separate permission and write an audit reason.
@@ -1851,6 +1851,7 @@ The exact allocation and cumulative-rounding module is shared with the contracto
 - The locked account can be rebuilt from its hashes, and changing any source row is detected.
 - A double submit, a second browser or a replay creates one lock, or a typed conflict.
 - A trigger test proves later revisions never change the lock row.
+- Once the job is locked, the reveal routine returns only `revealed` rows for that tenant and job, and still nothing for any other job or tenant (moved from SV-2's Done-when; Ben, 7 October 2026: "split the test").
 - A final or supplementary invoice without the lock or a completed reconciliation bound to that lock and cutoff fails in the command, controlled routine and UI. Race tests cover pending, failed and completing reconciliation. SV-4 introduces the fail-closed guard; SV-5 supplies the completion record. Deposit and interim invoices remain unaffected.
 - The lock screen, its response and "Running JobGuard's final check" are identical with zero signals and with many.
 - `await V('lock-state','Final account completed');` passes after a reload and when the job is opened from Jobs.
@@ -3536,6 +3537,7 @@ Agents append adjacent findings here rather than implementing them inline, with 
 | 2026-09-30 | M0-6 is an in-memory auth scaffold (no persisted sessions or identity email) and the AI gateway is fixture-only (no Claude route or Deepgram adapter) | §11 M0-6L, M0-12a/b | Carried as live prerequisites before any real user signs in |
 | 2026-10-03 | M0-6L source-inspected the compiled Nest Swagger document against the repository's tsx-generated snapshot: 48 pre-existing business paths differ because emitted parameter metadata differs; all new `/auth/...` path schemas agree. Evidence: compiled `dist/generate-openapi.js --check` exits 1; source generator via `node --import tsx` exits 0; path comparison recorded in the M0-6L run receipt. | M0-6L; §2.4 C2/C8 | Separate generator/contract-alignment work before claiming whole-API compiled-document parity; preserve existing published schemas. Risk: documented older parameter shapes may diverge from compiled metadata. No engineering invariant or decision-record change; M0-6L leaves earlier OpenAPI entries intact. |
 | 2026-10-07 | Shared command-ID ownership (M4-5-S round 5, Opus ruling): evidence-pack generation and attachment approval must claim `app.command_receipt` and reject IDs already used by any recovery/shared command family, including sequential and concurrent reuse. The recovery-to-pack exclusion is already covered in M4-5-S; the reverse evidence-pack paths are outside this lane | M4-5-S; evidence packs (M4-3-S) | Separate task outside the M4-5-S lane; use receipt-before-case locking |
+| 2026-10-07 | SV-2's Done-when asked it to prove the reveal routine returns `revealed` rows for a locked job, but the lock table (`final_account_lock`) is SV-4's and SV-4 depends on SV-2, so SV-2 cannot prove that half (Command Center card `jobguard-sv2-reveal-lock-split-2026-10-07`) | SV-2; SV-4 | Ben ruled "split the test" (7 October 2026, 20:01): SV-2 proves the guarded routine returns nothing while no lock exists, plus its EXECUTE grant; SV-4 proves the locked-job half. Done-when lines changed in both cards; no code, invariant or decision record changes |
 
 ---
 
