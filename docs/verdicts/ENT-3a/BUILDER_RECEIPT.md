@@ -1356,3 +1356,49 @@ differ from HEAD, no untracked repository files, watchdog.ts equals HEAD with
 only the exact issued comment/two class replacements, all prior receipt bytes
 are preserved, and each of the six required titles occurs once. The intended
 commit message file exists. PostgreSQL proofs remain NOT RUN; not accepted.
+
+## Mac verification (12 Oct, round 5)
+
+Mac-side helper, 12 October 2026, worktree `.worktrees/ent-3a`, branch `codex/sandbox/ent-3a`. Starting head `2ef7bd0` (clean, local only; sits on the REVERT `8a11803` on the pushed pull request #156 head `305ea92`). No review, no verdict, no merge to main beyond the catch-up, and no product code changed beyond the merge itself. **Head tested: `30175a0ca7e48d45c2f0447098e4dda5e4e79f50`** ("Merge main (a54d46f) into ENT-3a", working tree clean at test time). This receipt is committed after the tests and changes no code. Free disk at start 107 GiB, at end 106 GiB.
+
+**Merge.** `git fetch origin`; `git merge origin/main` (a54d46f: FEE-BOTH-1 #157 and TRAIN-LANE-1 #158) as a plain merge commit. Auto-merged with no conflict: `.github/workflows/ci.yml`, `config/agent-lane-assignments.json` (parses; the diff against main is exactly the one `ent-3a` line), `tools/agent-lane-boundary-lint.mjs`, `packages/core/src/enterprise-domain/*`. Exactly one file conflicted and was resolved by keeping both sides, main's line first:
+
+- `BUILD_PLAN.md` (section 12.2 ledger): main's FEE-BOTH-1 ledger paragraph first, then ENT-3a's two ledger paragraphs (11 Oct and 12 Oct) once each. No conflict markers remain.
+- `apps/api/openapi.json` was NOT hand-merged and did not conflict; `pnpm openapi:generate` in `apps/api` (exit 0) changed nothing, and `pnpm openapi:check` is exit 0.
+
+Migration 0135 file sha256 after the merge: `1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab` (unchanged).
+
+**Set-up.** `@jobguard/core`, `db`, `storage`, `config`, `ai` each built alone (all exit 0), then `@jobguard/api` (`nest build`, exit 0). Every heavy command ran through `~/.local/bin/heavy-slot`; vitest used `--maxWorkers=2` (db files `--maxWorkers=1`), at most three test files per run, one heavy step at a time. Embedded PostgreSQL started without the dyld fix.
+
+**The six named proofs (real PostgreSQL, `test/site-extra.integration.test.ts`, 22 of 22 passed, exit 0).**
+
+| Test title | Result |
+|---|---|
+| `[R2] a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written` | passed (295 ms) |
+| `[A3] an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job` | passed (439 ms) |
+| `[R3] the same command id with a changed payload conflicts` | passed (391 ms) |
+| `a successful no-op keeps its identity` | passed (380 ms) |
+| `replaying a command id returns the first result, never the job's current state` | passed (440 ms) |
+| `the same command id on another job conflicts` | passed (365 ms) |
+
+**Commands, exits and counts (head `30175a0`).**
+
+| Check | Exit | Result |
+|---|---|---|
+| db `test/site-extra.integration.test.ts` | 0 | 1 file, 22 passed (includes the six proofs above) |
+| db `test/site-extra-authority.integration.test.ts` (includes the [A13] upgrade proof), `test/contractor-session-context.integration.test.ts` | 0 | 2 files, 53 passed |
+| db `test/command-replay-contract.integration.test.ts` | 0 | 1 file, 53 passed (as expected; ENT-3a's rows are not listed) |
+| api `src/watchdog-registry.test.ts`, `src/contractor/site-extra.application.test.ts`, `src/contractor/site-extra.http.test.ts` | 0 | 3 files, 178 passed (registry 121, as expected) |
+| api `src/auth/context-boundary.test.ts`, `src/audit-export` | 0 | 3 files, 175 passed (145 + 30, as expected) |
+| core `src/site-extra.test.ts` | 0 | 1 file, 35 passed |
+| web `app/api/contractor/jobs/[id]/site-extras/route.test.ts` | 0 | 1 file, 30 passed |
+| `pnpm test:migrations` (db `tenancy`, `demo-bootstrap`) | 0 | 2 files, 13 passed |
+| db neighbours that install the whole registry: `audit-export.integration`, `extra-origin-upgrade.integration`, `sso-required.integration` | 0 | 3 files, 29 passed |
+| `pnpm typecheck --concurrency=2` | 0 | 7 of 7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2` | 0 | core purity (134 TypeScript files), lane boundary (lane ent-3a, base a54d46f), money arithmetic, 7 of 7 package tasks |
+| `pnpm openapi:check` | 0 | committed `openapi.json` matches the generator |
+| `git grep -n "resolveVerifiedTenantContext\|verifiedTenantContextFromMembership\|bridgeMarker" -- apps/api/src/contractor/site-extra* packages/db/src/site-extra*` | 1 | no output (no match) |
+
+**Registry and harness.** `watchdogCommandGuards` (packages/core/src/watchdog.ts:151) has no ENT-3a entry. The two ENT-3a rows in `jobMutationRegistry` are `pre_live_allowed` with the one comment line; the diff of `packages/core/src/watchdog.ts` against main is exactly those 3 added lines. `packages/db/test/watchdog-command-harness.ts`, `command-replay-contract.integration.test.ts`, `apps/api/src/auth/context-boundary.test.ts` and `packages/db/src/contractor-session-context.ts` are untouched (no difference from main or from the pushed head `305ea92`). `git diff 305ea92 HEAD --stat`: 13 files, 1917 insertions, 26 deletions; of these only `BUILD_PLAN.md` (+2), `config/agent-lane-assignments.json` (+2), `packages/core/src/watchdog.ts` (+3/-3 lines of the registry rows and comment), `packages/db/test/site-extra.integration.test.ts` and this receipt are ENT-3a's; the rest arrived from main (FEE-BOTH-1, TRAIN-LANE-1).
+
+**NOT run.** The full root `pnpm test`; the full `packages/db` suite (only the files in the table, so the shared `watchdog-lock-order`, `watchdog-legacy-identities` and `watchdog.integration` suites were not run here); the rest of the `apps/api` and `apps/web` suites; `pnpm test:e2e` and any browser run; GitHub CI; the db unit file `contractor-session-context.test.ts`; any independent Claude or Sol review. No deployment. Nothing here is an independent verdict or acceptance; it is Mac-side test evidence only.
