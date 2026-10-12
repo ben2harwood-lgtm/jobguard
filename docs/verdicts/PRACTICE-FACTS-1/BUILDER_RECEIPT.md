@@ -661,3 +661,37 @@ Command as run (cwd `/Users/benharwood/Claude/Projects/my-new-project/.worktrees
 +  });
 ```
 Commands as run (cwd `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-facts-1/packages/db`, with `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2` exported): `~/.local/bin/heavy-slot practice-facts-1 pnpm exec vitest run --maxWorkers=2 test/practice-facts.integration.test.ts > $HOME/.local/share/full-steam/jg-runs/pf1-reshape3-db1.log 2>&1` exit 0; 1 file passed; 30 tests passed. `LANE_BASE_REF=origin/main pnpm lint:lanes` (cwd the worktree root) exit 0. `~/.local/bin/heavy-slot practice-facts-1 pnpm exec tsc -p $HOME/.local/share/full-steam/jg-runs/pf1-reshape-tsconfig-test.json` (out-of-repository type check of the test file) exit 0.
+
+## Catch-up and renumber 0124 to 0131 (12 Oct)
+
+Claude Sonnet, run on the Mac, 12 October 2026. Branch head before this round: `862fb126849dd7bf0ebb42d01f8142d2d14e8e08` (clean worktree). `origin/main` when merged: `80d4a06c1fb0c9afd1edf2aadd069b4b56e232af` (it moved to `18743cb` (CI-TIME-2, #150) while the round ran; `git merge-tree` of that commit against this branch reports no conflict; it was not merged here).
+
+**Merge.** `git merge origin/main` (merge commit `5f2d675`, no rebase, no force). Four files conflicted, all append-only lists, all resolved by keeping both sides (main's lines first, this piece's after):
+- `BUILD_PLAN.md` (section 12.2 ledger): main's STORED-TIMES-1 11 October and both SV-2 paragraphs kept, then this piece's own 11 October paragraph.
+- `config/agent-lane-assignments.json`: main's `plan-sv2-dw3-split` line kept, then this piece's `practice-facts-1` line (JSON parses).
+- `packages/db/MIGRATIONS.md`: main's 0127 and 0128 sections kept, then this piece's section.
+- `packages/db/src/migrate.ts`: main's `0127_recovery_timing_pin.sql` and `0128_shadow_persistence.sql` lines kept, then this piece's line.
+No conflict was inside this piece's own logic or tests; no other file conflicted.
+
+**Renumber 0124 to 0131 (commit `3517e34`).** `git mv packages/db/migrations/0124_practice_feed_facts.sql packages/db/migrations/0131_practice_feed_facts.sql`. SHA-256 before (`git show 862fb12:...0124_practice_feed_facts.sql`): `00c2209f144443a5f7b23c94ed410873b9adc41849351c94e0b8da2e3f422cd0`. SHA-256 after (`shasum -a 256` of the 0131 file): `00c2209f144443a5f7b23c94ed410873b9adc41849351c94e0b8da2e3f422cd0`. Equal; the SQL bytes are unchanged and contain no migration number. Registered last in `migrate.ts` (after 0128; the list ends ...0128, 0131 until #146 (0129) and #138 (0130) land). The number was swapped in: the lane line `practice-facts-1` only (its `allow` entry), `packages/db/test/practice-facts.integration.test.ts` (13 lines; the upgrade proof finds the migration by name), `docs/contracts/practice-facts-v1.md` (one line), the `packages/db/MIGRATIONS.md` section (now `## 0131`, with the renumber note) and one new BUILD_PLAN section 12.2 ledger paragraph. Earlier sections of this receipt, the 11 October BUILD_PLAN paragraph, other pieces' paragraphs and `SOURCE_PRESERVATION.json` (a historical list of the files at that time) still say 0124 on purpose; no other piece's number was touched.
+
+**Commands as run** (worktree root unless stated; every Mac run through `~/.local/bin/heavy-slot pf1-<label>`, one at a time, `VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2`, `--maxWorkers=2`, free memory 66-68% before each run):
+
+| Run | Command | Exit | Result |
+|---|---|---|---|
+| builds, each alone | `pnpm --filter @jobguard/core build`, then `db`, `storage`, `config`, `ai` | 0 each | built |
+| one-file tsc | `node ~/.local/share/full-steam/jg-runs/mig-order-4-scratch/round1-tsc-one-file.cjs <worktree> packages/db/test/practice-facts.integration.test.ts` (the only test file `git diff --name-only origin/main...HEAD -- packages/db/test` lists) | 0 | 0 diagnostics |
+| own DB file | `packages/db`: `pnpm exec vitest run --maxWorkers=2 test/practice-facts.integration.test.ts` | 0 | 1 file, 30 tests passed (includes the upgrade proof and its four controls) |
+| neighbours 1 | `packages/db`: `test/practice-feed.integration.test.ts test/recovery-cases.integration.test.ts test/recovery-messages.integration.test.ts` | 0 | 3 files, 137 tests passed |
+| neighbours 2 | `packages/db`: `test/recovery-timing-pin.integration.test.ts test/extra-origin-upgrade.integration.test.ts test/recovery-follow-up-upgrade.integration.test.ts` | 0 | 3 files, 31 tests passed |
+| neighbours 3 | `packages/db`: `test/audit-export.integration.test.ts test/tenancy.integration.test.ts test/demo-bootstrap.integration.test.ts` | 0 | 3 files, 24 tests passed |
+| core unit | `packages/core`: `pnpm exec vitest run --maxWorkers=2 src/practice-facts.test.ts` | 0 | 1 file, 22 tests passed |
+| API unit | `apps/api`: `pnpm exec vitest run --maxWorkers=2 src/practice-facts.application.test.ts src/practice-facts.controller.test.ts` | 0 | 2 files, 47 tests passed |
+| OpenAPI file | `apps/api`: `pnpm openapi:check` | 0 | `apps/api/openapi.json` current |
+| typecheck | `pnpm typecheck` | 0 | 7 of 7 tasks successful |
+| lint | `LANE_BASE_REF=origin/main pnpm lint` (run after the rename was committed) | 0 | core purity, lane boundary, money arithmetic, commercial boundary and 7 of 7 package lints passed |
+| lane lint | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | passed for lane `practice-facts-1`, 28 files |
+
+A first `pnpm lint` and `pnpm lint:lanes` run, made with the rename staged but not yet committed, exited 1 with "Lane practice-facts-1 cannot edit: packages/db/migrations/0124_practice_feed_facts.sql": the lane lint counts the staged deletion of the old path, which the lane no longer allows. Committing the rename (`3517e34`) cleared it; both then exited 0 as shown. Nothing was changed to make it pass.
+
+**NOT RUN.** `apps/web/e2e/PRACTICE-FACTS-1.spec.ts` and any browser test; the web and API builds; the remaining core and API suites (for example the watchdog tests) and the full `pnpm test`; the full database suite (only the files named above); GitHub CI on the new head.
