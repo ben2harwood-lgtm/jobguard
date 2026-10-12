@@ -409,3 +409,49 @@ Mac helper executes the NOT RUN list; GitHub H1 API tests should be red only on 
 Deferred items already acknowledged in the order: three existing call-site context annotations/scanner propagation; stale merged test title; operations description of scanner categories. BUILD_PLAN is integrator-only, so these are handed over here, not edited by the builder.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (12 Oct)
+
+Written by a Mac-side helper (Claude Sonnet 5.5) on 12 Oct 2026 about 17:50 to 18:05 BST for the JobGuard dispatcher. macOS 26.4, node v24.17.0, pnpm 10.28.1. Every heavy command ran through `~/.local/bin/heavy-slot`, one at a time, vitest `--maxWorkers=2`, at most three test files per run, free memory 66 to 72 percent before each. This section records observed results only; it is not a review or an acceptance.
+
+**Branch state.** Before: head `3312a5097c5689c1d28980a5d8f7d0206f440850`, tree clean, merge-base `a0963f4`. `origin/main` had moved to `17c82ee2822cba9be364297d64e8754b43a57013` (FIXLATER-4 #144, PLAN-ENT4C-UNLINK-ROLES #148). I ran `git merge --no-ff origin/main` from the worktree: no conflicts; the only shared file touched on both sides was `config/agent-lane-assignments.json` (auto-merged, both lines kept). The merge commit is `e34d6c6277297b1113088feaf93c1d11ba57e41e` ("Merge origin/main (17c82ee) into codex/sandbox/ctx-bridge-1 - catch-up"). The bridge file is byte-identical across the merge: blob `f0a162c198419909ca7aca4b3394520876c6ac99` at both `3312a50` and `e34d6c6`.
+
+**Files changed against `origin/main` (`git diff --stat origin/main...HEAD`, working directory the ctx-bridge-1 worktree):** `apps/api/src/audit-export/audit-export.application.ts` (modified), `apps/api/src/audit-export/audit-export.context.test.ts` (new), `config/agent-lane-assignments.json` (+1 line), `docs/contracts/audit-export-v1.md` (modified), `docs/verdicts/CTX-BRIDGE-1/BUILDER_RECEIPT.md` (new), `packages/db/src/contractor-session-context.ts` (new), `packages/db/src/index.ts` (+1 line), `packages/db/test/contractor-session-context.integration.test.ts` (new), `packages/db/test/contractor-session-context.test.ts` (new). 9 files. No existing test file is modified: the only test files in the diff are the three new ones (`git diff --name-status origin/main HEAD` shows A, A, A for them and nothing for any merged test). `git diff --quiet origin/main HEAD -- apps/api/src/auth/context-boundary.test.ts packages/db/test/extra-origin.integration.test.ts` exits 0.
+
+**Bridge file.** `packages/db/src/contractor-session-context.ts`, sha256 `a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c` (same in the working tree, at `3312a50` and at `e34d6c6`), ASCII text, 0 carriage returns, 0 non-ASCII bytes, exactly one `verifiedTenantContextFromMembership(` in the file.
+
+**Dist rebuilt first (gitignored), each alone through heavy-slot, working directory the worktree root:**
+
+| Command | Exit |
+|---|---|
+| `pnpm --filter @jobguard/core build` | 0 |
+| `pnpm --filter @jobguard/db build` | 0 |
+| `pnpm --filter @jobguard/storage build` | 0 |
+| `pnpm --filter @jobguard/config build` | 0 |
+| `pnpm --filter @jobguard/ai build` | 0 |
+
+**Test, typecheck and lint runs (working directory the worktree root; each prefixed `~/.local/bin/heavy-slot <label>`):**
+
+| # | Command | Exit | Counts |
+|---|---|---|---|
+| 1 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/contractor-session-context.test.ts src/tenant-context.test.ts` | 0 | 2 files passed, 38 tests passed |
+| 2a | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/contractor-session-context.integration.test.ts` (first try) | 1 | environment fault, 3 skipped: `Unknown Error: Postgres init script exited with code null. Please check the logs for extra info. The data directory might already exist.` Cause: embedded PostgreSQL native symlinks not hydrated in this worktree. Fix: `node scripts/hydrate-symlinks.js` run from `node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64` (node_modules only). |
+| 2b | same command, rerun after the hydrate | 0 | 1 file passed, 3 tests passed ([D1], [D2], [D3]) |
+| 3 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-export.integration.test.ts test/audit.integration.test.ts test/verify-audit-export-cli.test.ts` (all unedited) | 0 | 3 files passed, 30 tests passed |
+| 4 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/audit-export/audit-export.context.test.ts src/audit-export/audit-export.application.test.ts` (merged file unedited) | 0 | 2 files passed, 30 tests passed |
+| 5 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/context-boundary.test.ts` (unedited, old name list) | 1 (expected) | 1 file failed, 145 tests: 2 failed, 143 passed |
+| 6 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/extra-origin.integration.test.ts` (unedited, includes [S9]) | 0 | 1 file passed, 32 tests passed |
+| 7 | `pnpm typecheck` | 0 | turbo 7 of 7 tasks successful (4 replayed from the shared turbo cache, 3 executed: db, api, web) |
+| 8 | `LANE_BASE_REF=origin/main pnpm lint` | 0 | core purity passed (129 files); lane boundary passed; money arithmetic check passed; turbo 7 of 7 successful (4 cached) |
+| 9 | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | "Lane boundary passed", lane `ctx-bridge-1`, base `17c82ee`, head `e34d6c6`, the 9 files listed above |
+
+**Run 5 is the expected scanner result, and only that.** Exactly the two cases the order names failed, for exactly the stated reason, and no other case failed (143 of 145 passed). Failure messages as printed:
+1. `M0-6L sole-constructor boundary across all application source > holds for the real repository: only the bridge, its definition, the worker queue, the retained synthetic sandbox and the rehearsal construct a tenant context`: `expected [ ...(2) ] to deeply equal []`, received `"packages/db/src/contractor-session-context.ts is not an approved retained synthetic file; a new caller of the tenant-context constructor needs a reviewed edit to the approved list"` and `"packages/db/src/contractor-session-context.ts:46 synthetic constructor argument must be a fixed, plain literal object (one top-level const, no spread, computed key, accessor or duplicate property)"`.
+2. `M0-6L round 3: the retained synthetic exception is bound to the authoritative fixture constants > pins the approved list to files that exist and still construct, and it covers every file the real tree constructs in`: `expected [ Array(1) ] to deeply equal []`, received `["packages/db/src/contractor-session-context.ts"]`.
+Both exist only because the new file is not yet on the scanner's list. That is the expected reason the coordinator's commit to the two security tests is needed.
+
+**Prepared patches (outside the repository), made and proved.** Directory `~/.local/share/full-steam/jg-runs/ctx-bridge-patch-2026-10-11/ready/`. The two templates were used unchanged (sha256 `926f837e...` and `a77d7920...` as the README states). Value 1 (bridge file sha256, above) went into `context-boundary.patch`; value 2, the sha256 of the scanner after patch 1, is `d082694df3dc005461d92ac79f275f31525d35c3e022948b47efa0ed7f9a772f`, and went into `extra-origin-s9.patch`. Drift check on the branch: the scanner is `7f1914846f763c3534ffafc79701fc6f768e8e1546be2fe98e27bc32a99e0e8d` (blob `bc63da29c0415bb55efefad54525822c2a437862`) and `extra-origin.integration.test.ts` is `3d49f5722de606c91b1f2802e59617a230d9fc7a2ceeb320cf50e4cf2cd9c68e`, both as the README expects. Proof in a throwaway detached worktree outside the repository tree (`ready/wt`, at `e34d6c6`, left in place): `git apply --check` then `git apply` of both patches, uncommitted, never committed or pushed; `git diff --numstat` printed `4 2 apps/api/src/auth/context-boundary.test.ts` and `1 1 packages/db/test/extra-origin.integration.test.ts`; the new path appears 3 times in the patched scanner. After an offline frozen install, a rebuild of the five packages and the hydrate step, in that worktree: `context-boundary.test.ts` exit 0, 145 of 145 passed (including "approves each main practice caller only at its exact reviewed source identity"); `extra-origin.integration.test.ts` exit 0, 32 of 32 passed (including "[S9] scanner and seven pinned bridges stay byte-identical", run alone as well: 1 passed). Without the patches: the scanner fails the two cases above, and [S9] passes (run 6).
+
+**The two security-related test files are untouched on this branch.** `apps/api/src/auth/context-boundary.test.ts` (sha256 `7f1914846f763c3534ffafc79701fc6f768e8e1546be2fe98e27bc32a99e0e8d`) and `packages/db/test/extra-origin.integration.test.ts` (sha256 `3d49f5722de606c91b1f2802e59617a230d9fc7a2ceeb320cf50e4cf2cd9c68e`) are byte-identical to `origin/main`. `apps/api/src/audit-export/audit-export.application.test.ts` is `8bac90b630ea3f782c6be2f811fdcbf6ad154b262cfb7ee592547794590ae1bd`, as in the order. This helper edited no source or test file; the only changes in this commit are this section.
+
+**NOT RUN by this helper (not asked for, or outside the time box):** `pnpm build`; `pnpm openapi:check`; `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/admin/contractor/audit-exports/page.test.tsx`; `ENT-10b.spec.ts` in both browser projects; whole-package or whole-repository suites (`pnpm test`, `pnpm test:db`, `pnpm test:migrations`); GitHub checks on this head; the two code checks (Claude Opus, Sol); the coordinator's commit H2. Turbo replayed cached typecheck and lint logs for four packages (one log shows another worktree's path); db, api and web were executed fresh.
