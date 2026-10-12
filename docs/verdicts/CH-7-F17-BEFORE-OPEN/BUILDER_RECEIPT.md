@@ -135,3 +135,55 @@ Repair builder only. Not a review and not an acceptance. Run on the Mac where Po
 **Stopped on:** nothing. No assertion, expected value, timeout, grant or policy was changed or loosened.
 
 Builder repair record only — not independently verified, not accepted.
+
+## Rule 9 reshape (12 Oct)
+
+Test-only reshape of this piece's own upgrade proof, by a Claude Sonnet helper on the integrator's Mac. Not a review, not an acceptance. No product file, no migration SQL, no other test in the file and no scanner file changed; 0123 was not renumbered. The code of this piece was accepted by both checkers; only the proof's shape was wrong (audit `upgrade-proof-audit-20261011.md`, section 1).
+
+**Rule quoted.** "An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'."
+
+**Catch-up with main.** `origin/main` 168ec04 merged first (merge commit 764477e). Conflicts: `packages/db/src/migrate.ts`, `packages/db/MIGRATIONS.md`, `BUILD_PLAN.md` ledger. All append-only; both sides kept in numeric order (0120, 0121, 0122, 0123, 0127). Lane registry merged automatically. Main then moved to a0963f4 (SV-2, 0128); merged again with no conflict (merge commit 76e7330). 0128 is therefore part of "everything after 0123" in every run below.
+
+**What changed (only `packages/db/test/recovery-eligibility-v3.integration.test.ts`, test "0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill"; title unchanged).**
+1. Install everything before 0123: `MIGRATION_URLS.slice(0,oldIndex+1)` (through 0119) became `MIGRATION_URLS.slice(0,newIndex)`, where `newIndex` is found by name (`0123_recovery_eligibility_v3_f17_timing.sql`). The registry check changed from `names.slice(0,oldIndex+1)` to `names.slice(0,newIndex)`.
+2. Snapshot: the three whole-row text snapshots (reviews, claim lines, audit events) are kept exactly. New: for the same three tables, the primary key of every row, the named columns, and each column's `format_type(atttypid,atttypmod)`, read as canonical text from the database.
+3. 0123 applied ALONE (its SQL, then its registry row, as the runner does). Straight after it, `expect(await snapshot()).toEqual(before)` (whole rows, byte for byte, full strength). That assertion moved from after `migrate()` to here; its text is unchanged.
+4. Then `migrate()` twice (must not throw), the registry must equal the full list of registered names, and 0123 must be registered once (unchanged assertion).
+5. After all migrations: pre-existing rows are found again by primary key and compared as `row_to_json(s)::text` over a sub-select of exactly the pre-existing named columns; the name-and-type list of those columns must be the same. A column, row, trigger or function added or replaced later is not looked at.
+6. Removed: the last assertion, a whole-row `row_to_json(r)::text` comparison of the saved review after everything. Its job is done, with a named-column identity match, by step 5 (the saved review is one of the compared rows). The check that the corrected review reads "Paid before you opened this case" at 0p is kept. A final step-5 comparison after that corrected review is saved shows a real later row (review, audit events) is ignored.
+7. Added the `PoolClient` type import, helpers `proofColumns`, `proofRows`, `proofBefore`, `proofDifferences`, `rolledBack`, and a 120 s timeout on this test.
+
+**Guards.** Each compared table has a primary key and at least one pre-existing row: reviews 1, claim lines 1, audit events 5.
+
+**Controls (rolled-back transactions, the SAME `proofDifferences`):**
+| Control | Expected | Red when the comparison is broken | Green |
+|---|---|---|---|
+| (a) one-microsecond change to a stored time (`created_at`, `occurred_at`), superuser UPDATE with triggers off, each of the three tables | every pre-existing row reported changed | scratch no-op comparator: failed on all 3 tables | passes |
+| (b) retype of a pre-existing column: `recovery_claim_line.net_pence` bigint to numeric(20,0) (values unchanged), and `audit_event.event_type` varchar(100) to varchar(120) (length only) | type list reports the move, rows unchanged | no-op comparator and old whole-row comparator: failed on both | passes |
+| (c) nullable column added to each of the three tables | passes | old whole-row comparator: failed on all 3 | passes |
+| (d) `app.guard_recovery_eligibility_v3()` replaced (definition checked to differ) | passes | not applicable: no row comparator looks at functions | passes |
+| (e) every pre-existing claim line deleted | each reported missing | no-op comparator: failed | passes |
+| (f) a later claim line inserted (rolled back), and the real corrected review (review, audit events) | passes | old whole-row comparator: failed on both | passes |
+
+Scratch red runs used temporary copies of the final test (a no-op comparator; the old whole-row comparator) with `expect.soft` on the controls, so every control reported. The final file was restored from a saved copy (sha256 of the committed test file below) before the green runs; nothing scratch is committed.
+
+**Commands, exactly as run** (worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open`; "pkg" = `.../packages/db`). Memory free was 80 to 81 percent before every run. Every test run used `~/.local/bin/heavy-slot <label> env VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2 pnpm exec vitest run --maxWorkers=2 <files>`, one at a time.
+| # | Directory | Files | Exit | Counts |
+|---|---|---|---|---|
+| 1 | pkg | recovery-eligibility-v3 (scratch no-op comparator) | 1 | 1 failed, 30 passed (31); 6 control assertions red: (a) x3, (b) x2, (e) x1 |
+| 2 | pkg | recovery-eligibility-v3 (scratch old whole-row comparator) | 1 | 1 failed, 30 passed (31); 7 red: (c) x3, (b) x2, (f) x1, real later rows x1 |
+| 3 | pkg | recovery-eligibility-v3 (final file; also once with `--reporter=verbose`) | 0 | 31 passed (1 file), both times; upgrade test 488 ms |
+| 4 | pkg | recovery-timing-pin + extra-origin-upgrade + recovery-follow-up-upgrade | 1 | 1 failed, 30 passed (31): `[S8]` in extra-origin-upgrade, `TypeError: Right-hand side of 'instanceof' is not an object` (stale built dist) |
+| 5 | worktree root | `~/.local/bin/heavy-slot f17-reshape-build-core pnpm --filter @jobguard/core build`, then (alone) `... pnpm --filter @jobguard/db build` | 0, 0 | tsc, no output errors |
+| 6 | pkg | same three files, re-run once | 0 | 3 files, 31 passed |
+| 7 | pkg | practice-feed + recovery-cases + fingerprinted-row-shape | 0 | 3 files, 52 passed |
+| 8 | worktree root | `pnpm typecheck` | 0 | 7 of 7 tasks |
+| 9 | worktree root | `LANE_BASE_REF=origin/main pnpm lint` | 0 | core purity, lane boundary, money arithmetic passed; 7 of 7 tasks |
+| 10 | worktree root | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane boundary passed |
+After the second merge (head 76e7330, with 0128), runs 3, 6, 7, 8, 9 and 10 were repeated unchanged: 31 passed; 31 passed (3 files); 52 passed (3 files); typecheck 0; lint 0; lint:lanes 0. No second build was needed.
+
+**NOT RUN.** Browser and Playwright specs (no screen changed); `pnpm build` of all packages; the whole `packages/db` suite and the core, api and web suites; `gitleaks` (not installed on this Mac; the scan of the added lines by pattern found nothing credential-shaped, and the existing `secrets` job on this PR is red from an old finding in its history, known and not touched); the Opus and Sol re-checks; GitHub Actions on the new head.
+
+**Left as is.** `packages/db/MIGRATIONS.md` section 0123 still says the upgrade test is "installed through 0119" and compares rows byte-for-byte after the runner; that sentence describes the old proof and should be refreshed with the next edit to that file. 0123 stays unrenumbered for the dispatcher.
+
+Builder record only, not independently verified, not accepted.

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, withTenant } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
@@ -295,6 +295,55 @@ it("F17 runtime-role raw qualifying insert after opening still commits with comp
  expect((await admin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,id])).rows[0].result).toMatchObject({outcome:"eligible_for_review",qualifyingPrincipal:{pence:45000,currency:"GBP"},reason:null});
 });
 
+// Standing rule 9: "An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything
+// after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no
+// column or replace no function; the fingerprinted-table guard owns 'may never gain a column'."
+// So the 0123 proof below compares whole rows only straight after 0123 has run ALONE. After every later migration it compares just the rows that existed
+// before 0123 (found again by primary key), on the columns and types they had before 0123, as canonical text from the database (never driver-parsed
+// values, which round timestamps to the millisecond). A column, row, trigger or function added or replaced later is not looked at.
+type Queryable=Pick<Pool|PoolClient,"query">;
+type ProofTable={names:string[];typed:Record<string,string>;pk:string[];rows:Record<string,string>};
+const proofTables=["recovery_eligibility_v3_review","recovery_claim_line","audit_event"] as const;
+const proofTimeColumn:Record<typeof proofTables[number],string>={recovery_eligibility_v3_review:"created_at",recovery_claim_line:"created_at",audit_event:"occurred_at"};
+const ident=(name:string)=>`"${name.replaceAll('"','""')}"`;
+async function proofColumns(db:Queryable,table:string){
+ return (await db.query(`SELECT a.attname::text AS name,format_type(a.atttypid,a.atttypmod) AS type FROM pg_attribute a
+  WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum`,[`app.${table}`])).rows as {name:string;type:string}[];
+}
+async function proofRows(db:Queryable,table:string,names:string[],pk:string[]){
+ const found=(await db.query(`SELECT identity,bytes FROM (SELECT (SELECT row_to_json(k)::text FROM (SELECT ${pk.map(name=>`t.${ident(name)}`).join(",")}) k) AS identity,
+  (SELECT row_to_json(s)::text FROM (SELECT ${names.map(name=>`t.${ident(name)}`).join(",")}) s) AS bytes FROM app.${table} t) x ORDER BY identity COLLATE "C"`)).rows;
+ return Object.fromEntries(found.map(row=>[row.identity as string,row.bytes as string]));
+}
+async function proofBefore(db:Queryable){
+ const proof:Record<string,ProofTable>={};
+ for(const table of proofTables){
+  const columns=await proofColumns(db,table),names=columns.map(column=>column.name);
+  const pk=(await db.query(`SELECT a.attname::text AS name FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey)
+   WHERE i.indrelid=$1::regclass AND i.indisprimary ORDER BY array_position(i.indkey::int2[],a.attnum)`,[`app.${table}`])).rows.map(row=>row.name as string);
+  proof[table]={names,typed:Object.fromEntries(columns.map(column=>[column.name,column.type])),pk,rows:await proofRows(db,table,names,pk)};
+ }
+ return proof;
+}
+// Every pre-existing column whose type moved ("table: name type -> new type"; a dropped column reads "(gone)") and every pre-existing row that is missing
+// or whose named columns changed. A later column, or a later row, is not a difference.
+async function proofDifferences(db:Queryable,proof:Record<string,ProofTable>){
+ const rows:string[]=[],types:string[]=[];
+ for(const [table,was] of Object.entries(proof)){
+  const now=new Map((await proofColumns(db,table)).map(column=>[column.name,column.type]));
+  for(const name of was.names)if(now.get(name)!==was.typed[name])types.push(`${table}: ${name} ${was.typed[name]} -> ${now.get(name)??"(gone)"}`);
+  if(was.names.some(name=>!now.has(name)))continue;
+  const live=await proofRows(db,table,was.names,was.pk);
+  for(const [identity,bytes] of Object.entries(was.rows)){
+   if(!(identity in live))rows.push(`${table} ${identity}: missing`);else if(live[identity]!==bytes)rows.push(`${table} ${identity}: changed`);
+  }
+ }
+ return {rows,types};
+}
+async function rolledBack<T>(db:Pool,work:(client:PoolClient)=>Promise<T>){
+ const client=await db.connect();
+ try{await client.query("BEGIN");return await work(client);}finally{await client.query("ROLLBACK");client.release();}
+}
 it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
  const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0123_recovery_eligibility_v3_f17_timing.sql");
  expect(oldIndex).toBeGreaterThanOrEqual(0);expect(newIndex).toBeGreaterThan(oldIndex);expect(names).toEqual([...names].sort());
@@ -303,11 +352,12 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
  const upgradeAdmin=new Pool({...admin.options,password:"synthetic",database}),upgradeRuntime=new Pool({...runtime.options,password:"synthetic",database});
  try{
   await upgradeAdmin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for(const url of MIGRATION_URLS.slice(0,oldIndex+1)){
+  // Everything registered before 0123 (its index is found by name above, so a later renumbering of the file is a mechanical change), as the runner records it.
+  for(const url of MIGRATION_URLS.slice(0,newIndex)){
    await upgradeAdmin.query(await readFile(url,"utf8"));
    await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[basename(fileURLToPath(url))]);
   }
-  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names.slice(0,oldIndex+1));
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names.slice(0,newIndex));
   await upgradeAdmin.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[T]);await upgradeAdmin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[U]);
   await upgradeAdmin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'F17 upgrade synthetic')",[A,T]);await upgradeAdmin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')",[M,T,A,U]);
   const session=await issuePracticeSession(upgradeRuntime),auth=await authenticatePracticeSession(upgradeRuntime,session),jobId=randomUUID();
@@ -326,14 +376,74 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
   });
   const before=await snapshot();expect(before.reviews).toHaveLength(1);
   expect((await upgradeAdmin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE id=$1",[id])).rows[0].result).toMatchObject({qualifyingPrincipal:{pence:45000,currency:"GBP"},reason:null});
-  await migrate(upgradeAdmin);await migrate(upgradeAdmin);
+  // What the after-all-migrations comparison will use: the primary keys of the rows that exist now, and their named columns and types.
+  const proof=await proofBefore(upgradeAdmin);
+  expect(Object.keys(proof)).toEqual([...proofTables]);
+  for(const [table,was] of Object.entries(proof)){expect(was.pk.length,`${table} has a primary key`).toBeGreaterThan(0);expect(Object.keys(was.rows).length,`${table} has a pre-existing row to compare`).toBeGreaterThan(0);}
+  // Migration 0123 ALONE, the way the runner applies one file: run its SQL, then record it. Whole rows, byte for byte: this says only what 0123 did.
+  await upgradeAdmin.query(await readFile(MIGRATION_URLS[newIndex]!,"utf8"));
+  await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[names[newIndex]]);
   expect(await snapshot()).toEqual(before);
+  // Then every later migration, twice; both runs must succeed.
+  await migrate(upgradeAdmin);await migrate(upgradeAdmin);
+  expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names);
   expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name=$1",[names[newIndex]])).rows).toEqual([{migration_name:"0123_recovery_eligibility_v3_f17_timing.sql"}]);
+  // After ALL migrations: only the rows that existed before 0123, by primary key, on their named columns and types.
+  expect(await proofDifferences(upgradeAdmin,proof)).toEqual({rows:[],types:[]});
+  // Controls: each runs the SAME comparison inside a transaction that is rolled back.
+  for(const table of proofTables){
+   const preExisting=Object.keys(proof[table]!.rows).length;
+   // (a) a one-microsecond change to a stored time (a superuser UPDATE with triggers off, the way this file seeds times) must fail the row comparison for every pre-existing row.
+   const moved=await rolledBack(upgradeAdmin,async client=>{
+    await client.query("SET LOCAL session_replication_role=replica");
+    expect((await client.query(`UPDATE app.${table} SET ${proofTimeColumn[table]}=${proofTimeColumn[table]}+interval '1 microsecond'`)).rowCount).toBeGreaterThanOrEqual(preExisting);
+    return proofDifferences(client,proof);
+   });
+   expect(moved.rows.filter(line=>line.startsWith(`${table} `)&&line.endsWith(": changed")),`control (a) ${table}: ${JSON.stringify(moved)}`).toHaveLength(preExisting);expect(moved.types).toEqual([]);
+   // (c) a nullable column added after 0123 must leave it passing.
+   expect(await rolledBack(upgradeAdmin,async client=>{
+    await client.query(`ALTER TABLE app.${table} ADD COLUMN f17_proof_control text`);
+    expect((await proofColumns(client,table)).map(column=>column.name)).toContain("f17_proof_control");
+    return proofDifferences(client,proof);
+   })).toEqual({rows:[],types:[]});
+  }
+  // (b) a retype of a pre-existing column must fail the type comparison: one that keeps every serialised value, and one that changes only the length.
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   await client.query("ALTER TABLE app.recovery_claim_line ALTER COLUMN net_pence TYPE numeric(20,0)");
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:["recovery_claim_line: net_pence bigint -> numeric(20,0)"]});
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   await client.query("ALTER TABLE app.audit_event ALTER COLUMN event_type TYPE varchar(120)");
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:["audit_event: event_type character varying(100) -> character varying(120)"]});
+  // (d) a function replaced after 0123 (here the very routine 0123 replaced) must leave it passing.
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   const routine="app.guard_recovery_eligibility_v3()",was=(await client.query("SELECT pg_get_functiondef($1::regprocedure) AS definition",[routine])).rows[0]!.definition as string;
+   expect(was).toContain("AS $function$");
+   await client.query(was.replace("AS $function$",()=>"AS $function$\n-- scratch control: replaced after 0123\n"));
+   expect((await client.query("SELECT pg_get_functiondef($1::regprocedure) AS definition",[routine])).rows[0]!.definition).not.toBe(was);
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:[]});
+  // (e) a pre-existing row that has gone must fail it: every one of them must still be present.
+  const gone=await rolledBack(upgradeAdmin,async client=>{
+   await client.query("SET LOCAL session_replication_role=replica");
+   expect((await client.query("DELETE FROM app.recovery_claim_line")).rowCount).toBeGreaterThanOrEqual(Object.keys(proof.recovery_claim_line!.rows).length);
+   return proofDifferences(client,proof);
+  });
+  expect(gone.rows).toHaveLength(Object.keys(proof.recovery_claim_line!.rows).length);expect(gone.rows.every(line=>line.startsWith("recovery_claim_line ")&&line.endsWith(": missing"))).toBe(true);expect(gone.types).toEqual([]);
+  // (f) a row added after 0123 is ignored (a rolled-back scratch claim line here; the corrected review saved below is a real later row, with its audit events).
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   await client.query("SET LOCAL session_replication_role=replica");
+   expect((await client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)SELECT $1::uuid,tenant_id,job_id,case_id,review_id,'fixed_compensation',debtor_type,1 FROM app.recovery_claim_line LIMIT 1",[randomUUID()])).rowCount).toBe(1);
+   expect(Object.keys(await proofRows(client,"recovery_claim_line",proof.recovery_claim_line!.names,proof.recovery_claim_line!.pk))).toHaveLength(Object.keys(proof.recovery_claim_line!.rows).length+1);
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:[]});
   const repo=new RecoveryEligibilityV3Repository(practiceMaterialPool(upgradeRuntime,auth.digest),"synthetic_demo");
   const corrected=await repo.review(ctx,jobId,review(c,"F17",1),actor,auth.digest);
   expect(corrected.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"});
-  expect((await upgradeAdmin.query("SELECT row_to_json(r)::text bytes FROM app.recovery_eligibility_v3_review r WHERE id=$1",[id])).rows).toEqual(before.reviews);
+  expect((await upgradeAdmin.query("SELECT count(*)::int n FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND case_id=$2",[T,c.id])).rows).toEqual([{n:2}]);
+  expect(await proofDifferences(upgradeAdmin,proof)).toEqual({rows:[],types:[]});
  }finally{
   await closeTestPools(upgradeRuntime,upgradeAdmin);await admin.query(`DROP DATABASE ${database}`);
  }
-});
+},120_000);
