@@ -367,3 +367,62 @@ Verification helper only: this section does not review or accept anything. Nothi
 **Set-up repairs.** None; no file other than this receipt was changed apart from the merge resolution. No assertion, expected value, timeout, grant, policy or security rule was changed.
 
 **Not run.** The branch was not pushed and no pull request or CI job exists, so no hosted check ran. `watchdog-migration-owner.integration.test.ts` was added to the third database run by the helper, as the only other migration-ownership file; the earlier helper run had not used it. No whole-package or whole-repository suite was run.
+
+## Catch-up and renumber 0125 to 0129 (12 Oct)
+
+Claude Sonnet 5.5, run on the Mac, 12 October 2026 (about 16:20 to 16:30 BST). Own code unchanged: no product or test file was edited except the renumber swaps listed below. Starting point: head `f553d807b18ad4f4981a88dbc33bf8384c924e8e`, clean tree, branch `codex/sandbox/ent-10d`; `origin/main` was `a0963f405fee263cf2bfe8effe68bbeaa9ae1ff6`, which holds migrations through 0128 (0127 STORED-TIMES-1, 0128 SV-2). The upgrade-proof audit of 11 October (section 3) found ENT-10d conforming: its set-ups prove only that the migration applies on the previous schema and that the runner repeats; there is no old-shape assertion.
+
+### The merge
+
+`git merge origin/main` (merge commit, no rebase, no force), commit `a85cc6e74b22e00dbcf5b3c17854d8fcca1ba165`, git's own message. Three append-only conflicts, none inside ENT-10d's own code or tests; both sides kept in numeric or date order:
+
+- `packages/db/src/migrate.ts`: the list tail. Kept `0125_sso_required.sql`, then `0127_recovery_timing_pin.sql`, then `0128_shadow_persistence.sql`.
+- `packages/db/MIGRATIONS.md`: kept the 0125 section, then main's 0127 and 0128 sections, with blank lines between.
+- `BUILD_PLAN.md` section 12.2: kept ENT-10d's 11 October ledger paragraph, then main's STORED-TIMES-1 and two SV-2 paragraphs, unchanged.
+
+Auto-merged without conflict: `config/agent-lane-assignments.json` (parsed afterwards, valid JSON) and `packages/db/src/index.ts` (main added `export * from "./shadow-repository.js"`). No conflict markers remain.
+
+### The renumber (commit `2e50472b451c54c56de9f12184d0d0f63004a89f`)
+
+Main now holds 0127 and 0128, so under Ben's 5 October merge-ahead ruling ENT-10d takes the next free number, 0129. Reserved for other pieces and not touched: 0123, 0124, 0126.
+
+- `git mv packages/db/migrations/0125_sso_required.sql packages/db/migrations/0129_sso_required.sql`.
+- SHA-256 before (0125 file): `4bbeb8d9e88a8f65dc4c47ac369717b95c62e68b113793f5a0c0ad62a7446c50`. After (0129 file): `4bbeb8d9e88a8f65dc4c47ac369717b95c62e68b113793f5a0c0ad62a7446c50`. Equal; the SQL bytes are unchanged. (The SQL text contains no reference to its own number.)
+- `packages/db/src/migrate.ts`: entry moved to the end of the list, after 0128.
+- `config/agent-lane-assignments.json`: the `ent-10d` entry only (migration path).
+- `packages/db/test/sso-required.integration.test.ts` and `packages/db/test/sso-emergency.integration.test.ts`: the file-name string in the order check, the "everything before this migration" set-up and the SQL read. The assertions are otherwise untouched.
+- `docs/contracts/sso-required-v1.md` and `docs/operations/sso-data-flow.md`: the one reference each.
+- `packages/db/MIGRATIONS.md`: section moved to the end and retitled `## 0129`, with the note that it was renumbered from 0125 on 12 October under the merge-ahead ruling and the SQL bytes are unchanged.
+- `BUILD_PLAN.md` section 12.2: one new "Ledger amendment — ENT-10d, 12 October 2026" paragraph after the SV-2 12 October paragraph.
+- Left as history, not changed: the 0125 mentions in this receipt, in `docs/verdicts/STORED-TIMES-1`, `docs/verdicts/M0-6L`, and in the older ledger paragraphs (they record what was true when written).
+
+### Commands as run
+
+All from the worktree root `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-10d`, through `~/.local/bin/heavy-slot <label> ...`, one at a time, memory free 76 to 77% before each, vitest `--maxWorkers=2`, at most three test files per run, no build and test together.
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `pnpm --filter @jobguard/core build` | 0 | tsc, no output |
+| 2 | `pnpm --filter @jobguard/db build` (alone) | 0 | tsc, no output; no PostgreSQL dylib error arose, so `hydrate-symlinks.js` was not needed |
+| 3 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/sso-required.integration.test.ts test/sso-emergency.integration.test.ts test/sso-emergency-concurrency.integration.test.ts` | 0 | 3 files, 23 tests passed |
+| 4 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/enterprise-identity.integration.test.ts test/audit-export.integration.test.ts test/tenancy.integration.test.ts` | 0 | 3 files, 39 tests passed |
+| 5 | `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/shadow-catalog.integration.test.ts test/small-builder-origin.integration.test.ts` | 0 | 2 files, 16 tests passed |
+| 6 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/sso/sso-emergency.test.ts src/auth/sso/sso-required-disclosure.test.ts src/auth/sso/sso-required-paths.test.ts` | 0 | 3 files, 41 tests passed |
+| 7 | `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/sso/sso-required.test.ts src/auth/context-boundary.test.ts` (`context-boundary.test.ts` unedited) | 0 | 2 files, 154 tests passed |
+| 8 | `pnpm typecheck` | 0 | 7 of 7 tasks successful (4 from the turbo cache) |
+| 9a | `LANE_BASE_REF=origin/main pnpm lint`, run with the rename still uncommitted | 1 | `Lane boundary FAILED: Lane ent-10d cannot edit: "packages/db/migrations/0125_sso_required.sql"`. Cause: the lane lint also reads uncommitted working-tree changes, so it saw the old file name as a deletion. Nothing was changed to get past it; the rename was committed as `2e50472` |
+| 9b | `LANE_BASE_REF=origin/main pnpm lint` (same command, after the commit) | 0 | 7 of 7 tasks successful (4 from cache), lane boundary passed |
+| 10 | `pnpm lint:lanes` | 0 | `Lane boundary passed`, lane `ent-10d`, head `2e50472b451c54c56de9f12184d0d0f63004a89f`, base `a0963f405fee263cf2bfe8effe68bbeaa9ae1ff6`, merge-base comparison |
+
+In runs 8 and 9b turbo replayed 4 of the 7 tasks from its content-keyed cache (the replayed logs for `@jobguard/ai` and `@jobguard/core` print another worktree's path); the `db`, `api` and `web` tasks, which this piece changes, were executed fresh.
+
+No failing merged test. No test or product file was touched to obtain any of these results.
+
+### NOT RUN
+
+- The browser suite (`apps/web/e2e/ENT-10d.spec.ts`, `ENT-10a.spec.ts`, `M0-6L.spec.ts`) and any `next build`.
+- `pnpm openapi:check` and the whole `apps/api` test run; the other `apps/api/src/auth/sso/*` files (`action-paths`, `linking`, `role-mapping`, `saml`).
+- The rest of the `packages/db` suite, including `extra-origin-upgrade`, `recovery-timing-pin`, `shadow-persistence`, `watchdog-migration-owner` and `demo-bootstrap` integration files, `pnpm test:db`, `pnpm test:migrations`, `pnpm test:regression`.
+- `node --test tools/*.test.mjs`, `pnpm eval`, restore and deploy-smoke checks.
+- GitHub checks (no run existed for the old head because the PR was conflicted); see the pull request after this push.
+- No new independent Claude review: the two checker PASS verdicts of 11 October bind to head `f553d80`, which this catch-up does not alter in code (merge of main plus the renumber swaps above); that binding is the dispatcher's to judge.
