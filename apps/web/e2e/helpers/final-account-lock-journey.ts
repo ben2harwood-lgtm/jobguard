@@ -25,6 +25,8 @@ export async function prepareLockJob(page: Page) {
 
 export async function finishDispositionsAndTerms(page: Page) {
   const panel = page.getByTestId("final-account-lock");
+  // The panel is on screen while it still reads "Loading final account…"; count the dispositions only once the persisted view has loaded.
+  await expect(panel.getByTestId("lock-state")).toHaveText("Final account review");
   const dispositions = panel.getByRole("combobox");
   for (let index = 0; index < await dispositions.count(); index++) {
     await dispositions.nth(index).selectOption("done");
@@ -44,9 +46,8 @@ export async function withSyntheticShadow<T>(tenantId: string, run: (pool: Pool,
   let shadow: Pool | undefined;
   try {
     await admin.query(`CREATE ROLE "${login}" LOGIN PASSWORD '${generated}' IN ROLE jobguard_shadow NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
-    shadow = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: login, password: generated, max: 1 });
-    const client = await shadow.connect();
-    try { await client.query("SELECT set_config('app.tenant_id',$1,false)", [tenantId]); } finally { client.release(); }
+    // pg discards a connection after a failed pool.query, so the tenant context travels with every new connection (startup option), not with one session.
+    shadow = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: login, password: generated, max: 1, options: `-c app.tenant_id=${tenantId}` });
     return await run(shadow, admin);
   } finally {
     await shadow?.end();

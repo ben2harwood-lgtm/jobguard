@@ -27,7 +27,7 @@ let port: number;
 
 beforeAll(async () => {
   databaseDir = await mkdtemp(join(tmpdir(), "jobguard-pg16-"));
-  port = await freePort(55432, 500);
+  port = await freePort(55433, 499);
   postgres = new EmbeddedPostgres({
     databaseDir,
     port,
