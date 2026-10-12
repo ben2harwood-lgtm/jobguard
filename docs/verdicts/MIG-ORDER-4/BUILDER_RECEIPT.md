@@ -653,3 +653,45 @@ The DW4 set-up hook has the default 10 s hook budget (unchanged by the order). R
 - Not committed or pushed: the scratch helper variants and scratch edits (they live only in `~/.local/share/full-steam/jg-runs/mig-order-4-scratch/`).
 
 Mac verification record only, by the Mac helper; not an independent review and not acceptance.
+
+## Round 1 repair (12 Oct)
+
+Done by the Mac helper on the dispatcher's order; not an independent review and not acceptance. Base head before this repair: `aaf69d0bdf748e3e35c5ee4c487880e4db50d9ef`.
+
+### The point (Sol, REPAIR, P2 BLOCKING)
+
+`packages/db/test/recovery-eligibility-v3.integration.test.ts:14` imported the names `proofBefore`, `proofColumns`, `proofDifferences` and `rolledBack` (and `scratchReplaceFunction`) from the shared helper `packages/db/test/upgrade-proof-utils.ts`. Open PR #138 (`codex/sandbox/ch-7-f17-before-open`, head `187528ddbfb81191b6b18bdb194ba633a605c692`) declares the same four names as local functions in the same test file. The text hunks do not overlap, so Git merges the two without a conflict, but the merged file does not compile.
+
+### The fix
+
+In that one file only: the named import became a namespace import, `import * as mo4Proof from "./upgrade-proof-utils.js";` (same style and `.js` extension as before), and each of the 19 lines that used a helper name (23 uses, including the `typeof` references on the `upgradeProof` declaration) now qualifies it with `mo4Proof.`. Nothing else changed in that file: no budget, no assertion, no title. The helper file is unchanged and needs no re-export, because the file uses no type from it by name (it reaches the proof type through `Awaited<ReturnType<typeof mo4Proof.proofBefore>>`). `git diff` is 20 lines changed, 20 inserted, 20 deleted, all in that file.
+
+The other two proof files (`prevention-checks.integration.test.ts`, `job-activation-terms.integration.test.ts`) keep their named imports. Checked read-only against every open PR branch (#138, #139, #143, #144, #146, #147, #69, and #145 itself) with `git diff --stat $(git merge-base origin/main origin/<branch>) origin/<branch> -- <path>`: none of them changes either file, and none adds a file called `upgrade-proof-utils`. So no open piece can collide with those two files' names and they were left alone. (Re-check this when a new piece that touches them opens.)
+
+### Trial merge: before and after
+
+A throwaway worktree OUTSIDE the repository folder, `~/.local/share/full-steam/jg-runs/mig-order-4-scratch/trial-merge` (detached HEAD, left in place), `node_modules` linked to this worktree's, then `git merge --no-commit origin/codex/sandbox/ch-7-f17-before-open` (never committed, never pushed, aborted with `git merge --abort` each time). Type check of that one file with the repo's compiler options (root `tsconfig.json`; TypeScript API, the same ad hoc approach as the earlier check; `pnpm typecheck` does not cover `packages/db/test`). Script kept at `~/.local/share/full-steam/jg-runs/mig-order-4-scratch/round1-tsc-one-file.cjs`; outputs at `round1-trial-before.log` and `round1-trial-after.log` in the same folder.
+
+| Merge | Result for `packages/db/test/recovery-eligibility-v3.integration.test.ts` |
+|---|---|
+| BEFORE: `aaf69d0` (no fix) + #138 `187528d` | exit 1, 5 diagnostics: four `TS2440` (line 14: "Import declaration conflicts with local declaration of" `proofBefore`, `proofColumns`, `proofDifferences`, `rolledBack`) and one `TS2554` (line 37: "Expected 1 arguments, but got 2."). 0 diagnostics in other files. Exactly Sol's five. |
+| AFTER: this fix (working tree of this branch, as git tree commit `f45dcfa720366c00cd22de2263baeb17ca31b37b` made with `git stash create`, which touches no branch and not the stash stack; its tracked content equals the pushed commit except for this receipt) + #138 `187528d` | exit 0, 0 diagnostics in that file, 0 in other files. The merged file still holds #138's four local declarations (lines 387, 396, 408, 421) and this branch's 19 `mo4Proof.` lines. |
+
+### Commands as run (working directory is the repository worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/mig-order-4` unless stated)
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `git fetch origin` | exit 0; #138 head `187528d`, as ordered |
+| 2 | `git worktree add --detach ~/.local/share/full-steam/jg-runs/mig-order-4-scratch/trial-merge aaf69d0` then `git merge --no-commit origin/codex/sandbox/ch-7-f17-before-open` (cwd: the scratch worktree), `node .../round1-tsc-one-file.cjs "$PWD" packages/db/test/recovery-eligibility-v3.integration.test.ts`, `git merge --abort` | merge "Automatic merge went well"; type check exit 1, 5 diagnostics (BEFORE above); abort exit 0 |
+| 3 | The edit (a one-off script over the one file), then `git stash create`, `git checkout --detach f45dcfa` and the same merge, type check and abort in the scratch worktree | merge clean; type check exit 0, 0 diagnostics (AFTER above); abort exit 0 |
+| 4 | `~/.local/bin/heavy-slot mo4-r1-dw4 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --reporter=verbose test/recovery-eligibility-v3.integration.test.ts` (memory free 77% before; dist not stale, no rebuild needed, no PostgreSQL dylib error) | exit 0; 1 file passed, 24 tests passed, 0 failed, 0 skipped; duration 4.11 s (tests 3.39 s). Log: `round1-vitest-dw4.log` |
+| 5 | `pnpm typecheck` | exit 0; 7 of 7 tasks successful (4 cached) |
+| 6 | `LANE_BASE_REF=origin/main pnpm lint:lanes` | exit 0; "Lane boundary passed"; files: the same six as before (this repair adds no path) |
+
+Same 24 tests as the Mac verification run above (recovery-eligibility-v3: 24 passed), so the rename of the helper references changes no test count or result. The controls (`[MO4-1d]`) and the after-all check (`[MO4-1e]`) are the same assertions on the same helper code, reached through the namespace.
+
+### Not part of this repair
+
+- Sol's second point (completed passing CI on the exact head): evidence, not mine. The head changes with this repair, so CI must finish on the new head.
+- Sol's third point (the DW4 hook's inherited 10 s budget is borderline cold): LATER. No budget was changed. This run was warm (hook plus tests 4.11 s in total).
+- Not run here: the other two proof files (`prevention-checks`, `job-activation-terms`) were not touched, so were not re-run; `pnpm test`, `pnpm test:db`, browser suites, build.
