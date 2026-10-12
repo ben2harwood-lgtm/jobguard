@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, randomUUID, sign, verify, createPublicKey } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { appendAuditBatch, auditEventInputV1Schema, verifyAuditChain, type AuditCheckpoint, type AuditEvent } from "./audit.js";
 import type { TenantTransaction, VerifiedTenantContext } from "./tenant-context.js";
@@ -60,7 +60,7 @@ export interface AuditExportActor { membershipId: string; identityUserId: string
 export interface AuditExportRow { id: string; createdAt: string; entryCount: number; headHash: string; file: AuditExportFile; }
 
 /** Restricted assurance path only: copies an EXISTING checkpoint, never creates one or grants runtime access to audit_control. */
-export async function handoffAuditExportCheckpoint(assurancePool: Pool, checkpoint: AuditCheckpoint): Promise<void> {
+export async function handoffAuditExportCheckpoint(assurancePool: Pick<Pool | PoolClient, "query">, checkpoint: AuditCheckpoint): Promise<void> {
   const parsed = checkpointV1.parse({ ...checkpoint, recordedAt: checkpoint.recordedAt.toISOString() });
   const result = await assurancePool.query(`INSERT INTO app.audit_export_checkpoint(tenant_id,sequence,event_hash,recorded_at)
     SELECT tenant_id,sequence,event_hash,recorded_at FROM audit_control.checkpoint
