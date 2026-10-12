@@ -911,3 +911,57 @@ Owner grant refusal (`grant.create` with `owner`), 10 + 7 + 1 + 9 results:
 Other new database results in the same files that passed: [PH14] a different database name refuses all session routines; [PH8] cap stays ended and a fresh value starts a separate company; [PH8] contractor-revoked stays ended and a fresh value starts a separate company; [PH9] owner insert refuses backdated / forwarddated / revoked / invalid-digest / before-created / beyond-seven / duplicate. Total in the three new files: 77 tests; 77 passed in 3 of 5 runs and 76 passed with the one failure above in 2 of 5 (the single-file run counts as one of the five).
 
 Not pushed. No pull request opened. Status: merged with main, tested on the Mac, NOT green.
+
+## Repair round 2 (13 Oct): intermittent PH23 test, built by Claude, Codex unavailable
+
+Built by Claude Sonnet 5.5 because Codex had no budget. Only a test was changed; no migration, product code, merged test, scanner or list was touched, and `apps/api/src/auth/context-boundary.test.ts` was not touched. This is a repair note, not a review or a verdict; a separate Opus check and a Codex Sol check come later.
+
+### The defect
+
+`packages/db/test/contractor-practice-session-upgrade.integration.test.ts:116`, in `it.each(["membership","raw-row-number","D-cap","B-cap","A-home-cap"])("[PH23] rolled-back session comparison refuses %s", ...)`. The first line picked its row with `sessions.find(x => x.class === ...)`. The `sessions` list comes from a query with no `ORDER BY`, so it has no fixed order, and it holds two class-A rows (line 78 asserts `toHaveLength(2)`), one per tenant. For the `membership` control the test writes `ownerCommand.membershipId` into the chosen row. That membership belongs to fixture 0's tenant only. When the other tenant's class-A row came back first, PostgreSQL refused the control UPDATE with error 23503 (`contractor_practice_session_tenant_id_membership_id_fkey`) before the comparison could run. Seen on the Mac as about 2 failures in 5 runs.
+
+Reproduced here on the unchanged code before the fix, first attempt, upgrade file alone: 1 failed, 10 passed; `contractor-practice-session-upgrade.integration.test.ts:118` (called from `:115` through `rolledBack`, `upgrade-proof-utils.ts:53`), error 23503 with the constraint name above. Log: `repair1/00-old-upgrade-1.log`.
+
+### Before and after (one statement changed, in that test only)
+
+Before (line 116):
+
+```ts
+  const selected = sessions.find(x => x.class === (control === "D-cap" ? "D" : control === "B-cap" ? "B" : "A"))!;
+```
+
+After (lines 116 to 119):
+
+```ts
+  // `sessions` has no fixed order and holds two class-A rows (one per tenant); ownerCommand.membershipId exists only in fixtures[0]'s tenant,
+  // so the membership control needs that tenant's row. Every control uses the same explicit order: fixtures[0]'s tenant first, then digest.
+  const homeTenant = (x: Captured) => (JSON.parse(x.bytes) as { tenant_id: string }).tenant_id === fixtures[0]!.p.tenantId ? 0 : 1;
+  const selected = sessions.filter(x => x.class === (control === "D-cap" ? "D" : control === "B-cap" ? "B" : "A")).sort((a, b) => homeTenant(a) - homeTenant(b) || (a.digest < b.digest ? -1 : 1))[0]!;
+```
+
+Nothing else changed: the five controls, every `UPDATE`, and `expect((await sessionDifferences(client)).length).toBeGreaterThan(0)` are as before, as is the closing `await compare(c.admin)`. The `membership` control now always writes a membership of the row's own tenant, and that membership differs from the row's own, so the helper still reports `columns-changed`. The other four controls make the same change as before, now on a row picked in a fixed order.
+
+### Other unordered picks checked
+
+- `contractor-practice-session-upgrade.integration.test.ts`: the only unordered `find` on a multi-row list was the one above. `fixtures[...]` are indexed by position; `sessions.some(...)` and `sessions.filter(...).length` are order-free; every `.rows[0]` reads a single-row aggregate or a one-key lookup. No other change needed.
+- `contractor-practice-session.integration.test.ts`: `.find(unit => unit.kind === "branch")` (line 76) runs on one freshly started tenant, which has exactly one branch (migration 0138 seeds one region, one branch, one team); the unit list is also `ORDER BY kind,name` in `contractor-repository.ts:76`. All `.rows[0]` reads are keyed lookups or aggregates. Cannot produce this failure; unchanged.
+- `contractor-owner-grant.integration.test.ts`: `view.units.find(kind === "region")`, `view.units.find(kind === "branch")` and `view.teams[0]` (line 27) read one freshly started tenant before the second branch is created, so each has exactly one match (units `ORDER BY kind,name`, teams `ORDER BY name`). `.rows[0]` at line 18 is a keyed lookup. Cannot produce this failure; unchanged.
+
+### Runs after the fix
+
+Command for runs 1 to 5, each through `heavy-slot`, `--maxWorkers=1`, in `packages/db`: `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/contractor-practice-session.integration.test.ts test/contractor-owner-grant.integration.test.ts test/contractor-practice-session-upgrade.integration.test.ts`. The dist folders for core, db, storage, config, ai and api were checked and were not stale (no source file newer than its dist, built 23:46 on 12 Oct), so no rebuild was needed. Logs are under `~/.local/share/full-steam/jg-runs/harden-1-mac/repair1/`.
+
+| Run | Files | Exit | Test files | Tests |
+|---|---|---|---|---|
+| 1 | three files | 0 | 3 passed (3) | 77 passed (77) |
+| 2 | three files | 0 | 3 passed (3) | 77 passed (77) |
+| 3 | three files | 0 | 3 passed (3) | 77 passed (77) |
+| 4 | three files | 0 | 3 passed (3) | 77 passed (77) |
+| 5 | three files | 0 | 3 passed (3) | 77 passed (77) |
+| 6 | upgrade file alone | 0 | 1 passed (1) | 11 passed (11) |
+| 7 | upgrade file alone | 0 | 1 passed (1) | 11 passed (11) |
+| 8 | upgrade file alone | 0 | 1 passed (1) | 11 passed (11) |
+| typecheck | `pnpm typecheck` | 0 | 7 of 7 tasks | n/a |
+| lint | `LANE_BASE_REF=origin/main pnpm lint` | 0 | 7 of 7 tasks | n/a |
+
+Not claimed: the `db` typecheck covers `src/` only (`packages/db/tsconfig.json` includes `src/**/*.ts`), so the test file is checked by running it, not by `tsc`. Eight passes in a row is evidence of stability, not proof; before the fix this test failed about 2 runs in 5. Not independently reviewed yet.

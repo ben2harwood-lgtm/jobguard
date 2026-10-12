@@ -113,7 +113,10 @@ it("[PH24] only three old function texts differ at N alone and home is unchanged
 });
 it.each(["membership", "raw-row-number", "D-cap", "B-cap", "A-home-cap"])("[PH23] rolled-back session comparison refuses %s", async control => {
  await proof.rolledBack(c.admin, async client => {
-  const selected = sessions.find(x => x.class === (control === "D-cap" ? "D" : control === "B-cap" ? "B" : "A"))!;
+  // `sessions` has no fixed order and holds two class-A rows (one per tenant); ownerCommand.membershipId exists only in fixtures[0]'s tenant,
+  // so the membership control needs that tenant's row. Every control uses the same explicit order: fixtures[0]'s tenant first, then digest.
+  const homeTenant = (x: Captured) => (JSON.parse(x.bytes) as { tenant_id: string }).tenant_id === fixtures[0]!.p.tenantId ? 0 : 1;
+  const selected = sessions.filter(x => x.class === (control === "D-cap" ? "D" : control === "B-cap" ? "B" : "A")).sort((a, b) => homeTenant(a) - homeTenant(b) || (a.digest < b.digest ? -1 : 1))[0]!;
   await client.query("ALTER TABLE control_plane.contractor_practice_session DISABLE TRIGGER USER");
   if (control === "membership") await client.query("UPDATE control_plane.contractor_practice_session SET membership_id=$2 WHERE session_digest=$1", [selected.digest, ownerCommand.membershipId]);
   else if (control === "raw-row-number") await client.query("UPDATE control_plane.contractor_practice_session SET session_id=$2 WHERE session_digest=$1", [selected.digest, selected.raw]);
