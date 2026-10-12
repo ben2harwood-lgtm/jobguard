@@ -783,6 +783,14 @@ References existing keys on command receipts, memberships, role grants, work ord
 
 Forward fix: disable callers of this new repository, preserve all appended records and deploy an additive corrective migration after review. Do not drop populated history or rewrite origins. No destructive rollback SQL is supplied. Database fresh/upgrade/catalog checks were written; sandbox execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). Dispatcher/CI must execute them before acceptance.
 
+## 0130_recovery_eligibility_v3_f17_timing.sql (CH-7-F17-BEFORE-OPEN)
+
+Renumbered from 0125 to 0123 on 11 October 2026 under the merge-ahead ruling because 0120 merged first and 0121 and 0122 were taken by open pull requests (0124 was reserved by PRACTICE-FACTS-1), and renumbered from 0123 to 0130 on 12 October under Ben's 5 October merge-ahead ruling because 0127 (STORED-TIMES-1) and 0128 (SV-2) merged ahead of it and 0129 is reserved by ENT-10d; the SQL bytes are unchanged (sha256 recorded in the builder receipt). Registered last in numeric order, after 0128. Restates only 0119's `app.guard_recovery_eligibility_v3` with `CREATE OR REPLACE`: the existing `paid_before` exclusion now also applies to `duplicate_supplier_payment`. The stored original settlement timestamp at or before (`<=`) case opening gives an excluded F17 candidate, 0p and exactly `Paid before you opened this case`. After opening, settled F17 remains 45,000p with a null reason. No second timing comparison, table/column/policy/grant/trigger change, backfill or row rewrite; function ownership, invoker rights and EXECUTE privileges remain intact. No routine from another migration is replaced.
+
+Upgrade coverage is appended to `test/recovery-eligibility-v3.integration.test.ts`: a separate database is installed through every migration registered before 0130 (the file is found by name, so this includes 0127 and 0128) and saves an F17 candidate for already-settled cash (the 0119 guard accepts it). Migration 0130 is then applied alone and the complete textual review, claim-line and audit rows are compared byte-for-byte straight away. The migration runner then runs twice (it applies anything registered after 0130, which today is nothing, and both runs must succeed), and the rows that existed before 0130 are found again by primary key and compared as canonical database text over their pre-existing column names and full types. A column, row, trigger or function added or replaced by a later migration is not looked at; rolled-back controls using the same comparison show that a one-microsecond change, a retype or a lost row fail it, and that an added column, a replaced function (including one whose body contains `$function$`), a later claim line and a later review pass it. The corrected review is appended against the review revision read from the database at that point. Fresh-install coverage, microsecond boundaries, equal-instant exclusion, complete raw runtime refusal transactions and an after-opening raw-write control are in that same file. **NOT RUN (sandbox cannot start PostgreSQL / a browser).**
+
+Forward fix only: retain immutable saved candidates and audit history, replace the affected routine in a reviewed later migration. An application rollback must keep the timing rule or fail closed against this guard; do not revert the guard to 0119 or rewrite historical Q. CI database/browser execution, fresh Claude Opus review and a separate Sol check on the exact dispatcher commit remain required before acceptance. Synthetic only; no new fee derivation, posting, statement, provider or operational alert.
+
 ## 0127 — STORED-TIMES-1 recovery timing pin
 
 Adds one SECURITY INVOKER function, `app.pin_recovery_timing_created_at()`, owned by `jobguard_migration`, `search_path=pg_catalog`, EXECUTE revoked from PUBLIC/runtime, and ordinary BEFORE INSERT row triggers named `a_recovery_timing_pin` on `app.recovery_case` and `app.practice_feed_event`. Every role's insert stores `transaction_timestamp()` instead of a chosen time; the pin fires before the existing source/feed guards. A raw writer's back-dating attempt cannot supply either stored time. No existing routine/hash, column, default, grant, policy or constraint changes; no backfill. Earlier stored times and all history remain unchanged. `CREATE TRIGGER` takes a short table lock.
@@ -841,7 +849,37 @@ and browser regressions. Local sandbox initialization errors are not DB passes.
 Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces). Renumbered from 0125 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
 
 Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
+## 0131 — PRACTICE-FACTS-1 part A
 
-### 0136 — recovery allocations (M4-8-S)
+Renumbered from 0124 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
+
+`0131_practice_feed_facts.sql` replaces exactly six catalogue CHECK constraints on
+`practice_feed_command`, `practice_feed_event` and `practice_feed_receipt_match`.
+It retains every existing allowed value and adds **six movement keys** from
+`practiceFactsCatalogueV1` to the command/event movement checks:
+`receipt-12000`, `receipt-14640`, `supplier-payment-600`, `supplier-payment-840`,
+`receipt-interest-120` and `receipt-compensation-70`.
+The receipt-only checks (command match action and receipt-match keys/amounts)
+add **four receipt keys**: `receipt-12000`, `receipt-14640`,
+`receipt-interest-120` and `receipt-compensation-70`.
+Supplier payments cannot match customer receipts. Constraint discovery uses table identity
+and `pg_get_constraintdef` containing `receipt-384`, requiring exactly two matches
+per table; any mismatch aborts the transaction. Each widened replacement keeps
+its discovered original constraint name and validates existing rows, in the
+same transaction. The upgrade test compares all six names, validation flags
+and every old allowed literal before and after 0131.
+
+Creates NO table, column, role, grant, policy, trigger or function. Updates,
+rewrites and deletes NO existing row. Both feed routines remain unchanged.
+The access-exclusive lock and validation scan are the operational migration cost.
+The populated upgrade, row bytes, no-op rerun and unchanged security/routine
+catalogue probes are in `test/practice-facts.integration.test.ts`; they are
+NOT RUN in the builder sandbox (cannot start PostgreSQL).
+
+Forward-fix: retain the expanded checks and disable the new route if a defect is
+found. Narrowing the checks is unsafe once new rows exist; do not delete or edit
+append-only facts to roll back. The integrator owns the BUILD_PLAN §12.2 ledger.
+
+## 0136 — recovery allocations (M4-8-S)
 
 Expand-only: adds immutable allocation reviews, line-source bindings, case allocations/reversals, receipt-line fractions and command identities. Runtime SELECT only; session-checked migration-owned `write_recovery_allocation` appends facts and Decision authorizations. No existing object or grant changes. All constraints remain immediate; the public repository transaction invokes the joined case event last and then appends caller audit before commit. Forward fix only after facts exist: disable the allocator, preserve original rows, add compensating facts in a reviewed follow-up migration; do not drop or edit commercial history. Saved deposit and supplementary-invoice fixtures remain Q2-held.
