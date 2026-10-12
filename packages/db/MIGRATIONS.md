@@ -880,6 +880,11 @@ Forward-fix: retain the expanded checks and disable the new route if a defect is
 found. Narrowing the checks is unsafe once new rows exist; do not delete or edit
 append-only facts to roll back. The integrator owns the BUILD_PLAN §12.2 ledger.
 
+## 0132 — SV-4 final-account lock
+
+Renumbered from 0130 to 0132 on 12 October 2026 under the merge-ahead ruling because ENT-10d (0129) and CH-7-F17-BEFORE-OPEN (0130) merged first and 0131 is reserved for PRACTICE-FACTS-1; the SQL bytes are unchanged (sha256 543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7).
+
+`0132_final_account_lock.sql`: SV-4 immutable lock, dispositions, synthetic terms, append-only check facts and invoice/line side bindings; only new lock-bound issue is guarded. No fingerprinted-table columns or existing grants change. Forward-fix by additive migration; do not delete locks or issued invoices.
 ## 0136 — recovery allocations (M4-8-S)
 
 Expand-only: adds immutable allocation reviews, line-source bindings, case allocations/reversals, receipt-line fractions and command identities. Runtime SELECT only; session-checked migration-owned `write_recovery_allocation` appends facts and Decision authorizations. No existing object or grant changes. All constraints remain immediate; the public repository transaction invokes the joined case event last and then appends caller audit before commit. Forward fix only after facts exist: disable the allocator, preserve original rows, add compensating facts in a reviewed follow-up migration; do not drop or edit commercial history. Saved deposit and supplementary-invoice fixtures remain Q2-held.

@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-4c/apps/api
+
+
+ Test Files  1 passed (1)
+      Tests  145 passed (145)
+   Start at  20:31:54
+   Duration  3.79s (transform 250ms, setup 0ms, import 545ms, tests 3.00s, environment 0ms)
+

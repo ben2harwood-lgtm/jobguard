@@ -81,4 +81,6 @@ export * from "./sso-required-repository.js";
 export * from "./extra-repository.js";
 export * from "./shadow-repository.js";
 export * from "./contractor-session-context.js";
+
+export * from "./final-account-lock-repository.js";
 export * from "./recovery-allocation-repository.js";
