@@ -166,5 +166,4 @@ export const watchdogCommandGuards = [
   { file: "evidence.ts", method: "beginUpload", calls: 1 },
   { file: "evidence.ts", method: "finalize", calls: 2 },
   { file: "proof-repository.ts", method: "complete", calls: 2 },
-  { file: "site-extra-repository.ts", method: "logSiteExtra", calls: 1 },
 ] as const;

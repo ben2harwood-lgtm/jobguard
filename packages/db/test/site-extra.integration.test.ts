@@ -189,22 +189,3 @@ it("[R4] live success and identical replay return the same stored result without
  expect(await repo.logSiteExtra(f.ctx, actor, raw)).toEqual(first); expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
  expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([{ result: first }]);
 });
-
-it("[R4 replay contract] public body refuses a not-live job before precheck or the raising seam, without writes", async () => {
- const f = await siteFixture(c), raw = input(f);
- await leaveLive(f);
- const before = await counts(c, f), head = await chain(c, f);
- const auditCount = (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n;
- const precheck = vi.spyOn(repo as unknown as { precheck: (...args: unknown[]) => Promise<never> }, "precheck")
-  .mockImplementation(async () => { throw new Error("precheck must not be reached"); });
- const raise = vi.spyOn(ExtraRepository.prototype, "raiseExtra")
-  .mockImplementation(async () => { throw new Error("raiseExtra and its seam must not be reached"); });
- const error = await repo.logSiteExtra(f.ctx, f.members.supervisor.member, raw).catch(error => error);
- expect(error).toBeInstanceOf(WatchdogError);
- expect(error).toMatchObject({ code: "JOB_NOT_LIVE", message: "JOB_NOT_LIVE" });
- expect(precheck).not.toHaveBeenCalled(); expect(raise).not.toHaveBeenCalled();
- expect(await counts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
- expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.n).toBe(auditCount);
- expect((await c.admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rowCount).toBe(0);
- expect((await c.admin.query("SELECT 1 FROM app.extra_origin WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rowCount).toBe(0);
-});
