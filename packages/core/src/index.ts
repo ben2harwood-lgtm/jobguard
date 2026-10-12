@@ -56,4 +56,5 @@ export * from "./recovery-eligibility-v3.js";
 export * from "./extra-persistence.js";
 
 export * from "./practice-facts.js";
+export * from "./final-account-lock.js";
 export * from "./contractor-practice-session.js";

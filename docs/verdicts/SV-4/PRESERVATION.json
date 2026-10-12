@@ -1,0 +1,77 @@
+[
+  {
+    "path": "apps/api/src/auth/context-boundary.test.ts",
+    "sha256": "7f1914846f763c3534ffafc79701fc6f768e8e1546be2fe98e27bc32a99e0e8d",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/src/practice-session.ts",
+    "sha256": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/src/contractor-repository.ts",
+    "sha256": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/src/contractor-party-repository.ts",
+    "sha256": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/src/work-order-repository.ts",
+    "sha256": "4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/src/sor-repository.ts",
+    "sha256": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/src/job-scheduling-repository.ts",
+    "sha256": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/src/work-order-fixtures.ts",
+    "sha256": "cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/src/practice-invoice-repository.ts",
+    "sha256": "88890e307813180a3e03624768002d5f886a9b4a651ef54a763884c7a410f85a",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/migrations/0095_job_parties.sql",
+    "sha256": "9ee24d65cc32b8fd0e713e3e85a9e536803fdbdbb319ce2d5e3754cc3c5d03d4",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/migrations/0128_shadow_persistence.sql",
+    "sha256": "d8f7370560595a47f1395dad198abacda1e1351ade096697656c76805e957afe",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/test/shadow-catalog.integration.test.ts",
+    "sha256": "97de4651693562964e237ff6cf1329265a16441fb90ad1c687ca4bb9121b9e3f",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/test/UIWIRE-12.integration.test.ts",
+    "sha256": "e172081c91e7fbe349f462cfca2ab1d73cdf56b199a6c7a1ef5b1612174014f0",
+    "unchanged": true
+  },
+  {
+    "path": "packages/db/test/demo-bootstrap.integration.test.ts",
+    "sha256": "08e29bf1f5114a6f369e3cf2c2fa75f96abed5be2930771b2f98b5e5bc1b2e8b",
+    "unchanged": true
+  },
+  {
+    "path": "apps/web/app/ui/customer-invoices.tsx",
+    "legacy_body_sha256": "f3eefea76d9b4439b6552ed9d44657249ab22900918b398c4c17fb51bc4cdf7d",
+    "unchanged": true
+  }
+]
