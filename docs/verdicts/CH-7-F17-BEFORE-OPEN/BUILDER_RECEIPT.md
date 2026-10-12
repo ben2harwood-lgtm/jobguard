@@ -187,3 +187,45 @@ After the second merge (head 76e7330, with 0128), runs 3, 6, 7, 8, 9 and 10 were
 **Left as is.** `packages/db/MIGRATIONS.md` section 0123 still says the upgrade test is "installed through 0119" and compares rows byte-for-byte after the runner; that sentence describes the old proof and should be refreshed with the next edit to that file. 0123 stays unrenumbered for the dispatcher.
 
 Builder record only, not independently verified, not accepted.
+
+### Round 2 repair (12 Oct)
+
+Test-only repair of the same upgrade proof after a fresh independent Sol check at head db4ac43 (verdict REPAIR: three blocking points in the reshaped test, one wording point), by a Claude Sonnet helper on the integrator's Mac. Not a review and not an acceptance. Changed: `packages/db/test/recovery-eligibility-v3.integration.test.ts` (that one test, plus two helpers and one import) and `packages/db/MIGRATIONS.md` (section 0123 wording). No product file, no migration SQL, no other assertion, no other test. The sibling worktree `.worktrees/ch-7-f17-before-open-r2` was not touched.
+
+**What changed, per fix (before / after).**
+1. Review revision (blocking). Before: the corrected review was appended against a pinned `expectedReviewRevision` of 1 and the test then required exactly two reviews, so a review appended legitimately by a later migration would have made the proof fail (`ELIGIBILITY_STALE_REVISION` or the count). After: the revision is read from the database, right before the append, by the repository's own newest-review reader (`readRecoveryEligibilityV3`, the reader behind the check at `recovery-eligibility-v3-repository.ts:34`) through a new helper `currentReviewRevision`; the corrected review is appended against that number; the count restriction is gone; the corrected-result assertion (excluded, 0p, "Paid before you opened this case"), `corrected.revision` equal to the read revision plus one, and the final identity-matched comparison of the original rows are kept. New rolled-back control (g): a copy of the saved review one revision higher is inserted (superuser, triggers off, rolled back); the same `proofDifferences` returns no difference, the review table shows one extra row that is ignored, and the revision read back is the saved one plus one (so a pinned 1 would now be stale).
+2. Function control (blocking). Before: the control required the literal `AS $function$` in `pg_get_functiondef` text and replaced exactly that, so a legitimate replacement whose body contains `$function$` (PostgreSQL then prints another delimiter) made the test fail. After: new helpers `routineSource` and `replaceRoutine` read the routine's own printed header and its body (`pg_proc.prosrc`) as data, cut the header at its dollar-quote opening with a pattern that accepts any delimiter, and run `CREATE OR REPLACE` with a delimiter chosen by the test that occurs in neither the body nor the note. Control (d) still asserts the stored definition changed and that the same `proofDifferences` returns no difference. New control (d2), delimiter collision: a replacement whose body contains `$function$` (asserted to make PostgreSQL print a different delimiter), then a second replacement made from that definition; both leave the comparison passing.
+3. Deadline (blocking). Before: `},120_000);` on the test. After: removed; the test runs at the inherited 5 000 ms Vitest deadline. Nothing was moved and no budget was added or changed anywhere: the upgrade test measured 610 to 639 ms in four green runs (the whole file about 3 s), far inside 5 000 ms. Note for the coordinator: the file's `beforeAll` has no explicit budget of its own (it also runs at Vitest's default hook timeout), so there was no "existing explicit budget" to move set-up into, and none was needed.
+4. Wording (later). `packages/db/MIGRATIONS.md` section 0123 now says: installation through every migration registered before 0123; 0123 applied alone and whole rows compared straight away; the runner then applies everything later twice; pre-existing rows found again by primary key and compared as canonical text over their pre-existing names and full types; the controls; and that the corrected review is appended against the revision read from the database.
+
+**Controls, red and green.** Every red run used a temporary copy of the final test kept in `packages/db/test/` under a `zz-scratch-r2-` name (so imports resolve), run with `expect.soft`, then moved (not deleted) to the session scratch folder; the real test file was never edited for a red run and its sha256 was checked before and after. Nothing scratch is committed.
+| Variant (scratch) | Expected | Result |
+|---|---|---|
+| A: comparator also fails on a changed row count and on a changed guard function, and the revision reader pinned to 1 | (d), (d2), (f), (g) and the final comparison red | red at all of them (8 soft failures; (e) also red as a side effect of the row-count rule); 1 failed, 30 skipped |
+| C: final test plus a REAL later review committed before the corrected one | green | green; 3 reviews, corrected review saved at revision 3 |
+| D: C but with the old pinned revision 1 and a count of two | red | red: `ELIGIBILITY_STALE_REVISION` |
+| E: final test but the old literal `AS $function$` replacement | red at (d2) | red: `syntax error at or near "DECLARE"` (the note's `$function$` closes the quote early) |
+| Final file | green | green |
+
+**Commands, exactly as run** (directory `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open/packages/db` unless noted; memory free 73 to 75 percent before every run; one run at a time; no build was needed, the built `dist` folders were current and PostgreSQL started). Test form: `~/.local/bin/heavy-slot <label> env VITEST_MAX_THREADS=2 VITEST_MAX_FORKS=2 pnpm exec vitest run --maxWorkers=2 [--reporter=verbose] [-t "0123 upgrade"] <files>`.
+| # | Run | Exit | Counts |
+|---|---|---|---|
+| 1 | `recovery-eligibility-v3.integration.test.ts`, verbose, before any change | 0 | 31 passed; upgrade test 639 ms |
+| 2 | same file, verbose, after fixes 1 to 3 (first version) | 0 | 31 passed; upgrade test 616 ms |
+| 3 | scratch A (`-t "0123 upgrade"`) | 1 | 1 failed (8 soft failures), 30 skipped (a first attempt flagged everything because my scratch captured the function fingerprint too early; corrected and re-run) |
+| 4 | scratch C | 0 | 1 passed, 30 skipped; 620 ms (a first attempt failed with `ELIGIBILITY_STALE_REVISION` because that scratch used a revision read before it added the later review; the real test was changed to read the revision right before the append, then C re-run) |
+| 5 | scratch D | 1 | `ELIGIBILITY_STALE_REVISION`, 1 failed, 30 skipped |
+| 6 | scratch E | 1 | syntax error, 1 failed, 30 skipped |
+| 7 | final `recovery-eligibility-v3.integration.test.ts` | 0 | 1 file, 31 passed; 3.74 s |
+| 8 | same file, `--reporter=verbose` | 0 | 31 passed; upgrade test 610 ms |
+| 9 | `recovery-timing-pin` + `extra-origin-upgrade` + `recovery-follow-up-upgrade` (`.integration.test.ts`) | 0 | 3 files, 31 passed |
+| 10 | `practice-feed` + `recovery-cases` + `fingerprinted-row-shape` (`.integration.test.ts`) | 0 | 3 files, 52 passed |
+| 11 | worktree root: `~/.local/bin/heavy-slot f17-r2-typecheck pnpm typecheck` | 0 | 7 of 7 tasks |
+| 12 | worktree root: `~/.local/bin/heavy-slot f17-r2-lint env LANE_BASE_REF=origin/main pnpm lint` | 0 | 7 of 7 tasks |
+| 13 | worktree root: `~/.local/bin/heavy-slot f17-r2-lanes env LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | lane boundary passed (MIGRATIONS.md and the receipt are within the lane) |
+| 14 | `pnpm exec tsc -p <scratch tsconfig>` over only the edited test file (the package typecheck covers `src` only) | 0 | no errors |
+Sha256 of the final test file: `4d0b71e459d7019a8616a87d57e35f6e79d445e80cc1c400c6c5dddc57f77780`.
+
+**NOT RUN.** Browser and Playwright specs (no screen changed); `pnpm build` of all packages and any build this round; the whole `packages/db` suite and the core, api and web suites; `gitleaks` (not installed on this Mac; the `secrets` job on this PR is red from an old finding in its history, known and not touched); the Opus and Sol re-checks; GitHub Actions on the new head. Sol point 4 (finished exact-head CI result) is a fact about GitHub, not a repair, and is not addressed here. One thing deliberately left alone: the corrected-review step still passes the case revision (`c.revision`) captured when the case was opened; the repair order covered the review revision only.
+
+Builder record only, not independently verified, not accepted.

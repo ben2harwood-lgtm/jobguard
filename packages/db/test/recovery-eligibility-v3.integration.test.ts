@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, withTenant } from "../src/index.js";
+import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, readRecoveryEligibilityV3, withTenant } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -344,6 +344,24 @@ async function rolledBack<T>(db:Pool,work:(client:PoolClient)=>Promise<T>){
  const client=await db.connect();
  try{await client.query("BEGIN");return await work(client);}finally{await client.query("ROLLBACK");client.release();}
 }
+// The review revision the repository itself will demand next: its own reader of the newest review of a case (the reader behind the expectedReviewRevision check),
+// so the proof never pins a revision number that a later migration may legitimately move.
+const currentReviewRevision=async(db:Queryable,caseId:string)=>(await readRecoveryEligibilityV3({$client:db} as unknown as TenantTransaction,T,caseId))?.revision??0;
+async function routineSource(db:Queryable,routine:string){
+ const row=(await db.query("SELECT pg_get_functiondef(p.oid) AS definition,p.prosrc AS body FROM pg_proc p WHERE p.oid=$1::regprocedure",[routine])).rows[0]!;
+ return {definition:row.definition as string,body:row.body as string};
+}
+// CREATE OR REPLACE with the routine's OWN header and body, both read from the catalog as data, under a dollar-quote delimiter chosen here that occurs in neither the
+// body nor the note. Nothing depends on the delimiter the stored definition happens to print (PostgreSQL picks another one when the body holds "$function$").
+async function replaceRoutine(db:Queryable,routine:string,note:string){
+ const was=await routineSource(db,routine),bodyAt=was.definition.lastIndexOf(was.body);
+ expect(bodyAt,`${routine}: the body is inside its printed definition`).toBeGreaterThan(0);
+ const opening=was.definition.slice(0,bodyAt),header=opening.replace(/\nAS \$[A-Za-z0-9_]*\$$/u,"");
+ expect(header,`${routine}: the printed definition opens its dollar-quoted body`).not.toBe(opening);
+ let delimiter="$ch7_scratch$";for(let n=1;`${note}\n${was.body}`.includes(delimiter);n++)delimiter=`$ch7_scratch${n}$`;
+ await db.query(`${header}\nAS ${delimiter}\n-- ${note}\n${was.body}${delimiter}`);
+ return {was,now:await routineSource(db,routine)};
+}
 it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
  const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0123_recovery_eligibility_v3_f17_timing.sql");
  expect(oldIndex).toBeGreaterThanOrEqual(0);expect(newIndex).toBeGreaterThan(oldIndex);expect(names).toEqual([...names].sort());
@@ -416,12 +434,22 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
    await client.query("ALTER TABLE app.audit_event ALTER COLUMN event_type TYPE varchar(120)");
    return proofDifferences(client,proof);
   })).toEqual({rows:[],types:["audit_event: event_type character varying(100) -> character varying(120)"]});
-  // (d) a function replaced after 0123 (here the very routine 0123 replaced) must leave it passing.
+  // (d) a function replaced after 0123 (here the very routine 0123 replaced) must leave it passing. The replacement is built from the routine's own header and body
+  // under a delimiter chosen by the test, so it does not rely on how the stored definition is quoted.
+  const routine="app.guard_recovery_eligibility_v3()";
   expect(await rolledBack(upgradeAdmin,async client=>{
-   const routine="app.guard_recovery_eligibility_v3()",was=(await client.query("SELECT pg_get_functiondef($1::regprocedure) AS definition",[routine])).rows[0]!.definition as string;
-   expect(was).toContain("AS $function$");
-   await client.query(was.replace("AS $function$",()=>"AS $function$\n-- scratch control: replaced after 0123\n"));
-   expect((await client.query("SELECT pg_get_functiondef($1::regprocedure) AS definition",[routine])).rows[0]!.definition).not.toBe(was);
+   const {was,now}=await replaceRoutine(client,routine,"scratch control: replaced after 0123");
+   expect(now.definition).not.toBe(was.definition);expect(now.body).toContain("scratch control: replaced after 0123");
+   return proofDifferences(client,proof);
+  })).toEqual({rows:[],types:[]});
+  // (d2) delimiter collision: a legitimate later replacement whose body itself contains "$function$" (so PostgreSQL has to print it back under another delimiter),
+  // and a second replacement made from that definition. Both must leave it passing.
+  expect(await rolledBack(upgradeAdmin,async client=>{
+   const first=await replaceRoutine(client,routine,"scratch control: a later body that itself contains $function$");
+   expect(first.now.definition).not.toBe(first.was.definition);expect(first.now.body).toContain("$function$");
+   expect(first.now.definition,"the collision made PostgreSQL print a different delimiter").not.toContain("AS $function$");
+   const second=await replaceRoutine(client,routine,"scratch control: replaced a second time");
+   expect(second.now.definition).not.toBe(second.was.definition);
    return proofDifferences(client,proof);
   })).toEqual({rows:[],types:[]});
   // (e) a pre-existing row that has gone must fail it: every one of them must still be present.
@@ -438,12 +466,24 @@ it("0123 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
    expect(Object.keys(await proofRows(client,"recovery_claim_line",proof.recovery_claim_line!.names,proof.recovery_claim_line!.pk))).toHaveLength(Object.keys(proof.recovery_claim_line!.rows).length+1);
    return proofDifferences(client,proof);
   })).toEqual({rows:[],types:[]});
+  // (g) a review added after 0123 (a rolled-back copy of the saved one, one revision higher) must leave it passing, and the revision the next review has to be
+  // appended against is read from the database, not assumed.
+  const saved=await currentReviewRevision(upgradeAdmin,c.id);expect(saved).toBeGreaterThanOrEqual(1);
+  const later=await rolledBack(upgradeAdmin,async client=>{
+   await client.query("SET LOCAL session_replication_role=replica");
+   expect((await client.query("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)SELECT $1::uuid,tenant_id,job_id,case_id,revision+1,case_revision,fixture,source_event_id,actor_membership_id,$2::uuid,payload_hash,result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$3 AND case_id=$4 AND revision=$5",[randomUUID(),randomUUID(),T,c.id,saved])).rowCount).toBe(1);
+   expect(Object.keys(await proofRows(client,"recovery_eligibility_v3_review",proof.recovery_eligibility_v3_review!.names,proof.recovery_eligibility_v3_review!.pk))).toHaveLength(Object.keys(proof.recovery_eligibility_v3_review!.rows).length+1);
+   return {revision:await currentReviewRevision(client,c.id),differences:await proofDifferences(client,proof)};
+  });
+  expect(later.differences).toEqual({rows:[],types:[]});expect(later.revision).toBe(saved+1);
   const repo=new RecoveryEligibilityV3Repository(practiceMaterialPool(upgradeRuntime,auth.digest),"synthetic_demo");
-  const corrected=await repo.review(ctx,jobId,review(c,"F17",1),actor,auth.digest);
+  // The corrected review is appended against the revision the database holds now (any review a later migration appended is allowed), and any number of reviews may exist.
+  const current=await currentReviewRevision(upgradeAdmin,c.id);expect(current).toBeGreaterThanOrEqual(saved);
+  const corrected=await repo.review(ctx,jobId,review(c,"F17",current),actor,auth.digest);
   expect(corrected.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"});
-  expect((await upgradeAdmin.query("SELECT count(*)::int n FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND case_id=$2",[T,c.id])).rows).toEqual([{n:2}]);
+  expect(corrected.revision).toBe(current+1);
   expect(await proofDifferences(upgradeAdmin,proof)).toEqual({rows:[],types:[]});
  }finally{
   await closeTestPools(upgradeRuntime,upgradeAdmin);await admin.query(`DROP DATABASE ${database}`);
  }
-},120_000);
+});
