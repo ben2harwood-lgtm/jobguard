@@ -942,3 +942,39 @@ Independent exact-commit RED pair verdicts, separate acceptance, helper/CI runs,
 and dispatcher catch-up/landing renumbering remain owed. Builder receipt only —
 source-inspected and test-executed where labelled; not independently verified,
 not accepted, not released.
+
+## Catch-up and renumber (12 Oct)
+
+Mac-side helper, 12 October 2026, worktree `.worktrees/ent-3a`, branch `codex/sandbox/ent-3a`, starting head 09f063e (clean, local only). Nothing pushed, no PR opened, no review or verdict given, no product code changed beyond the merge and the renumber. Earlier text in this receipt that says 0126 is history and is left as written; the migration is now 0135.
+
+**What was done.**
+1. `git fetch origin`; `git merge origin/main` (b223394) as a plain merge commit `2eed74e` "Merge main (b223394) into ENT-3a". Seven files conflicted and were resolved by keeping both sides, main's lines first: `packages/db/src/migrate.ts` (0127, 0128, 0129, then ENT-3a's entry), `packages/db/src/index.ts`, `packages/db/MIGRATIONS.md` (0127, 0128, 0129 sections, then ENT-3a's), `BUILD_PLAN.md` (§12.2 ledger paragraphs), `apps/api/src/app.module.ts` (import plus `SiteExtraController` added in front of `SsoRequiredController` inside the one `@Module` line), `apps/api/src/workspace/application.ts` (import plus `const siteExtras`, and `siteExtras: Object.freeze({ log: ... })` added after `ssoRequired,` inside the one long `return Object.freeze({...})` line; checked by character diff that the line differs from main's only by that addition). `apps/api/openapi.json` was not hand-merged: main's file was taken, then regenerated with `pnpm openapi:generate` in `apps/api` (91 added lines, the same size as this branch's own addition). `config/agent-lane-assignments.json` and `packages/core/src/index.ts` merged without conflict; the JSON files parse.
+2. Renumber, commit `77a98ab` "chore(ent-3a): renumber migration 0126 to 0135 after main reached 0129; SQL bytes unchanged": `git mv packages/db/migrations/0126_site_extra_authority.sql packages/db/migrations/0135_site_extra_authority.sql`. sha256 of the file before the move and after the move:
+   - before: `1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab`
+   - after:  `1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab` (equal; SQL bytes unchanged)
+   References updated: the registry entry in `packages/db/src/migrate.ts` (last, after 0129), the `packages/db/MIGRATIONS.md` heading and the renumber sentence, `packages/db/test/site-extra-authority.integration.test.ts` (migration name and comments; the upgrade proof already finds the migration by name), the ent-3a lane path in `config/agent-lane-assignments.json` (own line only), and a new §12.2 ledger paragraph in `BUILD_PLAN.md` ("Ledger amendment — ENT-3a, 12 October 2026 (catch-up, merge-ahead ruling)"). `docs/contracts/site-extra-v1.md` names no migration number, so it is unchanged.
+
+**Setup.** Embedded PostgreSQL started without the dyld error, so the hydrate script was not needed. `@jobguard/core`, `db`, `storage`, `config`, `ai` each built alone (exit 0); `@jobguard/db` rebuilt after the renumber; `@jobguard/api` built (exit 0). Every heavy command ran through `heavy-slot`; vitest used `--maxWorkers=2` (db files `--maxWorkers=1`), at most three files per run.
+
+**Commands, exits and counts (run at head 77a98ab, after the renumber).**
+
+| Check | Exit | Result |
+|---|---|---|
+| `pnpm typecheck` | 0 | 7 of 7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | lane boundary passed (lane ent-3a, 26 files, includes `0135_site_extra_authority.sql`); core purity, money arithmetic, 7 of 7 package lints |
+| core `src/site-extra.test.ts` | 0 | 35 passed |
+| db `test/site-extra-authority.integration.test.ts` (includes the [A13] upgrade proof) | 0 | 50 passed |
+| db `test/site-extra.integration.test.ts` | 0 | 25 passed |
+| api `site-extra.application.test.ts`, `site-extra.http.test.ts`, `watchdog-registry.test.ts` | 0 | 3 files, 174 passed |
+| api `src/auth/context-boundary.test.ts` | 0 | 145 passed |
+| `pnpm openapi:check` (apps/api) | 0 | committed openapi.json matches |
+| web `app/api/contractor/jobs/[id]/site-extras/route.test.ts` | 0 | 30 passed |
+| db `test:migrations` files (`tenancy`, `demo-bootstrap`) | 0 | 2 files, 13 passed |
+| db neighbours that install the whole registry: `audit-export`, `extra-origin-upgrade`, `sso-required` | 0 | 3 files, 29 passed |
+| db neighbours: `recovery-timing-pin`, `shadow-persistence`, `recovery-eligibility-v3` | 0 | 3 files, 59 passed |
+
+Two findings worth the next round's attention. (1) The scanner test `context-boundary.test.ts` was expected to go red on ENT-3a's local copy of the context adapter (`contextForContractorSession` in `apps/api/src/contractor/site-extra.application.ts`) and did not: it is 145 of 145 green, so that local copy is not forced out by the scanner and the switch to the shared bridge is still owed as a deliberate builder change. (2) A lane-lint run made while the rename was staged but not yet committed failed with "Lane ent-3a cannot edit 0126_site_extra_authority.sql" because the lint also counts staged deletions; it passes once the renumber is committed (the run above).
+
+In the merge commit alone, `migrate.ts` lists 0126 after 0129 (out of numeric order) by design; the next commit puts it at 0135. The upgrade proof now installs 0127 to 0129 before 0135 (it selects by name from 0122 up to 0135), and it passes.
+
+**NOT run.** The full root `pnpm test`; the full `packages/db` suite (only the files in the table above); the rest of the `apps/api` and `apps/web` suites; `pnpm test:e2e` and any browser run; GitHub CI; the 45-minute CI job; any independent Claude or Sol review of this catch-up. No push, no PR, no deployment, no verdict. Not independently verified, not accepted, not released. Free disk 117 GiB at start, 116 GiB at end.
