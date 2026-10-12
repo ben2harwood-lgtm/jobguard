@@ -649,3 +649,92 @@ The two credential greps from the order, run over `git diff origin/main...HEAD` 
 Lane line: `BUILD_PLAN.md` was added to this piece's OWN lane line only (`config/agent-lane-assignments.json`, key `ent-3a`, first entry of `allow`). The §12.2 ledger paragraph "Ledger amendment — ENT-3a, 11 October 2026 (merge-ahead ruling)" was added to `BUILD_PLAN.md` directly before `### 12.3 The graph`, modelled on the ENT-4b paragraph; it records that ENT-3a is the first part of plan leaf ENT-3 (split 3a-3e adopted 11 October; 3e parked), that it takes 0126, and the founder's ruling of 11 October ("Use that default") on who may record each kind of extra, which governs where §9.1.4's older "Who" column differs.
 
 Helper verification only; not independently reviewed, not accepted.
+
+## Round 1 — repair round 1 of at most 2 (12 October 2026)
+
+Order: `ENT-3a-r1-repair.txt` (integrator, issued 12 October 2026 about 00:30). Work finished on the Mac by a second repair helper (Claude Sonnet) after the first was cut off at about 00:30; this helper re-read the whole order and the uncommitted diff before running anything.
+Local only: no push, no pull request, no GitHub read or write of any kind by this helper (no `gh`, no `git fetch`). Head before this round's commit: `0305fdfc80466688e0a425b84a0e56b056120b91` (merge of `origin/main` `491f86a` into `8408d85`).
+This section records what was changed and run. It reviews and accepts nothing; the same Opus reviewer and a fresh Sol check re-check this round.
+
+**The ruling (quoted from the order).** "Integrator ruling on A15 (a reading of the integrator's own order against merged behaviour; no access rule changes). A15 says every response carries `version` and `code` only and is `no-store`, with the piece's own codes. That binds every response THIS PIECE produces: the web route, the service, and the Nest controller once a request reaches it. Refusals that happen on the Nest transport BEFORE the controller runs are produced by merged code this piece must not change: the framework's body parser (malformed JSON → its own 400) and the merged global guard `apps/api/src/auth/application-auth.guard.ts` (a missing or unacceptable session, or a mode other than the synthetic one → its own 401 `UNAUTHENTICATED`). They keep their merged shape, exactly as for the merged contractor controllers (for example `scheduling.controller.ts`), and they fail closed: no handler runs and nothing is written. The piece is NOT to exempt its route from the global guard, add a global filter, or register middleware that changes how other routes answer. A15 is amended to say so."
+
+| Item | Status | One line |
+|---|---|---|
+| R1-1 (A15 tests and contract) | DONE | new `apps/api/src/contractor/site-extra.http.test.ts` (13 tests, real Nest pipeline); contract paragraph added; sentence corrected; no product change |
+| R1-2 (A20 six database files) | DONE | six merged files, unedited, 3 + 3 files, 80 + 23 tests passed; run on the merged tree before this round's edits; nothing under `packages/db` changed since (see below) |
+| R1-3 (browser evidence) | DONE, one known failure | production build, then `ENT-2.spec.ts` and `ENT-10b.spec.ts`, both projects: 5 passed, 1 failed, the failure is the known `ENT-2.spec.ts:105` (mobile-360) |
+| R1-4 (marker constant) | DONE | constant renamed and rebuilt from parts; behaviour unchanged (unit file 33/33 still passes) |
+| R1-5 (catch-up merge) | DONE | merge commit `0305fdf`, parents `8408d85` and `491f86a`; merge only |
+
+### R1-1 — what the new test pins (each case also asserts the application service, the session lookup, the repository write, `Pool.prototype.query` and `Pool.prototype.connect` were never called, where the request is refused before them)
+
+The test builds the real application module (`AppModule`, with the merged global guard and the framework body parser) and sends real HTTP requests to `POST /contractor/jobs/:id/site-extras`. `Pool.prototype.query` and `.connect` are replaced by functions that reject, and spied, so any database statement would both fail and be counted. Because this runner does not emit decorator metadata, the controller's `Pool` parameter is declared by hand in the test with `Inject(Pool)(SiteExtraController, undefined, 0)`, the same way `app.module.ts` declares it for `DecisionsController`; no product file was changed for this. The request uses a socket on 127.0.0.1, so it runs on the Mac only.
+
+- (a) malformed JSON, valid cookie and Origin: HTTP 400, body has `statusCode: 400` and `error: "Bad Request"` and a text `message`, no `version`, no `code`, no `Cache-Control`; nothing ran. The message is the parser's own text and can quote a few characters of the bad body (noted in the contract).
+- (b) no session cookie: HTTP 401, body exactly `{"code":"UNAUTHENTICATED"}` (the guard's), no `Cache-Control`; nothing ran. A cookie that is not a synthetic session identifier: the same 401.
+- (c) mode `pilot_no_charge`, `production_billing`, an empty mode and an unset mode, each with a valid session, valid Origin and valid body: **HTTP 401 `{"code":"UNAUTHENTICATED"}`, not 403**; no `Cache-Control`; nothing ran.
+- (d) foreign Origin, missing Origin, and Origin `null`, each with a valid session: HTTP 403, body exactly `{"version":"site-extra-error.v1","code":"ORIGIN_FORBIDDEN"}`, `Cache-Control: no-store`; nothing ran.
+- (e) three requests that reach the controller and are refused by the piece, each with `Cache-Control: no-store` and a body of exactly `version` and `code`: unknown job (`NOT_FOUND`, 404, the repository write is made to refuse); a body that breaks the strict schema (`INVALID_COMMAND`, 400, no repository write); a session the database does not know (`UNAUTHENTICATED`, 401, a different body from the guard's, `{"version":"site-extra-error.v1","code":"UNAUTHENTICATED"}`).
+
+The first helper's throwaway observation tests (kept outside the repository, `~/.local/share/full-steam/jg-runs/ent-3a-mac-scratch/` and `ent-3a-mac-http-observed*.json`) show the same shapes in every mode; the committed test pins them.
+
+**Contract, `docs/contracts/site-extra-v1.md` (the only other files touched: this receipt and the lane line).**
+Sentence corrected. Before: "Both call the same application through `createWorkspaceApplication`; the Next adapter imports `server-only`." After: "Both run the same `SiteExtraApplication`: the Next adapter reaches it through `createWorkspaceApplication` (and imports `server-only`); the Nest controller builds it directly from its injected pool (`new SiteExtraApplication(pool)`), as the merged contractor controllers do."
+Paragraph added under the new heading "Refusals before the controller (Nest transport)": it states the ruling in plain words, the two merged refusals and their exact shapes, that both fail closed, and that the piece adds no exemption, filter or middleware. One more small edit: the older paragraph that began "**HELD transport requirement:**" now reads "**HELD transport requirement (superseded by the 12 October ruling below):**", so the contract no longer says A15 is partial without saying why that is replaced. Its text is otherwise unchanged.
+Lane line (`config/agent-lane-assignments.json`, key `ent-3a`): `apps/api/src/contractor/site-extra.http.test.ts` added to this piece's own `allow` list, directly after `site-extra.application.test.ts`. No other lane line was touched.
+
+### R1-2 — the six database files
+
+Logs `ent-3a-mac-r1-db4.log` (`shared-money-origin.integration.test.ts`, `work-order-import.integration.test.ts`, `contractor.integration.test.ts`: 3 files, 80 tests passed, exit 0, 00:29) and `ent-3a-mac-r1-db5.log` (`job-scheduling.integration.test.ts`, `recovery-follow-up-upgrade.integration.test.ts`, `audit-export.integration.test.ts`: 3 files, 23 tests passed, exit 0, 00:30), both run by the first helper from `packages/db` with `--maxWorkers=2` through heavy-slot, one run at a time, unedited, on real embedded PostgreSQL with migration 0126 in the migration list (`packages/db/src/migrate.ts`, line 68). They were run on the merged tree (merge commit `0305fdf`, 00:25), before the uncommitted edits of this round. Checked by this helper: `git diff HEAD -- packages/db` is empty, no file under `packages/db` is newer than those logs, and none of the six files differs from `origin/main` (`git diff 491f86a HEAD --stat -- packages/db` lists only this piece's own eight files). So the logs predate the final tree, nothing under `packages/db` changed after them, and they were NOT repeated by this helper.
+
+### R1-3 — browser evidence
+
+Production build first, alone (run 6 below). Then both specs in one run, both projects, `--workers=1`, with `CI=1` so the repository's own Playwright config starts the web server with `next start` (the production build) instead of `pnpm dev`, through an out-of-repo wrapper config (`~/.local/share/full-steam/jg-runs/pw-local-channel-ent-3a.config.ts`; it imports the repo's `apps/web/playwright.config` and sets `channel: "chromium"` for every project because `chromium_headless_shell-1193` is not installed here; nothing added to the repo). Result: 6 tests, 5 passed, 1 failed. The one failure is `[mobile-360] e2e/ENT-2.spec.ts:19:5`, at `ENT-2.spec.ts:105:36`, `expect(await noSideScroll(page)).toBe(true)` received `false` — the known mobile-360 "no sideways scroll" failure the order says is not a finding. The six tests are `ENT-2.spec.ts:19` and `ENT-2.spec.ts:113` and `ENT-10b.spec.ts:5`, each in the two projects. Passed: `ENT-2.spec.ts:19` desktop, `ENT-2.spec.ts:113` in both projects, `ENT-10b.spec.ts:5` in both projects. Log `ent-3a-mac-r1b-e2e-prod.log`. No other failure.
+
+### R1-4 — the marker constant (`apps/api/src/contractor/site-extra.application.ts`)
+
+Before (as committed in `968ad93`, line 14, and used on the two lines that follow it):
+```text
+ const credential = "ent3a-internal-bridge" + "-credential";
+  authenticate: async value => value === sessionId ? { identityUserId: member.identityUserId, sessionId, csrfToken: credential } : undefined,
+ return resolveVerifiedTenantContext(provider, { sessionToken: sessionId, requestedTenantId: member.tenantId, csrfToken: credential, origin }, origin);
+```
+After:
+```text
+ // Opaque and internal: it is only compared with itself by the bridge, which requires at least 24 characters.
+ const bridgeMarker = ["ent3a", "internal", "bridge", "marker", "value"].join("-");
+  authenticate: async value => value === sessionId ? { identityUserId: member.identityUserId, sessionId, csrfToken: bridgeMarker } : undefined,
+ return resolveVerifiedTenantContext(provider, { sessionToken: sessionId, requestedTenantId: member.tenantId, csrfToken: bridgeMarker, origin }, origin);
+```
+The earlier form remains in the first commit (`968ad93`) and in this branch's history; nothing was rewritten. The new value is 34 characters; the bridge's schema requires at least 24 (`apps/api/src/auth/auth-schemas.ts`, `csrfToken: z.string().min(24)`), so behaviour is unchanged. The only remaining occurrences of the words token in that file are the merged interface's own property names (`csrfToken`, `sessionToken`), which cannot be renamed here. The unit test does not name the constant (it reads `credentials` from the merged bridge call), so no unit test needed editing; `site-extra.application.test.ts` passes 33/33 unchanged.
+Scans run over the added lines of `git diff origin/main...HEAD`, over `git diff HEAD`, and over the new untracked test file: (1) a word ending in key, token, secret or password followed by a colon or equals sign and a quoted literal of ten or more characters; (2) any address that carries a user name and a password in front of the host. All printed nothing. One thing a stricter reader may notice: the new test builds the identity application's code-signing setting name from parts (`["AUTH", "CODE", "SECRET"].join("_")`) and fills it with a random value generated at run time; no literal is written beside the word.
+
+### R1-5 — catch-up
+
+Done before this helper started (first helper, 00:25): merge commit `0305fdf`, parents `8408d85` and `491f86a`. This helper did not fetch or merge again. Note for the integrator: the local `origin/main` ref in this worktree now reads `459ec87` (a later main, PR #118; changed by something other than this helper). This branch contains `491f86a` and not `459ec87`. `LANE_BASE_REF=origin/main` still passes (below).
+
+### Commands, exactly as run
+
+Worktree `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3a`; node v24.17.0, pnpm 10.28.1. `memory_pressure | tail -1` printed 77% free before the first command and 82% before the heavy ones. Every command ran inside `~/.local/bin/heavy-slot <label> ...`, one at a time, never a build and a test together. Every vitest command used `--maxWorkers=2`. Unlike the earlier section, `VITEST_MAX_THREADS` and `VITEST_MAX_FORKS` were not set (the flag is what limits the vitest 4 runner); no `playwright install`. Logs: `~/.local/share/full-steam/jg-runs/ent-3a-mac-r1b-<name>.log`.
+
+| # | Working directory | Command line (label `ent-3a-mac-r1b-<name>`) | Exit | Result |
+|---|---|---|---|---|
+| 1 | `apps/api` | `heavy-slot ... pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/site-extra.http.test.ts src/contractor/site-extra.application.test.ts` (log `http-unit-api`) | 0 | 2 files passed; 46 tests (13 http + 33 unit) |
+| 2 | `packages/core` | `heavy-slot ... pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/site-extra.test.ts` (log `unit-core`) | 0 | 1 file, 35 tests passed |
+| 3 | `apps/web` | `heavy-slot ... pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/contractor/jobs/[id]/site-extras/route.test.ts'` (log `unit-web`) | 0 | 1 file, 27 tests passed |
+| 4 | worktree | `heavy-slot ... pnpm typecheck --concurrency=2` (log `typecheck`) | 0 | 7 tasks successful (4 replayed from the turbo cache, `api`, `db` and `web` re-executed) |
+| 5 | worktree | `LANE_BASE_REF=origin/main heavy-slot ... pnpm lint` (log `lint`) | 0 | core purity (131 files), lane boundary (lane `ent-3a`, includes the new test file), money-arithmetic check, and `turbo run lint` 7 tasks successful |
+| 6 | worktree | `LANE_BASE_REF=origin/main pnpm lint:lanes` (log `lanes`) | 0 | lane boundary passed, lane `ent-3a`, 25 files including `site-extra.http.test.ts` |
+| 7 | worktree | `heavy-slot ... pnpm build` (log `build`; alone, before any browser run) | 0 | 7 tasks successful (4 cached), `next build` of `apps/web` completed |
+| 8 | `apps/web` | `CI=1 heavy-slot ... pnpm exec playwright test --config ~/.local/share/full-steam/jg-runs/pw-local-channel-ent-3a.config.ts --project=mobile-360 --project=desktop --workers=1 ENT-2.spec.ts ENT-10b.spec.ts` (log `e2e-prod`) | 1 | 6 tests: 5 passed, 1 failed (known `ENT-2.spec.ts:105`, mobile-360) |
+| 9 | `apps/web` | `CI=1 pnpm exec playwright test --config <same wrapper config> --project=mobile-360 --project=desktop --list ENT-2.spec.ts ENT-10b.spec.ts` (listing only, to name the six tests; starts no browser or server, not through heavy-slot) | 0 | `Total: 6 tests in 2 files` |
+| — | worktree | six database files: not re-run; logs `ent-3a-mac-r1-db4.log` (exit 0, 3 files, 80 tests) and `ent-3a-mac-r1-db5.log` (exit 0, 3 files, 23 tests) cited under R1-2 | — | — |
+
+### NOT RUN in this round
+
+- The six R1-2 database files were not repeated on the final tree (cited above; nothing under `packages/db` changed after them).
+- `apps/api/src/auth/context-boundary.test.ts` and `apps/api/src/audit-export/audit-export.application.test.ts` were not re-run this round (the earlier section's run 13 covers them; neither file, nor the global guard, was touched).
+- The development-server mode of the browser specs (`pnpm dev`, no `CI`), the other `apps/web/e2e` specs, `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, `openapi:check` (no route or schema changed), and the full CI on a pushed branch.
+- Nothing was pushed or fetched; no pull request; no review by Opus or Sol was run by this helper.
+
+Round 1 builder/helper receipt only — not independently verified, not accepted.

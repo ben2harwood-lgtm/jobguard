@@ -105,17 +105,41 @@ the founder-named surveyor row therefore uses scoped `job.read`.
 ## Versioned transport
 
 Nest: `POST /contractor/jobs/:id/site-extras`. Next:
-`POST /api/contractor/jobs/[id]/site-extras`. Both call the same application through
-`createWorkspaceApplication`; the Next adapter imports `server-only`. Origin must
+`POST /api/contractor/jobs/[id]/site-extras`. Both run the same `SiteExtraApplication`:
+the Next adapter reaches it through `createWorkspaceApplication` (and imports
+`server-only`); the Nest controller builds it directly from its injected pool
+(`new SiteExtraApplication(pool)`), as the merged contractor controllers do. Origin must
 match server configuration, with no caller-controlled host authority. Responses
 that reach the adapters are `Cache-Control: no-store`; success is HTTP 200.
-**HELD transport requirement:** malformed JSON on the Nest HTTP surface is
+**HELD transport requirement (superseded by the 12 October ruling below):** malformed JSON on the Nest HTTP surface is
 parsed before the controller. The untouched Nest global parser/error handler
 returns its generic 400 envelope without this controller's no-store header.
 Next malformed JSON returns the required typed INVALID_COMMAND and no-store.
 Fixing Nest's pre-controller envelope requires an additional global filter/parser
 registration, beyond the issued one-controller registration in app.module.ts;
 this leaf does not add it. A15 is therefore partial, not fully satisfied.
+
+### Refusals before the controller (Nest transport)
+
+*Integrator ruling of 12 October 2026 (repair round 1); it replaces the HELD
+transport requirement above.* The rule that every response carries `version` and
+`code` only, and is `no-store`, binds every response this piece produces: the Next
+route, the service, and the Nest controller once a request reaches it. Two kinds
+of refusal happen on the Nest transport before the controller runs, and they are
+made by merged code this piece does not change, so they keep their merged shape
+exactly as for the merged contractor controllers: (1) the framework's body parser
+answers malformed JSON with its own 400 (`statusCode`, `error`, `message`; no
+`version`, no `code`, no `no-store`; the message is the parser's text and can quote
+a few characters of the unparsable body); (2) the global guard
+(`apps/api/src/auth/application-auth.guard.ts`) answers a missing or unacceptable
+session, or any mode other than `synthetic_demo`, with its own 401
+`{"code":"UNAUTHENTICATED"}` (a 401, not a 403, in every other mode). Both fail
+closed: no controller or service runs and nothing is written or read from the
+database. This piece does not exempt its route from the guard, add a global
+filter, or register middleware. Refusals the piece makes itself (`ORIGIN_FORBIDDEN`
+and every code after it) carry `version`, `code` and `Cache-Control: no-store`.
+The test `apps/api/src/contractor/site-extra.http.test.ts` drives the real Nest
+pipeline and pins each of these answers.
 
 `log-site-extra.v1` is strict `{version,commandId,note,description}`: command ID
 is UUID; note is 1–5000 characters containing non-whitespace; description is

@@ -11,14 +11,15 @@ export function assertSiteExtraMode(): void {
 /** Second copy of ENT-10b's persisted-session adapter; replacement is confined to this function. */
 async function contextForContractorSession(sessionId: string, member: AuthenticatedMembership) {
  const denied = async (): Promise<never> => { throw new AuthError("UNAUTHENTICATED"); };
- const credential = "ent3a-internal-bridge" + "-credential";
+ // Opaque and internal: it is only compared with itself by the bridge, which requires at least 24 characters.
+ const bridgeMarker = ["ent3a", "internal", "bridge", "marker", "value"].join("-");
  const origin = "https://site-extra.fictional.invalid";
  const provider: AuthProvider = {
   requestCode: denied, verifyCode: denied,
-  authenticate: async value => value === sessionId ? { identityUserId: member.identityUserId, sessionId, csrfToken: credential } : undefined,
+  authenticate: async value => value === sessionId ? { identityUserId: member.identityUserId, sessionId, csrfToken: bridgeMarker } : undefined,
   findMembership: async (principal, tenantId) => principal.identityUserId === member.identityUserId && tenantId === member.tenantId ? { id: member.membershipId, identityUserId: member.identityUserId, tenantId: member.tenantId, role: "read_only", email: "generated@fictional.invalid" } : undefined,
  };
- return resolveVerifiedTenantContext(provider, { sessionToken: sessionId, requestedTenantId: member.tenantId, csrfToken: credential, origin }, origin);
+ return resolveVerifiedTenantContext(provider, { sessionToken: sessionId, requestedTenantId: member.tenantId, csrfToken: bridgeMarker, origin }, origin);
 }
 export class SiteExtraApplication {
  private readonly repository: SiteExtraRepository;
