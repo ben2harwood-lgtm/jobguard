@@ -1,0 +1,149 @@
+diff --git a/apps/api/openapi.json b/apps/api/openapi.json
+index 8d2139c..5c588bc 100644
+--- a/apps/api/openapi.json
++++ b/apps/api/openapi.json
+@@ -3,0 +4,67 @@
++    "/auth/scim/{connectionId}/deactivations": {
++      "post": {
++        "operationId": "ScimController_deactivate",
++        "parameters": [],
++        "requestBody": {
++          "required": true,
++          "content": {
++            "application/json": {
++              "schema": {
++                "type": "object",
++                "required": [
++                  "version",
++                  "eventId",
++                  "subject",
++                  "active"
++                ],
++                "additionalProperties": false,
++                "properties": {
++                  "version": {
++                    "type": "string",
++                    "enum": [
++                      "scim-deactivation.v1"
++                    ]
++                  },
++                  "eventId": {
++                    "type": "string",
++                    "format": "uuid"
++                  },
++                  "subject": {
++                    "type": "string",
++                    "minLength": 1,
++                    "maxLength": 200
++                  },
++                  "active": {
++                    "type": "boolean",
++                    "enum": [
++                      false
++                    ]
++                  }
++                }
++              }
++            }
++          }
++        },
++        "responses": {
++          "200": {
++            "description": "scim-deactivation-result.v1; deactivated, ignored or owner protected; synthetic only"
++          },
++          "400": {
++            "description": "INVALID_SCIM_INPUT"
++          },
++          "403": {
++            "description": "SCIM_REFUSED; identical for every unproved caller"
++          },
++          "409": {
++            "description": "SCIM_EVENT_CONFLICT"
++          },
++          "503": {
++            "description": "SCIM_UNAVAILABLE; no deactivation committed"
++          }
++        },
++        "summary": "Record a proved synthetic provider deactivation and immediately revoke company access",
++        "tags": [
++          "scim"
++        ]
++      }
++    },
+diff --git a/apps/api/src/app.module.ts b/apps/api/src/app.module.ts
+index fcf9a02..66058c5 100644
+--- a/apps/api/src/app.module.ts
++++ b/apps/api/src/app.module.ts
+@@ -0,0 +1 @@
++import { ScimController, SCIM_APPLICATION } from "./auth/sso/scim.controller.js";
+@@ -59 +60 @@ Inject(Pool)(DecisionsController, undefined, 0);
+-@Module({ controllers: [SsoRequiredController,SsoController,AuditExportController,RecoveryFollowUpController,RecoveryMessageController,PreventionCheckController,HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController,ContractorController,ContractorPartiesController,WorkOrderController,SchedulingController,JobPartiesController,JobPartiesListController,PracticeFeedController,IdentityController,PracticeFactsController], providers:[{provide:SSO_REQUIRED_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).ssoRequired!,inject:[Pool,IDENTITY_APPLICATION]},{provide:SSO_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).sso!,inject:[Pool,IDENTITY_APPLICATION]},{provide:APP_FILTER,useClass:WatchdogExceptionFilter},{provide:APP_FILTER,useClass:PracticeErrorsFilter},{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,{provide:IDENTITY_APPLICATION,useFactory:()=>{let application:IdentityApplication|undefined;return ()=>application??=createIdentityApplication(process.env)}},{provide:APP_GUARD,useClass:ApplicationAuthGuard}] })
++@Module({ controllers: [ScimController,SsoRequiredController,SsoController,AuditExportController,RecoveryFollowUpController,RecoveryMessageController,PreventionCheckController,HealthController,CaptureController,WorkspaceController,SandboxController,QuoteController,VariationController,DecisionsController,ProofController,FeeIllustrationController,FinalAccountController,CustomerInvoiceController,MaterialController,ValueController,PurchaseOrderController,SupplierDocumentController,SupplierMatchController,RecoveryCaseController,ThingsToCheckController,ReadinessController,InboxRelevanceController,CommercialIntegrityController,EvidencePackController,ContractorController,ContractorPartiesController,WorkOrderController,SchedulingController,JobPartiesController,JobPartiesListController,PracticeFeedController,IdentityController,PracticeFactsController], providers:[{provide:SCIM_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).scim!,inject:[Pool,IDENTITY_APPLICATION]},{provide:SSO_REQUIRED_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).ssoRequired!,inject:[Pool,IDENTITY_APPLICATION]},{provide:SSO_APPLICATION,useFactory:(pool:Pool,identity:()=>IdentityApplication)=>()=>createWorkspaceApplication({pool,identity:identity()}).sso!,inject:[Pool,IDENTITY_APPLICATION]},{provide:APP_FILTER,useClass:WatchdogExceptionFilter},{provide:APP_FILTER,useClass:PracticeErrorsFilter},{provide:Pool,useFactory:()=>new Pool({connectionString:process.env.DATABASE_URL})},{provide:CaptureRepository,useFactory:(pool:Pool)=>new CaptureRepository(pool),inject:[Pool]},{provide:SandboxRepository,useFactory:(pool:Pool)=>new SandboxRepository(pool),inject:[Pool]},{provide:WorkspaceService,useFactory:(pool:Pool)=>new WorkspaceService(pool),inject:[Pool]},{provide:SandboxService,useFactory:(repository:SandboxRepository)=>new SandboxService(repository),inject:[SandboxRepository]},CaptureService,{provide:IDENTITY_APPLICATION,useFactory:()=>{let application:IdentityApplication|undefined;return ()=>application??=createIdentityApplication(process.env)}},{provide:APP_GUARD,useClass:ApplicationAuthGuard}] })
+diff --git a/apps/api/src/workspace/application.ts b/apps/api/src/workspace/application.ts
+index dd56478..899cc07 100644
+--- a/apps/api/src/workspace/application.ts
++++ b/apps/api/src/workspace/application.ts
+@@ -0,0 +1,3 @@
++import { ScimApplication } from "../auth/sso/scim.application.js";
++import { scimSeed } from "../auth/sso/scim.contracts.js";
++import { ScimRepository } from "@jobguard/db";
+@@ -45,0 +49 @@ export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId
++  const scim = dependencies.identity ? new ScimApplication(new ScimRepository(dependencies.identity.provider.repository.pool), ssoDeploymentMode(process.env.JOBGUARD_ENV), scimSeed(process.env.JOBGUARD_SCIM_SYNTHETIC_SEED)) : undefined;
+@@ -78 +82 @@ export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId
+-  return Object.freeze({ ssoRequired, sso, auditExports:Object.freeze({list:()=>auditExports.list(dependencies.sessionId),create:(raw:unknown)=>auditExports.create(dependencies.sessionId,raw)}), practiceFacts:Object.freeze({view:practiceFacts.view.bind(practiceFacts),command:practiceFacts.command.bind(practiceFacts)}), workOrders:Object.freeze({overview:()=>workOrders.overview(contractorPrincipal),importGenerated:(raw:unknown)=>workOrders.importGenerated(contractorPrincipal,raw),batch:(batchId:string)=>workOrders.batch(contractorPrincipal,batchId),revisions:(workOrderId:string)=>workOrders.revisions(contractorPrincipal,workOrderId),sorVersions:()=>workOrders.sorVersions(contractorPrincipal),importSorVersion:(raw:unknown)=>workOrders.importSorVersion(contractorPrincipal,raw)}), scheduling:Object.freeze({assignments:(jobId:string)=>scheduling.assignments(contractorPrincipal,jobId),siteVisits:(jobId:string)=>scheduling.siteVisits(contractorPrincipal,jobId)}), recoveryMessages:Object.freeze({read:recoveryMessages.read.bind(recoveryMessages),preview:recoveryMessages.preview.bind(recoveryMessages),command:recoveryMessages.command.bind(recoveryMessages),failure:recoveryMessageFailure}), recoveryFollowUps:Object.freeze({read:recoveryFollowUps.read.bind(recoveryFollowUps),schedule:recoveryFollowUps.schedule.bind(recoveryFollowUps),command:recoveryFollowUps.command.bind(recoveryFollowUps),failure:recoveryFollowUpFailure}), practiceFeed:Object.freeze({view:practiceFeed.view.bind(practiceFeed),command:practiceFeed.command.bind(practiceFeed)}), preventionChecks:Object.freeze({view:preventionChecks.view.bind(preventionChecks),command:preventionChecks.command.bind(preventionChecks)}), parties:Object.freeze({list:parties.list.bind(parties),view:parties.view.bind(parties),command:parties.command.bind(parties),adopt:parties.adopt.bind(parties)}), evidencePacks:Object.freeze({list:evidencePacks.list.bind(evidencePacks),generate:evidencePacks.generate.bind(evidencePacks),approveAttachment:evidencePacks.approveAttachment.bind(evidencePacks),inspect:evidencePacks.inspect.bind(evidencePacks),download:evidencePacks.download.bind(evidencePacks),failure:evidencePackFailure}), inboxRelevance:Object.freeze({view:inboxRelevance.view.bind(inboxRelevance),seed:inboxRelevance.seed.bind(inboxRelevance),budget:inboxRelevance.budget.bind(inboxRelevance),dismiss:inboxRelevance.dismiss.bind(inboxRelevance)}), readiness:Object.freeze({view:readiness.view.bind(readiness),record:readiness.record.bind(readiness),advance:readiness.advance.bind(readiness)}), thingsToCheck:Object.freeze({view:thingsToCheck.view.bind(thingsToCheck),evaluate:thingsToCheck.evaluate.bind(thingsToCheck),review:thingsToCheck.review.bind(thingsToCheck),supersede:thingsToCheck.supersede.bind(thingsToCheck)}), supplierMatches:Object.freeze({view:supplierMatches.view.bind(supplierMatches),create:supplierMatches.create.bind(supplierMatches),correct:supplierMatches.correct.bind(supplierMatches)}), recoveryCases:Object.freeze({list:recoveryCases.list.bind(recoveryCases),command:recoveryCases.command.bind(recoveryCases),eligibility:recoveryCases.eligibility.bind(recoveryCases)}), supplierDocuments:Object.freeze({view:supplierDocuments.view.bind(supplierDocuments),intake:supplierDocuments.intake.bind(supplierDocuments),receipt:supplierDocuments.receipt.bind(supplierDocuments),confirm:supplierDocuments.confirm.bind(supplierDocuments)}), purchaseOrders:Object.freeze({view:purchaseOrders.view.bind(purchaseOrders),revise:purchaseOrders.revise.bind(purchaseOrders),place:purchaseOrders.place.bind(purchaseOrders)}), materials:Object.freeze({view:materials.view.bind(materials),addRate:materials.addRate.bind(materials),addRequirement:materials.addRequirement.bind(materials)}), value:Object.freeze({read:value.read.bind(value)}), customerInvoice:Object.freeze({get:customerInvoice.get.bind(customerInvoice),issue:customerInvoice.issue.bind(customerInvoice),pdf:customerInvoice.pdf.bind(customerInvoice),creditView:customerInvoice.creditView.bind(customerInvoice),previewCredit:customerInvoice.previewCredit.bind(customerInvoice),issueCredit:customerInvoice.issueCredit.bind(customerInvoice),receiptView:customerInvoice.receiptView.bind(customerInvoice),recordReceipt:customerInvoice.recordReceipt.bind(customerInvoice),reverseReceipt:customerInvoice.reverseReceipt.bind(customerInvoice)}), finalAccount:Object.freeze({get:finalAccount.get.bind(finalAccount),build:finalAccount.build.bind(finalAccount)}), proof:Object.freeze({get:proof.get.bind(proof),command:proof.command.bind(proof)}), fees:Object.freeze({read:fees.read.bind(fees),create:fees.create.bind(fees),whatIf:fees.whatIf.bind(fees)}), recovery:Object.freeze({read:recovery.read.bind(recovery),select:recovery.select.bind(recovery),approve:recovery.approve.bind(recovery)}), decisions:Object.freeze({list:decisions.list.bind(decisions),evaluate:decisions.evaluate.bind(decisions),dismiss:decisions.dismiss.bind(decisions)}), jobs: Object.freeze({ get: jobs.getJob.bind(jobs) }), capture:Object.freeze({create:capture.capture.bind(capture),get:capture.view.bind(capture),save:capture.save.bind(capture),confirm:capture.confirm.bind(capture)}),quote:Object.freeze({get:quote.get.bind(quote),save:quote.save.bind(quote),preview:quote.preview.bind(quote),issue:quote.issue.bind(quote),deliveryView:quote.deliveryView.bind(quote),execute:quote.execute.bind(quote),pdf:quote.pdf.bind(quote),acceptanceView:quote.acceptanceView.bind(quote),accept:quote.accept.bind(quote),disposition:quote.disposition.bind(quote),activationView:quote.activationView.bind(quote),activate:quote.activate.bind(quote)}),variation:Object.freeze({get:variation.get.bind(variation),command:variation.command.bind(variation)}), sandbox:Object.freeze({create:sandbox.create.bind(sandbox),get:sandbox.get.bind(sandbox),reset:sandbox.reset.bind(sandbox),archive:sandbox.archive.bind(sandbox),advance:sandbox.advance.bind(sandbox)}) });
++  return Object.freeze({ scim, ssoRequired, sso, auditExports:Object.freeze({list:()=>auditExports.list(dependencies.sessionId),create:(raw:unknown)=>auditExports.create(dependencies.sessionId,raw)}), practiceFacts:Object.freeze({view:practiceFacts.view.bind(practiceFacts),command:practiceFacts.command.bind(practiceFacts)}), workOrders:Object.freeze({overview:()=>workOrders.overview(contractorPrincipal),importGenerated:(raw:unknown)=>workOrders.importGenerated(contractorPrincipal,raw),batch:(batchId:string)=>workOrders.batch(contractorPrincipal,batchId),revisions:(workOrderId:string)=>workOrders.revisions(contractorPrincipal,workOrderId),sorVersions:()=>workOrders.sorVersions(contractorPrincipal),importSorVersion:(raw:unknown)=>workOrders.importSorVersion(contractorPrincipal,raw)}), scheduling:Object.freeze({assignments:(jobId:string)=>scheduling.assignments(contractorPrincipal,jobId),siteVisits:(jobId:string)=>scheduling.siteVisits(contractorPrincipal,jobId)}), recoveryMessages:Object.freeze({read:recoveryMessages.read.bind(recoveryMessages),preview:recoveryMessages.preview.bind(recoveryMessages),command:recoveryMessages.command.bind(recoveryMessages),failure:recoveryMessageFailure}), recoveryFollowUps:Object.freeze({read:recoveryFollowUps.read.bind(recoveryFollowUps),schedule:recoveryFollowUps.schedule.bind(recoveryFollowUps),command:recoveryFollowUps.command.bind(recoveryFollowUps),failure:recoveryFollowUpFailure}), practiceFeed:Object.freeze({view:practiceFeed.view.bind(practiceFeed),command:practiceFeed.command.bind(practiceFeed)}), preventionChecks:Object.freeze({view:preventionChecks.view.bind(preventionChecks),command:preventionChecks.command.bind(preventionChecks)}), parties:Object.freeze({list:parties.list.bind(parties),view:parties.view.bind(parties),command:parties.command.bind(parties),adopt:parties.adopt.bind(parties)}), evidencePacks:Object.freeze({list:evidencePacks.list.bind(evidencePacks),generate:evidencePacks.generate.bind(evidencePacks),approveAttachment:evidencePacks.approveAttachment.bind(evidencePacks),inspect:evidencePacks.inspect.bind(evidencePacks),download:evidencePacks.download.bind(evidencePacks),failure:evidencePackFailure}), inboxRelevance:Object.freeze({view:inboxRelevance.view.bind(inboxRelevance),seed:inboxRelevance.seed.bind(inboxRelevance),budget:inboxRelevance.budget.bind(inboxRelevance),dismiss:inboxRelevance.dismiss.bind(inboxRelevance)}), readiness:Object.freeze({view:readiness.view.bind(readiness),record:readiness.record.bind(readiness),advance:readiness.advance.bind(readiness)}), thingsToCheck:Object.freeze({view:thingsToCheck.view.bind(thingsToCheck),evaluate:thingsToCheck.evaluate.bind(thingsToCheck),review:thingsToCheck.review.bind(thingsToCheck),supersede:thingsToCheck.supersede.bind(thingsToCheck)}), supplierMatches:Object.freeze({view:supplierMatches.view.bind(supplierMatches),create:supplierMatches.create.bind(supplierMatches),correct:supplierMatches.correct.bind(supplierMatches)}), recoveryCases:Object.freeze({list:recoveryCases.list.bind(recoveryCases),command:recoveryCases.command.bind(recoveryCases),eligibility:recoveryCases.eligibility.bind(recoveryCases)}), supplierDocuments:Object.freeze({view:supplierDocuments.view.bind(supplierDocuments),intake:supplierDocuments.intake.bind(supplierDocuments),receipt:supplierDocuments.receipt.bind(supplierDocuments),confirm:supplierDocuments.confirm.bind(supplierDocuments)}), purchaseOrders:Object.freeze({view:purchaseOrders.view.bind(purchaseOrders),revise:purchaseOrders.revise.bind(purchaseOrders),place:purchaseOrders.place.bind(purchaseOrders)}), materials:Object.freeze({view:materials.view.bind(materials),addRate:materials.addRate.bind(materials),addRequirement:materials.addRequirement.bind(materials)}), value:Object.freeze({read:value.read.bind(value)}), customerInvoice:Object.freeze({get:customerInvoice.get.bind(customerInvoice),issue:customerInvoice.issue.bind(customerInvoice),pdf:customerInvoice.pdf.bind(customerInvoice),creditView:customerInvoice.creditView.bind(customerInvoice),previewCredit:customerInvoice.previewCredit.bind(customerInvoice),issueCredit:customerInvoice.issueCredit.bind(customerInvoice),receiptView:customerInvoice.receiptView.bind(customerInvoice),recordReceipt:customerInvoice.recordReceipt.bind(customerInvoice),reverseReceipt:customerInvoice.reverseReceipt.bind(customerInvoice)}), finalAccount:Object.freeze({get:finalAccount.get.bind(finalAccount),build:finalAccount.build.bind(finalAccount)}), proof:Object.freeze({get:proof.get.bind(proof),command:proof.command.bind(proof)}), fees:Object.freeze({read:fees.read.bind(fees),create:fees.create.bind(fees),whatIf:fees.whatIf.bind(fees)}), recovery:Object.freeze({read:recovery.read.bind(recovery),select:recovery.select.bind(recovery),approve:recovery.approve.bind(recovery)}), decisions:Object.freeze({list:decisions.list.bind(decisions),evaluate:decisions.evaluate.bind(decisions),dismiss:decisions.dismiss.bind(decisions)}), jobs: Object.freeze({ get: jobs.getJob.bind(jobs) }), capture:Object.freeze({create:capture.capture.bind(capture),get:capture.view.bind(capture),save:capture.save.bind(capture),confirm:capture.confirm.bind(capture)}),quote:Object.freeze({get:quote.get.bind(quote),save:quote.save.bind(quote),preview:quote.preview.bind(quote),issue:quote.issue.bind(quote),deliveryView:quote.deliveryView.bind(quote),execute:quote.execute.bind(quote),pdf:quote.pdf.bind(quote),acceptanceView:quote.acceptanceView.bind(quote),accept:quote.accept.bind(quote),disposition:quote.disposition.bind(quote),activationView:quote.activationView.bind(quote),activate:quote.activate.bind(quote)}),variation:Object.freeze({get:variation.get.bind(variation),command:variation.command.bind(variation)}), sandbox:Object.freeze({create:sandbox.create.bind(sandbox),get:sandbox.get.bind(sandbox),reset:sandbox.reset.bind(sandbox),archive:sandbox.archive.bind(sandbox),advance:sandbox.advance.bind(sandbox)}) });
+diff --git a/apps/api/src/workspace/index.ts b/apps/api/src/workspace/index.ts
+index 892d9a8..3d521b6 100644
+--- a/apps/api/src/workspace/index.ts
++++ b/apps/api/src/workspace/index.ts
+@@ -74,0 +75,2 @@ export { AuditExportApplication, auditExportHttpFailure, assertAuditExportMode }
++export * from "../auth/sso/scim.application.js";
++export * from "../auth/sso/scim.contracts.js";
+diff --git a/config/agent-lane-assignments.json b/config/agent-lane-assignments.json
+index f1753f6..1b420d7 100644
+--- a/config/agent-lane-assignments.json
++++ b/config/agent-lane-assignments.json
+@@ -21,0 +22 @@
++"ent-10a2":{"branches":["codex/sandbox/ent-10a2"],"receipt":"docs/verdicts/ENT-10a2/BUILDER_RECEIPT.md","note":"ENT-10a2 synthetic SCIM-style deactivation: one bearer-proved receiving route, one record table, one routine that writes the merged revocation facts. Server only, no screen (UI parked), so no browser spec. No merged routine replaced or altered; no merged test file in this lane. Shared registration files append-only. enterprise-identity-v1.md: two stale sentences corrected only. BUILD_PLAN.md is the integrator's ledger line only.","allow":["BUILD_PLAN.md","config/agent-lane-assignments.json","docs/verdicts/ENT-10a2/**","packages/db/migrations/0137_scim_deactivation.sql","packages/db/src/scim-repository.ts","packages/db/src/index.ts","packages/db/src/migrate.ts","packages/db/MIGRATIONS.md","packages/db/test/scim-fixtures.ts","packages/db/test/scim-deactivation.integration.test.ts","packages/db/test/scim-deactivation-access.integration.test.ts","packages/db/test/scim-deactivation-concurrency.integration.test.ts","packages/db/test/scim-deactivation-upgrade.integration.test.ts","apps/api/src/auth/sso/scim.application.ts","apps/api/src/auth/sso/scim.contracts.ts","apps/api/src/auth/sso/scim.controller.ts","apps/api/src/auth/sso/scim.test.ts","apps/api/src/auth/sso/scim-paths.test.ts","apps/api/src/app.module.ts","apps/api/src/workspace/application.ts","apps/api/src/workspace/index.ts","apps/api/openapi.json","apps/web/app/api/auth/scim/[connectionId]/deactivations/route.ts","docs/contracts/scim-deactivation-v1.md","docs/contracts/enterprise-identity-v1.md","docs/operations/sso-data-flow.md"]},
+diff --git a/docs/contracts/enterprise-identity-v1.md b/docs/contracts/enterprise-identity-v1.md
+index 12c0013..a282ede 100644
+--- a/docs/contracts/enterprise-identity-v1.md
++++ b/docs/contracts/enterprise-identity-v1.md
+@@ -23 +23 @@ JIT creation requires at least one explicitly enabled group mapping. Memberships
+-Group changes append revisions with optimistic per-group revision checks. Add/change/disable commands append audit events in the same transaction. At a verified next sign-in, old SSO sessions are revoked and previous SSO-derived grants receive immutable revocations before current mappings are applied. No remaining mapped groups returns a typed denial while committing those revocations. No SCIM endpoint is built.
++Group changes append revisions with optimistic per-group revision checks. Add/change/disable commands append audit events in the same transaction. At a verified next sign-in, old SSO sessions are revoked and previous SSO-derived grants receive immutable revocations before current mappings are applied. No remaining mapped groups returns a typed denial while committing those revocations. Synthetic deactivation is specified in [scim-deactivation-v1.md](scim-deactivation-v1.md); real SCIM remains HELD.
+@@ -50 +50 @@ All responses are uncached. Admin audit display is a restricted projection of ev
+-OIDC and emergency-access administration are HELD for Ben. SCIM is later ENT-10a2; audit export/DW6 later ENT-10b; assurance pack/DW7 later ENT-10c. Native M1 coverage waits for M3. Founder D04/G5 evidence remains held. Technical acceptance can only be “SAML synthetic, M4 held,” after the required independent reviews, CI and separate acceptance; this contract asserts none of those outcomes.
++OIDC and emergency-access administration are HELD for Ben. Synthetic SCIM deactivation is ENT-10a2, specified in [scim-deactivation-v1.md](scim-deactivation-v1.md); audit export/DW6 later ENT-10b; assurance pack/DW7 later ENT-10c. Native M1 coverage waits for M3. Founder D04/G5 evidence remains held. Technical acceptance can only be “SAML synthetic, M4 held,” after the required independent reviews, CI and separate acceptance; this contract asserts none of those outcomes.
+diff --git a/docs/operations/sso-data-flow.md b/docs/operations/sso-data-flow.md
+index a513091..0da7a90 100644
+--- a/docs/operations/sso-data-flow.md
++++ b/docs/operations/sso-data-flow.md
+@@ -36,0 +37,4 @@ Synthetic-only additions: append-only tenant switch reasons/revisions, actor mem
++
++## ENT-10a2 synthetic inbound deactivation
++
++Local inbound only: the in-process test provider submits an opaque subject and UUID message id at the connection's route. The restricted identity service hashes the unchanged subject and canonical message; the new immutable company-scoped record holds hashes, identifiers, outcome, counts and server time. No address, raw subject, bearer or seed is stored, audited or logged. Revocation and the identifier/hash-only company audit append share one transaction. Caller proof derives from JOBGUARD_SCIM_SYNTHETIC_SEED (no default, no persisted value); every unavailable/unapproved route falls back to deny. Processing is in the application process; storage is configured synthetic PostgreSQL; logs are redacted; fixtures are disposable; no training, live backup approval or outbound provider flow. Gate status synthetic-only: only JOBGUARD_ENV synthetic_demo and database jobguard_synthetic_demo; D04/G5 live provider evidence remains HELD. See [scim-deactivation-v1.md](../contracts/scim-deactivation-v1.md) for refusal, replay, owner protection and invitation limits.
+diff --git a/packages/db/MIGRATIONS.md b/packages/db/MIGRATIONS.md
+index 9016bdc..51343d2 100644
+--- a/packages/db/MIGRATIONS.md
++++ b/packages/db/MIGRATIONS.md
+@@ -881,0 +882,6 @@ append-only facts to roll back. The integrator owns the BUILD_PLAN §12.2 ledger
++
++## 0137 — synthetic SCIM deactivation (ENT-10a2)
++
++Adds only `identity.scim_event` (immutable, tenant-qualified, FORCE RLS, no application table privileges) and `identity.scim_deactivate(uuid,jsonb)` (restricted identity EXECUTE only; SECURITY DEFINER with pg_catalog search path). No object from 0111, 0120 or 0129 altered or restated; no backfill; no existing row changed by the migration. No column, index, constraint, policy, trigger or grant added to any existing table. PostgreSQL creates the internal foreign-key enforcement triggers automatically as part of the new table's constraints.
++
++The governed repository transaction writes existing one-way membership/session revocation facts, grant revocations and the record, then appends the audit event last. This is the first product code to set app.membership.revoked_at. Existing request gates remain unchanged. Synthetic database only, replay once, owner protected, no reactivation. Roll forward for any repair; removing the new objects is permissible only before any message has been accepted. Accepted history and revocation facts must never be cleared by rollback. Upgrade proof snapshots populated named columns, full types and primary-key identities before this migration, verifies this migration alone, then applies later migrations twice. Database tests are NOT RUN (sandbox cannot start PostgreSQL / a browser).
+diff --git a/packages/db/src/index.ts b/packages/db/src/index.ts
+index 682a133..436cc56 100644
+--- a/packages/db/src/index.ts
++++ b/packages/db/src/index.ts
+@@ -83,0 +84 @@ export * from "./contractor-session-context.js";
++export * from "./scim-repository.js";
+diff --git a/packages/db/src/migrate.ts b/packages/db/src/migrate.ts
+index ce8ee43..cc44eb8 100644
+--- a/packages/db/src/migrate.ts
++++ b/packages/db/src/migrate.ts
+@@ -72,0 +73 @@ export const MIGRATION_URLS = [
++  new URL("../migrations/0137_scim_deactivation.sql", import.meta.url),
