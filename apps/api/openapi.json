@@ -161,6 +161,57 @@
                         "description": "The caller's own open visit on this job"
                       }
                     }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "note",
+                      "description"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-site-extra.v3"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "pattern": "\\S"
+                      },
+                      "photoEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "residentConfirmation": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "shownContentSha256"
+                        ],
+                        "properties": {
+                          "shownContentSha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          }
+                        }
+                      }
+                    }
                   }
                 ]
               }
@@ -195,9 +246,38 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "PHOTO_NOT_ACCEPTED: the photo is not a verified site photo of this job. CONFIRMATION_MISMATCH: the hash shown is not the server's content hash.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "code"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "enum": [
+                        "site-extra-error.v1"
+                      ]
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "PHOTO_NOT_ACCEPTED",
+                        "CONFIRMATION_MISMATCH"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
-        "summary": "Log a note-only site extra in synthetic_demo; persisted session and database authority only",
+        "summary": "Log a site extra in synthetic_demo (v1 note only, v2 with an open visit, or v3 with a verified photo and a resident confirmation); persisted session and database authority only",
         "tags": [
           "contractor-site-extras"
         ]
