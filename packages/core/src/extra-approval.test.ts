@@ -60,6 +60,17 @@ describe("ENT-5 independent requirements", () => {
     expect(approvalSeparationConstraint({ ...base, candidatePerson: id(3) })).toBe("permitted_constraint");
     expect(() => approvalSeparationConstraint({ ...base, history: [{ person: id(2), revisionId: id(6) }] })).toThrow();
   });
+  const person = "abcdef01-abcd-4abc-8abc-abcdef012345";
+  const mixedCasePerson = "AbCdEf01-aBcD-4aBc-8AbC-aBcDeF012345";
+  it.each([[person, mixedCasePerson], [mixedCasePerson, person]])("BEN-Q04 mixed-case UUIDs cannot bypass self-approval (%s, %s)", (raiserPerson, candidatePerson) => {
+    expect(approvalSeparationConstraint({ version: "extra-separation.v1", raiserPerson, candidatePerson, stepKey: "surveyor", revisionId: id(7), history: [] })).toBe("refused_self");
+  });
+  it.each([[person, mixedCasePerson], [mixedCasePerson, person]])("BEN-Q04 mixed-case UUIDs cannot bypass cross-step reuse (%s, %s)", (previousPerson, candidatePerson) => {
+    expect(approvalSeparationConstraint({ version: "extra-separation.v1", raiserPerson: id(1), candidatePerson, stepKey: "surveyor", revisionId: id(7), history: [{ person: previousPerson, stepKey: "supervisor", revisionId: id(6) }] })).toBe("refused_reused_person");
+  });
+  it.each([[person, mixedCasePerson], [mixedCasePerson, person]])("BEN-Q04 mixed-case UUIDs preserve held same-step repeat semantics (%s, %s)", (previousPerson, candidatePerson) => {
+    expect(approvalSeparationConstraint({ version: "extra-separation.v1", raiserPerson: id(1), candidatePerson, stepKey: "supervisor", revisionId: id(7), history: [{ person: previousPerson, stepKey: "supervisor", revisionId: id(6) }] })).toBe("held_repeat_semantics");
+  });
   it("BEN-Q05 start and finish representations retain uncertainty and established breaches", () => {
     const before = { version: "extra-work-history.v1", start: { reference: "reported-start", uncertainty: "time uncertain" }, finish: { reference: "reported-finish", uncertainty: "scope uncertain" }, establishedBreaches: ["breach-fact-1"] };
     const after = preserveExtraWorkHistory(before, ["breach-fact-2"]);

@@ -1,6 +1,6 @@
-Built by Codex; dispatched 13 Oct 2026.
+Built by Codex gpt-6.1-sol; dispatched by the Claude dispatcher, 13 Oct 2026.
 
-ENT-5 — issued foundation and settled constraints only; RED lane. This is a builder run receipt, not a verdict or acceptance. The addendum's requested Claude attribution would be inaccurate; the actual builder is recorded above.
+ENT-5 — issued foundation and settled constraints only; RED lane. This is a builder run receipt, not a verdict or acceptance. Candidate head supplied for repair r2: `b1e87ecacc61e4014c9c8422c7112db169b07897`; the dispatcher will commit the r2 working-tree repair and bind the next review to that resulting commit.
 
 ## Base, authority and allocation
 
@@ -331,3 +331,51 @@ Actual code-only diff stat (receipt changes excluded):
 ```
 
 Final available/pre-commit HEAD remains `dfcc97ca76fe5a45f7ea594686334f7fad019e6b`. Dispatcher commit message: `/private/tmp/jg-msg-ent-5.txt`. Root lint/lane failure, OpenAPI startup refusal, unexecuted PostgreSQL/browser suites and exact-repaired-commit review/separate acceptance remain outstanding; this is a repair receipt, not acceptance. No automatic approval review rejection occurred.
+
+
+## Repair r2 — dispatcher 4, 13 October 2026
+
+Built by Codex gpt-6.1-sol; dispatched by the Claude dispatcher. Candidate/incoming HEAD: `b1e87ecacc61e4014c9c8422c7112db169b07897`, unchanged by this builder. This section describes the uncommitted r2 working-tree repair; the dispatcher must bind the subsequent independent review to its resulting commit. No verdict, acceptance, merge, push or release is claimed.
+
+Read AGENTS.md, BUILD_PLAN §9.1.2–§9.1.7 and ENT-5, the extra-approval contract and the supplied Sol first-check at `/Users/benharwood/.local/share/full-steam/jg-runs/ent-5-solcheck-20261013T213352.md`. That stored check declares HEAD `dfcc97ca76fe5a45f7ea594686334f7fad019e6b`; it is prior review evidence, not an independent verdict on this repair or the incoming r2 candidate.
+
+The separation input parser now lowercases only supplied raiser, candidate and historical person UUIDs before comparison. Other identifiers and the held persisted-person/repeat-policy decisions are unchanged. Six permanent regressions cover mixed-case self-approval, cross-step reuse across revisions and held same-step repeats, in both case directions. Tests-first execution reproduced all six failures (9 existing tests passed); after normalization the three ENT-5 core files passed all 21 tests.
+
+Inherited ENT-3d #170 repair: `packages/db/test/site-extra-evidence-fixtures.ts:7` retains every value import and imports `Cluster` from `extra-fixtures.js`. The identical one-line change was also made at `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/db/test/site-extra-evidence-fixtures.ts`, using the explicitly requested cross-worktree edit; the two fixture files were compared byte-for-byte and match. Strict compilation of the three ENT-5 database suites now exits 0 with no diagnostics. That is static compilation, not PostgreSQL execution.
+
+Affected invariant: §5.3 approval separation under the supplied-person constraint. No database schema, migration, persisted identity policy, authoritative approval, provider, prompt, financial record, alert or release behavior changes. Only the three repair code/test files and this receipt change in ENT-5; the ENT-3d worktree receives only the identical fixture line.
+
+All pnpm checks use the existing `/private/tmp/ent-5-tools/pnpm` binary (10.28.1) via `PATH="/private/tmp/ent-5-tools:$PATH"`; no installation or download. Node is v24.17.0, rather than the unchanged .nvmrc's v24.15.0. This is not a clean-install rehearsal. The initial global pnpm-shim probe and broad `/private/tmp` locator search were cancelled (130); the pinned version probe passed. No Git write command was run.
+
+| Repair r2 command | Exit / result / evidence |
+|---|---|
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/extra-approval.test.ts` before the fix | 1; 6 new regressions failed, 9 existing tests passed; `/private/tmp/jg-ent-5-r2-red.log`. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/extra-approval.test.ts src/extra-client-approval.test.ts src/extra-evidence-pack.test.ts` after the fix | 0; 3 files, 21 tests passed; `/private/tmp/jg-ent-5-r2-unit.log`. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/contractor-session-context.test.ts test/site-extra-evidence-compatibility.test.ts test/recovery-case-join.test.ts` | 0; 3 files, 37 tests passed; `/private/tmp/jg-ent-5-r2-db-unit.log`. Repository adapter doubles are not live database proof. |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/extra-approval-authority.integration.test.ts test/extra-evidence-packs.integration.test.ts test/extra-approval-upgrade.integration.test.ts` | 0; no diagnostics; `/private/tmp/jg-ent-5-r2-db-test-types.log`. |
+| `pnpm typecheck` | 0; 7 successful packages, 2 cached; 4m7.099s; `/private/tmp/jg-ent-5-r2-typecheck.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1; core purity passed, lane prerequisite refused the requested inherited `packages/db/test/site-extra-evidence-fixtures.ts` repair; package lint was not reached; `/private/tmp/jg-ent-5-r2-lint.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1; same single fixture path refused; `/private/tmp/jg-ent-5-r2-lanes.log`. No lane/base changes. |
+| `node tools/money-arithmetic-lint.mjs` | 0; `/private/tmp/jg-ent-5-r2-money-lint.log`. |
+| `node tools/commercial-boundary-lint.mjs` | 0; `/private/tmp/jg-ent-5-r2-commercial-lint.log`. |
+| `pnpm openapi:check` | 1; tsx CLI IPC listen EPERM before schema comparison; `/private/tmp/jg-ent-5-r2-openapi.log`. |
+| `node --import tsx src/generate-openapi.ts --check` from `apps/api` | 0; the unchanged generator's actual schema comparison passed using the installed loader without the CLI IPC server; `/private/tmp/jg-ent-5-r2-openapi-loader.log`. This supplements the failed package-script invocation above. |
+| `pnpm exec turbo run lint` | 0; 7 successful packages, 2 cached; 4m24.926s; `/private/tmp/jg-ent-5-r2-package-lint.log`. Does not replace root lane failure. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2` | 1; 162 files passed, 4 failed; 4,864 tests passed, 8 failed; 178.80s; `/private/tmp/jg-ent-5-r2-core-all.log`. |
+| `pnpm build --concurrency=2` | 0; 7 successful packages, 2 cached; 5m1.38s; `/private/tmp/jg-ent-5-r2-build.log`. |
+
+The broader core run discovered both `src` and generated `dist` tests. Six failures are the three existing receipt-allocation stress tests in each location exceeding the unchanged 5,000ms timeout. Two failures are generated `dist` copies of source-inspection tests opening missing `dist/recovery-allocation.ts` and `dist/site-extra-pricing.ts` files (ENOENT). No failing test, timeout, discovery configuration or unrelated source was changed. The broad run was concurrent with compilation; no pre-repair broad baseline or CI pass is claimed. These failures remain reported rather than waived.
+
+Turbo reported sandbox IO warnings and reused the disclosed cache hits; cached logs include the dependency worktree's original paths. The passing checks are not forced-fresh or clean-install results. Existing Next.js workspace-root and autoprefixer warnings are retained. No code changed after the passing focused checks.
+
+`pnpm test`, `pnpm test:db`, `pnpm test:migrations`, PostgreSQL suites and browser suites are NOT RUN locally: the dispatcher's environment cannot bind localhost or start PostgreSQL. Database/browser and required regression CI remain owed after the dispatcher pushes. Root lane resolution, a standard OpenAPI package-script run outside the IPC restriction, independent review bound to the resulting repair commit and separate acceptance also remain outstanding. AI golden-set and native gates are inapplicable to this repair.
+
+R2 code-only patch SHA-256 (`git diff HEAD --` the three files below): `3bce19a477560ae20b5164f628341e6a78a1cb04e32321bf42abb969793787a5`.
+
+| Repair code/test file | Working-tree SHA-256 |
+|---|---|
+| `packages/core/src/extra-approval.ts` | `c79bb656c9a655f639faf37538052dced33e3078e6b9d69b0a6270e8d4a5acce` |
+| `packages/core/src/extra-approval.test.ts` | `58b545d7f713255d9f6417cbdd994c6354f74108d8517135bce78f3bedd1e8f6` |
+| `packages/db/test/site-extra-evidence-fixtures.ts` | `611276c5b0e863111cada2369259be7e14ce7ed610e9954a803c0ab5819de5de` |
+
+Candidate/incoming HEAD remains `b1e87ecacc61e4014c9c8422c7112db169b07897`; there is no builder-created r2 commit. Intended conventional commit subject/body was overwritten at `/private/tmp/jg-msg-ent-5.txt`. The fixture edit is also present identically in ENT-3d #170. `git diff --check` passed. This receipt does not satisfy technical acceptance or authorize merge/release.

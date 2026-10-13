@@ -52,8 +52,9 @@ export function extraRoleConstraint(raw: unknown): "permitted_constraint" | "hel
   return input.role === "supervisor" ? "permitted_constraint" : "held";
 }
 const slot = z.string().trim().min(1).max(100);
-export const extraSeparationV1 = z.object({ version: z.literal("extra-separation.v1"), raiserPerson: uuid, candidatePerson: uuid, stepKey: slot, revisionId: uuid,
-  history: z.array(z.object({ person: uuid, stepKey: slot, revisionId: uuid }).strict()).max(1000) }).strict();
+const personUuid = uuid.transform(value => value.toLowerCase());
+export const extraSeparationV1 = z.object({ version: z.literal("extra-separation.v1"), raiserPerson: personUuid, candidatePerson: personUuid, stepKey: slot, revisionId: uuid,
+  history: z.array(z.object({ person: personUuid, stepKey: slot, revisionId: uuid }).strict()).max(1000) }).strict();
 export function approvalSeparationConstraint(raw: unknown) {
   const input = readExtraConstraint(extraSeparationV1, raw);
   if (input.raiserPerson === input.candidatePerson) return "refused_self" as const;
