@@ -48,6 +48,7 @@ describe("ENT-3d schema compatibility routing", () => {
    "SELECT app.require_watchdog_live($1::uuid)",
    "SELECT app.require_watchdog_live($1::uuid)",
    "SELECT app.ent3a_require_extra_authority($1,$2)",
+   "SELECT app.ent3b_require_open_visit($1,$2)",
   ]);
  });
  it.each(["photo", "confirmation", "both"])("[R6] v3 %s fails closed with typed unavailable when 0141 routines are missing", async kind => {
@@ -65,9 +66,10 @@ describe("ENT-3d schema compatibility routing", () => {
    ...(kind !== "photo" ? { shownContentSha256: "a".repeat(64) } : {}),
   };
   await expect(f.repo.logSiteExtra(f.context, f.actor, { ...f.input, ...fields })).resolves.toMatchObject({ variationId: f.variationId, evidence: { contentSha256: "a".repeat(64) } });
-  expect(f.query.mock.calls.map(([sql]) => sql).slice(-3)).toEqual([
+  expect(f.query.mock.calls.map(([sql]) => sql).slice(-4)).toEqual([
    "SELECT app.require_watchdog_live($1::uuid)",
    "SELECT app.ent3a_require_extra_authority($1,$2)",
+   "SELECT app.ent3b_require_open_visit($1,$2)",
    "SELECT app.ent3d_require_site_extra_evidence($1,$2)",
   ]);
  });
