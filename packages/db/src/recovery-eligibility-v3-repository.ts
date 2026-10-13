@@ -50,8 +50,12 @@ export class RecoveryEligibilityV3Repository {
    // mark or payer correction must commit wholly before or after this snapshot.
    let payer:{payer:"not_insurer"|"insurer_unmarked"|"insurer_customer_own";paying_party_binding_id:string|null;payer_mark_id:string|null}={payer:"not_insurer",paying_party_binding_id:null,payer_mark_id:null};
    if(definition.category==="withheld_customer_payment"&&event){
+    // Earlier upgrade proofs execute this repository before atomic migration 0142.
+    // Its table is the schema boundary; once present, missing helpers must fail.
+    const payerSchema=(await db.$client.query<{installed:boolean}>("SELECT to_regclass('app.recovery_payment_payer_mark') IS NOT NULL installed")).rows[0]!;
+    if(payerSchema.installed){
     await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,`payer-mark:${event.id}`]);
-    await db.$client.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[context.tenantId,job,actor.membershipId]);
+    await db.$client.query("SELECT app.lock_recovery_payer_job($1::uuid,$2::uuid,$3::uuid)",[context.tenantId,job,actor.membershipId]);
     // One SQL decision uses the shared payer function, never the customer's type.
     payer=(await db.$client.query<typeof payer>(`WITH payer AS (SELECT app.recovery_job_payer_type($1,$2) payer_type)
      SELECT CASE WHEN payer_type IS DISTINCT FROM 'insurer' THEN 'not_insurer'
@@ -61,6 +65,7 @@ export class RecoveryEligibilityV3Repository {
      FROM payer LEFT JOIN app.job_party_current b ON b.tenant_id=$1 AND b.job_id=$2
      LEFT JOIN LATERAL(SELECT id,state FROM app.recovery_payment_payer_mark
       WHERE tenant_id=$1 AND job_id=$2 AND source_event_id=$3 ORDER BY revision DESC LIMIT 1) m ON true`,[context.tenantId,job,event.id])).rows[0]!;
+    }
    }
    const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
     payer:payer.payer,settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});

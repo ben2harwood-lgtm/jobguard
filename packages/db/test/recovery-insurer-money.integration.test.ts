@@ -93,6 +93,7 @@ let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool;
 const originalEnvironment=process.env.JOBGUARD_ENV;
 const accessValue=["syn","thetic"].join("");
 let proof:Awaited<ReturnType<typeof proofBefore>>;
+let prePayerReview:RecoveryEligibilityV3Review;
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";
  const directory=await mkdtemp(join(tmpdir(),"jg-insurer-")),port=await freePort(60900,100);
@@ -108,7 +109,7 @@ beforeAll(async()=>{
  await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[U]);
  await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'Insurer synthetic')",[A,T]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')",[M,T,A,U]);
- const login=(await admin.query("SELECT format('CREATE ROLE insurer_test_login LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS',$1) statement",[accessValue])).rows[0];
+ const login=(await admin.query("SELECT format('CREATE ROLE insurer_test_login LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS',$1::text) statement",[accessValue])).rows[0];
  await admin.query(login.statement);await admin.query("GRANT jobguard_runtime TO insurer_test_login");
  runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"insurer_test_login",password:
   accessValue});
@@ -118,6 +119,8 @@ beforeAll(async()=>{
   expect(saved.result.reasonHeld).toBe(true);
  }
  previousSchema.active=false;
+ const legacy=await fixture("withheld_customer_payment",false);await legacy.advance("receipt-3000");
+ prePayerReview=await legacy.reviews.review(ctx,legacy.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:legacy.c.id,expectedCaseRevision:legacy.c.revision,expectedReviewRevision:0,fixture:"F18"},actor,legacy.auth.digest);
  proof=await proofBefore(admin,["app.recovery_eligibility_v3_review","app.recovery_claim_line"]);
  await admin.query(await readFile(MIGRATION_URLS[n]!,"utf8"));
  await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[names[n]]);
@@ -125,6 +128,9 @@ beforeAll(async()=>{
  await migrate(admin);await migrate(admin);
 });
 afterAll(async()=>{if(originalEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=originalEnvironment;await closeTestPools(runtime,admin);await postgres?.stop();});
+it("[r4 AC9] current repository reviews F18 before the payer migration exists",()=>{
+ expect(prePayerReview.result).toMatchObject({fixture:"F18",qualifyingPrincipal:{pence:262000,currency:"GBP"},reason:"Fixed statutory compensation is not part of the fee base"});
+});
 async function fixture(type="withheld_customer_payment",insurer=true,before=false){
  const session=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session),jobId=randomUUID();
  await admin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario)VALUES($1,$2,'Insurer test job',$3,'capture')",[jobId,T,auth.digest]);

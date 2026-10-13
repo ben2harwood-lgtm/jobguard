@@ -582,3 +582,95 @@ The original staged incoming merge is 40 files, 4,210 insertions, 11 deletions p
 | /private/tmp/ch-7-insurer-catchup-typecheck.log | 102793ff63f14838e2128a536735d9bfe137d42109599a180da7e8bf73ab2cc4 |
 
 Handoff remains RED: independent exact-commit verdicts, separate acceptance, database/browser/OpenAPI and lane verification on the completed merge belong to the dispatcher/reviewers/CI. No acceptance claimed. Final unchanged HEAD: `d9277e397ca6916859f857fb818302b7d905909f`. Intended merge message: `/private/tmp/jg-msg-ch-7-insurer.txt`. Dispatcher alone completes and commits this merge.
+
+
+## Repair r4 — 13 October 2026, dispatcher 3
+
+Actual builder: Codex. The existing truthful first-line attribution is retained; Codex was available in this session. Initial and final HEAD: `c97581cdc3c9e4a95e266ff939bed98ceb5ac135`. No commit, index write, branch change, push, acceptance or independent verdict was made by the builder.
+
+### Repairs and tests-first evidence
+
+- `packages/db/test/recovery-insurer-money.integration.test.ts:112`: cast the `format` argument to `text`, resolving the reported 42P18 setup ambiguity. Existing assertions are preserved.
+- `packages/db/src/recovery-eligibility-v3-repository.ts:55`: detect the payer table introduced atomically by 0142 before using that schema. The merged timing upgrade proof executes the CURRENT repository at `recovery-timing-pin.integration.test.ts:326` after installing only migrations before 0127. Its call fails at the repository query, before any 0142 routine exists. This is absence of the helper, not an overload ambiguity in a restated SQL routine. Explicit UUID casts are also added to the repository helper call at line 58.
+- Before 0142, the repository retains the earlier payer-independent evaluation and the earlier database guards. Once the payer table exists, the exact original advisory lock, checked job-lock helper and payer decision remain required; a missing helper is not caught or ignored. Membership, job ownership, revision and replay checks still precede this schema check. Migration 0142 is byte-identical; all its helper arguments inside PL/pgSQL are already UUID values and the helper is created before its callers.
+- Added `[r4 AC9] current repository reviews F18 before the payer migration exists` in this piece's integration file at line 131, with its pre-0142 setup at lines 122–123. It uses the actual current repository, real database guards and F18 evaluator, then includes its saved rows in the existing upgrade comparison. The test was written BEFORE the repository repair and setup cast. First local failing run: **NOT RUN (database suites expressly excluded; cannot start PostgreSQL here)**. The supplied CI run 38441477159 on the initial head is the pre-repair failure evidence: 42P18 in this piece's setup and 42883 in merged AC9, 117 passing DB files, 2 failing files, 1703 passing tests, 1 failing test, 39 skipped. This is CI evidence supplied by the dispatcher, not a local reproduction. The new test awaits CI execution.
+- No merged test, pinned list/value, fingerprint, watchdog registration/harness or coordinator patch file was edited. Both files changed by coordinator commit d9277e3 remain byte-identical to the supplied head.
+
+### OpenAPI N2 — STOP / verification still owed
+
+Ran the documented `pnpm --filter @jobguard/api openapi:generate`, exit **1** before the generator source executes. Exact refusal: `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/85374.pipe` (Node v24.17.0). No alternate launcher, compiled generator, escalation or socket workaround was attempted after that refusal. `pnpm openapi:check` is **NOT RUN** because it invokes the same denied generator wrapper. Dispatcher/CI must run generation and the official check on the committed repair.
+
+Source inspection: the insurer command dispatches through the existing `/jobs/{id}/recovery-cases/eligibility` action. This piece changes no Swagger controller annotations, path, operation summary or registered schema. Its body is `unknown` and no Zod-to-Swagger response schema is registered. The existing OpenAPI entry at `apps/api/openapi.json:1944` already describes that unchanged action. Expected generator output for this piece is therefore unchanged (an inference from source, not an executed generator comparison); no supported manual artifact edit was identified. `apps/api/openapi.json` is byte-identical. N2 has no local PASS; the generator/check hold remains.
+
+### Executed commands and results
+
+All pnpm commands started with `export PATH="$HOME/Library/pnpm/bin:$PATH"`, then prepended the pre-existing `/private/tmp/jg-pnpm-ent-10a2` launcher for cached pnpm 10.28.1. Node: v24.17.0. Dependencies were already installed; no download, install or clean-install claim. Heavy commands used `HEAVY_SLOTS=2` and `~/.local/bin/heavy-slot`, sequentially, with no test/build overlap. Vitest runs had two explicit files each and `--maxWorkers=2`. Every pre-heavy `memory_pressure | tail -1` and `df -g /System/Volumes/Data` exited 0: 67–68% free memory, 78–79 GB disk available, above the required floors.
+
+| Command | Exit / counts / result |
+| --- | --- |
+| `pwd`; `git status --short`; `git rev-parse HEAD`; `git rev-parse origin/main`; `git show --stat d9277e3`; `git diff --check`; `git diff --stat`; `git diff --name-only`; targeted `git diff --` source/test | 0 each; initial tree clean, unchanged HEAD; whitespace clean. Read-only Git commands only. |
+| `cat AGENTS.md`; `cat ~/.local/share/full-steam/handoffs/jobguard-task.md`; `cat` the supplied CI excerpt; `sed` applicable BUILD_PLAN CH-7 and contracts, 0142, repository, both integration files and earlier receipt; package/config/controller/bootstrap/generator and prior OpenAPI note inspection via `cat`, `sed`, `rg`, `nl`, `head`, `tail`; `command -v pnpm`; `node --version`; cached launcher/heavy-slot inspection | Read-only inspections succeeded, except the following explicitly recorded missing-path probes. Long combined output was narrowed with targeted reads; no implementation-test claims from source inspection. |
+| Initial `rg`/`cat` probes for `apps/api/src/recovery-payment-payer.controller.ts`, `apps/api/src/recovery-payment-payer.contracts.ts` and `apps/api/src/workspace.controller.ts` | Missing paths; grouped commands exited 2, 1 and 0 respectively. Actual dispatch/controller located by subsequent source searches; no files created at guessed paths. |
+| Python tracked-file SHA-256 baseline inventory | 0; 1,619 tracked paths snapshotted to `/private/tmp/ch-7-insurer-r4-before.json`. |
+| `apply_patch` test-first regression addition; setup cast and repository repair | Successful; only this piece's repository/test changed. No local DB first-failing run. |
+| `pnpm --filter @jobguard/api openapi:generate` | 1; socket EPERM before generation, STOP as above. |
+| `~/.local/bin/heavy-slot ch-7-insurer-r4-core pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/recovery-eligibility-v3.test.ts src/recovery-payment-payer.test.ts` | **0; 2 files, 54 tests passed**, 415ms. |
+| `~/.local/bin/heavy-slot ch-7-insurer-r4-api pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/recovery-eligibility-v3.application.test.ts src/recovery-payment-payer.application.test.ts` | **0; 2 files, 26 tests passed**, 2.00s. These mocks prove application contracts, not PostgreSQL or live provider behavior. |
+| `~/.local/bin/heavy-slot ch-7-insurer-r4-typecheck pnpm exec turbo run typecheck --force` | **0; 7 successful tasks, 0 cached**, 48.293s; once with `--force`. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | **0**; core purity (153 TS files), lane, money arithmetic and commercial boundaries passed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **0**; ch-7-insurer lane passed against origin/main 269874640468a6e1dfdfed63edd4ce187d1d9dbb. No lane-file edits. |
+| `~/.local/bin/heavy-slot ch-7-insurer-r4-lint pnpm exec turbo run lint --force`, `LANE_BASE_REF=origin/main` | **0; 7 successful tasks, 0 cached**, 37.564s; once with `--force`. Root lint wrapper checks executed separately above. |
+| `~/.local/bin/heavy-slot ch-7-insurer-r4-build pnpm build --concurrency=2 --force` | **0; 7 successful tasks, 0 cached**, 1m4.181s; once with `--force`. |
+| Python post-check hash/preservation assertions; receipt append; intended commit-message write; final tracked-file inventory and Git diff/HEAD inspection | 0; only the two repair files and this appended receipt differ from the initial head. |
+
+The required heavy-slot helper printed `sysctl: sysctl fmt -1 1024 1: Operation not permitted`, `sysmon request failed with error: sysmond service not found` and `pgrep: Cannot get process list`; it continued and the specified commands ran. No alternative telemetry route was attempted. Separate memory/disk probes passed. Turbo printed IO permission warnings while completing all forced tasks. Existing Next workspace-root/CSS/cache warnings were left untouched.
+
+Full command logs: `/private/tmp/ch-7-insurer-r4-{core,api,typecheck,lint,build,boundaries,lanes,openapi-generate}.log`.
+
+### NOT RUN
+
+- `packages/db/test/recovery-insurer-money.integration.test.ts` (including new r4 AC9), `packages/db/test/recovery-timing-pin.integration.test.ts`, `packages/db/test/recovery-eligibility-v3.integration.test.ts`, `packages/db/test/tenancy.integration.test.ts`, `pnpm test:db`, `pnpm test:migrations`: **NOT RUN (cannot start PostgreSQL here; DB suites expressly excluded by this repair order)**. Includes schema compatibility, RLS, privileges, audit, concurrency and migration verification.
+- `apps/web/e2e/CH-7.spec.ts`, `pnpm test:e2e`: **NOT RUN (cannot start a browser here; browser suites excluded)**.
+- `pnpm openapi:check`: **NOT RUN (documented generator wrapper denied its IPC socket)**. Generation attempted and failed; no generated-artifact pass claimed.
+- Whole-package/repository test suites: **NOT RUN (dispatcher owns them; memory limits)**. Clean install: **NOT RUN (preinstalled dependencies; no downloads allowed)**. Live providers/models, eval and release checks: **NOT RUN / not changed by this repair**.
+
+### Grants and Standard F
+
+New GRANTs in r4: **none**. No SQL migration bytes changed. For the existing 0142 grant inventory required by the order, one line each:
+
+- `0142:13`: `GRANT EXECUTE ON FUNCTION app.recovery_job_payer_type(uuid,uuid) TO jobguard_runtime;`
+- `0142:39`: `GRANT SELECT ON app.recovery_payment_payer_mark TO jobguard_runtime;`
+- `0142:69`: `GRANT EXECUTE ON FUNCTION app.lock_recovery_payer_job(uuid,uuid,uuid) TO jobguard_runtime;`
+- `0142:179`: `GRANT EXECUTE ON FUNCTION app.write_recovery_payment_payer_mark(uuid,uuid,jsonb) TO jobguard_runtime;`
+
+Standard F: application login has SELECT only on the new money-fact table; there is no direct INSERT, UPDATE or DELETE grant. Writes continue through the existing session-bound SECURITY DEFINER writer with its own owner/role check. No contractor route, permission, watchdog guard or replay contract is changed in r4.
+
+### Self-review (builder source inspection only)
+
+Affected guarantees: exact SQL parameter typing and compatibility of the current synthetic repository with earlier upgrade schemas. Membership and persisted session checks, revision checks, durable command identity, audit payloads, payer-origin rules and current-schema locks remain intact. No new external action, migration/backfill, environment setting, operational alert, prompt or model change. Compatibility change is limited to pre-0142 synthetic schemas; current-schema financial logic is unchanged. The migration's existing forward-fix/rollback guidance remains in force. No merged assertion was weakened or edited and no new byte/hash-pinning test was added. No STOP requiring merged-test before/after edits arose. Database execution and exact-head CI remain necessary evidence; this is neither an independent review nor acceptance.
+
+### Byte-preservation evidence
+
+Before receipt append, only the two repair files changed and 1,617 other tracked files were byte-identical. After this appended receipt, only those three paths differ; all 1,616 other tracked paths remain byte-identical. Full inventories: `/private/tmp/ch-7-insurer-r4-before.json` and `/private/tmp/ch-7-insurer-r4-after.json`. Selected final SHA-256 values (receipt excluded to avoid a self-hash):
+
+| File | SHA-256 |
+| --- | --- |
+| `packages/db/src/recovery-eligibility-v3-repository.ts` | `ab6374d12d4083460066b9b3ad4452636c8dda2789b7020b1049ccef1edd800f` |
+| `packages/db/test/recovery-insurer-money.integration.test.ts` | `67e63b2245366170c2ba79bfefcac2f665621e6ec5b411cf124453c1f9da9f07` |
+| `packages/db/test/recovery-timing-pin.integration.test.ts` | `a2f06daecbdbefd75e28617825dbb92e67627113d7854e558b5cce88046a4e0f` |
+| `apps/api/src/recovery-eligibility-v3.application.test.ts` | `9c915222c20f601b5330292d94516354bf7d02453c3b5c4898703aa32d1ab465` |
+| `packages/db/test/recovery-eligibility-v3.integration.test.ts` | `8d510762057de627398d8df071bce4b0ada3f21f33e09b00082d8d7d1526307a` |
+| `packages/db/migrations/0142_recovery_insurer_money.sql` | `eb6067e4a73f91e198502fe1886e2498710a413c1836308b650f13243e4b3865` |
+| `apps/api/openapi.json` | `c368255cd5e89140d2c4d6422a373edab192e478c773ddf20fed1a21a51413b5` |
+| `config/agent-lane-assignments.json` | `12dd6fc9b55155710a1834b557a4fba5c3c3733e394404b821535353588d0bd7` |
+
+Repair diff from the supplied head (not the complete PR diff):
+
+```text
+ docs/verdicts/CH-7-INSURER/BUILDER_RECEIPT.md      | 92 ++++++++++++++++++++++
+ .../db/src/recovery-eligibility-v3-repository.ts   |  7 +-
+ .../recovery-insurer-money.integration.test.ts     |  8 +-
+ 3 files changed, 105 insertions(+), 2 deletions(-)
+```
+
+Final unchanged HEAD: `c97581cdc3c9e4a95e266ff939bed98ceb5ac135`. Intended commit subject/body: `/private/tmp/jg-msg-ch-7-insurer.txt`. Dispatcher commits; RED-lane exact-head CI, independent recorded verdict and separate acceptance remain outstanding. OpenAPI generator/check STOP remains as documented above.
