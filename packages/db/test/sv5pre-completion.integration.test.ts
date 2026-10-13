@@ -8,6 +8,21 @@ describe("SV5PRE authoritative completion", () => {
  let f: Awaited<ReturnType<typeof createLockFixture>>;
  beforeAll(async () => { f = await createLockFixture(); }, 60000);
  afterAll(async () => { if (f) await closeLockFixture(f); });
+ // Canonical PostgreSQL JSON text preserves timestamps and bytes; every snapshot is tenant-scoped.
+ async function rows(tenantId: string, relation: string) {
+  return (await f.admin.query(`SELECT coalesce(jsonb_agg(value ORDER BY value::text),'[]'::jsonb)::text snapshot FROM (SELECT to_jsonb(t) value FROM ${relation} t WHERE tenant_id=$1) q`, [tenantId])).rows[0].snapshot as string;
+ }
+ async function commercialEffects(tenantId: string) {
+  const snapshot: Record<string, string> = {};
+  for (const table of ['job','final_account_revision','final_account_line','final_account_lock','customer_invoice_sequence','customer_invoice','customer_invoice_evidence','final_account_invoice_binding','final_account_invoiced_line','decision','decision_resolution','action_authorization','action_outbox','command_receipt','customer_payment','landing_allocation','recovery_fee_derivation','recovery_fee_journal','recovery_eligibility_revision','journal']) {
+   snapshot[table] = await rows(tenantId, `app.${table}`);
+  }
+  snapshot.outbox_signal = await rows(tenantId, 'infrastructure.outbox_signal');
+  return snapshot;
+ }
+ async function auditEffects(tenantId: string) {
+  return { events: await rows(tenantId, 'app.audit_event'), head: await rows(tenantId, 'audit_control.audit_head') };
+ }
  async function locked() { const a=await seedAccount(f.admin); const repo=await prepareLock(f,a); await repo.lock(a.context,a.input); return a; }
  it("PRE-Q5-01 a completed string without a run is refused", async () => {
   const a=await locked(); await expect(asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,status) VALUES($1,$2,$3,'completed')",[a.tenantId,a.jobId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
@@ -26,10 +41,46 @@ describe("SV5PRE authoritative completion", () => {
   const connection=await f.admin.connect(); try { expect((await connection.query("SELECT check_id,run_id FROM app.final_check_completion WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{check_id:checkId,run_id:runId}]); } finally { connection.release(); }
  });
  it("PRE-Q5-12 publication retries preserve identity and failure history", async () => {
-  const a=await locked(),repo=new FinalCheckCompletionRepository(f.shadow),manifest=await repo.freeze(a.context,{version:"final-check-manifest.v1",jobId:a.jobId,manifestId:randomUUID(),detectorVersion:"synthetic.v1",reconciliationVersion:"synthetic.v1"}),runId=randomUUID(),checkId=randomUUID();
-  await repo.bindEmptyRun(a.context,{version:"final-check-empty-run.v1",jobId:a.jobId,manifestId:manifest.id,runId,executionId:randomUUID()});
-  await repo.publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId,checkId}); await repo.publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId,checkId});
-  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
+  const x = await sourceFixture(), { a, repo, runId } = x, checkId = randomUUID();
+  await runWithZero(x);
+  const source = (await repo.sources(a.context, a.jobId, x.manifest.id))[0]!;
+  const failure = { version: "final-check-attempt.v1" as const, jobId: a.jobId, manifestId: x.manifest.id,
+   sourceId: source.id, attemptId: randomUUID(), executionId: x.executionId, stage: 'detection' as const,
+   processingVersion: 'synthetic.v1', inputHash: source.frozen_input_hash, outcome: 'failed' as const,
+   failureCode: 'INPUT_UNAVAILABLE', resultHash: null, resultSignalIds: [], evidenceId: null,
+   objectVersionId: null, sha256: null, sourceReceivedAt: null };
+  await repo.recordAttempt(a.context, failure);
+  const publication = { version: "final-check-publication.v1" as const, jobId: a.jobId, runId, checkId };
+  const commercialBefore = await commercialEffects(a.tenantId), auditBefore = await auditEffects(a.tenantId);
+  await expect(repo.publish(a.context, publication)).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  expect(await auditEffects(a.tenantId)).toEqual(auditBefore);
+  const evidence = await finalize(x);
+  await attempt(x, evidence, 'detection'); await attempt(x, evidence, 'reconciliation');
+  await repo.publish(a.context, publication);
+  const publishedAudit = await auditEffects(a.tenantId), certificate = await rows(a.tenantId, 'app.final_check_completion');
+  await repo.publish(a.context, publication);
+  expect(await rows(a.tenantId, 'app.final_check_completion')).toBe(certificate);
+  expect(await auditEffects(a.tenantId)).toEqual(publishedAudit);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_completion WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(1);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock_check WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='final_check.completed' AND subject_ref=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
+  await expect(repo.publish(a.context, { ...publication, runId: randomUUID() })).rejects.toThrow('IDEMPOTENCY_PAYLOAD_CONFLICT');
+  expect(await rows(a.tenantId, 'app.final_check_completion')).toBe(certificate);
+  expect(await auditEffects(a.tenantId)).toEqual(publishedAudit);
+  // A later failed attempt cannot be erased by replaying the old successful publication.
+  const laterFailure = { ...failure, attemptId: randomUUID() };
+  await repo.recordAttempt(a.context, laterFailure);
+  const attemptsBeforeReplay = await rows(a.tenantId, 'app.final_check_source_attempt');
+  await repo.publish(a.context, publication);
+  expect(await rows(a.tenantId, 'app.final_check_source_attempt')).toBe(attemptsBeforeReplay);
+  expect((await f.admin.query("SELECT id FROM app.final_check_source_attempt WHERE tenant_id=$1 AND outcome='failed' ORDER BY id", [a.tenantId])).rows).toEqual([failure.attemptId, laterFailure.attemptId].sort().map(id => ({ id })));
+  await expect(repo.publish(a.context, { ...publication, checkId: randomUUID() })).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  await expect(new FinalAccountLockRepository(f.runtime).issueInvoice(a.context, { jobId: a.jobId,
+   actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), finalAccountRevisionId: a.revisionId,
+   expectedSourceHash: 'a'.repeat(64), invoiceKind: 'final', recipient: 'practice-customer@example.invalid', issuedOn: '2026-10-13' })).rejects.toMatchObject({ code: 'FINAL_CHECK_NOT_COMPLETE' });
+  expect(await commercialEffects(a.tenantId)).toEqual(commercialBefore);
+  expect(await rows(a.tenantId, 'app.final_check_completion')).toBe(certificate);
+  expect(await auditEffects(a.tenantId)).toEqual(publishedAudit);
  });
  it("S3 non-empty fixture commits inventory before recording both stages and completion", async () => {
   const a=await seedAccount(f.admin),uploadId=randomUUID(),evidenceId=randomUUID();
@@ -153,9 +204,56 @@ describe("SV5PRE authoritative completion", () => {
   const suffix=randomUUID().replaceAll('-','');
   await f.admin.query(`CREATE FUNCTION app.sv5pre_audit_${suffix}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='${a.tenantId}'::uuid AND current_setting('app.sv5pre_refuse_audit',true)='yes' THEN RAISE EXCEPTION 'SV5PRE_AUDIT_REFUSED';END IF;RETURN NEW;END $$`);
   await f.admin.query(`CREATE TRIGGER sv5pre_audit_${suffix} BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.sv5pre_audit_${suffix}()`);
+  const commercialBefore = await commercialEffects(a.tenantId), auditBefore = await auditEffects(a.tenantId);
   await expect(asFixtureTenant(f.shadow,a.tenantId,async db=>{await db.query("SELECT set_config('app.sv5pre_refuse_audit','yes',true)");await db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,run_id,status) VALUES($1,$2,$3,$4,'completed')",[a.tenantId,a.jobId,checkId,runId]);})).rejects.toThrow('SV5PRE_AUDIT_REFUSED');
   for(const table of ['final_check_completion','final_account_lock_check'])expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+  expect(await commercialEffects(a.tenantId)).toEqual(commercialBefore);
+  expect(await auditEffects(a.tenantId)).toEqual(auditBefore);
   await repo.publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId,checkId});expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock_check WHERE tenant_id=$1 AND job_id=$2", [a.tenantId,a.jobId])).rows[0].n).toBe(1);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='final_check.completed'", [a.tenantId])).rows[0].n).toBe(1);
+  expect(await commercialEffects(a.tenantId)).toEqual(commercialBefore);
+  await f.admin.query(`DROP TRIGGER sv5pre_audit_${suffix} ON app.audit_event`);
+  await f.admin.query(`DROP FUNCTION app.sv5pre_audit_${suffix}()`);
+
+ });
+
+ it("PRE-Q5-14 invoice audit failure rolls back all commercial effects and the same command retries once", async () => {
+  const a = await locked(); await publishFixtureCompletion(f.shadow, f.admin, a.tenantId, a.jobId);
+  const repo = new FinalAccountLockRepository(f.runtime);
+  const input = { jobId: a.jobId, actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(),
+   finalAccountRevisionId: a.revisionId, expectedSourceHash: 'a'.repeat(64), invoiceKind: 'final' as const,
+   recipient: 'practice-customer@example.invalid', issuedOn: '2026-10-13' };
+  const before = await commercialEffects(a.tenantId), auditBefore = await auditEffects(a.tenantId);
+  const certificate = await rows(a.tenantId, 'app.final_check_completion');
+  const suffix = randomUUID().replaceAll('-', '');
+  await f.admin.query(`CREATE FUNCTION app.sv5pre_invoice_audit_${suffix}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='${a.tenantId}'::uuid AND NEW.event_type='customer_invoice.lock_bound_issued' THEN RAISE EXCEPTION 'SV5PRE_INVOICE_AUDIT_REFUSED'; END IF; RETURN NEW; END $$`);
+  await f.admin.query(`CREATE TRIGGER sv5pre_invoice_audit_${suffix} BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.sv5pre_invoice_audit_${suffix}()`);
+  try {
+   await expect(repo.issueInvoice(a.context, input)).rejects.toThrow('SV5PRE_INVOICE_AUDIT_REFUSED');
+   expect(await commercialEffects(a.tenantId)).toEqual(before);
+   expect(await auditEffects(a.tenantId)).toEqual(auditBefore);
+   expect(await rows(a.tenantId, 'app.final_check_completion')).toBe(certificate);
+  } finally {
+   await f.admin.query(`DROP TRIGGER sv5pre_invoice_audit_${suffix} ON app.audit_event`);
+   await f.admin.query(`DROP FUNCTION app.sv5pre_invoice_audit_${suffix}()`);
+  }
+  const result = await repo.issueInvoice(a.context, input);
+  expect(result).toMatchObject({ invoiceNumber: 'DEMO-CUST-000001', netPence: 3360000, taxPence: 672000, totalPence: 4032000 });
+  for (const table of ['customer_invoice','final_account_invoice_binding','final_account_invoiced_line','decision','decision_resolution','action_authorization','action_outbox']) {
+   expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [a.tenantId])).rows[0].n).toBe(1);
+  }
+  expect((await f.admin.query("SELECT next_number::int n FROM app.customer_invoice_sequence WHERE tenant_id=$1", [a.tenantId])).rows).toEqual([{ n: 2 }]);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId,input.commandId])).rows[0].n).toBe(1);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='customer_invoice.lock_bound_issued'", [a.tenantId])).rows[0].n).toBe(1);
+  const issued = await commercialEffects(a.tenantId), issuedAudit = await auditEffects(a.tenantId);
+  expect(await repo.issueInvoice(a.context, input)).toEqual(result);
+  expect(await commercialEffects(a.tenantId)).toEqual(issued);
+  expect(await auditEffects(a.tenantId)).toEqual(issuedAudit);
+  expect(await rows(a.tenantId, 'app.final_check_completion')).toBe(certificate);
+  for (const table of ['customer_payment','landing_allocation','recovery_fee_derivation','recovery_fee_journal','recovery_eligibility_revision','journal']) {
+   expect(await rows(a.tenantId, `app.${table}`)).toBe(before[table]);
+  }
  });
 
  it("PRE-Q5-05 invalidation after successful completion refuses issue and publication",async()=>{
