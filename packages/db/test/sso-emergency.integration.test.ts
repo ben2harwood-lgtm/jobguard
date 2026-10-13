@@ -89,14 +89,43 @@ async function audit(tenant:string) {
 describe("ENT-10d emergency PostgreSQL boundary",()=>{
  it("[S10d] one owner-run rolled-back fixture proves sequential single use, expiry, wrong member and tenant",async()=>{
   const f=await fixture(),other=await fixture();await f.enable();await other.enable();
-  const client=await admin.connect(),rule=randomUUID(),approval=randomUUID();
-  const use=(u:string,t=f.principal.tenantId)=>client.query("SELECT identity.sso_emergency_use($1,$2::jsonb) result",[u,JSON.stringify({version:"sso-emergency.v1",requested_tenant_id:t,email:f.email,code:"12345678",reason:"Synthetic owner-only emergency fixture reason"})]);
+  const client=await admin.connect();
+  const reason="Synthetic owner-only emergency fixture reason";
+  const use=(u:string,t=f.principal.tenantId)=>client.query("SELECT identity.sso_emergency_use($1,$2::jsonb) result",[u,JSON.stringify({version:"sso-emergency.v2",requested_tenant_id:t,commandId:randomUUID(),windowMinutes:60,reason})]);
   try {
-   await client.query("BEGIN");await client.query("ALTER TABLE identity.sso_emergency_approver_rule DROP CONSTRAINT sso_emergency_approver_rule_held");
-   await client.query("INSERT INTO identity.sso_emergency_approver_rule(id,version,definition) VALUES($1,'fixture.v1','{}')",[rule]);
-   await client.query("INSERT INTO identity.sso_emergency_approval(tenant_id,id,membership_id,rule_id,approver_ref,reason_hash,approved_at,expires_at) VALUES($1,$2,$3,$4,'owner-fixture',$5,statement_timestamp()-interval '31 minutes',statement_timestamp()-interval '1 minute')",[f.principal.tenantId,randomUUID(),f.principal.membershipId,rule,"a".repeat(64)]);
-   expect((await use(f.principal.identityUserId)).rows[0].result.used).toBe(false);
-   await client.query("INSERT INTO identity.sso_emergency_approval(tenant_id,id,membership_id,rule_id,approver_ref,reason_hash,approved_at,expires_at) VALUES($1,$2,$3,$4,'owner-fixture',$5,clock_timestamp(),clock_timestamp()+interval '20 minutes')",[f.principal.tenantId,approval,f.principal.membershipId,rule,"a".repeat(64)]);
+   await client.query("BEGIN");
+   await client.query("SELECT set_config('app.tenant_id',$1,true)",[f.principal.tenantId]);
+   await client.query("SAVEPOINT expired_window");
+   const rule=(await client.query("SELECT id FROM identity.sso_emergency_approver_rule WHERE version='company-owner-only.v1'")).rows[0].id;
+   const expiredApproval=randomUUID(),expiredCommand=randomUUID(),freshCommand=randomUUID();
+   const reasonHash=createHash("sha256").update(reason).digest("hex");
+   await client.query("INSERT INTO identity.sso_emergency_approval(tenant_id,id,membership_id,rule_id,approver_ref,reason_hash,approved_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,statement_timestamp()-interval '31 minutes',statement_timestamp()-interval '1 minute')",[f.principal.tenantId,expiredApproval,f.principal.membershipId,rule,`membership:${f.principal.membershipId}`,reasonHash]);
+   const expiredEvent=(await client.query("SELECT identity.sso_required_append($1,$2,$3,'emergency',false,$4,1) result",[f.principal.tenantId,f.connectionId,f.principal.membershipId,reason])).rows[0].result.eventId;
+   await client.query("INSERT INTO identity.sso_emergency_use(tenant_id,approval_id,event_id,used_at) SELECT tenant_id,id,$3,approved_at FROM identity.sso_emergency_approval WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,expiredApproval,expiredEvent]);
+   await client.query("INSERT INTO identity.sso_emergency_window(tenant_id,approval_id,event_id,command_id,owner_membership_id,window_minutes,opened_at,closes_at) SELECT tenant_id,id,$3,$4,membership_id,30,approved_at,approved_at+interval '30 minutes' FROM identity.sso_emergency_approval WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,expiredApproval,expiredEvent,expiredCommand]);
+   const expiredRows=()=>Promise.all([
+    client.query("SELECT to_jsonb(r) value FROM identity.sso_emergency_approval r WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,expiredApproval]),
+    client.query("SELECT to_jsonb(r) value FROM identity.sso_emergency_use r WHERE tenant_id=$1 AND approval_id=$2",[f.principal.tenantId,expiredApproval]),
+    client.query("SELECT to_jsonb(r) value FROM identity.sso_emergency_window r WHERE tenant_id=$1 AND approval_id=$2",[f.principal.tenantId,expiredApproval]),
+   ]).then(results=>results.map(result=>result.rows));
+   const expiredBefore=await expiredRows();
+   expect((await client.query("SELECT a.expires_at<=clock_timestamp() approval_expired,w.closes_at<=clock_timestamp() window_expired FROM identity.sso_emergency_approval a JOIN identity.sso_emergency_window w ON(w.tenant_id,w.approval_id)=(a.tenant_id,a.id) WHERE a.tenant_id=$1 AND a.id=$2",[f.principal.tenantId,expiredApproval])).rows).toEqual([{approval_expired:true,window_expired:true}]);
+   expect((await client.query("SELECT required,event_id,window_open FROM identity.sso_required_state($1)",[f.principal.tenantId])).rows).toEqual([{required:true,event_id:expiredEvent,window_open:false}]);
+   // The expired window is the latest OFF revision, yet cannot authorize emailed-code sign-in.
+   expect((await client.query("SELECT allowed FROM identity.sso_code_signin_allowed($1)",[f.principal.identityUserId])).rows).toEqual([{allowed:false}]);
+   const fresh=(await client.query("SELECT identity.sso_emergency_use($1,$2::jsonb) result",[f.principal.identityUserId,JSON.stringify({version:"sso-emergency.v2",requested_tenant_id:f.principal.tenantId,commandId:freshCommand,windowMinutes:60,reason})])).rows[0].result;
+   expect(fresh).toMatchObject({used:true,cause:"EMERGENCY_USED",connectionId:f.connectionId,actorMembershipId:f.principal.membershipId,windowMinutes:60});
+   const recorded=(await client.query("SELECT a.id,a.membership_id,a.rule_id,a.approver_ref,a.reason_hash,u.event_id,w.command_id FROM identity.sso_emergency_approval a JOIN identity.sso_emergency_use u ON(u.tenant_id,u.approval_id)=(a.tenant_id,a.id) JOIN identity.sso_emergency_window w ON(w.tenant_id,w.approval_id,w.event_id)=(u.tenant_id,u.approval_id,u.event_id) WHERE w.tenant_id=$1 AND w.command_id=$2",[f.principal.tenantId,freshCommand])).rows;
+   expect(recorded).toHaveLength(1);
+   expect(recorded[0]).toMatchObject({membership_id:f.principal.membershipId,rule_id:rule,approver_ref:`membership:${f.principal.membershipId}`,reason_hash:reasonHash,event_id:fresh.eventId,command_id:freshCommand});
+   expect(recorded[0].id).not.toBe(expiredApproval);
+   for(const table of ["sso_emergency_approval","sso_emergency_use","sso_emergency_window"])expect((await client.query(`SELECT count(*)::int n FROM identity.${table} WHERE tenant_id=$1`,[f.principal.tenantId])).rows[0].n).toBe(2);
+   expect(await expiredRows()).toEqual(expiredBefore);
+   expect((await client.query("SELECT required,event_id,window_open FROM identity.sso_required_state($1)",[f.principal.tenantId])).rows).toEqual([{required:false,event_id:fresh.eventId,window_open:true}]);
+   expect((await client.query("SELECT allowed FROM identity.sso_code_signin_allowed($1)",[f.principal.identityUserId])).rows).toEqual([{allowed:true}]);
+   // Restore ON and remove both fixture uses before the existing single-use checks.
+   await client.query("ROLLBACK TO SAVEPOINT expired_window");
+   await client.query("RELEASE SAVEPOINT expired_window");
    expect((await use(other.principal.identityUserId)).rows[0].result.used).toBe(false);
    expect((await use(f.principal.identityUserId,other.principal.tenantId)).rows[0].result.used).toBe(false);
    // One connection proves sequential single use; the separate disposable fixture tests concurrency.
