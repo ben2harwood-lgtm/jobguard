@@ -955,3 +955,77 @@ Runs 7 and 8 are evidence only (the file ran about three times slower), not a pr
 ### NOT RUN
 
 `@jobguard/db#test` and any database package suite, the whole repository test suite, Playwright, `pnpm build`, a cold re-build of `apps/api/dist` and `apps/web/.next` (round 5's proof stands; no product code changed), and GitHub CI itself (it starts again when this commit is pushed; whether the runner now passes is not known until it does).
+
+## Repair round 7 (13 Oct): browser clock assumptions in spec Q, built by Claude, Codex unavailable
+
+Issued 13 October 2026 by the JobGuard dispatcher. Base: `a60897c`, merged with `origin/main` `6fad00a` first (merge commit `f8d2f95`; the only conflict was the append-only `packages/db/MIGRATIONS.md`, resolved as a union with main's 0138 section first and SV-3's 0133 section after it; `migrate.ts` registers 0133, 0134, 0138 in numeric order; `pnpm openapi:check` exit 0, nothing regenerated or hand-merged). Built by a Claude Sonnet builder (Codex out of budget); a builder never reviews its own piece, and this record gives no verdict. Order `SV-3-issued` and repair rounds 1 to 6 stay in force. Tests only: `apps/web/e2e/SV-3.spec.ts` plus this receipt; no product code, migration, workflow, package.json, turbo file, scanner, list or other test was touched.
+
+### The defect (GitHub CI run 38328587877 on `a60897c`; `pnpm test` passes, Playwright 346 passed, 2 failed)
+
+Both failures are test Q (`SV-3.spec.ts:36`) on the two projects:
+- `[mobile-360]`: `Q response capture failed: GET .../api/jobs/<id>/prevention-checks: Error: retrievedAt is not before the request`, from `checkClock` (spec line 73 then, line 74 now: `expect(Date.parse(at),'retrievedAt is not before the request').toBeGreaterThanOrEqual(before)`).
+- `[desktop]`: `Q response capture failed: GET .../api/jobs/<id>/parties: Error: date clock reading before this request`, from spec line 103 then: `expect(dateBefore,'date clock reading before this request').toBeDefined()` where `dateBefore=starts.get(response.request())`.
+
+Two timing assumptions, both about how the test knows when a request began:
+1. **Failure 1 (mobile): `before` was `Date.now()` taken when this process is told about the 'request' EVENT.** The browser has already sent the request by then; the server may already have read `clock_timestamp()` (`packages/db/src/prevention-check-repository.ts:45`). I measured the gap on the Mac (instrumented scratch copy, 12 prevention-checks responses over three runs, 14 or 30 CPU burners and `taskpolicy -b`): the event reached the test 9.2 to 14.9 ms after the browser's own start of the request, and `retrievedAt` was only 0 to 5 ms after the event stamp (0 ms in two of the twelve; margins 1,0,2,1 / 1,0,2,2 / 5,2,2,4). On a slower runner the event arrives later than the server's stamp and the check fails although the server did nothing wrong.
+2. **Failure 2 (desktop): `starts` had no entry for a response.** The only way: the response's request began before `replay()` installed its listeners (the listeners are installed after `openLiveWatchdogJob` returns, then come DB set-up statements; the job page keeps fetching in the background, and `app/ui/purchase-order.tsx:61` and `app/ui/watchdog-panel.tsx:24` poll every 1.5 s). A request already on its way when the listeners go on has no 'request' event for them, only a 'response'. (The other routes I considered do not apply: no redirect in `apps/web/app/api`, no service worker in `apps/web/app` or `public`, `starts` was never reset.)
+
+### Whether it reproduced before the fix
+
+- Stock spec (`a60897c` plus main, byte for byte), `CI=1`, `--workers=1`, full spec file, both projects, cold server each time, 14 `perl -e 'alarm 200; 1 while 1'` burners started in the same heavy step as the run. Run 1 had burners at normal priority and the run itself was over in 26 s: 4/4 passed. Runs 2 and 3 ran the test under `taskpolicy -b`: **run 2 FAILED, [desktop] Q: `Q response capture failed: GET .../readiness: Error: date clock reading before this request`** (the CI desktop failure, failure 2); run 3 passed 4/4. Failure 1 (mobile) did not occur by chance in these three runs or in three instrumented runs (six Q executions); I reproduced it deterministically instead (next two lines).
+- Failure 1, deterministic: a scratch copy of the stock spec that stalls the test process for 400 ms inside its 'request' handler for the prevention-checks request (a stand-in for a slow runner delivering the event late) **fails on both projects with exactly the CI mobile message** (`retrievedAt is not before the request`); the same stall in the fixed spec passes on both (`stocklate.log`, `fixedlate.log`).
+- Failure 2, deterministic: a scratch copy that starts one slow `readiness` fetch (held 250 ms by a one-shot route) just before `replay()`: the stock spec **fails on both projects with `date clock reading before this request`** (twice); the fixed spec passes on both (twice) (`y1-stock-straggler250.log` to `y4-fixed-straggler250.log`).
+
+### The change (one file, +16/-7)
+
+The reference for "this response was produced after this request began" is now the browser's own record of when it started the request: `response.request().timing().startTime` (Playwright 1.55.1: epoch milliseconds, set when the response arrives; computed as `(requestTime - timestamp + wallTime) * 1000` from the browser's `requestWillBeSent` and resource-timing readings, so it is not later than the true send, and for a cached response the fallback is the `requestWillBeSent` wall time, also not later than the send). It is read after `await response.finished()` and floored to a whole millisecond (`retrievedAt` is a JavaScript date, truncated from PostgreSQL's microseconds, so `retrievedAt >= floor(startTime)` holds for every honest response). It exists for every response whatever the listeners saw, so `starts` and its `toBeDefined()` checks are gone. A guard keeps it a real reading: `startTime` must be at least `testStarted`, the test's own `Date.now()` taken before any navigation (so `0`, `-1`, `NaN` or a stale value fails). No tolerance was added to either window: `retrievedAt >= start` and `retrievedAt <= after` are exact; the `date` header keeps its exact-name exclusion, its IMF-fixdate checks and its one-second widening.
+
+Lines changed, before/after (line numbers are the new file's; old in brackets):
+- 37 (new): `const testStarted=Date.now();` (the floor for the guard; claim unchanged).
+- 78 to 86 (new): comment and `function browserRequestStart(request):number{const startTime=request.timing().startTime;expect(startTime,'request start is a real browser reading taken during this test').toBeGreaterThanOrEqual(testStarted);return Math.floor(startTime);}`. This replaces the two removed `toBeDefined()` checks below with one stronger one.
+- 100 [90]: `const starts=new Map<Request,number>(),retrievals:Array<...>=[];` becomes `const retrievals:Array<...>=[];` (the event-time map is gone).
+- 102 [92]: `const requestListener=(request)=>{starts.set(request,Date.now());inFlight.add(request);lastActivity=Date.now()};` becomes `...=>{inFlight.add(request);lastActivity=Date.now()};` (the in-flight and quiet-period tracking is unchanged).
+- [103] removed, 114 added: `const dateBefore=starts.get(response.request());expect(dateBefore,'date clock reading before this request').toBeDefined();` (taken before `await response.finished()`) becomes `const requestStart=browserRequestStart(response.request());` (taken after it).
+- 116 [106]: `checkHttpDate(headers.date,dateBefore!,dateAfter);` becomes `checkHttpDate(headers.date,requestStart,dateAfter);`.
+- 119 to 120 [109 to 111]: `const before=starts.get(response.request());expect(before,'clock reading before this request').toBeDefined();const checked=compareBody(bytes.toString('utf8'),before!,after);retrievals.push({at:checked.at,before:before!,after});...` becomes `const checked=compareBody(bytes.toString('utf8'),requestStart,after);retrievals.push({at:checked.at,before:requestStart,after});...`.
+
+Why the claim is unchanged: every compared value (response shape, counts, badges, errors, cache keys, cache headers, notifications, analytics, storage) is compared exactly as before; `checkClock` (lines 70 to 77, including the assertion at line 74), `checkHttpDate`, `compareBody`, `drain`, the failure listeners and the three named exclusions are untouched. The lower bound moves from "when this process heard of the request" (a moment later than the request began) to "when the browser began it" (earlier), which is what the check always meant, and the upper bounds are the same `Date.now()` readings taken after the response. A response generated BEFORE its request (a build-time or cached value) still fails: its `retrievedAt` is older than the new, earlier-or-equal start.
+
+### Scratch negative controls (uncommitted copies of the fixed spec under `~/.local/share/full-steam/jg-runs/sv-3-r7/diag/`, Q on both projects, quiet cold server)
+- Stale `retrievedAt` (every `retrievedAt` in the body rewritten to 5 s before the request began): both projects FAIL with `retrievedAt is not before the request` (`x-nc1-stale-retrievedAt.log`).
+- Request start reading replaced by 0: both FAIL with `request start is a real browser reading taken during this test` (`x-nc2-no-browser-start.log`).
+- `date` header rewritten to 10 s earlier: both FAIL with `date header is not before the widened request window` (`x-nc3-stale-date.log`).
+
+### Proof runs (Mac; every heavy step through `~/.local/bin/heavy-slot` with `HEAVY_SLOTS=2`; one browser run at a time; logs and scripts in `~/.local/share/full-steam/jg-runs/sv-3-r7/`)
+
+Dist folders rebuilt first: `@jobguard/core`, `db`, `storage`, `config`, `ai` each alone, then `@jobguard/api`, then `pnpm --filter @jobguard/web build` (exit 0, `00-build.log`). Command each time, from `apps/web`: `CI=1 npx playwright test --config pw-sv-3-r7.config.ts e2e/SV-3.spec.ts --workers=1` (the wrapper config is a copy of the channel-chromium template with this worktree and its own output folder). "Loaded" = 14 CPU burners started in the same heavy step plus the run under `taskpolicy -b`; Q takes 17 to 20 s loaded against 6.5 s quiet. Each run starts a fresh server, which Playwright stops at the end.
+
+| # | Spec | Condition | Result | Log |
+|---|---|---|---|---|
+| 1 | stock | loaded (normal priority) | 4/4 pass | `pre-load1.log` |
+| 2 | stock | loaded | **desktop Q FAIL: `date clock reading before this request` (readiness)**; 3 pass | `pre-load2.log` |
+| 3 | stock | loaded | 4/4 pass | `pre-load3.log` |
+| 4 | fixed | loaded | **desktop Q FAIL: `Q request failed: GET .../materials: net::ERR_ABORTED`** (not a clock check; see below); 3 pass | `post-load1.log` |
+| 5 | fixed | loaded | 4/4 pass | `post-load2.log` |
+| 6 | fixed | loaded | 4/4 pass | `post-load3.log` |
+| 7 | fixed | loaded | 4/4 pass | `post-load4.log` |
+| 8 | fixed | loaded | 4/4 pass | `post-load5.log` |
+| 9 | fixed | quiet, cold server | 4/4 pass, 22 s | `post-quiet1.log` |
+| 10 | fixed | quiet, cold server | 4/4 pass, 26 s | `post-quiet2.log` |
+| 11 | fixed | quiet, cold server | 4/4 pass, 24 s | `post-quiet3.log` |
+
+One-minute load average sampled every 10 s during the loaded runs peaked at 31 to 37 (the Mac has 10 cores; other builders' work was also running; sampler files `*.load`). Across the five loaded runs of the fixed spec Q passed in nine of ten executions (the one failure is the third cause below); in none of the ten loaded and six quiet Q executions did either clock check, or `date clock reading before this request`, fail.
+
+`pnpm typecheck`: exit 0, 7/7 tasks (`05-typecheck.log`). `LANE_BASE_REF=origin/main pnpm lint`: exit 0, "Lane boundary passed" (lane sv-3), core purity and money-arithmetic checks passed, 7/7 tasks (`06-lint.log`). `pnpm openapi:check`: exit 0 (`07-openapi-check.log`).
+
+### A third timing weakness found by the loaded run 4, NOT fixed here (needs a ruling)
+
+Run 4 failed in `drain()` with `Q request failed: GET .../materials: net::ERR_ABORTED`. From its trace: the test called `page.goto('/')` at +12.34 s; at +12.41 s Chromium aborted two in-flight polling fetches (`materials` and `purchase-orders`, the loader that `app/ui/purchase-order.tsx:61` re-runs every 1.5 s) because the old document was being unloaded. The listener `failedListener` (lines 104 to 107, untouched) turns any failed request into a test failure, and `drain()` cannot prevent this: its 500 ms quiet period is shorter than the 1.5 s poll period, so a poll can start after the last quiet check and before `goto`; on a slow machine a request lasts long enough for that to matter. The same code is in the stock spec (a scratch stock copy with a held `/api/session` fetch at the navigation fails the same way, `x-stock-abort.log`, as does the fixed copy, `x-fixed-abort.log`), so the fix of this round neither causes nor cures it. Related: a straggler that is still in flight when `goto` happens (an 800 ms hold in the injection) is aborted the same way (`x-stock-straggler.log`, `x-fixed-straggler.log`).
+
+I did not change this because it would loosen a failure check (the order forbids that and round 4 said a failed request must fail the test). The narrowest repair I tested in a scratch copy, for the coordinator to rule on: tolerate only `net::ERR_ABORTED` failures that arrive while the test's own `page.goto` is in progress (a flag set immediately before and cleared immediately after `goto`); every other failure, abort or not, anywhere else still fails, every response that completes is still captured and compared. It passes the injected-abort case on both projects (`x-proposal-abort-inject.log`) and a plain quiet run (`x-proposal-abort.log`); it has not been run 5 times under load. Scratch file: `diag/SV-3-proposal-abort.spec.ts` (differs from the committed spec in two lines).
+
+### NOT RUN
+GitHub CI itself (starts again only after a push); the whole repository test suite and `pnpm build` as a single command (the individual builds above ran); the database package suites (no database code changed). Nothing was pushed: see the status below.
+
+### Status
+Committed locally on `codex/sandbox/sv-3`; **not pushed**, because run 4 is red for the third cause above and the order allows a push only when everything is green. No clock check failed in sixteen Q executions of the fixed spec (ten loaded, six quiet); one loaded execution failed for the third cause.

@@ -34,6 +34,7 @@ test("I: mandatory must-surface Decision survives reload and return through Jobs
 });
 
 test("Q: every visible count/badge/error, cache key, storage and notification surface ignores 25 linked held signals",async({page})=>{
+ const testStarted=Date.now();
  await openLiveWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
  const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
@@ -74,6 +75,15 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    expect(Date.parse(at),'retrievedAt is not after the response').toBeLessThanOrEqual(after);
    return at;
   }
+  // The reference for "produced after this request began" is the browser's own record of when it started the request
+  // (Request.timing().startTime, epoch ms, set once the response is in), not Date.now() when this process is told about the
+  // request: on a slow runner that event can arrive after the server has already stamped retrievedAt or the date header, and a
+  // request begun before the listeners were installed has no event at all. The guard keeps it a real reading from this test.
+  function browserRequestStart(request:import('@playwright/test').Request):number{
+   const startTime=request.timing().startTime;
+   expect(startTime,'request start is a real browser reading taken during this test').toBeGreaterThanOrEqual(testStarted);
+   return Math.floor(startTime);
+  }
   function compareBody(text:string,before:number,after:number){
    const body=JSON.parse(text) as {retrievedAt?:unknown;payingParty?:{retrievedAt?:unknown}|null};
    const at=checkClock(body.retrievedAt,before,after);
@@ -87,9 +97,9 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    const responses=new Map<string,{status:number;body:string;headers:Record<string,string>}>();
    const captures=new Map<import('@playwright/test').Request,{response:import('@playwright/test').Response;read:Promise<void>;done:boolean}>();
    const inFlight=new Set<import('@playwright/test').Request>(),failures:Error[]=[];
-   const starts=new Map<import('@playwright/test').Request,number>(),retrievals:Array<{at:string;before:number;after:number}>=[];
+   const retrievals:Array<{at:string;before:number;after:number}>=[];
    let visibleClocks=0,lastActivity=Date.now();
-   const requestListener=(request:import('@playwright/test').Request)=>{starts.set(request,Date.now());inFlight.add(request);lastActivity=Date.now()};
+   const requestListener=(request:import('@playwright/test').Request)=>{inFlight.add(request);lastActivity=Date.now()};
    const finishedListener=(request:import('@playwright/test').Request)=>{inFlight.delete(request);lastActivity=Date.now()};
    const failedListener=(request:import('@playwright/test').Request)=>{
     finishedListener(request);failures.push(new Error(`Q request failed: ${request.method()} ${request.url()}: ${request.failure()?.errorText}`));
@@ -100,15 +110,14 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
     if(url.pathname.startsWith('/api/')){
      const capture={response,read:Promise.resolve(),done:false};captures.set(response.request(),capture);
      capture.read=(async()=>{
-     const dateBefore=starts.get(response.request());expect(dateBefore,'date clock reading before this request').toBeDefined();
      const finished=await response.finished();if(finished)throw finished;
+     const requestStart=browserRequestStart(response.request());
      const [headers,bytes]=await Promise.all([response.allHeaders(),response.body()]);const after=Date.now();let body=bytes.toString('base64');
-     checkHttpDate(headers.date,dateBefore!,dateAfter);
+     checkHttpDate(headers.date,requestStart,dateAfter);
      if(url.pathname===retrievalRoute){
       expect(response.status()).toBe(200);expect(headers.etag,'Next prevention-checks response has no etag').toBeUndefined();
-      const before=starts.get(response.request());expect(before,'clock reading before this request').toBeDefined();
-      const checked=compareBody(bytes.toString('utf8'),before!,after);
-      retrievals.push({at:checked.at,before:before!,after});body=Buffer.from(checked.text).toString('base64');
+      const checked=compareBody(bytes.toString('utf8'),requestStart,after);
+      retrievals.push({at:checked.at,before:requestStart,after});body=Buffer.from(checked.text).toString('base64');
      }
      responses.set(url.pathname+url.search,{status:response.status(),body,headers:Object.fromEntries(Object.entries(headers).filter(([name])=>name!=='date').sort(([a],[b])=>a.localeCompare(b)))});
      })().then(()=>{capture.done=true;lastActivity=Date.now()},cause=>{
