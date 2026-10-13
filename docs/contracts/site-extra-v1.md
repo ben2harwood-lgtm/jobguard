@@ -260,3 +260,9 @@ Remaining release gates: D16, G1, ENT-14 and UI; two independent RED verdicts
 (fresh Claude Opus and separate Codex Sol) bound to a committed head, separate
 acceptance, real PostgreSQL suites and the shared bridge merge hold. Builder
 receipt only — not independently verified, not accepted.
+
+## v2: the visit reference (ENT-3b)
+
+Version 2 of the body (`log-site-extra.v2`) is a strictly additive extension of version 1: the same four fields plus a required `siteVisitId`, which must be the caller's own open visit on the job in the path. It removes, renames and changes the meaning of no version 1 field, and a version 1 body keeps exactly its present result and reaches the repository as exactly four fields. Version 2 and the later version 3 (photo and resident confirmation, ENT-3d) are separate extensions of version 1, not a sequence.
+
+The seam of the route is now three statements, not one: the live-job check, `app.ent3a_require_extra_authority`, then `app.ent3b_require_open_visit`. The third reads the stored origin; when it names a visit it takes the shared form of the completion routine's visit lock and refuses unless the visit still has the raising member, the same job and no completion time. A refused visit reference is the same `NOT_FOUND` as any other out-of-scope target. Side by side test: `[B17-SIDE]` in `packages/core/src/site-extra-v2.test.ts`, `apps/api/src/contractor/site-visit.application.test.ts` and `route-v2.test.ts`.

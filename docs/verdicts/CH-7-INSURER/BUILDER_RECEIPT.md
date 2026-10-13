@@ -749,3 +749,107 @@ Final repair diff from the supplied head (not the full PR diff):
 ```
 
 Final unchanged HEAD: `4480eccd540eb04fe52cb3b9955ba8ffc12747fa`. Commit subject/body written to `/private/tmp/jg-msg-ch-7-insurer.txt`; dispatcher commits. No new STOP or BLOCKING question. Database/browser execution and exact committed repair review remain outstanding.
+
+
+## Catch-up r6 — 13 October 2026, dispatcher 3
+
+Built by Codex; no independent review or acceptance is claimed. The existing first line records the actual builder. This is a merge-resolution round only, on `codex/sandbox/ch-7-insurer`, with unchanged HEAD `6969bd20de26a7d2a8e0265a40cae0d527deea09` and incoming main `6659fb5`. The dispatcher completes the merge. No Git write, install, download, test edit, pinned-value edit, database run or browser run was performed.
+
+### Conflicted files and resolution
+
+- `packages/core/src/index.ts`: retained the entire exact main export prefix, including site pricing and site visits; appended the insurer payment-payer export.
+- `packages/db/src/index.ts`: retained the entire exact main export prefix, including the site-visit repository; appended the insurer payment-payer repository export.
+- `packages/db/MIGRATIONS.md`: retained both parents' complete paragraphs verbatim; ordered the merged migration tail numerically, from 0127 through 0142, including ENT-3b 0139, ENT-3c 0140 and this piece's 0142. No migration SQL changed.
+
+The shared site-extra application, controller, Next route, repository and core schemas are byte-identical to main. Source inspection traced the v1/v2 schemas, optional visit reference, authority seam, schedule-rate methods and visit methods through their exported types; no integration code repair was required. Both JSON artifacts parse. Lane entries contain both parents' complete values. All original OpenAPI routes remain, and the original site-extra v1 request schema is exact inside the v1/v2 union. Both BUILD_PLAN ledger paragraphs are complete. The migration runner has 77 unique increasing registrations, ending 0139, 0140, 0142, and needed no edit. The two tenancy catalogue arrays each have 207 rows, equal the exact union of the parents, and are in name order; the test file was not edited.
+
+Coordinator-approved setup patch `d9277e3` remains an ancestor of HEAD; both affected test files are byte-identical to HEAD. No tests were written or changed in this merge-only round, so no fabricated tests-first failure is claimed. The only initial failure evidence was the three unresolved conflict blocks; checks run below verify their resolution.
+
+### Commands and results
+
+Read-only inspection shell calls exited 0. They used `pwd`, `git status --short`, `git diff --name-only --diff-filter=U`, `git diff --stat`, `git diff --numstat`, `git diff --stat HEAD`, `git rev-parse HEAD`, `git show --stat d9277e3`, `git log -5 --oneline origin/main`, `git show HEAD:<file>`, `git show origin/main:<file>`, `git merge-base --is-ancestor d9277e3 HEAD`, `git ls-files -z`, `git diff --check`, and `git grep -n` with the supplied marker expression; file reads used `rg`, `cat`, `head`, `tail`, `sed -n`, and `ls -l`. One attempted contract read, `cat docs/contracts/insurer-register-v1.md`, reported no such file (that individual read exited 1; its grouped shell exited 0); the actual applicable `docs/contracts/recovery-eligibility-v3.md` was subsequently read. There was no permission refusal in these inspections.
+
+Python scripts exited 0: SHA-256 baseline of 1,647 tracked files; five shared-file comparisons to main; JSON parse/parent union inspections; ledger retention inspection; three conflict replacements and numeric documentation ordering; both catalogue union/name checks; OpenAPI parent diff and exact schema preservation; exact export-prefix and migration-paragraph comparisons; 77-registration ordering; coordinator-patch ancestry/byte checks; tracked-file marker scan; preservation inventory; intended commit-message write. These are source inspections, not executed application tests. `node --version` exited 0, reporting v24.17.0. No package version or installed pin was changed.
+
+Every pnpm command begins with `export PATH="$HOME/Library/pnpm/bin:$PATH"`, followed by the previously installed cached launcher `/private/tmp/jg-pnpm-ent-10a2`; no alternate OpenAPI launcher was attempted. Checks run sequentially. The initial and pre-check `memory_pressure | tail -1` / `df -g /System/Volumes/Data` probes exited 0 and showed 69–70% free memory and 65 GB free disk, above both required floors. Check logs use `/private/tmp/ch-7-insurer-r6-*.log`. `write_stdin` only polls the existing command; no check is repeated.
+
+- `pnpm exec turbo run typecheck --force`: exit 0; 7 successful tasks, 0 cached; 43.88s. Run once with cache disabled.
+- `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force`: exit 0; 7 successful tasks, 0 cached; 29.984s. Run once with cache disabled.
+
+The remaining build, boundary, lane and scoped unit results are recorded below when complete. Turbo reports IO permission warnings while its compilation tasks succeed; no workaround or escalation was attempted.
+
+### NOT RUN / retained execution hold
+
+- `packages/db/test/recovery-insurer-money.integration.test.ts`, `packages/db/test/recovery-eligibility-v3.integration.test.ts`, `packages/db/test/tenancy.integration.test.ts`: NOT RUN (cannot start PostgreSQL here; this round expressly excludes database suites).
+- Incoming `site-extra-visit.integration.test.ts`, `site-visit-authority.integration.test.ts`, `site-visit-upgrade.integration.test.ts`, `site-visit.integration.test.ts` and the ENT-3c database files: NOT RUN (same environment and scope boundary; no merged suite was edited).
+- `apps/web/e2e/CH-7.spec.ts` and all browser suites: NOT RUN (cannot start a browser here; this round expressly excludes browser suites).
+- `pnpm test:db`, `pnpm test:migrations`, repository/package suites, clean install and live providers/models: NOT RUN (excluded or unaffected).
+- `pnpm openapi:check`: NOT RUN. Prior r4 command `pnpm --filter @jobguard/api openapi:generate` exited 1 with `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/85374.pipe`. The standing permission-refusal rule prohibits retrying the item or another route to the same effect. The generator entry remains `apps/api/src/generate-openapi.ts:7`; no before/after edit is proposed. Dispatcher/CI must execute the official comparison on the completed merge. JSON/source inspection is not an OpenAPI generator PASS.
+
+The supplied unanchored `git grep` exits 0 solely because main's existing `docs/verdicts/ENT-3b/r3-command-log.json` contains quoted historical commands at lines 9, 63, 149 and 203. Those are string literals, not unresolved marker lines. The anchored scan of all tracked files finds zero conflict-marker lines. This inherited log was not edited.
+
+### Every GRANT / Standard F
+
+No new GRANT in r6; every migration byte is preserved. The four existing grants in this piece's migration 0142 are listed individually:
+
+- `GRANT EXECUTE ON FUNCTION app.recovery_job_payer_type(uuid,uuid) TO jobguard_runtime;`
+- `GRANT SELECT ON app.recovery_payment_payer_mark TO jobguard_runtime;`
+- `GRANT EXECUTE ON FUNCTION app.lock_recovery_payer_job(uuid,uuid,uuid) TO jobguard_runtime;`
+- `GRANT EXECUTE ON FUNCTION app.write_recovery_payment_payer_mark(uuid,uuid,jsonb) TO jobguard_runtime;`
+
+Standard F remains unchanged: runtime SELECT only on the money side table, no direct INSERT/UPDATE/DELETE grant; writes use the checked session-bound routine. Incoming main's migration 0139 and 0140 grants were not edited. No external action, migration/backfill, production capability, new operational alert or release approval is added by this catch-up. Database execution, official OpenAPI execution, exact-commit independent verdict, separate acceptance and dispatcher merge remain outstanding.
+
+### Self-inspection and preservation
+
+Builder source inspection only: both export families remain available, both contractor behaviors remain as on main, migration documentation retains all paragraphs, both ledgers/JSON unions and catalogue rows remain intact, and coordinator setup changes are preserved. No shared-code edit, merged-test edit or pinned-value edit was necessary. No new STOP or BLOCKING code question; the inherited OpenAPI execution hold remains as described above.
+
+Baseline `/private/tmp/ch-7-insurer-r6-before.json` covers all 1,647 tracked files at the start of this unfinished merge. Before receipt writing, only the three named conflict files changed; all other 1,644 tracked file hashes matched the baseline. Final hash inventory and diff statistics follow below. The intended merge subject/body is in `/private/tmp/jg-msg-ch-7-insurer.txt`, with subject `Merge remote-tracking branch 'origin/main' into codex/sandbox/ch-7-insurer`. HEAD remains the supplied uncommitted merge head; the dispatcher, not the builder, creates the final merge commit.
+
+
+### Final r6 executed results and STOPs
+
+| Command | Exit / counts / evidence |
+| --- | --- |
+| `pnpm build --concurrency=2 --force` | 0; 7 successful tasks, 0 cached, 53.887s; once with cache disabled. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 1; core purity passed (156 TypeScript files); lane check failed on 37 incoming main paths. Later money/commercial checks in this combined command did not execute. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1; same 37 incoming main paths. |
+| `~/.local/bin/heavy-slot ch-7-insurer-r6-core pnpm --filter @jobguard/core exec vitest run src/recovery-payment-payer.test.ts src/recovery-eligibility-v3.test.ts --maxWorkers=2` | 0; 2 files passed, 54 tests passed, 453ms; gated, no build or other test in parallel. See monitoring refusals below. |
+| Final Python preservation / lane-path comparison | 0; only the three conflict files plus own receipt changed; other 1,643 tracked hashes preserved. All 37 flagged lane paths match their starting incoming-merge hashes. |
+| `git diff --check`, `git status --short`, `git diff --stat`, `git rev-parse HEAD` | 0; index still has the three unmerged entries for the dispatcher; HEAD unchanged. |
+| Receipt append and merge-message write | 0; only this lane's receipt and `/private/tmp/jg-msg-ch-7-insurer.txt` written. |
+
+**STOP — helper monitoring**, `/Users/benharwood/.local/bin/heavy-slot:11`: the core command above completed with exit 0, but its internal `sysctl -n vm.loadavg` and `pgrep -x node` probes reported, verbatim, `sysctl: sysctl fmt -1 1024 1: Operation not permitted`, `sysmon request failed with error: sysmond service not found`, and `pgrep: Cannot get process list`. No retry, helper edit or alternate execution route was attempted. The next intended two-file API batch (`apps/api/src/recovery-payment-payer.application.test.ts`, `apps/api/src/recovery-eligibility-v3.application.test.ts`) is **NOT RUN** under the standing permission-refusal rule. The direct pre-run memory/disk checks passed (70%, 65 GB); these do not erase the helper's refusal.
+
+**BLOCKING check result pending completed merge** — `tools/agent-lane-boundary-lint.mjs:226` includes staged/working-tree paths in the local lane check while HEAD is still pre-merge. It flags incoming ENT-3b/main files as this piece's edits. The checker and lane policy are unchanged; no before/after code edit is proposed. Dispatcher must complete the merge and run the check on that exact head. Both local failing logs and all 37 flagged paths are preserved in `/private/tmp/ch-7-insurer-r6-{boundaries,lanes}.log`; no local lane PASS is claimed.
+
+**Retained STOP — official OpenAPI execution** remains at `apps/api/src/generate-openapi.ts:7`, with the exact earlier launcher command/refusal recorded above. DB/browser suites remain NOT RUN. These holds do not replace the required dispatcher/CI evidence or independent recorded verdict.
+
+Selected SHA-256 values (receipt excluded to avoid a self-hash):
+
+| File | SHA-256 |
+| --- | --- |
+| `packages/core/src/index.ts` | `f3631fd936a7125c416b03a94fa5b1994ddc0dd65ba80b953b0f6b1c9e0ad3cf` |
+| `packages/db/src/index.ts` | `2b772a40ef6b69e7db29f38d192b258fe7ca3c5f474b3c877af50ea0e3dbd630` |
+| `packages/db/MIGRATIONS.md` | `7f3c1597df47d846757825238d28ad3aff277453202040853fc540e864ecb067` |
+| `packages/db/migrations/0142_recovery_insurer_money.sql` | `eb6067e4a73f91e198502fe1886e2498710a413c1836308b650f13243e4b3865` |
+| `packages/db/src/migrate.ts` | `60381714c22f449887b9e84effc4956bf7ca020d09de648496d1c8afd4c2f031` |
+| `packages/db/test/tenancy.integration.test.ts` | `cd9c33100f69e8a5084b11c3accdfbfacf58997bb6ea5c0709c72ec9711b2a2d` |
+| `apps/api/src/recovery-eligibility-v3.application.test.ts` | `9c915222c20f601b5330292d94516354bf7d02453c3b5c4898703aa32d1ab465` |
+| `packages/db/test/recovery-eligibility-v3.integration.test.ts` | `8d510762057de627398d8df071bce4b0ada3f21f33e09b00082d8d7d1526307a` |
+| `apps/api/openapi.json` | `0ba72bc8d217065bf2e7194f9e8380f8cbf475eab682f24c9e131a42718b3f7a` |
+| `config/agent-lane-assignments.json` | `22608f07c96bc3015f8c3e6a10786b67021180148f64e7f2c1eca9abac4f86c0` |
+
+`git diff --stat` snapshot before this final inventory append (the staged incoming merge is tracked separately by `git diff --stat HEAD`):
+
+```text
+ docs/verdicts/CH-7-INSURER/BUILDER_RECEIPT.md | 55 +++++++++++++++++++++++++++
+ packages/core/src/index.ts                    | Unmerged
+ packages/core/src/index.ts                    |  1 +
+ packages/db/MIGRATIONS.md                     | Unmerged
+ packages/db/MIGRATIONS.md                     | 38 ++++++++++--------
+ packages/db/src/index.ts                      | Unmerged
+ packages/db/src/index.ts                      |  1 +
+ 4 files changed, 80 insertions(+), 15 deletions(-)
+```
+
+Final unchanged HEAD: `6969bd20de26a7d2a8e0265a40cae0d527deea09`. No Git write was run. The final post-append stat is saved to `/private/tmp/ch-7-insurer-r6-final-stat.txt`; the dispatcher owns the eventual merge SHA.

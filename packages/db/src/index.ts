@@ -89,4 +89,5 @@ export * from "./contractor-practice-session-repository.js";
 export * from "./site-extra-repository.js";
 export * from "./scim-repository.js";
 export * from "./recovery-allocation-repository.js";
+export * from "./site-visit-repository.js";
 export * from "./recovery-payment-payer-repository.js";
