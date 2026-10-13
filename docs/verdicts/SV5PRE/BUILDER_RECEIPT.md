@@ -1,3 +1,85 @@
+## Current status — coordinator-approved amendments r4 (13 October 2026, dispatcher 4)
+
+Local HEAD / repair base: `678b9da0d3b872ceaa331f0e87eff86bc7cf0662`; r4 amendments are **uncommitted**. Built by Codex. No Git write command, package install, independent review, technical acceptance, push or release. Dispatcher commits this working tree separately as **coordinator-approved amendments r4** using `/private/tmp/jg-msg-sv5pre.txt`. This section is the current head/status; all r1–r3 head/status and STOP statements below are historical run records.
+
+Independent source-inspection evidence read: `/Users/benharwood/.local/share/full-steam/jg-runs/sv5pre-opus-678b9da.md`: **HOLD**, bound to the exact base above, no suites executed by the reviewer. It is not a verdict on this uncommitted r4 diff. The independent verdict and separate acceptance for the dispatcher's new commit remain owed.
+
+Coordinator authority supplied verbatim in the active user instruction:
+
+> YES, queue it. All three are premise set-up under the standing rule: (1) practice-facts:63 and practice-feed:64: the builder may add a scoped pool / scoped repository for the SET-UP ONLY (terms, lock, completion), leaving the existing unscoped repository at :48/:49 and the existing issue call and every later assertion byte-for-byte. (2) apps/web/e2e/SV-4.spec.ts:112: replace the raw `completed` insert with the checked completion helper (a run, then completion); what the spec asserts afterwards is unchanged. (3) shadow-isolation.application.test.ts:365: add authoritative completion before the issue; the pending upload at :300 and the row comparison at :393 stay byte-for-byte. If the :393 comparison can only pass by changing what it expects, STOP on that line and send it to me.
+
+The user additionally confirms the existing completion-repository relocation into `shadow-detection-repository.ts` and UIWIRE-10/11/12 baseline scope/line setup. Those sources remain byte-identical to HEAD in r4. The pinned worker list and both structural isolation assertions remain unchanged; their executed result is recorded below.
+
+### Each r4 change — file:line, SET-UP-ONLY, before/after
+
+Line numbers below refer to the resulting working tree; issued line numbers are shown where they differ.
+
+| File:line | Class | Before | After |
+| --- | --- | --- | --- |
+| `packages/db/test/practice-facts.integration.test.ts:1,12` | SET-UP-ONLY | No prerequisite-helper or scoped-pool import | Add `prepareInvoicePrerequisites` and existing `practiceMaterialPool` imports. |
+| `packages/db/test/practice-facts.integration.test.ts:64–70` (issued issue :63, now :71) | SET-UP-ONLY | Accepted aggregate account lacks a baseline line, terms, lock and checked completion | Add confirmed scope identity and baseline line using the existing 110000 net/quote; read the job's persisted digest into a **setup-only** pool; establish terms, dispositions, exact-revision lock and checked empty completion via existing helper. Original unscoped repository at issued :48 (now :49), original issue and entire tail remain byte-for-byte. Issue remains STOP below. |
+| `packages/db/test/practice-feed.integration.test.ts:1,12` | SET-UP-ONLY | No prerequisite-helper or scoped-pool import | Same two additive imports. |
+| `packages/db/test/practice-feed.integration.test.ts:65–71` (issued issue :64, now :72) | SET-UP-ONLY | Same aggregate-only fixture | Same prerequisite insertion; original unscoped repository at issued :49 (now :50), original issue and every later assertion remain byte-for-byte. Issue remains STOP below. |
+| `apps/web/e2e/helpers/customer-invoice-journey.ts:89` | SET-UP-ONLY | Checked completion helper is private to its fixture module | Add only `export` to its declaration so SV-4 uses the same manifest/source/attempt/result/run-binding/publication path; helper body unchanged. |
+| `apps/web/e2e/SV-4.spec.ts:1,113` (issued :112) | SET-UP-ONLY | Raw successful `completed` insert on the other job without a run | Import helper and replace only that insert with `publishInvoiceFixtureCompletion(shadow,admin,fixture.tenantId,other.jobId,{lockId:foreign.id,cutoff:foreign.cutoff})`. Genuine checked simulated run and completion; both earlier 23503 refusals and every assertion afterwards are unchanged. |
+| `config/agent-lane-assignments.json:2` | SET-UP-ONLY (lane metadata) | All four coordinator-named test paths already explicitly present in sv5pre allow list | Keep exact allow entries without duplicates; append their explicit r4 coordinator approval and preservation conditions to sv5pre note. No other lane change. |
+| `docs/verdicts/SV5PRE/BUILDER_RECEIPT.md:1` | SET-UP-ONLY (receipt metadata) | Top status refers to r3 at 2e98177 | Prepend current 678b9da head/uncommitted status, exact authority, amendment rows, preservation evidence, checks and STOP handoff; retain prior receipts as history. |
+
+### STOPs sent to coordinator — preserved lines, source inspection only
+
+**STOP `apps/api/src/shadow-isolation.application.test.ts:393`** (comparison loop :393–397; final equality :406). Entire file is untouched. Authoritative completion cannot preserve the existing comparison under current schema. It inventories the original pending upload at :300 and requires it verified with matching version/hash before success (`0147:143–148,204`). More decisively, the zero-signal run has a zero-result descriptor; the many-signal run must classify and prove all 25 signals (`0147:208–212`). The comparison enumerates every app/infrastructure table except `shadow_%`, so it includes all five private `final_check_*` proof tables plus `final_check_completion`. Those runs necessarily differ in reveal-proof row count/descriptors, source-attempt signal IDs, run-binding result hash, certificate result hash and `audit_event` payload/hash. These are semantically different bytes even with deterministic clocks and UUIDs. Adding completion alone would fail on the pending upload; finalizing it would still require changing the protected comparison's expectations to pass. The coordinator expressly says STOP in that case: no completion insertion, upload mutation, comparison exclusion, fake proof, or migration repair has been attempted. The existing issue at :365 remains identical and held. This is a source-inspected blocker, not a claimed executed DB failure.
+
+**STOP `packages/db/test/practice-facts.integration.test.ts:71` and `practice-feed.integration.test.ts:72`** (issued :63/:64). The allowed scoped prerequisite setup is complete in source. Their retained `new PracticeInvoiceRepository(runtime)` issue uses a separate unscoped `withTenant` transaction (`practice-invoice-repository.ts:22–24`). Setup's `app.practice_material_digest` is transaction-local and ends at commit (`practice-session.ts:75`). The invoice routine checks digest **before replay** and again after the job lock (`0147:293,296`); a non-null job digest and absent supplied digest raise `FORBIDDEN` (`0147:276–278`). Setup-only scoping cannot change that. No repository rebinding, pool mutation, session-wide digest leak, job-digest deletion, pre-issued replay bypass, SQL authorization relaxation or expectation change is authorized or attempted. These calls still need a specific coordinator ruling; no green DB result is claimed.
+
+### r4 preservation and verification
+
+`/private/tmp/sv5pre-r4-preservation.json` records successful read-only reconstruction: deleting only r4 imports/setup reconstructs each complete practice test file at HEAD; reverting only the SV-4 import/replacement reconstructs that complete file; removing only `export` reconstructs the browser helper. Practice issue-and-assertion tails and SV-4 assertion tail hashes are recorded there. Ten protected files are byte-identical to HEAD, including the entire shadow-isolation file, entire worker structural test (pinned list and both isolation assertions), context-boundary, registry, practice-session, migration 0147, worker-only repository and all three UIWIRE fixtures. No permanent pinning test or existing expectation was changed.
+
+Executed r4 checks used installed Node `v24.17.0`, pinned pnpm `10.28.1` and Vitest `4.1.11`. Each pnpm command began with `export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/sv5pre-independent/bin:$PATH"`, using the already-installed corepack binary. No installs or downloads. Typecheck, lint and build each ran once with `--force`, seven packages executed and **0 cached**. Commands ran sequentially; no build/test overlap; every Vitest batch has at most three explicit files and `--maxWorkers=2`. Memory probes showed 66–70% free and available disk stayed 49 GB (>45 GB). Shared-cache permission warnings did not prevent forced execution. The current read-only `origin/main` used by both lane checks is `e4cb8437d044746300c377647f6061d06cd960cc`.
+
+| Executed r4 command | Exit | Result / log |
+| --- | ---: | --- |
+| `pnpm typecheck --force --concurrency=2` | 0 | Seven packages pass, zero cached; includes web/browser helper typecheck. `/private/tmp/sv5pre-r4-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | 0 | Root purity/lane/money/commercial checks and seven package checks pass, zero cached. `/private/tmp/sv5pre-r4-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | sv5pre scope passes. `/private/tmp/sv5pre-r4-lanes.log` |
+| `pnpm build --concurrency=2 --force` | 0 | Seven packages pass, zero cached; production Next build. Existing CSS/cache warnings. `/private/tmp/sv5pre-r4-build.log` |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/watchdog-registry.test.ts src/shadow-detection.worker.test.ts src/practice-session.test.ts` | 0 | 3 files, 277 tests pass; unchanged pinned worker list and both structural isolation assertions green. `/private/tmp/sv5pre-r4-api-structural.log` |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/sv5pre-worker-registration.test.ts src/final-account-lock.application.test.ts` | 0 | 2 files, 20 tests pass. `/private/tmp/sv5pre-r4-api-own.log` |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/context-boundary.test.ts src/final-account-lock.controller.test.ts` | 0 | 2 files, 150 tests pass. `/private/tmp/sv5pre-r4-api-boundary.log` |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/final-check-completion.test.ts` | 0 | 1 file, 11 tests pass. `/private/tmp/sv5pre-r4-core.log` |
+| `pnpm openapi:check` | 1 | Wrapper blocked before generator by tsx IPC `listen EPERM`; no permissions escalation. `/private/tmp/sv5pre-r4-openapi.log` |
+| `node apps/api/dist/generate-openapi.js --check` | 1 | Compiled diagnostic reports stale OpenAPI; compiled metadata produces a different document from the source checker. No generated file changed. `/private/tmp/sv5pre-r4-openapi-compiled.log` |
+| `node --import tsx src/generate-openapi.ts --check` **from apps/api** | 0 | Exact source generator and `--check` logic used by the required script passes, avoiding the CLI's IPC listener. `/private/tmp/sv5pre-r4-openapi-direct.log` |
+| TypeScript `transpileModule` on all four changed TypeScript fixtures | 0 | Syntax check; DB tests excluded from their package's production tsconfig. Not DB execution. |
+| Read-only HEAD reconstruction / protected-file hashes | 0 | Four reconstructed sources plus ten protected whole files; `/private/tmp/sv5pre-r4-preservation.json` |
+| `git diff --check` | 0 | Clean. |
+
+Total executed unit coverage: **458 passed, eight files, zero failed/skipped**. This is targeted unit coverage, not the package-wide API suite, DB guarantees or browser acceptance. The standard OpenAPI command remains blocked by sandbox IPC; its exact source checker was actually executed successfully. The compiled diagnostic is separately labelled and does not override the source-check result. Whole suites remain dispatcher-owned under the packet's memory limit.
+
+Other actual commands: read-only `pwd`, `rg`, `cat`, `sed`, `head`, `tail`, `nl`, `ls`, `git status --short`, `git rev-parse`, `git log`, `git show`, `git diff`/`--stat`/`--numstat`/`--check`; `memory_pressure`, `df`, `node --version`; temporary Python/TypeScript preservation and syntax checks; working-tree receipt/fixture/lane edits and temporary message/log writes. Initial reads of guessed absent files/globs returned nonzero; the first temporary Python reconstruction had an indentation error and was corrected before successful verification. The first direct tsx attempt from repo root could not resolve the API-only dependency; rerunning from apps/api succeeded. No package, environment, Git or permission boundary was changed to perform these checks.
+
+**NOT RUN:** both amended practice DB suites; shadow-isolation application's socket/PostgreSQL suite; SV-4 browser suite and existing customer-invoice helper consumers; all own SV5PRE PostgreSQL/access/upgrade/worker/HTTP suites and the affected DB/migration/browser suite manifest recorded in Opus's base verdict. These remain required on the dispatcher's Mac / GitHub CI. AI/prompt/model/extraction/matching unchanged; `pnpm eval` and approved-region live evaluation are inapplicable to these setup-only edits. No fresh install was attempted (dependencies provided); no clean-install claim.
+
+Self-review: all allowed practice setup is inserted before unchanged calls and expectations, scope/line value comes from the existing accepted quote/account, browser completion uses the existing checked restricted-worker helper, no public feature, access-path implementation, schema, GRANT or financial routine changed. Existing worker relocation and UIWIRE setup are unchanged and their newly supplied coordinator approval is recorded. The exact :393 STOP condition is present in source, so shadow-isolation stays wholly untouched; setup cannot carry transaction-local authentication into the preserved unscoped practice issue, so both calls stay STOP. Deterministic/source checks do not count as an independent model verdict. Reviewer/acceptance/release gates remain held.
+
+PostgreSQL/database/migration, HTTP socket and browser suites are **NOT RUN** per dispatcher sandbox instructions; they remain for the dispatcher's Mac / GitHub CI after push. No synthetic helper is described as installed SV-5 orchestration or live provider integration. No schema, production path, grant, monetary behavior, policy, provider destination, operational alert or release gate changes in r4; SV5-32 and substantive reveal/disposition remain held.
+
+### r4 final scope and handoff
+
+Five changed non-receipt files plus this receipt; no untracked files. Read-only final status/diffstat: `/private/tmp/sv5pre-r4-status.txt`, `/private/tmp/sv5pre-r4-diffstat.txt`. Changed-source SHA-256 manifest: `/private/tmp/sv5pre-r4-changed-hashes.json`.
+
+| Changed non-receipt file | SHA-256 |
+| --- | --- |
+| `apps/web/e2e/SV-4.spec.ts` | `f76b1a16801f579c87dfd87dc6f5f796926bc124b5a9597da992ddbdb6ea7cea` |
+| `apps/web/e2e/helpers/customer-invoice-journey.ts` | `72f1fd7ff9176aaa4af7d3841fdf9ee0c1c0f5240d745d247f4ed093a600a6c9` |
+| `config/agent-lane-assignments.json` | `628d76a27821189a995b394e0f1b3aa545b0e258bd6eb01298c7cd94c6049513` |
+| `packages/db/test/practice-facts.integration.test.ts` | `0196dd8865f89fdc28ff98fb549cb17d740ae31cceb2c93df5fed60221b2dd10` |
+| `packages/db/test/practice-feed.integration.test.ts` | `e42816df703978a226576bbaf6f44358b94abfd30de26b1e6cafadce47798fe6` |
+
+Final local HEAD stays `678b9da0d3b872ceaa331f0e87eff86bc7cf0662`; r4 stays uncommitted for the dispatcher. Intended conventional subject/body overwritten at `/private/tmp/jg-msg-sv5pre.txt`. This is a held handoff: exact coordinator STOPs above, real DB/browser proofs, independent new-commit verdict and separate acceptance remain outstanding.
+
+---
+
 Built by Codex; repair r3 dispatched 13 Oct 2026. Codex was available; the dispatch addendum's requested Claude author line is factually inapplicable.
 
 ## Repair r3 — S1–S4 only (13 October 2026, dispatcher 4)
