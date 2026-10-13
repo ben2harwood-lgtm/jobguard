@@ -99,7 +99,7 @@ export class RecoveryCaseRepository{
  /**
   * (i) the caller opens the transaction with withTenant (through practiceMaterialPool when it needs the practice setting; the joined call installs no setting of its own) and ends it;
   * (ii) call it AFTER every other lock and write of your transaction: it takes the membership row FOR SHARE, then the case advisory key, then, through its audit append, the tenant's audit head, and it takes no job-row lock;
-  * (iii) after it returns you may only append your own audit batch (the head is already held by your transaction, so that takes no new lock) and commit;
+  * (iii) after it returns you may only append your own audit batch and commit: a newly recorded command already holds the audit head; a replay returns before the audit append, so your own later audit batch acquires the head if needed;
   * (iv) at most ONE joined command per caller transaction (a second would take a case lock after the audit head);
   * (v) if it rejects, roll the whole transaction back: never commit after a rejection;
   * (vi) use the client for one thing at a time while the call is running.
@@ -111,7 +111,7 @@ export class RecoveryCaseRepository{
   const first=await db.$client.query<{x:string|null}>("SELECT pg_current_xact_id()::text AS x");
   const second=await db.$client.query<{x:string|null}>("SELECT pg_current_xact_id_if_assigned()::text AS x");
   if(first.rows[0]?.x==null||second.rows[0]?.x==null||first.rows[0].x!==second.rows[0].x)throw new RecoveryJoinError("RECOVERY_JOIN_TRANSACTION_REQUIRED");
-  const tenant=await db.$client.query<{same:boolean|null}>("SELECT nullif(current_setting('app.tenant_id', true), '')::uuid = $1::uuid AS same",[context.tenantId]);
+  const tenant=await db.$client.query<{same:boolean|null}>("SELECT CASE WHEN pg_input_is_valid(current_setting('app.tenant_id', true), 'uuid') THEN nullif(current_setting('app.tenant_id', true), '')::uuid = $1::uuid ELSE false END AS same",[context.tenantId]);
   if(tenant.rows[0]?.same!==true)throw new RecoveryJoinError("RECOVERY_JOIN_TENANT_MISMATCH");
   return this.commandBody(db,context,jobId,sent,parsed,reviewer);
  }

@@ -899,12 +899,6 @@ Existing rows are not examined or backfilled. A guarded message approved before 
 
 Forward fix: preserve all approval and chase history and amend only through a separately reviewed later migration. Do not roll back by removing the guard while pursuits exist. New terms/policy versions and withdrawal require their own reviewed migration and product ruling. DW3, wording, the UI and live M4-5 helper integration remain owed. Real charging remains locked.
 
-## 0138_practice_session_hardening.sql — contractor practice session boundary
-
-Depends on 0054 and 0094. Converts contractor session values in place into canonical SHA-256 digests and independent random row numbers. Live home records supply the remaining deadline; ended or absent home records end converted rows. New starts with no home record retain a nonrenewable seven-day cap. Lookup reads the home record on every call. Adds holder-only contractor revoke with a deferred audit requirement, write-once guards, and the same owner refusal in grant.create as member.invite. No new direct table write grants; only the checked revoke routine gains runtime EXECUTE.
-
-Forward fix preferred. A rollback restoring the three 0054 routines must also drop the three new NOT NULL requirements and the guard trigger, since the old start writes four columns. No current row retains its original session value, so restoring the old lookup ends every current session; each browser starts a new company. No rows are deleted. PostgreSQL upgrade and catalogue checks remain pending outside the sandbox.
-
 ## 0135 — site extra authority (ENT-3a)
 
 Renumbered from 0126 to 0135 on 12 October 2026 under the merge-ahead ruling because 0127 to 0129 merged first and 0130 to 0134 are reserved by open pull requests; the SQL bytes are unchanged (sha256 1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab).
@@ -936,6 +930,16 @@ operator change. No historical data rollback is needed.
 Adds only `identity.scim_event` (immutable, tenant-qualified, FORCE RLS, no application table privileges) and `identity.scim_deactivate(uuid,jsonb)` (restricted identity EXECUTE only; SECURITY DEFINER with pg_catalog search path). No object from 0111, 0120 or 0129 altered or restated; no backfill; no existing row changed by the migration. No column, index, constraint, policy, trigger or grant added to any existing table. PostgreSQL creates the internal foreign-key enforcement triggers automatically as part of the new table's constraints.
 
 The governed repository transaction writes existing one-way membership/session revocation facts, grant revocations and the record, then appends the audit event last. This is the first product code to set app.membership.revoked_at. Existing request gates remain unchanged. Synthetic database only, replay once, owner protected, no reactivation. Roll forward for any repair; removing the new objects is permissible only before any message has been accepted. Accepted history and revocation facts must never be cleared by rollback. Upgrade proof snapshots populated named columns, full types and primary-key identities before this migration, verifies this migration alone, then applies later migrations twice. Database tests are NOT RUN (sandbox cannot start PostgreSQL / a browser).
+
+## 0136 — recovery allocations (M4-8-S)
+
+Expand-only: adds immutable allocation reviews, line-source bindings, case allocations/reversals, receipt-line fractions and command identities. Runtime SELECT only; session-checked migration-owned `write_recovery_allocation` appends facts and Decision authorizations. No existing object or grant changes. All constraints remain immediate; the public repository transaction invokes the joined case event last and then appends caller audit before commit. Forward fix only after facts exist: disable the allocator, preserve original rows, add compensating facts in a reviewed follow-up migration; do not drop or edit commercial history. Saved deposit and supplementary-invoice fixtures remain Q2-held.
+
+## 0138_practice_session_hardening.sql — contractor practice session boundary
+
+Depends on 0054 and 0094. Converts contractor session values in place into canonical SHA-256 digests and independent random row numbers. Live home records supply the remaining deadline; ended or absent home records end converted rows. New starts with no home record retain a nonrenewable seven-day cap. Lookup reads the home record on every call. Adds holder-only contractor revoke with a deferred audit requirement, write-once guards, and the same owner refusal in grant.create as member.invite. No new direct table write grants; only the checked revoke routine gains runtime EXECUTE.
+
+Forward fix preferred. A rollback restoring the three 0054 routines must also drop the three new NOT NULL requirements and the guard trigger, since the old start writes four columns. No current row retains its original session value, so restoring the old lookup ends every current session; each browser starts a new company. No rows are deleted. PostgreSQL upgrade and catalogue checks remain pending outside the sandbox.
 
 ## 0133 — SV-3 shadow detection
 

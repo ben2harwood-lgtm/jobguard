@@ -79,3 +79,5 @@ export { ContractorPracticeSessionApplication, assertContractorPracticeSessionMo
 export { SiteExtraApplication, assertSiteExtraMode, siteExtraHttpFailure } from "../contractor/site-extra.application.js";
 export * from "../auth/sso/scim.application.js";
 export * from "../auth/sso/scim.contracts.js";
+export * from "../recovery-allocation.application.js";
+export * from "../recovery-allocation.contracts.js";

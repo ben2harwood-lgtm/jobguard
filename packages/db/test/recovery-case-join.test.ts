@@ -140,7 +140,7 @@ it.each([false, null])("[J-T2] tenant proof refuses %s before membership or lock
   await expect(new RecoveryCaseRepository(unusedPool()).commandInTransaction(client.db, context, jobId, landing(), reviewer))
     .rejects.toMatchObject({ code: "RECOVERY_JOIN_TENANT_MISMATCH" });
   expect(client.statements).toHaveLength(3);
-  expect(client.statements[2]).toEqual({ sql: "SELECT nullif(current_setting('app.tenant_id', true), '')::uuid = $1::uuid AS same", values: [tenantId] });
+  expect(client.statements[2]).toEqual({ sql: "SELECT CASE WHEN pg_input_is_valid(current_setting('app.tenant_id', true), 'uuid') THEN nullif(current_setting('app.tenant_id', true), '')::uuid = $1::uuid ELSE false END AS same", values: [tenantId] });
   assertCallerOwned(client);
 });
 it("[J-R1] identical replay returns a receipt; hash and job conflicts retain merged errors", async () => {
