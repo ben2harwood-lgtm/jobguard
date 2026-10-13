@@ -693,8 +693,8 @@ Existing users need no backfill: legacy synthetic users stay in their existing d
 Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
 0111 replaces this PR’s earlier reservations (0052, then 0098, then 0108): 0102, 0103, 0106, 0107
 (M4-5-S, `recovery_messages`), 0109 (CH-1) and 0110 (ENT-2) merged ahead of this PR, so 0111 is the next
-free number at merge. 0112 (M4-6-S) and 0113 (CH-7) are allocated after it, and 0100 (SV-2) takes the
-next free number at its own merge. The runner places 0111 after 0110_work_orders.sql (currently last);
+free number at merge. 0112 (M4-6-S) and 0113 (CH-7) are allocated after it, and 0100 (SV-2) later merged as
+0128. The runner places 0111 after 0110_work_orders.sql (currently last);
 0102_contractor_parties.sql, 0103_prevention_checks.sql, 0106_practice_feed.sql,
 0107_recovery_messages.sql, 0109_job_activation_terms.sql and 0110_work_orders.sql therefore apply before
 0111. The SQL bytes are unchanged by the renumber (SHA-256 9779d3f6…59e0).
@@ -875,7 +875,9 @@ rewrites and deletes NO existing row. Both feed routines remain unchanged.
 The access-exclusive lock and validation scan are the operational migration cost.
 The populated upgrade, row bytes, no-op rerun and unchanged security/routine
 catalogue probes are in `test/practice-facts.integration.test.ts`; they are
-NOT RUN in the builder sandbox (cannot start PostgreSQL).
+NOT RUN in the builder sandbox (cannot start PostgreSQL). They were later run on the Mac
+(the whole suite once, as part of merge train B) and in GitHub's CI on the merged head
+(pull request #139; acceptance comment 6132008864).
 
 Forward-fix: retain the expanded checks and disable the new route if a defect is
 found. Narrowing the checks is unsafe once new rows exist; do not delete or edit
@@ -919,7 +921,9 @@ record is appended separately. No business network action, price or fee.
 
 Upgrade/catalogue and governed-path tests: `site-extra-authority.integration.test.ts`
 and `site-extra.integration.test.ts`. NOT RUN in the builder sandbox (cannot start
-PostgreSQL). Integrator must execute before acceptance. Expand-compatible with
+PostgreSQL). Integrator must execute before acceptance. They were later executed
+(83 of 83 database tests passing on the combined head, plus GitHub's CI run on that head)
+before the merge (pull request #156, merge c84c6b3; acceptance comment 6136417276). Expand-compatible with
 prior clients. Forward fix preferred: stop this route and issue a reviewed
 additive correction; rollback of this leaf alone requires disabling the route
 and removing its two routines and migration registration under a separate
