@@ -1,3 +1,7 @@
+# ENT-10e round r6 — current builder receipt, 13 October 2026
+
+Current working-tree repair: [R6_RECEIPT.md](R6_RECEIPT.md), [R6_COMMANDS.md](R6_COMMANDS.md), [R6_PROTECTED_TEST_LINES.md](R6_PROTECTED_TEST_LINES.md), [R6_ASSERTION_CHECK.json](R6_ASSERTION_CHECK.json). Baseline HEAD 51986a49fd9b891b752e8c808409ab01d6a4120a; no git writes. E1 client fixture now uses its seeded same-tenant branch; every assertion remains unchanged. Main is four commits ahead and no merge is in progress. Database/browser CI and the historical gitleaks finding remain outstanding. This round supersedes prior current-status claims below; prior receipts are retained as history.
+
 # ENT-10e round r5 — current builder receipt, 13 October 2026
 
 Current evidence: [R5_RECEIPT.md](R5_RECEIPT.md), [R5_COMMANDS.md](R5_COMMANDS.md), [every protected test line](R5_PROTECTED_TEST_LINES.md), and [unchanged assertion comparison](R5_ASSERTION_CHECK.json). These supersede all earlier status statements below. Builder evidence only; RED lane remains pending real PostgreSQL/CI, historical secrets finding resolution and new exact-commit independent verdict/acceptance.

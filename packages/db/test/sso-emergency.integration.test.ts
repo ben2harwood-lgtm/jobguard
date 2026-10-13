@@ -195,7 +195,11 @@ const created=["identity.sso_emergency_approval","identity.sso_emergency_use","i
 const beforeUse=(f:OwnerFixture)=>Promise.all(created.map(t=>canonical(t,f.principal.tenantId)));
 async function grant(tenant:string,membership:string,role:string,email:string) {
  let clientId:string|null=null;
- if(role==="client_approver"){clientId=randomUUID();await admin.query("INSERT INTO app.client_organisation(tenant_id,id,branch_id,name,client_type) VALUES($1,$2,$1,'Synthetic client','person')",[tenant,clientId]);}
+ if(role==="client_approver"){
+  clientId=randomUUID();
+  const branchId=(await admin.query("SELECT id FROM app.org_unit WHERE tenant_id=$1 AND kind='branch' ORDER BY id LIMIT 1",[tenant])).rows[0].id;
+  await admin.query("INSERT INTO app.client_organisation(tenant_id,id,branch_id,name,client_type) VALUES($1,$2,$3,'Synthetic client','person')",[tenant,clientId,branchId]);
+ }
  await admin.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email,client_id) VALUES($1,$2,$3,$4)",[tenant,membership,email,clientId]);
  if(role!=="client_approver")await admin.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,$4,'tenant',$1)",[tenant,randomUUID(),membership,role]);
 }
