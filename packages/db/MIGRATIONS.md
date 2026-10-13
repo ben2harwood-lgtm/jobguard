@@ -925,6 +925,12 @@ additive correction; rollback of this leaf alone requires disabling the route
 and removing its two routines and migration registration under a separate
 operator change. No historical data rollback is needed.
 
+## 0137 — synthetic SCIM deactivation (ENT-10a2)
+
+Adds only `identity.scim_event` (immutable, tenant-qualified, FORCE RLS, no application table privileges) and `identity.scim_deactivate(uuid,jsonb)` (restricted identity EXECUTE only; SECURITY DEFINER with pg_catalog search path). No object from 0111, 0120 or 0129 altered or restated; no backfill; no existing row changed by the migration. No column, index, constraint, policy, trigger or grant added to any existing table. PostgreSQL creates the internal foreign-key enforcement triggers automatically as part of the new table's constraints.
+
+The governed repository transaction writes existing one-way membership/session revocation facts, grant revocations and the record, then appends the audit event last. This is the first product code to set app.membership.revoked_at. Existing request gates remain unchanged. Synthetic database only, replay once, owner protected, no reactivation. Roll forward for any repair; removing the new objects is permissible only before any message has been accepted. Accepted history and revocation facts must never be cleared by rollback. Upgrade proof snapshots populated named columns, full types and primary-key identities before this migration, verifies this migration alone, then applies later migrations twice. Database tests are NOT RUN (sandbox cannot start PostgreSQL / a browser).
+
 ## 0136 — recovery allocations (M4-8-S)
 
 Expand-only: adds immutable allocation reviews, line-source bindings, case allocations/reversals, receipt-line fractions and command identities. Runtime SELECT only; session-checked migration-owned `write_recovery_allocation` appends facts and Decision authorizations. No existing object or grant changes. All constraints remain immediate; the public repository transaction invokes the joined case event last and then appends caller audit before commit. Forward fix only after facts exist: disable the allocator, preserve original rows, add compensating facts in a reviewed follow-up migration; do not drop or edit commercial history. Saved deposit and supplementary-invoice fixtures remain Q2-held.

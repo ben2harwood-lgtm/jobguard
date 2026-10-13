@@ -20,7 +20,7 @@ An email collision never silently links an entered-code identity. Linking requir
 
 JIT creation requires at least one explicitly enabled group mapping. Memberships have base `read_only` role; every contractor grant is an immutable ENT-1 `role_grant` with explicitly mapped role and scope. No owner/client-approver mapping exists. `finance` is tenant scoped and `commercial_manager` is granted only by an explicit mapping. Unmapped group names grant nothing. Operatives also require existing ENT-1 team assignment before operational access; SSO does not fabricate that assignment. Existing independently granted account authority survives explicit linking; only SSO-derived grants are reconciled by SSO.
 
-Group changes append revisions with optimistic per-group revision checks. Add/change/disable commands append audit events in the same transaction. At a verified next sign-in, old SSO sessions are revoked and previous SSO-derived grants receive immutable revocations before current mappings are applied. No remaining mapped groups returns a typed denial while committing those revocations. No SCIM endpoint is built.
+Group changes append revisions with optimistic per-group revision checks. Add/change/disable commands append audit events in the same transaction. At a verified next sign-in, old SSO sessions are revoked and previous SSO-derived grants receive immutable revocations before current mappings are applied. No remaining mapped groups returns a typed denial while committing those revocations. Synthetic deactivation is specified in [scim-deactivation-v1.md](scim-deactivation-v1.md); real SCIM remains HELD.
 
 ## Sessions and execution
 
@@ -47,4 +47,4 @@ All responses are uncached. Admin audit display is a restricted projection of ev
 
 ## Outstanding scope
 
-OIDC and emergency-access administration are HELD for Ben. SCIM is later ENT-10a2; audit export/DW6 later ENT-10b; assurance pack/DW7 later ENT-10c. Native M1 coverage waits for M3. Founder D04/G5 evidence remains held. Technical acceptance can only be “SAML synthetic, M4 held,” after the required independent reviews, CI and separate acceptance; this contract asserts none of those outcomes.
+OIDC and emergency-access administration are HELD for Ben. Synthetic SCIM deactivation is ENT-10a2, specified in [scim-deactivation-v1.md](scim-deactivation-v1.md); audit export/DW6 later ENT-10b; assurance pack/DW7 later ENT-10c. Native M1 coverage waits for M3. Founder D04/G5 evidence remains held. Technical acceptance can only be “SAML synthetic, M4 held,” after the required independent reviews, CI and separate acceptance; this contract asserts none of those outcomes.
