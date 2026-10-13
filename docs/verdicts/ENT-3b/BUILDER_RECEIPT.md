@@ -287,3 +287,95 @@ Intended merge commit message is written to `/private/tmp/jg-msg-ent-3b.txt`, be
 ```
 
 The complete origin/main diff-stat and pre-resolution SHA-256 manifest are in the command log. These stats include existing branch work or incoming main changes, and do not label those as r3 edits.
+
+## Repair round r4 — 13 October 2026
+
+Actual builder: Codex; the existing truthful first-line attribution is retained. Incoming and final local HEAD: `238410bbb9d7168d24d4b7cbcb9b79cc1679fbf9`, branch `codex/sandbox/ent-3b`. No git write command was run. The dispatcher owns the next commit; its SHA is not yet available. Earlier receipt results are historical and do not verify r4.
+
+### Change and builder self-inspection
+
+Only `apps/api/src/contractor/site-visit.application.test.ts` changes executable content. [B17] parses TypeScript method bodies: each of `log`, `startVisit`, `completeVisit`, `assignedJobs` and `orderLines` must exist exactly once, have a body, call `this.resolveContext` exactly once and contain no `contractorSessionContext` identifier. Traversal includes nested callbacks. The existing whole-application restrictions on bridge references and identity-provider imports remain. An aggregate count could conceal a missing call balanced by two calls elsewhere; the new check refuses that redistribution.
+
+Five new control cases cover missing, duplicate, redistributed and direct bridge calls, plus correct parsing of nested bodies, typed parameters, comments, string literals and an unrelated method. [B18] keeps exact export-list equality, explicitly adding only ENT-3c's `logSor`, `orderCheck` and `sorItems`. Any additional or missing export still fails.
+
+No production code, merged test, ENT-3c test, pinned security value, migration, privilege or policy was edited. **New GRANTs: none. Standard F: no new direct INSERT, UPDATE or DELETE grant to jobguard_runtime.** No data migration, external action, operational alert, public API change or production activation. UI remains parked. This self-inspection is not an independent review or acceptance.
+
+### Commands and actual results
+
+Node `v24.17.0`; installed pinned pnpm `10.28.1`. Every pnpm shell first exported `PATH="$HOME/Library/pnpm/bin:$PATH"`. After the default launcher stalled, static checks selected the already-existing pinned executable using `export PATH="/private/tmp/jg-ent-3b-bin:$PATH"`. No install command or dependency change. Forced checks exported `TURBO_CACHE_DIR=/private/tmp/jg-ent-3b-r4-turbo-cache`.
+
+| Command | Actual result |
+| --- | --- |
+| `~/.local/bin/heavy-slot ent-3b-r4-before pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/site-visit.application.test.ts` | Exit 130 after interruption: helper permission refusals, then stalled default pnpm launcher. Vitest did not start: **0 files / 0 tests executed**. No second test attempt. |
+| `/private/tmp/jg-ent-3b-bin/pnpm --version` | Exit 0, 10.28.1. |
+| `pnpm exec turbo run typecheck --force` | Exit 0; **7/7 tasks, 0 cached**; once. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | Exit 0; core purity (154 TypeScript files), lane, money and commercial boundary checks. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; ENT-3b lane. |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | Exit 0; **7/7 tasks, 0 cached**; once. |
+| `pnpm build --concurrency=2 --force` | Exit 0; **7/7 tasks, 0 cached**; once. Existing Next workspace-root, CSS and webpack-cache warnings. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Result recorded in final verification below. No generation/write requested. |
+| `git diff --check` | Exit 0 on test edits; repeated final check below. |
+| Python `Path('/private/tmp/jg-msg-ent-3b.txt').write_text(...)` | Exit 0; conventional commit subject and body written to the dispatcher-authorized path. |
+
+Before every heavy command, `memory_pressure | tail -1` reported 67–68% free and `df -g /System/Volumes/Data` reported 79 GB available, above the 35% / 45 GB limits. Both commands exited 0. Build and test never ran together. One selected file was requested, with `--maxWorkers=2`.
+
+Read-only command inventory (exit 0 unless noted; commands batched in inspection shells):
+- `pwd`; `git status --short`; `git status --porcelain=v1`; `git rev-parse HEAD`; `git branch --show-current`; `git ls-files apps/api/src/contractor/site-visit.application.test.ts`; `git log -1 --format='%h %s' -- apps/api/src/contractor/site-visit.application.test.ts`; `git diff --stat`; `git diff -- apps/api/src/contractor/site-visit.application.test.ts`; `node --version`.
+- `rg --files -g 'AGENTS.md' -g 'BUILD_PLAN.md' -g '*site-visit*' -g '*RECEIPT*' -g 'package.json' -g 'turbo.json' -g '*ent-3b*'`.
+- `rg -n -A 55 -B 15 'ENT-3b|ENT-3c|Site visit|site visit' BUILD_PLAN.md`; `rg -n 'ENT-3b|ENT-3c|9\.2|visit' BUILD_PLAN.md`; `rg -n 'ENT-3b|ENT-3c' BUILD_PLAN.md`; `rg -n '^### ENT-3|^### 9\.2|^## 9' BUILD_PLAN.md`; `rg -n -A 28 -B 4 'ENT-3b|codex/sandbox/ent-3b' config/agent-lane-assignments.json`; `rg -n 'PNPM|pnpm|PATH|manage.package' docs/verdicts/ENT-3b/BUILDER_RECEIPT.md`.
+- `rg -n 'typescript|createSourceFile|isMethodDeclaration' apps/api/src/contractor/*.test.ts`: no matches, exit 1.
+- `sed -n '2110,2175p' BUILD_PLAN.md`; `sed -n '795,840p' BUILD_PLAN.md`; `sed -n '1,42p' ~/.local/share/full-steam/handoffs/jobguard-task.md`; `sed -n '1,210p' apps/api/src/contractor/site-extra.application.ts`; `sed -n '224,260p' apps/api/src/contractor/site-visit.application.test.ts`; `sed -n '193,230p' apps/api/src/contractor/site-visit.application.test.ts`.
+- `head -45 docs/verdicts/ENT-3b/BUILDER_RECEIPT.md`; `head -12 docs/verdicts/ENT-3b/BUILDER_RECEIPT.md`; `tail -4 docs/verdicts/ENT-3b/BUILDER_RECEIPT.md`; `nl -ba ~/.local/bin/heavy-slot | head -17`.
+- `cat` reads: `AGENTS.md`, the application test, `site-extra.application.ts`, `docs/contracts/site-visit-v1.md`, the standing handoff, this receipt, root/API `package.json`, `turbo.json`, `tools/lint.mjs`, `apps/api/tsconfig.json`, `~/.local/bin/heavy-slot`, `~/Library/pnpm/bin/pnpm` and `/private/tmp/heavy-slots/slot-*/owner`.
+- `ls -l` inspected `~/Library/pnpm/bin/pnpm`, `apps/api/node_modules/.bin/vitest`, `node_modules/.bin/turbo`, `/private/tmp/heavy-slots/slot-*/owner`, `~/Library/pnpm/.tools/pnpm` and `/private/tmp/jg-ent-3b-bin/pnpm`.
+- Absent-path inspections returned 1: `cat apps/api/src/contractor/contractor.application.ts`; `cat ~/.local/share/full-steam/COMMON.md`; `cat .npmrc`; `ls -l node_modules/.bin/vitest`; `ls -l ~/.local/bin/pnpm /opt/homebrew/bin/pnpm`; `ls -l node_modules/.pnpm/pnpm*` (zsh: no matches). These changed nothing; remaining commands in the batches were independent reads.
+- `shasum -a 256` over the six paths in the hash section (before and after repair); the test was also hashed separately. All hash commands exited 0.
+
+Tool polls collected output. Ctrl-C interrupted the stalled helper-launched pnpm (exit 130). The test patch succeeded. An initial receipt patch failed because its context omitted the start of the final paragraph; it changed nothing. The corrected appendix was then added. No protected file was edited.
+
+### STOP and files NOT RUN
+
+**STOP — ~/.local/bin/heavy-slot:11.** Exact requested command:
+
+```sh
+~/.local/bin/heavy-slot ent-3b-r4-before pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/site-visit.application.test.ts
+```
+
+Exact refusal output:
+
+```text
+sysctl: sysctl fmt -1 1024 1: Operation not permitted
+sysmon request failed with error: sysmond service not found
+pgrep: Cannot get process list
+```
+
+The helper then launched pnpm, which stalled before Vitest output and was interrupted. The dispatcher's refusal rule prohibits another route or helper attempt; neither was used. The helper was not edited.
+
+NOT RUN: repaired `apps/api/src/contractor/site-visit.application.test.ts` and its five new control cases (helper permission STOP). No local first-failing or passing test run is claimed. First failing evidence is the dispatcher's supplied CI run `38441831477` at the incoming head: [B17] expected 5 resolver calls and saw 8; [B18] refused the three merged ENT-3c exports. This CI evidence was supplied, not independently fetched here. This repair changes tests only.
+
+NOT RUN (cannot start PostgreSQL / a browser or bind sockets here; explicit dispatch scope): `packages/db/test/site-visit.integration.test.ts`, `packages/db/test/site-visit-authority.integration.test.ts`, `packages/db/test/site-visit-upgrade.integration.test.ts`, `packages/db/test/site-extra-visit.integration.test.ts`, `apps/api/src/contractor/site-visit.http.test.ts`, `pnpm test:db`, `pnpm test:migrations`, browser suites / `pnpm test:e2e`. Whole-package/repository tests and other pieces' tests were not run. No changed model/prompt or live-model evaluation applies.
+
+Targeted tests, green CI on the dispatcher-created commit, independent recorded verdict and separate acceptance remain required. No acceptance is claimed.
+
+### Hashes and scope evidence
+
+Incoming test SHA-256: `d1f65745826346d24ab132d740e55374e8b09059121697166bb992c7beca3139`.
+Repaired test SHA-256: `829966f0186a28dd29f15b57042cfbfe29271633714926d2472099d94358a485`.
+
+Unchanged SHA-256 values, matched before and after repair:
+
+```text
+4ff4611b355394752c3441f8cc69bee584276f3c67d55353d6f33cc2d153caca  apps/api/src/contractor/site-extra.application.ts
+f2bb7a23933b23347f844f056529bced6428aa006b39ca9fc72472fd75685949  apps/api/src/workspace/application.ts
+a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35  apps/api/src/auth/context-boundary.test.ts
+58174fc0e3cd28a9c5b27c5cf344565df68fb1fca1b557bd091aa21ddfcf4377  packages/db/migrations/0139_site_visit_closeout.sql
+29605ffb78bc6193da5d1483834c15456b0a23561cd2bb95f26bc564dd1ff852  packages/db/migrations/0140_site_extra_pricing.sql
+```
+
+Before this receipt appendix, `git diff --stat` (exit 0) showed only the test: **1 file changed, 36 insertions, 2 deletions**. Final scope/diff verification follows below. Commit message: `/private/tmp/jg-msg-ent-3b.txt`, subject `test(ent-3b): scope visit context assertions to their method bodies`.
+
+### Final verification
+
+OpenAPI check exited 0. The read of the intended commit message (`cat /private/tmp/jg-msg-ent-3b.txt`) exited 0. A temporary Python scope assertion using `git diff --name-only HEAD` exited 0: exactly the application test and receipt differ from HEAD. `git status --short` and `git rev-parse HEAD` exited 0; final local HEAD remains `238410bbb9d7168d24d4b7cbcb9b79cc1679fbf9`.
+
+The initial receipt diff check reported a trailing blank line at EOF; this final note replaces that blank ending. Final `git diff --check` exited 0. Final `git diff --stat` exited 0: **2 files changed, 128 insertions, 2 deletions** (application test: 38 changed lines; receipt: 92 added lines). The preceding snapshot was 2 files, 123 insertions, 2 deletions before this five-line note. No other working-tree change.

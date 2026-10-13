@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import * as ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import { ContractorRepository, SiteExtraRepository, SiteVisitRepository, WatchdogError, withTenant, type AuthenticatedMembership } from "@jobguard/db";
@@ -18,6 +19,27 @@ const started = () => ({ visitId: id(), startedAt: "2026-10-13T09:00:00.123456Z"
 const completed = (visitId = id()) => ({ visitId, completedAt: "2026-10-13T09:30:00.123456Z", closeoutAnswer: "yes" as const });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 const synthetic = () => vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+const visitMethods = ["log", "startVisit", "completeVisit", "assignedJobs", "orderLines"] as const;
+function assertVisitContextBoundary(source: string): void {
+ const parsed = ts.createSourceFile("site-extra.application.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+ const application = parsed.statements.find((node): node is ts.ClassDeclaration => ts.isClassDeclaration(node) && node.name?.text === "SiteExtraApplication");
+ expect(application).toBeDefined();
+ for (const name of visitMethods) {
+  const methods = application!.members.filter((node): node is ts.MethodDeclaration => ts.isMethodDeclaration(node) && node.name.getText(parsed) === name);
+  expect(methods, name).toHaveLength(1);
+  const body = methods[0]!.body;
+  expect(body, name).toBeDefined();
+  let resolverCalls = 0, bridgeReferences = 0;
+  const inspect = (node: ts.Node): void => {
+   if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.expression.kind === ts.SyntaxKind.ThisKeyword && node.expression.name.text === "resolveContext") resolverCalls++;
+   if (ts.isIdentifier(node) && node.text === "contractorSessionContext") bridgeReferences++;
+   ts.forEachChild(node, inspect);
+  };
+  inspect(body!);
+  expect(resolverCalls, name).toBe(1);
+  expect(bridgeReferences, name).toBe(0);
+ }
+}
 
 describe("ENT-3b service: authority comes only from the persisted session", () => {
  it("[B17] each repository method is called with the very same member object and the context from the shared bridge, once per request", async () => {
@@ -73,8 +95,20 @@ describe("ENT-3b service: authority comes only from the persisted session", () =
  it("[B17] the visit methods obtain the context only by calling the one resolver; the bridge is named nowhere else in the application", () => {
   const source = readFileSync(resolve(process.cwd(), "src/contractor/site-extra.application.ts"), "utf8");
   expect(source.match(/contractorSessionContext/gu)).toHaveLength(2); // the import and the single call inside the resolver
-  expect(source.match(/this\.resolveContext\(/gu)).toHaveLength(5); // log and the four visit methods
+  assertVisitContextBoundary(source); // exactly one call in log and in each of the four visit methods, including nested callbacks
   expect(source).not.toMatch(/AuthProvider|\.requestCode|\.verifyCode/u);
+ });
+ it.each(["missing", "duplicate", "redistributed", "direct bridge"] as const)("[B17] the method-body check refuses %s context calls", invalid => {
+  const bodies = new Map<string, string>(visitMethods.map(name => [name, "return (() => this.resolveContext())();"]));
+  if (invalid === "missing" || invalid === "redistributed") bodies.set("assignedJobs", "return null;");
+  if (invalid === "duplicate" || invalid === "redistributed") bodies.set("log", "this.resolveContext(); return (() => this.resolveContext())();");
+  if (invalid === "direct bridge") bodies.set("startVisit", "contractorSessionContext(); return this.resolveContext();");
+  const source = `class SiteExtraApplication { ${[...bodies].map(([name, body]) => `${name}() { ${body} }`).join("\n")} }`;
+  expect(() => assertVisitContextBoundary(source)).toThrow();
+ });
+ it("[B17] the method-body check ignores comments, string literals and unrelated methods while parsing nested bodies", () => {
+  const methods = visitMethods.map(name => `${name}(input: { nested: { value: string } }) { /* this.resolveContext(); contractorSessionContext(); */ const text = "this.resolveContext(); contractorSessionContext();"; return (() => { return this.resolveContext(); })(); }`);
+  assertVisitContextBoundary(`class SiteExtraApplication { ${methods.join("\n")} logSor() { this.resolveContext(); } }`);
  });
 });
 
@@ -144,7 +178,7 @@ describe("ENT-3b transport", () => {
   expect(Reflect.getMetadata("__httpCode__", SiteVisitController.prototype.start)).toBe(201); expect(Reflect.getMetadata("__httpCode__", SiteVisitController.prototype.complete)).toBe(201);
   const workspace = await import("../workspace/index.js"); expect(workspace.siteVisitHttpFailure).toBe(siteVisitHttpFailure);
   const app = createWorkspaceApplication({ pool: new Pool(), sessionId: id() });
-  expect(Object.keys(app.siteExtras).sort()).toEqual(["assignedJobs", "completeVisit", "log", "orderLines", "startVisit"]);
+  expect(Object.keys(app.siteExtras).sort()).toEqual(["assignedJobs", "completeVisit", "log", "logSor", "orderCheck", "orderLines", "sorItems", "startVisit"]);
  });
  it("[B15] a read result that carries a price or a resident key fails closed and nothing of it is returned", async () => {
   synthetic(); const pool = new Pool(); vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(member());
