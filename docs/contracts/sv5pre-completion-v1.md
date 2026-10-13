@@ -1,0 +1,36 @@
+# SV5PRE completion prerequisites v1 — 13 October 2026
+
+Synthetic small-builder work only. Issued base `2350b1a718b76aabdedd1782f02e92f516914246`; migration `0147_final_check_prerequisites.sql`. This is prerequisite construction, not technical acceptance or SV-5 completion. Database, browser and actual worker execution remain unexecuted in the builder sandbox. The builder receipt records all holds.
+
+The legacy seven-argument issue routine and the explicit final/supplementary routine require the same authoritative completion predicate for new effects. Deposits are unchanged. A genuine invoice issued before this migration can replay its immutable result after current membership, expiry and persisted session/job checks; it gains no invented lock or certificate. A second fresh main final is refused. The legacy artifact and returned columns are preserved. Side bindings record the exact lock, check, revision and source lines; no fingerprinted table gains a column.
+
+The guarded application adapter carries the existing practice-session digest through the existing scoped pool and translates known lock/check refusals into `FinalAccountLockError`. It appends the invoice audit only once under the job lock. The HTTP filter returns `final-check-invoice-error.v1` with status 409 and no-store for typed refusals. Arbitrary SQL diagnostics stay internal. Existing command schemas and access checks remain in place.
+
+Six append-only, tenant/job-qualified, migration-owned FORCE RLS relations persist the prerequisite:
+
+| Relation | Meaning | Application access |
+| --- | --- | --- |
+| final_check_manifest | One server-inventoried upload-source manifest per exact lock/cutoff; canonical inventory hash, count and processing versions | None |
+| final_check_manifest_source | Frozen pre-cutoff upload identity, original server receipt and available immutable input identity; unfinished uploads remain present | None |
+| final_check_source_attempt | Immutable separate detection/reconciliation attempts with execution/input/version/result bindings; failures survive retries | None |
+| final_check_run_binding | Exact existing reconciliation run/manifest/lock/cutoff/execution and server-derived result digest | None |
+| final_check_reveal_proof | Canonical persisted classification/result descriptor; explicit descriptor for a zero result | None |
+| final_check_completion | Opaque check/run/manifest/lock/cutoff/result certificate | SELECT only |
+
+The shadow role has SELECT/INSERT on manifest, attempts, run binding and reveal proof, SELECT only on generated manifest sources, and retains its existing INSERT-only access to check facts. Private SECURITY DEFINER triggers recheck the actual session role and tenant, synthetic small-builder job, accepted terms, qualified lock and exact cutoff. No new ordinary caller can EXECUTE any private helper. Ordinary roles cannot rewrite, delete or truncate proof. No new application DML grant is made.
+
+The manifest includes every upload whose server receipt precedes or equals the immutable cutoff, including pending, quarantined and rejected uploads. Evidence registration/finalization serializes on the job; original objects retain the upload's original receive time when finalized after lock. Manifest identity never changes. An unfinished or unsupported source remains incomplete with a recorded reason; it never silently becomes empty. The SV-5 source adapter must record explicit successful detection and reconciliation for each finalized source, including empty output. Verified inputs that are later invalidated fail the predicate again at new issue.
+
+A default-completed reconciliation row proves nothing. Completion requires the exact bound run status/version, independently inventoried source count/hash, both successful stages with matching versions/inputs/execution, classifications for every relevant signal and a persisted canonical result. A raw completed fact with a null/unbound run fails. The checked publication trigger creates the certificate and its audit event atomically. Earlier completed facts are unchanged and receive no certificate backfill.
+
+Lock order is job row, final-check advisory lock, immutable proof and source reads, invoice sequence for issuance, then audit head. Evidence insertion/finalization takes the job first. The preserved check guard reacquires the same already-held advisory lock after publication; it introduces no new waiting business lock. No business network call occurs inside the transaction. Replay identities are database-qualified; different input under an existing attempt/publication identity conflicts.
+
+`FinalCheckCompletionRepository` accepts an existing stamped context for each call; it retains and constructs none. Its strict versioned operations are freeze, sources, recordAttempt, recordResult, bindRun, bindEmptyRun and publish. Core's `final-check-completion.v1` schemas and pure consistency checks never grant invoice authority. Database publication is the authority. Runtime cannot read the hidden proof relations through this repository's SQL permissions.
+
+The actual worker entrypoint now registers fixed task `final_check` using strict payload `final-check-task.v1` (tenant, job, lock, manifest, execution UUIDs). Registration validates before using context and delegates context construction to the unchanged sole `queueContext` seam. `executeFinalCheckTask` refuses with `FINAL_CHECK_HANDLER_NOT_INSTALLED` until SV-5 supplies orchestration. A queued Graphile task and an injected callback test do not establish installed domain execution. SV5-32 remains incomplete.
+
+Forward-fix only: disable the task integration if necessary, retain fail-closed issuance, and apply an additive repair. Do not remove the gate, delete history, reinterpret historical finals as interim or retroactively certify old checks. No fee, eligibility, allocation, settlement, production route or provider action is introduced. D12/D13, release, substantive matching, reveal/disposition, catches and browser acceptance remain held.
+
+An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
+
+The new upgrade proof uses canonical JSON text over named original columns, full PostgreSQL types and captured primary-key identities with seeded-row guards. Its rolled-back controls require a microsecond mutation and retype to fail, and later nullable columns, replaced functions and inserted rows to pass. Execution of that proof remains owed to the dispatcher.

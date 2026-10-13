@@ -1,3 +1,4 @@
+import { publishEmptyCompletion, createHistoricalInvoice } from "./sv5pre-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
@@ -8,6 +9,7 @@ type Account=Awaited<ReturnType<typeof seedAccount>>;
 const invoiceInput=(a:Account,invoiceKind:'final'|'supplementary'='final')=>({jobId:a.jobId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:LOCK_HASH,invoiceKind,recipient:'practice-customer@example.invalid',issuedOn:'2026-10-12'});
 async function appendCheck(f:LockFixture,a:Account,status:'pending'|'failed'|'completed',overrides:{lockId?:string;cutoff?:string;jobId?:string}={}){
  const row=(await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
+ if(status==='completed' && Object.keys(overrides).length===0) return publishEmptyCompletion(f,a);
  const id=randomUUID();await asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,$6)",[a.tenantId,overrides.jobId??a.jobId,id,overrides.lockId??row.id,overrides.cutoff??row.cutoff,status]));return id;
 }
 describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
@@ -85,10 +87,20 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
    expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
   }
  });
- it("Q1 legacy issue remains available without lock; an interim side binding requires no lock",async()=>{
-  const a=await seedAccount(f.admin),invoice=await new PracticeInvoiceRepository(f.runtime).issue(a.context,{jobId:a.jobId,finalAccountRevisionId:a.revisionId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),recipient:'practice-customer@example.invalid',issuedOn:'2026-10-12'});
-  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,revision_id) VALUES($1,$2,$3,'interim',$4)",[a.tenantId,a.jobId,invoice.id,a.revisionId]));
-  expect((await f.admin.query("SELECT invoice_kind,lock_id,check_id FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{invoice_kind:'interim',lock_id:null,check_id:null}]);
+ it("Q1 new legacy final issue requires lock and changes no commercial effects",async()=>{
+  const a=await seedAccount(f.admin);
+  const counts=async()=>Promise.all(['customer_invoice_sequence','decision','decision_resolution','action_authorization','customer_invoice','final_account_invoice_binding','final_account_invoiced_line','action_outbox','command_receipt','audit_event'].map(async table=>(await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[a.tenantId])).rows[0].n));
+  const before=await counts();
+  await expect(new PracticeInvoiceRepository(f.runtime).issue(a.context,{jobId:a.jobId,finalAccountRevisionId:a.revisionId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),recipient:'practice-customer@example.invalid',issuedOn:'2026-10-12'})).rejects.toThrow('FINAL_ACCOUNT_LOCK_REQUIRED');
+  expect(await counts()).toEqual(before);
+ });
+ it("Q1 historical interim side binding requires no lock",async()=>{
+  const historical=await createHistoricalInvoice();
+  try {
+   const a=historical.account,invoice=historical.invoice;
+   await asFixtureTenant(historical.fixture.admin,a.tenantId,db=>db.query("INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,revision_id) VALUES($1,$2,$3,'interim',$4)",[a.tenantId,a.jobId,invoice.id,a.revisionId]));
+   expect((await historical.fixture.admin.query("SELECT invoice_kind,lock_id,check_id FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{invoice_kind:'interim',lock_id:null,check_id:null}]);
+  } finally { await historical.close(); }
  });
  it("a completion belonging to a foreign tenant cannot be bound or authorize either invoice kind",async()=>{
   const a=await seedAccount(f.admin),b=await seedAccount(f.admin);

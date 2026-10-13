@@ -1,0 +1,123 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createLockFixture, closeLockFixture, seedAccount, prepareLock, asFixtureTenant } from "./sv5pre-fixtures.js";
+import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
+import { FinalCheckCompletionRepository } from "../src/final-check-completion-repository.js";
+
+describe("SV5PRE authoritative completion", () => {
+ let f: Awaited<ReturnType<typeof createLockFixture>>;
+ beforeAll(async () => { f = await createLockFixture(); }, 60000);
+ afterAll(async () => { if (f) await closeLockFixture(f); });
+ async function locked() { const a=await seedAccount(f.admin); const repo=await prepareLock(f,a); await repo.lock(a.context,a.input); return a; }
+ it("PRE-Q5-01 a completed string without a run is refused", async () => {
+  const a=await locked(); await expect(asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,status) VALUES($1,$2,$3,'completed')",[a.tenantId,a.jobId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
+ });
+ it("PRE-Q5-02 the reconciliation default is not completion evidence", async () => {
+  const a=await locked(),run=randomUUID(); const cutoff=(await f.admin.query('SELECT locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0].cutoff;await asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4::timestamptz)",[a.tenantId,a.jobId,run,cutoff]));
+  await expect(new FinalCheckCompletionRepository(f.shadow).publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId:run,checkId:randomUUID()})).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
+ });
+ it("PRE-Q5-07 explicit zero results survive a fresh connection", async () => {
+  const a=await locked(),repo=new FinalCheckCompletionRepository(f.shadow);
+  const manifest=await repo.freeze(a.context,{version:"final-check-manifest.v1",jobId:a.jobId,manifestId:randomUUID(),detectorVersion:"synthetic.v1",reconciliationVersion:"synthetic.v1"});
+  expect(manifest.sourceCount).toBe(0);
+  const runId=randomUUID(); await repo.bindEmptyRun(a.context,{version:"final-check-empty-run.v1",jobId:a.jobId,manifestId:manifest.id,runId,executionId:randomUUID()});
+  const checkId=randomUUID(); await repo.publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId,checkId});
+  const connection=await f.admin.connect(); try { expect((await connection.query("SELECT check_id,run_id FROM app.final_check_completion WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{check_id:checkId,run_id:runId}]); } finally { connection.release(); }
+ });
+ it("PRE-Q5-12 publication retries preserve identity and failure history", async () => {
+  const a=await locked(),repo=new FinalCheckCompletionRepository(f.shadow),manifest=await repo.freeze(a.context,{version:"final-check-manifest.v1",jobId:a.jobId,manifestId:randomUUID(),detectorVersion:"synthetic.v1",reconciliationVersion:"synthetic.v1"}),runId=randomUUID(),checkId=randomUUID();
+  await repo.bindEmptyRun(a.context,{version:"final-check-empty-run.v1",jobId:a.jobId,manifestId:manifest.id,runId,executionId:randomUUID()});
+  await repo.publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId,checkId}); await repo.publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId,checkId});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
+ });
+ async function sourceFixture(){
+  const a=await seedAccount(f.admin),uploadId=randomUUID();
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]));
+  const lock=await prepareLock(f,a);await lock.lock(a.context,a.input);const repo=new FinalCheckCompletionRepository(f.shadow);
+  const manifest=await repo.freeze(a.context,{version:"final-check-manifest.v1",jobId:a.jobId,manifestId:randomUUID(),detectorVersion:"synthetic.v1",reconciliationVersion:"synthetic.v1"});
+  return {a,uploadId,repo,manifest,executionId:randomUUID(),runId:randomUUID()};
+ }
+ async function runWithZero(x:Awaited<ReturnType<typeof sourceFixture>>){
+  await asFixtureTenant(f.shadow,x.a.tenantId,async db=>{
+   await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4)",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.cutoff]);
+   await db.query("INSERT INTO app.final_check_reveal_proof(tenant_id,job_id,run_id,id,projection_version,result_descriptor) VALUES($1,$2,$3,$3,'final-check-result.v1',$4)",[x.a.tenantId,x.a.jobId,x.runId,{version:"final-check-result.v1",outcome:"zero_result"}]);
+   await db.query("INSERT INTO app.final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic.v1','synthetic.v1')",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.id,x.manifest.lockId,x.manifest.cutoff,x.executionId]);
+  });
+ }
+ async function finalize(x:Awaited<ReturnType<typeof sourceFixture>>){
+  const evidenceId=randomUUID();await asFixtureTenant(f.admin,x.a.tenantId,async db=>{
+   await db.query("UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='immutable.v1' WHERE tenant_id=$1 AND id=$2",[x.a.tenantId,x.uploadId]);
+   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','photo',$6,'immutable.v1',repeat('a',64),1,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())",[x.a.tenantId,x.a.jobId,evidenceId,x.uploadId,x.a.scopeItemId,`sv5pre/${x.uploadId}`]);
+  });return evidenceId;
+ }
+ async function attempt(x:Awaited<ReturnType<typeof sourceFixture>>,evidenceId:string,stage:"detection"|"reconciliation"){
+  const source=(await x.repo.sources(x.a.context,x.a.jobId,x.manifest.id))[0]!;
+  const received=(await f.admin.query("SELECT to_char(server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[x.a.tenantId,evidenceId])).rows[0].received;
+  await x.repo.recordAttempt(x.a.context,{version:"final-check-attempt.v1",jobId:x.a.jobId,manifestId:x.manifest.id,sourceId:source.id,attemptId:randomUUID(),executionId:x.executionId,stage,processingVersion:"synthetic.v1",inputHash:stage==='detection'?source.frozen_input_hash:'b'.repeat(64),outcome:'succeeded',failureCode:null,resultHash:'b'.repeat(64),resultSignalIds:[],evidenceId,objectVersionId:'immutable.v1',sha256:'a'.repeat(64),sourceReceivedAt:received});
+ }
+ it("PRE-Q5-03 the manifest inventories sources rather than existing signals",async()=>{
+  const x=await sourceFixture();expect(x.manifest.sourceCount).toBe(1);const sources=await x.repo.sources(x.a.context,x.a.jobId,x.manifest.id);expect(sources).toHaveLength(1);expect(sources[0]).toMatchObject({id:x.uploadId,upload_id:x.uploadId,evidence_id:null});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE tenant_id=$1",[x.a.tenantId])).rows[0].n).toBe(0);
+ });
+ it("PRE-Q5-04 a delayed pre-lock source blocks both invoice paths until processed",async()=>{
+  const x=await sourceFixture();await runWithZero(x);
+  await expect(asFixtureTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'practice-customer@example.invalid','2026-10-13'::date)",[x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  for(const kind of ['final','supplementary'])await expect(asFixtureTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,$6,'practice-customer@example.invalid','2026-10-13'::date,$7)",[x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID(),kind,'a'.repeat(64)]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  await expect(x.repo.publish(x.a.context,{version:"final-check-publication.v1",jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  const evidence=await finalize(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');await x.repo.publish(x.a.context,{version:"final-check-publication.v1",jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_completion WHERE tenant_id=$1",[x.a.tenantId])).rows[0].n).toBe(1);
+ });
+ it("PRE-Q5-05 unprocessable sources never count as successful empty output",async()=>{
+  const x=await sourceFixture();await runWithZero(x);
+  for(const outcome of ['pending','failed','invalidated']as const){await x.repo.recordAttempt(x.a.context,{version:"final-check-attempt.v1",jobId:x.a.jobId,manifestId:x.manifest.id,sourceId:x.uploadId,attemptId:randomUUID(),executionId:x.executionId,stage:'detection',processingVersion:'synthetic.v1',inputHash:(await x.repo.sources(x.a.context,x.a.jobId,x.manifest.id))[0]!.frozen_input_hash,outcome,failureCode:'INPUT_UNAVAILABLE',resultHash:null,resultSignalIds:[],evidenceId:null,objectVersionId:null,sha256:null,sourceReceivedAt:null});await expect(x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');}
+ });
+ it("PRE-Q5-06 both processing stages are required for every manifest source",async()=>{
+  const x=await sourceFixture();await runWithZero(x);const evidence=await finalize(x);await attempt(x,evidence,'detection');await expect(x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');await attempt(x,evidence,'reconciliation');await x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()});
+ });
+ it("PRE-Q5-08 completion preserves qualified identity and microsecond cutoff",async()=>{
+  const a=await locked(),lock=(await f.admin.query('SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0];
+  await expect(asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,run_id,status) VALUES($1,$2,$3,$4,$5::timestamptz+interval '1 microsecond',$6,'completed')",[a.tenantId,a.jobId,randomUUID(),lock.id,lock.cutoff,randomUUID()]))).rejects.toMatchObject({code:'23503'});
+ });
+ it("PRE-Q5-09 classification and persisted result availability precede completion",async()=>{
+  const x=await sourceFixture(),evidence=await finalize(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');
+  await asFixtureTenant(f.shadow,x.a.tenantId,async db=>{await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4)",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.cutoff]);await db.query("INSERT INTO app.final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic.v1','synthetic.v1')",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.id,x.manifest.lockId,x.manifest.cutoff,x.executionId]);});
+  await expect(x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_RESULT_UNAVAILABLE');
+ });
+ it("PRE-Q5-13 completion and issue serialize around authoritative publication",async()=>{
+  const a=await locked(),repo=new FinalCheckCompletionRepository(f.shadow),m=await repo.freeze(a.context,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'synthetic.v1',reconciliationVersion:'synthetic.v1'}),runId=randomUUID();await repo.bindEmptyRun(a.context,{version:'final-check-empty-run.v1',jobId:a.jobId,manifestId:m.id,runId,executionId:randomUUID()});
+  const results=await Promise.allSettled([repo.publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId,checkId:randomUUID()}),new FinalAccountLockRepository(f.runtime).issueInvoice(a.context,{jobId:a.jobId,actorMembershipId:a.input.actorMembershipId,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:'a'.repeat(64),invoiceKind:'final',recipient:'practice-customer@example.invalid',issuedOn:'2026-10-13'})]);expect(results[0].status).toBe('fulfilled');if(results[1].status==='rejected')expect(results[1].reason).toMatchObject({code:'FINAL_CHECK_NOT_COMPLETE'});
+  const rows=(await f.admin.query("SELECT i.id,c.check_id FROM app.customer_invoice i LEFT JOIN app.final_account_invoice_binding b ON(b.tenant_id,b.job_id,b.invoice_id)=(i.tenant_id,i.job_id,i.id) LEFT JOIN app.final_check_completion c ON(c.tenant_id,c.job_id,c.check_id)=(b.tenant_id,b.job_id,b.check_id) WHERE i.tenant_id=$1",[a.tenantId])).rows;for(const row of rows)expect(row.check_id).not.toBeNull();
+ });
+ it("PRE-NOFEE-01 prerequisites create no fee entitlement or settlement effect",async()=>{
+  const a=await locked(),repo=new FinalCheckCompletionRepository(f.shadow),m=await repo.freeze(a.context,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'synthetic.v1',reconciliationVersion:'synthetic.v1'}),runId=randomUUID();await repo.bindEmptyRun(a.context,{version:'final-check-empty-run.v1',jobId:a.jobId,manifestId:m.id,runId,executionId:randomUUID()});await repo.publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId,checkId:randomUUID()});
+  for(const table of ['customer_payment','customer_invoice','landing_allocation','recovery_fee_derivation','recovery_fee_journal','recovery_eligibility_revision'])expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[a.tenantId])).rows[0].n).toBe(0);
+ });
+
+ it("PRE-Q5-14 audit failure rolls back completion and its certificate",async()=>{
+  const a=await locked(),repo=new FinalCheckCompletionRepository(f.shadow),m=await repo.freeze(a.context,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'synthetic.v1',reconciliationVersion:'synthetic.v1'}),runId=randomUUID(),checkId=randomUUID();await repo.bindEmptyRun(a.context,{version:'final-check-empty-run.v1',jobId:a.jobId,manifestId:m.id,runId,executionId:randomUUID()});
+  const suffix=randomUUID().replaceAll('-','');
+  await f.admin.query(`CREATE FUNCTION app.sv5pre_audit_${suffix}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='${a.tenantId}'::uuid AND current_setting('app.sv5pre_refuse_audit',true)='yes' THEN RAISE EXCEPTION 'SV5PRE_AUDIT_REFUSED';END IF;RETURN NEW;END $$`);
+  await f.admin.query(`CREATE TRIGGER sv5pre_audit_${suffix} BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.sv5pre_audit_${suffix}()`);
+  await expect(asFixtureTenant(f.shadow,a.tenantId,async db=>{await db.query("SELECT set_config('app.sv5pre_refuse_audit','yes',true)");await db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,run_id,status) VALUES($1,$2,$3,$4,'completed')",[a.tenantId,a.jobId,checkId,runId]);})).rejects.toThrow('SV5PRE_AUDIT_REFUSED');
+  for(const table of ['final_check_completion','final_account_lock_check'])expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+  await repo.publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId,checkId});expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
+ });
+
+ it("PRE-Q5-05 invalidation after successful completion refuses issue and publication",async()=>{
+  const x=await sourceFixture(),evidence=await finalize(x);await runWithZero(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');await x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()});
+  await asFixtureTenant(f.admin,x.a.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),x.a.tenantId,evidence,x.a.input.actorMembershipId]));
+  await expect(x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_INPUT_UNAVAILABLE');
+  await expect(asFixtureTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'practice-customer@example.invalid','2026-10-13'::date)",[x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1",[x.a.tenantId])).rows[0].n).toBe(0);
+ });
+
+ it("PRE-Q5-09 a pre-lock signal missing its classification prevents a zero result",async()=>{
+  const x=await sourceFixture(),evidence=await finalize(x);await runWithZero(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');
+  const signal=randomUUID();await asFixtureTenant(f.shadow,x.a.tenantId,async db=>{
+   await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',$5,'Fictional test signal','low')",[x.a.tenantId,x.a.jobId,signal,randomUUID(),x.manifest.cutoff]);
+   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'immutable.v1',repeat('a',64),$5)",[x.a.tenantId,x.a.jobId,signal,evidence,(await x.repo.sources(x.a.context,x.a.jobId,x.manifest.id))[0]!.source_received_at]);
+  });await expect(x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_RESULT_UNAVAILABLE');
+ });
+
+});

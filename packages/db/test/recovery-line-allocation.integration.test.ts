@@ -1,3 +1,4 @@
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written before persistence; NOT RUN (sandbox cannot start PostgreSQL / a browser).
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -107,6 +108,7 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
     await db.query("UPDATE app.final_account_draft SET revision=CASE WHEN $4 THEN 2 ELSE 1 END,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId, lateCatch]);
     await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
+  await prepareInvoicePrerequisites(admin, runtime, DEMO_TENANT_ID, jobId, actor.membershipId, revisionId);
   const invoice = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: actor.membershipId,
     commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   const evidenceIds: string[] = [];

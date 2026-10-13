@@ -15,6 +15,7 @@ let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,repo:PracticeInvoiceR
 type Fixture={jobId:string;invoiceId:string;quoteId:string;draftId:string;revisionId:string};
 type ReceiptInput=Parameters<PracticeInvoiceRepository["recordReceipt"]>[1];
 let legacy:Fixture,legacyInput:ReceiptInput,legacyPayment:{paymentId:string},legacyReverseCommand:string,legacyReversal:string,legacyHashes:unknown;
+let reversalHistory:{f:Fixture;p:{paymentId:string};other:{id:string}};
 async function freshInvoice():Promise<Fixture> {
  const jobId=randomUUID(),quoteId=randomUUID(),draftId=randomUUID(),revisionId=randomUUID();
  await admin.query(`INSERT INTO app.job(id,tenant_id,title,status)VALUES($1,$2,'Fictional receipt test','live')`,[jobId,T]);
@@ -51,6 +52,14 @@ beforeAll(async()=>{
  legacy=await freshInvoice();legacyInput=command(legacy);legacyPayment=await repo.recordReceipt(context,legacyInput);legacyReverseCommand=randomUUID();
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
+ // The same-job two-invoice reversal fixture was issued under schema 0029, before SV5PRE closes new final issue.
+ {
+  const f=await freshInvoice(),p=await repo.recordReceipt(context,command(f)),next=randomUUID();
+  await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)VALUES($1,$2,$3,$4,2,$5,$6,$7,'GBP','candidate_m1_standard_v1',100000,20000,120000,false,'[]')`,[next,T,f.jobId,f.draftId,f.revisionId,"c".repeat(64),f.quoteId]);
+  await admin.query(`UPDATE app.final_account_draft SET revision=2,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`,[T,f.draftId,next]);
+  const other=await repo.issue(context,{jobId:f.jobId,finalAccountRevisionId:next,actorMembershipId:M,commandId:randomUUID(),recipient:"practice@example.invalid",issuedOn:"2026-09-19"});
+  reversalHistory={f,p,other};
+ }
  await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  const names=MIGRATION_URLS.map(url=>fileURLToPath(url).split("/").at(-1)!);
  const applied=await admin.query(`SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name`);
@@ -112,11 +121,15 @@ describe("UIWIRE-12 customer receipts",()=>{
   await expect(repo.reverseReceipt(context,{...c,reason:"Different correction"})).rejects.toMatchObject({code:"23505"});
   await expect(repo.reverseReceipt(context,{...c,commandId:randomUUID()})).rejects.toThrow("PAYMENT_ALREADY_REVERSED");
  });
+ it("PRE-Q4-04 historical same-job invoices remain distinct after upgrade",async()=>{
+  const {f,other}=reversalHistory;
+  expect(other.id).not.toBe(f.invoiceId);
+  const persisted=await admin.query(`SELECT id,job_id FROM app.customer_invoice WHERE tenant_id=$1 AND id=ANY($2::uuid[]) ORDER BY id`,[T,[f.invoiceId,other.id]]);
+  expect(persisted.rows).toHaveLength(2);
+  for(const invoice of persisted.rows)expect(invoice.job_id).toBe(f.jobId);
+ });
  it("binds reversals to the exact invoice, including another invoice in the same job",async()=>{
-  const f=await freshInvoice(),p=await repo.recordReceipt(context,command(f)),next=randomUUID();
-  await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)VALUES($1,$2,$3,$4,2,$5,$6,$7,'GBP','candidate_m1_standard_v1',100000,20000,120000,false,'[]')`,[next,T,f.jobId,f.draftId,f.revisionId,"c".repeat(64),f.quoteId]);
-  await admin.query(`UPDATE app.final_account_draft SET revision=2,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`,[T,f.draftId,next]);
-  const other=await repo.issue(context,{jobId:f.jobId,finalAccountRevisionId:next,actorMembershipId:M,commandId:randomUUID(),recipient:"practice@example.invalid",issuedOn:"2026-09-19"});
+  const {f,p,other}=reversalHistory;
   await expect(repo.reverseReceipt(context,{...reversal(f,p.paymentId),invoiceId:other.id})).rejects.toThrow("PAYMENT_NOT_FOUND");
   expect((await repo.receiptView(context,f.jobId,f.invoiceId)).receipts[0]!.reversal).toBeNull();
   await expect(repo.recordReceipt(context,{...command(f),jobId:randomUUID()})).rejects.toThrow("INVOICE_NOT_FOUND");
