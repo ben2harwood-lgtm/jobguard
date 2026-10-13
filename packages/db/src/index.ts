@@ -84,3 +84,4 @@ export * from "./contractor-session-context.js";
 
 export * from "./final-account-lock-repository.js";
 export * from "./recovery-case-terms-repository.js";
+export * from "./contractor-practice-session-repository.js";
