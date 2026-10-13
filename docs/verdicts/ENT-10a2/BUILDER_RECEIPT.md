@@ -247,3 +247,51 @@ Re-read the complete working diff and new files against the issued scope. Confir
 Repairs during this pass: fixed test fixture's undefined-mode default; supplied exact adapter-visible values for whitespace cases and documented Fetch normalization; tightened end-anchor acceptance to refuse final newlines; added newline seed/header tests; strengthened D1 unchanged invitation/switch/history rows and D2 unaffected-person positives, and aligned generated fixture roles/pools. Cleanup removed the launcher-created .pnpm-store, workspace package/API dist, Next .next, task .turbo logs and generated web tsbuildinfo; no build output or test-results remains. No merged check was weakened. Strict serial D1/D2 tests-first history, committed-range lint, database execution and independent verification remain explicitly unclaimed.
 
 Builder receipt only — not independently verified, not accepted.
+
+## Mac verification (13 Oct)
+
+Mac-side helper (Claude Sonnet 5.5), 13 Oct 2026. Not a review, not a verdict, no code changed beyond merging main. Logs: `~/.local/share/full-steam/jg-runs/ent-10a2-mac/`.
+
+**Result: RED. Five database tests fail (36 of 41 in run 1 pass). All five are in this piece's own new tests/fixtures. Every merged test and every other required check passed. Nothing pushed.**
+
+**Merges.** `origin/main` moved twice while this ran. Two plain merge commits: `dfc4f9c` "Merge main (f7fdc1c) into ENT-10a2" and then `57e3f5e` "Merge main (d38fbc5) into ENT-10a2" (d38fbc5 added CH-7-TERMS, migration 0134). Conflicts were only in append-only registrations (`apps/api/src/app.module.ts`, `apps/api/src/workspace/application.ts`, `apps/api/src/workspace/index.ts`, `packages/db/src/index.ts`, `packages/db/src/migrate.ts`, `packages/db/MIGRATIONS.md`); both sides kept, main's lines first. `apps/api/openapi.json` was not hand-merged: main's file taken, regenerated with `pnpm openapi:generate`, `pnpm openapi:check` passes (67 lines added, 0 removed against main). `migrate.ts` now ends 0131, 0132, 0134, 0137. `git diff origin/main --stat` shows only this piece's 27 files. Merge-base for the tested tree: origin/main d38fbc5.
+
+| step | command (via heavy-slot, one file group at a time) | exit | count |
+|---|---|---|---|
+| build | core, db, storage, config, ai each alone, then api (twice: after each merge) | 0 | all built |
+| lint:lanes | `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Lane boundary passed, 27 files |
+| DB run 1 | scim-deactivation, scim-deactivation-access, scim-deactivation-concurrency | 1 | 36 passed, 5 failed (41). First attempt exit 1 was only the embedded PostgreSQL dylib problem (no tests ran); fixed by `scripts/hydrate-symlinks.js` in the `@embedded-postgres/darwin-arm64` package folder, then re-run |
+| DB run 2 | scim-deactivation-upgrade, enterprise-identity, sso-required | 0 | 37 passed |
+| DB run 3 | identity, sso-emergency, sso-emergency-concurrency | 0 | 17 passed |
+| DB run 4 | contractor | 0 | 19 passed |
+| unit run 5 | action-paths, sso-required, sso-required-paths | 0 | 42 passed |
+| unit run 6 | identity.test.ts | 0 | 6 passed |
+| item 7 | packages/core `src/contractor.test.ts` | 0 | 725 passed |
+| scanner | `src/auth/context-boundary.test.ts` (unedited) | 0 | 145 passed |
+| api units, apps/api/dist moved aside | `scim.test.ts`, `scim-paths.test.ts`, `src/watchdog-registry.test.ts` | 0 | 55 + 47 (= 102) + 121 = 223 passed |
+| `pnpm test:migrations` | tenancy + demo-bootstrap | 0 | 13 passed |
+| `pnpm typecheck` | | 0 | 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | | 0 | 7/7 tasks, lane boundary passed |
+| `pnpm openapi:check` | | 0 | matches |
+
+**Compiled-output check (CI order: typecheck, lint, test, then build).** `apps/api/dist` was moved aside outside the worktree (to `~/.local/share/full-steam/jg-runs/ent-10a2-mac/aside/`, then restored, nothing deleted); `apps/web/.next` did not exist in this worktree. The three api test files above passed with both absent. Nothing in `scim.test.ts`, `scim-paths.test.ts`, the watchdog registry test or the scim database tests imports a compiled output; the Next route is read as source text. (`@jobguard/*` package `dist` folders remain present, as in CI where `test` depends on `^build`.) The extra-unlink note: this piece does not change grants; its own D1 test makes only a read_only grant through `grant.create` (not an owner grant).
+
+**Quoted results by test ID.**
+- [U1] PASS: scim-deactivation-upgrade: "applies only N over populated identity history, preserves every pre-existing object at N, then later migrations twice and rolled-back comparison controls".
+- [B1] PASS, [B2] PASS, [B3] FAIL, [B4] PASS (owner refused whole), [B5] PASS, [B6] PASS, [B7] PASS ("owned source has exactly two one-way UPDATE statements and active true never re-enables").
+- [G1] PASS, [G2] PASS, [G3] PASS, [G4] PASS (all seven roles), [G5] PASS, [G6] FAIL, [G7] FAIL (required-ON case; the "removing the only re-admitted unlinked person" case PASSES), [G8] PASS.
+- [H1] PASS, [H2] PASS (3 cases), [H3] PASS, [H4] PASS. [K1] PASS. [T1] ordinary PASS / bound-and-ordinary FAIL, [T2] PASS, [T3] PASS, [T4] PASS. [R1] to [R6] all PASS. [A3] FAIL.
+
+**The five failures (first assertion, expected vs actual; owner).**
+1. [B3] `scim-deactivation.integration.test.ts:96`: expected the code request to be accepted, got `AuthError RATE_LIMITED` thrown at `apps/api/src/auth/persisted-auth-provider.ts:33` (merged rule: same email and purpose within 60 s). Owner: builder test (the fixture helper `person()` at `packages/db/test/scim-fixtures.ts:87` already requested a signin code for that same address moments earlier in the same test; no clock advance in between).
+2. [G6] `scim-deactivation-access.integration.test.ts:84`: same `RATE_LIMITED`. Owner: builder test.
+3. [G7] `scim-deactivation-access.integration.test.ts:96`: same `RATE_LIMITED`. Owner: builder test.
+4. [A3] `scim-deactivation.integration.test.ts:66` (the `migrate(alternate)` call): expected the second database to migrate, got an empty-credential authentication error (SQLSTATE 28P01) because `new Pool({...h.admin.options,database})` does not carry the fixture login. Owner: builder test/fixture (`scim-fixtures.ts` pool settings).
+5. [T1] bound-and-ordinary `scim-deactivation.integration.test.ts:132`: `ZodError unrecognized_keys ["sessionId"]` from `apps/api/src/auth/principal-bridge.ts:19` (strict credentials schema). Owner: builder test (passes `otherBound` with an extra `sessionId` key to `identityApp.context`).
+None involves the migration or product code; the migration-level tests (K1, U1, B1, B4, B7, G1 to G5, G8, H1 to H4, R1 to R6, T2 to T4) pass.
+
+**GRANT and REVOKE statements in `0137_scim_deactivation.sql` (verbatim, all three):**
+- line 30: `REVOKE ALL ON identity.scim_event FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_identity;`
+- line 97: `REVOKE ALL ON FUNCTION identity.scim_deactivate(uuid,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_identity;`
+- line 98: `GRANT EXECUTE ON FUNCTION identity.scim_deactivate(uuid,jsonb) TO jobguard_identity;`
+No INSERT, UPDATE or DELETE grant to `jobguard_runtime` (or anyone) on money, membership, authorization, receipt or audit tables; the only writes to membership, session and grant-revocation rows are the checked routine's, and the only new privilege is EXECUTE on that routine for `jobguard_identity`.
