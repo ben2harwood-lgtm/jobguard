@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { logSiteExtraV1, SiteExtraError } from "@jobguard/core";
+import { logSiteExtraV1, logSiteExtraV3, SiteExtraError } from "@jobguard/core";
 import { assertSiteExtraMode, siteExtraHttpFailure } from "@jobguard/api/workspace";
 import { workspaceApplication } from "../../../../../lib/workspace-server";
 import { isTrustedBrowserOrigin } from "../../../origin";
@@ -11,8 +11,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
  try {
   assertSiteExtraMode();
   let raw: unknown; try { raw = await request.json(); } catch { throw new SiteExtraError("INVALID_COMMAND"); }
-  const body = logSiteExtraV1.safeParse(raw); if (!body.success) throw new SiteExtraError("INVALID_COMMAND");
+  const body = logSiteExtraV1.safeParse(raw), bodyV3 = body.success ? undefined : logSiteExtraV3.safeParse(raw);
+  const parsed = body.success ? body : bodyV3; if (!parsed?.success) throw new SiteExtraError("INVALID_COMMAND");
   const { id } = await context.params;
-  return NextResponse.json(await (await workspaceApplication()).siteExtras.log(id, body.data), { status: 201, headers });
+  return NextResponse.json(await (await workspaceApplication()).siteExtras.log(id, parsed.data), { status: 201, headers });
  } catch (error) { return failure(error); }
 }
