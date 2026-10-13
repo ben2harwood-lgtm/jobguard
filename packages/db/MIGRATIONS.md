@@ -1008,3 +1008,17 @@ Q-01/Q-03/Q-04/Q-05/Q-06 remain held; this does not complete CH-4 or unblock MON
 Forward-fix with a reviewed additive migration. Do not delete events or links,
 rewrite documents/money/audit, or reconstruct unknown historical site times.
 Database and upgrade proofs require the dispatcher's PostgreSQL environment.
+
+## 0149 — SV-7A synthetic job source storage and reads
+
+Installs three migration-owned, FORCE-RLS immutable tenant/job side tables, exact
+evidence/original relationships, private integrity triggers and one persisted-session
+authorized read routine. Runtime gains SELECT only and read EXECUTE. No earlier
+rows, grants, routines or fingerprinted table columns change; no backfill.
+Both executable source-intake routines remain held (Q3/Q4). No CH-4 event adapter
+is installed. The issued build-ahead base contains 0144, pending its merge; landing
+requires CH-4 and coordinator catalogue coverage. Disable the new read entrypoints
+on deployment failure and use a reviewed forward fix; preserve originals/history.
+Own-step upgrade proof: `test/job-sources-upgrade.integration.test.ts`; PostgreSQL
+execution remains required, with later migrations applied twice and rolled-back
+canonical-row/type/identity comparator controls.
