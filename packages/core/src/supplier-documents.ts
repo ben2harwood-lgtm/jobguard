@@ -10,7 +10,7 @@ export const supplierDocumentIntakeV1 = z.object({
   expectedRevision: z.number().int().nonnegative(),
   remoteUrl: z.never().optional(), attachmentPath: z.never().optional(), partial: z.literal(false).optional(),
 }).strict();
-export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.string().uuid().optional(),accepted:z.string().regex(/^\d+(?:\.\d+)?$/),rejected:z.string().regex(/^\d+(?:\.\d+)?$/),expectedRevision:z.number().int().nonnegative()}).strict();
+export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.string().uuid().optional(),accepted:z.string().regex(/^\d+(?:\.\d{1,6})?$/),rejected:z.string().regex(/^\d+(?:\.\d{1,6})?$/),expectedRevision:z.number().int().nonnegative()}).strict();
 export type SupplierDocumentIntake=z.infer<typeof supplierDocumentIntakeV1>;
 
 export const supplierFixtures = {
