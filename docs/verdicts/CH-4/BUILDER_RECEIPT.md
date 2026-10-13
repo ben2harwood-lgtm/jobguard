@@ -1,5 +1,209 @@
 Built by Codex; dispatched 13 Oct 2026
 
+# CH-4 repair round r2 — partial, not accepted
+
+Dispatched 13 October 2026, dispatcher 4. Starting and final HEAD: `4454c66560e9d97b3e2cbc1f32584fef8b3110d0`.
+Observed `origin/main`: `6659fb58791ec22588948f005b2bd4f6b299fa48`; no fetch, Git write, commit, push,
+merge, release, model review or acceptance was performed. Working tree was clean
+at entry. Installed Node v24.17.0 and the existing pinned pnpm 10.28.1 shim were
+used; no install, download or pin change. Intended message:
+`/private/tmp/jg-msg-ch-4.txt`.
+
+This round applies the coordinator ruling approving additive catalogue rows for
+the four NEW CH-4 tables. The earlier receipt's catalogue STOP is resolved by this
+explicit ruling; its OpenAPI STOP remains. Older sections below are retained
+historical evidence and do not describe the current r2 catalogue state.
+
+## Approved changes — exact before/after
+
+Only `packages/db/test/tenancy.integration.test.ts` and CH-4's own lane entry
+change, plus this receipt. In each of the two lists:
+
+| Unchanged anchor (before) | Added immediately after it (after) |
+|---|---|
+| `job_finding` | `job_link` |
+| `job_party_current` | `job_photo_purpose` |
+| `job_record_proposal` | `job_site_source_receipt`, then `job_work_state_event` |
+
+Eight added rows, four in each list, in name order:
+
+```ts
+      { relname: "job_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_photo_purpose", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_site_source_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_work_state_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_link", owner: "jobguard_migration" },
+      { relname: "job_photo_purpose", owner: "jobguard_migration" },
+      { relname: "job_site_source_receipt", owner: "jobguard_migration" },
+      { relname: "job_work_state_event", owner: "jobguard_migration" },
+```
+
+Current r2 row lines: RLS/guard 268, 271, 273, 274; ownership 511, 514, 516, 517.
+Rechecked current-main anchors at 268/270/271 and 508/510/511; they have the same
+names/fields. This older checkout's original anchors were 267/269/270 and
+506/508/509. Main wins; no conflicting main value was found at these anchors.
+All existing expected values, refusals, counts, names, fingerprints and ordering
+are preserved. A one-time Python inspection removed only the eight added lines
+in memory and required exact equality with HEAD's entire test file; it passed.
+No permanent preservation test was added.
+
+Lane before: CH-4's allow list lacked `packages/db/test/tenancy.integration.test.ts`.
+Lane after: add that exact path once and append a note recording coordinator
+approval for the catalogue rows only. Every earlier allow entry and every other
+lane is unchanged, verified by parsed-JSON comparison.
+No premise-establishing setup line was needed or added.
+
+## Executed checks and command evidence
+
+Every pnpm command below was prefixed with:
+`export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/ch4-pnpm-bin:$PATH"`.
+No test/build fan-out occurred. Before each heavy command,
+`memory_pressure | tail -1` reported 74% free and
+`df -g /System/Volumes/Data` reported 52 GB available (both exit 0).
+
+| Command | Exit | Evidence |
+|---|---:|---|
+| `pnpm --filter @jobguard/api openapi:generate` | 1 | tsx IPC permission refusal; JSON unchanged |
+| `pnpm exec turbo run typecheck --concurrency=2 --force` | 0 | 7 successful tasks; 0 cached |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0 | Core purity (153 files), lane, money and commercial checks |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --concurrency=2 --force` | 0 | 7 successful tasks; 0 cached |
+| `pnpm build --concurrency=2 --force` | 0 | 7 successful tasks; 0 cached; 30 static pages generated |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Actual merge-base range plus working-tree catalogue changes |
+| `git diff --check` | 0 | No whitespace errors |
+| `python3` inline additive edit | 0 | 8 new rows, 1 new lane path; JSON parses |
+| `python3` inline preservation inspection | 0 | Entire earlier test bytes retained; other lanes and allow entries unchanged; hashes below |
+
+Typecheck, lint and build used `--force`; no cache-hit result is called a run.
+Turbo printed shared-cache IO permission warnings; all tasks nevertheless
+executed successfully. Build printed the existing Next root/lockfile, CSS,
+file-type export and dynamic-import warnings and exited 0.
+
+Read-only shell inspection commands all exited 0: `pwd`, `git status --short`,
+`git rev-parse HEAD`, `git rev-parse origin/main`; `cat AGENTS.md`,
+`cat docs/contracts/job-work-state-v1.md`, `cat package.json`,
+`cat apps/api/src/generate-openapi.ts`, `cat /private/tmp/ch4-pnpm-bin/pnpm`;
+`sed -n '225,340p' AGENTS.md`, `sed -n '1950,1980p' BUILD_PLAN.md`,
+`sed -n '1950,1978p' BUILD_PLAN.md`,
+`sed -n '250,280p' packages/db/test/tenancy.integration.test.ts`,
+`sed -n '490,525p' packages/db/test/tenancy.integration.test.ts`,
+`sed -n '1,120p' docs/verdicts/CH-4/BUILDER_RECEIPT.md`,
+`sed -n '1,65p' tools/lint.mjs`,
+`sed -n '1,75p' tools/agent-lane-boundary-lint.mjs`,
+`node --version`, `command -v pnpm`, `ls -l /private/tmp/ch4-pnpm-bin/pnpm`;
+`git show origin/main:packages/db/test/tenancy.integration.test.ts` with
+`sed -n '255,280p'` and `sed -n '495,520p'`;
+`rg -n` searches for CH-4/table/OpenAPI names in the instructions, plan, lane,
+package manifests, tenancy test and receipt; and the `rg -n` grant/added-row
+inspection in migration 0144 and tenancy test.
+`git diff -- packages/db/test/tenancy.integration.test.ts`, `git diff --numstat`
+and `git diff --stat` exited 0. The inline preservation script and receipt
+writer use read-only `git show HEAD:<path>`, `git rev-parse` and `git diff`;
+all returned 0. Interactive output polls for typecheck/lint/build reached exit 0.
+The `python3` receipt/message writer is recorded here as an artifact operation,
+not a test. Final verification commands/results are appended below.
+
+## STOP — OpenAPI
+
+Exact command: `pnpm --filter @jobguard/api openapi:generate`, exit 1.
+Exact refusal:
+
+```text
+Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/42931.pipe
+```
+
+`apps/api/src/generate-openapi.ts:9` identifies the normal artifact write;
+`apps/api/openapi.json:1` is unchanged. The refusal occurred in the tsx CLI before
+that write. Per the issued stop-on-refusal instruction, no alternate invocation,
+manual artifact edit or escalation was attempted. `pnpm openapi:check` is
+**NOT RUN after the generator refusal**, not passed. Dispatcher/CI must regenerate
+with the existing generator and check the result, preserving published operation
+contracts and the pinned 409 enum. No automatic approval-review rejection occurred;
+this was an operating-system permission refusal.
+
+## NOT RUN and acceptance limits
+
+`packages/db/test/tenancy.integration.test.ts` and all six own DB suites
+(`job-work-state.integration.test.ts`, `job-work-state-sources.integration.test.ts`,
+`job-work-state-post-lock.integration.test.ts`, `job-work-state-races.integration.test.ts`,
+`job-work-state-catalog.integration.test.ts`, `job-work-state-upgrade.integration.test.ts`)
+are **NOT RUN (cannot start PostgreSQL here)**. Every retained DB suite, affected
+browser journey, `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and e2e umbrella
+in the earlier receipt remain NOT RUN for dispatcher/CI execution. Unit tests
+were not repeated in r2: this round changes catalogue expectations and lane
+metadata only; previous unit evidence is historical and is not a new r2 run.
+No database catalogue, RLS, ownership or migration assertion is claimed passed
+from compilation or the additive source inspection.
+
+Q-01/Q-03/Q-04/Q-05/Q-06 remain HELD exactly as recorded below. CH4-A21/A24/A25
+still require actual PostgreSQL/retained-suite results; CH4-A28 still requires a
+real different-model verdict bound to the dispatcher's eventual commit and
+separate acceptance. No full acceptance ID is newly passed. No held command,
+registry key, model/prompt, UI, provider action or production activation was added.
+
+## Grants and preservation
+
+No new GRANT or migration change in r2. Standard F remains: no runtime direct
+INSERT/UPDATE/DELETE grant on money, membership, authorization, receipt or audit.
+The unchanged 0144 migration's new grants (one per line) remain:
+
+```sql
+GRANT SELECT ON app.job_work_state_event TO jobguard_runtime;
+GRANT SELECT ON app.job_site_source_receipt TO jobguard_runtime;
+GRANT SELECT ON app.job_photo_purpose TO jobguard_runtime;
+GRANT SELECT ON app.job_link TO jobguard_runtime;
+GRANT EXECUTE ON FUNCTION app.ch4_read_work_facts(uuid,uuid,text) TO jobguard_runtime;
+```
+
+SHA-256 before (HEAD) and after r2:
+
+```text
+packages/db/test/tenancy.integration.test.ts
+  HEAD   41a9b7171e92a718f5f59f5a1879f3f5bc66aff94773ccbed2356516d5ab52ac
+  r2     076246fa5ff916d5443fb5a8e17dd34f16da3d523544b02ef9123512195af2ad
+config/agent-lane-assignments.json
+  HEAD   5719ef4d2c3bc5122ae8f0b911491eeca4506a64e6aaddf348fefd2d4114b9be
+  r2     554844d7425e240749a4a91bd467ac8aa88b0d33c8f8a92f27d89fc1792aafff
+apps/api/openapi.json
+  HEAD   c368255cd5e89140d2c4d6422a373edab192e478c773ddf20fed1a21a51413b5
+  r2     c368255cd5e89140d2c4d6422a373edab192e478c773ddf20fed1a21a51413b5
+packages/db/migrations/0144_job_work_state.sql
+  HEAD   e88858ecd2fa4d482561dde4d8043b4adbe3414c715146c655e0d86f123f7c9b
+  r2     e88858ecd2fa4d482561dde4d8043b4adbe3414c715146c655e0d86f123f7c9b
+apps/api/src/auth/context-boundary.test.ts
+  HEAD   a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35
+  r2     a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35
+packages/db/test/watchdog-command-harness.ts
+  HEAD   3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6
+  r2     3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6
+packages/db/test/command-replay-contract.integration.test.ts
+  HEAD   db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f
+  r2     db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f
+packages/db/test/fingerprinted-row-shape.integration.test.ts
+  HEAD   be34095677e52d4e63c771799c99a11e0e52a73fdf2d85808550b17a583ab3a8
+  r2     be34095677e52d4e63c771799c99a11e0e52a73fdf2d85808550b17a583ab3a8
+```
+
+`git diff --stat -- . ':!docs/verdicts/CH-4/BUILDER_RECEIPT.md'` (exit 0):
+
+```text
+ config/agent-lane-assignments.json           | 2 +-
+ packages/db/test/tenancy.integration.test.ts | 8 ++++++++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+```
+
+Self-inspection: exact added-row removal reconstructs HEAD; unchanged source
+bytes and hashes do not establish runtime correctness or independent review.
+The catalogue edit is the only r2 edit to a merged test and is explicitly
+coordinator-approved. The JSON lane check proves other entries unchanged.
+OpenAPI remains incomplete under the exact refusal above. No schema/data
+migration, backwards-compatibility change or new operational alert in r2.
+Independent verdict and separate acceptance remain outstanding.
+
+---
+
+## Retained r1 and original delivery history
+
+
 # CH-4 repair round r1 — partial, not accepted
 
 Repair starting and final HEAD: `30a44f9fede0f473252d8a06c8235823e8f6d761`.
@@ -885,3 +1089,19 @@ This manual inventory does not replace the refused lane gate.
 
 Final HEAD: `269874640468a6e1dfdfed63edd4ce187d1d9dbb` (issued base; all delivered work uncommitted).
 Current observed origin/main: `6659fb58791ec22588948f005b2bd4f6b299fa48`.
+
+
+## r2 final verification
+
+The receipt/message writer exited 0. Final `git diff --check`, `git diff --stat`, `git status --short`, `git rev-parse HEAD` and `df -g /System/Volumes/Data` exited 0; disk was 51 GB available at final verification (52 GB before heavy runs). The final inline Python verification exited 0: exactly the three authorized r2 paths changed, eight additive catalogue rows reconstruct the prior test bytes when removed in memory, other lane entries remain unchanged, and the intended commit-message file exists. Final HEAD remains `4454c66560e9d97b3e2cbc1f32584fef8b3110d0`. No Git-writing command was run.
+
+Final whole-worktree stat before the final verification note (exit 0):
+
+```text
+ config/agent-lane-assignments.json           |   2 +-
+ docs/verdicts/CH-4/BUILDER_RECEIPT.md        | 204 +++++++++++++++++++++++++++
+ packages/db/test/tenancy.integration.test.ts |   8 ++
+ 3 files changed, 213 insertions(+), 1 deletion(-)
+```
+
+Final receipt disk-value correction and stat recording via `python3` exited 0; post-correction `git diff --check` exited 0.
