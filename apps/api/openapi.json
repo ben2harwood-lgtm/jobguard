@@ -1642,6 +1642,21 @@
         ]
       }
     },
+    "/jobs/{id}/recovery-cases/terms": {
+      "post": {
+        "operationId": "RecoveryCaseController_terms",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record owner agreement to proposed synthetic case fee terms",
+        "tags": [
+          "recovery-cases"
+        ]
+      }
+    },
     "/jobs/{id}/recovery-cases/eligibility": {
       "post": {
         "operationId": "RecoveryCaseController_eligibility",
