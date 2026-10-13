@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, recoveryFixtureDefinitionV3, RecoveryEligibilityV3Error, type RecoveryEligibilityViewV3 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
+import { reviewPracticeSupplierCredit } from "./practice-supplier-credit-repository.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 export type RecoveryEligibilityV3Review = Readonly<{id:string;revision:number;caseRevision:number;sourceEventId:string|null;result:RecoveryEligibilityViewV3}>;
 export async function readRecoveryEligibilityV3(db:TenantTransaction,tenantId:string,caseId:string):Promise<RecoveryEligibilityV3Review|null> {
@@ -15,6 +16,7 @@ export class RecoveryEligibilityV3Repository {
   if(this.environment!=="synthetic_demo")throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
   const parsed=recoveryEligibilityCommandV3.safeParse(raw);if(!parsed.success)throw new RecoveryEligibilityV3Error("INVALID_COMMAND");
   const input={...parsed.data,commandId:parsed.data.commandId.toLowerCase(),caseId:parsed.data.caseId.toLowerCase()},job=jobId.toLowerCase();
+  if(input.fixture==="F14"||input.fixture==="F16-partial"||input.fixture==="F16-full")return reviewPracticeSupplierCredit(this.pool,context,job,input,sessionDigest);
   const payloadHash=hash({jobId:job,...input});
   return withTenant(this.pool,context,async db=>{
    await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");

@@ -969,3 +969,7 @@ trigger rejects UPDATE and DELETE.
 
 Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
 `packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
+
+### 0146 — practice_supplier_credit (PRACTICE-FACTS-1B)
+
+Adds two immutable tenant/job/case side tables for the authorised synthetic supplier documents and original payment links. Runtime gets SELECT on the side tables and EXECUTE on a checked writer which derives current authority from the persisted owning practice session. Restates the newest 0130 eligibility guard and 0119 completeness check for F14 and the F16 partial-to-full path, preserving F17 timing and other fixtures. Existing rows and table shapes remain unchanged. Earlier/mixed settlements refuse without saving an outcome; fee and production capabilities remain held. Forward fix preserves all saved history and compatible readers. Populated upgrade/fresh-install and catalogue checks require dispatcher/CI PostgreSQL execution; tenancy catalogue registration remains coordinator-owned.
