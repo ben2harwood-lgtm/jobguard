@@ -849,6 +849,7 @@ and browser regressions. Local sandbox initialization errors are not DB passes.
 Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces). Renumbered from 0125 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
 
 Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
+
 ## 0131 — PRACTICE-FACTS-1 part A
 
 Renumbered from 0124 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
@@ -897,6 +898,32 @@ Chasing a withheld payment on a job that is not bound to the v3 fee policy is NO
 Existing rows are not examined or backfilled. A guarded message approved before this migration but not yet delivered is refused at delivery without terms and follows the merged blocked path. The guard runs at message preview, exact approval and delivery-record insertion, including reminders. A due follow-up is used for the populated upgrade proof's new preview after its earlier delivered message; earlier delivery remains intact. Upgrade tests compare named pre-existing columns as canonical PostgreSQL JSON text and full types, by pre-existing primary-key identity. Rolled-back controls cover a microsecond, retyping, a later nullable column, replaced function and added row; subsequent migrations are applied twice. Database execution is still owed; T8 was ruled on 12 Oct by the coordinator and amended to prove ONE transaction identity with ordered times (never exact equality; the merged audit path takes a fresh `clock_timestamp()` per event while the approval requires `transaction_timestamp()`, so exact equality was never achievable).
 
 Forward fix: preserve all approval and chase history and amend only through a separately reviewed later migration. Do not roll back by removing the guard while pursuits exist. New terms/policy versions and withdrawal require their own reviewed migration and product ruling. DW3, wording, the UI and live M4-5 helper integration remain owed. Real charging remains locked.
+
+## 0135 — site extra authority (ENT-3a)
+
+Renumbered from 0126 to 0135 on 12 October 2026 under the merge-ahead ruling because 0127 to 0129 merged first and 0130 to 0134 are reserved by open pull requests; the SQL bytes are unchanged (sha256 1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab).
+
+Additive: only `app.ent3a_extra_authority(uuid,text,uuid)` (STABLE) and
+`app.ent3a_require_extra_authority(uuid,uuid)` (VOLATILE). Both PL/pgSQL,
+SECURITY INVOKER, `search_path=pg_catalog`, owned by `jobguard_migration`.
+PUBLIC and infrastructure EXECUTE revoked explicitly; runtime EXECUTE granted
+only on these two signatures. No merged migration object altered or restated;
+no table or column added, no row changed or backfilled. The founder's 11 October
+raising rule applies through SiteExtraRepository and the ENT-4b seam; ordinary
+ENT-4b writers remain structurally governed only (issued Q5).
+
+The read-only decision selects the lowest covering, unrevoked grant of the
+member's own role. The stored-origin guard holds the shared tenant administration
+lock until commit. Refusals roll back the attempted command; their coalesced audit
+record is appended separately. No business network action, price or fee.
+
+Upgrade/catalogue and governed-path tests: `site-extra-authority.integration.test.ts`
+and `site-extra.integration.test.ts`. NOT RUN in the builder sandbox (cannot start
+PostgreSQL). Integrator must execute before acceptance. Expand-compatible with
+prior clients. Forward fix preferred: stop this route and issue a reviewed
+additive correction; rollback of this leaf alone requires disabling the route
+and removing its two routines and migration registration under a separate
+operator change. No historical data rollback is needed.
 
 ## 0136 — recovery allocations (M4-8-S)
 

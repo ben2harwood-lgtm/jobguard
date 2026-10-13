@@ -72,6 +72,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0131_practice_feed_facts.sql", import.meta.url),
   new URL("../migrations/0132_final_account_lock.sql", import.meta.url),
   new URL("../migrations/0134_recovery_case_terms.sql", import.meta.url),
+  new URL("../migrations/0135_site_extra_authority.sql", import.meta.url),
   new URL("../migrations/0136_recovery_allocation.sql", import.meta.url),
   new URL("../migrations/0138_practice_session_hardening.sql", import.meta.url),
 ] as const;
