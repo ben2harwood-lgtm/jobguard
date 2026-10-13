@@ -1245,8 +1245,33 @@
         "operationId": "VariationController_post",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Propose, revise, approve or reject a synthetic variation",
@@ -1332,6 +1357,34 @@
                       "enum": [
                         "JOB_NOT_LIVE",
                         "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
                       ]
                     }
                   }
@@ -1640,6 +1693,34 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append a synthetic purchase-order draft revision",
@@ -1671,6 +1752,34 @@
                       "enum": [
                         "JOB_NOT_LIVE",
                         "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
                       ]
                     }
                   }
@@ -1723,6 +1832,34 @@
                       "enum": [
                         "JOB_NOT_LIVE",
                         "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
                       ]
                     }
                   }
@@ -3963,6 +4100,21 @@
         "summary": "Review or approve allocation reversal against a recorded refund, credit or receipt reversal",
         "tags": [
           "recovery-allocations"
+        ]
+      }
+    },
+    "/jobs/{id}/work-state": {
+      "get": {
+        "operationId": "JobWorkStateController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Persisted synthetic history with exact UTC microsecond timestamps and zero external actions"
+          }
+        },
+        "summary": "Read immutable synthetic work facts; interval and command policies held",
+        "tags": [
+          "JobWorkState"
         ]
       }
     }

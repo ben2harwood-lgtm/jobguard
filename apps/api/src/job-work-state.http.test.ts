@@ -1,10 +1,39 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { Test } from "@nestjs/testing";
+import { Pool as PoolProvider } from "pg";
 import type { Pool } from "pg";
 import { describe,expect,it,vi } from "vitest";
 import { JobWorkStateController } from "./job-work-state.controller.js";
 import { JobWorkStateApplication } from "./job-work-state.application.js";
+import { AppModule } from "./app.module.js";
+import { configureOpenApi } from "./bootstrap.js";
 describe("CH-4 Nest read adapter (no socket)",()=>{
+ it("CH4-A23 real AppModule mounts GET /jobs/:id/work-state and documents it",async()=>{
+  const result={version:"job-work-state-read.v1",jobId:randomUUID(),events:[],links:[],lock:null,environment:"synthetic_demo",realExternalActions:0};
+  const read=vi.spyOn(JobWorkStateApplication.prototype,"get").mockResolvedValue(result as Awaited<ReturnType<JobWorkStateApplication["get"]>>);
+  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+  const module=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(PoolProvider).useValue({}).compile();
+  const app=module.createNestApplication();
+  const registerGet=vi.spyOn(app.getHttpAdapter(),"get");
+  try{
+   await app.init();
+   expect(app.get(JobWorkStateController)).toBeInstanceOf(JobWorkStateController);
+   expect(registerGet).toHaveBeenCalledWith("/jobs/:id/work-state",expect.any(Function));
+   const registration=registerGet.mock.calls.find(([path])=>path==="/jobs/:id/work-state")!;
+   // Dispatch Nest's registered handler, including its guard and headers, without a socket.
+   const response={status:vi.fn().mockReturnThis(),json:vi.fn(),set:vi.fn(),getHeader:vi.fn()};
+   await registration[1]({path:`/jobs/${result.jobId}/work-state`,params:{id:result.jobId},headers:{cookie:`jg_session=${randomUUID()}`},query:{}},response,vi.fn());
+   expect(read).toHaveBeenCalledWith(result.jobId,{});
+   expect(response.status).toHaveBeenCalledWith(200);
+   expect(response.json).toHaveBeenCalledWith(result);
+   expect(response.set).toHaveBeenCalledWith("Cache-Control","no-store");
+   const document=configureOpenApi(app) as {paths:Record<string,{get?:unknown}>};
+   expect(document.paths["/jobs/{id}/work-state"]?.get).toBeDefined();
+  }finally{
+   await app.close();registerGet.mockRestore();read.mockRestore();vi.unstubAllEnvs();
+  }
+ });
  it("CH4-A23 controller delegates persisted reads and carries no-store; exposes no held writes",async()=>{
   const result={version:"job-work-state-read.v1",jobId:randomUUID(),events:[],links:[],lock:null,environment:"synthetic_demo",realExternalActions:0};
   const spy=vi.spyOn(JobWorkStateApplication.prototype,"get").mockResolvedValue(result as Awaited<ReturnType<JobWorkStateApplication["get"]>>);

@@ -1105,3 +1105,76 @@ Final whole-worktree stat before the final verification note (exit 0):
 ```
 
 Final receipt disk-value correction and stat recording via `python3` exited 0; post-correction `git diff --check` exited 0.
+
+
+## Repair round r3 — mounted Nest read route (13 October 2026)
+
+Issued by dispatcher 4 against local HEAD
+`f87cbe17f3c2c98e00f925da17886063c4209a89`. Scope: the single blocking
+controller-registration defect, its regression coverage, and regenerated OpenAPI.
+No Git-writing command, install, package download, migration or policy change.
+
+`AppModule.controllers` now includes the already imported
+`JobWorkStateController`. The regression in `job-work-state.http.test.ts`
+compiles the real `AppModule` with only its Pool provider replaced, initializes
+Nest without a listener, observes registration of GET `/jobs/:id/work-state`,
+and dispatches the registered Nest handler with a synthetic session. It checks
+200, the read result, the `Cache-Control: no-store` header, and the GET operation
+in the actual module's generated OpenAPI. The read application is scripted;
+this proves module registration/dispatch, not PostgreSQL authorization.
+
+The test first failed because Nest could not find `JobWorkStateController`.
+After registration, two intermediate harness runs failed on incomplete Express
+response doubles; the final double implements the adapter's response methods
+and all assertions pass. The original two HTTP adapter tests remain unchanged.
+
+OpenAPI was regenerated from the existing source generator. Besides the newly
+mounted GET, generation includes five pre-existing CH-4 source-operation 422
+response decorators. Swagger replaces the variation operation's implicit 201
+documentation with its existing explicit 422 response metadata. No response
+metadata or source-operation behavior was changed in this repair.
+
+### Executed checks
+
+Node `v24.17.0`; cached pinned pnpm `10.28.1`. The global pnpm version-selection
+wrapper stalled and was interrupted; all checks below use the pre-existing
+cached CLI shim, with this command prefix:
+
+```sh
+export PATH="/private/tmp/ch4-pnpm-bin:/Users/benharwood/Library/pnpm/bin:$PATH"
+```
+
+| Command | Exit/result |
+| --- | --- |
+| `pnpm typecheck --force --concurrency=2` | 0; 7 packages, no cached tasks |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | 0; root invariants and all 7 packages, no cached tasks |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; CH-4 lane |
+| `pnpm build --force --concurrency=2` | 0; 7 packages, no cached tasks |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-work-state.http.test.ts` | Initial missing-controller red: 1 failed, 2 passed; final registration/dispatch green: 3 passed |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-work-state.application.test.ts src/job-work-state.controller.test.ts src/job-work-state.http.test.ts src/job-work-state.isolation.test.ts` | 0; 4 files, 11 tests passed |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-work-state.test.ts` | 0; 11 tests passed |
+| `pnpm --filter @jobguard/api openapi:generate` | 1; tsx CLI IPC `listen EPERM` |
+| `pnpm openapi:check` | 1 on both attempts; tsx CLI IPC `listen EPERM`, including after regeneration |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts` | 0; same source generator, without CLI IPC; artifact regenerated |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; regenerated artifact matches the source generator |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage --filter @jobguard/web --workspace-concurrency=2 test --maxWorkers=2` | 1; core 4,492 passed, 6 failed (four allocation timeouts and two source-inspection assertions against compiled dist copies); config 2 passed, storage 4 passed; bail prevented AI/web |
+| `pnpm --filter @jobguard/ai --filter @jobguard/web --workspace-concurrency=1 --no-bail test --maxWorkers=2` | 0; AI 80 passed, web 636 passed |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src --exclude "**/health.test.ts" --exclude "**/shadow-isolation.application.test.ts"` | 1; 63 files passed, 6 failed; 1,479 tests passed, 96 failed, 1 skipped; 73 errors. Includes replay mocks missing existing CH-4 membership queries, socket `EPERM`, and the remaining final-account isolation suite unable to obtain a PostgreSQL port |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 src test/recovery-case-join.test.ts test/recovery-message-repository.test.ts test/recovery-case-outcome.test.ts test/contractor-session-context.test.ts test/verify-audit-export-cli.test.ts test/verify-evidence-pack-cli.test.ts` | 1; 145 passed, 1 audit-checkpoint source-graph test timed out at its existing 5-second limit |
+
+Detailed command output is in `/private/tmp/ch4-r3-*.log`. Turbo reported
+shared-cache IO permission warnings; the forced typecheck, lint and build still
+completed successfully. The broader suites are not claimed green. No failing
+assertion, timeout, source fixture or existing test was changed.
+
+Tenant/session authorization and no-store remain the route's existing contracts;
+there are no new credentials, external actions, operational alerts or database
+changes. `pnpm test`, database/migration and browser umbrellas remain for GitHub
+CI under the dispatcher's environment instruction. A clean install was not
+attempted because dependencies are installed and downloads are prohibited.
+AI evaluation is inapplicable to this registration-only change.
+
+This is builder test evidence, not independent acceptance. Independent verdict
+bound to the dispatcher's resulting commit, separate acceptance, CI evidence and
+release gates remain outstanding. Intended commit message is overwritten at
+`/private/tmp/jg-msg-ch-4.txt`; the dispatcher owns commit, push and merge.
