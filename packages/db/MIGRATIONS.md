@@ -885,3 +885,15 @@ append-only facts to roll back. The integrator owns the BUILD_PLAN §12.2 ledger
 Renumbered from 0130 to 0132 on 12 October 2026 under the merge-ahead ruling because ENT-10d (0129) and CH-7-F17-BEFORE-OPEN (0130) merged first and 0131 is reserved for PRACTICE-FACTS-1; the SQL bytes are unchanged (sha256 543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7).
 
 `0132_final_account_lock.sql`: SV-4 immutable lock, dispositions, synthetic terms, append-only check facts and invoice/line side bindings; only new lock-bound issue is guarded. No fingerprinted-table columns or existing grants change. Forward-fix by additive migration; do not delete locks or issued invoices.
+
+## 0134 — CH-7-TERMS (proposed synthetic withheld-payment terms)
+
+Adds one migration-owned forced-RLS approval table, the controlled `app.approve_recovery_case_terms` routine and the invoker `app.recovery_case_terms_approved` helper, a server time pin, immutable-row trigger and three ordinary pursuit insert triggers beside the merged guards. No existing column, routine, grant, policy or row is changed. Runtime has SELECT only on approvals and EXECUTE on the two callable functions. Active-owner authorization is checked inside the definer routine as well as by the merged dispatcher (coordinator's 12 October amendment). Decision/receipt/audit paths remain dispatcher-owned.
+
+A builder's agreement to the proposed fee terms for a case is not approval of the fee policy and authorises no charge.
+
+Chasing a withheld payment on a job that is not bound to the v3 fee policy is NOT guarded by this order.
+
+Existing rows are not examined or backfilled. A guarded message approved before this migration but not yet delivered is refused at delivery without terms and follows the merged blocked path. The guard runs at message preview, exact approval and delivery-record insertion, including reminders. A due follow-up is used for the populated upgrade proof's new preview after its earlier delivered message; earlier delivery remains intact. Upgrade tests compare named pre-existing columns as canonical PostgreSQL JSON text and full types, by pre-existing primary-key identity. Rolled-back controls cover a microsecond, retyping, a later nullable column, replaced function and added row; subsequent migrations are applied twice. Database execution is still owed; T8 was ruled on 12 Oct by the coordinator and amended to prove ONE transaction identity with ordered times (never exact equality; the merged audit path takes a fresh `clock_timestamp()` per event while the approval requires `transaction_timestamp()`, so exact equality was never achievable).
+
+Forward fix: preserve all approval and chase history and amend only through a separately reviewed later migration. Do not roll back by removing the guard while pursuits exist. New terms/policy versions and withdrawal require their own reviewed migration and product ruling. DW3, wording, the UI and live M4-5 helper integration remain owed. Real charging remains locked.
