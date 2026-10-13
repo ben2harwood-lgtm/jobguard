@@ -68,7 +68,7 @@ describe("ENT-5 independent requirements", () => {
     expect(preserveExtraWorkHistory(after, []).establishedBreaches).toEqual(after.establishedBreaches);
     expect(preserveExtraWorkHistory({ ...before, start: null, finish: null }, []).start).toBeNull();
     expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "report", role: "operative", siteStaff: true })).toBe("permitted_constraint");
-    expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "report", role: "owner", siteStaff: false })).toBe("refused");
+    expect(extraRoleConstraint({ version: "extra-role-constraint.v1", action: "report", role: "owner", siteStaff: false })).toBe("held");
     expect(() => preserveExtraWorkHistory({ ...before, timing: "before_work" }, [])).toThrow();
   });
   it("BEN-Q08 original approvers remain eligible and backups require agreed waits", () => {

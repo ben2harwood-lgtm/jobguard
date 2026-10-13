@@ -48,7 +48,7 @@ export const extraRoleConstraintV1 = z.object({ version: z.literal("extra-role-c
 export function extraRoleConstraint(raw: unknown): "permitted_constraint" | "held" | "refused" {
   const input = readExtraConstraint(extraRoleConstraintV1, raw);
   if (input.action === "price") return input.role === "surveyor" ? "permitted_constraint" : "refused";
-  if (input.action === "report") return input.siteStaff ? "permitted_constraint" : "refused";
+  if (input.action === "report") return input.siteStaff ? "permitted_constraint" : "held";
   return input.role === "supervisor" ? "permitted_constraint" : "held";
 }
 const slot = z.string().trim().min(1).max(100);

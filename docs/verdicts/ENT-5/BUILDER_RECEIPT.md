@@ -5,7 +5,7 @@ ENT-5 — issued foundation and settled constraints only; RED lane. This is a bu
 ## Base, authority and allocation
 
 - `origin/main`: `6659fb58791ec22588948f005b2bd4f6b299fa48`, verified without fetching or changing refs.
-- Build-ahead/final HEAD: `82f05c2af245255a84921108e554ecab4e065054` (ENT-3d #170 stack). No builder commit, push, PR or checkout. Intended commit message: `/private/tmp/jg-msg-ent-5.txt`.
+- Original build-ahead dependency HEAD: `82f05c2af245255a84921108e554ecab4e065054` (ENT-3d #170 stack). Dispatcher-committed incoming/pre-commit HEAD for repair r1: `dfcc97ca76fe5a45f7ea594686334f7fad019e6b`. No builder Git write, push, PR or checkout. Intended repair commit message: `/private/tmp/jg-msg-ent-5.txt`.
 - Migration: `0147_extra_approval.sql`; one additive runner registration. No renumbering of predecessors.
 - Main already contains 0139 ENT-3b and 0140 ENT-3c; it ends at 0140, not the draft's old 0138. The issued ENT-3d dependency supplies 0141 and is still a landing prerequisite. Main wins over the draft's older readiness/head descriptions. Catch-up and exact-commit review are required after #170 merges.
 - BUILD_PLAN §9.1.2–§9.1.7 (lines 551–627), ENT-5 (890–921), §§2.4, 9.1.12/13, ledger ENT-4a-ALIGN (3376), FEE-BOTH-1 (3382), and graph (3436) were inspected. Against main, the only plan delta in this dependency stack is the two-line ENT-3d ledger amendment at 3396; all cited existing contracts are unchanged. AGENTS.md is unchanged. No plan amendment was written by this builder.
@@ -61,7 +61,7 @@ Inspection command log (read-only calls, grouped; exit codes are whole-shell res
 
 ## STOP items — exact coordinator lines and before/after
 
-These files are unchanged. No prerequisite was silently repaired in another lane.
+Original handoff STOP items follow. Item 1 is resolved by the explicit coordinator-approved additive catalogue repair in r1 below; other source files remain unchanged.
 
 1. `packages/db/test/tenancy.integration.test.ts:236` currently:
 
@@ -149,13 +149,12 @@ Executed own test inventory (15 tests):
 - `packages/core/src/extra-evidence-pack.test.ts`: `E5-20 existing verifier uses an integrity key without creating a recovery subject`.
 - `packages/core/src/extra-evidence-pack.test.ts`: `E5-19 optional absence and confirmation limits are explicit in source artifacts`.
 
-PostgreSQL test inventory (13 tests), each **NOT RUN (cannot start PostgreSQL here)**:
+PostgreSQL test inventory (13 actual tests: 4 authority, 5 upgrade, 4 evidence; the stray `/` entry was not a test), each **NOT RUN (cannot start PostgreSQL here)**:
 
 - `packages/db/test/extra-approval-authority.integration.test.ts`: `E5-24 partial catalog RLS and absent business writer boundary`.
 - `packages/db/test/extra-approval-authority.integration.test.ts`: `E5-09 partial source binding preserves the origin-bound SoR row and basis`.
 - `packages/db/test/extra-approval-authority.integration.test.ts`: `E5-24 partial wrong-job revision hash and predecessor specimens refuse`.
 - `packages/db/test/extra-approval-authority.integration.test.ts`: `E5-24 partial migration-owner mutation of immutable foundation rows refuses`.
-- `packages/db/test/extra-approval-upgrade.integration.test.ts`: `/`.
 - `packages/db/test/extra-approval-upgrade.integration.test.ts`: `E5-26 rule-9 upgrade proof`.
 - `packages/db/test/extra-approval-upgrade.integration.test.ts`: `E5-20 existing pack and fingerprint compatibility`.
 - `packages/db/test/extra-approval-upgrade.integration.test.ts`: `E5-26 one-microsecond and full-type changes FAIL using the same comparator`.
@@ -184,7 +183,7 @@ Inspected every new GRANT, source FK/subject check, immutability trigger and mod
 
 LATER: client screens and complete journey remain parked for the separately issued UI part. Coordinator-owned plan recording of side-cache/pack representation and catalogue/fixture prerequisite fixes is still needed.
 
-## Lane evidence and hashes
+## Original handoff lane evidence and hashes
 
 `git diff --stat HEAD` (tracked additive files only; new files are untracked because no git add is allowed):
 
@@ -200,7 +199,7 @@ LATER: client screens and complete journey remain parked for the separately issu
 
 17 new untracked implementation/contract/test files accompany those five tracked additions; this receipt is the eighteenth new file. Every current delta path is in this lane's explicit allow list. No existing merged test, pinned source, shared replay harness, fingerprinted table, predecessor SQL or unrelated file was edited by ENT-5. The main-to-HEAD dependency diff is separate from the HEAD-to-working-tree delta.
 
-Protected-file SHA-256, unchanged against issued HEAD:
+Original handoff protected-file SHA-256, unchanged against the dependency HEAD at that time (r1 catalogue exception and repair hashes below):
 
 ```text
 21d7c5ba11b66d000c3689b8c65d9defa9c8840889cde4ff1241105f558682b3  BUILD_PLAN.md
@@ -217,7 +216,7 @@ db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f  packages/db/te
 
 ```
 
-Delta SHA-256 (receipt excluded to avoid hashing its own text):
+Original handoff delta SHA-256 (receipt excluded to avoid hashing its own text; r1 repair hashes below supersede changed files):
 
 | File | Issued HEAD SHA-256 | Working SHA-256 |
 |---|---|---|
@@ -244,4 +243,91 @@ Delta SHA-256 (receipt excluded to avoid hashing its own text):
 | `packages/db/test/extra-approval-upgrade.integration.test.ts` | new | db93fdf87f717aa370c28247936bc68cac100440c17d25504390521a2005b884 |
 | `packages/db/test/extra-evidence-packs.integration.test.ts` | new | 6c1dc7188efc4a045e97060714479ef63eb6df7413eaec57d8ce67e29ff1a1b6 |
 
-Final HEAD: `82f05c2af245255a84921108e554ecab4e065054`. No builder commit exists; intended message is in `/private/tmp/jg-msg-ent-5.txt`. Exact patch/source hashes, not this unchanged HEAD alone, identify the uncommitted builder work. Independent verdict, separate acceptance and founder merge remain outstanding.
+Repair r1 incoming/pre-commit HEAD: `dfcc97ca76fe5a45f7ea594686334f7fad019e6b`; original dependency HEAD was `82f05c2af245255a84921108e554ecab4e065054`. The dispatcher committed the original build; the builder has made no Git write. Intended repair message is in `/private/tmp/jg-msg-ent-5.txt`. The r1 patch/hashes below identify the uncommitted repair. Independent verdict for the eventual repaired commit, separate acceptance and founder merge remain outstanding.
+
+
+## Repair r1 — dispatcher 4, 13 October 2026
+
+Incoming/pre-commit HEAD: `dfcc97ca76fe5a45f7ea594686334f7fad019e6b`, branch `codex/sandbox/ent-5`. Read the independent Opus REPAIR verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/ent-5-opus-dfcc97c.md`, bound to this exact incoming head. That verdict is source inspection only and is not a verdict on the repaired commit.
+
+B1 before/after: `packages/core/src/extra-approval.ts:51` changes only the non-site-staff report result from `"refused"` to `"held"`; the own `BEN-Q05` test at `packages/core/src/extra-approval.test.ts:71` changes the corresponding expectation to `"held"`. The reporting matrix remains HELD, matching the withdrawal constraint. No caller or commercial writer is introduced.
+
+Coordinator-approved catalogue exception: dispatcher 4 explicitly authorized four additive entries for the two new tables created by migration 0147. `config/agent-lane-assignments.json` adds the exact `packages/db/test/tenancy.integration.test.ts` allow path to ENT-5 and records the exception in that lane's note. No other lane is changed. This resolves original STOP item 1; no existing catalogue row is changed or removed. The following are the exact before/after blocks (line numbers refer to incoming HEAD):
+
+RLS/guard catalogue, before lines 236–237:
+
+```ts
+      { relname: "extra_duplicate_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+```
+
+After:
+
+```ts
+      { relname: "extra_approval_revision_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_duplicate_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_evidence_pack", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+```
+
+Ownership catalogue, before lines 476–477:
+
+```ts
+      { relname: "extra_duplicate_link", owner: "jobguard_migration" },
+      { relname: "extra_event", owner: "jobguard_migration" },
+```
+
+After:
+
+```ts
+      { relname: "extra_approval_revision_binding", owner: "jobguard_migration" },
+      { relname: "extra_duplicate_link", owner: "jobguard_migration" },
+      { relname: "extra_evidence_pack", owner: "jobguard_migration" },
+      { relname: "extra_event", owner: "jobguard_migration" },
+```
+
+Receipt correction: there are 13 actual PostgreSQL tests (4 + 5 + 4); the fourteen-item list included a stray `/` entry, now removed. The original dependency head is distinguished from the actual repair pre-commit head. Earlier command receipts and hashes are historical, not r1 execution evidence.
+
+Scope: five changed files only (constraint, own test, tenancy catalogue, ENT-5 lane entry, receipt). No migration/schema/grant change, no new operational alert or release permission. Database/migration/browser suites are NOT RUN because the dispatcher's environment note confirms localhost binding and PostgreSQL startup are unavailable here; GitHub CI after dispatcher push owes those proofs. All previously held product questions and independent repaired-commit review/separate acceptance gates remain held. The builder runs no Git write commands; dispatcher owns the commit.
+
+
+Repair r1 commands use the already-installed pnpm 10.28.1 at `/private/tmp/ent-5-tools/pnpm` (no install/download); Node is v24.17.0. Every pnpm shell sets `PATH="$HOME/Library/pnpm/bin:$PATH"` and then prepends `/private/tmp/ent-5-tools`. Before each heavy invocation, `memory_pressure | tail -1` and `df -g /System/Volumes/Data` passed (73–74% free memory; 51 GB available). Heavy runs were serial; unit run used three own files with `--maxWorkers=2`.
+
+| Repair r1 command | Exit / evidence |
+|---|---|
+| `pnpm typecheck` | 0; 7 successful packages, 2 cached; 1m4.637s; `/private/tmp/jg-ent-5-r1-typecheck.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1; core purity passed (162 files), then lane prerequisite failed on 19 inherited ENT-3d paths; package lint was not reached by this command; `/private/tmp/jg-ent-5-r1-lint.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1; same 19 inherited paths, no base override or dependency lane expansion; `/private/tmp/jg-ent-5-r1-lanes.log`. |
+| `pnpm exec turbo run lint` | 0; 7 successful packages, 2 cached; 45.607s; `/private/tmp/jg-ent-5-r1-package-lint.log`. Supplemental package checks do not replace the failed root lane prerequisite. |
+| `node tools/money-arithmetic-lint.mjs` | 0; boundary check passed. |
+| `node tools/commercial-boundary-lint.mjs` | 0; no errors. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/extra-approval.test.ts src/extra-client-approval.test.ts src/extra-evidence-pack.test.ts` | 0; 3 files, 15 tests passed; 1.05s; `/private/tmp/jg-ent-5-r1-unit.log`. |
+| `pnpm build --concurrency=2` | 0; 7 successful packages, 2 cached; 1m46.945s; `/private/tmp/jg-ent-5-r1-build.log`. Existing workspace-root/autoprefixer warnings. |
+| `pnpm openapi:check` | 1; tsx IPC startup denied (`listen EPERM`, `node:net:1987`, tsx `cli.mjs:53`, socket `/var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/64946.pipe`); schema comparison NOT RUN; `/private/tmp/jg-ent-5-r1-openapi.log`. No retry or alternate launcher. |
+| `git diff --check` | 0; no whitespace errors. |
+| Source-only Python comparison of HEAD catalogue and lane JSON | 0; exactly four added rows, every old line byte-for-byte preserved; all five repair paths allowed. This is not a PostgreSQL or lane-gate pass. |
+
+Turbo reported sandbox IO warnings; counts above disclose the two cache hits and are not forced fresh runs. No new source/test changes followed these checks. Read-only inspection included AGENTS, relevant BUILD_PLAN contracts/task, the real Opus verdict and existing receipts/scripts. The initially supplied relative `jg-runs` path and guessed run directories were absent; the verdict was subsequently located/read at the full path above. Broad file search and the global pnpm-shim version probe were cancelled (130); the installed pinned pnpm version probe passed (10.28.1). No package download or Git write was attempted. Original source fixture STOP item 2 (`packages/db/test/site-extra-evidence-fixtures.ts:7`, consequent diagnostic at `:81`) remains outside this repair and unchanged; no r1 standalone integration-test compiler pass is claimed.
+
+Repair code hashes (receipt excluded; HEAD means actual incoming/pre-commit `dfcc97ca76fe5a45f7ea594686334f7fad019e6b`):
+
+| File | HEAD SHA-256 | Repair SHA-256 |
+|---|---|---|
+| `config/agent-lane-assignments.json` | 7e6c8d79523191588bc21e0edb7d8fda119e5a76b5a46fb01bb1d8458e8a0627 | 9f48a32e11752737a13da981334aef92b8187bd99772bc2e6cf2c5bde5673e1e |
+| `packages/core/src/extra-approval.ts` | 9f51f13923d7e08beb7103cf5c8cc97057be313ed824a68fb5262360b01b99da | f5eb3dcb263374f2655df432d063e2fa8b818505e20c95c4b74f7653361221c9 |
+| `packages/core/src/extra-approval.test.ts` | dce4663bc6342873c49d660e988da1a0a17b034777ad2cf4449fedc493a9723c | 7baf0786fda8cdd9cbeffe8d58be439168c129db99ad79a99651a8434c8b5aa8 |
+| `packages/db/test/tenancy.integration.test.ts` | 7c2f648e17ce97885b7a387713496a3bbe487b6150627e393b5822a8946f6169 | 405a7562221844aae433d15996532c6944c3ee6599d17fb028249a1e8dbf0af5 |
+
+Repair code patch SHA-256 (`git diff HEAD --` the four files above): `fa8ac5f251fd1809d439545785f8fb1e829c8be27ce55e47d6020c8a59821611`.
+
+Actual code-only diff stat (receipt changes excluded):
+
+```text
+ config/agent-lane-assignments.json           | 2 +-
+ packages/core/src/extra-approval.test.ts     | 2 +-
+ packages/core/src/extra-approval.ts          | 2 +-
+ packages/db/test/tenancy.integration.test.ts | 4 ++++
+ 4 files changed, 7 insertions(+), 3 deletions(-)
+```
+
+Final available/pre-commit HEAD remains `dfcc97ca76fe5a45f7ea594686334f7fad019e6b`. Dispatcher commit message: `/private/tmp/jg-msg-ent-5.txt`. Root lint/lane failure, OpenAPI startup refusal, unexecuted PostgreSQL/browser suites and exact-repaired-commit review/separate acceptance remain outstanding; this is a repair receipt, not acceptance. No automatic approval review rejection occurred.
