@@ -85,3 +85,4 @@ export * from "./shadow-detection-repository.js"; export * from "./shadow-observ
 
 export * from "./final-account-lock-repository.js";
 export * from "./recovery-case-terms-repository.js";
+export * from "./contractor-practice-session-repository.js";
