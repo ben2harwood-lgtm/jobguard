@@ -64,4 +64,5 @@ export * from "./site-extra.js";
 export * from "./recovery-allocation.js";
 export * from "./site-extra-pricing.js";
 export * from "./site-visit.js";
+export * from "./site-extra-evidence.js";
 export * from "./recovery-payment-payer.js";

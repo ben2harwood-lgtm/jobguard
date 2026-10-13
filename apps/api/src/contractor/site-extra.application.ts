@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { SiteExtraError, logSiteExtraV1, siteExtraLoggedV1, siteExtraFailureV1, siteExtraHttpStatus } from "@jobguard/core";
+import { SiteExtraError, logSiteExtraV1, logSiteExtraV3, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
 import { ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
 import { SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
@@ -29,9 +29,19 @@ export class SiteExtraApplication {
   const session = workOrderPrincipalV1.safeParse(principal); if (!session.success) throw new SiteExtraError("UNAUTHENTICATED");
   try {
    const member = await new ContractorRepository(this.pool).resolveSession(session.data.sessionId);
-   const body = logBodyOf(raw); if (!body) throw new SiteExtraError("INVALID_COMMAND");
+   // v2 and v3 are separate extensions of v1, not a sequence: a body is exactly one of them.
+   const body = logBodyOf(raw), bodyV3 = body ? undefined : logSiteExtraV3.safeParse(raw);
+   if (!body && !bodyV3?.success) throw new SiteExtraError("INVALID_COMMAND");
    const job = z.string().uuid().safeParse(jobId); if (!job.success) throw new SiteExtraError("NOT_FOUND");
    const context = await this.resolveContext(session.data.sessionId, member);
+   if (bodyV3?.success) {
+    const v3 = bodyV3.data, shown = v3.residentConfirmation?.shownContentSha256;
+    const result = await this.repository.logSiteExtra(context, member, { commandId: v3.commandId, jobId: job.data, note: v3.note, description: v3.description, ...(v3.photoEvidenceId === undefined ? {} : { photoEvidenceId: v3.photoEvidenceId }), ...(shown === undefined ? {} : { shownContentSha256: shown }) });
+    // With no photo and no hash shown the content hash is the pure function of the request; otherwise the database's answer.
+    const evidence = result.evidence ?? { photoEvidenceId: null, residentConfirmationEvidenceId: null, contentSha256: siteExtraContentSha256V1({ jobId: job.data, description: v3.description, note: v3.note, photoSha256: null }) };
+    return siteExtraLoggedV3.parse({ version: "site-extra-logged.v3", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", evidence: { ...evidence, contentFormat: "site-extra-content.v1" } });
+   }
+   if (!body) throw new SiteExtraError("INVALID_COMMAND");
    const result = await this.repository.logSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, note: body.note, description: body.description, ...("siteVisitId" in body ? { siteVisitId: body.siteVisitId } : {}) });
    return siteExtraLoggedV1.parse({ version: "site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged" });
   } catch (error) {

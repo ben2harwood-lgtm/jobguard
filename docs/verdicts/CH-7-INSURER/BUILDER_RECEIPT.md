@@ -853,3 +853,68 @@ Selected SHA-256 values (receipt excluded to avoid a self-hash):
 ```
 
 Final unchanged HEAD: `6969bd20de26a7d2a8e0265a40cae0d527deea09`. No Git write was run. The final post-append stat is saved to `/private/tmp/ch-7-insurer-r6-final-stat.txt`; the dispatcher owns the eventual merge SHA.
+
+
+## Catch-up r7 — 13 October 2026, dispatcher 4
+
+Builder source inspection and executed checks only; no independent verdict or technical acceptance. PR #176, branch `codex/sandbox/ch-7-insurer`. Starting HEAD `f86859e93ae7cb9f795bf9c29a911c80d727987f`; active MERGE_HEAD and fetched origin/main `e4cb8437d044746300c377647f6061d06cd960cc`. The dispatcher had started the merge. No fetch, add, commit, checkout or other Git write was issued; the index still needs dispatcher staging and merge completion.
+
+### Resolution and preservation
+
+Resolved all three conflict files: `packages/core/src/index.ts` retains main's `site-extra-evidence` export followed by this piece's `recovery-payment-payer` export; `packages/db/src/migrate.ts` retains 0141 followed by 0142; `packages/db/MIGRATIONS.md` retains main's complete text exactly, followed by this piece's unchanged 0142 note. This removes the automatically duplicated 0139 note while preserving both sides' content. Main's shared contractor code required no integration changes and matches origin/main exactly.
+
+`BUILD_PLAN.md` matches origin/main exactly, preserving both incoming ledger paragraphs, including ENT-3b and ENT-3d. Both `config/agent-lane-assignments.json` and `apps/api/openapi.json` retain every main JSON value; both parse without duplicate keys. Neither needed an edit. No tracked conflict markers remain.
+
+All registered migration files exist once, the runner is strictly sorted, and the tail is continuous 0130–0142. ENT-3d remains 0141 and CH-7-INSURER remains 0142. Both SQL files retain their original bytes. The unchanged insurer upgrade proof locates 0142 by name, applies `MIGRATION_URLS.slice(0,n)` (now including 0141), snapshots the original F19/F21 rows and types, applies 0142 alone, then runs the migrator twice. This is source/static ordering verification, not an executed PostgreSQL upgrade proof. No migration, grant, routine body, backfill or pinned value changed in r7.
+
+Before receipt writing, only the three conflict files differed from the starting tracked-file hash inventory. Every merged test and pin is unchanged. Baseline and preservation evidence: `/private/tmp/ch-7-insurer-r7-before.json` and `/private/tmp/ch-7-insurer-r7-preservation.json`.
+
+### Commands actually executed
+
+Dependencies were preinstalled; no install/download command was issued. Node v24.17.0. The default pnpm version probe emitted its v11 warning and stalled; interrupted with exit 130 before any reported check. Subsequent pnpm commands used the existing `/private/tmp/jg-pnpm-ent-10a2` launcher on PATH, verified pnpm 10.28.1. Heavy checks and test batches ran sequentially. Logs use `/private/tmp/ch-7-insurer-r7-*.log`.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm exec turbo run typecheck --force` | Exit 0; 7 successful, 0 cached; 4m32.753s. Run once. |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | Exit 0; 7 successful, 0 cached; 1m7.068s. Run once. |
+| `pnpm exec turbo run build --force --concurrency=2` | Exit 0; 7 successful, 0 cached; 1m23.27s; 31 pages generated. Run once. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | Exit 1; core purity passed (158 TypeScript files); lane check failed on 21 incoming-main paths and stopped the combined script. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; the same 21 incoming-main paths. |
+| `node tools/money-arithmetic-lint.mjs` | Exit 0; money arithmetic boundary passed. |
+| `node tools/commercial-boundary-lint.mjs` | Exit 0. |
+| `pnpm --filter @jobguard/core exec vitest run src/recovery-payment-payer.test.ts src/recovery-eligibility-v3.test.ts --maxWorkers=2` | Exit 0; 2 files, 54 tests passed. |
+| `pnpm --filter @jobguard/core exec vitest run src/site-extra.test.ts src/site-extra-evidence.test.ts --maxWorkers=2` | Exit 0; 2 files, 116 tests passed. |
+| `pnpm --filter @jobguard/api exec vitest run src/recovery-payment-payer.application.test.ts src/recovery-eligibility-v3.application.test.ts --maxWorkers=2` | Exit 0; 2 files, 26 tests passed. Application mocks, not PostgreSQL/live integration. |
+| `pnpm --filter @jobguard/api exec vitest run src/contractor/site-extra-evidence.application.test.ts src/contractor/site-visit.application.test.ts --maxWorkers=2` | Exit 0; 2 files, 67 tests passed. Application mocks. |
+| `pnpm --filter @jobguard/web exec vitest run 'app/api/contractor/jobs/[id]/site-extras/route.evidence.test.ts' 'app/api/contractor/jobs/[id]/site-extras/route-v2.test.ts' --maxWorkers=2` | Exit 0; 2 files, 42 tests passed. Adapter mocks, not browser execution. |
+| `pnpm --filter @jobguard/db exec vitest run test/site-extra-evidence-compatibility.test.ts --maxWorkers=2` | Exit 0; 1 file, 7 tests passed. Repository doubles, not PostgreSQL. |
+| `pnpm openapi:check` | Exit 1; before generation, tsx failed `listen EPERM` at `/var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/8782.pipe`. No socket workaround or alternate generator attempted. |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck test/recovery-insurer-money.integration.test.ts test/site-extra-evidence.integration.test.ts` | Wrapper exit 1 / compiler exit 2; five diagnostics in incoming ENT-3d tests, listed below. Supplemental compilation only. |
+| `git diff --check`; static JSON/migration/hash/marker checks | Exit 0. |
+
+Total selected unit/adapter tests: 312 passed across 11 files. Required forced package checks passed; no cache-hit pass claimed. Turbo emitted sandbox I/O warnings; Next retained its existing workspace-root/cache/CSS warnings. No configuration/pin changes were made to silence warnings.
+
+### STOP — merged test edits prohibited
+
+Supplemental strict compilation found these incoming-main test diagnostics. Under the dispatch instruction to edit no merged test, no fix is attempted. Before and after are the same bytes; the following table records the exact affected expressions, not a proposed patch.
+
+| File and line | Before | After | Diagnostic |
+| --- | --- | --- | --- |
+| `packages/db/test/site-extra-evidence-fixtures.ts:7` | `type Cluster` imported from `./site-extra-fixtures.js` | Unchanged; no edit proposed | TS2724: module has no exported member `Cluster`. |
+| `packages/db/test/site-extra-evidence-fixtures.ts:81` | `.rows.map(r => r.reason as string)` | Unchanged; no edit proposed | TS7006: parameter `r` implicitly has an `any` type. |
+| `packages/db/test/site-extra-evidence.integration.test.ts:11` | `runtimeCall, type Cluster, type SiteFixture,` | Unchanged; no edit proposed | TS2724: evidence fixtures module has no exported member `Cluster`. |
+| `packages/db/test/site-extra-evidence.integration.test.ts:131` | `.rows.map(r => r.body as string).join("\n")` | Unchanged; no edit proposed | TS7006: parameter `r` implicitly has an `any` type. |
+| `packages/db/test/site-extra-evidence.integration.test.ts:210` | `shownContentSha256: raw.shownContentSha256` | Unchanged; no edit proposed | TS2339: property `shownContentSha256` missing from inferred body type. |
+
+These diagnostics are separate from the passing configured seven-package typecheck. No database test was executed and no merged test/pinned value was edited to fix them.
+
+### Dispatcher and CI holds
+
+The local lane checker adds staged/working-tree paths to its comparison while HEAD is still pre-merge (`tools/agent-lane-boundary-lint.mjs:226`). Every one of the 21 rejected paths matches its starting incoming-merge hash. The lane policy/checker/base were not changed; dispatcher must finish the merge and rerun it on the resulting head. No local lane PASS is claimed.
+
+Official OpenAPI comparison, PostgreSQL fresh/upgrade/catalog/RLS/concurrency suites and browser journeys remain owed to dispatcher/GitHub CI; the sandbox cannot bind sockets or start PostgreSQL. `pnpm test:db`, `pnpm test:migrations` and `pnpm test:e2e` were NOT RUN. Existing real-provider, production-policy, independent RED exact-commit verdict and separate acceptance gates remain unresolved. AI evaluation is inapplicable: no AI/model/prompt/parser changes. No new release permission, external action or operational alert is implied.
+
+
+Final isolated insurer upgrade-source compilation: `pnpm --filter @jobguard/db exec tsc --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck test/recovery-insurer-money.integration.test.ts` — exit 0, no diagnostics (`/private/tmp/ch-7-insurer-r7-insurer-upgrade-typecheck.log`). This isolates CH-7's test from the supplemental merged ENT-3d compilation failure; it does not execute PostgreSQL.
+
+Final preservation check: only the three conflict files and this receipt changed; all other 1657 starting tracked-file hashes match. HEAD and MERGE_HEAD remain unchanged. Conventional-commit subject/body written to `/private/tmp/jg-msg-ch-7-insurer.txt`; dispatcher owns staging, merge commit, push and CI.
