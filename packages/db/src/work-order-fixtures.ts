@@ -37,41 +37,60 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
     const team = organisation.teams[0]!;
     const existing = organisation.clients.find(client => client.name === demoClientName);
     const siteCount = options.siteCount ?? 5;
-    if (existing) {
-      const contracts = await contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "contracts" });
-      const version = contracts.contracts.filter(c => c.client_id === existing.id).at(-1)!;
-      const document = version.document as ReturnType<typeof contractDocument>;
-      const stored = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => ({
-        sites: (await db.$client.query<{ id: string }>("SELECT id FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street' ORDER BY created_at,id")).rows.map(r => r.id),
-        operative: (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.contractor_member WHERE email='demo.operative@fictional.invalid'")).rows[0]?.membership_id,
-        sor: (await db.$client.query<{ schedule_id: string }>("SELECT schedule_id FROM app.sor_version WHERE id=$1", [document.sorVersionIds[0]])).rows[0]?.schedule_id,
-      }));
-      // A half-prepared organisation is never guessed at: the caller sees the generic retryable failure.
-      if (stored.sites.length === 0 || !stored.operative || !stored.sor) throw new Error("The generated demo organisation is incomplete");
-      return { clientId: existing.id, contractId: version.contract_id, contractVersionId: version.id, scheduleId: stored.sor!, sorVersionId: document.sorVersionIds[0]!, siteRevisionIds: stored.sites, teamId: team.id, branchId: team.branch_id, operativeMembershipId: stored.operative!, adjustment: document.tenderedAdjustment, issuedOn: "2026-10-08" };
+    // Each step commits independently. Resume from persisted facts under the same session lock;
+    // the existence of the client alone does not mean the rest of preparation succeeded.
+    let version = organisation.contracts.filter(c => c.client_id === existing?.id).at(-1);
+    let sorVersionId = (version?.document as ReturnType<typeof contractDocument> | undefined)?.sorVersionIds[0];
+    let scheduleId = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => {
+      if (sorVersionId) return (await db.$client.query<{ schedule_id: string }>("SELECT schedule_id FROM app.sor_version WHERE id=$1", [sorVersionId])).rows[0]?.schedule_id;
+      const stored = (await db.$client.query<{ id: string; schedule_id: string }>("SELECT v.id,v.schedule_id FROM app.sor_version v JOIN app.schedule_of_rates s ON (s.tenant_id,s.id)=(v.tenant_id,v.schedule_id) WHERE s.reference=$1 AND v.reference=$1 ORDER BY v.created_at,v.id LIMIT 1", ["Fictional schedule of rates 2026"])).rows[0];
+      sorVersionId = stored?.id;
+      return stored?.schedule_id;
+    });
+    if (!sorVersionId) {
+      scheduleId = randomUUID();
+      const sor = await rates.importVersion(principal, { version: "sor-version-import.v1", environment: "synthetic_demo", commandId: randomUUID(), scheduleId, reference: "Fictional schedule of rates 2026", effectiveFrom: "2026-01-01",
+        items: demoSorItems.map(item => ({ code: item.code, description: item.description, unit: item.unit, rate: { pence: item.ratePence, currency: "GBP" } })) });
+      sorVersionId = sor.versionId;
     }
-    const scheduleId = randomUUID();
-    const sor = await rates.importVersion(principal, { version: "sor-version-import.v1", environment: "synthetic_demo", commandId: randomUUID(), scheduleId, reference: "Fictional schedule of rates 2026", effectiveFrom: "2026-01-01",
-      items: demoSorItems.map(item => ({ code: item.code, description: item.description, unit: item.unit, rate: { pence: item.ratePence, currency: "GBP" } })) });
-    const clientId = (await command({ kind: "client.create", branchId: team.branch_id, name: demoClientName, clientType: "housing_association" })).id;
-    const contractId = randomUUID();
-    const contractVersionId = (await command({ kind: "contract.revise", clientId, contractId, document: contractDocument(sor.versionId), rules: referenceApprovalRulesV1 })).id;
-    const siteRevisionIds: string[] = [];
-    const customerRevisionId = randomUUID();
-    await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => {
-      const customerId = randomUUID();
-      await db.$client.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [principal.tenantId, customerId]);
-      await db.$client.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4::jsonb)", [principal.tenantId, customerRevisionId, customerId, JSON.stringify({ version: "customer.v1", name: demoClientName, type: "housing_association", email: "lettings@fictional.invalid" })]);
+    if (!scheduleId) throw new Error("The generated demo schedule is incomplete");
+    const clientId = existing?.id ?? (await command({ kind: "client.create", branchId: team.branch_id, name: demoClientName, clientType: "housing_association" })).id;
+    if (!version) {
+      const contractId = randomUUID();
+      await command({ kind: "contract.revise", clientId, contractId, document: contractDocument(sorVersionId), rules: referenceApprovalRulesV1 });
+      version = (await view()).contracts.find(c => c.contract_id === contractId);
+    }
+    if (!version) throw new Error("The generated demo contract is incomplete");
+    const document = version.document as ReturnType<typeof contractDocument>;
+    const stored = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => {
+      const link = (await db.$client.query<{ customer_revision_id: string }>("SELECT customer_revision_id FROM app.contractor_client_customer WHERE client_id=$1", [clientId])).rows[0];
+      let customerRevisionId = link?.customer_revision_id;
+      if (!customerRevisionId) {
+        customerRevisionId = (await db.$client.query<{ id: string }>("SELECT id FROM app.customer_revision WHERE revision=1 AND payload->>'name'=$1 AND payload->>'email'=$2 ORDER BY created_at,id LIMIT 1", [demoClientName, "lettings@fictional.invalid"])).rows[0]?.id;
+        if (!customerRevisionId) {
+          const customerId = randomUUID();
+          customerRevisionId = randomUUID();
+          await db.$client.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [principal.tenantId, customerId]);
+          await db.$client.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4::jsonb)", [principal.tenantId, customerRevisionId, customerId, JSON.stringify({ version: "customer.v1", name: demoClientName, type: "housing_association", email: "lettings@fictional.invalid" })]);
+        }
+      }
+      // The numbered fictional address is the fixture identity. Transaction timestamps and
+      // random UUIDs cannot define its order. Keep the original revision when later ones exist.
+      const sites = (await db.$client.query<{ id: string; address: string }>("SELECT DISTINCT ON (payload->'addressLines'->>0) id,payload->'addressLines'->>0 address FROM app.site_revision WHERE payload->'addressLines'->>0 ~ '^[1-9][0-9]* Fictional Demo Street$' ORDER BY payload->'addressLines'->>0,revision,created_at,id")).rows;
+      const byNumber = new Map(sites.map(site => [Number(site.address.split(" ")[0]), site.id]));
       for (let index = 1; index <= siteCount; index++) {
+        if (byNumber.has(index)) continue;
         const siteId = randomUUID(), revisionId = randomUUID();
         await db.$client.query("INSERT INTO app.site(tenant_id,id) VALUES($1,$2)", [principal.tenantId, siteId]);
         await db.$client.query("INSERT INTO app.site_revision(tenant_id,id,site_id,revision,payload,match_key) VALUES($1,$2,$3,1,$4::jsonb,'[]')", [principal.tenantId, revisionId, siteId, JSON.stringify({ version: "site.v1", addressLines: [`${index} Fictional Demo Street`], town: "London", postcode: "SW1A 1AA" })]);
-        siteRevisionIds.push(revisionId);
+        byNumber.set(index, revisionId);
       }
+      const operative = (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.contractor_member WHERE email='demo.operative@fictional.invalid'")).rows[0]?.membership_id;
+      return { customerRevisionId, linked: !!link, siteRevisionIds: [...byNumber.entries()].sort(([a], [b]) => a - b).map(([, id]) => id), operative };
     });
-    await parties.linkCustomer(principal, clientId, { version: "contractor-customer-link.v1", environment: "synthetic_demo", commandId: randomUUID(), customerRevisionId });
-    const operativeMembershipId = (await command({ kind: "member.invite", role: "operative", email: "demo.operative@fictional.invalid", scope: { kind: "team", id: team.id }, clientId: null, contractId: null })).id;
-    return { clientId, contractId, contractVersionId, scheduleId, sorVersionId: sor.versionId, siteRevisionIds, teamId: team.id, branchId: team.branch_id, operativeMembershipId, adjustment: { numerator: "-35", denominator: "1000" }, issuedOn: "2026-10-08" };
+    if (!stored.linked) await parties.linkCustomer(principal, clientId, { version: "contractor-customer-link.v1", environment: "synthetic_demo", commandId: randomUUID(), customerRevisionId: stored.customerRevisionId });
+    const operativeMembershipId = stored.operative ?? (await command({ kind: "member.invite", role: "operative", email: "demo.operative@fictional.invalid", scope: { kind: "team", id: team.id }, clientId: null, contractId: null })).id;
+    return { clientId, contractId: version.contract_id, contractVersionId: version.id, scheduleId, sorVersionId, siteRevisionIds: stored.siteRevisionIds, teamId: team.id, branchId: team.branch_id, operativeMembershipId, adjustment: document.tenderedAdjustment, issuedOn: "2026-10-08" };
   } finally {
     await lock.query("SELECT pg_advisory_unlock(hashtextextended($1,56))", [principal.tenantId]).catch(() => undefined);
     lock.release();
