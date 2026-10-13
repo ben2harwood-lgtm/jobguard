@@ -88,6 +88,7 @@ immutability trigger, and `GRANT SELECT` to `jobguard_runtime` only (standard F)
 that priced the extra. `app.extra_pricing_basis` is keyed by (extra, revision number).
 
 1. `app.ent3c_record_sor_revision(uuid,uuid,text,text)` — SECURITY DEFINER, the ONLY writer of both tables, takes no actor, rate, price, outcome or time. Order of refusals: wrong database `MODE_FORBIDDEN`; no tenant `NOT_FOUND`;
+   its own `PERFORM app.ent3a_require_extra_authority(p_job,p_variation)` checks the stored raising member's current authority under ENT-3a's tenant lock (`NOT_FOUND` on refusal, before any price or write);
    bad hash `INVALID_COMMAND`; bad or zero quantity `INVALID_QUANTITY`; the stored origin must be a contractor site command (`INVALID_COMMAND`); its receipt must still be `processing` for the same actor (so it runs only inside the
    raising command); the variation must carry the schedule item; the baseline must be `ordered` with the variation’s price list and excess revision (`ORDER_CHECK_STALE`); the item must exist (`ORDER_CHECK_STALE`); the
    order check is decided again from the baseline’s own lines (`ALREADY_ON_ORDER`, `ORDER_CHECK_STALE`); price by the merged function (`MONEY_OUT_OF_RANGE` passes through; below 1p is `EXTRA_NOT_POSITIVE`); insert the revision; insert the basis.
@@ -115,8 +116,8 @@ and candidate-duplicate flagging (nobody owns them yet); a revision record for a
 visits and close-out (ENT-3b); offline capture (ENT-12); acting as a made-up site worker; office and client-instructed extras; fees (ENT-7); VAT.
 
 1. Only the practice owner can hold a contractor practice session today and an owner may not log a site extra, so no signed-in person reaches a success path; it is proved through the repository and at service level.
-2. The writer reads the actor from the stored origin and runs only while the raising receipt is in flight; the rule binds the governed path, not a raw database client holding the runtime role, which could raise an extra by hand
-   as it already can; even then it cannot store any price but the merged function’s.
+2. Standard F: the writer carries its own authority check, using the stored origin's member, command and grant. A raw runtime-role call cannot bypass ENT-3a's authority rule; the raising receipt must also be in flight.
+   No direct write grant is added. This check relies on the authenticated tenant context and existing stored origin; it does not establish the identity of a compromised database client.
 3. The database does not force every schedule-item extra to have a price (merged ENT-4b tests raise such extras with none); the rule binds the one method.
 4. The price is named in no audit payload; the record is tied to the raising transaction’s one audit event at commit and to the origin hash (Q8).
 5. The live-job guard is not the write transaction’s first lock (Q9).

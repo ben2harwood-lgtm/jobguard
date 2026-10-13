@@ -2,9 +2,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { extraOriginHashV1, priceSorLine, SorSiteExtraError } from "@jobguard/core";
-import { ExtraRepository, SiteExtraRepository, demoSorItems, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { ExtraRepository, SiteExtraRepository, demoSorItems, withTenant, type VerifiedTenantContext, type TenantTransaction } from "../src/index.js";
 import { ObservedPool, analyseLockOrder, mutableTables } from "./lock-observer.js";
-import { fixture } from "./extra-fixtures.js";
+import { fixture, receipt, rawOrigin, finishRaw } from "./extra-fixtures.js";
 import { cluster, siteFixture, command, ownerTx, sorInput, noteText, written, chainHead, rowText, stored, newOrder, reviseOrder, lineIds, newContract, newPriceList, leaveLive, moneyRows, hashOf,
   rawExtra, revisionValues, insertRow, basisValues, type Cluster, type SiteFixture } from "./site-extra-pricing-fixtures.js";
 import { invite, smallJob, smallTrack, cancel, originSql, originHashInput, decision } from "./site-extra-fixtures.js";
@@ -25,6 +25,22 @@ async function refused(f: SiteFixture, member: SiteFixture["p"], raw: Record<str
 }
 const lines = (...items: Array<[string, string, string]>) => items;
 const carries = () => lines(["L1", "REPAIR-DOOR", "1"], ["L2", "FIT-LOCK", "2"], ["L3", "CLEAR-GUTTER", "4"]);
+
+/** Structurally valid stored origin and open receipt, without any application authority seam. */
+async function directRaise(db: TenantTransaction, f: SiteFixture, who: SiteFixture["members"]["owner"], role: string) {
+  const variationId = randomUUID(), scopeId = randomUUID(), tenant = f.p.tenantId;
+  const commandId = await receipt(db, tenant, f.jobId, variationId, who.member.membershipId);
+  await db.$client.query("INSERT INTO app.scope_identity(tenant_id,job_id,id) VALUES($1,$2,$3)", [tenant, f.jobId, scopeId]);
+  await insertRow(db, "variation", { tenant_id: tenant, job_id: f.jobId, id: variationId, scope_item_id: scopeId, capture_kind: "text", capture_text: noteText,
+    description: "Fictional direct-call extra", job_track: "contractor", origin: "site_user", sor_version_id: f.demo.sorVersionId, sor_code: "CLEAR-GUTTER" });
+  const actorFixture = { ...f, p: who.member, grantId: who.grant };
+  const origin = await rawOrigin(db, actorFixture, variationId, commandId, { raising_role: role });
+  return { variationId, commandId, scopeId, originHash: origin.origin_hash as string, jobId: f.jobId, actorFixture };
+}
+
+/** Assert at INSERT, never at COMMIT where an absent basis could mask a missing row guard. */
+const assertRevisionInsertRefused = (db: TenantTransaction, values: Record<string, unknown>, expected: RegExp, name: string) =>
+  expect(insertRow(db, "extra_sor_revision", values), name).rejects.toMatchObject({ code: expect.stringMatching(expected) });
 
 describe("ENT-3c priced log: success, money and the excess only", () => {
   for (const role of ["operative", "supervisor", "surveyor"] as const) for (const coverage of ["new", "excess"] as const) {
@@ -131,6 +147,69 @@ describe("ENT-3c priced log: success, money and the excess only", () => {
 });
 
 describe("ENT-3c access: the same refusals as every command, decided by the database before anything else", () => {
+  for (const role of ["owner", "unassigned operative"] as const) {
+    it(`[C9] direct runtime writer refuses a structurally valid ${role} origin through its own authority check, with no revision, basis or audit written`, async () => {
+      const f = await siteFixture(c), tenant = f.p.tenantId, before = await written(c, tenant), head = await chainHead(c, tenant);
+      await expect(withTenant(c.runtime, f.ctx, async db => {
+        expect((await db.$client.query("SELECT pg_has_role(current_user,'jobguard_runtime','member') AS runtime")).rows[0]!.runtime).toBe(true);
+        const who = role === "owner" ? f.members.owner : f.unassigned;
+        const raw = await directRaise(db, f, who, role === "owner" ? "owner" : "operative");
+        expect((await db.$client.query("SELECT status,actor_membership_id FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, raw.commandId])).rows[0]).toEqual({ status: "processing", actor_membership_id: who.member.membershipId });
+        expect(raw.originHash).toMatch(/^[a-f0-9]{64}$/u);
+        // Require the refusal at the direct function call, before deferred origin/audit constraints can run.
+        const error = await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, raw.variationId, "a".repeat(64)]).then(() => undefined, e => e);
+        expect(error).toMatchObject({ code: "P0002", message: "NOT_FOUND" });
+        throw error;
+      })).rejects.toMatchObject({ code: "P0002", message: "NOT_FOUND" });
+      expect(await written(c, tenant)).toEqual(before); expect(await chainHead(c, tenant)).toBe(head);
+    });
+  }
+
+  it("[C10] direct runtime writer re-checks revoked stored authority and refuses at the call with no revision, basis or audit written", async () => {
+    const f = await siteFixture(c), tenant = f.p.tenantId, who = f.members.supervisor;
+    const raw = await ownerTx(c, tenant, async db => {
+      const raw = await directRaise(db, f, who, "supervisor");
+      await finishRaw(db, raw.actorFixture, raw.variationId, raw.commandId, raw.originHash);
+      return raw;
+    });
+    await command(c, f, { kind: "grant.revoke", grantId: who.grant });
+    const before = await written(c, tenant), head = await chainHead(c, tenant);
+    await expect(withTenant(c.runtime, f.ctx, async db => {
+      const error = await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, raw.variationId, "a".repeat(64)]).then(() => undefined, e => e);
+      expect(error).toMatchObject({ code: "P0002", message: "NOT_FOUND" }); throw error;
+    })).rejects.toMatchObject({ code: "P0002", message: "NOT_FOUND" });
+    expect(await written(c, tenant)).toEqual(before); expect(await chainHead(c, tenant)).toBe(head);
+  });
+
+  it("[C11] direct runtime writer refuses without a stored origin or open receipt, with no revision, basis or audit written", async () => {
+    const f = await siteFixture(c), tenant = f.p.tenantId, before = await written(c, tenant), head = await chainHead(c, tenant);
+    await expect(withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, randomUUID(), "a".repeat(64)]))).rejects.toMatchObject({ code: "P0002", message: "NOT_FOUND" });
+    expect(await written(c, tenant)).toEqual(before); expect(await chainHead(c, tenant)).toBe(head);
+  });
+
+  it("[C16] direct runtime writer still enforces INVALID_COMMAND (23514) for an authorized stored origin whose raising receipt is no longer open", async () => {
+    const f = await siteFixture(c), tenant = f.p.tenantId;
+    const result = await log(f, f.members.supervisor, f.jobId, { quantity: "2" });
+    const before = await written(c, tenant), head = await chainHead(c, tenant);
+    await expect(withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, result.variationId, "a".repeat(64)]))).rejects.toMatchObject({ code: "23514", message: "INVALID_COMMAND" });
+    expect(await written(c, tenant)).toEqual(before); expect(await chainHead(c, tenant)).toBe(head);
+  });
+
+  it("[C5] direct runtime writer accepts an authorized stored supervisor origin and open receipt with its basis and raised audit in one committing transaction", async () => {
+    const f = await siteFixture(c), tenant = f.p.tenantId;
+    const raw = await withTenant(c.runtime, f.ctx, async db => {
+      const raw = await directRaise(db, f, f.members.supervisor, "supervisor");
+      await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, raw.variationId, "a".repeat(64)]);
+      await finishRaw(db, raw.actorFixture, raw.variationId, raw.commandId, raw.originHash);
+      await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE"); return raw;
+    });
+    const { revision, basis } = await stored(c, tenant, raw.variationId);
+    expect(revision).toMatchObject({ net_pence: "676", raising_membership_id: f.members.supervisor.member.membershipId });
+    expect(basis).toMatchObject({ pricing_basis: "server_sor", revision_content_hash: revision.content_hash });
+    expect(await written(c, tenant)).toMatchObject({ extra_sor_revision: 1, extra_pricing_basis: 1, raised: 1 });
+    await chainHead(c, tenant);
+  });
+
   it("[C9] every role that may not log gets EXTRA_FORBIDDEN, identical for an in-scope job, another branch's job, another tenant's job and a random job", async () => {
     const f = await siteFixture(c), foreign = await fixture(c), targets = [f.jobId, f.otherJob, foreign.jobId, randomUUID()];
     for (const role of ["owner", "admin", "commercial_manager", "finance", "read_only", "client_approver"] as const) {
@@ -171,8 +250,10 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
     const connect = vi.spyOn(c.runtime, "connect");
     for (const bad of [null, { tenantId: f.p.tenantId }]) { connect.mockClear(); await refused(f, supervisor, sorInput(f.jobId), "NOT_FOUND", bad as unknown as VerifiedTenantContext); expect(connect).not.toHaveBeenCalled(); }
     await refused(small, small.members.supervisor.member, sorInput(small.jobId), "TRACK_FORBIDDEN");
-    // The routine called directly as the runtime role inside tenant A, with tenant B's job and variation, is refused and writes nothing.
-    await expect(withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'1',$3)", [bOrder.jobId, bExtra.variationId, "a".repeat(64)]))).rejects.toMatchObject({ code: "23514" });
+    // ENT-3a's stored-origin authority rule refuses tenant B's absent origin in tenant A before any writer constraint.
+    const callerCounts = await written(c, f.p.tenantId), callerHead = await chainHead(c, f.p.tenantId);
+    await expect(withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'1',$3)", [bOrder.jobId, bExtra.variationId, "a".repeat(64)]))).rejects.toMatchObject({ code: "P0002", message: "NOT_FOUND" });
+    expect(await written(c, f.p.tenantId)).toEqual(callerCounts); expect(await chainHead(c, f.p.tenantId)).toBe(callerHead);
     expect(await written(c, b.p.tenantId)).toEqual(foreignCounts); expect(await chainHead(c, b.p.tenantId)).toBe(foreignHead); expect(await rowText(c, b.p.tenantId, "extra_sor_revision")).toEqual(foreignRows);
     // Tenant A's runtime role sees none of tenant B's rows in either new table.
     const seen = await withTenant(c.runtime, f.ctx, async db => ({ revisions: (await db.$client.query("SELECT tenant_id FROM app.extra_sor_revision")).rows, basis: (await db.$client.query("SELECT tenant_id FROM app.extra_pricing_basis")).rows }));
@@ -395,7 +476,7 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
     const committed = transactions.filter(t => t.outcome === "commit" && t.statements.some(s => s.sql.includes("ent3c_record_sor_revision")));
     expect(committed).toHaveLength(1);
     const analysis = analyseLockOrder(committed[0]!, ownership); expect(analysis.auditIndex).toBeDefined(); expect(analysis.afterAudit).toEqual([]);
-    // A revision row inserted by the owner with no raised audit event in its transaction fails at commit; one for an extra raised in an EARLIER transaction is refused at insert.
+    // A raised audit in a different transaction identity cannot authorize this revision; an EARLIER committed extra is refused at insert.
     await expect(ownerTx(c, tenant, async db => {
       const raw = await rawExtra(db, f, { jobId: f.jobId, code: "CLEAR-GUTTER", savepoint: true });
       // The raise sits in a released savepoint: its facts carry another transaction id than the revision row, so the price is not in the raising transaction.
@@ -411,6 +492,40 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
     })).rejects.toMatchObject({ code: expect.stringMatching(/^(23505|23514)$/u) });
   }, 120_000);
 
+  it("[C15] matching origin/revision transaction identities and a valid basis still require the raised audit event: PRICING_AUDIT_REQUIRED rolls everything back", async () => {
+    const f = await siteFixture(c), tenant = f.p.tenantId, before = await written(c, tenant), head = await chainHead(c, tenant);
+    await expect(ownerTx(c, tenant, async db => {
+      const raw = await rawExtra(db, f, { jobId: f.jobId, code: "CLEAR-GUTTER", audit: false });
+      const row = await insertRow(db, "extra_sor_revision", await revisionValues(db, f, raw, { claimed: "2" }));
+      await insertRow(db, "extra_pricing_basis", basisValues(f, raw, row.content_hash as string));
+      const xmins = (await db.$client.query(`SELECT o.xmin::text AS origin_xid,r.xmin::text AS revision_xid,b.xmin::text AS basis_xid
+        FROM app.extra_origin o JOIN app.extra_sor_revision r ON(r.tenant_id,r.variation_id)=(o.tenant_id,o.variation_id)
+        JOIN app.extra_pricing_basis b ON(b.tenant_id,b.variation_id)=(r.tenant_id,r.variation_id) WHERE o.tenant_id=$1 AND o.variation_id=$2`, [tenant, raw.variationId])).rows[0]!;
+      expect(xmins.origin_xid).toBe(xmins.revision_xid); expect(xmins.basis_xid).toBe(xmins.revision_xid);
+      expect((await db.$client.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.raised'", [tenant, raw.variationId])).rowCount).toBe(0);
+      await db.$client.query("SET CONSTRAINTS app.sor_revision_basis IMMEDIATE");
+      // Force this constraint alone: an origin's own deferred audit failure must not stand in for the pricing audit rule.
+      const error = await db.$client.query("SET CONSTRAINTS app.sor_revision_audit IMMEDIATE").then(() => undefined, e => e);
+      expect(error).toMatchObject({ code: "23514", message: "PRICING_AUDIT_REQUIRED" }); throw error;
+    })).rejects.toMatchObject({ code: "23514", message: "PRICING_AUDIT_REQUIRED" });
+    expect(await written(c, tenant)).toEqual(before); expect(await chainHead(c, tenant)).toBe(head);
+  });
+
+  it("[C16] a correct owner-inserted revision commits with its basis and raised audit, so tamper refusals are isolated to the revision INSERT", async () => {
+    const f = await siteFixture(c), tenant = f.p.tenantId;
+    const raw = await ownerTx(c, tenant, async db => {
+      const raw = await rawExtra(db, f, { jobId: f.jobId, code: "CLEAR-GUTTER" });
+      const row = await insertRow(db, "extra_sor_revision", await revisionValues(db, f, raw, { claimed: "2" }));
+      await insertRow(db, "extra_pricing_basis", basisValues(f, raw, row.content_hash as string));
+      await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE"); return raw;
+    });
+    const { revision, basis } = await stored(c, tenant, raw.variationId);
+    expect(revision).toMatchObject({ quantity: "2", net_pence: "676" });
+    expect(basis).toMatchObject({ revision_content_hash: revision.content_hash, pricing_basis: "server_sor" });
+    expect(await written(c, tenant)).toMatchObject({ extra_sor_revision: 1, extra_pricing_basis: 1, raised: 1 });
+    await chainHead(c, tenant);
+  });
+
   it("[C16] the stored record cannot be changed or supplied, and every tampered row is refused by the guard or a foreign key", async () => {
     const f = await siteFixture(c), who = f.members.supervisor, tenant = f.p.tenantId, result = await log(f, who, f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" });
     const { revision } = await stored(c, tenant, result.variationId);
@@ -422,10 +537,15 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
     await expect(withTenant(c.runtime, f.ctx, db => insertRow(db, "extra_sor_revision", { ...Object.fromEntries(Object.entries(revision).filter(([key]) => key !== "xmin_text")), id: randomUUID() }))).rejects.toMatchObject({ code: "42501" });
     // Tampered rows offered as the table owner inside a transaction shaped like a real raise (the guard binds the owner too).
     const tamper = async (name: string, shape: { claimed: string; quantity?: string }, overrides: Record<string, unknown>, expected: RegExp) => {
-      await expect(ownerTx(c, tenant, async db => {
-        const raw = await rawExtra(db, f, { jobId: f.jobId, code: "CLEAR-GUTTER" });
-        await insertRow(db, "extra_sor_revision", await revisionValues(db, f, raw, shape, overrides));
-      }), name).rejects.toMatchObject({ code: expect.stringMatching(expected) });
+      const before = await written(c, tenant), head = await chainHead(c, tenant);
+      await ownerTx(c, tenant, async db => {
+        await db.$client.query("SAVEPOINT tamper_case");
+        try {
+          const raw = await rawExtra(db, f, { jobId: f.jobId, code: "CLEAR-GUTTER" });
+          await assertRevisionInsertRefused(db, await revisionValues(db, f, raw, shape, overrides), expected, name);
+        } finally { await db.$client.query("ROLLBACK TO SAVEPOINT tamper_case"); }
+      });
+      expect(await written(c, tenant), name).toEqual(before); expect(await chainHead(c, tenant), name).toBe(head);
     };
     const high = (await c.admin.query("SELECT (app.sor_line_net_pence('2',350,-35,1000)+1)::text AS n")).rows[0]!.n as string, low = (await c.admin.query("SELECT (app.sor_line_net_pence('2',350,-35,1000)-1)::text AS n")).rows[0]!.n as string;
     await tamper("one penny high", { claimed: "2" }, { net_pence: high }, /^23514$/u);
@@ -433,7 +553,9 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
     await tamper("another rate", { claimed: "2" }, { rate_pence: "351" }, /^(23514|23503)$/u); // the guard (net is not the exact price of that rate) or the schedule-item foreign key
     await tamper("another unit", { claimed: "2" }, { unit: "each" }, /^(23514|23503)$/u);
     await tamper("another adjustment", { claimed: "2" }, { adjustment_numerator: "-34" }, /^23514$/u);
-    await tamper("another baseline", { claimed: "2" }, { work_order_revision_id: f.revisionId }, /^(23514|23503)$/u);
+    const differentBaseline = await newOrder(c, f, lines(["L1", "FIT-LOCK", "1"]));
+    expect(differentBaseline.revisionId).not.toBe(f.revisionId);
+    await tamper("another baseline", { claimed: "2" }, { work_order_revision_id: differentBaseline.revisionId }, /^(23514|23503)$/u);
     await tamper("another member", { claimed: "2" }, { raising_membership_id: f.members.supervisor.member.membershipId }, /^23514$/u);
     await tamper("an extra quantity that is not claimed minus instructed", { claimed: "2", quantity: "3" }, {}, /^23514$/u);
     await tamper("new for a code the baseline carries", { claimed: "1" }, { sor_code: "FIT-LOCK", sor_version_id: f.demo.sorVersionId }, /^(23514|23503)$/u);
@@ -459,4 +581,30 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
     }
     expect(await written(c, tenant)).toEqual(before);
   }, 90_000);
+
+  it("[C16] the high/low INSERT-refusal assertions fail if only the exact-price guard is removed (rolled-back mutation control)", async () => {
+    const f = await siteFixture(c), tenant = f.p.tenantId, before = await written(c, tenant), head = await chainHead(c, tenant);
+    const functionText = async () => (await c.admin.query("SELECT pg_get_functiondef('app.ent3c_sor_revision_guard()'::regprocedure) AS definition")).rows[0]!.definition as string;
+    const original = await functionText();
+    const priceGuard = / IF NEW\.net_pence IS DISTINCT FROM app\.sor_line_net_pence\(NEW\.quantity,NEW\.rate_pence,NEW\.adjustment_numerator,NEW\.adjustment_denominator\) THEN\s+RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514';\s+END IF;/gu;
+    expect(original.match(priceGuard)).toHaveLength(1);
+    await expect(ownerTx(c, tenant, async db => {
+      // Change only this piece's price predicate; every structural, basis and audit control remains enabled.
+      await db.$client.query(original.replace(priceGuard, ""));
+      for (const [name, offset] of [["one penny high", 1], ["one penny low", -1]] as const) {
+        const raw = await rawExtra(db, f, { jobId: f.jobId, code: "CLEAR-GUTTER" });
+        const price = (await db.$client.query("SELECT (app.sor_line_net_pence('2',350,-35,1000)+$1)::text AS n", [offset])).rows[0]!.n as string;
+        const values = await revisionValues(db, f, raw, { claimed: "2" }, { net_pence: price });
+        // The SAME assertion used above must fail now, at INSERT, rather than pass on a later missing-basis error.
+        await expect(assertRevisionInsertRefused(db, values, /^23514$/u, name)).rejects.toMatchObject({ name: "AssertionError" });
+        const row = (await db.$client.query("SELECT * FROM app.extra_sor_revision WHERE tenant_id=$1 AND id=$2", [tenant, values.id])).rows[0]!;
+        expect(row.net_pence).toBe(price);
+        await insertRow(db, "extra_pricing_basis", basisValues(f, raw, row.content_hash as string));
+      }
+      await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE");
+      throw new Error("ROLLBACK_PRICE_GUARD_CONTROL");
+    })).rejects.toThrow("ROLLBACK_PRICE_GUARD_CONTROL");
+    expect(await functionText()).toBe(original);
+    expect(await written(c, tenant)).toEqual(before); expect(await chainHead(c, tenant)).toBe(head);
+  });
 });

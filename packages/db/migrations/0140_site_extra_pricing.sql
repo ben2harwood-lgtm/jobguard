@@ -2,10 +2,10 @@ BEGIN;
 -- ENT-3c: the server-priced first revision of a schedule-of-rates site extra and its pricing-basis side record.
 -- Additions only: two new tables, five routines, triggers on the two new tables. No column, index, constraint, policy, grant or trigger is added to any
 -- existing table, no row of app.variation_revision is written, and no existing object is replaced or dropped. Needs 0110 (work orders, app.sor_line_net_pence)
--- and 0122 (extra origin persistence); it calls no ENT-3a routine.
+-- and 0122 (extra origin persistence), plus 0135 (the stored-origin authority check).
 -- Standard F: the application login gets SELECT only on both new tables. The ONLY writer is app.ent3c_record_sor_revision, a SECURITY DEFINER routine owned by
 -- jobguard_migration that takes no actor, rate, price, outcome or time: everything but the claimed quantity and the request hash is read from rows already
--- stored in the raising transaction, and it runs only while the raising command's own receipt is still processing.
+-- stored in the raising transaction. It carries its own ENT-3a authority check and runs only while the raising command's own receipt is still processing.
 
 -- 1. The first priced revision of a schedule-item extra. Complete on purpose: a later piece may fingerprint whole rows, after which no column can be added.
 CREATE TABLE app.extra_sor_revision (
@@ -75,6 +75,8 @@ BEGIN
  EXCEPTION WHEN invalid_text_representation THEN tenant:=NULL;
  END;
  IF tenant IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ -- Standard F: check the stored raising member's current authority, including the tenant lock, before pricing or writing anything.
+ PERFORM app.ent3a_require_extra_authority(p_job,p_variation);
  IF p_request_hash IS NULL OR p_request_hash !~ '^[0-9a-f]{64}$' THEN RAISE EXCEPTION 'INVALID_COMMAND' USING ERRCODE='23514'; END IF;
  IF p_claimed_quantity IS NULL OR p_claimed_quantity !~ '^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$' THEN RAISE EXCEPTION 'INVALID_QUANTITY' USING ERRCODE='22023'; END IF;
  claimed:=p_claimed_quantity::numeric;
