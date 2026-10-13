@@ -1,5 +1,213 @@
 Built by Codex; dispatched 13 Oct 2026
 
+# SV-5 repair round r1 — 13 October 2026, dispatcher 4, RED lane
+
+This section is the current repair receipt. The initial construction receipt below is historical and its old head, hashes, line locations, failed checks and factory claims do not describe r1. Built by Codex; no independent model verdict or technical acceptance is asserted.
+
+Starting and final builder HEAD: `3efe521348609751320b62348f97784b8c85abe1`. Branch: `codex/sandbox/sv-5`. Initial worktree clean. Local `origin/main`: `6659fb58791ec22588948f005b2bd4f6b299fa48` (PR #167 merge). Main has advanced from the original issued base; no catch-up, commit, add, checkout, push, merge or other Git mutation performed. The dispatcher must commit the working tree and bind all database evidence and the next independent verdict to that new exact head. No result is claimed for a future rebased/merged head.
+
+Read AGENTS.md, applicable BUILD_PLAN §10.2.6–10.2.8 and SV-5 card, final-check contract, existing worker/test boundary, 0145 and its own fixtures/tests. Dependencies already installed; no install/download, clean-install claim or provider call. Node is v24.17.0 (repository .nvmrc still pins 24.15.0); this pre-existing runtime difference was not changed. Checks use the previously installed pnpm 10.28.1 wrapper, with both PATH exports below. Memory checks before each heavy command showed 70–73% free; free disk stayed 65 GB, above the 45 GB floor. Heavy commands ran sequentially, two workers/concurrency, at most three explicit test files per invocation.
+
+## Repairs and source-inspected limits
+
+- **B1:** removed `createFinalCheckWorker`, concrete detector/shadow imports and factory implementation from `apps/api/src/final-check.worker.ts`. It now exposes only the injected-port handler and type-only database imports. The merged SV-3 scanner/list/assertion was unchanged. Reproduced its failure before editing the worker, then ran it unchanged successfully with the two other merged boundary/registry regressions.
+- **Held with Q6:** the factory-dependent `SV5-11 SV5-15 SV5-19` diary/message/photo coalescing/replay scenario in `packages/db/test/final-check-catch.integration.test.ts` is explicitly `it.todo` at line 18. The remaining two executable prohibition/no-money tests stay in that file; it also contains three pre-existing Q2 todos. This is an authorized hold under the repair order, not a passing scenario, deleted file, relocated executing factory or completed coalescing integration. Concrete composition/registration/scheduling remain unbuilt here.
+- **B2:** no catalogue edits. The six-table tenancy additions belong to coordinator-approved SV5PRE group C (`jg-runs/sv-5-prereq-patch/`). Catch-up and merge order: **#170, then SV5PRE, then #181**. No catalogue or PostgreSQL installation result is claimed.
+- **B3:** 0145's `read_final_check_manifest` now returns signal `evidenceIds` only for non-invalidated links whose `source_received_at <= manifest.evidence_cutoff_at`. PostgreSQL `complete_final_check` independently refuses `reveal` without at least one non-invalidated linked evidence row received at or before the lock cutoff. Exact PostgreSQL timestamps, including microseconds, decide the cutoff. The existing pure reconciliation receives an empty qualifying evidence list for post-lock-only work and proposes `not_enough_evidence`; completing with that exclusion reconciles the signal and leaves it out of main findings. Separate `postLockItems` remain available. Mixed valid pre/post-lock support may still reveal; the pre-existing conservative whole-signal fee ineligibility for later links is unchanged, pending its later policy card.
+- Tests were written **before the SQL change** in this piece's unmerged manifest suite: `SV5-14 B3 post-lock-only evidence must NOT become a reveal and is classified as an exclusion` and `SV5-14 SV5-25 B3 valid pre-lock evidence permits reveal while manifest evidenceIds exclude later links`. The negative test first directly calls completion with `reveal` and expects refusal, then checks filtered IDs, pure exclusion, persisted classification/state, empty main items and separate later items. The positive test binds both an earlier and a later link to one signal and proves earlier support permits reveal while later IDs stay out of the qualifying manifest list. **First failing database run: NOT RUN** (cannot bind/start PostgreSQL here). Source inspection shows the old SQL would accept the negative test's `reveal` and expose both IDs in the positive test. That is not an executed failing test or database proof.
+- **Upgrade snapshot:** added populated pre-N `recovery_case`, `shadow_signal_classification`, `shadow_signal_disposition` and `shadow_signal_evidence` rows to the own-migration comparison. The evidence link is created through the fixture shadow login; the historical run/classification/disposition and ordinary `merchant_overcharge` case are owner-created historical fixtures before 0145. No SV-5 catch or completion is manufactured. All nine snapshot tables retain the existing nonempty-row guard, canonical named-column text, full types, captured primary-key identities and rolled-back controls. Proof execution remains NOT RUN.
+- **OpenAPI:** regenerated the canonical `apps/api/src/generate-openapi.ts` through Node's tsx loader and checked it through the same source with `--check`, without starting a listener. No generator or package script changed. The diff is exactly 45 additive lines for the three final-check endpoints, with no other endpoint change. The initial receipt's generation STOP is superseded by these r1 results.
+
+Only the issued repair and its contract/operations notes changed. No new table/column, grant, catch/fee effect, invoice gate, worker registration, UI, model, prompt or detector policy was introduced. Q2/Q3/Q11, Q4/Q5/Q6 and parked browser acceptance remain as held/stopped in the historical receipt. Current construction does not satisfy any full database acceptance ID or the aggregate SV-5 card.
+
+## Commands actually executed
+
+Successful pnpm commands used:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-sv5-bin:$PATH"
+```
+
+| Actual validation command | Exit | Evidence |
+|---|---:|---|
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/shadow-detection.worker.test.ts` (initial PATH accidentally selected global pnpm; interrupted through its existing session) | 130 | Stalled launcher; no test result. Log `/private/tmp/sv5-r1-b1-before.log`. No permission refusal. |
+| Same command, correctly selecting installed pinned pnpm, **before worker change** | 1 | 1 failed / 6 passed. Failure `apps/api/src/final-check.worker.ts: shadow capability import`, at merged assertion :116. Log `/private/tmp/sv5-r1-b1-before-pinned.log`. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/context-boundary.test.ts src/watchdog-registry.test.ts src/shadow-detection.worker.test.ts` | 0 | 3 files, 273 passed. Log `/private/tmp/sv5-r1-regressions.log`. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/final-check.test.ts` | 0 | 1 file, 8 passed. Log `/private/tmp/sv5-r1-core.log`. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/final-check.application.test.ts src/final-check.controller.test.ts src/final-check.http.test.ts` | 0 | 3 files, 7 passed. Log `/private/tmp/sv5-r1-api.log`. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/final-check.worker.test.ts src/final-check.isolation.test.ts` | 0 | 2 files, 5 passed. Log `/private/tmp/sv5-r1-worker.log`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts` | 0 | Canonical generator, three additive routes. Log `/private/tmp/sv5-r1-openapi-generate.log`. |
+| `pnpm exec turbo run typecheck --force --concurrency=2` | 0 | 7 successful, **0 cached**. Log `/private/tmp/sv5-r1-typecheck.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Genuine committed branch merge-base diff plus working tree, lane sv-5. Log `/private/tmp/sv5-r1-lanes.log`. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0 | Core purity (153 files), genuine lane check, money and commercial boundary checks. Log `/private/tmp/sv5-r1-boundary-lint.log`. |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force --concurrency=2` | 0 | 7 successful, **0 cached**. Log `/private/tmp/sv5-r1-lint.log`. |
+| `pnpm build --concurrency=2 --force` | 0 | 7 successful, **0 cached**. Log `/private/tmp/sv5-r1-build.log`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Canonical OpenAPI equality check. Log `/private/tmp/sv5-r1-openapi-check.log`. |
+
+After the worker repair: **293 passing targeted tests across nine files** (20 own tests + 273 merged regression tests); this is not the full root suite. Forced typecheck/lint/build really executed. Turbo emitted nonfatal IO/cache warnings (`Operation not permitted`), and Next reported existing workspace-root/CSS warnings; all three processes exited 0. No retry, permission escalation or script weakening was used for those warnings.
+
+Read-only inspection commands (`pwd`, `git status --short`, `git rev-parse HEAD`, `git rev-parse origin/main`, `git branch --show-current`, `git log -1 --format='%H %s' origin/main`, `git show`, `git diff --name-only`, `git diff --numstat`, `git diff --stat`, `git diff --check`, `cat`, `sed`, `rg`, `head`, `tail`, `nl`, `ls`, `command -v node`, `node --version`, `memory_pressure | tail -1`, `df -g /System/Volumes/Data`) exited 0 in their completed inspection batches. All completed test/source/receipt/message edits by task-scoped Python here-docs or `cat >`/`cat >>` exited 0. A read-only Python lane/hash assertion initially exited 1 (`KeyError: 'sv-5'`, policy is nested under `lanes`), without writing; its corrected version exited 0. Final handoff assertions and receipt verification are recorded below. No safety/approval-review rejection occurred in r1.
+
+## Database and full-suite evidence — NOT RUN
+
+**All eight files below are NOT RUN: to run on the Mac by the dispatcher**, against the exact repaired commit, through `~/.local/bin/heavy-slot`, two workers, at most three files per run. This sandbox cannot bind localhost or start PostgreSQL; no attempt to bypass that restriction, install migration 0145 locally, or declare an SQL/catalog/upgrade/race pass was made. The harness requests real PostgreSQL 16 and real runtime/shadow logins; the actual server version, installed migration, privileges and behavior remain unverified.
+
+- `packages/db/test/final-check.integration.test.ts` — to run on the Mac by the dispatcher.
+- `packages/db/test/final-check-manifest.integration.test.ts` — to run on the Mac by the dispatcher, including both new B3 tests.
+- `packages/db/test/final-check-disposition.integration.test.ts` — to run on the Mac by the dispatcher.
+- `packages/db/test/final-check-catch.integration.test.ts` — to run on the Mac by the dispatcher; Q6 coalescing scenario and three Q2 cases are explicit todos, not passes.
+- `packages/db/test/final-check-access.integration.test.ts` — to run on the Mac by the dispatcher.
+- `packages/db/test/final-check-races.integration.test.ts` — to run on the Mac by the dispatcher.
+- `packages/db/test/final-check-invoice.integration.test.ts` — to run on the Mac by the dispatcher; Q4/Q5 integration remains stopped.
+- `packages/db/test/final-check-upgrade.integration.test.ts` — to run on the Mac by the dispatcher, including all nine populated snapshot tables.
+
+Sequential Mac batches (not executed here; after exact-head commit and the coordinator-owned catch-up):
+
+```sh
+~/.local/bin/heavy-slot sv-5-r1-a pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/final-check.integration.test.ts test/final-check-manifest.integration.test.ts test/final-check-disposition.integration.test.ts
+~/.local/bin/heavy-slot sv-5-r1-b pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/final-check-catch.integration.test.ts test/final-check-access.integration.test.ts test/final-check-races.integration.test.ts
+~/.local/bin/heavy-slot sv-5-r1-c pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/final-check-invoice.integration.test.ts test/final-check-upgrade.integration.test.ts
+```
+
+Dispatcher must also run the unchanged tenancy/fingerprint/DB regressions and full CI gates at that resulting head. `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, complete fixture evaluation and browser/native journeys were NOT RUN here. No UI/browser work is authorized; no live model/provider run was made. Reconciliation cutoff validation changed; model/prompt/extraction/matching/gateway versions did not. Targeted unit checks are not independent review or full-suite/database proof.
+
+## Exact protected boundaries: STOP / held
+
+**B1 / Q6 STOP:** `apps/api/src/shadow-detection.worker.test.ts:89`, enforcing the test at :86 and assertion at :116. The original receipt omitted this STOP; it is now recorded with the failing run. No pinned-list edit is authorized. **Before = After (unchanged)** at :89:
+
+```ts
+  const excluded=new Set(["apps/api/src/worker.ts","apps/api/src/shadow-detection.worker.ts","packages/db/src/shadow-repository.ts","packages/db/src/shadow-observation-reader.ts","packages/db/src/shadow-detection-repository.ts"]);
+```
+
+Before = After (unchanged) at :116:
+
+```ts
+      expect(capabilities.has((binding.propertyName??binding.name).text),`${file}: shadow capability import`).toBe(false);
+```
+
+A proposal to add `apps/api/src/final-check.worker.ts` to that list is stopped and was not applied. The coordinator's repair ruling is implemented by removing the concrete factory/imports and holding the dependent test with Q6. Factory before: exported `createFinalCheckWorker` at original worker :13–41. After: absent; only ports and `FinalCheckWorker` remain. Affected unmerged test before: executable `it("SV5-11 SV5-15 SV5-19 finalized synthetic diary/message/photo observations coalesce into one reveal and rerun returns the same result",...)` at old catch :15. After, current catch :18:
+
+```ts
+it.todo('SV5-11 SV5-15 SV5-19 Q6 finalized synthetic diary/message/photo observations coalesce into one reveal and rerun returns the same result HELD');
+```
+
+**B2 catalogue STOP:** `packages/db/test/tenancy.integration.test.ts`, order references :252/:491. At builder HEAD those exact lines are financial-authorization rows, **Before = After (unchanged)**:
+
+```ts
+      { relname: "financial_authorization", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "financial_authorization", owner: "jobguard_migration" },
+```
+
+The intended sorted insertion anchor `final_check_terms_acceptance` is actually :251/:490 in this worktree. On current origin/main it is :252/:492 (main wins; the order's second location and the historical receipt's worktree line labels have drifted). **Before = After for this builder (unchanged)** at the actual anchor:
+
+```ts
+      { relname: "final_check_terms_acceptance", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "final_check_terms_acceptance", owner: "jobguard_migration" },
+```
+
+Required additive after rows are the six `final_check_disposition_binding`, `final_check_manifest`, `final_check_manifest_source`, `final_check_reveal_proof`, `final_check_run_binding`, `final_check_source_attempt` entries in each catalogue (RLS/guard flags true; owner jobguard_migration), preserving existing entries. Already approved for **SV5PRE**, not applied by SV-5. Do not broaden this builder's lane. Merge **#170 → SV5PRE → #181**.
+
+**Inherited Q4 STOP:** `packages/db/test/final-account-lock-invoice.integration.test.ts:88–89`. Before = After (unchanged) legacy test permits issue without lock; its exact source and required coordinator change are retained in the historical STOP 1 below. No invoice routine or merged test changed.
+
+**Inherited Q5 STOP:** same file :11 and `packages/db/migrations/0132_final_account_lock.sql:357`. Before = After (unchanged): the fixture inserts completion labels without a bound run, and the gate is `IF check_row.status IS DISTINCT FROM 'completed' THEN RAISE EXCEPTION 'FINAL_CHECK_NOT_COMPLETE'; END IF;`. Exact prior fixture is retained in historical STOP 2. After required by coordinator prerequisite: authoritative manifest/run-bound completion, not an SV-5 change or claimed pass.
+
+**Inherited Q6 registration STOP:** `apps/api/src/worker.ts:33/:35`, Before = After (unchanged). Existing task is `detect_shadow_evidence`; runner still uses `crontab:"*/1 * * * * discover_outbox"`. Exact lines are retained in historical STOP 3. Required final-check composition, durable registration/discovery and restart proof remain coordinator-owned. No new context constructor or detector capability is moved to another scanned source.
+
+Q2 catch/case/initial claim, Q3 human resolution, Q11 live decisions, and SV5-35 UI/browser acceptance remain HELD/PARKED. No new founder question is decided. No permission request is needed to apply the already issued SV5PRE ruling; this builder simply leaves its protected lines untouched.
+
+## Every migration GRANT — standard F, unchanged in r1
+
+No new GRANT was added or changed in repair. The complete existing 0145 set is still exactly these seven EXECUTE grants; no runtime table SELECT or INSERT/UPDATE/DELETE grant, and no infrastructure/emergency grant. Human writes stay behind routines checking current persisted session/membership/identity/job authority themselves.
+
+- `GRANT EXECUTE ON FUNCTION app.begin_final_check(uuid,uuid,text,text) TO jobguard_shadow;`
+- `GRANT EXECUTE ON FUNCTION app.read_final_check_manifest(uuid,uuid,uuid) TO jobguard_shadow;`
+- `GRANT EXECUTE ON FUNCTION app.record_final_check_source_result(uuid,uuid,uuid,uuid,uuid,jsonb) TO jobguard_shadow;`
+- `GRANT EXECUTE ON FUNCTION app.complete_final_check(uuid,uuid,uuid,jsonb) TO jobguard_shadow;`
+- `GRANT EXECUTE ON FUNCTION app.read_final_check_reveal(uuid,uuid,text) TO jobguard_runtime;`
+- `GRANT EXECUTE ON FUNCTION app.record_final_check_disposition(uuid,uuid,text,jsonb) TO jobguard_runtime;`
+- `GRANT EXECUTE ON FUNCTION app.read_final_check_disputes(uuid,uuid,text) TO jobguard_runtime;`
+
+## Self-review and remaining risks
+
+Source inspection: new cutoff predicates are tenant/job/signal qualified; timestamps and invalidation come from authoritative linked rows, not input metadata. SQL refuses reveal even if a caller proposes it using later evidence; filtered manifest IDs drive the existing pure exclusion. No business lock follows the audit-head acquisition in the repair. Role checks, retries, immutable source accounting, no-money guarantees and exact version/hash links were preserved. Inspection and green unit checks do not establish installed PostgreSQL syntax, upgrade preservation, transaction races, catalogue privileges or independent acceptance. All remain release holds until actual evidence is recorded. Full SV-5 acceptance stays partial, with the affected Q6 integration coverage now expressly held.
+
+OpenAPI/package scripts, protected test bytes and merged migrations were inspected; only generated endpoint additions and this piece's unmerged sources/tests/docs changed. No permanent byte-pinning test was added. The next model's verdict must cover the dispatcher-created repaired head; the Opus input verdict at 3efe521 remains REPAIR and does not carry forward.
+
+LATER preserved: separately issued UI/browser portion and per-evidence fee eligibility policy for mixed earlier/later support. No adjacent implementation added.
+
+## r1 file evidence and handoff
+
+Changed/new non-receipt SHA-256:
+
+- `apps/api/openapi.json` — `cfc89a14c4d9878533418b0d9bee8c1d0e99be13de640228a4ad4f4e4582376b`
+- `apps/api/src/final-check.worker.ts` — `5df0326d243757e9675bac5536389ccd51d09a83a695781d90c32ff7f92bbbfe`
+- `docs/contracts/final-check-v1.md` — `e47a380302adb0a1361e090d3fb098b086d0dfa6e7c148331c5495444e5dc81e`
+- `docs/operations/final-check-recovery.md` — `a3f4c7d0f4ee2db1547a38b062362cb813f9ce6fbe34da3035f04e26c19a3a0b`
+- `packages/db/migrations/0145_final_check.sql` — `49e51d11c0ed277fe70130f981edd99b523d6e9eb6626536c6ff2d25cd3b23a2`
+- `packages/db/test/final-check-catch.integration.test.ts` — `c2c08212f1d8120faa423b2070ae6cdfce29b9668a780c5fdb435e7ab7a151f0`
+- `packages/db/test/final-check-manifest.integration.test.ts` — `d264d20bffea73e9f17984a6dc46950f4bb64fd5e66993fdf9a0e7c1b2130dda`
+- `packages/db/test/final-check-upgrade.integration.test.ts` — `c117d15c22fb99001d1a0e705a955b2a2ac693e85793906f2bfebaea4d4942c7`
+
+Protected/merged/reference files byte-equal to starting HEAD (SHA-256):
+
+- `apps/api/src/shadow-detection.worker.test.ts` — `6416236d2558a9ce4c66d4b68091b0f30720385e732439accb760e2f464741fe`
+- `apps/api/src/auth/context-boundary.test.ts` — `a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35`
+- `apps/api/src/worker.ts` — `372532c1aa575ad775df66c50a32fecd5881d703fd00d80136608bea4bccbd8f`
+- `packages/db/test/tenancy.integration.test.ts` — `41a9b7171e92a718f5f59f5a1879f3f5bc66aff94773ccbed2356516d5ab52ac`
+- `packages/db/test/final-account-lock-invoice.integration.test.ts` — `f882f61ae1ee2742d0563133cb67cfd9a79c9dccf667872afc03579000c65730`
+- `packages/db/test/fingerprinted-row-shape.integration.test.ts` — `be34095677e52d4e63c771799c99a11e0e52a73fdf2d85808550b17a583ab3a8`
+- `packages/db/migrations/0132_final_account_lock.sql` — `543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7`
+- `packages/db/src/practice-session.ts` — `9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14`
+- `packages/db/src/contractor-repository.ts` — `56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c`
+- `packages/db/src/contractor-party-repository.ts` — `e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0`
+- `packages/db/src/work-order-repository.ts` — `4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3`
+- `packages/db/src/sor-repository.ts` — `45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5`
+- `packages/db/src/job-scheduling-repository.ts` — `ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d`
+- `packages/db/src/work-order-fixtures.ts` — `cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386`
+- `packages/db/src/contractor-session-context.ts` — `a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c`
+- `apps/api/src/generate-openapi.ts` — `7a5fbf27ce69b21a9cc3aff9b288db032d1f6d78a069e4bc9df9b519160f8c73`
+- `package.json` — `fa4702713c4e2401017a7b4edde569ccaaccb086f5c65bb38c88daa171745da0`
+- `pnpm-lock.yaml` — `06b501e413424d77fc5c3a1ac0f481b7230c271e36bfbde2cb953385ccccd349`
+
+Actual `git diff --stat HEAD` before receipt update (exit 0):
+
+```text
+ apps/api/openapi.json                              | 45 ++++++++++++++++++++++
+ apps/api/src/final-check.worker.ts                 | 37 +-----------------
+ docs/contracts/final-check-v1.md                   |  2 +-
+ docs/operations/final-check-recovery.md            |  2 +-
+ packages/db/migrations/0145_final_check.sql        |  8 +++-
+ .../db/test/final-check-catch.integration.test.ts  | 14 ++-----
+ .../test/final-check-manifest.integration.test.ts  | 30 +++++++++++++++
+ .../test/final-check-upgrade.integration.test.ts   | 16 ++++++--
+ 8 files changed, 102 insertions(+), 52 deletions(-)
+```
+
+The only additional repair path is this receipt. Lane verification covers the genuine committed branch diff plus the working tree. No out-of-lane or merged-test path changed; hashes are evidence in this receipt, not new pinned assertions. Intended conventional commit message written to `/private/tmp/jg-msg-sv-5.txt`; dispatcher owns commit/push/catch-up. Final builder head remains `3efe521348609751320b62348f97784b8c85abe1`.
+
+Final handoff verification: `git diff --check`, `git status --short`, `git diff --stat HEAD`, `git rev-parse HEAD` and the Python final lane/hash/eight-Mac-files/worker-ports/test-ID/message assertions all exited **0**. Nine repair paths are within SV-5; all non-receipt hashes match this r1 section. Final builder head is unchanged at `3efe521348609751320b62348f97784b8c85abe1`. This final receipt insertion itself completed without changing source or tests. No later code edit or Git mutation was performed.
+
+Actual nine-file `git diff --stat HEAD` immediately before this final receipt insertion:
+
+```text
+ apps/api/openapi.json                              |  45 +++++
+ apps/api/src/final-check.worker.ts                 |  37 +---
+ docs/contracts/final-check-v1.md                   |   2 +-
+ docs/operations/final-check-recovery.md            |   2 +-
+ docs/verdicts/SV-5/BUILDER_RECEIPT.md              | 191 +++++++++++++++++++++
+ packages/db/migrations/0145_final_check.sql        |   8 +-
+ .../db/test/final-check-catch.integration.test.ts  |  14 +-
+ .../test/final-check-manifest.integration.test.ts  |  30 ++++
+ .../test/final-check-upgrade.integration.test.ts   |  16 +-
+ 9 files changed, 293 insertions(+), 52 deletions(-)
+```
+
+---
+
+# Initial construction receipt — historical record from before r1
+
+
 # SV-5 builder receipt — partial server/database construction
 
 The addendum's requested first line names Claude Sonnet 5.5 and says Codex was unavailable. That is not the builder in this session, so it is not recorded as a fact. This is a Codex build receipt, not an independent verdict or acceptance.

@@ -1,11 +1,12 @@
+import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import type {PoolClient} from "pg";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {MIGRATION_URLS,migrate} from "../src/migrate.js";
-import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,type FinalCheckFixture} from "./final-check-fixture.js";
+import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,finalCheckProposal,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 /* An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'. */
-const own='0145_final_check.sql';const tables=['job','evidence_object','final_account_revision','final_account_line','final_account_lock'];
+const own='0145_final_check.sql';const tables=['job','evidence_object','final_account_revision','final_account_line','final_account_lock','recovery_case','shadow_signal_classification','shadow_signal_disposition','shadow_signal_evidence'];
 const ident=(s:string)=>`"${s.replaceAll('"','""')}"`;
 type Snapshot={columns:Array<{name:string;type:string}>;keys:string[];identities:string[];bytes:string[]};
 async function columns(db:Pick<PoolClient,'query'>,table:string){return (await db.query("SELECT attname name,format_type(atttypid,atttypmod) type FROM pg_attribute WHERE attrelid=$1::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum",[`app.${table}`])).rows as Snapshot['columns'];}
@@ -19,7 +20,16 @@ it("SV5-31 SV5-34 populated own-migration comparison preserves named bytes/types
  for(const url of MIGRATION_URLS.slice(0,n)){await f.admin.query(await readFile(url,'utf8'));await f.admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)',[url.pathname.split('/').at(-1)]);}
  // Logins were allocated before roles existed. Bind them after the pre-N install.
  await f.admin.query(`GRANT jobguard_runtime TO ${f.runtime.options.user}`);await f.admin.query(`GRANT jobguard_shadow TO ${f.shadow.options.user}`);
- await installLegacySyntheticPartyFixtures(f.admin);const a=await seedFinalCheckJob(f);await insertFinalCheckEvidence(f,a);await a.lock();
+ await installLegacySyntheticPartyFixtures(f.admin);const a=await seedFinalCheckJob(f),evidence=await insertFinalCheckEvidence(f,a),signalId=await finalCheckProposal(f,a,evidence);await a.lock();
+ // Populate each pre-existing table whose constraints/triggers 0145 changes.
+ // These are owner-created pre-N historical fixtures, not an SV-5 completion or catch.
+ await finalCheckTenant(f.admin,a.tenantId,async db=>{
+  const runId=randomUUID();
+  await db.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,synthetic,case_type) VALUES($1,$2,$3,32000,'GBP','identified',true,'merchant_overcharge')",[randomUUID(),a.tenantId,a.jobId]);
+  await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) SELECT tenant_id,job_id,$1,'synthetic.pre-sv5.v1',locked_at FROM app.final_account_lock WHERE tenant_id=$2 AND job_id=$3",[runId,a.tenantId,a.jobId]);
+  await db.query("INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[a.tenantId,a.jobId,randomUUID(),runId,signalId]);
+  await db.query("INSERT INTO app.shadow_signal_disposition(tenant_id,job_id,id,run_id,signal_id,disposition) VALUES($1,$2,$3,$4,$5,'not_completed')",[a.tenantId,a.jobId,randomUUID(),runId,signalId]);
+ });
  await f.admin.query("CREATE FUNCTION app.sv5_upgrade_control() RETURNS integer LANGUAGE sql AS 'SELECT 1'");
  const before=await snapshot(f.admin);await f.admin.query(await readFile(MIGRATION_URLS[n]!,'utf8'));await compare(f.admin,before);
  await f.admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)',[own]);await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);
