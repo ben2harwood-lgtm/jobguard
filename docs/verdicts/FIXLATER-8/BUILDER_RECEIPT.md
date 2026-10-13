@@ -1,5 +1,193 @@
 Built by Codex; dispatched 13 Oct 2026
 
+## Repair round r1 — 13 October 2026
+
+Built by Codex. Repair base and final observed HEAD: `6b9819c5a8fbb2eea0fdc93f5456cf2bd8805743`; PR #179, AMBER lane. No Git write command was run. The dispatcher supplies the next commit SHA and independent review. The original build receipt below is historical evidence for its earlier base, not the repair head.
+
+Scope: only `packages/db/test/catalog-fixlater-8.integration.test.ts` and this receipt changed in the repository. The intended commit message at `/private/tmp/jg-msg-fixlater-8.txt` was updated at the dispatcher's explicit destination. No migration, production code, merged test, shared helper, lane entry, scope note, grant or fingerprint changed.
+
+### Repair and source inspection
+
+- B1: the pg_class sequence branch now passes lowercase `s` to acldefault. The default-privilege fallback also maps pg_default_acl's uppercase sequence kind to lowercase `s`; other kinds and recorded object identities remain unchanged.
+- The existing NULL-ACL sequence fixture guard now requires the owner's SELECT, UPDATE and USAGE entries, each with grantor/grantee f8_owner and grantable false. These assertions were edited first, before either reader fallback. They tighten A08 coverage through fixtureCoverage in F8-01/F8-02/F8-03. The initial failing database run is **NOT RUN (cannot start PostgreSQL here; CI)**. No executed failure or PostgreSQL pass is claimed.
+- E2: only this piece's new F8-01, F8-02 and F8-06 tests receive an explicit `60_000` ms per-test budget, authorized by the repair header. No existing merged test or hook budget changed. The sibling small-builder-origin-rule9 proof uses the same explicit 60-second scale.
+- LATER — temp-directory cleanup: the sibling retains its own mkdtemp directory. The installed embedded-postgres stop implementation cleans nonpersistent directories using a recursive delete operation. This order prohibits adding deletion, so persistence and cleanup stay unchanged. No directory was created by a DB run during this repair.
+
+Self-inspection (builder, not independent review): both uppercase sequence inputs are normalized; the guard checks all three owner privileges while retaining the real NULL-ACL assertion; only the three named test budgets changed; own-step/later-step behavior, controls and role probes remain intact. Rule 9's existing proof shape is unchanged. No self-acceptance or rebound Opus verdict is claimed. Review B1 is source-addressed; E1 still needs actual PostgreSQL execution on the dispatcher's repaired commit.
+
+### Executed checks and limits
+
+| Check | Exit | Result |
+| --- | --- | --- |
+| `pnpm exec turbo run typecheck --force` | 0 | 7 successful / 7 tasks; 0 cached; 1m3.954s |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 0 | 7 successful / 7 tasks; 0 cached; 42.95s |
+| Initial `git diff --check` and preservation read | 0 | Only the requested test changed before receipt update; 12 files hashed |
+
+Each forced check ran once. Both logs include nonfatal `WARNING IO error: Operation not permitted (os error 1)`; all seven compiler tasks executed and the commands exited 0. No reroute or rerun was attempted. Preflight memory free: typecheck 70%, lint 69%; available disk 65 GB before both. Installed Node: v24.17.0; repository .nvmrc: 24.15.0. Reused the already-existing local pnpm shim with pinned pnpm 10.28.1; no install, download or new shim.
+
+**NOT RUN:** `packages/db/test/catalog-fixlater-8.integration.test.ts` (all six F8 tests; sandbox cannot start PostgreSQL; CI owns execution). All other DB files listed in the original receipt remain NOT RUN in this repair; no whole suite was launched. Browser suites NOT RUN (cannot start a browser here; no browser change). Build, unit suites and OpenAPI check NOT RUN in this narrow repair: header requests forced typecheck/lint only, and no production/schema/API change was made. No live-model evaluation applies. TypeScript/package lint results are not claimed as DB proof.
+
+**New migration GRANTs: none. Standard F:** no new direct INSERT, UPDATE or DELETE grant to jobguard_runtime on money, membership, authorization, receipt or audit tables. No fixture or control grant was added or altered.
+
+No new STOP or BLOCKING question. The first source read used the verdict's abbreviated relative path, which did not exist (exit 1); discovery located the actual read-only verdict under the user's full-steam directory. This was a missing file, not a permission refusal.
+
+### Repair command log
+
+Every shell command below is copied as launched; source reads have no test count. Pooling/polling used write_stdin on the same two running checks, with no additional shell command. Three successful apply_patch calls preceded the receipt: assertions first, reader/budgets second, intended message third. Receipt edits use apply_patch only.
+
+Read command 1 — exit 0:
+```sh
+pwd; git status --short; git rev-parse HEAD; git diff --stat
+```
+
+Read command 2 — exit 1:
+```sh
+cat AGENTS.md; rg -n 'FIXLATER-8|catalog|Discovered later' BUILD_PLAN.md; cat jg-runs/fixlater-8-opus-6b9819c.md
+```
+
+Read command 3 — exit 0:
+```sh
+cat packages/db/test/catalog-fixlater-8.integration.test.ts; rg -n '60_000|60000|afterAll|mkdtemp|cleanup' packages/db/test/*small-builder*rule9*; cat docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md; cat package.json
+```
+
+Read command 4 — exit 0:
+```sh
+sed -n '1,210p' packages/db/test/catalog-fixlater-8.integration.test.ts; sed -n '211,430p' packages/db/test/catalog-fixlater-8.integration.test.ts
+```
+
+Read command 5 — exit 0:
+```sh
+sed -n '76,126p' BUILD_PLAN.md; sed -n '1050,1076p' BUILD_PLAN.md; sed -n '1779,1805p' BUILD_PLAN.md; sed -n '3358,3396p' BUILD_PLAN.md; sed -n '1,100p' docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md; rg -n 'afterAll|mkdtemp|cleanup|60000|60_000|persistent' packages/db/test/small-builder-origin-rule9.integration.test.ts; rg --files /Users/benharwood/.local/share/full-steam | rg 'fixlater-8-opus-6b9819c|FIXLATER-8'; cat /Users/benharwood/.local/share/full-steam/handoffs/jobguard-task.md
+```
+
+Read command 6 — exit 0:
+```sh
+cat /Users/benharwood/.local/share/full-steam/jg-runs/fixlater-8-opus-6b9819c.md; sed -n '25,41p' packages/db/test/small-builder-origin-rule9.integration.test.ts; sed -n '282,296p' packages/db/test/small-builder-origin-rule9.integration.test.ts; sed -n '1,26p' docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md
+```
+
+Read command 7 — exit 0:
+```sh
+rg -n 'persistent|rm\(|rmdir|stop\(' node_modules/.pnpm/embedded-postgres*/node_modules/embedded-postgres/dist/*; cat packages/db/package.json; cat packages/db/vitest.config.ts; cat tools/lint.mjs; memory_pressure | tail -1; df -g /System/Volumes/Data; node --version; ls /private/tmp/jg-f8-tools /private/tmp/jg-msg-fixlater-8.txt
+```
+
+Read command 8 — exit 0:
+```sh
+git diff -- packages/db/test/catalog-fixlater-8.integration.test.ts; sed -n '192,229p' node_modules/.pnpm/embedded-postgres@16.10.0-beta.15/node_modules/embedded-postgres/dist/index.js; cat turbo.json; cat /private/tmp/jg-f8-tools/pnpm; cat .nvmrc; sed -n '1,65p' tools/agent-lane-boundary-lint.mjs
+```
+
+Forced check 1 — exit 0, 7/7 tasks, 0 cached:
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/jg-f8-tools:$PATH"; memory_pressure | tail -1; df -g /System/Volumes/Data; pnpm exec turbo run typecheck --force
+```
+
+Forced check 2 — exit 0, 7/7 tasks, 0 cached:
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/jg-f8-tools:$PATH"; memory_pressure | tail -1; df -g /System/Volumes/Data; LANE_BASE_REF=origin/main pnpm exec turbo run lint --force
+```
+
+Preservation command — exit 0:
+```sh
+git diff --check; git diff --stat; git status --short; git rev-parse HEAD; cat /private/tmp/jg-msg-fixlater-8.txt; python3 - <<'PY'
+from pathlib import Path
+import hashlib, subprocess
+paths = [
+'packages/db/migrations/0121_audit_export.sql',
+'packages/db/migrations/0128_shadow_persistence.sql',
+'packages/db/src/migrate.ts',
+'packages/db/test/audit-export.integration.test.ts',
+'packages/db/test/shadow-catalog.integration.test.ts',
+'packages/db/test/small-builder-origin-rule9.integration.test.ts',
+'packages/db/test/pool-test-utils.ts',
+'packages/db/test/upgrade-proof-utils.ts',
+'apps/api/src/auth/context-boundary.test.ts',
+'config/agent-lane-assignments.json',
+'docs/verdicts/FIXLATER-8/CATALOG_SCOPE.md',
+'packages/db/test/catalog-fixlater-8.integration.test.ts',
+]
+for path in paths:
+    current = Path(path).read_bytes()
+    original = subprocess.check_output(['git', 'show', 'HEAD:' + path])
+    print(hashlib.sha256(current).hexdigest(), path, 'UNCHANGED' if current == original else 'REPAIR')
+PY
+```
+
+Captured hashes and diff (before receipt update):
+```text
+ .../db/test/catalog-fixlater-8.integration.test.ts    | 19 +++++++++++--------
+ 1 file changed, 11 insertions(+), 8 deletions(-)
+ M packages/db/test/catalog-fixlater-8.integration.test.ts
+6b9819c5a8fbb2eea0fdc93f5456cf2bd8805743
+test(db): add supplementary own-step catalogue proofs
+
+Cover schema, sequence, view and default-privilege facts around existing
+0121 and 0128, including rolled-back controls and actual role probes.
+Permit only the two specified non-grantable app USAGE additions at 0128.
+
+Keep merged tests and migrations unchanged. Register FIXLATER-8 and
+record source scope, local checks and PostgreSQL execution still pending.
+a4a36afbe8c4e0fdc7940e47057f8c7d3e52db1b2e651dd5cd56a983fc9eaf68 packages/db/migrations/0121_audit_export.sql UNCHANGED
+d8f7370560595a47f1395dad198abacda1e1351ade096697656c76805e957afe packages/db/migrations/0128_shadow_persistence.sql UNCHANGED
+3c1d7b6a6d1511b38284401974dc9ff65b41d6691be375f348aaf0147da5d11d packages/db/src/migrate.ts UNCHANGED
+dadb5e37870aa5178b023b52c385731cb40403b6d8d73163e9270281b4d018ee packages/db/test/audit-export.integration.test.ts UNCHANGED
+0ee8767ffdf773e515b679cb964dfa6f8b3ee511164cf2521978c221f1b3d455 packages/db/test/shadow-catalog.integration.test.ts UNCHANGED
+e6e631d34c2e03f0a603fc713ca76999e3319f61d89df8e349caa1c406f2b77e packages/db/test/small-builder-origin-rule9.integration.test.ts UNCHANGED
+8411ccba37f0cadb0a5e0c56782235af059e5be28fb8a662d00e4d9dff45c22a packages/db/test/pool-test-utils.ts UNCHANGED
+9c0db8b49cd23bc3bae5dc19bdc9749486bd1869b7d642b37a137d7175b56e49 packages/db/test/upgrade-proof-utils.ts UNCHANGED
+a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35 apps/api/src/auth/context-boundary.test.ts UNCHANGED
+6da58fdf78dc7d7e21160795285535463c2384513b34ef05a03bbd45c054ea7c config/agent-lane-assignments.json UNCHANGED
+fd56fdc358d6dbe7d659f47a3a45c4c6dde17524317accccf9046b75ab5d7d7e docs/verdicts/FIXLATER-8/CATALOG_SCOPE.md UNCHANGED
+16a0356af13e11f0a08e6030e07fbb06f991f2c38e4211e0c2b67069cc72f2ca packages/db/test/catalog-fixlater-8.integration.test.ts REPAIR
+```
+
+Final boundary check — exit 0:
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/jg-f8-tools:$PATH"; LANE_BASE_REF=origin/main node tools/lint.mjs
+```
+```text
+Core purity passed (151 TypeScript files).
+Lane boundary passed: {"lane":"fixlater-8","branch":"codex/sandbox/fixlater-8","event":"local","base":"6659fb58791ec22588948f005b2bd4f6b299fa48","head":"6b9819c5a8fbb2eea0fdc93f5456cf2bd8805743","comparison":"merge-base","files":["config/agent-lane-assignments.json","docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md","docs/verdicts/FIXLATER-8/CATALOG_SCOPE.md","packages/db/test/catalog-fixlater-8.integration.test.ts"]}
+Money arithmetic boundary check passed.
+```
+This includes lint:lanes through its unchanged node entrypoint: four original PR paths allowed, working-tree repair confined to the test and receipt. Core purity covered 151 TypeScript files; money and commercial boundaries exited successfully.
+
+Final two-path verification — exit 0:
+```sh
+git diff --check; git diff --stat; git status --short; git rev-parse HEAD; python3 - <<'PY'
+from pathlib import Path
+import hashlib, subprocess
+expected = {'packages/db/test/catalog-fixlater-8.integration.test.ts', 'docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md'}
+changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD'], text=True).splitlines())
+untracked = subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard'], text=True).splitlines()
+assert changed == expected, changed
+assert not untracked, untracked
+for path in sorted(expected):
+    print(path, 'lines', len(Path(path).read_text().splitlines()))
+path = 'packages/db/test/catalog-fixlater-8.integration.test.ts'
+print('SHA256', hashlib.sha256(Path(path).read_bytes()).hexdigest(), path)
+message = Path('/private/tmp/jg-msg-fixlater-8.txt').read_text()
+assert message.startswith('fix(db): correct sequence ACL defaults in FIXLATER-8 proofs\n\n')
+print('Two-path preservation and intended commit message: PASS')
+PY
+```
+```text
+ docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md        | 144 +++++++++++++++++++++
+ .../db/test/catalog-fixlater-8.integration.test.ts |  19 +--
+ 2 files changed, 155 insertions(+), 8 deletions(-)
+ M docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md
+ M packages/db/test/catalog-fixlater-8.integration.test.ts
+6b9819c5a8fbb2eea0fdc93f5456cf2bd8805743
+docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md lines 595
+packages/db/test/catalog-fixlater-8.integration.test.ts lines 423
+SHA256 16a0356af13e11f0a08e6030e07fbb06f991f2c38e4211e0c2b67069cc72f2ca packages/db/test/catalog-fixlater-8.integration.test.ts
+Two-path preservation and intended commit message: PASS
+```
+The diff statistics and receipt line count were captured before adding this command/result appendix. The appendix changes only this receipt; the test hash stays as captured. Final observed HEAD remains `6b9819c5a8fbb2eea0fdc93f5456cf2bd8805743`. Dispatcher owns the next commit and real PostgreSQL validation. No new STOP or BLOCKING question.
+
+A final read-only `git diff --check; git diff --stat; git status --short; git rev-parse HEAD` follows this receipt edit; its actual output is returned directly to the dispatcher. No further file edit is planned.
+
+## Original build receipt (historical)
+
+
 # FIXLATER-8 builder receipt
 
 Task: FIXLATER-8. Branch: `codex/sandbox/fixlater-8`. Worktree: `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/fixlater-8`.

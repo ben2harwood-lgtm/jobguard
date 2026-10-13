@@ -34,7 +34,7 @@ describe("[A02 A03] audit-export own-step catalogue", () => {
     auditPath = await ownStep("0121_audit_export.sql", "f8_audit");
     expect(differences(auditPath.before, auditPath.after)).toEqual([]);
     expect(await receipts(auditPath.pool)).toEqual(auditPath.prefixAndOwn);
-  });
+  }, 60_000);
 });
 
 describe("[A04 A05 A06 A11] shadow own-step catalogue", () => {
@@ -44,7 +44,7 @@ describe("[A04 A05 A06 A11] shadow own-step catalogue", () => {
     expect(raw).toEqual(expectedUsage(shadowPath.before));
     expect(differences(shadowPath.before, shadowPath.after, true)).toEqual([]);
     expect(await receipts(shadowPath.pool)).toEqual(shadowPath.prefixAndOwn);
-  });
+  }, 60_000);
 });
 
 describe("[A05 A07 A08 A09 A10 A11] real catalogue controls", () => {
@@ -125,7 +125,7 @@ describe("[A16] later migrations are allowed to evolve the catalogue", () => {
       expect(await receipts(path.pool)).toEqual(MIGRATION_URLS.map(filename).sort());
     }
     // No catalogue equality after later migrations; no business-row proof belongs to this batch.
-  });
+  }, 60_000);
 });
 
 // Both sides include every selected non-system object, and global defaults have no namespace filter.
@@ -141,7 +141,7 @@ async function catalogue(db: Queryable): Promise<Subject[]> {
       UNION ALL
       SELECT CASE WHEN c.relkind='S' THEN 'sequence' ELSE 'view' END,c.oid,
         (n.nspname||'.'||c.relname)::text,c.relowner,
-        coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S' ELSE 'r' END::"char",c.relowner)),
+        coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 's' ELSE 'r' END::"char",c.relowner)),
         CASE WHEN c.relkind='S' THEN ARRAY[]::text[] ELSE
           ARRAY['kind '||c.relkind::text,'definition '||pg_get_viewdef(c.oid,true)] ||
           ARRAY(SELECT 'column '||row_to_json(x)::text FROM (
@@ -159,7 +159,8 @@ async function catalogue(db: Queryable): Promise<Subject[]> {
       UNION ALL
       SELECT 'default privileges',d.oid,
         (pg_get_userbyid(d.defaclrole)||'.'||coalesce(n.nspname,'<global>')||'.'||d.defaclobjtype::text)::text,
-        d.defaclrole,coalesce(d.defaclacl,acldefault(d.defaclobjtype,d.defaclrole)),
+        d.defaclrole,coalesce(d.defaclacl,acldefault(CASE WHEN d.defaclobjtype='S' THEN 's'
+          ELSE d.defaclobjtype END::"char",d.defaclrole)),
         ARRAY['defining role '||pg_get_userbyid(d.defaclrole),
           'scope '||coalesce(n.nspname,'<global>'),'object kind '||d.defaclobjtype::text]
       FROM pg_default_acl d LEFT JOIN namespaces n ON n.oid=d.defaclnamespace
@@ -301,9 +302,11 @@ async function fixtureCoverage(db: Queryable, subjects: Subject[]) {
   expect(nullSchema.facts).toContain(usageFact("f8_owner", "f8_owner"));
   expect((await db.query("SELECT nspacl IS NULL AS absent FROM pg_namespace WHERE oid=$1", [nullSchema.oid])).rows[0]?.absent).toBe(true);
   const sequence = find("sequence", "f8_fixture.sequence_fixture");
-  expect(sequence.facts).toContain("acl " + JSON.stringify({
-    grantor: "f8_owner", grantee: "f8_owner", privilege: "USAGE", grantable: false,
-  }));
+  for (const privilege of ["SELECT", "UPDATE", "USAGE"]) {
+    expect(sequence.facts).toContain("acl " + JSON.stringify({
+      grantor: "f8_owner", grantee: "f8_owner", privilege, grantable: false,
+    }));
+  }
   expect((await db.query("SELECT relacl IS NULL AS absent FROM pg_class WHERE oid=$1", [sequence.oid])).rows[0]?.absent).toBe(true);
   const view = find("view", "f8_fixture.view_fixture");
   expect(view.facts).toContain("kind v");
