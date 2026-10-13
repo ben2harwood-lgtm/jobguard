@@ -203,6 +203,186 @@
         ]
       }
     },
+    "/contractor/jobs/{id}/site-extras/sor": {
+      "post": {
+        "operationId": "SiteExtraPricingController_logSor",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "sorCode",
+                  "quantity",
+                  "note"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "log-sor-site-extra.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sorCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$"
+                  },
+                  "orderLineScopeItemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5000,
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Schedule-item site extra logged and priced by the server, or the identical stored result replayed"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept site extras. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Log a schedule-of-rates site extra in synthetic_demo; the server compares it with the order and prices the extra quantity alone",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/sor-items": {
+      "get": {
+        "operationId": "SiteExtraPricingController_sorItems",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "1 to 80 characters after trimming",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Items of this job's price list whose code or description contains the text (at most 50)"
+          }
+        },
+        "summary": "Search the price list of this job's work order",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/order-check": {
+      "get": {
+        "operationId": "SiteExtraPricingController_orderCheck",
+        "parameters": [
+          {
+            "name": "orderLine",
+            "required": false,
+            "in": "query",
+            "description": "scope item id of the order line, when the code is on more than one line",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "quantity",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sorCode",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "already_on_order, more_than_ordered (with the extra quantity) or new"
+          }
+        },
+        "summary": "Compare a schedule item and a total quantity with the order, before logging",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/site-visits/start": {
       "post": {
         "operationId": "SiteVisitController_start",

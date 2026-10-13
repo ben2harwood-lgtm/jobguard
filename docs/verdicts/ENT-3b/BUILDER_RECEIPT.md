@@ -1,4 +1,4 @@
-Built by Claude Sonnet 5.5, Codex unavailable; dispatched 13 Oct 2026
+Built by Codex; dispatched 13 Oct 2026
 
 # ENT-3b builder receipt: visit start and complete, and the close-out answer (server only)
 
@@ -144,3 +144,146 @@ Node `v24.17.0`; installed pinned pnpm `10.28.1`, checked with `/private/tmp/jg-
 NOT RUN in this sandbox: PostgreSQL integration bodies (including all 12 new tests), database regressions, `pnpm test:db`, `pnpm test:migrations`, socket-dependent HTTP integration tests, browser suites and the full repository `pnpm test`. The dispatcher states this sandbox cannot bind localhost or start PostgreSQL. GitHub CI after dispatcher commit/push runs database and browser suites; earlier-round database results do not verify this diff. CI and an independent verdict bound to the dispatcher-created commit remain required, with acceptance by a separate actor. Existing release gates remain in force. No new live-model evaluation is applicable.
 
 Intended conventional commit subject/body written to `/private/tmp/jg-msg-ent-3b.txt`. No git add/commit/checkout/push/merge, dependency installation, database startup, independent verdict or technical acceptance performed. Builder repair receipt only.
+
+## Repair round 3 — resolve the supplied main merge
+
+Built by Codex, dispatched 13 October 2026, dispatcher 3. The earlier first-line Claude attribution was inaccurate for this Codex session and has been corrected; earlier-round results below are historical evidence only. No independent review or acceptance is claimed.
+
+Starting and final existing HEAD: `9ed4ae7bf22aea3a7ccff1d034e0397c167b4f80`. Supplied MERGE_HEAD / origin/main: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`. The dispatcher started the merge; this round resolved working-tree contents only. Git's index still has eleven unmerged entries because no git write, add, commit, checkout, merge, push or installation was performed. A final merge-commit SHA does not exist yet.
+
+### Every conflicted file and its resolution
+
+| File | Resolution |
+| --- | --- |
+| `BUILD_PLAN.md` | Keep main's ENT-3c ledger paragraph exactly; append ENT-3b's ledger paragraph after it. Historical wording and allocation values preserved. |
+| `apps/api/openapi.json` | Regenerate from both registered controllers. Preserve every main path exactly, with the existing v1 schema retained exactly as the first alternative of ENT-3b's v1/v2 free-text request union. Preserve all ENT-3b paths. |
+| `apps/api/src/app.module.ts` | Keep main's pricing-controller import and registration; append the visit-controller import and registration. All other controllers and providers preserved. |
+| `apps/api/src/contractor/site-extra.application.ts` | Keep main's pricing imports, methods and error helper; append ENT-3b imports, visit methods and helpers. Retain the visit repository and v1/v2 free-text log parsing/visit reference. Main's pricing-method block and HEAD's visit-method block are verbatim. |
+| `apps/api/src/workspace/application.ts` | Keep main's logSor, sorItems and orderCheck bindings; append startVisit, completeVisit, assignedJobs and orderLines in the same frozen siteExtras object. |
+| `apps/api/src/workspace/index.ts` | Export main's sorSiteExtraHttpFailure, then ENT-3b's siteVisitHttpFailure. |
+| `config/agent-lane-assignments.json` | Preserve main's ENT-3c entry and every other main lane value; append ENT-3b's entry. Do not widen any allowlist. JSON parses. |
+| `packages/core/src/index.ts` | Export main's site-extra-pricing module, then ENT-3b's site-visit module. |
+| `packages/core/src/watchdog.ts` | Keep main's SoR route rows and existing comment; append both pairs of visit route rows. Preserve watchdogCommandGuards and every other guard. |
+| `packages/db/MIGRATIONS.md` | Keep main's complete 0140 documentation exactly; append ENT-3b's complete 0139 documentation after it. |
+| `packages/db/src/migrate.ts` | Keep both registrations in explicitly required numeric order: 0139, then 0140. |
+
+No merged test, pinned assertion/value, provider route, UI, prompt, policy, money calculation, membership rule or existing SQL routine was edited in this repair. Existing automatic nonconflicting merges are retained. In particular, the incoming main security test update was already in the supplied index and was not changed here. Source checks distinguish this from a claim that the complete merge contains no test changes.
+
+### Tests and commands actually executed
+
+Runtime: Node `v24.17.0`; installed pinned pnpm `10.28.1`. Commands calling pnpm first exported `PATH="$HOME/Library/pnpm/bin:$PATH"`, then selected the existing pinned executable through `/private/tmp/jg-ent-3b-bin`. The default pnpm launcher stalled on `pnpm --version`; it was interrupted (exit 130). The pinned executable version check exited 0. No install/download command was run. Turbo cache was placed at `/private/tmp/jg-ent-3b-r3-turbo-cache`.
+
+The exact execution command strings, exit codes, initial tool output and inspection commands are recorded in [r3-command-log.json](./r3-command-log.json). Read-only git status/show/rev-parse/diff/ls-files, rg, cat, sed, ls, nl, Python conflict extraction/comparison and SHA-256 calculations were also run. Inspection blocks returned 0; two lookups found absent files (`site-extra-proposals-v1.md` and `apps/api/vitest.config.ts`). No file was created to replace either lookup. One binary preview of the pinned pnpm executable was unhelpful.
+
+| Command | Actual result |
+| --- | --- |
+| `~/.local/bin/heavy-slot ent-3b pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/site-visit.test.ts src/site-extra-v2.test.ts` | Exit 0, 2 files, **96 tests passed**; helper permission failures below. One run only, no parallel test run. |
+| `pnpm exec turbo run typecheck --force` | Exit 0; 7/7 tasks, **0 cached**. Executed once. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | Exit 1. Core purity passed (154 TypeScript files); lane check refused incoming main files in the unfinished merge index. Remaining root checks were subsequently run individually. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; same pending-merge lane issue. No allowlist or checker change. |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | Exit 0; 7/7 tasks, **0 cached**. Executed once. This is package lint, not a passing root lane check. |
+| `node tools/money-arithmetic-lint.mjs` | Exit 0. |
+| `node tools/commercial-boundary-lint.mjs` | Exit 0. |
+| `pnpm build --concurrency=2 --force` | Exit 0; 7/7 tasks, **0 cached**. Executed once. Existing workspace-root, CSS and webpack-cache warnings remain. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts` | First attempt exit 1: pre-merge compiled core lacked SorSiteExtraError. After the forced build, exit 0 and document regenerated. Uses the repository generator without the tsx CLI's IPC socket. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0 after regeneration. |
+| `git diff --check` | Exit 0 on the resolved contents. |
+| Python source/schema/byte comparisons | Final exit 0: all eleven conflict files have no markers; both JSON files parse; pricing and visit method blocks preserved; all main lane values unchanged; all main and ENT-3b OpenAPI paths preserved; r2 repository, tests and 0139 unchanged. |
+
+Before each heavy command, `memory_pressure | tail -1` reported 66–68% free and `df -g /System/Volumes/Data` reported 80–83 GB free, above the 35% / 45 GB thresholds.
+
+Two temporary comparison scripts initially exited 1 without changing protected files: the first JSON union correctly identified the shared route's existing v1/v2 schema difference (only BUILD_PLAN had been resolved before that assertion); the comparison was refined to preserve the exact v1 alternative. A later overly broad main-byte comparison found that the already automatic merge of site-extra-repository contains both pieces; the final check instead proves every nonconflicted file is unchanged from the supplied baseline, while separately proving main's unchanged files and this piece's r2 source. These are temporary receipt checks, not permanent tests or weakened test assertions.
+
+This is a merge-integration repair with no new acceptance behaviour and no new tests. All existing test bodies are preserved. No new test-first failing run is claimed; the initial generator failure and temporary comparison failures above are not unit-test failures.
+
+### STOP / failed checks / files NOT RUN
+
+**STOP: shared helper's permission checks, `~/.local/bin/heavy-slot:11`.** During the one successful core test run, internal `sysctl -n vm.loadavg` reported `sysctl: sysctl fmt -1 1024 1: Operation not permitted` and `sysmon request failed with error: sysmond service not found`; internal `pgrep -x node` reported `pgrep: Cannot get process list`. The helper nevertheless launched the tests and exited 0. The dispatcher refusal rule was applied as soon as this output returned: no further slot-dependent tests were attempted, no alternate test runner or gate bypass was used. The helper itself was not edited.
+
+**Pending check: lane lint, `tools/agent-lane-boundary-lint.mjs:227–233`.** The local checker includes `git diff --cached HEAD` and the working-tree diff, so the supplied unfinished main merge is counted against ENT-3b. It refuses 30 incoming main paths, including `apps/api/src/auth/context-boundary.test.ts` and ENT-3c's new files. All these files are retained from the supplied merge. The dispatcher must complete the merge and rerun lane lint; this receipt does not claim that result. No source line needs weakening and no pinned list/value is changed.
+
+NOT RUN due to the helper permission STOP:
+
+- `apps/api/src/contractor/site-visit.application.test.ts`.
+- `apps/web/app/api/contractor/jobs/[id]/site-visits/start/route.test.ts`.
+- `apps/web/app/api/contractor/jobs/[id]/site-visits/[visitId]/complete/route.test.ts`.
+- `apps/web/app/api/contractor/jobs/[id]/order-lines/route.test.ts`.
+- `apps/web/app/api/contractor/site/jobs/route.test.ts`.
+- `apps/web/app/api/contractor/jobs/[id]/site-extras/route-v2.test.ts`.
+
+NOT RUN (cannot start PostgreSQL / a browser or bind sockets here; dispatch explicitly assigns these to CI):
+
+- `packages/db/test/site-visit.integration.test.ts`, including the unchanged r2 race tests.
+- `packages/db/test/site-visit-authority.integration.test.ts`.
+- `packages/db/test/site-visit-upgrade.integration.test.ts`.
+- `packages/db/test/site-extra-visit.integration.test.ts`.
+- Incoming main's ENT-3c PostgreSQL suites, database regressions, `pnpm test:db` and `pnpm test:migrations`.
+- `apps/api/src/contractor/site-visit.http.test.ts` and incoming main's socket-dependent HTTP tests.
+- Browser suites / `pnpm test:e2e`. No own-piece browser spec exists while UI is parked.
+- Full repository/package unit suites, excluded by the dispatch's file and memory limits.
+
+No model/prompt change or live-model evaluation applies. Database and browser checks, independent review bound to the dispatcher-created commit, separate acceptance and existing production gates remain outstanding.
+
+### Migration, upgrade proof and standard F
+
+Both migrations remain byte-identical: 0139 equals HEAD; 0140 equals MERGE_HEAD. Existing populated upgrade proofs are retained unchanged; this round adds no migration or reshapes any upgrade test.
+
+Standard F: **no new direct INSERT, UPDATE or DELETE grant** to jobguard_runtime, and no new grant authored in r3. For completeness, every runtime grant retained from these two migrations is listed separately:
+
+- 0139: `GRANT SELECT ON app.closeout_answer TO jobguard_runtime;`
+- 0139: `GRANT EXECUTE ON FUNCTION app.ent3b_visit_authority(uuid,uuid), app.ent3b_start_visit(uuid,uuid,uuid), app.ent3b_complete_visit(uuid,uuid,uuid,uuid,text), app.ent3b_require_open_visit(uuid,uuid) TO jobguard_runtime;`
+- 0140: `GRANT SELECT ON app.extra_sor_revision TO jobguard_runtime;` (expanded from the migration's exact table loop).
+- 0140: `GRANT SELECT ON app.extra_pricing_basis TO jobguard_runtime;` (expanded from the same loop).
+- 0140: `GRANT EXECUTE ON FUNCTION app.ent3c_record_sor_revision(uuid,uuid,text,text) TO jobguard_runtime;`
+
+Writer routines, their own authority checks, existing roles and forward-fix instructions are retained. No business network action, production activation, fee issuance or new alert was introduced. Public compatibility is the combined existing visit and pricing API, with free-text body versions 1 and 2 still accepted.
+
+### Source inspection and hashes
+
+This section is builder source inspection and deterministic comparison, not a model verdict. Before resolution, SHA-256 values for the supplied merge-modified paths were captured in `/private/tmp/jg-ent-3b-r3-baseline.json`. Final comparisons prove all 32 nonconflicted incoming paths unchanged. The eleven conflicted paths plus this receipt and its command log are the only r3 edits. No protected merged test or fingerprint was touched.
+
+```text
+58174fc0e3cd28a9c5b27c5cf344565df68fb1fca1b557bd091aa21ddfcf4377  packages/db/migrations/0139_site_visit_closeout.sql
+29605ffb78bc6193da5d1483834c15456b0a23561cd2bb95f26bc564dd1ff852  packages/db/migrations/0140_site_extra_pricing.sql
+b3e3b70aa925a684c9160425de06169c16c9e39bd7fc932b3e2b2a2688c458b6  packages/db/src/site-visit-repository.ts
+ca600135ba2ffb9cc73d9185cc4a9e1db2011b38a8577e2f1f91e4a76bd62487  packages/db/test/site-visit.integration.test.ts
+a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35  apps/api/src/auth/context-boundary.test.ts
+0ba72bc8d217065bf2e7194f9e8380f8cbf475eab682f24c9e131a42718b3f7a  apps/api/openapi.json
+```
+
+Self-inspection: shared methods, exports, application composition and controllers include both pieces; the pricing-method and visit-method blocks are byte-preserved; migrations retain numeric order and exact SQL; main's lane values and nonconflicting inputs remain unchanged; both JSON documents parse. The preserved r2 authority checks are source-inspected only in this round. The 96 executed core tests do not prove PostgreSQL races, HTTP socket journeys or browser behaviour.
+
+Intended merge commit message is written to `/private/tmp/jg-msg-ent-3b.txt`, beginning exactly `Merge remote-tracking branch 'origin/main' into codex/sandbox/ent-3b`. The dispatcher owns staging, completing the merge and its new head SHA.
+
+### Final diff-stat snapshot
+
+`git diff --stat` (exit 0; index intentionally unmerged; captured before adding this stat appendix):
+
+```text
+ BUILD_PLAN.md                                     | Unmerged
+ BUILD_PLAN.md                                     |   2 +
+ apps/api/openapi.json                             | Unmerged
+ apps/api/openapi.json                             | 180 ++++++++++++++++++++++
+ apps/api/src/app.module.ts                        | Unmerged
+ apps/api/src/app.module.ts                        |   3 +-
+ apps/api/src/contractor/site-extra.application.ts | Unmerged
+ apps/api/src/contractor/site-extra.application.ts |  66 +++++++-
+ apps/api/src/workspace/application.ts             | Unmerged
+ apps/api/src/workspace/application.ts             |   2 +-
+ apps/api/src/workspace/index.ts                   | Unmerged
+ apps/api/src/workspace/index.ts                   |   1 +
+ config/agent-lane-assignments.json                | Unmerged
+ config/agent-lane-assignments.json                |   9 +-
+ docs/verdicts/ENT-3b/BUILDER_RECEIPT.md           | 112 +++++++++++++-
+ packages/core/src/index.ts                        | Unmerged
+ packages/core/src/index.ts                        |   1 +
+ packages/core/src/watchdog.ts                     | Unmerged
+ packages/core/src/watchdog.ts                     |   2 +
+ packages/db/MIGRATIONS.md                         | Unmerged
+ packages/db/MIGRATIONS.md                         |  19 +++
+ packages/db/src/migrate.ts                        | Unmerged
+ packages/db/src/migrate.ts                        |   1 +
+ 12 files changed, 387 insertions(+), 11 deletions(-)
+```
+
+The complete origin/main diff-stat and pre-resolution SHA-256 manifest are in the command log. These stats include existing branch work or incoming main changes, and do not label those as r3 edits.
