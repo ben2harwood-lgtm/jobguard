@@ -984,3 +984,11 @@ Adds exactly five routines in schema `app` and their EXECUTE grants to `jobguard
 
 Forward fix preferred. A confirmation object is two ordinary evidence rows, so nothing is ever deleted: to stop the feature, stop the v3 body in the application; the five routines can be replaced by a reviewed forward migration. Upgrade proof (`site-extra-evidence.integration.test.ts`, rule 9) snapshots existing rows by named columns, full column types and primary keys before this migration, applies it alone, then applies everything after it twice. The two database files ran against embedded PostgreSQL on the builder's Mac (receipt lists counts); reviewers re-run them.
 
+
+## 0147 — ENT-5 extra approval foundation
+
+Requires ENT-3b/3c/3d (0139–0141), and their merged interfaces before landing. Two new immutable containers: `extra_approval_revision_binding`, `extra_evidence_pack`. Runtime SELECT only; no callable business writer, backfill, approval/state transition or external effect. Two insert guards verify same-extra immutable source/positive price/predecessor structure and extra subject. Existing source prices, baseline, hashes, origin and recovery packs remain unchanged.
+
+Upgrade proof: `test/extra-approval-upgrade.integration.test.ts`; install predecessors, populate actual source/pack rows, apply 0147 alone, compare canonical named-column text and full types by original primary keys, then later migrations and runner twice. Rolled-back microsecond/type controls fail; later nullable columns, replaced functions and inserted rows pass. Builder database runs NOT RUN: sandbox cannot start PostgreSQL. Coordinator must add the two catalogue rows to the merged tenancy test; builder cannot change that pinned list.
+
+Old code ignores the added tables. New internal assembly/binding readers fail closed with a typed migration-required error when schema is missing. No rollout enables held commands or client access. Forward fix only through a later reviewed migration; never delete commercial/audit history. No data migration or rollback deletion. Complete approval, identity, timing, scheduling and sending behavior stays HELD (contract documents list Q01–Q16).
