@@ -1,4 +1,4 @@
-import { WatchdogError, beginStoredCommand, requestHashFor, requireLiveJob, storeCommandResult, type WatchdogCommandType } from "./watchdog.js";
+import { WatchdogError, beginStoredCommand, requestHashFor, requireLiveJob, storeCommandResult } from "./watchdog.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
@@ -18,7 +18,7 @@ export class SupplierMatchRepository {
   ) {
     return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
-      const requestHash = hash({ jobId, ...input }), { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.create", requestHash: requestHashFor("supplier_match.create", jobId, request) });
+      const { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.create", requestHash: requestHashFor("supplier_match.create", jobId, request) });
       if (began.replay) return began.result;
       // A creation written before results were stored: its revision row carries the command id and its audit event the hash of this very request.
       // It replays as the match stood at that revision, on its own job and for its own request only.
@@ -45,7 +45,7 @@ export class SupplierMatchRepository {
           [context.tenantId, jobId, proposal.digest],
         )
       ).rows[0];
-      if (existing) return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.create", requestHash);
+      if (existing) return this.finish(db, context.tenantId, jobId, input.commandId, { proposalId: existing.id });
       const payloadHash = hash(proposal);
       const audits = await appendAuditBatch(db, [
         {id:randomUUID(),version:"audit.v1",actorRef:"member:synthetic-builder",eventType:"supplier_match.proposed",subjectType:"job",subjectRef:jobId,payload:{references:{proposalId:proposal.id},hashes:{payloadHash},classifications:{action:"operational"}}},
@@ -82,14 +82,14 @@ export class SupplierMatchRepository {
             orderVersionId: sources.order.versionId,
             receiptVersionIds: sources.receipts.map((x: any) => x.versionId),
             billVersionId: sources.bill.versionId,
-            allocations: sources.receipts.map((x: any) => ({
+            allocations: sources.receipts.filter((x: any) => /[1-9]/u.test(x.quantity)).map((x: any) => ({
               receiptVersionId: x.versionId,
               quantity: x.quantity,
             })),
           },
           audits[1]!.id,
         );
-      return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.create", requestHash);
+      return this.finish(db, context.tenantId, jobId, input.commandId, { proposalId: proposal.id });
     });
   }
   async correct(
@@ -99,7 +99,7 @@ export class SupplierMatchRepository {
   ) {
     return withTenant(this.pool, context, async (db) => {await requireLiveJob(db,jobId);
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`${context.tenantId}:${jobId}:supplier-match`]);
-      const requestHash = hash({ jobId, ...input }), { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.correct", requestHash: requestHashFor("supplier_match.correct", jobId, request) });
+      const { commandId: _ignored, ...request } = input, began = await beginStoredCommand<any>(db, { tenantId: context.tenantId, commandId: input.commandId, jobId, kind: "supplier_match.correct", requestHash: requestHashFor("supplier_match.correct", jobId, request) });
       if (began.replay) return began.result;
       if (
         new Set(input.allocations.map((x) => x.receiptVersionId)).size !==
@@ -142,7 +142,8 @@ export class SupplierMatchRepository {
         input.billVersionId !== proposal.bill_revision_id ||
         input.receiptVersionIds.some(
           (x: string) => !proposal.receipt_version_ids.includes(x),
-        )
+        ) ||
+        input.allocations.some(x => !input.receiptVersionIds.includes(x.receiptVersionId))
       )
         throw new Error("MATCH_SOURCE_VERSION_CONFLICT");
       for (const allocation of input.allocations) {
@@ -184,7 +185,7 @@ export class SupplierMatchRepository {
         input,
         audit.id,
       );
-      return this.finish(db, context.tenantId, jobId, input.commandId, "supplier_match.correct", requestHash);
+      return this.finish(db, context.tenantId, jobId, input.commandId, { proposalId: input.proposalId, revision: input.expectedRevision + 1 });
     });
   }
   async view(context: VerifiedTenantContext, jobId: string) {
@@ -193,18 +194,21 @@ export class SupplierMatchRepository {
     );
   }
   private async sources(db: any, tenantId: string, jobId: string) {
+    // Receipts carry the immutable order identity. Revision numbers from different
+    // orders are not comparable. Multiple receipt orders require explicit review.
+    const receipts = (await db.query(
+      `SELECT id,order_draft_id,revision,accepted_quantity::text quantity_decimal,unit FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision,id`,
+      [tenantId, jobId],
+    )).rows;
+    if (!receipts.length) throw new Error("CONFIRMED_MATCH_SOURCES_REQUIRED");
+    const orderIds = new Set(receipts.map((r: any) => r.order_draft_id));
+    if (orderIds.size !== 1) throw new Error("MATCH_SOURCE_VERSION_CONFLICT");
     const order = (
         await db.query(
-          `SELECT r.id version_id,r.revision,r.quantity_decimal,d.id FROM app.purchase_order_revision r JOIN app.purchase_order_draft d ON(d.tenant_id,d.job_id,d.id)=(r.tenant_id,r.job_id,r.draft_id) WHERE r.tenant_id=$1 AND r.job_id=$2 ORDER BY r.revision DESC LIMIT 1`,
-          [tenantId, jobId],
+          `SELECT r.id version_id,r.revision,r.quantity_decimal,d.id FROM app.purchase_order_revision r JOIN app.purchase_order_draft d ON(d.tenant_id,d.job_id,d.id)=(r.tenant_id,r.job_id,r.draft_id) WHERE r.tenant_id=$1 AND r.job_id=$2 AND d.id=$3 ORDER BY r.revision DESC LIMIT 1`,
+          [tenantId, jobId, receipts[0].order_draft_id],
         )
       ).rows[0],
-      receipts = (
-        await db.query(
-          `SELECT id,revision,accepted_quantity::text quantity_decimal,unit FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision`,
-          [tenantId, jobId],
-        )
-      ).rows,
       bill = (
         await db.query(
           `SELECT r.id version_id,r.revision,r.quantity_decimal::text,d.id FROM app.supplier_fact_revision r JOIN app.supplier_document d ON(d.tenant_id,d.job_id,d.id)=(r.tenant_id,r.job_id,r.document_id) WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.document_type='invoice' ORDER BY r.created_at DESC LIMIT 1`,
@@ -274,12 +278,12 @@ export class SupplierMatchRepository {
       );
   }
   /** The command's first result is stored with it, in the same transaction, so a replay (including of a no-op) returns exactly this. */
-  private async finish(db: any, tenantId: string, jobId: string, commandId: string, kind: WatchdogCommandType, requestHash: string) {
-    const result = await this.viewIn(db.$client, tenantId, jobId);
+  private async finish(db: any, tenantId: string, jobId: string, commandId: string, at: { proposalId: string; revision?: number }) {
+    const result = await this.viewIn(db.$client, tenantId, jobId, at);
     await storeCommandResult(db, { tenantId, commandId, result });
     return result;
   }
-  private async viewIn(db: any, tenantId: string, jobId: string, at?: { proposalId: string; revision: number }) {
+  private async viewIn(db: any, tenantId: string, jobId: string, at?: { proposalId: string; revision?: number }) {
     const row = (
       await db.query(
         `SELECT p.*,r.id revision_id,r.revision,(SELECT quantity_decimal::text FROM app.purchase_order_revision o WHERE o.tenant_id=p.tenant_id AND o.id=p.order_revision_id) ordered,(SELECT quantity_decimal::text FROM app.supplier_fact_revision b WHERE b.tenant_id=p.tenant_id AND b.id=p.bill_revision_id) billed,COALESCE((SELECT sum(a.quantity_decimal)::text FROM app.supplier_match_allocation a WHERE a.tenant_id=p.tenant_id AND a.match_revision_id=r.id),'0') received FROM app.supplier_match_proposal p LEFT JOIN LATERAL(SELECT * FROM app.supplier_match_revision x WHERE x.tenant_id=p.tenant_id AND x.proposal_id=p.id AND ($4::int IS NULL OR x.revision<=$4::int) ORDER BY x.revision DESC LIMIT 1)r ON true WHERE p.tenant_id=$1 AND p.job_id=$2 AND ($3::uuid IS NULL OR p.id=$3::uuid) ORDER BY p.created_at DESC LIMIT 1`,
