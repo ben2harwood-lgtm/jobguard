@@ -133,3 +133,73 @@ Shell commands below are inspection, controls or stopped diagnostics; no browser
 - Final Python receipt correction and command-audit update, followed by `git diff --check; git status --short; git rev-parse HEAD`: exit 0.
 
 Final head SHA remains `269874640468a6e1dfdfed63edd4ce187d1d9dbb`; dispatcher commit and exact-head CI/verdict are pending.
+
+## Repair round r1 — 13 October 2026
+
+Built by Codex; dispatched 13 Oct 2026. The requested Sonnet attribution is inaccurate for this session. Earlier sections above are the historical original-build receipt; this section records r1 against issued and final HEAD `a413d9eb8bd8b2e8c541c60e4ce7d465ee6fd206`, PR #178, branch `codex/sandbox/sv-3-barrier`. No git write command, package installation or download command was issued. Dispatcher commits; intended commit text is `/private/tmp/jg-msg-sv-3-barrier.txt`.
+
+Scope: only the two timer-wrapper casts in `apps/web/e2e/SV-3.spec.ts` and this required receipt. Cast each browser wrapper to its respective `typeof window` timer function to accommodate the combined DOM/Node overloads. The functions, arguments, numeric timer IDs, stop/drain behavior, every assertion and the exact SV-3-ABORT things-to-check exception remain unchanged. No new test or assertion is needed for this type-only repair; the existing compiler check is the reproduction gate.
+
+### Reproduction and STOP
+
+First attempted command, before editing:
+
+`export PATH="$HOME/Library/pnpm/bin:$PATH"; pnpm --filter @jobguard/web typecheck`
+
+Exit **1**, before the compiler ran; zero checks/tests executed. Initial output was a warning that the package.json pnpm field is no longer read. Final refusal text:
+
+```text
+[ERROR] Refusing to run pnpm@10.28.1: its npm registry signature could not be verified (@pnpm/exe@10.28.1: fetch failed; @pnpm/macos-arm64@10.28.1: fetch failed; pnpm@10.28.1: fetch failed). The bytes selected by this project's lockfile/registry do not match a published, signed pnpm release.
+This can indicate a tampered lockfile or a malicious/unreachable registry. Set `pmOnFail` to `ignore` to skip the version switch if this is unexpected.
+```
+
+STOP: pinned pnpm launcher at `/Users/benharwood/Library/pnpm/bin/pnpm`; project pin is `package.json:5`. No retry, ignore setting, alternate launcher or direct compiler/build workaround was used after this safety refusal, per the dispatch addendum. The CI TS2322 report was supplied by the dispatcher; it was **not reproduced locally** because this command never reached TypeScript. This is a launcher refusal, not an automatic approval-review rejection.
+
+NOT RUN after that refusal: `pnpm exec turbo run typecheck --force`, `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force`, `pnpm build --concurrency=2 --force`, `pnpm lint:lanes`, `pnpm openapi:check`, and the root lint wrapper. The requested final forced runs remain for the dispatcher/CI; no forced run or cache-hit success is claimed here.
+
+`apps/web/e2e/SV-3.spec.ts`, mobile-360 and desktop: **NOT RUN (cannot start a browser here; CI)**. No browser test ran in the reported CI run 38442132818. Database tests, migration tests, unit suites and eval: NOT RUN, inapplicable to this type-only change; no database or AI change. No migration and **no new GRANT**; standard F remains unchanged, with no application-login write grant, route or authorization change. Node observed v24.17.0; repository pin .nvmrc 24.15.0; dependencies were supplied and no clean pinned installation was performed. Resource checks: 68% memory free, 79 GB disk available, above the required floors.
+
+### Deterministic inspection and scope evidence
+
+`git diff --check`: exit 0. A temporary Python inspection removed only the two casts and their grouping from the working spec and compared it with `git show HEAD:apps/web/e2e/SV-3.spec.ts`: exact equality, exit 0. This proves source preservation of every assertion and the SV-3-ABORT exception; it is not a compiler or browser run and introduces no permanent file-pinning test.
+
+SHA-256, issued HEAD → working tree:
+
+- Spec: `82fa29cacf47e9a8c906263e9632b7bacbbf10f1768647456f77679da01d7cde` → `03232f9c2e93cf42f8cc084a05e20963f0435f06e7d5c6b9733c8eca3ba53592`.
+- `config/agent-lane-assignments.json`: unchanged, `292a8ec6ee596010e98934d179c59c7b940ba6c4db49f7ca70922927913bfb7d`.
+- `apps/web/e2e/helpers/capture-journey.ts`: unchanged, `4e079f110fba2f829797c7920458005ccfce055eac91cd88cbf19013c5424199`.
+
+Before the receipt append, `git diff --stat` reported exactly:
+
+```text
+ apps/web/e2e/SV-3.spec.ts | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+```
+
+The final working-tree scope includes that spec and this receipt only; the intended commit-message file is outside the repository. No product file or lane registration changed.
+
+### Command audit for r1
+
+Shell-call exit codes below are the aggregate codes; nonzero subcommand diagnostics are stated separately. All session polls completed with the reproduction command's final exit 1; they issued no further command. Read-only clock calls and short sleeps supplied no validation evidence.
+
+- `pwd; git status --short; git rev-parse HEAD; rg --files -g 'AGENTS.md' -g 'BUILD_PLAN.md' -g '*SV-3*' -g 'package.json' -g '*RECEIPT*' -g '*things*'; memory_pressure | tail -1; df -g /System/Volumes/Data`: exit 0; initial working tree clean.
+- `cat AGENTS.md; rg -n 'SV-3|things-to-check|single.view|Single.view' BUILD_PLAN.md; cat apps/web/e2e/SV-3.spec.ts docs/verdicts/SV-3-BARRIER/BUILDER_RECEIPT.md package.json apps/web/package.json; cat /Users/benharwood/.local/share/full-steam/handoffs/jobguard-task.md`: exit 0; output truncated, followed by focused reads.
+- `sed -n '240,340p' AGENTS.md; rg -n 'SV-3|things-to-check' BUILD_PLAN.md; sed -n '1,90p' apps/web/e2e/SV-3.spec.ts; sed -n '1,64p' docs/verdicts/SV-3-BARRIER/BUILDER_RECEIPT.md; rg -n 'SV-3-ABORT|SV-3-BARRIER' tools/agent-lanes.json; cat .nvmrc; node --version`: exit 0; rg exited 2 because the guessed registry path does not exist.
+- Mandatory PATH prefix plus `pnpm --filter @jobguard/web typecheck`: exit 1; launcher refusal above, 0 compiler runs.
+- `sed -n '175,240p' AGENTS.md; sed -n '1807,1845p' BUILD_PLAN.md; rg --files tools | rg 'lane'; sed -n '160,185p' apps/web/e2e/SV-3.spec.ts; wc -l AGENTS.md docs/verdicts/SV-3-BARRIER/BUILDER_RECEIPT.md; git branch --show-current`: exit 0.
+- `rg --files .agents .codex | head -30; sed -n '1,90p' tools/agent-lane-boundary-lint.mjs; shasum -a 256 apps/web/e2e/SV-3.spec.ts`: exit 0; rg reported absent .agents/.codex directories.
+- `rg -n 'SV-3-BARRIER|SV-3-ABORT' .github/agent-lanes.json; cat /Users/benharwood/Library/pnpm/bin/pnpm; ls /private/tmp/jg-msg-sv-3-barrier.txt`: exit 0; rg exited 2 for another guessed registry path; reading the launcher made no retry or change.
+- `rg -n 'json|lane' tools/agent-lane-boundary-lint.mjs | tail -15; sed -n '1,15p' /private/tmp/jg-msg-sv-3-barrier.txt; sed -n '65,135p' docs/verdicts/SV-3-BARRIER/BUILDER_RECEIPT.md`: exit 0.
+- `sed -n '63,106p' BUILD_PLAN.md; sed -n '178,215p' tools/agent-lane-boundary-lint.mjs; rg -n 'SV-3-BARRIER|SV-3-ABORT' config/agent-lane-assignments.json; cat apps/web/tsconfig.json; sed -n '1,80p' tools/lint.mjs`: exit 0; actual lane registration confirmed.
+- `sed -n '106,143p' BUILD_PLAN.md; sed -n '1,50p' turbo.json; ls -l apps/web/node_modules/.bin/tsc node_modules/.bin/turbo; memory_pressure | tail -1; df -g /System/Volumes/Data`: exit 0; 68% free memory and 79 GB disk.
+- `apply_patch` for two timer casts: succeeded.
+- `git diff --check; git diff -- apps/web/e2e/SV-3.spec.ts; git diff --stat; git status --short; git rev-parse HEAD; shasum -a 256 apps/web/e2e/SV-3.spec.ts config/agent-lane-assignments.json apps/web/e2e/helpers/capture-journey.ts`: exit 0; one spec changed, 3 lines replaced.
+- Inline `python3` source-preservation and SHA-256 inspection using only read-only `git show`: exit 0; 3 equality checks passed (normalized spec, unchanged lane registry, unchanged helper).
+- `apply_patch` appending this r1 receipt and updating the authorized commit-message path: succeeded.
+- Final `git diff --check; git diff --stat; git status --short; git rev-parse HEAD; shasum -a 256 apps/web/e2e/SV-3.spec.ts /private/tmp/jg-msg-sv-3-barrier.txt`: exit 0; final HEAD unchanged and two authorized repository files modified.
+
+### Self-review — builder inspection only
+
+The only executable-source edits are parentheses and erased TypeScript assertions around the existing timer wrappers. All statements and assertions remain identical after removal of those annotations. No behavioral fix, changed exception, weakened check, new grant, migration, operational alert or policy was introduced. Compiler validity and browser behavior remain unverified here. The dispatcher needs the verified pinned launcher and the three forced checks; the independent reviewer needs the dispatcher-created exact commit. This receipt is neither an independent verdict nor acceptance.
+
+Final head SHA: `a413d9eb8bd8b2e8c541c60e4ce7d465ee6fd206`; no builder commit. STOP remains the pnpm signature-verification refusal, not a code-policy question.

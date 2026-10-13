@@ -8,7 +8,7 @@ const T="11111111-1111-4111-8111-111111111111";
 function installIntervalBarrier():void{
  const intervals=new Set<number>();let stopped=false;
  const schedule=window.setInterval.bind(window),clear=window.clearInterval.bind(window);
- window.setInterval=(handler:TimerHandler,timeout?:number,...args:unknown[]):number=>{
+ window.setInterval=((handler:TimerHandler,timeout?:number,...args:unknown[]):number=>{
   if(stopped)return 0;
   const id=schedule(()=>{
    // A callback already queued when we stop must not start another request.
@@ -16,8 +16,8 @@ function installIntervalBarrier():void{
    if(typeof handler==='function')handler.apply(window,args);else window.eval(handler);
   },timeout);
   intervals.add(id);return id;
- };
- window.clearInterval=(id?:number):void=>{if(id!==undefined)intervals.delete(id);clear(id)};
+ }) as typeof window.setInterval;
+ window.clearInterval=((id?:number):void=>{if(id!==undefined)intervals.delete(id);clear(id)}) as typeof window.clearInterval;
  Object.assign(window,{__sv3StopIntervals:()=>{
   stopped=true;for(const id of intervals)clear(id);intervals.clear();
  }});
