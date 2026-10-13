@@ -1,4 +1,4 @@
-Built by Codex; dispatched 13 Oct 2026. Codex was available; the dispatch addendum's requested Claude author line is factually inapplicable.
+Built by Codex; repair r2 dispatched 13 Oct 2026. Codex was available; the dispatch addendum's requested Claude author line is factually inapplicable.
 
 # SV5PRE builder receipt — partial construction, RED review owed
 
@@ -7,6 +7,187 @@ Repair r1 HEAD: `bfae9dfd38a6671d44e3db7f6f41ee32da461398`; original issued base
 Core, migration/persistence, guarded invoice adapter and worker registration constructed. Fresh legacy issue is fail-closed. Some existing fixture premises require coordinator amendments beyond issued A-D; the exact STOP list below remains technical-acceptance blocking. UI, substantive detector/reconciliation, catches/dispositions, fees and real-data release remain held. SV5-32 is incomplete.
 
 Validation results, grant inventory, hashes, exact amendments and command log are appended after controlled end checks. PostgreSQL, browser and HTTP socket suites are NOT RUN (sandbox cannot start PostgreSQL or bind sockets). Existing aggregate suites belong to dispatcher sequential batching and were not run here. Dependencies were already installed; no install/download command was used.
+
+## Repair r2 — coordinator-approved amendments, dispatcher 4, 13 October 2026
+
+Active repair base/final local HEAD: `ffd359de5875aed58feb9b3b890b1ccad93da3ae` (r1 already committed by dispatcher). Origin/main remains `6659fb58791ec22588948f005b2bd4f6b299fa48`; original issued base remains `2350b1a718b76aabdedd1782f02e92f516914246`. This section supersedes the historical STOP/validation lists below for r2 only. Dispatcher must commit ALL r2 changes as ONE separate commit labelled **coordinator-approved amendments**. Intended message: `/private/tmp/jg-msg-sv5pre.txt`. No git write command, installation, download or independent agent review was performed. All r2 changes are to existing merged files and this receipt; r1's migration and SV5PRE-owned implementation/fixtures are unchanged. No new migration or production GRANT; the original six GRANT statements and Standard F inventory below remain in force.
+
+Authority supplied verbatim by the dispatcher in the active r2 instruction:
+
+> (a) apps/api/src/shadow-detection.worker.test.ts:77: the expected task list gains "final_check" as a new LAST entry; nothing else on that line or in that file changes. Approved as an additive expectation following the approved worker.ts insertion. The isolation assertions at :86/:116 and the pinned list at :89 are NOT touched.
+>
+> (b) Premise-adding set-up under my groups A and D: UIWIRE-10:5, UIWIRE-11:4, UIWIRE-12:26 (freshInvoice), practice-facts:63, practice-feed:64, shadow-isolation.application.test.ts:358-365, apps/web/e2e/SV-4.spec.ts:112, and the helpers M4-3-S.spec.ts:57, helpers/customer-invoice-journey.ts:68, recovery-allocation-journey.ts:67, recovery-sources.ts:55. The builder adds ONLY what establishes accepted terms, the lock and checked authoritative completion (or the run that a completed fact now needs) BEFORE the existing call; the existing call and every assertion after it stay byte-for-byte; nothing UI-facing is asserted differently. Any line that cannot be done that way = STOP on that line only.
+>
+> (c) apps/api/src/final-account-lock.application.ts:17 (repository built without the session digest, so the lock-bound invoice route refuses practice-session jobs): add that ONE file to the SV5PRE lane (lane-entry edit in config/agent-lane-assignments.json via you) for a digest pass-through only, with a test that a practice-session job can issue through the lock-bound route and that a wrong/absent digest is still refused. Both reviewers look at it specifically (it is access-path code).
+>
+> STANDING RULE: inside an issued order the builder MAY (i) add a new row/entry to an existing merged catalogue or list for a NEW thing the order creates, and (ii) add premise-establishing set-up before an unchanged call where a new, approved rule requires it; both always listed before/after in the receipt and confirmed by the reviewers. The builder may NEVER change, remove or loosen an existing expected value, refusal, count, pinned name or fingerprint, and never touches context-boundary.test.ts or its pinned lists: those still stop and come to the coordinator.
+
+### Every r2 amendment: before / after
+
+Paths and current lines are bound to the r2 working tree. Original order numbers can differ after additive imports; the invoice in shadow-isolation is actually at 365, inside the authorized 358–365 region. Existing assertion blocks are reconstructed byte-for-byte by a TEMPORARY read-only comparison script, not a permanent pinning test.
+
+| File:line | Class | Before | After |
+| --- | --- | --- | --- |
+| `apps/api/src/shadow-detection.worker.test.ts:77` | STRENGTHENED | Exactly `discover_outbox`, `execute_outbox`, `detect_shadow_evidence` | Append `final_check` LAST. Removing that one entry reconstructs the WHOLE original file. Assertions at 86/116 and pinned list at 89 are unchanged. |
+| `packages/db/test/UIWIRE-10.integration.test.ts:1,6` (issued :5) | SET-UP-ONLY | Aggregate-only accepted account, no baseline line/lock/check before `repository.issue(context,input)` | Import existing checked fixture; add its missing confirmed baseline scope identity/line with the EXISTING 110000-pence net and quote identity (needed to establish a valid lock); establish dispositions, accepted terms, lock and authoritative empty completion BEFORE the exact same call. Invoice number, 132000 total/balance, artifact, replay, one invoice/outbox, mutation and recipient refusals are unchanged. |
+| `packages/db/test/UIWIRE-11.integration.test.ts:1,5` (issued :4) | SET-UP-ONLY | Aggregate-only starting invoice | Same baseline-lock prerequisites before the exact `invoiceId=(await repo.issue(...)).id` call. Every credit, signed amount/hash/balance, concurrency, wrong-job and no-fee assertion is unchanged. |
+| `packages/db/test/UIWIRE-12.integration.test.ts:1,27` (issued freshInvoice :26) | SET-UP-ONLY | Same aggregate-only fixture used at schema 0029 and head | Explicit installed-table condition; historical schema-0029 calls remain historical. At head ONLY, add the missing baseline scope/line, same original quote and 110000 net, then terms/dispositions/lock/checked empty completion. Existing issue call and all later receipt/reversal assertions remain exact. |
+| `apps/web/e2e/helpers/customer-invoice-journey.ts:1,71,81` (issued :68) | SET-UP-ONLY | Verified proof and assembled account, then legacy issue | Imports, one `prepareInvoiceFinalCheck` call before unchanged issue, and setup-only helper declarations. Accept terms, dispose existing baseline items, lock exact assembled revision through authenticated API, inventory real sources through restricted shadow INSERT, commit inventory BEFORE separate admin source read, then record both simulated processing stages/classifications/result and publish through checked triggers. No UI assertion changes; simulated setup is not installed SV-5 orchestration. |
+| `apps/web/e2e/M4-3-S.spec.ts:1,58` (issued :57) | SET-UP-ONLY | Assembled sources then invoice issue | Import and call the same prerequisite helper immediately before unchanged issue; every evidence-pack/UI assertion remains exact. |
+| `apps/web/e2e/helpers/recovery-allocation-journey.ts:1,68` (issued :67) | SET-UP-ONLY | Verified evidence and assembled account then issue | Same prerequisite import/call; all invoice money, recovery/allocation and UI assertions remain exact. |
+| `apps/web/e2e/helpers/recovery-sources.ts:1,56` (issued :55) | SET-UP-ONLY | Verified sources/account then issue | Same prerequisite import/call; every later source and UI assertion remains exact. |
+| `apps/api/src/final-account-lock.application.ts:3,17,41` | STRENGTHENED | Unscoped repository used for lock-bound issue | Retain pool in inert constructor; import existing `practiceMaterialPool`; only after `access.job` and schema parsing construct an invoice repository with the AUTHENTICATED `auth.digest`. No digest from request payload, no authority reconstruction or SQL guard relaxation. Both RED reviewers must specifically inspect this access-path row. |
+| `apps/api/src/final-account-lock.application.test.ts:44` | STRENGTHENED | No proof of digest reaching SQL after authority | Append `PRE-Q4-05 r2 lock-bound issue carries only the authenticated session digest after access`; executes existing repository against a simulated checked routine, proves access/config/issue order and exact digest. All earlier tests/assertions unchanged. |
+| `packages/db/test/final-account-lock-invoice.integration.test.ts:114` | STRENGTHENED | No real-PostgreSQL application/session regression | Append `PRE-Q4-05 r2 practice-session job issues through the lock-bound application; wrong and absent digests remain refused`. Actual restricted runtime login, real persisted session, terms/lock/checked completion; wrong/absent digest refused before AND after issuance/replay, no invoice added on refusal, exact 4032000 total and one certificate-bound invoice. NOT RUN here. All existing F7/refusal/race assertions unchanged. |
+| `config/agent-lane-assignments.json:2` | STRENGTHENED | SV5PRE allow list lacked the digest application and two merged unit files | Coordinator-owned additions: `apps/api/src/final-account-lock.application.ts`, `apps/api/src/final-account-lock.application.test.ts`, `apps/api/src/shadow-detection.worker.test.ts`, `apps/web/e2e/SV-4.spec.ts` (the latter remains stopped/untouched). All touched DB/browser tests were already listed. Only sv5pre note/allow changes; every other lane reconstructs identically. |
+| `docs/verdicts/SV5PRE/BUILDER_RECEIPT.md:1` and this section | STRENGTHENED | Historical r1 evidence/STOP list | Truthful r2 authorship, authority, amendment table, tests/commands, unchanged-source proof, exact remaining STOPs, reviewer finding disposition, hashes and final local HEAD. Historical evidence retained, explicitly superseded where r2 adds setup. |
+
+Named assertion preservation (for both reviewers to confirm row by row):
+
+| Old assertion | New assertion | Why equal or stronger |
+| --- | --- | --- |
+| Worker task names/order | Same three entries in same order, plus named `final_check` last | Approved new registration only; whole original file reconstructs after removal of the one new entry. |
+| UIWIRE-10 invoice money, number, replay/effect counts and refusals | SAME exact assertions | Only setup before the existing issue; no business expected value replaced. |
+| UIWIRE-11 credit money/hash/balance, race count, wrong-job refusal, zero fees | SAME exact assertions | Checked lock/check premises establish eligibility; no credit assertions change. |
+| UIWIRE-12 historical receipt/reversal replay, cross-invoice refusal and money exclusion | SAME exact assertions | Historical 0029 fixture is untouched; head gains valid lock premises only. |
+| Four browser helpers' UI/money/source assertions | SAME exact assertions | All four original files reconstruct after removing prerequisite additions. |
+| Existing F7 4032000/96000, qualified 23503 refusals, access refusals and race outcomes | SAME exact assertions | Only a NEW practice-session regression is appended to the merged suite. |
+| Existing final-account application tests including unowned/unauthenticated/production refusal | SAME exact assertions | New digest test appended; constructor remains inert. |
+
+### STOP lines: cannot be repaired by only adding allowed premises before an unchanged call
+
+All four affected files below remain byte-identical to r1 HEAD. No bypass, session impersonation, trigger exemption, altered expected code, relaxed source validation or changed original call was introduced.
+
+1. **STOP `packages/db/test/practice-facts.integration.test.ts:63`** and **STOP `packages/db/test/practice-feed.integration.test.ts:64`**. Exact BEFORE (both):
+   `const issued = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), recipient: "practice@example.invalid", issuedOn: "2026-09-19" });`
+   Required AFTER also needs the existing repository construction (`practice-facts:48`, `practice-feed:49`) changed from `new PracticeInvoiceRepository(runtime)` to `new PracticeInvoiceRepository(practiceMaterialPool(runtime, authenticatedDigest))`, AND missing baseline/terms/lock/checked completion. The job is owned by a persisted session; setup alone cannot make an unscoped invoice call supply its authenticated digest. That repository-construction substitution is beyond ruling (b), so STOP on these lines, not the SQL guard.
+2. **STOP `apps/web/e2e/SV-4.spec.ts:112`**. Exact BEFORE:
+   `await shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,other.jobId,randomUUID(),foreign.id,foreign.cutoff]);`
+   Required AFTER: the same checked completion fact MUST include `run_id` and its actual checked manifest/source/result binding. Creating a run beforehand cannot supply the omitted column in this unchanged SQL. Requires coordinator authorization to replace this positive setup call with checked publication (or add the `run_id` column/parameter); its existing wrong-job/cutoff `23503` assertions at 111 and every later own-job blocked assertion would remain exact. No edit made.
+3. **STOP `apps/api/src/shadow-isolation.application.test.ts:365`** (authorized region :358–365). Exact BEFORE:
+   `await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:"a".repeat(64),recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));`
+   Proposed AFTER was worker-side checked publication before this UNCHANGED call. But seeded `signalUpload` at 300 is still pending, with no finalized upload object-version binding; row 301 inserts an original object independently. Adding attempts or a run does not satisfy checked verified-input predicates. Further, final public-row comparison at 393 includes all new `final_check_*` tables; a run classifying 0 versus 25 hidden signals produces different proof rows. Completion setup alone cannot preserve that original byte comparison. Requires a coordinator ruling for the unfinished fixture at 300–301 and a named equal-or-stronger public-versus-hidden proof comparison at 393, retaining every builder trace assertion. No row or comparison changed, no raw completion fabricated.
+
+Additional Sol holds outside this merged-amendment-only round (all corresponding SV5PRE-owned files unchanged):
+
+- `packages/db/src/guarded-practice-invoice-repository.ts:14`: BEFORE inheritance from `PracticeInvoiceRepository`; required AFTER composition with equivalent issue projections, preserving `watchdog-registry.test.ts:183`. This implementation repair needs its own authorization/round. Its :16 constructor also calls `practiceMaterialPool` before asynchronous application access; required AFTER defer scope initialization until after authenticated access, preserving practice-session production/pilot refusals. Neither is closed by the narrow lock-bound digest amendment.
+- `packages/db/src/final-check-completion-repository.ts:50` versus untouched `apps/api/src/shadow-detection.worker.test.ts:89,118`: BEFORE worker repository reads/writes shadow state outside pinned worker catalogue; required AFTER an expressly approved worker capability boundary preserving request-side isolation. Ruling (a) only adds the task expectation; pinned catalogue is NOT touched. Actual worker-suite isolation failure recorded below.
+- `packages/db/test/sv5pre-fixtures.ts:71–72`: BEFORE manifest inserted in uncommitted shadow transaction, sources read on separate admin connection; required AFTER commit inventory before admin source read, then resume restricted processing/publication. This OWN fixture remains unchanged per r2 scope. Browser setup uses its own authorized setup-only helper with that correct transaction sequencing, but does not close Sol's finding about the SV5PRE-owned fixture.
+
+### Prior independent findings: r1 / r2 disposition (source changes are not acceptance)
+
+Read both complete reports: `/Users/benharwood/.local/share/full-steam/jg-runs/sv5pre-opus-bfae9df.md` and latest `/Users/benharwood/.local/share/full-steam/jg-runs/sv5pre-solcheck-20261013T211754.md`. Both remain independent **REPAIR** verdicts for bfae9df; no r1/r2 independent verdict or technical acceptance is claimed.
+
+| Finding | r1 | r2 |
+| --- | --- | --- |
+| Opus blocking 1, evidence-time mutation | SQL/own regression repair committed ffd359d; DB execution/review owed | Migration and cited merged evidence tests unchanged; r1 guarantees preserved |
+| Opus blocking 2, historical test timeout | New beforeAll historical setup committed ffd359d; old assertion/timeout unchanged | Existing hooks and interim assertion untouched |
+| Opus blocking 3 / Sol P1 task expectation | Held | Exact last-entry amendment applied; registration expectation now passes, pinned isolation failure remains |
+| Opus blocking 3 / Sol P1 fixture premises | Held | UIWIRE-10/11/12 and four P2 helpers repaired by setup only; practice facts/feed, SV-4:112 and shadow-isolation:365 STOP as detailed above |
+| Opus blocking 4 / Sol P1 lock-bound session route | Held | Authenticated digest pass-through; unit regression passes, PostgreSQL success/refusal/replay proof added, NOT RUN |
+| Opus blocking 5, original commit shape | Dispatcher-owned | r2 explicitly prepared as ONE separate coordinator-approved amendments commit. Existing bfae9df history was not rewritten; any historical split remains dispatcher-owned |
+| Sol P1 guarded inheritance / pinned shadow catalogue | Not in r1 scope | OPEN; no implementation/pinned-list edit authorized in this round |
+| Sol P1 non-empty OWN fixture visibility | Not in r1 scope | OPEN in sv5pre-fixtures; correct committed-inventory setup added only in merged browser helper |
+| Sol P2 constructor refusal timing | Not in r1 scope | OPEN in guarded-practice repository; lock-bound amendment is inert until after access |
+| Sol P2 missing authority/execution evidence | Held | Dispatcher r2 authority reproduced above; DB/browser/full-suite evidence and both exact-commit verdicts still owed |
+
+Original reviewer LATER notes (including explicit deposit proof and own migration replay/depth/login observations) remain recorded in their reports; r2 neither deletes them nor treats them as passed.
+
+### r2 execution receipt
+
+Node `v24.17.0`, installed pinned pnpm `10.28.1`, Vitest `4.1.11`. No install/download. Every pnpm command below used `export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/jg-pnpm-sv5pre:$PATH"`. Each run was sequential; at most three named test files and two workers; no build/test overlap. All memory probes passed (71–74% free), all disk probes passed (51–52 GB available, >45 GB).
+
+Tests first: new digest unit test was appended BEFORE the application change; first run observed `Error: FORBIDDEN`, with 14 existing tests passing and 1 new test failing. Its real-PostgreSQL companion and premise test first runs are **NOT RUN (cannot start PostgreSQL here)**, not claimed observed failures.
+
+| Actual r2 command | Exit | Counts/result |
+| --- | ---: | --- |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/final-account-lock.application.test.ts` before code | 1 | 14 passed, 1 new test failed with FORBIDDEN |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/final-account-lock.application.test.ts src/sv5pre-worker-registration.test.ts src/shadow-detection.worker.test.ts` | 1 | 26 passed, 1 failed / 3 files. Task-list expectation passes; untouched structural isolation fails at :118 on final-check-completion-repository.ts |
+| `pnpm exec turbo run typecheck --force --concurrency=2` initial | 2 | 5/6 tasks completed, 0 cached; new unit mock inferred too narrow a row type |
+| Same forced typecheck after correcting ONLY new mock declaration | 0 | 7/7 tasks, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | sv5pre lane passed |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0 | Core purity 153 TS files; lane and money boundaries passed |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force --concurrency=2` | 0 | 7/7 tasks, 0 cached; final browser setup sequencing checked |
+| `pnpm build --concurrency=2 --force` | 0 | 7/7 tasks, 0 cached; 30 Next pages generated; final helper types checked |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/final-account-lock.application.test.ts src/sv5pre-worker-registration.test.ts src/auth/context-boundary.test.ts` | 0 | 165 passed / 3 files; final digest adapter, prerequisite registration, unchanged context boundaries |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/final-check-completion.test.ts` | 0 | 11 passed / 1 file |
+| `pnpm --filter @jobguard/api openapi:check` | 1 | STOP: tsx fails BEFORE generator with `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/58139.pipe`; no alternate route/escalation attempted |
+| `node --input-type=module` TypeScript transpileModule check on the four changed DB test files | 0 | 4 syntax checks, NOT DB execution or semantic test-file typecheck |
+| `python3 /private/tmp/jg-sv5pre-r2-preservation.py` | 1, 1, then 0, 0, 0 | First two attempts corrected verifier-only newline accounting and JSON lanes nesting; no compared assertion changed. Final reconstruction proves all 10 changed merged test/helper files and 13 untouched boundary/OWN files; every other lane unchanged |
+| `git diff --check` | 0 | No whitespace errors |
+
+Final forced typecheck and end hashes/stat are recorded below. Turbo emits sandbox cache IO warnings; all forced successful tasks executed with ZERO cache hits. Build retains existing workspace-root/CSS warnings. Syntax verification is separate from DB execution; mock adapter/registration tests are separate from actual application/Graphile/PostgreSQL execution.
+
+Other actual r2 commands: read-only `pwd`, `git status --short`, `git rev-parse HEAD`, `git rev-parse origin/main`, `git log -3 --oneline`, `git diff --stat`, `git diff --numstat`, `git diff --name-only`, targeted `git diff -- <paths>`, and Python read-only `git show HEAD:<path>` reconstruction; `ls -t` on reviewer reports, `ls -l /private/tmp/jg-pnpm-sv5pre/pnpm`, `cat`/`sed -n`/`rg -n`/`rg -l`/`nl -ba`/`head -c` on the named task, source, contract, test and config files; `memory_pressure | tail -1`, `df -g /System/Volumes/Data`, `node --version`. Successful reads/probes returned 0. Exploratory reads for absent `apps/api/src/practice-material-pool.ts`/`packages/db/src/practice-material-repository.ts`/`apps/api/vitest.config.ts` returned cat 1 / rg 2 (existing practice scope seam is packages/db/src/practice-session.ts); no permission alternative was used. Python source/test/lane/receipt/message edits returned 0. No Git command wrote.
+
+r2 **NOT RUN (cannot start PostgreSQL here)**: `packages/db/test/UIWIRE-10.integration.test.ts`, `UIWIRE-11.integration.test.ts`, `UIWIRE-12.integration.test.ts`, `final-account-lock-invoice.integration.test.ts` (including new actual-session route proof); `apps/api/src/shadow-isolation.application.test.ts` (also requires sockets/Next). The original/r1 NOT RUN manifest below remains mandatory, including own completion/access/legacy/upgrade files, evidence consumers, real worker/HTTP and all merged DB boundaries. No DB/browser process was attempted; dispatch explicitly states they cannot start in this sandbox.
+
+r2 **NOT RUN (cannot start a browser here)**: `apps/web/e2e/SV-4.spec.ts`, `M4-3-S.spec.ts`; helper consumers enumerated by actual `rg -l`: `CH-7.spec.ts`, `CH-2.spec.ts`, `CH-1.spec.ts`, `PRACTICE-FACTS-1.spec.ts`, `M4-7-S.spec.ts`, `M4-6-S.spec.ts`, `M4-8-S.spec.ts`, `UIWIRE-12.spec.ts`, `M4-5-S.spec.ts`. Dispatcher must cover both projects and reload assertions. No UI assertion or screen was edited.
+
+Aggregate `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, `pnpm test:e2e`, applicable eval and OpenAPI generation/comparison remain NOT RUN/dispatcher-owned. No provider/prompt/model changed. No new migration/backfill/GRANT, operational deployment or live approval in r2; previous forward-fix-only strategy and all release holds remain. SV5-32 and aggregate SV-5 acceptance remain incomplete.
+
+Self-review is SOURCE INSPECTION only: checked digest is obtained after current authority, within transaction-local pool scope; SQL and proof gates are unchanged; browser fixture inventory commits before admin read; originals reconstructed; no weakened existing expected value, refusal, count, pinned name or fingerprint. TEST-EXECUTED: 176 final targeted tests plus forced build/lint/typecheck; whole worker suite remains failing as above. INDEPENDENTLY VERIFIED: only prior bfae9df REPAIR reports. Both Opus and Sol still need to confirm EVERY amendment/preservation row, especially final-account-lock.application.ts, against the dispatcher’s exact r2 commit; a separate actor owns acceptance.
+
+### r2 final command results and payload binding
+
+Final `pnpm exec turbo run typecheck --force --concurrency=2` after final helper sequencing: **exit 0, 7/7 tasks, ZERO cache hits**. This additional run was required by the intervening helper transaction-sequencing change. End read-only `git status --short`, `git diff --check`, preservation verifier, message readback and disk probe all exited 0; disk remained 51 GB available. Python receipt/hash/footer edit exited 0. Final local HEAD remains **`ffd359de5875aed58feb9b3b890b1ccad93da3ae`**. No new commit SHA exists until the dispatcher commits this working tree; reviewers must bind their new verdicts to that actual commit.
+
+Complete r2 commit file manifest (all paths below, exactly one separate dispatcher commit):
+
+- `apps/api/src/final-account-lock.application.test.ts`
+- `apps/api/src/final-account-lock.application.ts`
+- `apps/api/src/shadow-detection.worker.test.ts`
+- `apps/web/e2e/M4-3-S.spec.ts`
+- `apps/web/e2e/helpers/customer-invoice-journey.ts`
+- `apps/web/e2e/helpers/recovery-allocation-journey.ts`
+- `apps/web/e2e/helpers/recovery-sources.ts`
+- `config/agent-lane-assignments.json`
+- `docs/verdicts/SV5PRE/BUILDER_RECEIPT.md`
+- `packages/db/test/UIWIRE-10.integration.test.ts`
+- `packages/db/test/UIWIRE-11.integration.test.ts`
+- `packages/db/test/UIWIRE-12.integration.test.ts`
+- `packages/db/test/final-account-lock-invoice.integration.test.ts`
+
+Final source-inspection follow-up: read both local completion/lock contracts (exit 0) and session routine authority; exploratory `rg` on an absent `0094_practice_sessions.sql` returned 2, then `rg --files` found `0094_practice_session_ownership.sql` and its routine read returned 0. Its issue routine requires the demo membership BEFORE session issuance. Corrected only the NEW DB regression's setup ordering accordingly; DB test remains NOT RUN. Repeated single-file nonexecuting TypeScript syntax check, complete temporary reconstruction, and `git diff --check` each exited 0. Existing tests/assertions and application source did not change. End lane lint rerun exited 0; final full diff/stat/status reads exited 0. The payload hashes/stat below bind that final DB test setup.
+
+SHA-256 payloads below exclude this receipt to avoid a self-referential hash; unchanged implementation/boundary witnesses are included. Only receipt metadata was edited after these source hashes and completed checks.
+
+```text
+05ab83880bb1875661f3b1a773dc831e50391e7a796a75d92180fb69848f7115  apps/api/src/final-account-lock.application.test.ts
+44f3be6b95bf350081bacdc2e2ff8eceac9405be668bddbcdc90ebeca95f7cc2  apps/api/src/final-account-lock.application.ts
+e8f272f70c230c03493a69f6f76c4765f9d73fcb6d2c790df8946e5cd8eb1ac3  apps/api/src/shadow-detection.worker.test.ts
+60d6668ecc55f4dd30a62f482b013be250e3b7e1b2bf370fae07cdbbeb6403ae  apps/web/e2e/M4-3-S.spec.ts
+cabc5e9bfba55bb5875ceba6146b4c06c15019d00f92d1edd289922b24640ee0  apps/web/e2e/helpers/customer-invoice-journey.ts
+cca316c90d03374bba8afe8fe8c36da70a0171f9e496e1667636143e780ddaab  apps/web/e2e/helpers/recovery-allocation-journey.ts
+fc9caddcd8675220bd1467de18aebd4882ce510487af5caadd05a3e3cf4cefff  apps/web/e2e/helpers/recovery-sources.ts
+675b7ac20330dac1d4f417aef7a3c1ee2e5a5919c4e0afe713a4e113438130dc  config/agent-lane-assignments.json
+aea65e500dadedd989847be01086927b4b55b77976a129eca238ba9365125736  packages/db/test/UIWIRE-10.integration.test.ts
+9cd4c7a9ce7028f5e4ab65c31dc0606892712146e784e5216f27d487d97cdb56  packages/db/test/UIWIRE-11.integration.test.ts
+26d8684466cc660588c2fc72df2b58bd2d3e6b7564a0ab2c362f72b0103a61e2  packages/db/test/UIWIRE-12.integration.test.ts
+3f3269a0685b4709b4c0a404945f6a8818f520aba91a3e602501015d078cd4d9  packages/db/test/final-account-lock-invoice.integration.test.ts
+a75ec3e6d819954628d5b32298ca436ba3bb9a8dae4845daa8ba27bd7cabff96  packages/db/migrations/0147_final_check_prerequisites.sql (unchanged from r1 HEAD)
+a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35  apps/api/src/auth/context-boundary.test.ts (unchanged from r1 HEAD)
+1935b39a8c3dbe15dba3fa4240758d5c133470c8f8c50ac4f31c5ac4ba46e493  apps/api/src/worker.ts (unchanged from r1 HEAD)
+91f158fd82838366a432e32698c0089a8f65bcc41f6d92ff9be5f84c2b9bd89f  packages/db/test/sv5pre-fixtures.ts (unchanged from r1 HEAD)
+```
+
+Actual `git diff --stat -- . ':(exclude)docs/verdicts/SV5PRE/BUILDER_RECEIPT.md'` (exit 0); excludes only this self-documenting receipt. The accompanying full `git diff --name-only`/status and lane verifier include it; no other path changes.
+
+```text
+ .../api/src/final-account-lock.application.test.ts | 29 +++++++++++++
+ apps/api/src/final-account-lock.application.ts     |  6 +--
+ apps/api/src/shadow-detection.worker.test.ts       |  2 +-
+ apps/web/e2e/M4-3-S.spec.ts                        |  2 +
+ apps/web/e2e/helpers/customer-invoice-journey.ts   | 48 ++++++++++++++++++++++
+ .../web/e2e/helpers/recovery-allocation-journey.ts |  2 +
+ apps/web/e2e/helpers/recovery-sources.ts           |  2 +
+ config/agent-lane-assignments.json                 |  2 +-
+ packages/db/test/UIWIRE-10.integration.test.ts     |  3 +-
+ packages/db/test/UIWIRE-11.integration.test.ts     |  3 +-
+ packages/db/test/UIWIRE-12.integration.test.ts     |  8 ++++
+ .../final-account-lock-invoice.integration.test.ts | 28 +++++++++++++
+ 12 files changed, 128 insertions(+), 7 deletions(-)
+```
 
 ## Repair r1 — dispatcher 4, 13 October 2026
 

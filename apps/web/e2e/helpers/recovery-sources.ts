@@ -1,3 +1,4 @@
+import { prepareInvoiceFinalCheck } from "./customer-invoice-journey";
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { openReview } from "./capture-journey";
@@ -52,6 +53,7 @@ export async function persistedRecoverySources(page: Page) {
   const proofId = await recordedProof(page, jobId, true);
   const final = await post(page, `/api/jobs/${jobId}/final-account`, { version: "final-account.assemble.v1", commandId: randomUUID() });
   expect(final.account.issueBlocked).toBe(false);
+  await prepareInvoiceFinalCheck(page,jobId,final.account);
   const invoices = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: randomUUID(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-09-25" });
   return { jobId, quoteId: quote.documentId as string, proofId, variationId: variation.currentRevisionId as string, invoiceId: invoices.invoices.at(-1).id as string, scopeItemId: variationBefore.parentScopeItemId as string };
 }

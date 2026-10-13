@@ -111,4 +111,32 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
   for(const kind of ['final','supplementary']as const){const input=invoiceInput(a,kind);await expect(repo.issueInvoice(a.context,input)).rejects.toMatchObject({code:'FINAL_CHECK_NOT_COMPLETE'});await expect(direct(a,input)).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE')}
  });
 
+ it("PRE-Q4-05 r2 practice-session job issues through the lock-bound application; wrong and absent digests remain refused",async()=>{
+  const {createHash}=await import("node:crypto");
+  const {practiceMaterialPool,issuePracticeSession,DEMO_TENANT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID}=await import("../src/index.js");
+  const {FinalAccountLockApplication}=await import("../../../apps/api/src/final-account-lock.application.js");
+  const prior=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV="synthetic_demo";
+  try{
+   const a=await seedAccount(f.admin,DEMO_TENANT_ID);
+   await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
+   await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4 ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID,DEMO_TENANT_ID,LOCK_OWNER]);
+   const session=await issuePracticeSession(f.runtime),digest=createHash("sha256").update(session).digest("hex");
+   await asFixtureTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL session_replication_role='replica'");await db.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='home' WHERE tenant_id=$2 AND id=$3",[digest,a.tenantId,a.jobId]);});
+   const repo=await prepareLock(f,a);await repo.lock(a.context,a.input);await appendCheck(f,a,'completed');
+   const command={...invoiceInput(a),actorMembershipId:DEMO_MEMBERSHIP_ID};
+   const before=(await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows;
+   for(const pool of [f.runtime,practiceMaterialPool(f.runtime,createHash("sha256").update(randomUUID()).digest("hex"))])
+    await expect(new FinalAccountLockRepository(pool).issueInvoice(a.context,command)).rejects.toMatchObject({code:'42501'});
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual(before);
+   const {actorMembershipId:_actor,jobId:_job,...body}=command;
+   const app=new FinalAccountLockApplication(f.runtime,session),result=await app.issueInvoice(a.jobId,{version:'lock-bound-invoice.issue.v1',...body});
+   expect(result.invoices).toHaveLength(1);expect(result.invoices[0]).toMatchObject({netPence:3360000,taxPence:672000,totalPence:4032000});
+   expect(await app.issueInvoice(a.jobId,{version:'lock-bound-invoice.issue.v1',...body})).toEqual(result);
+   for(const pool of [f.runtime,practiceMaterialPool(f.runtime,createHash("sha256").update(randomUUID()).digest("hex"))])
+    await expect(new FinalAccountLockRepository(pool).issueInvoice(a.context,command)).rejects.toMatchObject({code:'42501'});
+   const certificates=(await f.admin.query("SELECT count(*)::int n FROM app.final_account_invoice_binding b JOIN app.final_check_completion c ON(c.tenant_id,c.job_id,c.check_id)=(b.tenant_id,b.job_id,b.check_id) WHERE b.tenant_id=$1 AND b.job_id=$2",[a.tenantId,a.jobId])).rows;
+   expect(certificates).toEqual([{n:1}]);
+  }finally{if(prior===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=prior;}
+ });
+
 });
