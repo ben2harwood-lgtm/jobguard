@@ -300,3 +300,128 @@ Final whitespace check and lane check: exit 0. `ROUND_1_INVENTORY.json` records 
 Git's tracked stat omits new files: core payer schema/test; DB writer repository, 0142 and insurer integration test; API payer application test; four Round 1 evidence artifacts plus this final inventory. See `git status --short` and the inventory. The existing lane row was already committed in f1180b5 and was not changed in Round 1. The two entire stopped test files and the original OpenAPI file remain unchanged. The final standalone DB test typecheck after all fixture/control corrections exited 0. No further source change followed the passing root forced checks; only added/corrected DB test definitions and receipt evidence changed.
 
 Intended commit message exists at /private/tmp/jg-msg-ch-7-insurer.txt. Final HEAD is f1180b548157b7866a49e554ba130968434ce95e; builder committed nothing.
+
+
+## Round 2 — 13 October 2026
+
+Built by Codex; dispatched 13 Oct 2026. **Builder receipt only — not independently verified, not accepted.** Initial working tree clean; branch `codex/sandbox/ch-7-insurer`, initial/final HEAD `ee4917f70c29834ac2291220af8310a3a932bda9`. `origin/main` remained `ec6ad4d2a411bf058cb1f107419d68da9fdffc05`. No git-writing command, commit, push, PR, merge, provider call, approval or release. Read this receipt first, then both issued orders at `~/.local/share/full-steam/jg-orders/CH-7-INSURER-issued.txt` and `CH-7-INSURER-r1-lock-redesign.txt`, AGENTS and applicable BUILD_PLAN/contracts. This section supersedes Round 1's pending A6/F21 rulings.
+
+### Coordinator rulings applied
+
+- **F21 remains unchanged.** Header/line `reason:null`, header/line `reasonHeld:true`, Q=0. DB test **305** and every earlier F21 expectation remain untouched. The insurer exclusion is a **different fact**, the required server fact `payer:"insurer_unmarked"`, with its own result/header/line reason `Insurer proceeds never qualify`. It applies only to withheld-customer-payment fixtures. F21 is the separate merchant unpaid-bill fact and receives no insurer reason. No result field/version is added; each review owns its existing reason field. The unpaid-bill constant is retained, byte-exact and documented, but not activated. Original G4, F21 G5, DB11's null-F21 refusal and DB16's non-null-F21 expectation are superseded by this ruling, not implemented or relaxed tests.
+- **A6 built assuming the coordinator setup patch.** API **43**, DB **339** and **351** remain byte-identical. No schema default, production fallback, fixture detection or test alteration bypasses their new required payer fact. The coordinator will add only `payer:"not_insurer"` there. The core helper receives the explicitly authorized setup-only input addition; none of its existing expected values changes.
+- **A5/standard F retained.** The merged precedent remains `0095_job_parties.sql:140–151`: migration-owned definer, tenant check, job FOR SHARE and runtime EXECUTE; application `quote-document-repository.ts:6` calls it. The checked helper from Round 1 mirrors it, sets/checks tenant context, carries its own persisted-session/owner predicate and allows missing bindings. No new app.job grant, or money/membership/authorization/receipt/audit-table write grant.
+
+### Changes and before/after behavior
+
+Core now requires `payer: not_insurer | insurer_unmarked | insurer_customer_own`. An unmarked insurer payment passes SV-1 `proceeds:"insurer"`, so SV-1 computes zero; every claim component gets the insurer reason. Paid-before still wins over insurer, and insurer wins over pending. Marked insurer payments retain F18 262000p / F19 250000p with the compensation header. F17 supplier refunds and F15/F21/F22 retain their existing figures, reasons and held flags. F19's approved individual-interest message, added in Round 1, remains ahead of pending for that interest line, behind paid-before/insurer. No new fee or money posting.
+
+The review repository authenticates/locks owner membership before replay, takes command then case locks, validates the immutable source, takes the exact payer-mark lock then controlled job FOR SHARE, and only then derives payer/binding/mark in **one SQL query**. It calls `app.recovery_job_payer_type` (the single current-payer join); JavaScript does not infer payer from customer type. Missing binding is explicitly `not_insurer`. Insurer audit references additionally include current `payingPartyBindingId` and the `payerMarkId` when a customer-own mark is used. Mark/withdraw/payer correction only changes a subsequent review. Reads/replay retain saved JSON and do not recompute history.
+
+Before Round 2 the application submitted an ordinary candidate which the insurer SQL backstop refused. After Round 2 it can save an insurer exclusion, and can save a qualifying candidate after a customer-own mark. No merged table, column, policy, grant or row was altered. 0142 changes in this round are **comments only**; its two routine bodies equal ee4917f exactly. Newest merged definitions are still guard `0130:6`, effect `0119:132` (0134 defines neither). Fresh routine comparisons against those definitions are in `ROUND_2_guard_recovery_eligibility_v3.diff` and `ROUND_2_require_recovery_eligibility_v3_effect.diff`. Their only behavior changes remain the documented Round 1 G1–G3, insurer line reason, F19 message and F19 held release. F17 timing is preserved. Existing v3 result/policy labels stay as issued; v1 is untouched.
+
+Locks: review membership → command → case → payer-mark → job → audit; mark membership → mark-command → payer-mark → job → audit. The SQL insert guard repeats already held locks. `recovery-case-repository.ts:73–80,121–132` holds membership/case but no job row lock; `job-parties-repository.ts:119` enters `0095:118`'s job FOR UPDATE before changing binding, without taking a case/payer-mark key. `0097_recovery_case_current.sql:43–49` takes case then job, never the reverse. The new query holds the job lock while reading payer and binding and holds the payment lock while reading the latest mark. No different business lock is acquired after audit. This is source inspection; the two-connection proof is NOT RUN.
+
+### Tests / acceptance map
+
+Tests for required payer and independent insurer outcomes were added **before** implementation. First core run: 41 failed / 13 passed across two files (new payer inputs rejected by the old strict schema; missing-payer refusal also failed). After implementation: **54 passed / 2 files**. The primary new DB snapshot/control cases and the one new browser journey were also written before A6; they are NOT RUN. Supplementary raw/refusal/DB16 controls and an API client-payer refusal were added during source inspection, not presented as tests-first or live execution.
+
+| Acceptance | Current evidence / limits |
+| --- | --- |
+| A1/A6; DB1 | Core `[A1 A6 DB1]` F18/F19 component exclusions pass. DB `[A1 A6 DB1 DB3 DB4 DB5]` saves exclusions, confirms no fee journal, NOT RUN. |
+| A2; DB2 | Existing shared-payer lookup/catalog definition plus new `[A2 A6 DB2]` person/business/customer-insurer/separate-payer/same-as-customer controls; `[A6 DB2]` unbound job / omitted audit refs. DB NOT RUN. Core neutral/customer-own controls pass. |
+| A3/A4/A7; DB3–5 | Existing mark evidence metadata/revision/replay tests, new full exclude → mark → qualify → withdraw → exclude → re-mark → qualify for both F18/F19; exact binding/mark audit refs and canonical-text earlier-review preservation. DB NOT RUN. |
+| DB6 | `[A6 DB6]` receipt-384 mark cannot qualify receipt-3000. NOT RUN. |
+| DB7/8/9 | Core precedence and unchanged supplier/prevention/F21 controls pass; existing F20 before/after mark and F17/F22 tests plus new pending insurer/F21 database cases. NOT RUN. |
+| DB10 | `[A6 DB10]` insurer → person → insurer binding revisions affect only new snapshots. NOT RUN. |
+| A5/DB11 | Existing raw nonqualifying insurer/incorrect insurer reason controls; supplementary `[A5 DB11 Round2]` incorrect null insurer reason and held header refuse with zero rows. F21 null is allowed and unchanged as ruled; no ASCII/message2 F21 activation. DB NOT RUN. |
+| A4/DB12–14 | Existing role/session/tenant/job/evidence/source/state/revision/immutability/audit/replay definitions preserved. Supplementary strict-field/missing-evidence DB rollback assertions added. Core strict schema passes; API status/refusal/dispatch mocks pass except coordinator-owned setup below. DB NOT RUN. |
+| A5/DB15 | Existing mark transaction blocks review with exact blocker PID in pg_stat_activity, no sleeps/timeouts added. Own Round 1 query now observes the new pre-insert SELECT advisory lock instead of INSERT. Qualifying post-commit expectation untouched. NOT RUN. |
+| B1/B2/DB16 | Both constants' lengths/hashes pass. F19 wording/header/pending/legacy/F18 interest core checks pass. DB F19 exact message/hash, pending F19, unchanged 12000p/null F18 interest and preserved null/held F21 defined, NOT RUN. F21 message2 activation intentionally absent under ruling. |
+| DB17 | Round 1 FORCE-RLS/owner/standard-F/no-job-grant/fixed-search-path/definer-own-check catalogs retained. NOT RUN. |
+| DB18/rule 9 | Legacy F19 interest null/held and F21 null/held are written through a **test-only snapshot of the pre-A6 repository** before N. Snapshot source is from ee4917f; it uses real PostgreSQL transactions/previous guards, without querying N's functions before N exists. The existing test-only old-evaluator adapter supplies the required neutral fact only while seeding that previous schema; after N it is off. This is synthetic previous-schema fixture preparation, not a previous binary or live integration. Named canonical text, full column types, primary-key row matching, N alone, all later migrations twice, and all five rolled-back controls retained. NOT RUN. |
+| Browser Part A | One appended `[A1 A6 Browser]` F18 journey creates an insurer and binds it through existing `/parties` API commands, then checks zero/Excluded/exact insurer reason before and after reload. Existing CH-3a API journey and capture helper support this without UI changes. NOT RUN. All existing browser/F21 assertions remain byte-identical. |
+
+No task assertion is independently verified or accepted. Production, live receipts, allocator/fee derivation, missed-variation insurer handling, mark screens/read models, dedicated evidence type and non-owner marking remain held. Future SV-5 / M4-8-S / M4-9-S / SV-6 and live receipt work still owe the shared payer/mark rule. D03 remains proposed; `productionEnabled:false`, synthetic_demo only. No AI/model/prompt changes; eval inapplicable.
+
+### Exactly which tests fail until the coordinator setup patch
+
+**Observed locally:** `apps/api/src/recovery-eligibility-v3.application.test.ts:43`, test **“replays the immutable v3 command result when the workbench has a newer candidate”** fails `INVALID_COMMAND` before its assertions. Combined API run: **25 passed, 1 failed**, 2 files. Neither this setup nor any of its assertions was changed.
+
+**Predicted by source inspection, database NOT RUN:** `packages/db/test/recovery-eligibility-v3.integration.test.ts:339` makes all three **“F17 refund settled %s opening: repository, saved result and core/SQL parity”** variants (800 microseconds BEFORE / exactly AT / 800 microseconds AFTER) fail `INVALID_COMMAND`. Line **351** is shared by both **“F17 runtime-role raw qualifying insert for a %s-opening refund cannot commit”** variants (before / equal), **“F17 runtime-role raw qualifying insert after opening still commits with complete components and audit”**, and **“0130 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill”**. Each encounters missing-payer validation before its intended SQL assertion. That is **7 database tests**, not executed failures. DB **305** is unchanged and requires no patch. Exact adjacent contexts for all four lines remain in the historical receipt; `ROUND_2_UNCHANGED_FILES.json` proves both complete test files equal ee4917f.
+
+### Every GRANT in 0142 (unchanged from Round 1)
+
+1. :13 `GRANT EXECUTE ON FUNCTION app.recovery_job_payer_type(uuid,uuid) TO jobguard_runtime`.
+2. :39 `GRANT SELECT ON app.recovery_payment_payer_mark TO jobguard_runtime`.
+3. :69 `GRANT EXECUTE ON FUNCTION app.lock_recovery_payer_job(uuid,uuid,uuid) TO jobguard_runtime`.
+4. :179 `GRANT EXECUTE ON FUNCTION app.write_recovery_payment_payer_mark(uuid,uuid,jsonb) TO jobguard_runtime`.
+
+Standard F: no new direct write grant to runtime on any job, money, membership, authorization, receipt or audit table; no PUBLIC execution; no role assumption grant. FORCE-RLS and context/owner checks constrain correctly authenticated application use, not compromised privileged credentials or a false application-selected tenant. No new GRANT in Round 2.
+
+### Commands actually run / checks
+
+Node v24.17.0; preinstalled cached pnpm 10.28.1. No install/download/clean-install proof. Every pnpm shell begins with `export PATH="$HOME/Library/pnpm/bin:$PATH"`; final Turbo commands additionally prepend `/private/tmp/jg-pnpm-ent-10a2` so child processes use the same pinned cached launcher. Logs: `/private/tmp/jg-ch-7-insurer-r2-*.log`. Before heavy runs memory 67–68% free and disk 85–86 GB available; no threshold failure.
+
+| Actual command / operation | Exit / result |
+| --- | --- |
+| `pwd; git status --short; rg --files ...`; receipt read first | 0; clean, correct worktree. |
+| `rg --files --hidden -g '!node_modules' -g '!.git'` task-path search; `cat` receipt | 0 each. |
+| `cat AGENTS.md; rg -n ... BUILD_PLAN.md; ls /private/tmp/jg-orders .../jg-orders` | 1 from absent order paths. No result taken from absent paths. |
+| `/private/tmp` listing / COMMANDS / BUILD_PLAN card / package reads | 0; listing output truncated, not counted as full contents inspection. Prior command inventory identified exact full-steam order path. |
+| `cat` both full-steam orders; targeted A1–A7/B1–B2/order chunks, contracts/source/SQL/test reads with cat/sed/rg | Read batches 0; diagnostic batches 1 for absent guessed practice-material-pool/upgrade-proof-utils paths or cat on the launcher directory. Actual files found using rg and read. No permission refusal in those reads. |
+| `git rev-parse HEAD origin/main`; newest-definition `git grep ... origin/main -- packages/db/migrations`; read-only source/diff/grant searches | 0. One lock search batch 2 from an absent guessed 0097 filename; actual 0097_recovery_case_current.sql read afterwards. No unsafe operation retried. |
+| Python test-first core/DB/browser additions and saved previous-repository snapshot | 0; database/browser NOT RUN. |
+| Core two-file tests-first `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/recovery-eligibility-v3.test.ts src/recovery-payment-payer.test.ts` | 1; 41 failed / 13 passed, 2 files. |
+| Python core/repository implementation, 0142 comment/doc updates, own supplementary DB/API tests | 0. No merged assertion changed. |
+| Same core two-file run after implementation | 0; **54 passed**, 2 files. |
+| Initial `pnpm exec turbo run build --filter=@jobguard/db... --force --concurrency=2` through explicit pinned launcher but without its directory on child PATH | Interrupted **130**; child pnpm emitted v11 warning then no build completion. No pass claimed. |
+| Same forced dependency build after child PATH correction | 0; **3 successful, 0 cached**. No permission escalation/cache repair. |
+| Standalone DB-test `pnpm --filter @jobguard/db exec tsc --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck test/recovery-insurer-money.integration.test.ts` | Initial 1 (underlying tsc 2): own helper argument `fixture` shadowed factory type, TS2344. Renamed own argument to `name`; next run 0. Final supplementary-test run recorded below. Compilation only. |
+| `pnpm exec turbo run typecheck --force` | 0; **7 successful, 0 cached**, 49.727s. |
+| API two-file `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/recovery-eligibility-v3.application.test.ts src/recovery-payment-payer.application.test.ts` | **1**; **25 passed / 1 failed**, 2 files, exact coordinator setup failure above. Mocks, not a live integration. |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | 0; actual purity/lane/money/commercial checks plus **7 forced tasks, 0 cached**, 38.058s. |
+| `pnpm build --concurrency=2 --force` | 0; **7 successful, 0 cached**, 1m42.017s, 30 pages generated. |
+| `pnpm openapi:check` | **1 / STOP**: `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/29170.pipe`. No alternate route/generator tried. Original OpenAPI unchanged; CI owes official check. |
+| Read-only git diff/status/whitespace checks; Python unchanged-file and routine comparison artifacts | 0; 8 unchanged files, both routine bodies exactly ee4917f, diffs against newest main recorded. |
+| Python supplementary pending-F19/F18-interest DB checks and exact unpaid-bill doc reference | 0; DB tests NOT RUN, added during source inspection after final root checks. Only test definitions/docs changed. |
+| `node --version`; `pnpm --version` | 0; v24.17.0 / 10.28.1. |
+
+Turbo warned `IO error: Operation not permitted (os error 1)` during forced commands; they still completed with zero cache hits. No cache permissions workaround/escalation attempted. Build's existing CSS `end` warning is untouched. OpenAPI's socket refusal is a sandbox refusal, not an automatic approval-review rejection. No alternate route after it. Whole repository/package tests were not run under the at-most-three-file rule; all Vitest runs used maxWorkers=2, two files, one test run at a time. Database/browser suites were never invoked. No helper agent/delegation.
+
+**NOT RUN (sandbox cannot start PostgreSQL / a browser):** `packages/db/test/recovery-insurer-money.integration.test.ts`, `packages/db/test/recovery-eligibility-v3.integration.test.ts`, `packages/db/test/tenancy.integration.test.ts`, `apps/web/e2e/CH-7.spec.ts`, `pnpm test:db`, `pnpm test:migrations`, `pnpm test:e2e`. These are owed CI checks, not passed/skipped checks. The official OpenAPI check was attempted and stopped before source generation. Fresh/upgrade/privilege/RLS/effect/audit/replay/concurrency checks and browser journeys remain unverified.
+
+### Source inspection / handoff
+
+Re-read the diff against ee4917f and origin/main. Only lane files changed; origin/main's unrelated FEE-PINS-1 / SV-3-ABORT merges appear as reverse diff differences because this branch starts before them. They were not edited. The lane checker uses the merge-base. No lane widening, security-pin edits, changed timeout, erased assertion, deleted file/row, merged migration change, data backfill, provider or UI source change. API/DB coordinator files are entirely unchanged; the core helper's input-only payer addition is the only pre-existing core-test-line change. Browser changes are one append only; original F21 row/count and F19 assertions stay untouched. Own Round 1 integration definitions were adapted for the new required fact/earlier lock and the previous-schema writer fixture, without relaxing their expected result or identity checks. Eight unchanged files are SHA-256 recorded in `ROUND_2_UNCHANGED_FILES.json` as receipt evidence, never permanent fingerprint tests. No implementation change followed the forced checks; only supplementary DB test definitions, docs and receipt artifacts.
+
+0142 remains registered by name in numeric order and is not renumbered. Rollback is forward fix preserving immutable marks/reviews/lines/audit and compatible readers; an older writer may hit the stricter insurer guard. No operational alert/provider/config/credential is introduced. Work touching these eligibility routines/repository/tests must serialize with this task.
+
+No implementation STOP remains from the F21/A6 rulings. **Handoff holds:** coordinator's three setup-only additions; CI database/browser/official OpenAPI checks; fresh Opus and separate Sol verdicts bound to the exact dispatcher commit, separate acceptance, founder merge/release. Do not describe this as accepted or fully green. Intended conventional commit subject/body written to `/private/tmp/jg-msg-ch-7-insurer.txt`; dispatcher commits after this turn. Builder committed nothing; final HEAD stays ee4917f70c29834ac2291220af8310a3a932bda9.
+
+
+### Round 2 final verification / inventory
+
+- Final standalone DB integration-test TypeScript check (same command above, including the supplementary DB16 definitions): **exit 0**, no diagnostics. No PostgreSQL execution.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **exit 0**, ch-7-insurer passes against ec6ad4d. No lane edits.
+- `git diff --check`: **exit 0**. Final read-only inventory checks every changed/untracked path against this lane, rechecks the two complete coordinator test files and OpenAPI, confirms the browser original prefix and authorized input-only core-helper change, and verifies the test-only previous repository snapshot against ee4917f. This is receipt evidence, not a permanent test.
+- `ROUND_2_INVENTORY.json` records final file byte counts/hashes (receipt excluded to avoid recursion). `COMMANDS.md` is appended with the Round 2 operation inventory. Receipt and commit-message writes: exit 0. No git write.
+
+Tracked diff against ee4917f (untracked receipt artifacts are included separately in the inventory):
+
+```text
+ .../src/recovery-payment-payer.application.test.ts |  10 +-
+ apps/web/e2e/CH-7.spec.ts                          |  15 ++
+ docs/contracts/recovery-eligibility-v3.md          |  18 +-
+ docs/verdicts/CH-7-INSURER/BUILDER_RECEIPT.md      | 106 ++++++++++++
+ docs/verdicts/CH-7-INSURER/COMMANDS.md             |  23 +++
+ packages/core/src/recovery-eligibility-v3.test.ts  |  36 +++-
+ packages/core/src/recovery-eligibility-v3.ts       |   9 +-
+ packages/db/MIGRATIONS.md                          |   4 +-
+ .../db/migrations/0142_recovery_insurer_money.sql  |   6 +-
+ .../db/src/recovery-eligibility-v3-repository.ts   |  20 ++-
+ .../recovery-insurer-money.integration.test.ts     | 181 ++++++++++++++++++++-
+ 11 files changed, 403 insertions(+), 25 deletions(-)
+```
+
+Final HEAD ee4917f70c29834ac2291220af8310a3a932bda9. Dispatcher message path: `/private/tmp/jg-msg-ch-7-insurer.txt`. Builder committed nothing.

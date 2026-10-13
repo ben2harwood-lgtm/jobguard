@@ -1,6 +1,6 @@
 BEGIN;
--- Partial Round 1: A6 and F21 are stopped. This installs mark commands and
--- the Part A SQL backstop; insurer review evaluation/audit still awaits A6.
+-- Round 2: insurer exclusion is a separate payer fact with its own reason.
+-- F21 keeps its null reason and reasonHeld=true under the coordinator ruling.
 CREATE FUNCTION app.recovery_job_payer_type(p_tenant uuid,p_job uuid) RETURNS text
  LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog,app AS $$
  SELECT r.payload->>'type' FROM app.job_party_current c
@@ -180,7 +180,7 @@ GRANT EXECUTE ON FUNCTION app.write_recovery_payment_payer_mark(uuid,uuid,jsonb)
 
 -- From 0130_recovery_eligibility_v3_f17_timing.sql: G1 local insurer flag;
 -- G2 payer-mark then controlled job lock and payer expression; G3 insurer branch only.
--- G5 releases F19 reasonHeld only; G4 and F21 G5 remain stopped.
+-- G5 releases F19 reasonHeld only; Round 2 leaves every F21 reason/held value unchanged.
 CREATE OR REPLACE FUNCTION app.guard_recovery_eligibility_v3() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 DECLARE c app.recovery_case_current; e app.practice_feed_event; r app.recovery_eligibility_v3_review;
  digest text:=nullif(current_setting('app.practice_material_digest',true),'');

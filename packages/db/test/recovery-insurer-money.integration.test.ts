@@ -7,9 +7,9 @@ import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { MIGRATION_URLS, migrate, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, RecoveryPaymentPayerRepository, PracticeFeedRepository, withTenant, appendAuditBatch } from "../src/index.js";
+import { MIGRATION_URLS, migrate, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, RecoveryPaymentPayerRepository, PracticeFeedRepository, withTenant, appendAuditBatch, readRecoveryEligibilityV3, type VerifiedTenantContext, type RecoveryEligibilityV3Review } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
-import { evaluateRecoveryEligibilityV3 } from "@jobguard/core";
+import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, recoveryFixtureDefinitionV3, RecoveryEligibilityV3Error } from "@jobguard/core";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
@@ -20,11 +20,74 @@ const previousSchema = vi.hoisted(() => ({ active: true }));
 vi.mock("@jobguard/core", async original => {
  const actual = await original<typeof import("@jobguard/core")>();
  return { ...actual, evaluateRecoveryEligibilityV3: (raw: unknown) => {
-  const result = actual.evaluateRecoveryEligibilityV3(raw);
+  const result = actual.evaluateRecoveryEligibilityV3(previousSchema.active ? {...raw as object,payer:"not_insurer"} : raw);
   if (!previousSchema.active || result.fixture !== "F19") return result;
   return { ...result, reasonHeld: true, lines: result.lines.map(line => line.kind === "statutory_interest" ? { ...line, reason: null, reasonHeld: true } : line) };
  } };
 });
+// Test-only snapshot of the pre-A6 repository at ee4917f. It writes through
+// real PostgreSQL guards before N, without querying functions introduced by N.
+const hash=(value:unknown)=>createHash("sha256").update(JSON.stringify(value)).digest("hex");
+class PreviousRecoveryEligibilityV3Repository {
+ constructor(private readonly pool:Pool,private readonly environment=process.env.JOBGUARD_ENV??"unconfigured"){}
+ async review(context:VerifiedTenantContext,jobId:string,raw:unknown,actor:Readonly<{membershipId:string;identityUserId:string}>,sessionDigest:string):Promise<RecoveryEligibilityV3Review> {
+  if(this.environment!=="synthetic_demo")throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
+  const parsed=recoveryEligibilityCommandV3.safeParse(raw);if(!parsed.success)throw new RecoveryEligibilityV3Error("INVALID_COMMAND");
+  const input={...parsed.data,commandId:parsed.data.commandId.toLowerCase(),caseId:parsed.data.caseId.toLowerCase()},job=jobId.toLowerCase();
+  const payloadHash=hash({jobId:job,...input});
+  return withTenant(this.pool,context,async db=>{
+   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
+   const member=await db.$client.query(`SELECT 1 FROM app.membership m JOIN app.authenticate_practice_session($4) p
+    ON p.tenant_id=m.tenant_id AND p.membership_id=m.id AND p.identity_user_id=m.identity_user_id
+    WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3 AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp()) FOR SHARE OF m`,[context.tenantId,actor.membershipId,actor.identityUserId,sessionDigest]);
+   if(member.rowCount!==1)throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
+   if(!(await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3",[context.tenantId,job,sessionDigest])).rowCount)throw new Error("RECOVERY_JOB_NOT_FOUND");
+   // Command identity then the shared case advisory key; every business lock precedes audit.
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,`eligibility-v3:${input.commandId}`]);
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,input.caseId]);
+   const replay=(await db.$client.query<{id:string;payload_hash:string;revision:number;case_revision:number;source_event_id:string|null;result:unknown;job_id:string}>("SELECT * FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId])).rows[0];
+   if(replay){if(replay.payload_hash.trim()!==payloadHash||replay.job_id!==job)throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");return {id:replay.id,revision:replay.revision,caseRevision:replay.case_revision,sourceEventId:replay.source_event_id,result:recoveryEligibilityViewV3.parse(replay.result)};}
+   const c=(await db.$client.query<{case_type:string;revision:number;claim_pence:string}>("SELECT case_type,revision,claim_pence FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND claim_revision IS NOT NULL",[context.tenantId,job,input.caseId])).rows[0];
+   if(!c)throw new Error("RECOVERY_CASE_NOT_FOUND");
+   const latest=await readRecoveryEligibilityV3(db,context.tenantId,input.caseId);
+   if(c.revision!==input.expectedCaseRevision||(latest?.revision??0)!==input.expectedReviewRevision)throw new Error("ELIGIBILITY_STALE_REVISION");
+   const definition=recoveryFixtureDefinitionV3(input.fixture);
+   if(definition.category!==c.case_type||latest&&latest.result.fixture!==input.fixture)throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
+   if(definition.credit&&input.fixture!=="F15")throw new RecoveryEligibilityV3Error("ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE");
+   // Fixed M4-7-S facts only; prefer the ORIGINAL settled event, never a statement replay.
+   const event= ["F15","F21","F22"].includes(input.fixture)?undefined:(await db.$client.query<{id:string;state:string;settled_before_opening:boolean;duplicate_held:boolean}>(`SELECT e.id,e.state,
+    -- Decided once, here, on the original timestamptz values (microseconds); the 0119 guard restated in 0130 shares this decision for customer payments and F17 refunds.
+    (e.state='settled' AND e.created_at<=(SELECT k.created_at FROM app.recovery_case_current k WHERE k.tenant_id=e.tenant_id AND k.job_id=e.job_id AND k.id=$4)) settled_before_opening,
+    EXISTS(SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=e.tenant_id AND u.account_id=e.account_id AND u.movement_key=e.movement_key AND u.identity='unidentified'
+      AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate')) duplicate_held
+    FROM app.practice_feed_event e WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.movement_key=$3 AND e.identity='identified' AND e.event_kind IN('settled','pending')
+    ORDER BY (e.event_kind='settled') DESC,e.created_at,e.id LIMIT 1`,[context.tenantId,job,definition.movement,input.caseId])).rows[0];
+   if(!event&&!["F15","F21","F22"].includes(input.fixture))throw new RecoveryEligibilityV3Error("ELIGIBILITY_SOURCE_REQUIRED");
+   const before=event?.settled_before_opening===true;
+   if(input.fixture==="F20"&&!before)throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
+   const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
+    settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});
+   if(definition.lines[0]!.netPence>Number(c.claim_pence))throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
+   const id=randomUUID(),revision=(latest?.revision??0)+1;
+   const inserted=await db.$client.query<{result_hash:string}>(`INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') result_hash`,[id,context.tenantId,job,input.caseId,revision,c.revision,input.fixture,event?.id??null,actor.membershipId,input.commandId,payloadHash,JSON.stringify(result)]);
+   for(const line of result.lines)await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),context.tenantId,job,input.caseId,id,line.kind,line.debtorType,line.netPence]);
+   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.membershipId}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:input.caseId,
+    payload:{references:{jobId:job,reviewId:id,commandId:input.commandId,...(event?{sourceEventId:event.id}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.result_hash},classifications:{recovery:"financial"}}}]);
+   return {id,revision,caseRevision:c.revision,sourceEventId:event?.id??null,result};
+  }).catch((error: unknown) => {
+   // Known database pre-commit guards use the same typed refusal contract as the service.
+   // Transport/commit ambiguity and deferred completeness defects retain the unknown outcome.
+   const failure = error as { code?: unknown; message?: unknown } | null;
+   const guards = ["ELIGIBILITY_REVIEWER_FORBIDDEN", "RECOVERY_JOB_NOT_FOUND", "RECOVERY_CASE_NOT_FOUND", "ELIGIBILITY_STALE_REVISION", "ELIGIBILITY_SOURCE_REQUIRED", "ELIGIBILITY_FIXTURE_MISMATCH", "ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE"];
+   if (typeof failure?.code === "string" && typeof failure.message === "string" && guards.includes(failure.message)) {
+    throw Object.assign(new Error(failure.message), { code: failure.message });
+   }
+   throw error;
+  });
+ }
+}
+
 const ctx=testTenantContext(T), actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool;
 const originalEnvironment=process.env.JOBGUARD_ENV;
@@ -51,7 +114,7 @@ beforeAll(async()=>{
   accessValue});
  for(const [name,type] of [["F19","withheld_customer_payment"],["F21","merchant_overcharge"]]){
   const f=await fixture(type!,false);if(name==="F19")await f.advance("receipt-3000");
-  const saved=await f.reviews.review(ctx,f.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:f.c.id,expectedCaseRevision:f.c.revision,expectedReviewRevision:0,fixture:name},actor,f.auth.digest);
+  const saved=await new PreviousRecoveryEligibilityV3Repository(f.pool,"synthetic_demo").review(ctx,f.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:f.c.id,expectedCaseRevision:f.c.revision,expectedReviewRevision:0,fixture:name},actor,f.auth.digest);
   expect(saved.result.reasonHeld).toBe(true);
  }
  previousSchema.active=false;
@@ -162,15 +225,15 @@ it("[DB18] preserves named pre-existing F19/F21 rows and full types with rolled-
  expect(await proofDifferences(admin,proof)).toEqual({rows:[],types:[]});
 });
 
-// SQL-only backstop checks: A6's application evaluator remains stopped.
-async function rawReview(f:Awaited<ReturnType<typeof fixture>>,insurer:boolean){
+// Raw writer controls independently test the PostgreSQL backstop.
+async function rawReview(f:Awaited<ReturnType<typeof fixture>>,insurer:boolean,mutate:(result:unknown)=>unknown=result=>result){
  const event=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='receipt-3000' AND event_kind='settled'",[T,f.jobId])).rows[0];
- const ordinary=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",settlement:"settled",paymentTiming:"after_opening",sourceRef:event.id});
+ const ordinary=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:event.id});
  const result=insurer?{...ordinary,outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Insurer proceeds never qualify",lines:ordinary.lines.map(line=>({...line,qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Insurer proceeds never qualify"}))}:ordinary;
  return withTenant(f.pool,ctx,async db=>{
   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
   const id=randomUUID(),command=randomUUID(),requestHash=createHash("sha256").update(command).digest("hex");
-  const inserted=await db.$client.query("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F18',$6,$7,$8,$9,$10)RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') result_hash",[id,T,f.jobId,f.c.id,f.c.revision,event.id,M,command,requestHash,JSON.stringify(result)]);
+  const inserted=await db.$client.query("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F18',$6,$7,$8,$9,$10)RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') result_hash",[id,T,f.jobId,f.c.id,f.c.revision,event.id,M,command,requestHash,JSON.stringify(mutate(result))]);
   for(const line of ordinary.lines)await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),T,f.jobId,f.c.id,id,line.kind,line.debtorType,line.netPence]);
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${M}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:f.c.id,payload:{references:{reviewId:id,commandId:command},hashes:{command:requestHash,result:inserted.rows[0]!.result_hash}}}]);
   return id;
@@ -267,7 +330,7 @@ it("[A5 DB15] a review waits for the open mark transaction and then uses the com
   const pid=await started;
   const reviewing=f.reviews.review(ctx,f.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:f.c.id,expectedCaseRevision:f.c.revision,expectedReviewRevision:0,fixture:"F18"},actor,f.auth.digest).then(value=>({value}),error=>({error}));
   let waiting=false;
-  for(let attempt=0;attempt<200&&!waiting;attempt++)waiting=(await admin.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity a WHERE $1=ANY(pg_blocking_pids(a.pid)) AND a.wait_event_type='Lock' AND a.query LIKE 'INSERT INTO app.recovery_eligibility_v3_review%') waiting",[pid])).rows[0].waiting as boolean;
+  for(let attempt=0;attempt<200&&!waiting;attempt++)waiting=(await admin.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity a WHERE $1=ANY(pg_blocking_pids(a.pid)) AND a.wait_event_type='Lock' AND a.query LIKE 'SELECT pg_advisory_xact_lock%') waiting",[pid])).rows[0].waiting as boolean;
   release();await transaction;const outcome=await reviewing;
   expect(waiting).toBe(true);if("error" in outcome)throw outcome.error;
   expect(outcome.value.result.qualifyingPrincipal.pence).toBe(262000);
@@ -306,4 +369,104 @@ it("[A4 DB12] an existing original evidence file from another tenant is refused 
  }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
  await expect(f.marks.command(ctx,f.jobId,{...input,evidenceId:evidence},actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_EVIDENCE_REQUIRED");
  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_payment_payer_mark WHERE tenant_id=$1 AND job_id=$2",[T,f.jobId])).rows[0].n).toBe(0);
+});
+
+
+const reviewInput=(f:Awaited<ReturnType<typeof fixture>>,name="F18",expectedReviewRevision=0)=>({version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:f.c.id,expectedCaseRevision:f.c.revision,expectedReviewRevision,fixture:name});
+const reviewPayer=(f:Awaited<ReturnType<typeof fixture>>,name="F18",revision=0)=>f.reviews.review(ctx,f.jobId,reviewInput(f,name,revision),actor,f.auth.digest);
+async function partyTypes(f:Awaited<ReturnType<typeof fixture>>,customerType:string,payerType:string|null){
+ const client=await admin.connect();try{
+  await client.query("BEGIN");
+  const customer=randomUUID(),customerRevision=randomUUID(),payer=payerType===null?customer:randomUUID(),payerRevision=payerType===null?customerRevision:randomUUID(),binding=randomUUID();
+  for(const [id,revision,type] of [[customer,customerRevision,customerType],...(payerType===null?[]:[[payer,payerRevision,payerType]])]){
+   await client.query("INSERT INTO app.customer(tenant_id,id)VALUES($1,$2)",[T,id]);
+   await client.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload)VALUES($1,$2,$3,1,$4)",[T,revision,id,JSON.stringify({version:"customer.v1",name:"Fictional payer control",type})]);
+  }
+  await client.query("INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance)SELECT tenant_id,$3,job_id,revision+1,$4,$5,$6,$7,site_id,site_revision_id,'backfilled_synthetic_fixture' FROM app.job_party_binding WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision DESC LIMIT 1",[T,f.jobId,binding,customer,customerRevision,payer,payerRevision]);
+  await client.query("UPDATE app.job_party_current SET binding_id=$3 WHERE tenant_id=$1 AND job_id=$2",[T,f.jobId,binding]);
+  await client.query("COMMIT");return binding;
+ }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+}
+async function storedReview(id:string){return (await admin.query("SELECT row_to_json(t)::text bytes FROM app.recovery_eligibility_v3_review t WHERE id=$1",[id])).rows[0].bytes as string;}
+it.each(["F18","F19"])("[A1 A6 DB1 DB3 DB4 DB5] %s saves independent insurer exclusion, exact audit facts and immutable earlier reviews",async name=>{
+ const f=await fixture();await f.advance("receipt-3000");
+ const excluded=await reviewPayer(f,name),bytes=await storedReview(excluded.id);
+ expect(excluded.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify",reasonHeld:false});
+ for(const line of excluded.result.lines)expect(line).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify",reasonHeld:false});
+ const input=await markInput(f),mark=await f.marks.command(ctx,f.jobId,input,actor,f.auth.digest);
+ expect(await storedReview(excluded.id)).toBe(bytes);
+ const counted=await reviewPayer(f,name,1);
+ expect(counted.result).toMatchObject({qualifyingPrincipal:{pence:name==="F18"?262000:250000},reason:"Fixed statutory compensation is not part of the fee base"});
+ expect(await storedReview(excluded.id)).toBe(bytes);
+ const binding=(await admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2",[T,f.jobId])).rows[0].binding_id;
+ const refs=async(id:string)=>(await admin.query("SELECT payload->'references' refs FROM app.audit_event WHERE tenant_id=$1 AND event_type='recovery.eligibility.v3_reviewed' AND payload->'references'->>'reviewId'=$2",[T,id])).rows[0].refs;
+ expect(await refs(counted.id)).toMatchObject({payingPartyBindingId:binding,payerMarkId:mark.id});
+ expect(await refs(excluded.id)).toMatchObject({payingPartyBindingId:binding});expect(await refs(excluded.id)).not.toHaveProperty("payerMarkId");
+ const {evidenceId:_e,...withdraw}=input;
+ await f.marks.command(ctx,f.jobId,{...withdraw,action:"withdraw_mark",commandId:randomUUID(),expectedMarkRevision:1},actor,f.auth.digest);
+ expect((await reviewPayer(f,name,2)).result).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify"});
+ await f.marks.command(ctx,f.jobId,{...input,commandId:randomUUID(),expectedMarkRevision:2},actor,f.auth.digest);
+ expect((await reviewPayer(f,name,3)).result.qualifyingPrincipal.pence).toBe(name==="F18"?262000:250000);
+ expect(await storedReview(excluded.id)).toBe(bytes);
+ expect((await admin.query("SELECT count(*)::int n FROM app.recovery_fee_journal WHERE tenant_id=$1 AND job_id=$2",[T,f.jobId])).rows[0].n).toBe(0);
+});
+it.each([["person",null,262000],["business",null,262000],["insurer","person",262000],["person","insurer",0],["insurer",null,0]] as const)("[A2 A6 DB2] customer %s payer %s determines Q %i using paying party only",async(customer,payer,q)=>{
+ const f=await fixture("withheld_customer_payment",false);await partyTypes(f,customer,payer);await f.advance("receipt-3000");
+ expect((await reviewPayer(f)).result).toMatchObject({qualifyingPrincipal:{pence:q},reason:q===0?"Insurer proceeds never qualify":"Fixed statutory compensation is not part of the fee base"});
+});
+it("[A6 DB2] missing binding keeps the merged non-insurer result and omits payer audit references",async()=>{
+ const f=await fixture("withheld_customer_payment",false);await f.advance("receipt-3000");
+ // Test-only synthetic setup, never an application mutation path.
+ const unbound=randomUUID();await admin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario)VALUES($1,$2,'Unbound review control',$3,'capture')",[unbound,T,f.auth.digest]);
+ const c=await new RecoveryCaseRepository(f.pool).command(ctx,unbound,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",claimedNetPence:300000,counterparty:"Fictional debtor",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Generated customer invoice INV-18800"],expectedRevision:0},actor);
+ const feed=new PracticeFeedRepository(runtime,"synthetic_demo");const connected=await feed.command(ctx,actor,f.auth.digest,unbound,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
+ await feed.command(ctx,actor,f.auth.digest,unbound,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:connected.revision,action:"advance",movement:"receipt-3000",step:"settled"});
+ f.jobId=unbound;f.c=c;
+ const saved=await reviewPayer(f);
+ expect(saved.result.qualifyingPrincipal.pence).toBe(262000);
+ const refs=(await admin.query("SELECT payload->'references' refs FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'reviewId'=$2",[T,saved.id])).rows[0].refs;
+ expect(refs).not.toHaveProperty("payingPartyBindingId");expect(refs).not.toHaveProperty("payerMarkId");
+});
+it("[A6 DB6] a mark on another payment cannot qualify receipt-3000",async()=>{
+ const f=await fixture();await f.advance("receipt-384");await f.advance("receipt-3000");
+ await f.marks.command(ctx,f.jobId,await markInput(f,"receipt-384"),actor,f.auth.digest);
+ expect((await reviewPayer(f)).result).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify"});
+});
+it("[A6 DB8] pending insurer payment saves exclusion before pending reason",async()=>{
+ const f=await fixture();await f.advance("receipt-3000","pending");
+ const r=await reviewPayer(f);expect(r.result).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify"});
+ expect(r.result.lines.every(l=>l.reason==="Insurer proceeds never qualify")).toBe(true);
+});
+it("[A6 DB10] binding changes insurer to person to insurer affect only new reviews",async()=>{
+ const f=await fixture();await f.advance("receipt-3000");const original=await reviewPayer(f),bytes=await storedReview(original.id);
+ await partyTypes(f,"person",null);expect((await reviewPayer(f,"F18",1)).result.qualifyingPrincipal.pence).toBe(262000);
+ await partyTypes(f,"person","insurer");expect((await reviewPayer(f,"F18",2)).result).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify"});
+ expect(await storedReview(original.id)).toBe(bytes);
+});
+it("[Round2 DB16] F21 stays null and held on an insurer-paid job, independently of insurer facts",async()=>{
+ const f=await fixture("merchant_overcharge");
+ const r=await reviewPayer(f,"F21");
+ expect(r.result).toMatchObject({qualifyingPrincipal:{pence:0},reason:null,reasonHeld:true,lines:[{reason:null,reasonHeld:true}]});
+});
+
+it.each(["wrong_reason","held"])("[A5 DB11 Round2] raw insurer exclusion with %s cannot commit",async change=>{
+ const f=await fixture();await f.advance("receipt-3000");
+ await expect(rawReview(f,true,raw=>{const result=raw as Record<string,unknown>;return {...result,...(change==="held"?{reasonHeld:true}:{reason:null})};})).rejects.toThrow("ELIGIBILITY_FIXTURE_MISMATCH");
+ expect((await admin.query("SELECT count(*)::int n FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND job_id=$2",[T,f.jobId])).rows[0].n).toBe(0);
+});
+it("[A4 DB12 Round2] injected fields and missing evidence refuse before any mark or audit write",async()=>{
+ const f=await fixture();await f.advance("receipt-3000");const input=await markInput(f),{evidenceId:_e,...missing}=input;
+ for(const candidate of [missing,{...input,payerType:"person"},{...input,amount:300000},{...input,state:"customer_own"},{...input,tenantId:T},{...input,action:"withdraw_mark"}])await expect(f.marks.command(ctx,f.jobId,candidate,actor,f.auth.digest)).rejects.toThrow("INVALID_COMMAND");
+ expect((await admin.query("SELECT count(*)::int n FROM app.recovery_payment_payer_mark WHERE tenant_id=$1 AND job_id=$2",[T,f.jobId])).rows[0].n).toBe(0);
+ expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'jobId'=$2 AND event_type LIKE 'recovery.payment_payer.%'",[T,f.jobId])).rows[0].n).toBe(0);
+});
+
+it("[B2 DB16 Round2] pending F19 interest keeps approved words and settled F18 interest stays null at 12000p",async()=>{
+ const pending=await fixture("withheld_customer_payment",false);await pending.advance("receipt-3000","pending");
+ const r=(await reviewPayer(pending,"F19")).result;
+ expect(r.reason).toBe("Pending money cannot qualify");
+ expect(r.lines.find(l=>l.kind==="principal")).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Pending money cannot qualify",reasonHeld:false});
+ expect(r.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.",reasonHeld:false});
+ const settled=await fixture("withheld_customer_payment",false);await settled.advance("receipt-3000");
+ expect((await reviewPayer(settled)).result.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({qualifyingPrincipal:{pence:12000},reason:null,reasonHeld:false});
 });

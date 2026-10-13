@@ -71,3 +71,26 @@ The receipt's Round 1 check table records exact implementation-check commands, e
 | Final `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; all changes within ch-7-insurer allowlist. |
 
 The official `pnpm openapi:check` refusal is the only stopped executable check: `listen EPERM` on tsx's IPC pipe. Turbo also logged cache-related IO permission warnings while the requested forced tasks themselves executed successfully. No permissions escalation, shared-cache repair or alternate post-refusal operation was attempted. The generated diff shown by the compiled OpenAPI generator was unrelated parameter metadata and was restored; it is not presented as a source-generator pass.
+
+
+## Round 2 command inventory (13 October)
+
+Exact check commands, exit codes/counts and source/read diagnostics are in the receipt's Round 2 commands table. Every read batch used pwd/git status/rev-parse/grep/diff, rg/rg --files, cat/sed/tail/ls and returned 0 except absent guessed paths (1/2), noted there. Full 0119 source was re-read after the forced checks; no implementation change followed them.
+
+| Operation | Result |
+| --- | --- |
+| Read own receipt first; both full-steam orders and targeted order paragraphs; AGENTS/BUILD_PLAN/cards/contracts; current core/repositories/migrations/tests/package/launcher/upgrade-helper reads | Read-only, exits 0/1/2 as detailed in receipt; no refused operation retried. |
+| Python core tests-first payer addition/new tests; memory_pressure/df; two-file maxWorkers=2 core red then green | Edits 0; red 1 (41 failed/13 passed), green 0 (54 passed). |
+| Python DB tests-first snapshots/audit/marks/payer controls and browser append; saved previous-repository class for upgrade fixtures | 0; suites NOT RUN. |
+| Python required payer schema/SV-1 proceeds/insurer reason/repository SQL/locks/audit implementation; 0142 comments/current docs | 0; no new routine behavior beyond Round 1 SQL; F21 untouched. |
+| Supplementary own raw/header/strict-field/DB16 controls and API client-payer refusal | 0; added during source inspection. |
+| Dependency forced build, initial child pnpm mismatch; Ctrl-C; pinned child PATH rerun | 130 initially, 0 corrected (3 tasks/0 cached). No download. |
+| Standalone insurer DB-test tsc, own helper-name fix, repeated after additions | Initial 1 (underlying tsc 2, TS2344); own edit 0; two final runs 0. No DB execution. |
+| Forced root typecheck; API two-file run; forced root lint; forced root build; official OpenAPI | 0/1/0/0/1 respectively; exact counts and EPERM in receipt. No alternate OpenAPI route. |
+| Newest-definition git grep; whole own diff and moving-main diff; standard-F GRANT and lock searches; exact coordinator contexts | Read-only; 0 except absent guessed 0097 filename (2), actual file read afterwards. |
+| Python unchanged-file hashes and fresh newest-routine diff artifacts | 0; eight unchanged files; both routines identical to ee4917f. |
+| Node/pnpm version, memory/disk reads | 0; Node24.17.0/pnpm10.28.1; memory67–68%, disk85–86GB. |
+| Append Round 2 receipt/commands and write /private/tmp/jg-msg-ch-7-insurer.txt | 0; no commit, truthful Codex builder attribution. |
+| Final lint:lanes, whitespace check, inventory/allowed-path/original-prefix/snapshot assertions and git status/HEAD inspection | 0; final inventory/stat recorded in receipt. |
+
+All tests maxWorkers=2, two files, one run at a time. Database/browser/whole suites NOT RUN. No package install, git mutation, deletion, provider call, helper agent or permission escalation.

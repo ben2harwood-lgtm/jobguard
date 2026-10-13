@@ -3,7 +3,7 @@ import { sha256 } from "./evidence-pack.js";
 import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityFactsV3, recoveryEligibilityViewV3, RECOVERY_NOT_COUNTED_WORDING_V1 } from "./recovery-eligibility-v3.js";
 import { assertRecoverySources, recoveryCaseTypeV1 } from "./recovery-case.js";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
-const facts = (fixture: string, changes: Record<string,unknown> = {}) => ({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:id(1),jobId:id(2),caseId:id(3),fixture,settlement:"settled",paymentTiming:"after_opening",sourceRef:id(4),...changes});
+const facts = (fixture: string, changes: Record<string,unknown> = {}) => ({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:id(1),jobId:id(2),caseId:id(3),fixture,payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:id(4),...changes});
 describe("CH-7 D03 v3 candidate reviews", () => {
  it("B1 accepts the additive supplier case category and source split",()=>{
   expect(recoveryCaseTypeV1.parse("duplicate_supplier_payment")).toBe("duplicate_supplier_payment");
@@ -91,4 +91,38 @@ it("[B1] approved constants have the exact independent UTF-8 hashes without acti
  expect(RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced).toHaveLength(163);
  expect(sha256(RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced)).toBe("44e291a1874a9c230b704f972df2a547fcb4d67256d1c0f69114682decaf0e21");
  expect(evaluateRecoveryEligibilityV3(facts("F21"))).toMatchObject({reason:null,reasonHeld:true});
+});
+
+
+describe("CH-7-INSURER Round 2 payer fact",()=>{
+ it("[A6] requires an explicit server payer fact and refuses unknown payer values",()=>{
+  const {payer:_payer,...missing}=facts("F18");
+  expect(recoveryEligibilityFactsV3.safeParse(missing).success).toBe(false);
+  expect(()=>evaluateRecoveryEligibilityV3(missing)).toThrow("INVALID_COMMAND");
+  for(const payer of [null,"insurer","customer_cash"])expect(()=>evaluateRecoveryEligibilityV3(facts("F18",{payer}))).toThrow("INVALID_COMMAND");
+ });
+ it.each(["F18","F19"])("[A1 A6 DB1] %s insurer fact has its own exclusion reason on every component",fixture=>{
+  const r=evaluateRecoveryEligibilityV3(facts(fixture,{payer:"insurer_unmarked"}));
+  expect(r).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Insurer proceeds never qualify",reasonHeld:false,productionEnabled:false});
+  expect(r.lines).toHaveLength(3);
+  for(const line of r.lines)expect(line).toMatchObject({qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Insurer proceeds never qualify",reasonHeld:false});
+ });
+ it.each(["not_insurer","insurer_customer_own"])("[A6 DB2 DB3] %s retains F18/F19 exact figures and reasons",payer=>{
+  expect(evaluateRecoveryEligibilityV3(facts("F18",{payer}))).toMatchObject({qualifyingPrincipal:{pence:262000},reason:"Fixed statutory compensation is not part of the fee base"});
+  expect(evaluateRecoveryEligibilityV3(facts("F19",{payer}))).toMatchObject({qualifyingPrincipal:{pence:250000},reason:"Fixed statutory compensation is not part of the fee base"});
+ });
+ it.each(["F18","F19","F20"])("[A1 DB7] %s paid-before wins over insurer money on every line",fixture=>{
+  for(const payer of ["insurer_unmarked","insurer_customer_own"]){
+   const r=evaluateRecoveryEligibilityV3(facts(fixture,{payer,paymentTiming:"before_opening"}));
+   expect(r).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Paid before you opened this case"});
+   expect(r.lines.every(l=>l.reason==="Paid before you opened this case")).toBe(true);
+  }
+ });
+ it.each(["pending","unverified"])("[A1 DB8] insurer exclusion precedes %s proof",settlement=>{
+  const r=evaluateRecoveryEligibilityV3(facts("F19",{payer:"insurer_unmarked",settlement}));
+  expect(r.reason).toBe("Insurer proceeds never qualify");expect(r.lines.every(l=>l.reason===r.reason&&l.qualifyingPrincipal.pence===0)).toBe(true);
+ });
+ it.each(["F15","F17","F21","F22"])("[A1 DB9 Round2] insurer payer leaves %s including F21 reasons and held flags untouched",fixture=>{
+  expect(evaluateRecoveryEligibilityV3(facts(fixture,{payer:"insurer_unmarked"}))).toEqual(evaluateRecoveryEligibilityV3(facts(fixture)));
+ });
 });

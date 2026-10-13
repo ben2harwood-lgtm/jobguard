@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterEach, expect, it, vi } from "vitest";
-import { RecoveryPaymentPayerRepository, RecoveryCaseRepository } from "@jobguard/db";
+import { RecoveryPaymentPayerRepository, RecoveryCaseRepository, RecoveryEligibilityV3Repository } from "@jobguard/db";
 import { PracticeAccess } from "./practice-access.js";
 import { RecoveryCaseApplication, recoveryCommandFailure } from "./recovery-case.application.js";
 const pool = {} as Pool;
@@ -37,4 +37,12 @@ it("[A7 DB12] denies authorization before JSON and refuses invalid command field
  const failure = await new RecoveryCaseApplication(pool).eligibility(randomUUID(), { ...body(), tenantId: randomUUID() }).catch(e => e);
  expect(recoveryCommandFailure(failure)).toMatchObject({ status: 400, body: { code: "INVALID_COMMAND" } });
  expect(save).not.toHaveBeenCalled();
+});
+
+it("[A6 A7 Round2] v3 refuses client payer facts before calling the repository",async()=>{
+ vi.stubEnv("JOBGUARD_ENV","synthetic_demo");vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue(principal as never);
+ const write=vi.spyOn(RecoveryEligibilityV3Repository.prototype,"review"),job=randomUUID();
+ const input={version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:randomUUID(),expectedCaseRevision:2,expectedReviewRevision:0,fixture:"F18",payer:"insurer_customer_own"};
+ const failure=await new RecoveryCaseApplication(pool,randomUUID()).eligibility(job,input).catch(error=>error);
+ expect(recoveryCommandFailure(failure)).toMatchObject({status:400,body:{code:"INVALID_COMMAND"}});expect(write).not.toHaveBeenCalled();
 });
