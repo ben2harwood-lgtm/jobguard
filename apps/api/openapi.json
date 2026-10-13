@@ -68,6 +68,43 @@
         ]
       }
     },
+    "/contractor/practice/session/revoke": {
+      "post": {
+        "operationId": "ContractorPracticeSessionController_revoke",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "contractor-practice-session-revoke.v1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "End only the caller's contractor practice session; home practice is unchanged",
+        "tags": [
+          "contractor-practice-session"
+        ]
+      }
+    },
     "/auth/sso-required": {
       "get": {
         "operationId": "SsoRequiredController_view",

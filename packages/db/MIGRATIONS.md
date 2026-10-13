@@ -898,6 +898,12 @@ Existing rows are not examined or backfilled. A guarded message approved before 
 
 Forward fix: preserve all approval and chase history and amend only through a separately reviewed later migration. Do not roll back by removing the guard while pursuits exist. New terms/policy versions and withdrawal require their own reviewed migration and product ruling. DW3, wording, the UI and live M4-5 helper integration remain owed. Real charging remains locked.
 
+## 0138_practice_session_hardening.sql — contractor practice session boundary
+
+Depends on 0054 and 0094. Converts contractor session values in place into canonical SHA-256 digests and independent random row numbers. Live home records supply the remaining deadline; ended or absent home records end converted rows. New starts with no home record retain a nonrenewable seven-day cap. Lookup reads the home record on every call. Adds holder-only contractor revoke with a deferred audit requirement, write-once guards, and the same owner refusal in grant.create as member.invite. No new direct table write grants; only the checked revoke routine gains runtime EXECUTE.
+
+Forward fix preferred. A rollback restoring the three 0054 routines must also drop the three new NOT NULL requirements and the guard trigger, since the old start writes four columns. No current row retains its original session value, so restoring the old lookup ends every current session; each browser starts a new company. No rows are deleted. PostgreSQL upgrade and catalogue checks remain pending outside the sandbox.
+
 ## 0137 — synthetic SCIM deactivation (ENT-10a2)
 
 Adds only `identity.scim_event` (immutable, tenant-qualified, FORCE RLS, no application table privileges) and `identity.scim_deactivate(uuid,jsonb)` (restricted identity EXECUTE only; SECURITY DEFINER with pg_catalog search path). No object from 0111, 0120 or 0129 altered or restated; no backfill; no existing row changed by the migration. No column, index, constraint, policy, trigger or grant added to any existing table. PostgreSQL creates the internal foreign-key enforcement triggers automatically as part of the new table's constraints.
