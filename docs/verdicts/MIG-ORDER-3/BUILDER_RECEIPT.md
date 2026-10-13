@@ -157,3 +157,7 @@ The full `LANE_BASE_REF=origin/main pnpm lint` and the whole-repository `pnpm ty
 3. Control GREEN (b), later function replacement: the recorded `app.half_even_ratio(bigint,bigint,bigint)` re-created with `/* mo3 scratch */` after its first body delimiter, inside a rolled-back transaction after step 2, committed control (ii). Expected pass, actual pass (command 4). Not repeated by hand. The same replacement at 0122's own step (committed control (iii)) reported exactly that one function and also behaved as asserted.
 
 Set-up repairs: none. Anything refused or not run: nothing refused; the by-hand repeats of controls 2 and 3 were deliberately not run, as stated above.
+
+## FIXLATER-7 historical evidence clarification — 13 October 2026
+
+The compiled-generator failure recorded at lines 99, 106 and 116 remains an accurate record of that builder run. The later independent Sol verdict, `mig-order-3-solcheck-20261011T235400.md`, is bound to head `77634e62900b46076220304a2bb9af13fe6a6421` and records at line 65 that `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` exited 0: “Source OpenAPI check passed.” The accepted head recorded in `ACCEPTANCE_RECORD.md` is `77634e6`. This supplies the missing follow-up evidence for the historical OpenAPI note. It does not turn the earlier compiled failure into a pass, establish its root cause, or claim a fresh FIXLATER-7 execution.
