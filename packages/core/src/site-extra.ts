@@ -14,3 +14,5 @@ export function siteExtraHttpStatus(code: SiteExtraErrorCode): number {
  const status: Record<SiteExtraErrorCode, number> = { UNAUTHENTICATED: 401, MODE_FORBIDDEN: 403, ORIGIN_FORBIDDEN: 403, TRACK_FORBIDDEN: 403, EXTRA_FORBIDDEN: 403, INVALID_COMMAND: 400, NOT_FOUND: 404, COMMAND_CONFLICT: 409, STALE_REVISION: 409, SITE_EXTRA_UNAVAILABLE: 503, PHOTO_NOT_ACCEPTED: 422, CONFIRMATION_MISMATCH: 422 };
  return status[code];
 }
+/** Version 2 is a strictly additive extension of version 1: the same four fields plus the caller's own open visit. Job identity still comes from the route. */
+export const logSiteExtraV2 = z.object({ version: z.literal("log-site-extra.v2"), commandId: uuid, note: reviewedText(5000), description: reviewedText(500), siteVisitId: uuid }).strict();

@@ -441,3 +441,164 @@ Exactly five repair paths: repository, owned integration test, new unit file, EN
 ### Builder scope check (source-inspected, not a reviewer verdict)
 
 The base seam emits main's original authority SQL; the SoR transaction preserves main's original live/authority/pricing order. Evidence-bearing calls still execute all existing read, writer and transaction guard routines. Missing evidence routines remain unavailable rather than a fallback to ordinary capture. Authority checks precede evidence access; existing audit/refusal, payload conflict and replay handling are untouched. Test doubles do not establish PostgreSQL behavior: the new integration case and the merged failing proof require CI. Rollback/forward fix is a repository-code change only; no data migration, commercial policy change, new alert or release authorization. No code STOP, merged assertion relaxation, or BLOCKING policy question. Remaining gates: final unit execution after the helper refusal is resolved, real database CI, OpenAPI verification in an environment that permits the IPC socket, exact-new-head independent verdict and separate acceptance. Final available head remains `d777aa47c61473f9e64f45ca8fa79ea0249081c9`; the dispatcher owns the new commit.
+
+
+## Catch-up r7 — 13 October 2026, dispatcher 3
+
+Performed by Codex. The historical first line naming Claude is retained verbatim under the dispatch order; it describes the original build, not this catch-up. Builder evidence only: no independent verdict, acceptance, merge, commit, push, migration execution or release authorization.
+
+Available head remains `5d2c196b2fe2161b97f5733f951472ae0d293a26`; merge parent `6659fb58791ec22588948f005b2bd4f6b299fa48`. The dispatcher owns the eventual merge commit, whose hash does not yet exist. Branch `codex/sandbox/ent-3d`. Intended merge message written to `/private/tmp/jg-msg-ent-3d.txt`, beginning `Merge remote-tracking branch 'origin/main' into codex/sandbox/ent-3d`.
+
+### Each conflicted file
+
+| File | Resolution |
+|---|---|
+| `BUILD_PLAN.md` | Complete main ENT-3b paragraph retained; complete ENT-3d paragraph follows. ENT-3c paragraph unchanged. |
+| `apps/api/openapi.json` | All main paths retained; exact main v1/v2 schemas followed by v3; evidence 422 response retained. Parses without duplicate keys. |
+| `apps/api/src/contractor/site-extra.application.ts` | Main v1/v2 parser, visit methods and visit reference retained; separate v3 branch added, returning only its evidence response. Pricing methods unchanged. |
+| `apps/api/src/contractor/site-extra.controller.ts` | Main v1/v2 schemas followed by v3; evidence refusal response retained; summary describes all three versions. |
+| `apps/web/app/api/contractor/jobs/[id]/site-extras/route.ts` | Main v1/v2 parsing retained with v3 fallback; validated body reaches the same application. |
+| `config/agent-lane-assignments.json` | Both main ENT-3b and branch ENT-3d registrations retained; all other registrations preserved; valid JSON without duplicate keys. |
+| `packages/core/src/index.ts` | Main site-visit export retained, followed by site-extra-evidence export. |
+| `packages/db/MIGRATIONS.md` | Complete descriptions retained in numeric 0139, 0140, 0141 order. |
+| `packages/db/src/site-extra-repository.ts` | Main visit refusal reason, precheck, stored visit reference and transaction guard retained alongside evidence gate. Authority/pricing use narrow Refusal; evidence path alone uses SiteExtraRefusal. Non-evidence paths use the base seam and access no 0141 routine. |
+
+The migration runner already lists 0139, 0140, 0141 correctly and was not edited. Both migration descriptions from main and both main ENT-3b/ENT-3c ledger paragraphs were compared as complete text. The OpenAPI comparison proves all other paths and all other top-level fields equal main; the original v1/v2 schemas remain exact. These are static preservation checks, not application or integration test results.
+
+### Checks and refusals
+
+No cache result is claimed. Forced typecheck, lint and build were each invoked once with `--force`; pnpm refused before Turbo or any compiler started. Counts: zero unit tests, zero database tests, zero browser tests executed.
+
+The required helper's exact denied diagnostics were `sysctl: sysctl fmt -1 1024 1: Operation not permitted`, `sysmon request failed with error: sysmond service not found`, and `pgrep: Cannot get process list`. No helper bypass or further unit test attempt was made. The core unit attempt ultimately returned exit 1 at the pnpm launcher.
+
+The launcher refusal was: `Refusing to run pnpm@10.28.1: its npm registry signature could not be verified (@pnpm/exe@10.28.1: fetch failed; @pnpm/macos-arm64@10.28.1: fetch failed; pnpm@10.28.1: fetch failed). The bytes selected by this project's lockfile/registry do not match a published, signed pnpm release.` No setting to ignore the refusal was used. The installed wrapper points to pnpm 11, which attempts verification of the repository's pinned 10.28.1. No package install command or successful download occurred; dependencies, pins and lockfile were not edited.
+
+A cleanup attempt to signal only the owned stalled helper group (`os.killpg(11332, signal.SIGTERM)`) returned exit 1 with `PermissionError: [Errno 1] Operation not permitted`. No alternative signal or termination route was attempted. That helper run subsequently exited on its own with the launcher refusal.
+
+OpenAPI CLI returned exit 1 before generation: `listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/15733.pipe`. No alternate OpenAPI execution route was tried.
+
+Lane lint returned exit 1 listing main's staged files outside ENT-3d. The lane tool inspects the uncompleted merge index as well as working changes; those files are byte-identical to the initial dispatch state. No lane expansion, lint weakening or git write was used. The dispatcher must repeat it after completing the merge.
+
+The raw conflict-string grep reports only literal historical command strings in merged `docs/verdicts/ENT-3b/r3-command-log.json` at lines 9, 63 and 203. An anchored scan finds zero active conflict-marker lines. This merged log was preserved; it cannot be edited to erase the raw grep hits while retaining main exactly.
+
+### STOP — pinned compatibility assertions (source finding; tests NOT RUN)
+
+No test or pinned value was edited. Main now calls `app.ent3b_require_open_visit` after the original authority guard. The existing expected call lists omit it, so coordinator action is required:
+
+- `packages/db/test/site-extra-evidence-compatibility.test.ts:51`: before `  ]);`; needed after `   "SELECT app.ent3b_require_open_visit($1,$2)",` then `  ]);`.
+- `packages/db/test/site-extra-evidence-compatibility.test.ts:68`: before `  expect(f.query.mock.calls.map(([sql]) => sql).slice(-3)).toEqual([`; needed after `  expect(f.query.mock.calls.map(([sql]) => sql).slice(-4)).toEqual([`.
+- `packages/db/test/site-extra-evidence-compatibility.test.ts:71`: before `   "SELECT app.ent3d_require_site_extra_evidence($1,$2)",`; needed after `   "SELECT app.ent3b_require_open_visit($1,$2)",` then the original evidence-guard line.
+
+This order says to stop rather than edit a pinned value. Preserving main's guard and preserving these expected lists together leaves this known assertion mismatch; no code workaround was introduced. A first failing test run could not be obtained because the required launcher refused execution. No new acceptance test was added for this merge-only catch-up.
+
+### NOT RUN files
+
+- `packages/core/src/site-extra-evidence.test.ts`: requested helper attempt exited 1 before Vitest (launcher signature refusal); zero tests ran.
+- `packages/db/test/site-extra-evidence-compatibility.test.ts`: helper/launcher blocked; pinned-list STOP above.
+- `apps/api/src/contractor/site-extra-evidence.application.test.ts`: helper/launcher blocked.
+- `apps/web/app/api/contractor/jobs/[id]/site-extras/route.evidence.test.ts`: helper/launcher blocked.
+- `packages/db/test/site-extra-evidence.integration.test.ts` and `packages/db/test/site-extra-evidence-routines.integration.test.ts`: NOT RUN (cannot start PostgreSQL here; database suites prohibited for this catch-up).
+- Browser suites: NOT RUN (cannot start a browser here; browser suites prohibited for this catch-up). No browser spec belongs to this server-only slice.
+
+### Grants and migrations
+
+No new GRANT was introduced or changed by r7. Migration 0141 remains byte-identical. Its five pre-existing EXECUTE grants are listed individually here; standard F remains unchanged, with no new direct INSERT/UPDATE/DELETE grant to the application login:
+
+- `GRANT EXECUTE` on `app.ent3d_content_sha256(uuid,text,text,text)` to `jobguard_runtime`.
+- `GRANT EXECUTE` on `app.ent3d_confirmation_document(uuid,uuid,uuid,text)` to `jobguard_runtime`.
+- `GRANT EXECUTE` on `app.ent3d_site_extra_evidence(uuid,text,text,uuid,uuid,uuid)` to `jobguard_runtime`.
+- `GRANT EXECUTE` on `app.ent3d_record_resident_confirmation(uuid,uuid,uuid,uuid,text,text,uuid,text)` to `jobguard_runtime`.
+- `GRANT EXECUTE` on `app.ent3d_require_site_extra_evidence(uuid,uuid)` to `jobguard_runtime`.
+
+No migration, backfill, privilege change, prompt/model change, external action, new alert or production policy change was made in this catch-up. Existing forward-fix strategy and release gates remain.
+
+### Scope evidence
+
+A SHA-256 snapshot of every tracked file at dispatch entry was saved to `/private/tmp/ent-3d-r7-initial-sha256.json`. Before this receipt append, every tracked file outside the nine conflict paths was compared to that snapshot and remained identical. No merged test or pinned value changed. Resolution SHA-256 values:
+
+```text
+21d7c5ba11b66d000c3689b8c65d9defa9c8840889cde4ff1241105f558682b3  BUILD_PLAN.md
+15dd797c3d11c63da21aa659501b06fccfd51dc09115b58abddb0d05598a4bb8  apps/api/openapi.json
+e705ae4084b7325bda656d560e17ddb29f816a2dd02231aabfbb26a2e5375bfa  apps/api/src/contractor/site-extra.application.ts
+b3ffcbe8ee9bd6ad85e25652fe9a3ff0dbbcefc4a12d669e3dd3e369e115bf83  apps/api/src/contractor/site-extra.controller.ts
+fd027317b92103ccbeeeb7825b2afc09b05b4673192bd5850d0d295ffe8a4e03  apps/web/app/api/contractor/jobs/[id]/site-extras/route.ts
+04164a0ca67e08ce117e539015416ad0f7016e1a88d40a6d112584c642c3e44b  config/agent-lane-assignments.json
+626429cce51c620e254db160138fbab68ba7a0c7ce176b86bd7a526be079a95e  packages/core/src/index.ts
+84541cfdbbaa0971f3736357eb17dc18eb5689624974a5214248e46e4de40ea9  packages/db/MIGRATIONS.md
+f593561fd81e046e4a00b770a75251ceb9f4d9105c9bb1d4efec27ac61596758  packages/db/src/site-extra-repository.ts
+```
+
+Selected unchanged files (equal to initial dispatch bytes):
+
+```text
+95bb5640ec12ac7dff1e25b303e0224bea6ebbbdd843efe370c284ab2abe9fa2  packages/db/src/migrate.ts
+58174fc0e3cd28a9c5b27c5cf344565df68fb1fca1b557bd091aa21ddfcf4377  packages/db/migrations/0139_site_visit_closeout.sql
+29605ffb78bc6193da5d1483834c15456b0a23561cd2bb95f26bc564dd1ff852  packages/db/migrations/0140_site_extra_pricing.sql
+253a65ba1297767cd30ed839cbbef0c570d0ffde99767f8b2de4b6a4ec85f93f  packages/db/migrations/0141_site_extra_evidence.sql
+ff78a242d486508887c958d0d808cab94e6812b3e2502561e100f7766813870c  packages/db/test/site-extra-evidence-compatibility.test.ts
+1628a2c3dc2d24cdb20c11ded7461a9206af9e71f918bff571ba51e66cf9aaf7  packages/core/src/watchdog.ts
+3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6  packages/db/test/watchdog-command-harness.ts
+db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f  packages/db/test/command-replay-contract.integration.test.ts
+a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35  apps/api/src/auth/context-boundary.test.ts
+37e980e750348b4b9a2a483f66179662b52035d17e0822526b0b28cec265fff8  docs/verdicts/ENT-3b/r3-command-log.json
+```
+
+`git diff --stat` before this receipt append (index intentionally remains unmerged):
+
+```text
+ BUILD_PLAN.md                                      | Unmerged
+ BUILD_PLAN.md                                      |   2 +
+ apps/api/openapi.json                              | Unmerged
+ apps/api/openapi.json                              | 248 ++++++++++++++++++++-
+ apps/api/src/contractor/site-extra.application.ts  | Unmerged
+ apps/api/src/contractor/site-extra.application.ts  |  77 ++++++-
+ apps/api/src/contractor/site-extra.controller.ts   | Unmerged
+ apps/api/src/contractor/site-extra.controller.ts   |   8 +-
+ .../api/contractor/jobs/[id]/site-extras/route.ts  | Unmerged
+ .../api/contractor/jobs/[id]/site-extras/route.ts  |   7 +-
+ config/agent-lane-assignments.json                 | Unmerged
+ config/agent-lane-assignments.json                 |   2 +
+ packages/core/src/index.ts                         | Unmerged
+ packages/core/src/index.ts                         |   1 +
+ packages/db/MIGRATIONS.md                          | Unmerged
+ packages/db/MIGRATIONS.md                          |   8 +
+ packages/db/src/site-extra-repository.ts           | Unmerged
+ packages/db/src/site-extra-repository.ts           |  16 +-
+ 9 files changed, 351 insertions(+), 18 deletions(-)
+```
+
+### Builder scope inspection
+
+Source-inspected, not a reviewer verdict: request schemas select v1/v2/v3 distinctly; v3 cannot supply a visit. The persisted-session resolver is unchanged. Authority precedes visit/evidence checks. Main's visit guard participates in the base seam, and the evidence guard follows it only for evidence-bearing calls. Pricing's authority/refusal type stays narrow and its transaction uses the base seam. All main pricing and visit methods remain. No test was changed to make this claim pass. Compiler and runtime evidence are unavailable here and remain a hold. The dispatcher needs real forced checks, targeted tests, PostgreSQL evidence, the coordinator's pinned-assertion decision, an exact-commit independent verdict and separate acceptance before merge/release.
+
+
+### Final r7 command results
+
+Every check command below ran through `/private/tmp/ent-3d-r7-run.py`, which captured its output, final exit code and elapsed time. The launcher refused before the three forced tasks could execute; zero Turbo tasks and zero tests ran. All three used `--force`; none was repeated.
+
+| Check | Exact shell command | Exit | Executed count |
+|---|---|---|---|
+| core-unit | `export PATH="$HOME/Library/pnpm/bin:$PATH"; memory_pressure \| tail -1; df -g /System/Volumes/Data; ~/.local/bin/heavy-slot ent-3d-r7-core pnpm --filter @jobguard/core exec vitest run src/site-extra-evidence.test.ts --maxWorkers=2` | 1 | 0 tests |
+| lane-check | `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 1 | 1 check |
+| openapi-check | `apps/api/node_modules/.bin/tsx apps/api/src/generate-openapi.ts --check` | 1 | 1 check |
+| typecheck | `export PATH="$HOME/Library/pnpm/bin:$PATH"; pnpm exec turbo run typecheck --force` | 1 | 0 Turbo tasks |
+| lint | `export PATH="$HOME/Library/pnpm/bin:$PATH"; memory_pressure \| tail -1; df -g /System/Volumes/Data; LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 1 | 0 Turbo tasks |
+| build | `export PATH="$HOME/Library/pnpm/bin:$PATH"; memory_pressure \| tail -1; df -g /System/Volumes/Data; pnpm build --concurrency=2 --force` | 1 | 0 Turbo tasks |
+
+Additional completed commands and results:
+
+- `export PATH="$HOME/Library/pnpm/bin:$PATH"; export npm_config_manage_package_manager_versions=false; export COREPACK_ENABLE_NETWORK=0; pnpm --version`: exit 1, same signature-verification refusal; no version bypass succeeded or was used for verification.
+- Python cancellation of owned helper group via `os.killpg(11332, signal.SIGTERM)`: exit 1, permission refusal quoted above; no repeat.
+- `git diff --check`: exit 0 on both post-resolution and final runs.
+- Raw `git grep -n` for the two marker strings: exit 0, three literal historical command-log matches; anchored version: exit 1, zero active marker lines. Neither scan edited any file.
+- `memory_pressure | tail -1`: exit 0 on each resource check, 68–72% free; `df -g /System/Volumes/Data`: exit 0, 65 GB available throughout. No run went below the dispatch thresholds.
+- `pwd`, `git status --short`, `git rev-parse HEAD`, `git rev-parse MERGE_HEAD`, `git ls-files -u`, `git diff --stat`, `git diff --name-only origin/main`, and `git diff --numstat origin/main -- docs/verdicts/ENT-3b packages/db/test apps/api/src/auth/context-boundary.test.ts`: exit 0, read-only merge/scope inspection. The index retains nine unmerged entries until the dispatcher stages the resolved files.
+- `cat AGENTS.md`, `cat ~/.local/share/full-steam/handoffs/jobguard-task.md`, contract and receipt reads, `cat package.json`, workspace/package/Turbo configuration reads, `cat tools/lint.mjs | head -65`, and `cat ~/.local/bin/heavy-slot`: exit 0, instruction/tool inspection only.
+- `rg`, `rg --files`, `sed -n`, `head`, `tail` and `nl -ba` inspections of the task ledger, nine conflicting files, source types, applicable test files, OpenAPI generator and grants: completed; the `.npmrc` lookup reported no such file (no modification). No test command is hidden among these reads.
+- Launcher-path inspections with `ls -l`: existing pnpm wrapper, Turbo and Vitest binaries read successfully; absent `~/.local/bin/pnpm`, repository `.bin/pnpm`, `/opt/homebrew/bin/pnpm` and `/usr/local/bin/pnpm` reported no such file. No executable was installed or replaced.
+- Python dispatch snapshot and nine-file conflict resolution: exit 0, all nine resolved, JSON parses.
+- Python JSON/marker/change-set inspection: exit 0, exactly nine tracked paths changed before the receipt; one OpenAPI path differs from main.
+- Python final preservation assertions and hash snapshot: exit 0, every other tracked file byte-identical, exact main v1/v2 schemas and main migration/ledger paragraphs retained, migration runner sorted 0139/0140/0141.
+- Python intended-message write and receipt append: exit 0, only requested artifact/receipt paths written.
+
+Final check status: typecheck exit 1, lint exit 1, build exit 1 (all launcher refusals, checks NOT RUN); unit attempt exit 1 with zero tests; lane lint exit 1; OpenAPI CLI exit 1 with IPC refusal. JSON, preservation, migration order, absence of active markers and whitespace checks pass as static checks only. Head unchanged at `5d2c196b2fe2161b97f5733f951472ae0d293a26`.

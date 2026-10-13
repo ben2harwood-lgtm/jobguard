@@ -951,6 +951,14 @@ Renumbered from 0129 to 0133 on 12 October 2026 under the merge-ahead ruling bec
 
 `0133_shadow_detection.sql`: SV-3: append-only FORCE-RLS `shadow_must_surface_firing`, shadow-only `surface_shadow_signal_early` EXECUTE, and the single `must_surface_signal` finding kind. Atomic Decision/disclosure/firing/audit; no new business-table grants. Forward fix only: retain immutable firings and disclosures; disable the worker to stop new detections. Database upgrade proof is in `shadow-detection.integration.test.ts`.
 
+## 0139 — site visit start and complete, and the close-out answer (ENT-3b)
+
+Additive: one table and six PL/pgSQL functions, all owned by `jobguard_migration` with `search_path=pg_catalog`. `app.closeout_answer` holds one immutable row per visit (forced row security, the merged `tenant_isolation` policy, runtime SELECT only, update and delete refused by the merged immutable trigger). `app.ent3b_visit_authority(uuid,uuid)` (STABLE, SECURITY INVOKER) is the one place the visit rule lives and calls merged routines only. `app.ent3b_start_visit(uuid,uuid,uuid)` and `app.ent3b_complete_visit(uuid,uuid,uuid,uuid,text)` are the only writers of `app.site_visit` and `app.closeout_answer` (SECURITY DEFINER; they re-decide the rule under the shared tenant administration lock, check the command receipt and take the visit locks 3101 and 3102). `app.ent3b_require_open_visit(uuid,uuid)` (SECURITY INVOKER) is called by the site-extra seam when an extra names a visit. `app.ent3b_closeout_guard()` and `app.ent3b_require_closeout_audit()` are trigger functions, not executable by the runtime role.
+
+One deferred trigger is added to the merged `app.site_visit` table, so that a completed visit without exactly one matching answer (and a visit that has an answer but is not completed) cannot commit for any writer, the table owner included. No column, index, constraint, policy or grant is added to any existing table; no existing object is replaced or removed; no row is changed or backfilled. The application login gains SELECT on the new table and EXECUTE on four functions by an explicit list, and no write grant on any table.
+
+Upgrade proof and catalogue: `site-visit-upgrade.integration.test.ts` and `site-visit-authority.integration.test.ts`. Forward fix preferred: stop the two routes and issue a reviewed correction; the answer table holds records that must be kept. Removing the new objects is permissible only before any visit has been completed through it. No historical data rollback is needed.
+
 ## 0140 — site extra pricing (ENT-3c)
 
 Additive only: two new tables, `app.extra_sor_revision` (the server-priced first revision of a schedule-item site extra, one row at most per extra, `revision=1`) and

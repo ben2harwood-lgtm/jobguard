@@ -12,14 +12,14 @@ import { readOrderFacts, readReplay, readStoredPriced, searchItems, type StoredP
 /** ENT-3c: what a priced log answers. The price itself is never part of an answer (Q7). */
 export type StoredSorExtra = Pick<StoredPriced, "variationId" | "jobId" | "coverage" | "sorCode" | "unit" | "claimedQuantity" | "instructedQuantity" | "extraQuantity" | "orderLineScopeItemId" | "priceSource">;
 const commandType = "LogSiteExtra";
-const inputV1 = z.object({ commandId: z.string().uuid(), jobId: z.string().uuid(), note: z.string().min(1).max(5000).refine(value => /\S/u.test(value)), description: z.string().min(1).max(500).refine(value => /\S/u.test(value)) }).strict();
+const inputV1 = z.object({ commandId: z.string().uuid(), jobId: z.string().uuid(), note: z.string().min(1).max(5000).refine(value => /\S/u.test(value)), description: z.string().min(1).max(500).refine(value => /\S/u.test(value)), siteVisitId: z.string().uuid().optional() }).strict();
 type Input = z.infer<typeof inputV1>;
 const inputV3 = inputV1.extend({ photoEvidenceId: z.string().uuid().optional(), shownContentSha256: z.string().regex(/^[0-9a-f]{64}$/u).optional() }).strict();
 type InputV3 = z.infer<typeof inputV3>;
 type EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED" | "CONFIRMATION_MISMATCH"; reason: "photo_not_accepted" | "confirmation_mismatch" };
 export type EvidenceFacts = { photoEvidenceId: string | null; residentConfirmationEvidenceId: string | null; contentSha256: string };
 export type LoggedSiteExtra = RaisedExtra & { evidence?: EvidenceFacts };
-type Refusal = { code: "TRACK_FORBIDDEN" | "EXTRA_FORBIDDEN" | "NOT_FOUND"; reason: "track_not_contractor" | "member_inactive" | "role_not_permitted" | "job_out_of_scope" };
+type Refusal = { code: "TRACK_FORBIDDEN" | "EXTRA_FORBIDDEN" | "NOT_FOUND"; reason: "track_not_contractor" | "member_inactive" | "role_not_permitted" | "job_out_of_scope" | "visit_out_of_scope" };
 type SiteExtraRefusal = Refusal | EvidenceRefusal;
 type Authority = { grant: string } | Refusal;
 const answerV1 = z.discriminatedUnion("decision", [
@@ -31,6 +31,8 @@ const answerV1 = z.discriminatedUnion("decision", [
 const siteExtraBaseAuthoritySeam: ExtraTransactionSeam = async (db, fact) => {
  await requireLiveJob(db, fact.jobId);
  await db.$client.query("SELECT app.ent3a_require_extra_authority($1,$2)", [fact.jobId, fact.variationId]);
+ // ENT-3b: when the stored origin names a visit, it must still be the raising member's own open visit on this job (shares the completion routine's visit lock).
+ await db.$client.query("SELECT app.ent3b_require_open_visit($1,$2)", [fact.jobId, fact.variationId]);
 };
 /** The v3 evidence checks run before ENT-4b's final audit append; raiseExtra already holds its per-job lock. */
 export const siteExtraAuthoritySeam: ExtraTransactionSeam = async (db, fact) => {
@@ -43,7 +45,7 @@ const photoRefusal: EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED", reason: "pho
 type Gate = { raise: { evidenceId?: string; residentConfirmationEvidenceId?: string }; evidence?: EvidenceFacts };
 export class SiteExtraRepository {
  constructor(private readonly pool: Pool) {}
- private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string): Promise<Authority> {
+ private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string): Promise<Authority> {
   return withTenant(this.pool, context, async db => {
    try { await assertContractorGate(db, actor, "member"); } catch (error) {
     if (error instanceof WorkOrderError && error.code === "TRACK_FORBIDDEN") return { code: "TRACK_FORBIDDEN", reason: "track_not_contractor" };
@@ -55,6 +57,8 @@ export class SiteExtraRepository {
    if (!answer.success) return { code: "NOT_FOUND", reason: "job_out_of_scope" };
    if (answer.data.decision === "allowed") {
     await requireLiveJob(db, jobId);
+    // A visit reference is checked only after the caller is known to be allowed: it must be the caller's own open visit on this job.
+    if (siteVisitId && !(await db.$client.query("SELECT 1 FROM app.site_visit WHERE tenant_id=$1 AND id=$2 AND job_id=$3 AND membership_id=$4 AND completed_at IS NULL", [actor.tenantId, siteVisitId, jobId, actor.membershipId])).rowCount) return { code: "NOT_FOUND", reason: "visit_out_of_scope" };
     return { grant: answer.data.raising_grant };
    }
    if (answer.data.decision === "not_found") return { code: "NOT_FOUND", reason: "job_out_of_scope" };
@@ -150,13 +154,13 @@ export class SiteExtraRepository {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (actor.tenantId.toLowerCase() !== context.tenantId.toLowerCase()) refusal = { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
    else {
-    const authority = await this.precheck(context, actor, input.jobId);
+    const authority = await this.precheck(context, actor, input.jobId, input.siteVisitId);
     if ("code" in authority) refusal = authority;
     else {
      const gate = await this.evidenceGate(context, actor, input);
      if ("code" in gate) refusal = gate; else
      try {
-      return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...gate.raise }, async (db, fact) => {
+      return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...(input.siteVisitId ? { siteVisitId: input.siteVisitId } : {}), ...gate.raise }, async (db, fact) => {
        try {
         if (gate.evidence) await siteExtraAuthoritySeam(db, fact);
         else await siteExtraBaseAuthoritySeam(db, fact);
@@ -172,7 +176,7 @@ export class SiteExtraRepository {
      } catch (error) {
       if (liveRefusal) throw liveRefusal;
       if (error instanceof ExtraPersistenceError && (error.code === "NOT_FOUND" || error.code === "INVALID_ORIGIN")) {
-       const current = await this.precheck(context, actor, input.jobId);
+       const current = await this.precheck(context, actor, input.jobId, input.siteVisitId);
        if ("grant" in current) { refusal = await this.evidenceRefusal(context, input); if (!refusal) throw new SiteExtraError("STALE_REVISION"); }
        else refusal = current;
       } else throw error;
