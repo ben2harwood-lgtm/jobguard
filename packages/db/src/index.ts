@@ -91,3 +91,5 @@ export * from "./scim-repository.js";
 export * from "./recovery-allocation-repository.js";
 export * from "./site-visit-repository.js";
 export * from "./recovery-payment-payer-repository.js";
+
+export * from "./commercial-integrity-application-repository.js";
