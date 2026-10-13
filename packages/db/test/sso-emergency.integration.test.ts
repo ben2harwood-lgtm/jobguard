@@ -46,6 +46,11 @@ beforeAll(async()=>{
  identity=new Pool({...base,user:"ent10d_identity",password:"identity-fixture",max:8});runtime=new Pool({...base,user:"ent10d_runtime",password:"runtime-fixture",max:8});
 },120000);
 afterAll(async()=>{await closeTestPools(identity,runtime,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});});
+async function requestSigninCode(provider:PersistedAuthProvider,email:string) {
+ // Fixture-only elapsed cooldown: keep attempts, expiry and consumption intact; do not move the database window clock.
+ await admin.query("UPDATE identity.challenge SET requested_at=LEAST(requested_at,clock_timestamp()-interval '61 seconds') WHERE email=$1 AND purpose='signin'",[email]);
+ return provider.requestCode({email,purpose:"signin",ip:randomUUID()});
+}
 async function fixture(configure=true,link=true) {
  const contractor=new ContractorRepository(runtime),principal=await contractor.startPractice(randomUUID()),provider=auth();
  const connectionId=randomUUID(),domain=`${connectionId}.fixture.invalid`,email=`owner@${domain}`;
@@ -158,7 +163,7 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
   expect((await admin.query("SELECT count(*)::int n FROM app.evidence_object WHERE tenant_id=$1",[f.principal.tenantId])).rows[0].n).toBe(1);
   const compared=["app.journal","app.journal_line","app.evidence_object","identity.sso_connection","identity.verified_domain","identity.idp_group_role_mapping","identity.sso_subject","identity.sso_session_binding","identity.sso_grant","identity.session","app.membership","app.role_grant"];
   const snapshot=async(client:Pick<PoolClient,'query'>)=>Promise.all(compared.map(async table=>(await client.query(`SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb)::text bytes FROM ${table} r`)).rows[0].bytes));
-  const prior=await snapshot(admin),earlier=await audit(f.principal.tenantId),request=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()});
+  const prior=await snapshot(admin),earlier=await audit(f.principal.tenantId),request=await requestSigninCode(f.provider,f.email);
   await expect(f.service.emergency({version:"sso-emergency.v1",requested_tenant_id:f.principal.tenantId,email:f.email,code:request.fixtureCode!,reason:"Synthetic outage with held approval rule"},origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});
   expect(await snapshot(admin)).toEqual(prior);expect((await audit(f.principal.tenantId)).slice(0,earlier.length)).toEqual(earlier);
   const client=await admin.connect();try {
@@ -180,7 +185,7 @@ type OwnerFixture=Awaited<ReturnType<typeof fixture>>;
 const emergencyReason="Synthetic owner requests emergency access";
 const inputV2=(f:OwnerFixture,commandId=randomUUID())=>({version:"sso-emergency.v2",requested_tenant_id:f.principal.tenantId,commandId,email:f.email,reason:emergencyReason});
 async function publicUse(f:OwnerFixture,commandId=randomUUID(),service=f.service) {
- const request=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()});
+ const request=await requestSigninCode(f.provider,f.email);
  return service.emergency({...inputV2(f,commandId),code:request.fixtureCode},origin);
 }
 async function canonical(table:string,tenant?:string) {
@@ -190,7 +195,7 @@ const created=["identity.sso_emergency_approval","identity.sso_emergency_use","i
 const beforeUse=(f:OwnerFixture)=>Promise.all(created.map(t=>canonical(t,f.principal.tenantId)));
 async function grant(tenant:string,membership:string,role:string,email:string) {
  let clientId:string|null=null;
- if(role==="client_approver"){clientId=randomUUID();await admin.query("INSERT INTO app.client_organisation(tenant_id,id,branch_id,name) VALUES($1,$2,$1,'Synthetic client')",[tenant,clientId]);}
+ if(role==="client_approver"){clientId=randomUUID();await admin.query("INSERT INTO app.client_organisation(tenant_id,id,branch_id,name,client_type) VALUES($1,$2,$1,'Synthetic client','person')",[tenant,clientId]);}
  await admin.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email,client_id) VALUES($1,$2,$3,$4)",[tenant,membership,email,clientId]);
  if(role!=="client_approver")await admin.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,$4,'tenant',$1)",[tenant,randomUUID(),membership,role]);
 }
@@ -216,7 +221,7 @@ describe("ENT-10e owner emergency records",()=>{
    const membership=await memberIn(claimant.principal.identityUserId,f.principal.tenantId,role);
    await grant(f.principal.tenantId,membership,role,claimant.email);
    const before=await beforeUse(f),logs=await canonical("identity.sso_emergency_event",f.principal.tenantId),events=await audit(f.principal.tenantId);
-   const code=await f.provider.requestCode({email:claimant.email,purpose:"signin",ip:randomUUID()});
+   const code=await requestSigninCode(f.provider,claimant.email);
    await expect(f.service.emergency({...inputV2(f),email:claimant.email,code:code.fixtureCode},origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});expect(await beforeUse(f)).toEqual(before);
    const cause=role==="admin"?"EMERGENCY_NOT_OWNER":"EMERGENCY_PERMISSION_REFUSED";
    const after=await audit(f.principal.tenantId);
@@ -235,7 +240,7 @@ describe("ENT-10e owner emergency records",()=>{
   const a=await fixture(),b=await fixture();await a.enable();await b.enable();
   const bState=await b.service.view({version:"sso-required-view.v1",requested_tenant_id:b.principal.tenantId},b.bound!);
   const bBefore=await Promise.all([...created,"identity.sso_emergency_event"].map(t=>canonical(t,b.principal.tenantId))),aBefore=await beforeUse(a),aLogs=await canonical("identity.sso_emergency_event",a.principal.tenantId);
-  const submit=async()=>{const code=await b.provider.requestCode({email:b.email,purpose:"signin",ip:randomUUID()});return a.service.emergency({...inputV2(a),email:b.email,code:code.fixtureCode},origin);};
+  const submit=async()=>{const code=await requestSigninCode(b.provider,b.email);return a.service.emergency({...inputV2(a),email:b.email,code:code.fixtureCode},origin);};
   await expect(submit()).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});expect(await beforeUse(a)).toEqual(aBefore);expect(await canonical("identity.sso_emergency_event",a.principal.tenantId)).toEqual(aLogs);
   expect((await admin.query("SELECT code FROM identity.sso_refusal_event ORDER BY created_at DESC LIMIT 1")).rows[0].code).toBe("EMERGENCY_MEMBER_NOT_ACTIVE");
   const membership=await memberIn(b.principal.identityUserId,a.principal.tenantId,"admin");await grant(a.principal.tenantId,membership,"admin",b.email);
@@ -266,7 +271,7 @@ describe("ENT-10e owner emergency records",()=>{
   expect((await admin.query("SELECT cause_code FROM identity.sso_emergency_event WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 1",[f.principal.tenantId])).rows[0].cause_code).toBe("EMERGENCY_ALREADY_USED");
   await f.service.command(f.command(true,2),f.bound!);const pastCommand=randomUUID();await pastUse(f,pastCommand);const past=await canonical("identity.sso_emergency_window",f.principal.tenantId);
   await expect(publicUse(f,pastCommand)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});expect((await admin.query("SELECT cause_code FROM identity.sso_emergency_event WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 1",[f.principal.tenantId])).rows[0].cause_code).toBe("EMERGENCY_COMMAND_REPLAYED");expect(await canonical("identity.sso_emergency_window",f.principal.tenantId)).toEqual(past);
-  const request=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()}),input={...inputV2(f),code:request.fixtureCode};await f.service.emergency(input,origin);const after=await beforeUse(f);
+  const request=await requestSigninCode(f.provider,f.email),input={...inputV2(f),code:request.fixtureCode};await f.service.emergency(input,origin);const after=await beforeUse(f);
   await expect(f.service.emergency(input,origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});expect(await beforeUse(f)).toEqual(after);
   const current=await canonical("identity.sso_emergency_window",f.principal.tenantId);expect(current).toHaveLength(past.length+1);expect(current.filter(x=>past.includes(x))).toEqual(past);
  });
@@ -289,10 +294,10 @@ describe("ENT-10e owner emergency records",()=>{
  });
  it("[E9] retired v1, unknown mailbox, invalid code, switch off and invalid setting have identical public bodies",async()=>{
   const f=await fixture(),controller=new (await import("../../../apps/api/src/auth/sso/sso-required.controller.js")).SsoRequiredController(()=>f.service);
-  const request=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()}),raw={...inputV2(f),code:request.fixtureCode};
+  const request=await requestSigninCode(f.provider,f.email),raw={...inputV2(f),code:request.fixtureCode};
   for(const input of [{...raw,code:undefined},{...raw,code:"0".repeat(8)},{...raw,email:"unknown@fixture.invalid"},{...raw,version:"sso-emergency.v1"},raw]){const error=await controller.emergency(input,{headers:{origin}}).catch(e=>e);expect(error.getStatus()).toBe(403);expect(error.getResponse()).toEqual({code:"SSO_EMERGENCY_REFUSED"});}
   await f.enable();const invalid=new SsoRequiredApplication(f.provider,new SsoRequiredRepository(identity),origin,"synthetic_demo","invalid");await expect(publicUse(f,randomUUID(),invalid)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});expect((await admin.query("SELECT cause_code FROM identity.sso_emergency_event WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 1",[f.principal.tenantId])).rows[0].cause_code).toBe("EMERGENCY_WINDOW_INVALID");
-  await publicUse(f);const fresh=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()});
+  await publicUse(f);const fresh=await requestSigninCode(f.provider,f.email);
   const open=await controller.emergency({...inputV2(f),code:fresh.fixtureCode},{headers:{origin}}).catch(e=>e);expect(open.getStatus()).toBe(403);expect(open.getResponse()).toEqual({code:"SSO_EMERGENCY_REFUSED"});
  });
 });

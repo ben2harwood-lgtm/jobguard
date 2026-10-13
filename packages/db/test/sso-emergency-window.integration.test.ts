@@ -34,6 +34,11 @@ beforeAll(async()=>{
  identity=new Pool({...base,user:"ent10e_window_identity",password:"fixture",max:4});runtime=new Pool({...base,user:"ent10e_window_runtime",password:"fixture",max:4});
 },120000);
 afterAll(async()=>{try{await closeTestPools(identity,runtime,admin);}finally{try{await postgres?.stop();}finally{if(directory)await rm(directory,{recursive:true,force:true});}}});
+async function requestSigninCode(provider:PersistedAuthProvider,email:string) {
+ // Fixture-only elapsed cooldown: keep attempts, expiry and consumption intact; do not move the database window clock.
+ await admin.query("UPDATE identity.challenge SET requested_at=LEAST(requested_at,clock_timestamp()-interval '61 seconds') WHERE email=$1 AND purpose='signin'",[email]);
+ return provider.requestCode({email,purpose:"signin",ip:randomUUID()});
+}
 async function fixture(configure=true,link=true) {
  const contractor=new ContractorRepository(runtime),principal=await contractor.startPractice(randomUUID()),provider=auth();
  const connectionId=randomUUID(),domain=`${connectionId}.fixture.invalid`,email=`owner@${domain}`;
@@ -80,7 +85,7 @@ const viewInput=(f:Fixture)=>({version:"sso-required-view.v1",requested_tenant_i
 const reason="Synthetic owner requests emergency access";
 const sqlInput=(f:Fixture,commandId=randomUUID(),windowMinutes:unknown=60)=>({version:"sso-emergency.v2",requested_tenant_id:f.principal.tenantId,commandId,windowMinutes,reason});
 async function emergency(f:Fixture,commandId=randomUUID()) {
- const code=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()});
+ const code=await requestSigninCode(f.provider,f.email);
  return f.service.emergency({version:"sso-emergency.v2",requested_tenant_id:f.principal.tenantId,commandId,reason,email:f.email,code:code.fixtureCode},origin);
 }
 async function state(f:Fixture) {
@@ -126,7 +131,7 @@ describe("ENT-10e emergency window",()=>{
  it.each(["downgraded","revoked","expired"] as const)("[E10] owner %s while emergency use waits on the company lock is refused",async change=>{
   const f=await fixture();await f.enable();
   // Prove mailbox control before execution, as in the existing emergency race fixture.
-  const challenge=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()});
+  const challenge=await requestSigninCode(f.provider,f.email);
   expect(await f.provider.proveEmergencyMailbox(f.email,challenge.fixtureCode!)).toBe(f.principal.identityUserId);
   const tables=["sso_required_event","sso_emergency_approval","sso_emergency_use","sso_emergency_window"];
   const snapshot=()=>Promise.all(tables.map(t=>bytes(`identity.${t}`,f.principal.tenantId)));
@@ -202,7 +207,7 @@ describe("ENT-10e emergency window",()=>{
  });
  it("[T3] open window allows emailed-code sign-in, listing, contexts and both invitation gates",async()=>{
   const f=await fixture(),pending=await invite(f);await f.enable();await emergency(f);
-  const request=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()}),session=await f.provider.verifyCode(f.email,"signin",request.fixtureCode!);
+  const request=await requestSigninCode(f.provider,f.email),session=await f.provider.verifyCode(f.email,"signin",request.fixtureCode!);
   const app=new IdentityApplication(f.provider,origin);
   expect((await app.session(session.sessionToken)).memberships.map(m=>m.tenantId)).toEqual([f.principal.tenantId]);
   expect((await app.context({...session,origin,requestedTenantId:f.principal.tenantId})).tenantId).toBe(f.principal.tenantId);
@@ -217,7 +222,7 @@ describe("ENT-10e emergency window",()=>{
   const f=await fixture(),other=await fixture(false,false),pending=await invite(f);await memberIn(f.principal.identityUserId,other.principal.tenantId);await f.enable();
   // The ordinary session is issued before seeding the short transition; its lifetime is independent.
   await emergency(f);
-  const code=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()}),session=await f.provider.verifyCode(f.email,"signin",code.fixtureCode!);
+  const code=await requestSigninCode(f.provider,f.email),session=await f.provider.verifyCode(f.email,"signin",code.fixtureCode!);
   await f.service.command(f.command(true,2),f.bound!);
   const seeded=await completeWindow(f,shape);
   const names=(await admin.query("SELECT tablename FROM pg_tables WHERE schemaname='identity' ORDER BY tablename")).rows.map(r=>`identity.${r.tablename}`);
@@ -242,7 +247,7 @@ describe("ENT-10e emergency window",()=>{
   const d=await f.service.detail(detailInput(f),f.bound!);expect(d.emergencyWindow).toEqual({openedAt:(await admin.query("SELECT to_char(opened_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') t FROM identity.sso_emergency_window WHERE tenant_id=$1 AND event_id=$2",[f.principal.tenantId,seeded.event])).rows[0].t,closesAt:(await admin.query("SELECT to_char(closes_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') t FROM identity.sso_emergency_window WHERE tenant_id=$1 AND event_id=$2",[f.principal.tenantId,seeded.event])).rows[0].t,windowMinutes:15,open:false});
   // A separate owner whose only company is required cannot obtain an ordinary session.
   const sole=await fixture();await sole.enable();await completeWindow(sole);
-  const challenge=await sole.provider.requestCode({email:sole.email,purpose:"signin",ip:randomUUID()}),sessions=await bytes("identity.session");
+  const challenge=await requestSigninCode(sole.provider,sole.email),sessions=await bytes("identity.session");
   await expect(sole.provider.verifyCode(sole.email,"signin",challenge.fixtureCode!)).rejects.toMatchObject({code:"INVALID_CODE"});expect(await bytes("identity.session")).toEqual(sessions);
  });
  it("[T5] one immutable window per use and all three unique keys are enforced",async()=>{
@@ -280,7 +285,7 @@ describe("ENT-10e emergency window",()=>{
   const a=await fixture(),b=await fixture();await a.enable();await b.enable();await memberIn(a.principal.identityUserId,b.principal.tenantId);
   const pending=randomUUID(),before=await gates(b,pending),bState=await state(b);await emergency(a);
   expect(await gates(b,pending)).toEqual(before);expect(await state(b)).toEqual(bState);
-  const challenge=await a.provider.requestCode({email:a.email,purpose:"signin",ip:randomUUID()}),session=await a.provider.verifyCode(a.email,"signin",challenge.fixtureCode!);
+  const challenge=await requestSigninCode(a.provider,a.email),session=await a.provider.verifyCode(a.email,"signin",challenge.fixtureCode!);
   expect((await new IdentityApplication(a.provider,origin).session(session.sessionToken)).memberships.map(m=>m.tenantId)).toEqual([a.principal.tenantId]);
  });
  it("[K1] catalogue, privileges and RLS fail closed for omitted, invalid and other-company contexts",async()=>{

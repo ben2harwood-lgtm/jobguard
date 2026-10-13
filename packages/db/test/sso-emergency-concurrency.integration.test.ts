@@ -42,6 +42,11 @@ afterAll(async () => {
   }
 });
 
+async function requestSigninCode(provider:PersistedAuthProvider,email:string) {
+ // Fixture-only elapsed cooldown: keep attempts, expiry and consumption intact; do not move the database window clock.
+ await admin.query("UPDATE identity.challenge SET requested_at=LEAST(requested_at,clock_timestamp()-interval '61 seconds') WHERE email=$1 AND purpose='signin'",[email]);
+ return provider.requestCode({email,purpose:"signin",ip:randomUUID()});
+}
 async function fixture(configure=true,link=true) {
  const contractor=new ContractorRepository(runtime),principal=await contractor.startPractice(randomUUID()),provider=auth();
  const connectionId=randomUUID(),domain=`${connectionId}.fixture.invalid`,email=`owner@${domain}`;
@@ -108,7 +113,7 @@ describe("ENT-10d isolated emergency concurrency", () => {
       await f.service.command(f.command(true, iteration * 2), f.bound!);
       // Consume two independent real mailbox challenges before the locked execution stage.
       for(let proof=0;proof<2;proof++) {
-        const challenge=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()});
+        const challenge=await requestSigninCode(f.provider,f.email);
         expect(await f.provider.proveEmergencyMailbox(f.email,challenge.fixtureCode!)).toBe(f.principal.identityUserId);
       }
       const before = await snapshot(), earlierAudit = await audit(f.principal.tenantId);

@@ -1,3 +1,11 @@
+# ENT-10e round r5 — current builder receipt, 13 October 2026
+
+Current evidence: [R5_RECEIPT.md](R5_RECEIPT.md), [R5_COMMANDS.md](R5_COMMANDS.md), [every protected test line](R5_PROTECTED_TEST_LINES.md), and [unchanged assertion comparison](R5_ASSERTION_CHECK.json). These supersede all earlier status statements below. Builder evidence only; RED lane remains pending real PostgreSQL/CI, historical secrets finding resolution and new exact-commit independent verdict/acceptance.
+
+Resolved main 45125a4 conflicts keeping 0142 then 0143. Repaired same-mailbox cooldown fixture inputs and E1's missing client_type; all 197 existing assertions preserved. Local build, typecheck, package lint, generator snapshot comparison and 5,056 selected source/tool tests passed. Root lane checks fail on 31 byte-identical inherited main paths while the merge is unfinished; exact openapi launcher is sandbox-blocked, same generator comparison passed. PostgreSQL/browser/full suite not run. No git write. Intended message: /private/tmp/jg-msg-ent-10e.txt.
+
+---
+
 # ENT-10e round r4 — builder receipt, 13 October 2026
 
 Actual builder: Codex; dispatcher 4; RED lane; draft PR #180. Builder receipt only — not independently verified, not accepted. This section supersedes the r3 status below; historical evidence is retained.

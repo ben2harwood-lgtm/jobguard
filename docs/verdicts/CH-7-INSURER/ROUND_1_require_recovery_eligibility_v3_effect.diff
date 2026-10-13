@@ -1,0 +1,23 @@
+--- 0119_recovery_eligibility_v3.sql
++++ 0142:require_recovery_eligibility_v3_effect
+@@ -1,4 +1,4 @@
+-CREATE FUNCTION app.require_recovery_eligibility_v3_effect() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
++CREATE OR REPLACE FUNCTION app.require_recovery_eligibility_v3_effect() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+ DECLARE expected_lines jsonb; candidate_q bigint:=(NEW.result->'qualifyingPrincipal'->>'pence')::bigint;
+ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM app.audit_event WHERE tenant_id=NEW.tenant_id AND subject_ref=NEW.case_id::text AND actor_ref='membership:'||NEW.actor_membership_id::text AND event_type='recovery.eligibility.v3_reviewed'
+@@ -11,11 +11,13 @@
+   'kind',l.kind,'debtorType',l.debtor_type,'netPence',l.net_pence,
+   'qualifyingPrincipal',jsonb_build_object('pence',CASE WHEN candidate_q=0 OR l.kind='fixed_compensation' OR l.kind='statutory_interest' AND l.debtor_type='individual' THEN 0 ELSE l.net_pence END,'currency','GBP'),
+   'reason',CASE WHEN NEW.result->>'reason'='Paid before you opened this case' THEN 'Paid before you opened this case'
++    WHEN NEW.result->>'reason'='Insurer proceeds never qualify' THEN 'Insurer proceeds never qualify'
+     WHEN NEW.fixture='F15' THEN 'Credit note below the £250 minimum'
+     WHEN NEW.fixture='F22' THEN 'Prevented spending is not recovered cash'
+     WHEN l.kind='fixed_compensation' THEN 'Fixed statutory compensation is not part of the fee base'
++    WHEN l.kind='statutory_interest' AND l.debtor_type='individual' THEN 'Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.'
+     WHEN NEW.result->>'reason'='Pending money cannot qualify' THEN 'Pending money cannot qualify' ELSE NULL END,
+-  'reasonHeld',NEW.fixture='F21' OR l.kind='statutory_interest' AND l.debtor_type='individual')
++  'reasonHeld',NEW.fixture='F21')
+   ORDER BY CASE l.kind WHEN 'principal' THEN 1 WHEN 'statutory_interest' THEN 2 ELSE 3 END)
+  INTO expected_lines FROM app.recovery_claim_line l WHERE l.tenant_id=NEW.tenant_id AND l.review_id=NEW.id;
+  IF NEW.result->'lines' IS DISTINCT FROM expected_lines THEN RAISE EXCEPTION 'ELIGIBILITY_LINES_REQUIRED' USING ERRCODE='23514';END IF;
