@@ -901,3 +901,9 @@ Forward fix: preserve all approval and chase history and amend only through a se
 ## 0136 — recovery allocations (M4-8-S)
 
 Expand-only: adds immutable allocation reviews, line-source bindings, case allocations/reversals, receipt-line fractions and command identities. Runtime SELECT only; session-checked migration-owned `write_recovery_allocation` appends facts and Decision authorizations. No existing object or grant changes. All constraints remain immediate; the public repository transaction invokes the joined case event last and then appends caller audit before commit. Forward fix only after facts exist: disable the allocator, preserve original rows, add compensating facts in a reviewed follow-up migration; do not drop or edit commercial history. Saved deposit and supplementary-invoice fixtures remain Q2-held.
+
+## 0138_practice_session_hardening.sql — contractor practice session boundary
+
+Depends on 0054 and 0094. Converts contractor session values in place into canonical SHA-256 digests and independent random row numbers. Live home records supply the remaining deadline; ended or absent home records end converted rows. New starts with no home record retain a nonrenewable seven-day cap. Lookup reads the home record on every call. Adds holder-only contractor revoke with a deferred audit requirement, write-once guards, and the same owner refusal in grant.create as member.invite. No new direct table write grants; only the checked revoke routine gains runtime EXECUTE.
+
+Forward fix preferred. A rollback restoring the three 0054 routines must also drop the three new NOT NULL requirements and the guard trigger, since the old start writes four columns. No current row retains its original session value, so restoring the old lookup ends every current session; each browser starts a new company. No rows are deleted. PostgreSQL upgrade and catalogue checks remain pending outside the sandbox.
