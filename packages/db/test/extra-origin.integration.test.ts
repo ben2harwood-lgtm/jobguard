@@ -249,7 +249,7 @@ describe("ENT-4b origin persistence", () => {
    "packages/db/src/sor-repository.ts": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",
    "packages/db/src/job-scheduling-repository.ts": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
    "packages/db/src/work-order-fixtures.ts": "cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386",
-   "apps/api/src/auth/context-boundary.test.ts": "d082694df3dc005461d92ac79f275f31525d35c3e022948b47efa0ed7f9a772f"
+   "apps/api/src/auth/context-boundary.test.ts": "a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35"
 };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });

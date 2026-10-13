@@ -425,3 +425,160 @@ Tracked diff against ee4917f (untracked receipt artifacts are included separatel
 ```
 
 Final HEAD ee4917f70c29834ac2291220af8310a3a932bda9. Dispatcher message path: `/private/tmp/jg-msg-ch-7-insurer.txt`. Builder committed nothing.
+
+
+## Catch-up round — 13 October 2026, dispatcher 3
+
+Built by Codex. The dispatch's Claude Sonnet fallback attribution does not describe this session. This entry supersedes earlier setup-patch holds only for the checks actually executed below; it is builder evidence, not an independent verdict or acceptance. Check lane RED; not yet a PR.
+
+Initial and final HEAD: `d9277e397ca6916859f857fb818302b7d905909f`. Incoming `origin/main`: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`. Git remains in the dispatcher's in-progress merge. No git write command, commit, staging, merge completion, push, PR, install, package download, provider call or approval was performed. The committed coordinator setup patch at HEAD is unchanged.
+
+### Scope and self-review (builder source inspection only)
+
+Resolved exactly three conflict blocks, placing incoming main first and CH-7's original addition after it:
+
+- `packages/core/src/index.ts:65`: main's site-extra-pricing export, followed by recovery-payment-payer.
+- `packages/db/src/migrate.ts:80`: main's 0140 entry, followed by 0142. No 0141 entry: ENT-3d is not on main yet.
+- `packages/db/MIGRATIONS.md:954`: main's complete 0140 section, followed by the original 0142 section at line 973.
+
+One-off byte assertions reconstructed each file from origin/main plus the unchanged CH-7 addition; all passed. These are receipt evidence, not permanent fingerprint tests. Every marker was removed from the three files. No merged test, pinned value, lane policy, SQL migration or other source file was edited. Shared-file edits serialize this catch-up with ENT-3c; the dispatcher completes the merge. No prompt/model/schema/policy change, backfill, new alert, external action or compatibility change was introduced. Existing 0142 forward-fix guidance and synthetic/production holds remain unchanged.
+
+Tests-first: no new test or behavior was introduced in this conflict-only round. Existing CH-7 unit files were run unchanged. No new first-failing test run is claimed; earlier implementation tests-first evidence remains in its historical sections.
+
+### Commands and executed results
+
+Every pnpm shell started with `export PATH="$HOME/Library/pnpm/bin:$PATH"`. Successful pnpm invocations then prepended the existing `/private/tmp/jg-pnpm-ent-10a2` launcher (cached pnpm 10.28.1); no launcher was created or changed. Heavy commands used the required `~/.local/bin/heavy-slot` with `HEAVY_SLOTS=2`. Tests used exactly two files per run, `--maxWorkers=2`, sequentially; no build/test overlap. Memory probes (`memory_pressure | tail -1`) and `df -g /System/Volumes/Data` before each heavy command exited 0: memory 64–69% free, disk 80–83 GB available. Node was v24.17.0. Dependencies were preinstalled; no clean-install proof is claimed.
+
+| Command / operation | Exit and result |
+| --- | --- |
+| `pwd`, `git status --short`, `git rev-parse HEAD`, `git rev-parse origin/main`, `git diff --stat`, conflict-marker `rg`, `cat AGENTS.md` | Initial inspection batch 0; exactly three conflicted paths, HEAD/main recorded above. |
+| `cat ~/.local/share/full-steam/handoffs/jobguard-task.md`; `cat`/`sed` the three conflict files, `BUILD_PLAN.md` task/contracts, recovery contract, package.json files, Turbo config, prior receipt and heavy-slot; `rg` task/test/grant/lane paths | Read-only batches 0; some long outputs truncated, targeted follow-up reads used. No evidence inferred from truncated portions. |
+| `git log -4 --oneline`; source/test/lane `rg`; `sed`/`nl` lane checker, grant and acceptance searches | 0; coordinator setup patch is the current committed HEAD; source-inspected, not tested DB guarantees. |
+| `command -v pnpm`; `ls -l` default launcher and guessed `~/.local/bin/pnpm`; `cat` default and existing cached launchers | Read batch 0; the guessed `~/.local/bin/pnpm` path did not exist (`ls` 1); actual launchers read. Default launcher points at global v11. |
+| Python initial SHA-256 inventory and asserted main-first conflict resolution | 0; 1,619 initial files inventoried, exactly three conflict files changed. |
+| `~/.local/bin/heavy-slot ch-7-insurer-typecheck pnpm exec turbo run typecheck --force` with default launcher | Interrupted 130 after pnpm v11 warning/stall, zero reported Turbo tasks. NOT a typecheck pass or executed typecheck. No packages downloaded. |
+| Same exact typecheck command using the existing cached pinned launcher | **0; 7 successful, 0 cached**, 30.974s. Used `--force`; one completed execution of each task. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | **1**; core purity passed (153 files); lane checker refused incoming main paths in the unresolved Git index. Money/commercial checks were not reached in this wrapper. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **1**, same incoming-main paths; no allowlist change or alternate comparison base attempted. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | **0 each**; money/commercial boundaries passed separately. |
+| `~/.local/bin/heavy-slot ch-7-insurer-lint pnpm exec turbo run lint --force`, with `LANE_BASE_REF=origin/main` | **0; 7 successful, 0 cached**, 27.338s. Used `--force`, once. Package lint passed; root lane check remains failed as recorded above. |
+| `~/.local/bin/heavy-slot ch-7-insurer-core pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/recovery-eligibility-v3.test.ts src/recovery-payment-payer.test.ts` | **0; 2 files, 54 tests passed**, 454ms. |
+| `~/.local/bin/heavy-slot ch-7-insurer-build pnpm build --concurrency=2 --force` | **0; 7 successful, 0 cached**, 2m7.364s; 30 static pages. Used `--force`, once. Existing workspace-root/CSS/cache warnings remain untouched. |
+| `~/.local/bin/heavy-slot ch-7-insurer-api pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/recovery-eligibility-v3.application.test.ts src/recovery-payment-payer.application.test.ts` | **0; 2 files, 26 tests passed**, 2.01s. Mocks prove application contracts, not live provider or PostgreSQL integration. Coordinator setup patch now passes its unit assertion. |
+| `pnpm openapi:check` | **1 / STOP** before generation: `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/41102.pipe`. No alternative route, socket workaround or escalation attempted. |
+| Python post-check preservation/ordering/marker assertions and SHA-256 comparison | **0**; main content exact, both additions retained, exactly three edited files, 1,616 other initial files unchanged before this receipt append. |
+| `git diff --check`, `git diff --stat`, `git diff --cached --stat`, `git diff --numstat HEAD --` the three files, `git rev-parse HEAD`; final targeted `rg`, `sed`, `nl`, memory/disk probes | **0**; whitespace clean, original index still unresolved for dispatcher, no Git write. |
+| Python receipt append and intended-message write; final SHA-256/marker/head verification | **0**; only receipt documentation and three conflict files edited. Final evidence verified in the final command output. |
+
+### NOT RUN and STOPs
+
+- `packages/db/test/recovery-insurer-money.integration.test.ts`, `packages/db/test/recovery-eligibility-v3.integration.test.ts`, `packages/db/test/tenancy.integration.test.ts`, `pnpm test:db`, `pnpm test:migrations`: **NOT RUN (cannot start PostgreSQL here; explicitly excluded by catch-up order)**. This includes upgrade, privilege/RLS, audit and concurrency proofs.
+- `apps/web/e2e/CH-7.spec.ts`, `pnpm test:e2e`: **NOT RUN (cannot start a browser here; explicitly excluded by catch-up order)**.
+- Official OpenAPI verification: **NOT COMPLETED**, command exited 1 at the sandbox socket refusal above. No schema-generation pass is claimed.
+- Lane/root boundary wrapper: **BLOCKING check failure** at `tools/agent-lane-boundary-lint.mjs:233`. The checker includes cached incoming-main paths before merge completion (lines 227–229); all reported paths were already in the starting merge and remain byte-identical. Dispatcher must complete the merge and obtain checks on that head; no rule was weakened.
+- Shared helper telemetry emitted `sysctl: sysctl fmt -1 1024 1: Operation not permitted`, `sysmon request failed with error: sysmond service not found`, and `pgrep: Cannot get process list`. These internal probes could not verify load/process counts. The supplied helper continued and returned each wrapped command's exit; no telemetry bypass/helper edit, standalone retry, or permission escalation was attempted. Memory/disk probes above worked. Turbo also reported `IO error: Operation not permitted (os error 1)` warnings but all completed forced tasks had zero cache hits; no cache-permission workaround was attempted.
+
+### GRANT inventory
+
+No new or modified GRANT in this catch-up. The inherited 0142 migration is SHA-256 unchanged; its complete existing grant list remains:
+
+1. `0142:13`: `GRANT EXECUTE ON FUNCTION app.recovery_job_payer_type(uuid,uuid) TO jobguard_runtime`.
+2. `0142:39`: `GRANT SELECT ON app.recovery_payment_payer_mark TO jobguard_runtime`.
+3. `0142:69`: `GRANT EXECUTE ON FUNCTION app.lock_recovery_payer_job(uuid,uuid,uuid) TO jobguard_runtime`.
+4. `0142:179`: `GRANT EXECUTE ON FUNCTION app.write_recovery_payment_payer_mark(uuid,uuid,jsonb) TO jobguard_runtime`.
+
+Standard F: no new direct INSERT/UPDATE/DELETE grants to jobguard_runtime on money, membership, authorization, receipt or audit tables; runtime has SELECT only on the inherited mark table and writes through its checked routine. This round source-inspected existing grants; database verification was NOT RUN.
+
+### Preservation evidence
+
+Full initial SHA-256 inventory: `/private/tmp/ch-7-insurer-catchup-before.json` (1,619 paths). After checks, all 1,616 paths other than the three conflict files were unchanged; this receipt is the only subsequent documentation edit. No test pins were introduced. Final content hashes below include the unchanged setup-patch tests and security/lane/lock files:
+
+| File | SHA-256 |
+| --- | --- |
+| packages/core/src/index.ts | 10284867e92df107d50f7f04a947d744cd19da52b60ff1964902fe13874d52a4 |
+| packages/db/MIGRATIONS.md | a1bee221ff2b876637f7f7ceab57ba525e02aa07b8879e08d9967ae5b1cfa571 |
+| packages/db/src/migrate.ts | 3318f9eab84cd216bf1b8af01ee8114dd9b073341de5de616e27e48f5006b743 |
+| packages/db/migrations/0142_recovery_insurer_money.sql | eb6067e4a73f91e198502fe1886e2498710a413c1836308b650f13243e4b3865 |
+| apps/api/src/recovery-eligibility-v3.application.test.ts | 9c915222c20f601b5330292d94516354bf7d02453c3b5c4898703aa32d1ab465 |
+| packages/db/test/recovery-eligibility-v3.integration.test.ts | 8d510762057de627398d8df071bce4b0ada3f21f33e09b00082d8d7d1526307a |
+| apps/api/src/auth/context-boundary.test.ts | a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35 |
+| config/agent-lane-assignments.json | 12dd6fc9b55155710a1834b557a4fba5c3c3733e394404b821535353588d0bd7 |
+| packages/core/src/watchdog.ts | efe6f104c0a9e7ae408ce661b23fcbd181a11eb6dce65624ba61b14a73ff9de9 |
+| packages/db/test/watchdog-command-harness.ts | 3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6 |
+| packages/db/test/command-replay-contract.integration.test.ts | db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f |
+| pnpm-lock.yaml | 06b501e413424d77fc5c3a1ac0f481b7230c271e36bfbde2cb953385ccccd349 |
+
+`git diff --stat` before this receipt append (Git still has unmerged index entries, even though the working-tree markers are removed):
+
+```text
+ packages/core/src/index.ts | Unmerged
+ packages/core/src/index.ts |  1 +
+ packages/db/MIGRATIONS.md  | Unmerged
+ packages/db/MIGRATIONS.md  | 19 +++++++++++++++++++
+ packages/db/src/migrate.ts | Unmerged
+ packages/db/src/migrate.ts |  1 +
+ 3 files changed, 21 insertions(+)
+```
+
+The original staged incoming merge is 40 files, 4,210 insertions, 11 deletions plus the three unmerged entries; it was present at task start and its files were not edited. Full staged-stat snapshot:
+
+```text
+ BUILD_PLAN.md                                      |   2 +
+ apps/api/openapi.json                              | 180 ++++++
+ apps/api/src/app.module.ts                         |   3 +-
+ apps/api/src/auth/context-boundary.test.ts         |   2 +-
+ apps/api/src/auth/sso/saml-fixlater-6.test.ts      |  93 ++++
+ .../site-extra-pricing.application.test.ts         | 190 +++++++
+ .../contractor/site-extra-pricing.controller.ts    |  43 ++
+ .../src/contractor/site-extra-pricing.http.test.ts | 130 +++++
+ apps/api/src/contractor/site-extra.application.ts  |  53 ++
+ apps/api/src/workspace/application.ts              |   2 +-
+ apps/api/src/workspace/index.ts                    |   1 +
+ .../contractor/jobs/[id]/order-check/route.test.ts |  30 +
+ .../api/contractor/jobs/[id]/order-check/route.ts  |  17 +
+ .../jobs/[id]/site-extras/sor/route.test.ts        |  47 ++
+ .../contractor/jobs/[id]/site-extras/sor/route.ts  |  19 +
+ .../contractor/jobs/[id]/sor-items/route.test.ts   |  29 +
+ .../api/contractor/jobs/[id]/sor-items/route.ts    |  16 +
+ apps/web/e2e/SV-3.spec.ts                          |  26 +-
+ config/agent-lane-assignments.json                 |   9 +-
+ docs/contracts/site-extra-pricing-v1.md            | 126 +++++
+ docs/verdicts/ENT-3c/BUILDER_RECEIPT.md            | 488 +++++++++++++++++
+ docs/verdicts/FEE-PINS-1/BUILDER_RECEIPT.md        | 107 ++++
+ docs/verdicts/FIXLATER-6/BUILDER_RECEIPT.md        | 138 +++++
+ docs/verdicts/SV-2/BUILDER_RECEIPT_main-merge.md   |   6 +
+ docs/verdicts/SV-3-ABORT/BUILDER_RECEIPT.md        |  61 +++
+ .../core/src/enterprise-domain/fee-pins.test.ts    |  78 +++
+ packages/core/src/index.ts                         | Unmerged
+ packages/core/src/site-extra-pricing.test.ts       | 213 +++++++
+ packages/core/src/site-extra-pricing.ts            | 142 +++++
+ packages/core/src/watchdog.ts                      |   3 +
+ packages/db/MIGRATIONS.md                          | Unmerged
+ packages/db/migrations/0140_site_extra_pricing.sql | 257 +++++++++
+ packages/db/src/migrate.ts                         | Unmerged
+ packages/db/src/site-extra-pricing-queries.ts      |  62 +++
+ packages/db/src/site-extra-repository.ts           | 121 ++++
+ ...erprise-identity-fixlater-6.integration.test.ts | 284 ++++++++++
+ packages/db/test/extra-origin.integration.test.ts  |   2 +-
+ .../site-extra-order-check.integration.test.ts     | 177 ++++++
+ .../site-extra-pricing-basis.integration.test.ts   |  69 +++
+ packages/db/test/site-extra-pricing-fixtures.ts    | 188 +++++++
+ .../site-extra-pricing-upgrade.integration.test.ts | 193 +++++++
+ .../db/test/site-extra-pricing.integration.test.ts | 610 +++++++++++++++++++++
+ packages/db/test/tenancy.integration.test.ts       |   4 +
+ 40 files changed, 4210 insertions(+), 11 deletions(-)
+```
+
+| Local check log | SHA-256 |
+| --- | --- |
+| /private/tmp/ch-7-insurer-catchup-api.log | 07f7b490f159d4d9679d45db7bac5cb12d6df7f72d9ad05c1247c91d99839bfa |
+| /private/tmp/ch-7-insurer-catchup-boundaries.log | f807139eb07a8e44a038ffa8a09c4dd1273406c1975dd4e4ce01ec7fdb18fc3f |
+| /private/tmp/ch-7-insurer-catchup-build.log | 1dbb1e1890b70cf6fc240d2791432c7eae8b2aaf74bd93d65e574f42a796ebce |
+| /private/tmp/ch-7-insurer-catchup-core.log | 721f92efaeca45a90842a4cebbb8afd5a40b147eeff30882133af5d605abf635 |
+| /private/tmp/ch-7-insurer-catchup-lanes.log | ac41d9e1bbe7c51a029b6c7af32f0901026330ad4f0582cfe1df84625bd37f4c |
+| /private/tmp/ch-7-insurer-catchup-lint.log | 85148a577def642b018491fa697071b8d9a8ad5c505288dab11e1ed2b9774a35 |
+| /private/tmp/ch-7-insurer-catchup-openapi.log | 25e846006b62f4b774790fd32c979d8060f75f43f82d2c15e35be3e6b26a5b66 |
+| /private/tmp/ch-7-insurer-catchup-typecheck-pinned.log | 145254258800e9556035e8392f857c172d39352e9c60052e7e27372a9b4a0989 |
+| /private/tmp/ch-7-insurer-catchup-typecheck.log | 102793ff63f14838e2128a536735d9bfe137d42109599a180da7e8bf73ab2cc4 |
+
+Handoff remains RED: independent exact-commit verdicts, separate acceptance, database/browser/OpenAPI and lane verification on the completed merge belong to the dispatcher/reviewers/CI. No acceptance claimed. Final unchanged HEAD: `d9277e397ca6916859f857fb818302b7d905909f`. Intended merge message: `/private/tmp/jg-msg-ch-7-insurer.txt`. Dispatcher alone completes and commits this merge.
