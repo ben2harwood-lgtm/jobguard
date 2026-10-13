@@ -930,3 +930,9 @@ prior clients. Forward fix preferred: stop this route and issue a reviewed
 additive correction; rollback of this leaf alone requires disabling the route
 and removing its two routines and migration registration under a separate
 operator change. No historical data rollback is needed.
+
+## 0137 — synthetic SCIM deactivation (ENT-10a2)
+
+Adds only `identity.scim_event` (immutable, tenant-qualified, FORCE RLS, no application table privileges) and `identity.scim_deactivate(uuid,jsonb)` (restricted identity EXECUTE only; SECURITY DEFINER with pg_catalog search path). No object from 0111, 0120 or 0129 altered or restated; no backfill; no existing row changed by the migration. No column, index, constraint, policy, trigger or grant added to any existing table. PostgreSQL creates the internal foreign-key enforcement triggers automatically as part of the new table's constraints.
+
+The governed repository transaction writes existing one-way membership/session revocation facts, grant revocations and the record, then appends the audit event last. This is the first product code to set app.membership.revoked_at. Existing request gates remain unchanged. Synthetic database only, replay once, owner protected, no reactivation. Roll forward for any repair; removing the new objects is permissible only before any message has been accepted. Accepted history and revocation facts must never be cleared by rollback. Upgrade proof snapshots populated named columns, full types and primary-key identities before this migration, verifies this migration alone, then applies later migrations twice. Database tests are NOT RUN (sandbox cannot start PostgreSQL / a browser).

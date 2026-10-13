@@ -86,3 +86,4 @@ export * from "./final-account-lock-repository.js";
 export * from "./recovery-case-terms-repository.js";
 export * from "./contractor-practice-session-repository.js";
 export * from "./site-extra-repository.js";
+export * from "./scim-repository.js";

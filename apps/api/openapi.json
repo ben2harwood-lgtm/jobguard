@@ -1,6 +1,73 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/auth/scim/{connectionId}/deactivations": {
+      "post": {
+        "operationId": "ScimController_deactivate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "eventId",
+                  "subject",
+                  "active"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "scim-deactivation.v1"
+                    ]
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "scim-deactivation-result.v1; deactivated, ignored or owner protected; synthetic only"
+          },
+          "400": {
+            "description": "INVALID_SCIM_INPUT"
+          },
+          "403": {
+            "description": "SCIM_REFUSED; identical for every unproved caller"
+          },
+          "409": {
+            "description": "SCIM_EVENT_CONFLICT"
+          },
+          "503": {
+            "description": "SCIM_UNAVAILABLE; no deactivation committed"
+          }
+        },
+        "summary": "Record a proved synthetic provider deactivation and immediately revoke company access",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
     "/contractor/jobs/{id}/site-extras": {
       "post": {
         "operationId": "SiteExtraController_log",
