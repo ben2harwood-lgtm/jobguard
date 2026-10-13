@@ -108,20 +108,27 @@ export async function refused(request: Promise<APIResponse>, status: number, cod
 export async function allocationDatabase(jobId: string) {
   const { Pool } = await import("pg");
   const { DEMO_TENANT_ID } = await import("@jobguard/db");
-  const { withTenant } = await import("../../../../packages/db/src/tenant-context.js");
-  const { testTenantContext } = await import("../../../../packages/db/test/tenant-context-test-utils.js");
   const passphrase = ["sbox", "e2e", "runtime"].join("-");
   const pool = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: "jobguard_runtime", password: passphrase, max: 1 });
   try {
-    return await withTenant(pool, testTenantContext(DEMO_TENANT_ID), async db => {
+    // One pooled client in one transaction with the tenant set transaction-locally (what the package's own tenant wrapper does), written out
+    // here so no TypeScript source of the db package is loaded through Playwright's loaders (CI run 38328750351).
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [DEMO_TENANT_ID]);
       const params = [DEMO_TENANT_ID, jobId];
-      const allocated = await db.$client.query("SELECT id,case_id,payment_id,invoice_id,movement_id,evidence_id,evidence_hash,object_version_id,policy_version,reviewer_ref,authorization_id,gross_pence,eligible_net_pence,tax_pence FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", params);
+      const allocated = await client.query("SELECT id,case_id,payment_id,invoice_id,movement_id,evidence_id,evidence_hash,object_version_id,policy_version,reviewer_ref,authorization_id,gross_pence,eligible_net_pence,tax_pence FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", params);
       const originals: Record<string, unknown> = {};
       for (const table of ["recovery_case_allocation", "customer_payment", "practice_feed_event", "practice_feed_receipt_match"] as const) {
-        const selected = await db.$client.query(`SELECT row_to_json(t)::text value FROM app.${table} t WHERE tenant_id=$1 AND job_id=$2 ORDER BY id`, params);
+        const selected = await client.query(`SELECT row_to_json(t)::text value FROM app.${table} t WHERE tenant_id=$1 AND job_id=$2 ORDER BY id`, params);
         originals[table] = selected.rows.map(row => row.value);
       }
+      await client.query("COMMIT");
       return { allocated: allocated.rows, originals };
-    });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
   } finally { await pool.end(); }
 }

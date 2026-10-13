@@ -240,3 +240,59 @@ Intended commit message: `/private/tmp/jg-msg-m4-8-s-r2.txt`. Dispatcher owns co
 **GRANT reading, re-checked on this tree.** Unchanged by the repair: `GRANT SELECT ON app.<table> TO jobguard_runtime` for the six new tables after `REVOKE ALL ... FROM PUBLIC, jobguard_runtime`; `GRANT EXECUTE ON FUNCTION app.write_recovery_allocation(uuid,uuid,text,jsonb,jsonb) TO jobguard_runtime` after `REVOKE ALL ... FROM PUBLIC, jobguard_infrastructure`; the trigger function and the fraction helper are revoked from `PUBLIC` and `jobguard_runtime`. No direct INSERT, UPDATE or DELETE grant for the app login on any new table.
 
 **Observation, not a finding.** The Mac passes show execution only for the tests listed; they are not an independent review, a verdict or acceptance.
+
+---
+
+## Repair round 3 (13 Oct): browser helper source imports under a cold loader cache, built by Claude, Codex unavailable
+
+13 October 2026, Claude Sonnet 5.5 builder ("built by Claude, Codex unavailable"), dispatched by the Claude session "JobGuard dispatcher, Monday". Not a reviewer, no verdict. Edited: `apps/web/e2e/helpers/recovery-allocation-journey.ts` (function `allocationDatabase`) and this receipt. Logs: `~/.local/share/full-steam/jg-runs/m4-8-s-mac/repair3/`.
+
+**Defect (CI run 38328750351 on 3da6557).** Six `M4-8-S.spec.ts` tests (DW1, DW4 and B2/B6, each on `mobile-360` and `desktop`) failed with `ReferenceError: exports is not defined in ES module scope` at `packages/db/src/tenant-context.ts:3`, thrown from `allocationDatabase` at `apps/web/e2e/helpers/recovery-allocation-journey.ts:111`. Cause: the helper loaded the db package's TypeScript SOURCE (`tenant-context.js` and `tenant-context-test-utils.js` under `packages/db/src` and `packages/db/test`) through Playwright's loaders instead of the compiled package entry.
+
+**Did it reproduce, and how.** Not with the cold cache the order suggested. Run 1 (before the fix): `CI=1 PWTEST_CACHE_DIR=<fresh empty dir> npx playwright test --config <wrapper> --workers=1 M4-8-S.spec.ts` on the committed tree after `pnpm build`: 12 passed (the 316-file cache directory was filled during the run, so it was genuinely cold). So the transform cache is not the trigger. What does trigger it is running `M4-8-S.spec.ts` in the same Playwright run as `ENT-10a.spec.ts` / `ENT-10d.spec.ts`, which STATICALLY import `packages/db/src/tenant-context` (CI runs the whole suite in one run; a lone M4-8-S run never loads them). Run 2 (before the fix): same command with a fresh cache and `ENT-10a.spec.ts ENT-10d.spec.ts M4-8-S.spec.ts`: 6 failed, 14 passed; all six failures are DW1, DW4 and B2/B6 on both projects with the identical message, `tenant-context.ts:3` and `recovery-allocation-journey.ts:111`, exactly the CI failure. Likely mechanism (read from the installed Playwright 1.55.1, not separately proven): `lib/transform/compilationCache.js` `getFromCompilationCache` consults an in-memory entry keyed by FILE NAME ONLY before it looks at the module mode, so the CommonJS-flavoured transform that the static `require` of `tenant-context.ts` produced is handed back when the helper's native dynamic `import()` asks for the same file as an ES module (`exports` used inside an ES module). The fix below does not depend on that explanation: after it, no db source file is loaded by this spec or helper at all.
+
+**Before / after (the only code change).**
+
+```
+-  const { withTenant } = await import("../../../../packages/db/src/tenant-context.js");
+-  const { testTenantContext } = await import("../../../../packages/db/test/tenant-context-test-utils.js");
+   ...
+-    return await withTenant(pool, testTenantContext(DEMO_TENANT_ID), async db => {
+-      ... db.$client.query(...)   (the five reads)
+-    });
++    const client = await pool.connect();
++    try {
++      await client.query("BEGIN");
++      await client.query("SELECT set_config('app.tenant_id', $1, true)", [DEMO_TENANT_ID]);
++      ... client.query(...)       (the same five reads, same SQL text, same parameters)
++      await client.query("COMMIT");
++      return { allocated: allocated.rows, originals };
++    } catch (error) { await client.query("ROLLBACK"); throw error; }
++    finally { client.release(); }
+```
+
+The `pg` and `@jobguard/db` (compiled entry, for `DEMO_TENANT_ID`) dynamic imports, the pool, the joined-array login phrase, the SQL text, the parameters and the returned shape `{ allocated, originals }` are unchanged. `M4-8-S.spec.ts` was not edited (a `grep` of both files for `packages/.*/src`, `packages/.*/test` and `apps/api/src` now finds only a comment; the one remaining source reference, `import type { RecoveryAllocationView }` from the api contracts, is type-only and erased before running).
+
+**Why the independent-read point is preserved.** The read still goes through a new pooled connection as the application login `jobguard_runtime` (not the owner), so row-level security applies exactly as in the application; the tenant is set with the same transaction-local `set_config('app.tenant_id', ..., true)` that `withTenant` executes (`BEGIN`, that call, the work, `COMMIT`, `ROLLBACK` on error, release in `finally`), and the pool is still closed in `finally`. No tenant context object is built (the `VerifiedTenantContext` maker is not used), so nothing is added for `apps/api/src/auth/context-boundary.test.ts`, which passes unchanged (145 passed, 1 file).
+
+**Run table (merge commit 124f9f8 plus this change; `CI=1`, production `next start`, one worker, channel chromium, both projects).**
+
+| Run | Command / scope | Result |
+| --- | --- | --- |
+| build | `pnpm build` on the merged tree (as CI does) | 7/7 tasks, exit 0 |
+| before 1 | M4-8-S alone, fresh `PWTEST_CACHE_DIR` (unfixed helper) | 12 passed (did NOT reproduce) |
+| before 2 | `ENT-10a` + `ENT-10d` + M4-8-S, fresh cache (unfixed helper) | 6 failed (the CI error), 14 passed |
+| after 1 | `ENT-10a` + `ENT-10d` + M4-8-S, fresh cache | 20 passed |
+| after 2 | M4-8-S alone, fresh cache (the order's command) | 12 of 12 passed |
+| after 3 | M4-8-S alone, default cache | 12 of 12 passed |
+| after 4 | `M4-7-S`, `M4-1-S`, `UIWIRE-12`, plus `UIWIRE-7` (added after finding the second CI failure below) | 34 passed, 2 failed: only `UIWIRE-7` test 4, one per project; M4-7-S, M4-1-S, UIWIRE-12 are 32 of the 34 passes |
+| static | `pnpm typecheck` | 7/7, exit 0 |
+| static | `LANE_BASE_REF=origin/main pnpm lint` (includes the lane check, lane `m4-8-s`) | 7/7, exit 0 (a first attempt made while the merge was still uncommitted exited 2 on the lane check, because main's files looked like edits; re-run after the merge commit passed) |
+| static | `pnpm openapi:check` | exit 0 |
+| unit | api `context-boundary.test.ts` | 145 passed |
+
+**Second CI failure that this repair does NOT fix (found while reading the CI log; reported, not touched).** Run 38328750351 had 8 failures, not 6 from one cause: the other two are `UIWIRE-7.spec.ts:4` ("fails closed for malformed, live-mode, wrong-scope and unfinalized proof requests") on both projects, failing `getByText(/verified|guaranteed/iu)` expected 0, received 1. The same two fail on this tree on the Mac (after 4 above) with the page snapshot showing `Verified recovery evidence` (a label and its combobox, with the option `Choose verified evidence`) from this piece's own panel `apps/web/app/ui/recovery-allocations.tsx` (lines 51 and 96). It is product text, so changing it is outside this tests-only round; `M4-8-S.spec.ts` and the helper select that combobox by the accessible name `Verified recovery evidence`, so the label change must be made together with those two references, and `UIWIRE-7` (a merged test) must stay as it is. Until then the pull request's CI stays red on those two tests.
+
+**Merge of main.** `origin/main` 6fad00a (practice-session hardening, migration 0138) was not yet in the branch and is merged as its own commit 124f9f8. Conflicts were only in append-only registration files and were resolved by union, main's lines first: `apps/api/src/app.module.ts` (main's long `@Module` line taken, `RecoveryAllocationController` appended), `apps/api/src/workspace/index.ts`, `packages/core/src/index.ts`, `packages/db/src/index.ts`, `packages/db/src/migrate.ts` (0136 then 0138) and `packages/db/MIGRATIONS.md` (0136 then 0138). `apps/api/openapi.json` merged without conflict and was NOT hand-merged; `pnpm openapi:check` passes.
+
+**Observation, not a finding.** These runs show execution only; they are not an independent review, a verdict or acceptance.
