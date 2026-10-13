@@ -1,5 +1,57 @@
 Built by Codex; dispatched 13 Oct 2026.
 
+## Continuation r2 — STOP, 13 October 2026
+
+Actual builder: Codex. Builder receipt only — not independently verified, not accepted.
+
+The r2 authorization resolves the fixture/setup prohibitions recorded in r1: the old constraint drops, fixture rule, old approval seeding and old request inputs may now be re-pointed in the two named files. No further retirement is requested. No fixture or assertion was edited in this round, because the required base catch-up is pending and a separate assertion STOP remains.
+
+### Base catch-up required first
+
+Initial worktree clean; no unmerged paths. Branch `codex/sandbox/ent-10e`; HEAD `642e9873ed024c86a64344b410f0d89f97b18ffb`; local `origin/main` `6659fb58791ec22588948f005b2bd4f6b299fa48`. `git rev-list --left-right --count HEAD...origin/main` returned `8 17`: main has 17 commits not incorporated in this branch. The dispatcher must incorporate main before implementation resumes. This builder ran no git write and did not attempt a filesystem substitute for a merge.
+
+Coordinator commits remain applied: `e77ef5c8ee9ab26c47e0558308a7791637cfa07a`, `8ad002aa4e597f86ea506e4851db431061406ab7`, `a942cdc0cfa9cc85bc5b817e18bbdb6382600b7a`. The five retired-check mapping rows in the historical r1 section remain pending implementation and both reviewers' confirmation. None of those coordinator changes was edited.
+
+### Exact assertion STOP — outside the newly allowed setup edits
+
+File `packages/db/test/sso-emergency-concurrency.integration.test.ts`, line 152, before (unchanged):
+
+```ts
+expect(results.find(r => r.used)).toEqual({ used: true, cause: "EMERGENCY_USED", connectionId: f.connectionId, actorMembershipId: f.principal.membershipId });
+```
+
+The ordered repository returns three additional fields on success. Vitest `toEqual` checks the complete object's keys, so this line cannot pass against that v2 result merely by changing setup and request inputs. Returning fewer fields, projecting the result in the fixture, or switching to a partial matcher would avoid the ordered check and was not done.
+
+Proposed after, NOT APPLIED (the coordinator must decide; `storedWindow` would be selected for the winning command with `closes_at` formatted as canonical UTC text with microseconds):
+
+```ts
+expect(results.find(r => r.used)).toEqual({ used: true, cause: "EMERGENCY_USED", connectionId: f.connectionId, actorMembershipId: f.principal.membershipId, eventId: storedWindow.event_id, windowMinutes: storedWindow.window_minutes, closesAt: storedWindow.closes_at });
+```
+
+This retains exact equality and the four original expected values, adding verification of all three new values against persisted facts. It still changes an assertion, whereas r2 authorizes setup and input edits only and explicitly requires stopping if an assertion needs changing. It is therefore a BLOCKING coordinator question, not a builder-applied re-point. Integration line 168 remains `expect(result.used).toBe(true);` unchanged.
+
+### r2 evidence and checks
+
+All five inspection/verification shell invocations exited 0. Commands were read-only: repository/AGENTS inspection; status, conflict paths, branch divergence and existing receipt; numbered test/source reads and coordinator ancestry; status, whitespace check, coordinator SHAs and hashes; final whitespace/scope/hash verification. Exact invocation text is in `R2_COMMANDS.md`. Counts: 0 tests executed; 0 tests passed; 0 git writes; 0 grants; 0 source/test/migration changes. No first-failing unit run exists because the mandated STOP precedes implementation.
+
+Final verification: `git diff --check` exited 0; protected hashes identical; HEAD unchanged. `git diff --stat` before this evidence paragraph reported only `docs/verdicts/ENT-10e/BUILDER_RECEIPT.md`, 50 inserted lines. Status also listed the two new receipt files `R2_COMMANDS.md` and `R2_COMMIT_MESSAGE.txt`. Every changed path is inside the receipt folder; no source changes outside the lane.
+
+Typecheck, lint, lint:lanes, build, unit tests and OpenAPI checks: NOT RUN, stopped before implementation. All ordered database suites and `ENT-10d.spec.ts`: NOT RUN (sandbox cannot start PostgreSQL / a browser). The complete ordered file list remains in the historical receipt. E1–E9, T1–T8, L1–L7, K1, U1 and R1 remain incomplete. Migration 0143 remains unbuilt. No acceptance or independent verdict is claimed.
+
+Protected files' SHA-256 before and after receipt edits:
+
+| File | SHA-256 | State |
+|---|---|---|
+| packages/db/test/sso-emergency.integration.test.ts | 83776a990284c70ca27b789590588f28559a2669c93f55783c19fe7c41be07c9 | KEPT, no touched lines |
+| packages/db/test/sso-emergency-concurrency.integration.test.ts | 7f078396e77da39b6a35a933c1bdd0bbf713df497dc4327296d4ff5c2850e8aa | KEPT, no touched lines |
+| packages/db/migrations/0129_sso_required.sql | 4bbeb8d9e88a8f65dc4c47ac369717b95c62e68b113793f5a0c0ad62a7446c50 | KEPT |
+
+There are zero touched lines in either emergency test, so the r2 before/after line table is empty. No object from 0111 or 0120 altered or restated; no 0129 object altered. No new GRANT; standard F preserved. Default 60 minutes; allowed 15 to 240; chosen by the order drafter and confirmed by the integrator's answer to Q3; still unimplemented. No rule UUID selected. Historical limits and HELD/LATER items remain in force.
+
+Self-review: verified clean/conflict-free state and divergence, retained coordinator ancestry, checked the actual line 152 against the required enriched success schema and the r2 edit boundary, and confirmed integration line 168 remains true. No setup-only workaround, result projection or assertion relaxation was applied. Only receipt evidence was changed.
+
+The requested `/private/tmp/jg-msg-ent-10e.txt` already contains the r1 intended message. It was not overwritten under the instruction forbidding overwriting an uncommitted file this round did not create. The r2 intended message is preserved in `R2_COMMIT_MESSAGE.txt` for the dispatcher to copy to its chosen message path.
+
 ## Continuation r1 — current result, 13 October 2026
 
 STOP under the continuation's prohibition on editing merged tests and dispatch rule G. This is a source-inspected conflict; no test-executed failure is claimed. The original two STOPs below are RESOLVED by the coordinator commits, not raised again. Everything after the heading "Original round — historical receipt" is retained historical evidence.
