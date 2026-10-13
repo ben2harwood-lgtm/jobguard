@@ -674,3 +674,78 @@ Repair diff from the supplied head (not the complete PR diff):
 ```
 
 Final unchanged HEAD: `c97581cdc3c9e4a95e266ff939bed98ceb5ac135`. Intended commit subject/body: `/private/tmp/jg-msg-ch-7-insurer.txt`. Dispatcher commits; RED-lane exact-head CI, independent recorded verdict and separate acceptance remain outstanding. OpenAPI generator/check STOP remains as documented above.
+
+
+## Repair r5 — 13 October 2026, dispatcher 3
+
+Actual builder: Codex. The existing truthful first-line attribution is retained; the requested Claude fallback attribution does not describe this session. Initial and final unchanged HEAD: `4480eccd540eb04fe52cb3b9955ba8ffc12747fa`, PR #176, branch `codex/sandbox/ch-7-insurer`. Dispatcher commits; no builder acceptance or independent verdict.
+
+### Repair scope and failure evidence
+
+Only this piece's test file and this receipt change in r5. Production source, migration 0142, merged tests, pinned lists/values, fingerprints, watchdog guards/harness and OpenAPI remain byte-identical to the supplied head.
+
+- `[DB18]`, test line 223: the rolled-back replacement now uses the exact existing signature from `0142:4`: `app.recovery_job_payer_type(p_tenant uuid,p_job uuid)`. Its changed body still returns NULL, so this remains a real function replacement after N. It still runs the same `proofDifferences(client,proof)` and requires no row/type differences; no comparison or assertion was removed or relaxed. Transaction rollback restores the function. Named pre-existing columns, canonical JSON text, full PostgreSQL types, identity matching and the other controls are unchanged.
+- `[A4 DB12]`, test lines 270–272: settle the movement through the existing fixture command helper before `alternate_representation` or `unknown_duplicate`. The helper defaults to the settled step and tracks the new revision. This mirrors `practice-feed.integration.test.ts:189–203` and satisfies `PracticeFeedRepository.preconditions` at line 245. The pending and supplier-refund setups are unchanged. The exact event-kind selection and every expected payer-mark refusal remain unchanged, including `PAYER_MARK_SOURCE_REQUIRED` for both repaired cases.
+- Tests existed before this setup repair. First local failing run: **NOT RUN (DB suites expressly excluded; cannot start PostgreSQL here)**. Supplied CI log `~/.local/share/full-steam/jg-runs/ch-7-insurer-ci-fail-38446071089.log` on the supplied head is the failing evidence: DB18 raises 42P13 on the parameter name; the two A4 DB12 cases raise `PRACTICE_FEED_SETTLEMENT_REQUIRED` during setup. CI reports **119 DB files passed, 1 failed; 1,753 tests passed, 3 failed**. These are previous-head CI counts, not local repair results. No product defect was established and no production code was changed.
+
+### OpenAPI evidence from CI
+
+The supplied log lines 440–443 show `@jobguard/api openapi:check` invoking `tsx src/generate-openapi.ts --check` and completing its task group without an error. The API script is `vitest run src && pnpm openapi:check`; API reports 68 files / 1,599 tests passed, and the final Turbo summary identifies only `@jobguard/db#test` as failed (12 successful of 13 tasks). The check therefore succeeded on head `4480eccd540eb04fe52cb3b9955ba8ffc12747fa`. Inspection of the generator confirms it compares the generated serialized document with the committed bytes and throws if stale. CI supplies the missing comparison evidence from r4: no hand edit or local generation is needed. `apps/api/openapi.json` is unchanged. This is CI evidence, not a local OpenAPI run.
+
+### Commands and results
+
+Read-only inspection commands ran in grouped shell calls. Successful inspections used `pwd`, `rg --files`, `rg -n` (with context where needed), `cat`, `sed -n`, `wc -l`, `ls`, `head`, `tail`, `node --version`, `git status --short`, `git rev-parse HEAD`, and `git diff --check` / `--stat` / targeted `--`. They read AGENTS, the applicable BUILD_PLAN CH-7 card and qualifying categories, the standing handoff rules, the supplied CI log/tail, the existing receipt, own test, migration 0142, feed repository/sibling test, upgrade comparator, payer repository, generator, package/tsconfig and lint tools. All completed inspection shell calls exited 0. No source read is represented as a test. The first uncached-launcher `pnpm --version` probe produced a configuration warning without a recorded version; no success is claimed for that probe. The existing cached launcher was inspected and used for the commands below; no download or install was requested.
+
+All subsequent pnpm calls begin with `export PATH="$HOME/Library/pnpm/bin:$PATH"`, then prepend the existing `/private/tmp/jg-pnpm-ent-10a2` cached launcher. Installed versions: Node v24.17.0 and pnpm 10.28.1 (confirmed version call exit 0). Checks run sequentially, never concurrently. No DB/browser command or heavy-slot helper was invoked. Before each heavy check, `memory_pressure | tail -1` and `df -g /System/Volumes/Data` exited 0: 70% free memory and 71 GB disk available; initial read was 69% / 71 GB. Both floors were satisfied.
+
+| Command / operation | Exit / counts / result |
+| --- | --- |
+| Python SHA-256 baseline using read-only `git ls-files -z` | 0; 1,621 tracked files recorded in `/private/tmp/ch-7-insurer-r5-before.json`. |
+| `apply_patch` on the authorized test file | Successful; exact parameter names and settlement setup only. |
+| `pnpm exec turbo run typecheck --force` | **0; 7 successful tasks, 0 cached**, 19.442s; run once with cache off. |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | **0; 7 successful tasks, 0 cached**, 20.376s; run once with cache off. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | **0**; core purity (153 TypeScript files), lane, money and commercial boundaries passed. |
+| Python pre-receipt byte comparison | 0; only the authorized test changed; all 1,620 other tracked file hashes match the starting head. |
+| `tail` of check logs and `write_stdin` polling | Completed without running or repeating any check. |
+| Python receipt append and intended commit-message write | 0; receipt appended, commit subject/body written to `/private/tmp/jg-msg-ch-7-insurer.txt`. |
+
+Command logs: `/private/tmp/ch-7-insurer-r5-{typecheck,lint,boundaries,build,lanes}.log`. Final build/lane results and byte inventory follow below. Turbo emitted IO permission warnings; no alternate route or escalation was attempted.
+
+### NOT RUN
+
+- `packages/db/test/recovery-insurer-money.integration.test.ts`: **NOT RUN (cannot start PostgreSQL here; repair header expressly excludes DB suites)**. Includes the repaired DB18 control and the A4 DB12 cases. All other DB files, `pnpm test:db` and `pnpm test:migrations`: **NOT RUN** for the same scope/environment reason; dispatcher/CI owns execution.
+- `apps/web/e2e/CH-7.spec.ts`, `pnpm test:e2e`: **NOT RUN (cannot start a browser here)**.
+- Local `pnpm openapi:check` / generation: **NOT RUN**; previous IPC refusal is not retried, and successful supplied-head CI comparison is documented above.
+- Unit/whole-package/repository suites: **NOT RUN**; no domain/API behavior changed, and a unit test cannot verify these PostgreSQL setup repairs. Clean install: **NOT RUN (preinstalled dependencies; no downloads allowed)**. Live providers/models/eval: **NOT RUN / unaffected**.
+
+### Grants, self-inspection and handoff
+
+New GRANTs in r5: **none**. Migration 0142 is unchanged; its four grants are already listed individually in r4. Standard F remains unchanged: SELECT only on the payer-money table for the application login; writes use the existing checked session-bound routine, with no new direct write grant. No contractor route changed.
+
+Builder source inspection only: both repairs allow the test to reach its intended assertion while preserving its comparison/refusal strength. No schema migration, backfill, compatibility change to production, external action, alert, policy, prompt or model change. The existing migration forward-fix/rollback notes still apply. No merged test was edited and no permanent byte/hash-pinning test was added. There is no new STOP or BLOCKING question. Exact-commit CI, independent recorded RED-lane verdicts and separate acceptance remain the dispatcher's/reviewers' work; no acceptance is claimed.
+
+
+### Final executed verification and byte preservation
+
+- `pnpm build --concurrency=2 --force`: **exit 0; 7 successful tasks, 0 cached**, 1m10.711s; once, sequentially after lint. Existing Next/CSS/workspace/cache warnings remain; all tasks completed.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **exit 0**, own lane passed. Root boundary check also passed as recorded above.
+- Final `git diff --check`, `git diff --stat`, `git status --short`, `git rev-parse HEAD`, and Python byte inventory/assertions: **exit 0**; whitespace clean, exactly the authorized test and receipt modified, no untracked repository files. All **1,619 other tracked files** remain byte-identical to the starting head. Full final inventory: `/private/tmp/ch-7-insurer-r5-after.json`; baseline: `/private/tmp/ch-7-insurer-r5-before.json`. Inventory values are receipt evidence only, not permanent tests.
+
+Selected final SHA-256 values (receipt excluded from this table to avoid a self-hash):
+
+| File | SHA-256 |
+| --- | --- |
+| `packages/db/test/recovery-insurer-money.integration.test.ts` | `837ea4b89d6ce58de4f71c75b80fba61424e1ada32b9b1c2357dc849a2f47003` |
+| `packages/db/migrations/0142_recovery_insurer_money.sql` | `eb6067e4a73f91e198502fe1886e2498710a413c1836308b650f13243e4b3865` |
+| `packages/db/src/practice-feed-repository.ts` | `c7f077b9ce8782bc5c63da3715bee6cb07d5aeb28d531db01d363510de214283` |
+| `apps/api/openapi.json` | `c368255cd5e89140d2c4d6422a373edab192e478c773ddf20fed1a21a51413b5` |
+
+Final repair diff from the supplied head (not the full PR diff):
+
+```text
+ docs/verdicts/CH-7-INSURER/BUILDER_RECEIPT.md      | 75 ++++++++++++++++++++++
+ .../recovery-insurer-money.integration.test.ts     |  6 +-
+ 2 files changed, 79 insertions(+), 2 deletions(-)
+```
+
+Final unchanged HEAD: `4480eccd540eb04fe52cb3b9955ba8ffc12747fa`. Commit subject/body written to `/private/tmp/jg-msg-ch-7-insurer.txt`; dispatcher commits. No new STOP or BLOCKING question. Database/browser execution and exact committed repair review remain outstanding.

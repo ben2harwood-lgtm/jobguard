@@ -220,7 +220,7 @@ it("[DB18] preserves named pre-existing F19/F21 rows and full types with rolled-
   await rolledBack(admin,async client=>{await client.query(`ALTER TABLE ${table} ADD COLUMN insurer_proof_nullable text`);expect(await proofDifferences(client,proof)).toEqual({rows:[],types:[]});});
  }
  await rolledBack(admin,async client=>{
-  await client.query("CREATE OR REPLACE FUNCTION app.recovery_job_payer_type(uuid,uuid) RETURNS text LANGUAGE sql STABLE SET search_path=pg_catalog,app AS 'SELECT NULL::text'");
+  await client.query("CREATE OR REPLACE FUNCTION app.recovery_job_payer_type(p_tenant uuid,p_job uuid) RETURNS text LANGUAGE sql STABLE SET search_path=pg_catalog,app AS 'SELECT NULL::text'");
   expect(await proofDifferences(client,proof)).toEqual({rows:[],types:[]});
  });
  await rolledBack(admin,async client=>{
@@ -267,7 +267,9 @@ it("[A4 DB12] owner role, revocation, other-session digest, other job and case t
  expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'jobId'=$2 AND event_type LIKE 'recovery.payment_payer.%'",[T,f.jobId])).rows[0].n).toBe(0);
 });
 it.each([["receipt-3000","pending","pending","PAYER_MARK_SOURCE_REQUIRED"],["receipt-3000","alternate_representation","statement","PAYER_MARK_SOURCE_REQUIRED"],["receipt-3000","unknown_duplicate","unknown","PAYER_MARK_SOURCE_REQUIRED"],["supplier-refund-540","settled","settled","PAYER_MARK_NOT_CUSTOMER_PAYMENT"]])("[A4 DB12] refuses %s %s",async(movement,step,kind,code)=>{
- const f=await fixture();await f.advance(movement!,step!);
+ const f=await fixture();
+ if(step==="alternate_representation"||step==="unknown_duplicate")await f.advance(movement!);
+ await f.advance(movement!,step!);
  const event=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key=$3 AND event_kind=$4",[T,f.jobId,movement,kind])).rows[0];
  await expect(f.marks.command(ctx,f.jobId,{version:"recovery-payment-payer-command.v1",action:"mark_customer_own",commandId:randomUUID(),caseId:f.c.id,sourceEventId:event.id,expectedMarkRevision:0,evidenceId:f.evidence},actor,f.auth.digest)).rejects.toThrow(code!);
 });
