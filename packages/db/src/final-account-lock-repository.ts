@@ -65,6 +65,32 @@ export class FinalAccountLockRepository {
   const input = parse(lockInput, raw);
   try { return await withTenant(this.pool, context, async db => {
    const row = (await db.$client.query<any>(`SELECT l.*,r.source_hash locked_source_hash,to_char(l.locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') locked_at_text FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7) l JOIN app.final_account_revision r ON(r.tenant_id,r.job_id,r.id)=(l.tenant_id,l.job_id,l.final_account_revision_id)`, [context.tenantId, input.jobId, input.actorMembershipId, input.commandId, input.finalAccountRevisionId, input.expectedRevision, input.declarationVersion])).rows[0]!;
+   // The routine holds the job and all existing variations until this transaction ends.
+   // Validate before COMMIT, without taking any further business locks after its audit append.
+   // xmin distinguishes our new INSERT from an immutable historical replay, including a
+   // duplicate command which waited for another transaction to finish creating the lock.
+   const created = (await db.$client.query<{ created_in_transaction: boolean }>(
+    `SELECT xmin = pg_current_xact_id()::xid AS created_in_transaction FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,
+    [context.tenantId,input.jobId,row.id])).rows[0]!;
+   if (created.created_in_transaction) {
+    // Match the assembler's current approved source set in both directions. Comparing
+    // exact identities and signed values also catches removals and equal-total replacements.
+    const freshness = (await db.$client.query<{ stale: boolean }>(`WITH approved_sources AS (
+     SELECT r.id source_id,r.scope_item_id,r.id commercial_revision_id,a.id approval_id,r.description,r.signed_delta_pence net_pence
+     FROM app.variation_approval a
+     JOIN app.variation_revision r ON(r.tenant_id,r.job_id,r.id)=(a.tenant_id,a.job_id,a.revision_id)
+     JOIN app.variation v ON(v.tenant_id,v.job_id,v.id)=(a.tenant_id,a.job_id,a.variation_id)
+     WHERE a.tenant_id=$1 AND a.job_id=$2 AND v.state='approved' AND v.current_revision_id=a.revision_id
+    ), account_sources AS (
+     SELECT source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence FROM app.final_account_line
+     WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='variation'
+    ) SELECT EXISTS(
+     (SELECT * FROM approved_sources EXCEPT ALL SELECT * FROM account_sources)
+     UNION ALL
+     (SELECT * FROM account_sources EXCEPT ALL SELECT * FROM approved_sources)
+    ) AS stale`,[context.tenantId,input.jobId,input.finalAccountRevisionId])).rows[0]!;
+    if (freshness.stale) throw new FinalAccountLockError("STALE_REVISION");
+   }
    const snapshot = createFinalAccountLockSnapshot(row.snapshot);
    if (snapshot.digest !== row.snapshot_digest.trim() || snapshot.captureRegisterHash !== row.capture_register_hash.trim() || snapshot.lineSetHash !== row.line_set_hash.trim() || snapshot.scopeDispositionHash !== row.scope_disposition_hash.trim()) throw new FinalAccountLockError("FINAL_ACCOUNT_SOURCE_CHANGED");
    return lockProjection(row);
