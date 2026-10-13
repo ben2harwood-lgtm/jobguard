@@ -885,3 +885,73 @@ Conditions: `apps/api/dist` and `apps/web/.next` renamed aside (not deleted; lat
 ### NOT RUN
 
 `@jobguard/db#test` and any database package suite (heavy; beyond this round's order), the whole repository test suite, Playwright, `pnpm build`, and GitHub CI itself (it starts again when this commit is pushed).
+
+## Repair round 6 (13 Oct): cross-connection log order in the isolation replay, built by Claude, Codex unavailable
+
+Issued 13 October 2026 at about 03:00 by the JobGuard dispatcher. Base: clean `2b5f984`, branch `codex/sandbox/sv-3`, worktree `.worktrees/sv-3`. Built by a Claude Sonnet builder (Codex out of budget); a builder never reviews its own piece, and this record gives no verdict. Order `SV-3-issued` and repair rounds 1 to 5 stay in force. Tests only: one test file plus this receipt. No product code, migration, workflow, package.json, turbo file, `apps/api/src/auth/context-boundary.test.ts` or other test was touched.
+
+### The defect (found by GitHub CI, invisible on the Mac)
+
+CI run **38324335881** on `2b5f984`, job `checks`, step `pnpm test`: with round 5's build step in place `src/shadow-isolation.application.test.ts` now runs in CI, and its first test ("SV-3 Test Q ... replays every OpenAPI builder GET and Next job GET ...") failed at line 149 of the file as it stood (`expect(many.compared).toEqual(zero.compared)`; line 174 now). The only difference in the deep-equal diff (hunk `@@ -2051,12 +2051,12 @@`) is two log lines, `" BEGIN"` and `" COMMIT"`, in opposite order between the two replays. `compared.statements` came from `runtimeStatements(logStart,database)`: the PostgreSQL statement log of the runtime role, from the Nest server and the Next server and every pooled connection, as ONE interleaved sequence. Cause, read from the code: `apps/api/src/final-account-lock.application.ts` line 20 does `await Promise.all([this.repo.read(...),this.accounts.read(...)])`, so one request runs two transactions on two connections started together (the second connection may still be opening). The lock-view transaction's COMMIT and the draft-read transaction's BEGIN are then logged in either order. Same statements, same order on each connection, different interleaving; not a held-signal effect. Neither the four earlier Mac runs nor any Mac run in this round showed it (the Mac opens connections faster than the runner).
+
+### What is compared, before and after
+
+Before: the whole runtime log as one sequence (so the relative order of any two lines, whatever connection they came from).
+
+After (one shared function, `runtimeStatementsByUnit`, used by both statement comparisons in the file): the log entries of the runtime role are grouped by connection (the session id, `log_line_prefix` `%c`), each connection's statements are cut, in their exact order, into units (one transaction, `BEGIN` to `COMMIT`/`ROLLBACK`, or one statement outside a transaction), the units are sorted into a fixed order, and a marker line `<unit>` is written before each so the grouping itself is compared. The session id is used only to group and is never compared (it differs between any two replays).
+
+The four properties of the order:
+- (a) every statement text and every bound-parameter DETAIL line that was compared before is still compared (Q-LOG-3 lists all eight statements of a two-connection log, DETAIL lines included, in the result).
+- (b) order of statements: still compared exactly inside every transaction. **Deliberate narrowing against the order's wording:** the order of two units that sit on the same connection is NOT compared. Reason, found by measuring: which pooled connection serves a later request is itself timing. After the `Promise.all` above, the pool hands the next request whichever of the two connections was released last. On the Mac, in the SAME run, the Nest server and the Next server end up opposite: Nest keeps all later requests on its first connection (328 statements) and uses the second for the 4-statement draft read only; Next puts the draft read and the 247 later statements on its second connection (sessions of 62 and 251). Comparing per-connection sequences exactly would therefore turn a timing race into a failure of the same kind as this round's. (The per-connection grouping the order recommended was built first and passed five runs on the Mac; it was dropped for this reason, not because it failed.)
+- (c) a statement present in one replay and absent in the other, a different statement, a different bound parameter, an extra or duplicated unit, a swap inside one transaction and a moved transaction boundary all still fail (Q-LOG-4, Q-LOG-5, Q-LOG-6).
+- (d) the shadow-name check is byte-identical: `expect(statements.join("\n")).not.toMatch(/\b(?:shadow_commercial_signal|...)\b/u)` (now line 168) and the same check in the third test (now line 402) are untouched; the marker contains no shadow name.
+
+**What is no longer compared, plainly:** the relative order of units in the log, across different connections (timing) and on one connection (which connection a later request lands on is timing), and with it which request issued which unit (the log carries no request identity). Every route's response (status, headers, body) is still compared byte for byte in the same assertion. Why that is safe: a held signal could only reach the runtime role by adding, removing or changing a statement or a bound parameter, or by reordering statements inside a transaction; all of those still fail, and the shadow-name check is unchanged. A reorder of whole units with identical contents is a property of timing and pool reuse, not of what the application does. If a per-route attribution is wanted later, the way to get it is a marker line written to the log after each request (not done here: it adds a statement per request and depends on no statement being logged after its response).
+
+Also handled in the same function: only the LAST entry of the raw log still carries its own trailing newline (the split removes it from the others), and which entry is last is timing too, so one trailing newline is removed from each entry text.
+
+### Lines changed, before/after (file total +88/-2)
+
+- Old line 45 `function runtimeStatements(logStart,database){return statementsLog.slice(logStart).join("").split(/\n(?=SV3:[^\n]*?: LOG:  )/u).filter(...).map(...)}` (one line; the existing comment above it is unchanged) becomes new lines 45-70: three comment lines, `UNIT_MARK`, the two transaction predicates, `runtimeStatementsByUnit(raw,database)` (same split, same filter, same text cleaning as before, plus session id, grouping, units, fixed order), and `runtimeStatements(logStart,database)`, now a one-line call of it. Call sites (`const statements=runtimeStatements(logStart,database);` now line 166, and `trace.statements=runtimeStatements(logStart,database);` now line 401) and every assertion that uses the result are unchanged.
+- Old line 80 `ALTER SYSTEM SET log_line_prefix='SV3:%u:%d: '` becomes `'SV3:%u:%d:%c: '` (now line 105); the filter and the neutral rewrite of the database name in DETAIL lines still match, because the id sits after the database name.
+- New lines 224-284: the pure test block described next, between the channel negative controls and the third test.
+- Nothing else in the file changed (the shadow-name checks, the named-limit assertions, every `it` timeout, the `expect(many.compared).toEqual(zero.compared)` line itself).
+- The second test (`successful Log an extra, retries, ...`) compares responses and one outbox query, not a statement log: no change. The third test (`Test Q: successful mutations ...`) compares `trace.statements` through `assertIsolation`, so it gets the same function (it calls `runtimeStatements`); it also reaches the same `Promise.all` through `app.finalAccountLock.get`.
+
+### The pure test (`SV-3 Test Q-LOG`, seven new tests, hand-made logs, no database or server)
+
+Logs are written exactly as PostgreSQL writes them with the new prefix. The two-connection fixture has the shape CI produced (a lock-view transaction on one connection, a draft read on another).
+- Q-LOG-1 equal: the same two connections interleaved either way (the CI order and the other), logged one connection after the other, and under different session ids.
+- Q-LOG-2 equal: the same units with the later statements landing on the other connection.
+- Q-LOG-3 every statement and DETAIL line present, two markers for two transactions, session id and database name absent.
+- Q-LOG-4 different: changed statement, changed bound parameter, missing statement, extra statement, duplicated transaction, duplicated single statement.
+- Q-LOG-5 different: two statements swapped inside one transaction, the COMMIT missing, a statement moved out of a transaction, a boundary moved.
+- Q-LOG-6 ROLLBACK ends a unit, ROLLBACK TO SAVEPOINT does not, an unterminated transaction is one unit and still compared.
+- Q-LOG-7 other roles, other databases and non-statement lines ignored; a runtime entry with no session id throws ("fails closed").
+Scratch negative controls (uncommitted copies, file restored byte for byte afterwards, `cmp` identical): returning the units unsorted makes Q-LOG-1 and Q-LOG-2 fail; returning a flat sorted statement list (no units) makes Q-LOG-3, -5, -6 and -7 fail. Logs `02-m1.log`, `02-m4.log`.
+
+### Proof runs (Mac; `~/.local/bin/heavy-slot` with `HEAVY_SLOTS=2`; logs in `~/.local/share/full-steam/jg-runs/sv-3-r6/`)
+
+Command each time: `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/shadow-isolation.application.test.ts`; `apps/api/dist` and `apps/web/.next` present (round 5's build step is untouched and was not re-proved cold; the product code did not change). Whole file is now 22 tests (15 before, 7 new).
+
+| # | Condition | Exit | Result | Log |
+|---|---|---|---|---|
+| 1 | pure tests only (`-t "Q-LOG"`) | 0 | 7 passed, 15 skipped | `01-pure.log` |
+| 2 | whole file, quiet Mac | 0 | **22/22**, 8.1 s | `03-file-run1.log` |
+| 3 | whole file, quiet Mac | 0 | **22/22**, 9.4 s | `03-file-run2.log` |
+| 4 | whole file, quiet Mac | 0 | **22/22**, 8.4 s | `03-file-run3.log` |
+| 5 | whole file, quiet Mac | 0 | **22/22**, 9.9 s | `03-file-run4.log` |
+| 6 | whole file, quiet Mac | 0 | **22/22**, 12.7 s | `03-file-run5.log` |
+| 7 | whole file, `taskpolicy -b` while a heavy-slot command ran 14 CPU-burning processes (load average peaked 19.7 on 10 cores) | 0 | **22/22**, 24.8 s | `04-load-run1.log` |
+| 8 | same load | 0 | **22/22**, 23.8 s | `04-load-run2.log` |
+
+Runs 7 and 8 are evidence only (the file ran about three times slower), not a proof of stability. Exploratory runs `00-dump1` to `00-dumpL4` (nine whole-file runs, each with a temporary line writing the per-connection groups to a scratch folder; the line is not in the commit) are where the connection split above was measured: in all nine runs, in both replays, the isolation databases gave connection groups of 328, 4, 62 and 251 statements and the clone databases of the third test gave 670, 484 and 240. The first five of those ran the per-connection variant on a quiet Mac, the last four (all under CPU load) the units variant before its trailing-newline line was added; all passed. The connection split was identical in every one of them, so the Mac never flipped the pool's choice; the two servers ending up opposite inside one run shows the assignment is not fixed by the application, so a per-connection comparison could not be shown safe on a slower runner (this is an argument from the mechanism, not an observed failure).
+
+### What else was checked
+
+- `pnpm typecheck`: exit 0, 7/7 tasks (5 cached) (`05-typecheck.log`).
+- `LANE_BASE_REF=origin/main pnpm lint`: exit 0, "Lane boundary passed" (lane sv-3, merge-base comparison against origin/main), core purity and money-arithmetic checks passed, 7/7 tasks (5 cached) (`06-lint.log`). It ran on the local commit that held this record with this one line still unfilled; filling it in (an amend before the push) changed no other file.
+
+### NOT RUN
+
+`@jobguard/db#test` and any database package suite, the whole repository test suite, Playwright, `pnpm build`, a cold re-build of `apps/api/dist` and `apps/web/.next` (round 5's proof stands; no product code changed), and GitHub CI itself (it starts again when this commit is pushed; whether the runner now passes is not known until it does).

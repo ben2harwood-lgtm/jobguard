@@ -42,7 +42,32 @@ async function nextRoutes(path:string,prefix="/api",method:"GET"|"POST"="GET"):P
 }return routes;}
 function pathFor(route:string){return route.replace(/\{(?:id|jobId)\}|\[(?:id|jobId)\]/gu,jobId).replace(/\{[^}]+\}|\[[^\]]+\]/gu,"10000000-0000-4000-8000-000000000099");}
 // PostgreSQL log entries start at a "LOG:" line; DETAIL (bound parameters) and continuation lines belong to the entry before them. onLog delivers raw stderr chunks cut anywhere, so entries are rebuilt from the joined text, and the database name in the log prefix (which differs by construction between the zero and many databases) is made neutral before the lists are compared.
-function runtimeStatements(logStart:number,database:string){return statementsLog.slice(logStart).join("").split(/\n(?=SV3:[^\n]*?: LOG:  )/u).filter(s=>s.includes(`SV3:sv3_isolation_runtime:${database}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,"").replaceAll(`SV3:sv3_isolation_runtime:${database}:`,"SV3:sv3_isolation_runtime:DB:"));}
+// Repair round 6 (13 Oct 2026, CI run 38324335881). The runtime log is no longer compared as one interleaved sequence. Statements are grouped by database connection (session id, log_line_prefix %c), each connection's statements are cut into units (one transaction, BEGIN to COMMIT/ROLLBACK, or one statement outside a transaction) in their exact order, and the units are sorted into a fixed order.
+// Compared exactly: every statement, every DETAIL (bound-parameter) line, the order of statements inside each unit, and what belongs to which unit. NOT compared: the relative order of units, whether on different connections (timing: one connection's COMMIT can be logged before or after another's BEGIN) or on one connection (which pooled connection serves a later request is itself timing: final-account-lock.application.ts runs two reads at once with Promise.all and the pool reuses whichever connection was released last). The session id only groups and is never compared; a marker line before each unit keeps the grouping itself compared.
+const UNIT_MARK="<unit>";
+const opensTransaction=(text:string)=>/^(?:BEGIN|START\s+TRANSACTION)\b/iu.test(text.trim()),closesTransaction=(text:string)=>/^(?:COMMIT|END|ABORT|ROLLBACK(?!\s+TO\b))\b/iu.test(text.trim());
+function runtimeStatementsByUnit(raw:string,database:string):string[]{
+ const prefix=`SV3:sv3_isolation_runtime:${database}:`,sessions=new Map<string,string[]>();
+ for(const entry of raw.split(/\n(?=SV3:[^\n]*?: LOG:  )/u)){
+  if(!entry.includes(prefix)||!/(?:statement|execute [^:]+):/u.test(entry))continue;
+  const id=entry.match(new RegExp(`${prefix}([0-9a-f]+\\.[0-9a-f]+): `,"u"))?.[1];
+  if(id===undefined)throw new Error(`runtime log entry without a session id (log_line_prefix must include %c): ${entry.slice(0,200)}`);
+  const text=entry.replace(/^.*?(?:statement|execute [^:]+):/su,"").replaceAll(`${prefix}${id}:`,"SV3:sv3_isolation_runtime:DB:").replace(/\n$/u,""); // only the last entry of the raw log still ends with its own newline; which statement is last is timing too
+  sessions.set(id,[...sessions.get(id)??[],text]);
+ }
+ const units:string[][]=[];
+ for(const texts of sessions.values()){let open:string[]|undefined;
+  for(const text of texts){
+   if(open){open.push(text);if(closesTransaction(text)){units.push(open);open=undefined}}
+   else if(opensTransaction(text))open=[text];
+   else units.push([text]);
+  }
+  if(open)units.push(open);
+ }
+ const key=(unit:string[])=>JSON.stringify(unit);
+ return units.sort((a,b)=>key(a)<key(b)?-1:key(a)>key(b)?1:0).flatMap(unit=>[UNIT_MARK,...unit]);
+}
+function runtimeStatements(logStart:number,database:string){return runtimeStatementsByUnit(statementsLog.slice(logStart).join(""),database);}
 function stableHeaders(headers:Record<string,string>){return Object.fromEntries(Object.entries(headers).filter(([k])=>k!=="date").sort(([a],[b])=>a.localeCompare(b)));}
 // NAMED LIMIT (coordinator ruling, 12 Oct 2026; SV-3 BUILDER_RECEIPT "Follow-up (12 Oct)"). Only in the replay comparison below, and only on the two prevention-checks GETs (Nest /jobs/{id}/prevention-checks and Next /api/jobs/{id}/prevention-checks),
 // exactly two things are not compared byte for byte between the two replays: the body field `retrievedAt` (the database wall clock, so two replays can never match; it is also copied into payingParty.retrievedAt) and the `etag` response header, which Express derives from the body bytes.
@@ -77,7 +102,7 @@ beforeAll(()=>buildIfAbsent("Web production","@jobguard/web",new URL("../../web/
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"sv3-isolation-"));port=await freePort(58000,500);
  postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:(line:string)=>statementsLog.push(line)});await postgres.initialise();await postgres.start();owner=pool("postgres","postgres");
- await owner.query("ALTER SYSTEM SET log_line_prefix='SV3:%u:%d: '");await owner.query("SELECT pg_reload_conf()");
+ await owner.query("ALTER SYSTEM SET log_line_prefix='SV3:%u:%d:%c: '");await owner.query("SELECT pg_reload_conf()");
  await owner.query(`CREATE ROLE sv3_isolation_runtime LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
  await owner.query("ALTER ROLE sv3_isolation_runtime SET log_statement='all'");
  await owner.query("CREATE DATABASE sv3_isolation_zero");const p=pool("postgres","sv3_isolation_zero");try{await migrate(p);await installLegacySyntheticPartyFixtures(p);
@@ -194,6 +219,67 @@ function assertIsolation(zero:IsolationTrace,many:IsolationTrace){for(const chan
 it.each(channels)("Test Q monitor rejects a signal-dependent %s path",channel=>{
  const zero=emptyTrace(),many=structuredClone(zero);
  many[channel].push({heldSignalCount:25});expect(()=>assertIsolation(zero,many)).toThrow();
+});
+
+// Test Q-LOG (repair round 6): the statement-log normaliser behind both statement comparisons, proved on hand-made logs (no database, no server). Same statements re-interleaved across connections, or landing on other connections, compare equal; a changed, missing or extra statement, a changed bound parameter, a duplicated unit, a swap inside one transaction and a moved transaction boundary all compare different.
+describe("SV-3 Test Q-LOG: runtime statement log normalisation (pure)",()=>{
+ const DB="d_one",ROLE="SV3:sv3_isolation_runtime";
+ // Lines exactly as PostgreSQL writes them with log_line_prefix 'SV3:%u:%d:%c: ' and log_statement='all'.
+ const simple=(sid:string,sql:string,db=DB)=>`${ROLE}:${db}:${sid}: LOG:  statement: ${sql}`;
+ const bound=(sid:string,sql:string,parameters:string,db=DB)=>`${ROLE}:${db}:${sid}: LOG:  execute <unnamed>: ${sql}\n${ROLE}:${db}:${sid}: DETAIL:  parameters: ${parameters}`;
+ const logOf=(...entries:string[])=>`${entries.join("\n")}\n`;
+ const normalise=(raw:string,db=DB)=>runtimeStatementsByUnit(raw,db);
+ const [X,Y,Z]=["6a7c1d00.1001","6a7c1d00.1002","6a7c1d01.2003"] as const;
+ // The shape CI run 38324335881 produced: a lock-view transaction on one connection and a draft read on another, started together.
+ const lockBegin=simple(X,"BEGIN"),lockConfig=bound(X,"SELECT set_config('app.tenant_id', $1, true)","$1 = 'T'"),lockView=bound(X,"SELECT l.* FROM app.final_account_lock l WHERE l.job_id=$2","$1 = 'T', $2 = 'J'"),lockEnd=simple(X,"COMMIT");
+ const draftBegin=simple(Y,"BEGIN"),draftConfig=bound(Y,"SELECT set_config('app.tenant_id', $1, true)","$1 = 'T'"),draftRead=bound(Y,"SELECT d.revision FROM app.final_account_draft d WHERE d.job_id=$2","$1 = 'T', $2 = 'J'"),draftEnd=simple(Y,"COMMIT");
+ const draftFirst=logOf(lockBegin,lockConfig,lockView,draftBegin,lockEnd,draftConfig,draftRead,draftEnd),lockFirst=logOf(lockBegin,lockConfig,lockView,lockEnd,draftBegin,draftConfig,draftRead,draftEnd);
+ const rename=(raw:string,from:string,to:string)=>raw.replaceAll(`:${from}: `,`:${to}: `);
+ it("Q-LOG-1 the same two connections interleaved either way (the CI shape), or under other session ids, compare equal",()=>{
+  expect(normalise(draftFirst)).toEqual(normalise(lockFirst));
+  expect(normalise(rename(rename(draftFirst,X,"7b000000.9001"),Y,"7b000000.9002"))).toEqual(normalise(lockFirst));
+  expect(normalise(logOf(draftBegin,draftConfig,draftRead,draftEnd,lockBegin,lockConfig,lockView,lockEnd))).toEqual(normalise(lockFirst));
+ });
+ it("Q-LOG-2 later statements landing on the other pooled connection compare equal (the pool reuses whichever connection was released last)",()=>{
+  const first=["SELECT * FROM app.authenticate_practice_session($1)","$1 = 'S'"] as const,second=["SELECT * FROM app.contractor_session($1)","$1 = 'S'"] as const;
+  const onFirst=logOf(bound(X,...first),bound(X,...second),lockBegin,lockConfig,lockEnd,draftBegin,draftConfig,draftEnd);
+  const onSecond=logOf(bound(X,...first),lockBegin,lockConfig,lockEnd,draftBegin,draftConfig,draftEnd,bound(Y,...second));
+  expect(normalise(onSecond)).toEqual(normalise(onFirst));
+ });
+ it("Q-LOG-3 every statement text and bound-parameter line is still in the result, each transaction is one unit behind a marker, and the database name and session id are neutral",()=>{
+  const result=normalise(lockFirst),detail=(parameters:string)=>`\n${ROLE}:DB: DETAIL:  parameters: ${parameters}`;
+  expect([...result].filter(line=>line!==UNIT_MARK).sort()).toEqual([" BEGIN"," BEGIN"," COMMIT"," COMMIT",` SELECT set_config('app.tenant_id', $1, true)${detail("$1 = 'T'")}`,` SELECT set_config('app.tenant_id', $1, true)${detail("$1 = 'T'")}`,` SELECT l.* FROM app.final_account_lock l WHERE l.job_id=$2${detail("$1 = 'T', $2 = 'J'")}`,` SELECT d.revision FROM app.final_account_draft d WHERE d.job_id=$2${detail("$1 = 'T', $2 = 'J'")}`].sort());
+  expect(result.filter(line=>line===UNIT_MARK)).toHaveLength(2);expect(result[0]).toBe(UNIT_MARK);
+  expect(result.join("\n")).not.toContain(X);expect(result.join("\n")).not.toContain(Y);expect(result.join("\n")).not.toContain(DB);
+  expect(normalise(logOf(simple(Z,"SELECT 1")))).toEqual([UNIT_MARK," SELECT 1"]);
+ });
+ it("Q-LOG-4 a changed statement, a changed bound parameter, a missing statement, an extra statement and a duplicated unit each compare different",()=>{
+  const base=normalise(lockFirst);
+  expect(normalise(lockFirst.replace("final_account_lock l","final_account_lock x"))).not.toEqual(base);
+  expect(normalise(lockFirst.replace("$2 = 'J'","$2 = 'K'"))).not.toEqual(base);
+  expect(normalise(logOf(lockBegin,lockConfig,lockEnd,draftBegin,draftConfig,draftRead,draftEnd))).not.toEqual(base);
+  expect(normalise(logOf(lockBegin,lockConfig,lockView,lockEnd,draftBegin,draftConfig,draftRead,draftEnd,simple(Y,"SELECT 1")))).not.toEqual(base);
+  expect(normalise(logOf(lockBegin,lockConfig,lockView,lockEnd,draftBegin,draftConfig,draftRead,draftEnd,lockBegin,lockConfig,lockView,lockEnd))).not.toEqual(base);
+  expect(normalise(logOf(simple(Z,"SELECT 1"),simple(Z,"SELECT 1")))).not.toEqual(normalise(logOf(simple(Z,"SELECT 1"))));
+ });
+ it("Q-LOG-5 two statements swapped inside one transaction, and a transaction boundary moved, each compare different",()=>{
+  const base=normalise(lockFirst);
+  expect(normalise(logOf(lockBegin,lockView,lockConfig,lockEnd,draftBegin,draftConfig,draftRead,draftEnd))).not.toEqual(base);
+  expect(normalise(logOf(lockBegin,lockConfig,lockView,draftBegin,draftConfig,draftRead,draftEnd))).not.toEqual(base);
+  expect(normalise(logOf(lockBegin,lockConfig,lockEnd,lockView,draftBegin,draftConfig,draftRead,draftEnd))).not.toEqual(base);
+  expect(normalise(logOf(simple(Z,"BEGIN"),simple(Z,"SELECT 1"),simple(Z,"COMMIT"),simple(Z,"SELECT 2")))).not.toEqual(normalise(logOf(simple(Z,"BEGIN"),simple(Z,"SELECT 1"),simple(Z,"SELECT 2"),simple(Z,"COMMIT"))));
+ });
+ it("Q-LOG-6 ROLLBACK ends a unit, ROLLBACK TO SAVEPOINT does not, and an unterminated transaction is still one compared unit",()=>{
+  expect(normalise(logOf(simple(Z,"BEGIN"),simple(Z,"SELECT 1"),simple(Z,"ROLLBACK"),simple(Z,"SELECT 2")))).toEqual([UNIT_MARK," BEGIN"," SELECT 1"," ROLLBACK",UNIT_MARK," SELECT 2"]);
+  expect(normalise(logOf(simple(Z,"BEGIN"),simple(Z,"SAVEPOINT a"),simple(Z,"ROLLBACK TO a"),simple(Z,"COMMIT"),simple(Z,"SELECT 2")))).toEqual([UNIT_MARK," BEGIN"," SAVEPOINT a"," ROLLBACK TO a"," COMMIT",UNIT_MARK," SELECT 2"]);
+  expect(normalise(logOf(simple(Z,"BEGIN"),simple(Z,"SELECT 1")))).toEqual([UNIT_MARK," BEGIN"," SELECT 1"]);
+  expect(normalise(logOf(simple(Z,"BEGIN"),simple(Z,"SELECT 1")))).not.toEqual(normalise(logOf(simple(Z,"BEGIN"),simple(Z,"SELECT 2"))));
+ });
+ it("Q-LOG-7 other roles, other databases and lines that are not statements are ignored, and a runtime entry without a session id fails closed",()=>{
+  const noise=logOf(`SV3:postgres:${DB}:6a7c1d02.3001: LOG:  statement: SELECT 'owner'`,simple(X,"SELECT 1","d_other"),`${ROLE}:${DB}:${Z}: LOG:  duration: 1.000 ms`,simple(Z,"SELECT 1"));
+  expect(normalise(noise)).toEqual([UNIT_MARK," SELECT 1"]);
+  expect(()=>normalise(`${ROLE}:${DB}: LOG:  statement: SELECT 1\n`)).toThrow(/without a session id/u);
+ });
 });
 
 it("Test Q: successful mutations, exports, delivery/retry telemetry and every mutation error surface are identical",async()=>{
