@@ -34,7 +34,8 @@ async function organisation() {
  return Object.assign(f, { r1, r2, b1: f.demo.branchId, b2, b3, t1: f.demo.teamId, t2, t3, t4 });
 }
 async function grantTo(f: Fixture, membershipId: string, role: string, scope: Scope) {
- const id = randomUUID(); await command(f, { kind: "grant.create", id, membershipId, role, scope, contractId: null }); return id;
+ const id = randomUUID(); // grant.create now refuses owner (HARDEN-1), so an owner grant is made as the table owner, like one handed out before.
+ await (role === "owner" ? ownerTx(c, f.p.tenantId, db => db.$client.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,'owner',$4,$5)", [f.p.tenantId, id, membershipId, scope.kind, scope.id])) : command(f, { kind: "grant.create", id, membershipId, role, scope, contractId: null })); return id;
 }
 async function member(f: Fixture, role: string, scope: Scope) {
  const id = randomUUID(), invitedRole = role === "owner" ? "read_only" : role;

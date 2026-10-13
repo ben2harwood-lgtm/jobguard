@@ -279,7 +279,7 @@ describe("ENT-10b PostgreSQL audit exports", () => {
   it("exports one tenant only, including shared-user tenants, with its own audit event and distinct public key", async () => {
     const a = await setup(), b = await setup();
     await admin.query("UPDATE app.membership SET identity_user_id=$1 WHERE tenant_id=$2 AND id=$3", [a.p.identityUserId, b.p.tenantId, b.p.membershipId]);
-    await admin.query("UPDATE control_plane.contractor_practice_session SET identity_user_id=$1 WHERE session_id=$2", [a.p.identityUserId, b.session]);
+    await admin.query("UPDATE control_plane.contractor_practice_session SET identity_user_id=$1 WHERE tenant_id=$2 AND membership_id=$3", [a.p.identityUserId, b.p.tenantId, b.p.membershipId]);
     const bp = await contractor.resolveSession(b.session); expect(bp.identityUserId).toBe(a.p.identityUserId);
     await exportAuditCheckpoints(admin); await checkpoint(a.p); await checkpoint(bp);
     const bFile = await repo.create(context(bp), actor(bp), request());
