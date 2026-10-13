@@ -8,7 +8,7 @@ import { Client, Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { RecoveryTransitionError } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
-import { RecoveryCaseRepository, type RecoveryCaseView } from "../src/recovery-case-repository.js";
+import { RecoveryCaseRepository, RecoveryJoinError, type RecoveryCaseView } from "../src/recovery-case-repository.js";
 import { appendAuditBatch, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { withTenant, type TenantTransaction } from "../src/tenant-context.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -86,6 +86,25 @@ async function counts(caseId: string, factId: string) {
 async function current(caseId: string) {
   return (await admin.query("SELECT state,claim_pence,landed,manual_landed,written_off,revision FROM app.recovery_case_current WHERE id=$1", [caseId])).rows[0]!;
 }
+// These reads deliberately use the caller's transaction, before any rollback or exception.
+// An implementation that returned success without saving its event/audit cannot pass.
+async function assertJoinedVisible(db: TenantTransaction, view: RecoveryCaseView, input: ReturnType<typeof landing>, factId: string) {
+  const landed = view.landedNetPence + (input.eventType === "reverse_landing" ? -input.amountPence : input.amountPence);
+  const state = landed > 0 ? "partially_landed" : "evidence_assembled";
+  const row = await db.$client.query(`SELECT id,job_id,state,landed::text,manual_landed::text,revision::int
+    FROM app.recovery_case_current WHERE tenant_id=$1 AND job_id=$2 AND id=$3`, [tenantA, jobA, view.id]);
+  expect(row.rows).toEqual([{ id: view.id, job_id: jobA, state, landed: String(landed), manual_landed: String(landed), revision: view.revision + 1 }]);
+  const event = await db.$client.query(`SELECT case_id,job_id,event_type,amount_pence::text,command_id,reviewer_ref,to_state
+    FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2`, [tenantA, input.commandId]);
+  expect(event.rows).toEqual([{ case_id: view.id, job_id: jobA, event_type: input.eventType, amount_pence: String(input.amountPence),
+    command_id: input.commandId, reviewer_ref: `membership:${ownerA.membershipId}`, to_state: state }]);
+  const audit = await db.$client.query(`SELECT event_type,subject_type,subject_ref,actor_ref
+    FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'commandId'=$2`, [tenantA, input.commandId]);
+  expect(audit.rows).toEqual([{ event_type: "recovery.transition", subject_type: "recovery_case", subject_ref: view.id,
+    actor_ref: `membership:${ownerA.membershipId}` }]);
+  expect((await db.$client.query("SELECT note FROM public.m4_8_s_pre_caller_fact WHERE id=$1", [factId])).rows)
+    .toEqual([{ note: "Synthetic caller row" }]);
+}
 async function head() {
   return (await admin.query("SELECT sequence::text,event_hash FROM audit_control.audit_head WHERE tenant_id=$1", [tenantA])).rows;
 }
@@ -145,7 +164,8 @@ it("[J2] open joined transaction exposes nothing early and caller rollback leave
   const client = await runtime.connect();
   try {
     await begin(client); await callerFact(tx(client), factId);
-    await repo.commandInTransaction(tx(client), ctxA, jobA, input, ownerA);
+    expect(await repo.commandInTransaction(tx(client), ctxA, jobA, input, ownerA)).toEqual({ caseId: view.id, replayed: false });
+    await assertJoinedVisible(tx(client), view, input, factId);
     await assertNoEffect(view, factId, before, state);
     expect(await head()).toEqual(auditHead);
     await client.query("ROLLBACK");
@@ -157,7 +177,8 @@ it("[J2] open joined transaction exposes nothing early and caller rollback leave
 it("[J3] caller exception rolls everything back and the same command then succeeds", async () => {
   const view = await ready(), factId = randomUUID(), input = landing(view), before = await counts(view.id, factId), state = await current(view.id), error = new Error("Caller abort");
   await expect(withTenant(runtime, ctxA, async db => {
-    await callerFact(db, factId); await repo.commandInTransaction(db, ctxA, jobA, input, ownerA); throw error;
+    await callerFact(db, factId); await repo.commandInTransaction(db, ctxA, jobA, input, ownerA);
+    await assertJoinedVisible(db, view, input, factId); throw error;
   })).rejects.toBe(error);
   await assertNoEffect(view, factId, before, state);
   await expect(joined(input, factId)).resolves.toEqual({ caseId: view.id, replayed: false });
@@ -211,6 +232,40 @@ it("[J6] mismatched tenant proofs and foreign reviewer fail without rows in eith
     expect((await counts(view.id, factId)).facts).toBe(0);
   }
 });
+it.each(["unset", "empty", "foreign", "malformed"] as const)(
+  "[J-REQ1] %s tenant setting returns typed mismatch; valid setting saves inside the caller transaction", async mode => {
+    const view = await ready(), input = landing(view), factId = randomUUID();
+    const before = await counts(view.id, factId), state = await current(view.id), auditHead = await head();
+    // A dedicated fresh connection makes the unset case genuinely absent, rather than a pool's reset-to-empty setting.
+    const client = new Client(connectionOptions(login)); await client.connect();
+    const db = { $client: client } as unknown as TenantTransaction;
+    try {
+      await client.query("BEGIN");
+      const setting = mode === "unset" ? null : mode === "empty" ? "" : mode === "foreign" ? tenantB : "not-a-uuid";
+      if (setting !== null) await client.query("SELECT set_config('app.tenant_id', $1, true)", [setting]);
+      expect((await client.query("SELECT current_setting('app.tenant_id', true) AS value")).rows).toEqual([{ value: setting }]);
+      await callerFact(db, factId);
+      let rejected: unknown;
+      try { await repo.commandInTransaction(db, ctxA, jobA, input, ownerA); } catch (error) { rejected = error; }
+      expect(rejected).toBeInstanceOf(RecoveryJoinError);
+      expect(rejected).toMatchObject({ code: "RECOVERY_JOIN_TENANT_MISMATCH" });
+      // A malformed UUID must not abort PostgreSQL's transaction with raw 22P02.
+      expect((await client.query("SELECT 1 AS alive")).rows).toEqual([{ alive: 1 }]);
+      await client.query("ROLLBACK");
+      await assertNoEffect(view, factId, before, state);
+      expect(await head()).toEqual(auditHead);
+
+      // Every rejected-setting case has its own valid UUID control on the same client and command.
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantA]);
+      await callerFact(db, factId);
+      expect(await repo.commandInTransaction(db, ctxA, jobA, input, ownerA)).toEqual({ caseId: view.id, replayed: false });
+      await assertJoinedVisible(db, view, input, factId);
+      await client.query("ROLLBACK");
+      await assertNoEffect(view, factId, before, state);
+      expect(await head()).toEqual(auditHead);
+    } finally { await client.query("ROLLBACK"); await client.end(); }
+  });
 it("[J6d] PostgreSQL refuses hand-made foreign-tenant event and audit inserts", async () => {
   const foreign = await ready(ctxB, jobB, ownerB);
   // Catalog checks in merged tenancy tests do not exercise these two actual INSERT boundaries.
@@ -340,8 +395,10 @@ it("[J11] joined reverse landing matches unjoined twin and caller rollback prese
   expect(after).toEqual(await current(twin.id));
   view = (await repo.listForMember(ctxA, jobA, ownerA)).find(item => item.id === view.id)!;
   const factId = randomUUID(), countsBefore = await counts(view.id, factId), error = new Error("Rollback reverse");
+  const input = landing(view, 500, "reverse_landing");
   await expect(withTenant(runtime, ctxA, async db => {
-    await callerFact(db, factId); await repo.commandInTransaction(db, ctxA, jobA, landing(view, 500, "reverse_landing"), ownerA); throw error;
+    await callerFact(db, factId); await repo.commandInTransaction(db, ctxA, jobA, input, ownerA);
+    await assertJoinedVisible(db, view, input, factId); throw error;
   })).rejects.toBe(error);
   await assertNoEffect(view, factId, countsBefore, after); await verifyChain();
 });

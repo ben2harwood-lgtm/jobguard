@@ -95,6 +95,17 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     expect((await admin.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_runtime'")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
     expect((await admin.query(`SELECT count(*)::int AS count FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control','infrastructure') AND tableowner <> 'jobguard_migration'`)).rows).toEqual([{ count: 0 }]);
     expect((await admin.query(`SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relkind IN ('r','p') AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity)`)).rows).toEqual([{ count: 0 }]);
+    // M4-8-S adds six read-only runtime catalog rows; bootstrap must preserve the no-direct-write standard.
+    for (const table of ["recovery_allocation_command", "recovery_allocation_review", "recovery_allocation_line_source", "recovery_case_allocation", "recovery_case_allocation_reversal", "receipt_line_allocation"]) {
+      expect((await admin.query(`SELECT pg_get_userbyid(c.relowner) AS owner,c.relrowsecurity,c.relforcerowsecurity,
+        has_table_privilege('jobguard_runtime',c.oid,'SELECT') can_select,
+        has_table_privilege('jobguard_runtime',c.oid,'INSERT') can_insert,
+        has_table_privilege('jobguard_runtime',c.oid,'UPDATE') can_update,
+        has_table_privilege('jobguard_runtime',c.oid,'DELETE') can_delete
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=$1`, [table])).rows).toEqual([{
+        owner: "jobguard_migration", relrowsecurity: true, relforcerowsecurity: true, can_select: true, can_insert: false, can_update: false, can_delete: false,
+      }]);
+    }
     runtime = new Pool({ connectionString: runtimeUrl, max: 1 });
     const client = await runtime.connect();
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
