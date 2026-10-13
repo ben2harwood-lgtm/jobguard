@@ -35,7 +35,7 @@ describe("SV5PRE legacy final invoice gate", () => {
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input); const check=await publishEmptyCompletion(f,a);
   const c=input(a),invoices=new PracticeInvoiceRepository(f.runtime),first=await invoices.issue(a.context,c);expect(await invoices.issue(a.context,c)).toEqual(first);
   expect(first).toMatchObject({netPence:3360000,taxPence:672000,totalPence:4032000});
-  const bindings=(await f.admin.query("SELECT b.invoice_kind,b.revision_id,b.check_id,c.check_id certified_check FROM app.final_account_invoice_binding b JOIN app.final_check_completion c ON(c.tenant_id,c.job_id,c.check_id)=(b.tenant_id,b.job_id,b.check_id) WHERE b.tenant_id=$1 AND b.invoice_id=$2",[a.tenantId,first.id])).rows;
+  const bindings=(await f.admin.query("SELECT b.invoice_kind,b.revision_id,b.check_id,c.check_id certified_check FROM app.final_account_invoice_binding b JOIN app.shadow_final_check_completion c ON(c.tenant_id,c.job_id,c.check_id)=(b.tenant_id,b.job_id,b.check_id) WHERE b.tenant_id=$1 AND b.invoice_id=$2",[a.tenantId,first.id])).rows;
   expect(bindings).toEqual([{invoice_kind:"final",revision_id:a.revisionId,check_id:check,certified_check:check}]);
   expect((await f.admin.query("SELECT final_account_line_id FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND invoice_id=$2",[a.tenantId,first.id])).rows).toEqual([{final_account_line_id:a.lineId}]);
  });

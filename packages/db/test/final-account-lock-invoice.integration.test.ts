@@ -134,7 +134,7 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
    expect(await app.issueInvoice(a.jobId,{version:'lock-bound-invoice.issue.v1',...body})).toEqual(result);
    for(const pool of [f.runtime,practiceMaterialPool(f.runtime,createHash("sha256").update(randomUUID()).digest("hex"))])
     await expect(new FinalAccountLockRepository(pool).issueInvoice(a.context,command)).rejects.toMatchObject({code:'42501'});
-   const certificates=(await f.admin.query("SELECT count(*)::int n FROM app.final_account_invoice_binding b JOIN app.final_check_completion c ON(c.tenant_id,c.job_id,c.check_id)=(b.tenant_id,b.job_id,b.check_id) WHERE b.tenant_id=$1 AND b.job_id=$2",[a.tenantId,a.jobId])).rows;
+   const certificates=(await f.admin.query("SELECT count(*)::int n FROM app.final_account_invoice_binding b JOIN app.shadow_final_check_completion c ON(c.tenant_id,c.job_id,c.check_id)=(b.tenant_id,b.job_id,b.check_id) WHERE b.tenant_id=$1 AND b.job_id=$2",[a.tenantId,a.jobId])).rows;
    expect(certificates).toEqual([{n:1}]);
   }finally{if(prior===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=prior;}
  });

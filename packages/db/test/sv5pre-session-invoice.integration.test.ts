@@ -31,7 +31,7 @@ describe("SV5PRE session-owned invoice issue", () => {
     const result: Record<string, { count: number; rows: string }> = {};
     for (const relation of [
       "app.job", "app.final_account_draft", "app.final_account_revision", "app.final_account_line",
-      "app.final_account_lock", "app.final_account_lock_check", "app.final_check_completion",
+      "app.final_account_lock", "app.final_account_lock_check", "app.shadow_final_check_completion",
       "app.customer_invoice_sequence", "app.customer_invoice", "app.customer_invoice_evidence",
       "app.final_account_invoice_binding", "app.final_account_invoiced_line",
       "app.decision", "app.decision_resolution", "app.action_authorization", "app.action_outbox",
@@ -79,7 +79,7 @@ describe("SV5PRE session-owned invoice issue", () => {
     expect(digest).toBeNull();
     const before = await effects();
     expect(before["app.final_account_lock"]!.count).toBe(1);
-    expect(before["app.final_check_completion"]!.count).toBe(1);
+    expect(before["app.shadow_final_check_completion"]!.count).toBe(1);
     expect(before["app.customer_invoice"]!.count).toBe(0);
     await expect(unscoped.issue(auth.context, input)).rejects.toMatchObject({ message: "FORBIDDEN", code: "42501" });
     const after = await effects();

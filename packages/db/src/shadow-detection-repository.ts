@@ -107,7 +107,7 @@ export class FinalCheckCompletionRepository {
  }
  async recordAttempt(context:VerifiedTenantContext,raw:z.infer<typeof attemptInput>){
   const c=parse(attemptInput,raw);
-  try{await withTenant(this.pool,context,async db=>{await db.$client.query(`INSERT INTO app.final_check_source_attempt(tenant_id,job_id,manifest_id,source_id,id,execution_id,stage,version,input_hash,outcome,failure_code,result_hash,result_signal_ids,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::timestamptz)`,[context.tenantId,c.jobId,c.manifestId,c.sourceId,c.attemptId,c.executionId,c.stage,c.processingVersion,c.inputHash,c.outcome,c.failureCode,c.resultHash,c.resultSignalIds,c.evidenceId,c.objectVersionId,c.sha256,c.sourceReceivedAt]);});}catch(error){return typed(error);}
+  try{await withTenant(this.pool,context,async db=>{await db.$client.query(`INSERT INTO app.shadow_final_check_source_attempt(tenant_id,job_id,manifest_id,source_id,id,execution_id,stage,version,input_hash,outcome,failure_code,result_hash,result_signal_ids,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::timestamptz)`,[context.tenantId,c.jobId,c.manifestId,c.sourceId,c.attemptId,c.executionId,c.stage,c.processingVersion,c.inputHash,c.outcome,c.failureCode,c.resultHash,c.resultSignalIds,c.evidenceId,c.objectVersionId,c.sha256,c.sourceReceivedAt]);});}catch(error){return typed(error);}
  }
  /** Explicit zero descriptor is allowed only for an independently server-inventoried empty manifest. */
  async bindEmptyRun(context:VerifiedTenantContext,raw:z.infer<typeof emptyInput>){
@@ -115,22 +115,22 @@ export class FinalCheckCompletionRepository {
   try{await withTenant(this.pool,context,async db=>{
    const m=(await db.$client.query("SELECT * FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[context.tenantId,c.jobId,c.manifestId])).rows[0];
    if(!m||m.source_count!==0)throw new FinalCheckPersistenceError("FINAL_CHECK_NOT_COMPLETE");
-   const prior=(await db.$client.query("SELECT execution_id,manifest_id FROM app.final_check_run_binding WHERE tenant_id=$1 AND job_id=$2 AND run_id=$3",[context.tenantId,c.jobId,c.runId])).rows[0];
+   const prior=(await db.$client.query("SELECT execution_id,manifest_id FROM app.shadow_final_check_run_binding WHERE tenant_id=$1 AND job_id=$2 AND run_id=$3",[context.tenantId,c.jobId,c.runId])).rows[0];
    if(prior){if(prior.execution_id!==c.executionId||prior.manifest_id!==c.manifestId)throw new FinalCheckPersistenceError("IDEMPOTENCY_PAYLOAD_CONFLICT");return;}
    await db.$client.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at,status) SELECT tenant_id,job_id,$4,reconciliation_version,evidence_cutoff_at,'completed' FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[context.tenantId,c.jobId,c.manifestId,c.runId]);
-   await db.$client.query("INSERT INTO app.final_check_reveal_proof(tenant_id,job_id,run_id,id,projection_version,result_descriptor) VALUES($1,$2,$3,$3,'final-check-result.v1',$4::jsonb)",[context.tenantId,c.jobId,c.runId,JSON.stringify({version:"final-check-result.v1",outcome:"zero_result"})]);
-   await db.$client.query(`INSERT INTO app.final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) SELECT tenant_id,job_id,$4,id,lock_id,evidence_cutoff_at,$5,detector_version,reconciliation_version FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,c.jobId,c.manifestId,c.runId,c.executionId]);
+   await db.$client.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,projection_version,result_descriptor) VALUES($1,$2,$3,$3,'final-check-result.v1',$4::jsonb)",[context.tenantId,c.jobId,c.runId,JSON.stringify({version:"final-check-result.v1",outcome:"zero_result"})]);
+   await db.$client.query(`INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) SELECT tenant_id,job_id,$4,id,lock_id,evidence_cutoff_at,$5,detector_version,reconciliation_version FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,c.jobId,c.manifestId,c.runId,c.executionId]);
   });}catch(error){return typed(error);}
  }
  /** Final-check orchestration supplies classifications first; this records only reconstructible result proof. */
  async recordResult(context:VerifiedTenantContext,raw:z.infer<typeof resultInput>){
   const c=parse(resultInput,raw);
-  try{await withTenant(this.pool,context,async db=>{await db.$client.query("INSERT INTO app.final_check_reveal_proof(tenant_id,job_id,run_id,id,signal_id,classification_id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,$5,$6,'final-check-result.v1',$7::jsonb)",[context.tenantId,c.jobId,c.runId,c.resultId,c.signalId,c.classificationId,JSON.stringify(c.descriptor)]);});}catch(error){return typed(error);}
+  try{await withTenant(this.pool,context,async db=>{await db.$client.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,signal_id,classification_id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,$5,$6,'final-check-result.v1',$7::jsonb)",[context.tenantId,c.jobId,c.runId,c.resultId,c.signalId,c.classificationId,JSON.stringify(c.descriptor)]);});}catch(error){return typed(error);}
  }
  /** Bind an existing reconciliation run after source processing and result-proof persistence. */
  async bindRun(context:VerifiedTenantContext,raw:z.infer<typeof bindingInput>){
   const c=parse(bindingInput,raw);
-  try{await withTenant(this.pool,context,async db=>{await db.$client.query(`INSERT INTO app.final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) SELECT tenant_id,job_id,$4,id,lock_id,evidence_cutoff_at,$5,detector_version,reconciliation_version FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,c.jobId,c.manifestId,c.runId,c.executionId]);});}catch(error){return typed(error);}
+  try{await withTenant(this.pool,context,async db=>{await db.$client.query(`INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) SELECT tenant_id,job_id,$4,id,lock_id,evidence_cutoff_at,$5,detector_version,reconciliation_version FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,c.jobId,c.manifestId,c.runId,c.executionId]);});}catch(error){return typed(error);}
  }
  async publish(context:VerifiedTenantContext,raw:z.infer<typeof publicationInput>){
   const c=parse(publicationInput,raw);

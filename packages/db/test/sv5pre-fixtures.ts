@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -64,9 +64,15 @@ export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof s
 
 /** Tests only: inventories real fixture sources, persists explicitly simulated worker results,
  * and publishes through the same private checked triggers as the later SV-5 worker. */
-export async function publishFixtureCompletion(shadow: Pool, admin: Pool, tenantId: string, jobId: string, overrides: { lockId?: string; cutoff?: string; checkId?: string } = {}) {
- const manifestId=randomUUID(),runId=randomUUID(),executionId=randomUUID(),checkId=overrides.checkId??randomUUID();
+export async function publishFixtureCompletion(shadow: Pool, admin: Pool, tenantId: string, jobId: string, overrides: { lockId?: string; cutoff?: string; checkId?: string; deterministicIds?: boolean } = {}) {
  const lock=(await admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[tenantId,jobId])).rows[0];
+ // Separate namespaces: source/lock-derived public ids never consume a per-signal counter.
+ const fixtureId=(namespace: "source"|"signal",label: string)=>{
+  if(!overrides.deterministicIds) return randomUUID();
+  const hex=createHash("sha256").update(`sv5pre-fixture.v1:${namespace}:${tenantId}:${jobId}:${lock.id}:${label}`).digest("hex");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-4${hex.slice(13,16)}-8${hex.slice(17,20)}-${hex.slice(20,32)}`;
+ };
+ const manifestId=fixtureId("source","manifest"),runId=fixtureId("source","run"),executionId=fixtureId("source","execution"),checkId=overrides.checkId??fixtureId("source","check");
  await asFixtureTenant(shadow,tenantId,async db=>{
   await db.query("INSERT INTO app.final_check_manifest(tenant_id,job_id,id,lock_id,evidence_cutoff_at,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,'synthetic-fixture.v1','synthetic-fixture.v1')",[tenantId,jobId,manifestId,overrides.lockId??lock.id,overrides.cutoff??lock.cutoff]);
  });
@@ -78,15 +84,15 @@ export async function publishFixtureCompletion(shadow: Pool, admin: Pool, tenant
   for(const source of sources) {
    const signalIds=(await db.query("SELECT DISTINCT signal_id FROM app.shadow_signal_evidence WHERE tenant_id=$1 AND job_id=$2 AND evidence_id=$3 ORDER BY signal_id",[tenantId,jobId,source.finalized_id])).rows.map(row=>row.signal_id);
    // Successful empty output is explicit. A missing/quarantined upload is refused by the checked trigger.
-   for(const stage of ["detection","reconciliation"]) await db.query("INSERT INTO app.final_check_source_attempt(tenant_id,job_id,manifest_id,source_id,id,execution_id,stage,version,input_hash,outcome,result_hash,result_signal_ids,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic-fixture.v1',$8,'succeeded',$9,$10,$11,$12,$13,$14::timestamptz)",[tenantId,jobId,manifestId,source.id,randomUUID(),executionId,stage,stage==='detection'?source.frozen_input_hash:LOCK_HASH,LOCK_HASH,signalIds,source.finalized_id,source.finalized_version,source.finalized_hash,source.finalized_received]);
+   for(const stage of ["detection","reconciliation"]) await db.query("INSERT INTO app.shadow_final_check_source_attempt(tenant_id,job_id,manifest_id,source_id,id,execution_id,stage,version,input_hash,outcome,result_hash,result_signal_ids,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic-fixture.v1',$8,'succeeded',$9,$10,$11,$12,$13,$14::timestamptz)",[tenantId,jobId,manifestId,source.id,fixtureId("source",`${source.id}:${stage}`),executionId,stage,stage==='detection'?source.frozen_input_hash:LOCK_HASH,LOCK_HASH,signalIds,source.finalized_id,source.finalized_version,source.finalized_hash,source.finalized_received]);
   }
   for(const signal of signals) {
-   const classification=randomUUID();
+   const classification=fixtureId("signal",`${signal.id}:classification`);
    await db.query("INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[tenantId,jobId,classification,runId,signal.id]);
-   await db.query("INSERT INTO app.final_check_reveal_proof(tenant_id,job_id,run_id,id,signal_id,classification_id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,$5,$6,'final-check-result.v1',$7::jsonb)",[tenantId,jobId,runId,randomUUID(),signal.id,classification,JSON.stringify({version:'final-check-result.v1',outcome:'not_enough_evidence',signalId:signal.id,classificationId:classification})]);
+   await db.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,signal_id,classification_id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,$5,$6,'final-check-result.v1',$7::jsonb)",[tenantId,jobId,runId,fixtureId("signal",`${signal.id}:result`),signal.id,classification,JSON.stringify({version:'final-check-result.v1',outcome:'not_enough_evidence',signalId:signal.id,classificationId:classification})]);
   }
-  if(!signals.length) await db.query("INSERT INTO app.final_check_reveal_proof(tenant_id,job_id,run_id,id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,'final-check-result.v1',$5::jsonb)",[tenantId,jobId,runId,randomUUID(),JSON.stringify({version:'final-check-result.v1',outcome:'zero_result'})]);
-  await db.query("INSERT INTO app.final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic-fixture.v1','synthetic-fixture.v1')",[tenantId,jobId,runId,manifestId,lock.id,lock.cutoff,executionId]);
+  if(!signals.length) await db.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,'final-check-result.v1',$5::jsonb)",[tenantId,jobId,runId,fixtureId("source","zero-result"),JSON.stringify({version:'final-check-result.v1',outcome:'zero_result'})]);
+  await db.query("INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic-fixture.v1','synthetic-fixture.v1')",[tenantId,jobId,runId,manifestId,lock.id,lock.cutoff,executionId]);
   await db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status,run_id) VALUES($1,$2,$3,$4,$5,'completed',$6)",[tenantId,jobId,checkId,lock.id,lock.cutoff,runId]);
   return checkId;
  });
@@ -98,7 +104,7 @@ export async function publishEmptyCompletion(f: Pick<LockFixture,'shadow'|'admin
 }
 /** A fixture established before 0147 remains historical; it deliberately uses the old issue path. */
 export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, tenantId: string, jobId: string, actorMembershipId: string, revisionId: string) {
- if(!(await admin.query("SELECT to_regclass('app.final_check_completion') installed")).rows[0].installed) return;
+ if(!(await admin.query("SELECT to_regclass('app.shadow_final_check_completion') installed")).rows[0].installed) return;
  const context=testTenantContext(tenantId),repo=new FinalAccountLockRepository(runtime);
  await repo.acceptTerms(context,{actorMembershipId,commandId:randomUUID(),termsVersion:'synthetic_final_check_terms.v1'});
  const scope=(await admin.query("SELECT DISTINCT scope_item_id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'",[tenantId,jobId,revisionId])).rows;

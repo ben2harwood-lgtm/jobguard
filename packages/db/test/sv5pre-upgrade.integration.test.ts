@@ -36,7 +36,7 @@ async function oldGrants(db: Queryable) {
 }
 async function effectCounts(db: Queryable) {
   const result: Record<string, string> = {};
-  for (const table of [...TABLES, "app.final_account_lock", "app.final_account_lock_check", "app.final_check_completion", "app.final_account_invoiced_line"])
+  for (const table of [...TABLES, "app.final_account_lock", "app.final_account_lock_check", "app.shadow_final_check_completion", "app.final_account_invoiced_line"])
     result[table] = (await db.query<{ n: string }>(`SELECT count(*)::text n FROM ${table}`)).rows[0]!.n;
   return result;
 }
@@ -86,6 +86,11 @@ describe("SV5PRE own-migration upgrade and historical replay", () => {
     await f.admin.query(await readFile(MIGRATION_URLS[own]!, "utf8"));
     await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [OWN]);
     await compare(f.admin, before);
+    // Rule 9: this unmerged migration creates private result proofs without altering any pre-existing row or ACL.
+    const privateTables=['shadow_final_check_completion','shadow_final_check_reveal_proof','shadow_final_check_run_binding','shadow_final_check_source_attempt'];
+    const privateCatalog=(await f.admin.query("SELECT c.relname,has_table_privilege('jobguard_runtime',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') runtime,c.relrowsecurity,c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1) ORDER BY c.relname",[privateTables])).rows;
+    expect(privateCatalog).toEqual(privateTables.map(relname=>({relname,runtime:false,relrowsecurity:true,relforcerowsecurity:true})));
+    expect((await f.admin.query("SELECT tablename FROM pg_tables WHERE schemaname='app' AND tablename=ANY($1)",[privateTables.map(name=>name.replace('shadow_',''))])).rows).toEqual([]);
     const afterOwn = await oldGrants(f.admin);
     // Only this migration is accountable for keeping the ACLs of its pre-existing objects unchanged.
     for (const key of ["tables", "routines"] as const) {
@@ -141,7 +146,7 @@ describe("SV5PRE own-migration upgrade and historical replay", () => {
 
   it("[PRE-Q4-04] historical invoice replay preserves original facts without inventing a lock", async () => {
     const counts = await effectCounts(f.admin);
-    expect(counts["app.final_account_lock"]).toBe("0"); expect(counts["app.final_check_completion"]).toBe("0");
+    expect(counts["app.final_account_lock"]).toBe("0"); expect(counts["app.shadow_final_check_completion"]).toBe("0");
     // Direct checked SQL replay is exercised here; it is not a repository or HTTP replay claim.
     expect(await rawIssue(f, a, c)).toEqual(originalResult);
     expect(await rawIssue(f, a, c)).toEqual(originalResult);
