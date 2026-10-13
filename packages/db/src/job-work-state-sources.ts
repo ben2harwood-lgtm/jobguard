@@ -15,6 +15,18 @@ export function rethrowJobWorkState(error:unknown):never {
 }
 
 import type { TenantTransaction } from "./tenant-context.js";
+import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import type { Pool } from "pg";
+import { WatchdogError } from "./watchdog.js";
+/** Translate a not-live refusal after the source transaction has rolled back.
+ * Live commands and stored replay conflicts keep their original query paths.
+ * A PostgreSQL exception aborts its transaction, so the offer read needs a fresh one.
+ */
+export async function checkPostLockAfterLiveRefusal(pool:Pool,context:VerifiedTenantContext,jobId:string,error:unknown,actorMembershipId:string):Promise<void> {
+ if(error instanceof WatchdogError && error.code==="JOB_NOT_LIVE") {
+  await withTenant(pool,context,db=>checkPostLockSourceLifecycle(db,jobId,actorMembershipId));
+ }
+}
 /** Authorized existing-source callers only. The source's original live guard still runs.
  * This read supplies the issued redirect for a locked job that has left live;
  * the insert/update trigger remains the serializing boundary for live jobs.

@@ -1245,33 +1245,8 @@
         "operationId": "VariationController_post",
         "parameters": [],
         "responses": {
-          "422": {
-            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "code",
-                    "message"
-                  ],
-                  "properties": {
-                    "code": {
-                      "type": "string",
-                      "enum": [
-                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
-                      ]
-                    },
-                    "message": {
-                      "type": "string",
-                      "enum": [
-                        "Start a linked job for this customer and site"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
+          "201": {
+            "description": ""
           }
         },
         "summary": "Propose, revise, approve or reject a synthetic variation",

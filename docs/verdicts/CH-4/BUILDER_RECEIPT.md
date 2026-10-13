@@ -1178,3 +1178,122 @@ This is builder test evidence, not independent acceptance. Independent verdict
 bound to the dispatcher's resulting commit, separate acceptance, CI evidence and
 release gates remain outstanding. Intended commit message is overwritten at
 `/private/tmp/jg-msg-ch-4.txt`; the dispatcher owns commit, push and merge.
+
+
+## Repair round r4 — response preservation, evidence labels and replay regressions
+
+Dispatcher 4, 13 October 2026. Starting/final local HEAD:
+`58a6e5882080686cb492c3c78ed0258e897914f1`. Working tree was clean at entry.
+Node v24.17.0; existing cached pnpm 10.28.1 shim. No install, download,
+Git-writing command, push, migration, policy change or acceptance. Intended
+commit message overwritten at `/private/tmp/jg-msg-ch-4.txt`.
+
+**B1:** CH-4's own outside decoration explicitly adds
+`ApiCreatedResponse({description:""})` for `VariationController.post` and
+omits that method from CH-4's 422 documentation list. The merged variation
+controller is unchanged. The runtime post-lock refusal remains unchanged;
+422 documentation on the other four source operations remains. The source
+generator regenerated `apps/api/openapi.json`. Structured comparison proves
+the **entire** variation POST operation equals observed `origin/main`, so the
+requested route diff is empty. This follows the dispatch message's explicit
+empty-diff target. The attached Opus delta had asked for 201 plus 422, so an
+optional clarification was sent; no reply arrived. The final resolution follows
+the latest dispatch wording. The own Nest/OpenAPI regression checks the exact
+restored 201 description.
+
+**B2:** the contract now names `pre_cover_photo`, `completion_photo`,
+`excavation_photo`, `electrical_certificate`, citing `proofEvidenceTypeSchema`
+in `packages/core/src/proof.ts`. No migration or evidence policy changed.
+
+**B3:** the earlier receipt's “replay mocks missing existing CH-4 membership
+queries” described a real regression, not sandbox noise. In the unchanged
+merged `apps/api/src/watchdog-registry.test.ts`, the two parameterized
+purchase-order conflict cases at line 692 failed because the query double at
+line 592 correctly refused CH-4's new `SELECT 1 FROM app.membership` query.
+The original dispatcher already verifies active owner membership before calling
+its lock hook (`packages/db/src/commands.ts:62`). Placement now retains that
+original live guard and replay path without CH-4's extra precheck. Only a
+`JOB_NOT_LIVE` refusal, after the original transaction rolls back, opens a new
+stamped tenant transaction to recheck active membership and read the post-lock
+offer. A fresh transaction is necessary because the PostgreSQL exception aborts
+the original transaction. Original authorization, lock order, command identity,
+stored receipts and new-source refusal remain in place.
+
+A further 21 failures in that same merged suite were CH-4 adapter regressions:
+Next error handlers asked the mocked workspace for `workState.failure` on
+ordinary conflict/access errors. The existing response adapters for proof,
+purchase-order revisions/placement, supplier intake and variations now invoke
+that CH-4 mapping only for `JobWorkStateError`. Ordinary errors retain their
+existing response path without an extra workspace service lookup. No merged
+test was edited. Five own scripted boundary cases check conflict/not-found
+query preservation, active/revoked membership before party disclosure, and the
+unlocked not-live read. These are not PostgreSQL proofs.
+
+### Executed checks
+
+All pnpm commands used the existing prefix:
+`export PATH="/private/tmp/ch4-pnpm-bin:/Users/benharwood/Library/pnpm/bin:$PATH"`.
+Logs are `/private/tmp/jg-ch-4-*.log`.
+
+| Command | Exit/result |
+| --- | --- |
+| `pnpm typecheck --force --concurrency=2` | 0; 7 executed tasks |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | 0; root invariants and 7 executed tasks |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 |
+| `pnpm build --force --concurrency=2` | 0; 7 executed tasks, 30 static pages |
+| `pnpm --filter @jobguard/db build` | 0; compiled the changed replay implementation before API tests |
+| `pnpm --filter @jobguard/api openapi:generate` | 1; tsx IPC `listen EPERM` |
+| `pnpm openapi:check` | 1; same tsx IPC restriction |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts` | 0; same generator, without CLI IPC |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; exact source/artifact match |
+| API `vitest run --maxWorkers=2 src` before repair | 1; 63 files passed, 8 failed; 1,479 passed, 97 failed, 23 skipped; 74 errors |
+| API targeted `watchdog-registry`, own HTTP and own isolation tests | 0; 3 files, 131 passed |
+| API `vitest run --maxWorkers=2 src --exclude "**/shadow-isolation.application.test.ts" --exclude "**/final-account-lock.isolation.test.ts"` after repair | 1; 64 files passed, 5 failed; 1,505 passed, 74 failed; 74 errors |
+| API same run additionally excluding `health.test.ts`, `contractor-practice-session.http.test.ts`, `site-extra.http.test.ts`, `site-extra-pricing.http.test.ts`, `action-paths.test.ts` | 0; 64 files, 1,489 passed, zero failed |
+| API `vitest run --maxWorkers=1 src/final-account-lock.isolation.test.ts -t "DW8 application read"` | 0; 2 scripted reads passed, 1 real-DB case excluded |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage --filter @jobguard/web --workspace-concurrency=1 --no-bail test --maxWorkers=2` | 1; core 4,496 passed/2 failed; config 2, storage 4, AI 80, web 636 all passed |
+| core `vitest run --maxWorkers=2 src` | 0; 78 files, 2,249 passed |
+| DB `vitest run --maxWorkers=2 src` | 1; 84 passed, 1 existing 5-second audit-checkpoint source-graph timeout |
+| DB `vitest run --maxWorkers=1 src` retry after build | 0; 4 files, 85 passed, original timeout unchanged |
+| `node --test --test-concurrency=2` for the seven non-Git-fixture tooling test files | 0; 19 passed |
+| `git diff --check` and read-only preservation inspection | 0; no whitespace errors, no merged test changed, variation controller unchanged |
+
+The 23 functional API failures are fixed. The remaining 74 API failures belong
+only to `health.test.ts` (1), `contractor-practice-session.http.test.ts` (39),
+`site-extra-pricing.http.test.ts` (16), `site-extra.http.test.ts` (16), and
+`auth/sso/action-paths.test.ts` (2); their socket bind fails with EPERM.
+The two DB-backed API files failed setup in the initial baseline; later runs
+exclude them explicitly under the dispatcher's no-PostgreSQL environment rule.
+Neither exclusion changes a repository script, assertion or CI requirement.
+
+The broader core script collects both source and compiled dist tests. Its two
+failures are `dist/recovery-allocation.test.js` and
+`dist/site-extra-pricing.test.js` trying to read nonexistent `.ts` files in dist;
+the unchanged source suite passes. These unrelated tests/configuration remain
+unchanged. The two full root tooling attempts produced no result before being
+interrupted (exit 1); the 19-test subset excludes the two Git-fixture suites.
+The initial global pnpm version wrapper stalled and was interrupted (130);
+all subsequent pnpm checks used the cached shim. No incomplete run is a pass.
+
+PostgreSQL, migrations, full umbrella and browser suites remain GitHub CI work;
+no real provider or live-model evaluation applies to this repair. Forced Turbo
+checks reported shared-cache IO warnings; build also reported existing Next
+root/lockfile, CSS, file-type export and dynamic-import warnings. Database
+migration and grant bytes are unchanged. No new operational alert or production
+capability. Independent exact-commit verdict and separate acceptance remain
+outstanding. This receipt records builder execution only.
+
+
+Final B1 target verification: entire variation POST dictionary equals
+`origin/main`, with no ignored response or other field. After that final
+metadata change, the same generator's `--check` exited 0; the targeted 131
+tests passed again; `pnpm typecheck --concurrency=2` and
+`LANE_BASE_REF=origin/main pnpm lint --concurrency=2` both exited 0 (7 successful
+tasks, 2 cached, 5 executed); lane lint exited 0 again after receipt edits.
+Read-only final scope inspection confirms 13 changed files, only the two own
+CH-4 test files changed, no merged controller/test edit, and HEAD unchanged.
+Final `pnpm build --concurrency=2` exited 0 after the final B1 metadata edit:
+7 successful tasks, 2 cached, 5 executed, 30 static pages. Final
+`git diff --check` exited 0. The commit-message file contains the conventional
+subject and body, reflecting the final empty variation-route diff. No
+Git-writing command was issued; dispatcher retains commit/push ownership.

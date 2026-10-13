@@ -16,15 +16,17 @@ export class JobWorkStateController {
  }
 }
 
-// Add only the new 422 response to source operations; the merged 409 metadata stays intact.
-import { ApiUnprocessableEntityResponse } from "@nestjs/swagger";
+// Keep the variation operation identical to main; add 422 to the other source operations.
+import { ApiCreatedResponse, ApiUnprocessableEntityResponse } from "@nestjs/swagger";
 import { PurchaseOrderController } from "./purchase-order.controller.js";
 import { SupplierDocumentController } from "./supplier-document.controller.js";
 import { ProofController } from "./proof/proof.controller.js";
 import { VariationController } from "./variation/variation.controller.js";
+// Preserve the merged created response explicitly in CH-4's own decoration.
+ApiCreatedResponse({description:""})(VariationController.prototype,"post",Object.getOwnPropertyDescriptor(VariationController.prototype,"post")!);
 for(const [prototype,method] of [
  [PurchaseOrderController.prototype,"revise"],[PurchaseOrderController.prototype,"place"],
- [SupplierDocumentController.prototype,"intake"],[ProofController.prototype,"post"],[VariationController.prototype,"post"],
+ [SupplierDocumentController.prototype,"intake"],[ProofController.prototype,"post"],
 ] as const){
  ApiUnprocessableEntityResponse({description:"POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",schema:{type:"object",required:["code","message"],properties:{code:{type:"string",enum:["POST_LOCK_WORK_REQUIRES_LINKED_JOB"]},message:{type:"string",enum:["Start a linked job for this customer and site"]}}}})(prototype,method,Object.getOwnPropertyDescriptor(prototype,method)!);
 }

@@ -58,8 +58,9 @@ key, so they produce one effect. Builder captures and stage completion create
 site-activity events only; `final_review` and `jobguard_catch` do not.
 
 Photo classification uses stored original identity, verified upload, exact hash
-and object version and an explicit stored evidence type (`photo`, `progress_photo`,
-`proof_photo`, `electrical_certificate`). MIME alone is never a photo classifier.
+and object version and an explicit stored evidence type (`pre_cover_photo`, `completion_photo`,
+`excavation_photo`, `electrical_certificate`; source: `packages/core/src/proof.ts`
+`proofEvidenceTypeSchema`). MIME alone is never a photo classifier.
 Pending/rejected/preview/invalidated-at-processing sources do not qualify.
 Photo-purpose metadata is immutable and cannot relabel a recorded progress source
 as snagging. Its admission mechanism remains held.

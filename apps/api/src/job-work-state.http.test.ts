@@ -28,8 +28,9 @@ describe("CH-4 Nest read adapter (no socket)",()=>{
    expect(response.status).toHaveBeenCalledWith(200);
    expect(response.json).toHaveBeenCalledWith(result);
    expect(response.set).toHaveBeenCalledWith("Cache-Control","no-store");
-   const document=configureOpenApi(app) as {paths:Record<string,{get?:unknown}>};
+   const document=configureOpenApi(app) as {paths:Record<string,{get?:unknown;post?:{responses:Record<string,unknown>}}>};
    expect(document.paths["/jobs/{id}/work-state"]?.get).toBeDefined();
+   expect(document.paths["/jobs/{id}/variations"]?.post?.responses["201"]).toEqual({description:""});
   }finally{
    await app.close();registerGet.mockRestore();read.mockRestore();vi.unstubAllEnvs();
   }
