@@ -82,6 +82,14 @@ routine is a read that rechecks the persisted practice session, membership,
 owned-job boundary (including the existing adoption semantics), track and mode.
 It receives the existing stamped context per call, not a recreated or saved one.
 
+The migration owner has an additional tenant-bound SELECT policy on the older
+`stage_completion` table, allowing source validation under FORCE RLS. Its existing
+runtime policy and grants remain intact. The lock admission trigger dispatches
+by table before reading `status`, which exists only on `final_account_lock_check`.
+Held signal/link writes produce no CH-4 receipt, event, purpose, link or audit
+write. Source processing does not consult shadow content; otherwise-identical
+source facts produce identical CH-4 facts regardless of private signal links.
+
 Existing source commands retain their existing authority, hashes and replay
 stores. Added triggers check tenant context, serialize on the job row and recheck
 an owned practice job's persisted session after a wait. RLS and these seams rely

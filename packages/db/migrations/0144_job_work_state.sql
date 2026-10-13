@@ -2,6 +2,11 @@ BEGIN;
 -- CH-4: synthetic immutable fact storage. No lifecycle/link/snagging command admission.
 -- No historical reconstruction, timer policy, eligibility policy, money or provider work.
 ALTER TABLE app.stage_completion ADD CONSTRAINT ch4_stage_job_identity UNIQUE(tenant_id,job_id,id);
+-- The source trigger runs as the migration owner. FORCE RLS on this older
+-- table only admits runtime, so validating its newly inserted source otherwise
+-- sees no row. Admit tenant-bound reads only; retain the existing runtime policy.
+CREATE POLICY ch4_stage_source_read ON app.stage_completion FOR SELECT TO jobguard_migration
+ USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
 CREATE TABLE app.job_site_source_receipt (
  tenant_id uuid NOT NULL, job_id uuid NOT NULL, id uuid NOT NULL,
  version text NOT NULL DEFAULT 'job-site-source-receipt.v1' CHECK(version='job-site-source-receipt.v1'),
@@ -316,7 +321,11 @@ DECLARE latest text; old_context text:=current_setting('app.tenant_id',true);
 BEGIN
  IF NEW.tenant_id IS DISTINCT FROM nullif(old_context,'')::uuid AND NOT (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true);
- IF TG_TABLE_NAME='final_account_lock_check' AND NEW.status<>'pending' THEN PERFORM set_config('app.tenant_id',coalesce(old_context,''),true); RETURN NEW; END IF;
+ -- NEW has different row types on these two tables. A combined AND expression
+ -- still resolves the missing status field on final_account_lock.
+ IF TG_TABLE_NAME='final_account_lock_check' THEN
+  IF NEW.status<>'pending' THEN PERFORM set_config('app.tenant_id',coalesce(old_context,''),true); RETURN NEW; END IF;
+ END IF;
  PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE;
  SELECT kind INTO latest FROM app.job_work_state_event WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND kind IN('closed','reopened') ORDER BY sequence DESC LIMIT 1;
  IF latest='closed' THEN RAISE EXCEPTION 'JOB_WORK_CLOSED'; END IF;
