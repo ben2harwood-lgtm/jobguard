@@ -3435,7 +3435,7 @@ Basic backups, restore, privacy operations, permissions, and financial security 
 **Build:** two identity-side routines and server route; reuse merged deactivation paths, no screen. Session-derived owner checks, last-owner protection and same-transaction audit; document a tested authenticated administration procedure.
 **Done when:**
 - Removal/demotion bites on the next request; stale context and concurrent mutual removal/demotion cannot bypass checks or leave no owner. Membership change and audit are atomic.
-- Already-authorized commands/invitations/queued work have an explicit disposition under existing execution-time revocation rules. Owner creation, removal rights, transfer and recovery remain Ben's decisions: proposal recommendation is owners at sign-up only, another active owner for removal, never last-owner removal; no broadened right is assumed before a ruling.
+- Already-authorized commands/invitations/queued work have an explicit disposition under existing execution-time revocation rules. Owner rights — **ANSWERED**, card `jobguard-twenty-product-decisions-2026-10-13`: **"Require a verified owner's approval and prevent accidental lockout"**.
 **Check lane:** RED — sign-in/permissions/data; fresh Opus plus Sol.
 
 #### LP-8a Money and commitment tables: customer billing
@@ -3497,7 +3497,7 @@ Basic backups, restore, privacy operations, permissions, and financial security 
 **Done when:**
 - Pair every refusal with an authorized positive case and committed-state checks: unbound/wrong actor/tenant/resource, inactive membership, expired/reused approval, alternative signatures, forged context, races/retries and rollback. Existing trigger/backstop assertions remain. Destructive attacks use a disposable equivalent database; deployed real-data checks are non-destructive.
 - Bind results to exact migration, role and application versions after all gate work. Deployment uses separate runtime/identity/worker/owner secrets, owner absent from service processes; seeds refuse unintended destinations; rotation handles existing connections. Restore reinstates grants/ownership/policies/triggers and passes catalogue/refusal tests before resumption; restored sessions/revocations/approvals/queued actions cannot silently restore access or repeat effects.
-- Record pilot isolation/topology and identity/business co-location limits. Independent human review of role model, binding and suite remains a founder spending/reviewer decision with an affordable route before real-data approval; models/green CI cannot fabricate that sign-off.
+- Record pilot isolation/topology and identity/business co-location limits. Paying an independent human reviewer — **ANSWERED**, card `jobguard-twenty-product-decisions-2026-10-13`: **"Obtain a quote; spend only after explicit approval"**. This authorises getting a quote only; spending requires Ben's explicit approval. Independent human review of role model, binding and suite remains required before real-data approval; models/green CI cannot fabricate that sign-off.
 - Completion claim is bounded: a business DB password alone cannot manufacture owners, approvals or trusted history, bypass checked money operations or the tested tenant boundary. Captured valid sessions, service takeover and administrators remain risks; audit records accepted system facts, not human intent or site truth. Existing restricted checkpoints before G1 and later external anchoring/signature work retain their gates; no retrospective authentication or tamper-proof claim.
 **Check lane:** RED — sign-in/permissions/money/data; fresh Opus plus Sol.
 
@@ -3599,6 +3599,13 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — PLAN-LPL, 13 October 2026 (adopted least-privilege database login track).** Ben typed **"yes, lock down the database login"** on 13 October 2026, about 13:45; the dispatcher issued PLAN-LPL on the coordinator's instruction. §11.8 records the shared track and the additional before-any-real-customer-data gate; each piece is buildable only after Ben merges this plan pull request and its dependencies are merged. This is plan adoption, not technical acceptance, scanner-pin approval, deployment authority or a real-data release. LP-0 has no migration. Other LP migrations take the next free number at landing, above every merged number and avoiding all reservations, under Ben's 5 October merge-ahead ruling; they count against the five-open-database-PR cap, with at most two LP pieces open together. The proposal reserved **0132–0138** for SV-4, SV-3, CH-7-TERMS, ENT-3a, M4-8-S, ENT-10a2 and PRACTICE-SESSION-HARDEN-1; all seven are already merged on the inspected origin/main (`ec6ad4d`), so LP must not reuse them. No LP number is allocated by this documents-only change; the coordinator records each reservation/renumber before its build order lands. R1–R5 freeze new authority/money write powers, including equivalent routine bypasses, from adoption; working-data grants remain individually justified. The receipt records Astra N6 dispositions and proposal/main mismatches; pending policy changes remain NEEDS A RULING.
 
+**Ledger amendment — PLAN-LPL, 13 October 2026 (answers to open points).** Ben answered card `jobguard-twenty-product-decisions-2026-10-13` at 20:07 on 13 October 2026: **"Accept all leans"**.
+
+- Owner rights — **ANSWERED**, card `jobguard-twenty-product-decisions-2026-10-13`: **"Require a verified owner's approval and prevent accidental lockout"**.
+- Paying an independent human reviewer — **ANSWERED**, card `jobguard-twenty-product-decisions-2026-10-13`: **"Obtain a quote; spend only after explicit approval"**. This authorises getting a quote only; no spending without Ben's explicit approval.
+
+This plan pull request remains Ben's own click to merge.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
@@ -3677,7 +3684,7 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 | LP 11 | LP-6c | Bind money/commitment actors | shared | LP-6b | next free at landing | §11.8 |
 | LP 12 | LP-6d | Bind remaining routine actors | shared | LP-6c | next free at landing | §11.8 |
 | LP 13 | LP-6e | Trusted audit attribution | shared | LP-6d | next free at landing | §11.8 |
-| LP 14 | LP-7 | Identity-side removal/role change | shared | LP-6e, ENT-10a2; owner-policy ruling | next free at landing | §11.8 |
+| LP 14 | LP-7 | Identity-side removal/role change | shared | LP-6e, ENT-10a2; owner rights ANSWERED, card `jobguard-twenty-product-decisions-2026-10-13`: "Require a verified owner's approval and prevent accidental lockout" | next free at landing | §11.8 |
 | LP 15 | LP-8a | Controlled customer billing writes | shared | LP-7, SV-4 | next free at landing | §11.8 |
 | LP 16 | LP-8b | Outbox/evidence dependencies | shared | LP-8a | next free at landing | §11.8 |
 | LP 17 | LP-10 | Worker credential/authority split | shared | LP-8b, PRACTICE-WORKER-SWITCH | next free at landing | §11.8 |
