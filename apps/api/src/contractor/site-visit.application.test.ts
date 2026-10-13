@@ -216,6 +216,6 @@ describe("ENT-3b OpenAPI", () => {
   }
   expect(spec().paths["/contractor/site/jobs"].get.responses["200"]).toBeDefined(); expect(spec().paths["/contractor/jobs/{id}/order-lines"].get.responses["200"]).toBeDefined();
   const body = spec().paths["/contractor/jobs/{id}/site-extras"].post.requestBody.content["application/json"].schema;
-  expect(body.oneOf.map((variant: { properties: { version: { enum: string[] } } }) => variant.properties.version.enum[0])).toEqual(["log-site-extra.v1", "log-site-extra.v2"]);
+  expect(body.oneOf.map((variant: { properties: { version: { enum: string[] } } }) => variant.properties.version.enum[0])).toEqual(["log-site-extra.v1", "log-site-extra.v2", "log-site-extra.v3"]);
  });
 });
