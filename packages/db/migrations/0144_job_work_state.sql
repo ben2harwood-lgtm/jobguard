@@ -129,7 +129,8 @@ BEGIN
   IF TG_OP='UPDATE' AND NEW.state=OLD.state AND NEW.object_version_id IS NOT DISTINCT FROM OLD.object_version_id THEN RETURN NEW; END IF;
  END IF;
  IF TG_TABLE_NAME='scope_progress' THEN applies:=NEW.stage IN('in_progress','complete') AND NEW.stage IS DISTINCT FROM OLD.stage; END IF;
- IF TG_TABLE_NAME='evidence_object' THEN applies:=NEW.kind='original' AND NEW.evidence_type IN('photo','progress_photo','proof_photo','electrical_certificate'); END IF;
+ -- Proof evidence types: packages/core/src/proof.ts (proofEvidenceTypeSchema).
+ IF TG_TABLE_NAME='evidence_object' THEN applies:=NEW.kind='original' AND NEW.evidence_type IN('pre_cover_photo','completion_photo','excavation_photo','electrical_certificate'); END IF;
  IF NOT applies THEN RETURN NEW; END IF;
  IF NOT app.ch4_source_job(NEW.tenant_id,NEW.job_id) THEN RETURN NEW; END IF;
  IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id) THEN
@@ -213,7 +214,7 @@ DECLARE r app.job_site_source_receipt; evidence app.evidence_object; upload app.
 BEGIN
  -- Excluded billing/catch/office facts return BEFORE any business lock, including when their existing command already appended audit.
  IF TG_TABLE_NAME='evidence_object' THEN
-  IF NEW.kind<>'original' OR NEW.evidence_type NOT IN('photo','progress_photo','proof_photo','electrical_certificate') OR NEW.byte_length<=0 THEN RETURN NEW; END IF;
+  IF NEW.kind<>'original' OR NEW.evidence_type NOT IN('pre_cover_photo','completion_photo','excavation_photo','electrical_certificate') OR NEW.byte_length<=0 THEN RETURN NEW; END IF;
  ELSIF TG_TABLE_NAME='extra_origin' THEN
   IF NEW.kind<>'builder_logged' OR NEW.provenance<>'command' OR NEW.job_track<>'small_builder' THEN RETURN NEW; END IF;
  ELSIF TG_TABLE_NAME='supplier_document_version' THEN
@@ -223,7 +224,7 @@ BEGIN
  IF NOT app.ch4_source_job(NEW.tenant_id,NEW.job_id) THEN RETURN NEW; END IF;
  r.tenant_id:=NEW.tenant_id; r.job_id:=NEW.job_id; r.environment:='synthetic_demo'; r.provenance:='server_source'; r.version:='job-site-source-receipt.v1';
  IF TG_TABLE_NAME='evidence_object' THEN
-  IF NEW.kind<>'original' OR NEW.evidence_type NOT IN('photo','progress_photo','proof_photo','electrical_certificate') OR NEW.byte_length<=0 THEN RETURN NEW; END IF;
+  IF NEW.kind<>'original' OR NEW.evidence_type NOT IN('pre_cover_photo','completion_photo','excavation_photo','electrical_certificate') OR NEW.byte_length<=0 THEN RETURN NEW; END IF;
   SELECT * INTO upload FROM app.evidence_upload WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.job_id,NEW.upload_id) AND state='verified';
   IF upload.id IS NULL OR NEW.sha256<>upload.expected_sha256 OR NEW.object_version_id<>upload.object_version_id OR EXISTS(SELECT 1 FROM app.evidence_invalidation WHERE tenant_id=NEW.tenant_id AND evidence_id=NEW.id) THEN RETURN NEW; END IF;
   IF EXISTS(SELECT 1 FROM app.job_photo_purpose WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND evidence_id=NEW.id AND purpose='snagging') THEN RETURN NEW; END IF;

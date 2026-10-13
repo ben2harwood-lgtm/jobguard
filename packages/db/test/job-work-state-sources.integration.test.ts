@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { proofEvidenceTypeSchema } from "@jobguard/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createWorkFixture, closeWorkFixture, seedWorkJob, insertPhoto, workEvents, workTenant, CH4_HASH, type WorkFixture } from "./job-work-state-fixtures.js";
+import { boundaryLock, createWorkFixture, closeWorkFixture, seedWorkJob, insertPhoto, workEvents, workTenant, CH4_HASH, type WorkFixture } from "./job-work-state-fixtures.js";
 
 describe("CH-4 existing source storage",()=>{
  let f:WorkFixture;
@@ -49,7 +50,7 @@ describe("CH-4 existing builder capture command",()=>{
 
 describe("CH-4 verified proof and stage command sources",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},60000);afterAll(async()=>closeWorkFixture(f));
- it("CH4-A02 CH4-A05 stage completion is activity and planning is not (real existing proof commands, storage fake)",async()=>{
+ it.each(proofEvidenceTypeSchema.options)("CH4-A02 CH4-A05 %s creates first site evidence; stage completion is activity and planning is not (real existing proof commands, storage fake)",async evidenceType=>{
   const {generatePracticePng}=await import("../../../apps/api/src/proof/proof.application.js"),{createHash}=await import("node:crypto");
   const {EvidenceService}=await import("../src/evidence.js"),{ProofCommandService}=await import("../src/proof-repository.js");
   const a=await seedWorkJob(f),bytes=generatePracticePng(),hash=createHash("sha256").update(bytes).digest("hex"),version=randomUUID();let storedKey="";
@@ -57,9 +58,26 @@ describe("CH-4 verified proof and stage command sources",()=>{
   await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[a.tenantId,a.jobId,a.scopeId]));
   const evidence=new EvidenceService(f.runtime,storage),upload=await evidence.beginUpload(a.context,{jobId:a.jobId,scopeItemId:a.scopeId,expectedSha256:hash,contentType:"image/png",maximumBytes:bytes.length,expiresAt:new Date(Date.now()+3600000)});
   expect(await workEvents(f,a)).toEqual([]);
-  await evidence.finalize(a.context,{uploadId:upload.id,objectVersionId:version,evidenceType:"electrical_certificate"});expect(await workEvents(f,a)).toHaveLength(1);
-  const command={version:"proof.complete.v1",commandId:randomUUID(),actorMembershipId:a.actorId,jobId:a.jobId,scopeItemId:a.scopeId,stage:"electrical-stage",evidenceId:upload.id,requiredEvidenceType:"electrical_certificate",decisionId:null};
+  await evidence.finalize(a.context,{uploadId:upload.id,objectVersionId:version,evidenceType});
+  expect(await workEvents(f,a)).toEqual([expect.objectContaining({kind:"first_site_evidence"})]);
+  const source=await workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT evidence_id,source_kind,object_version_id,source_hash FROM app.job_site_source_receipt WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows);
+  expect(source).toEqual([{evidence_id:upload.id,source_kind:"photo",object_version_id:version,source_hash:hash}]);
+  const command={version:"proof.complete.v1",commandId:randomUUID(),actorMembershipId:a.actorId,jobId:a.jobId,scopeItemId:a.scopeId,stage:"electrical-stage",evidenceId:upload.id,requiredEvidenceType:evidenceType,decisionId:null};
   const proof=new ProofCommandService(f.runtime,storage),result=await proof.complete(a.context,command),events=await workEvents(f,a);
   expect(events.map(e=>e.kind)).toEqual(["first_site_evidence","site_activity"]);expect(await proof.complete(a.context,command)).toEqual(result);expect(await workEvents(f,a)).toEqual(events);
+ });
+ it.each(proofEvidenceTypeSchema.options)("CH4-A13 %s original raw runtime insert is refused on a locked job with a pre-lock verified upload",async evidenceType=>{
+  const a=await seedWorkJob(f),id=randomUUID(),version=randomUUID(),key=`synthetic/ch4/${id}`;
+  // Persist the upload before lock so this exercises the evidence-object guard itself.
+  await workTenant(f.runtime,a.tenantId,db=>db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at)
+   VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,clock_timestamp())`,[id,a.tenantId,a.jobId,a.scopeId,key,CH4_HASH,version]));
+  await boundaryLock(f,a);
+  const before=await workEvents(f,a),uploadBefore=(await f.admin.query("SELECT row_to_json(u)::text row FROM app.evidence_upload u WHERE id=$1",[id])).rows;
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+   SELECT u.id,u.tenant_id,u.id,u.job_id,u.scope_item_id,'original',$2,u.object_key,u.object_version_id,u.expected_sha256,80,'image/png',u.retention_class,u.server_received_at,u.server_verified_at FROM app.evidence_upload u WHERE u.id=$1`,[id,evidenceType]))).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+  expect((await f.admin.query("SELECT id FROM app.evidence_object WHERE upload_id=$1",[id])).rows).toEqual([]);
+  expect((await f.admin.query("SELECT id FROM app.job_site_source_receipt WHERE upload_id=$1",[id])).rows).toEqual([]);
+  expect(await workEvents(f,a)).toEqual(before);
+  expect((await f.admin.query("SELECT row_to_json(u)::text row FROM app.evidence_upload u WHERE id=$1",[id])).rows).toEqual(uploadBefore);
  });
 });
