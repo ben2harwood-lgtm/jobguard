@@ -1,5 +1,99 @@
 Built by Codex; dispatched 13 Oct 2026.
 
+## Continuation r1 — current result, 13 October 2026
+
+STOP under the continuation's prohibition on editing merged tests and dispatch rule G. This is a source-inspected conflict; no test-executed failure is claimed. The original two STOPs below are RESOLVED by the coordinator commits, not raised again. Everything after the heading "Original round — historical receipt" is retained historical evidence.
+
+Current HEAD: `338f545a6579ff57bb4e1713073784c1e8682f6e`. Main incorporated by that merge: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`. Initial r1 working tree was clean; the lane line and prior receipt already exist in this HEAD. No git writes, downloads, test changes, feature implementation or migration authored in r1.
+
+Coordinator changes verified by reading their diffs:
+
+- `e77ef5c8ee9ab26c47e0558308a7791637cfa07a`: the five held-state retirements, 35 removed lines, two files.
+- `8ad002aa4e597f86ea506e4851db431061406ab7`: expired-approval check re-pointed to a complete expired window and new owner use. Original STOP 1 resolved.
+- `a942cdc0cfa9cc85bc5b817e18bbdb6382600b7a`: concurrency snapshot preserves existing rows by primary key and requires one added approval/use/window. Original STOP 2 resolved.
+
+### New STOP — remaining fixture setup in protected merged files
+
+The continuation says not to edit either database file again or any other merged test. Rule G expressly requires stopping when another piece's merged setup needs changing. These are NOT requests to retire further assertions. No edit or workaround was applied.
+
+`packages/db/test/sso-emergency-concurrency.integration.test.ts:115`, before:
+
+```ts
+await owner.query("ALTER TABLE identity.sso_emergency_approver_rule DROP CONSTRAINT sso_emergency_approver_rule_held");
+```
+
+Required after: no constraint-drop statement in the fixture; use the migration's owner rule and let the checked v2 emergency command create and consume its own approval. Migration 0143 must already have dropped that constraint, so this statement will fail. Line 116 also inserts `fixture.v1`, which the required new owner-only constraint refuses. Lines 109–121 still create a prior approval for the old flow. A coordinator fixture re-point is required; the builder cannot change these lines.
+
+`packages/db/test/sso-emergency.integration.test.ts:164`, before:
+
+```ts
+await client.query("BEGIN");await client.query("ALTER TABLE identity.sso_emergency_approver_rule DROP CONSTRAINT sso_emergency_approver_rule_held");const rule=randomUUID();
+```
+
+Required after:
+
+```ts
+await client.query("BEGIN");
+```
+
+The fixture's subsequent rule/approval seed at lines 165–166 must also be re-pointed by the coordinator to the real owner-command flow. Otherwise line 165 attempts a forbidden second rule. No removal was made by the builder.
+
+### Further exact conflicts in those unchanged fixtures
+
+`packages/db/test/sso-emergency.integration.test.ts:167` submits `sso-emergency.v1` with email/code directly to SQL. Line 168, before:
+
+```ts
+expect(result.used).toBe(true);
+```
+
+For THAT unchanged v1 input the required after result is:
+
+```ts
+expect(result.used).toBe(false);
+```
+
+Changing that expectation would abandon its successful-use history check, so it was NOT changed. The coordinator should preserve the true assertion and re-point its setup/input to a valid v2 owner use instead (new commandId, configured windowMinutes, no email/code in SQL).
+
+`packages/db/test/sso-emergency-concurrency.integration.test.ts:136`, before:
+
+```ts
+const input = { version: "sso-emergency.v1", requested_tenant_id: f.principal.tenantId, reason: "Synthetic concurrent emergency fixture reason" };
+```
+
+Required after: v2 input with commandId and the configured window forwarded by the repository. Calls at line 143 must forward that setting. This is another forbidden setup edit; as written the v2-only routine returns before waiting on the company lock.
+
+`packages/db/test/sso-emergency-concurrency.integration.test.ts:152`, before:
+
+```ts
+expect(results.find(r => r.used)).toEqual({ used: true, cause: "EMERGENCY_USED", connectionId: f.connectionId, actorMembershipId: f.principal.membershipId });
+```
+
+Required after: retain exact equality and include the successful result's eventId, windowMinutes and canonical closesAt, matched to the stored window. The required v2 success result contains those fields, so the existing exact equality cannot pass. No change to a partial matcher, expected keys, assertion or result parser was applied. Coordinator review is required for all these re-points.
+
+### Five coordinator retirements — replacement status in r1
+
+| Retired check | Ordered replacement | r1 status |
+|---|---|---|
+| S10a, original integration lines 90–103 | E9, E1, E2, E7 | NOT BUILT; new rule-G STOP |
+| S10b, original integration lines 104–115 | E1, E2, E3, E4 | NOT BUILT; new rule-G STOP |
+| S10c, original integration lines 116–121 | E7 | NOT BUILT; new rule-G STOP |
+| S10d, original integration lines 143–144 | E7 and approval/use zero after rollback | NOT BUILT; new rule-G STOP |
+| concurrency original line 115, latch assertion | E6, E7 | NOT BUILT; new rule-G STOP |
+
+The retired concurrency latch ASSERTION is distinct from the surviving constraint-drop SETUP now at line 115. Both independent reviewers still need to confirm replacements one for one. No additional retirement is claimed. The previous RETAINED_ASSERTIONS.md and UNCHANGED_SHA256.txt describe the original round; coordinator commits changed their source baseline. Current protected-test hashes are in R1_COMMANDS.md and prove zero builder test edits in this continuation.
+
+### r1 verification, scope and limits
+
+All r1 inspection shell commands exited 0; 0 tests executed, 0 passed. Typecheck, lint, lint:lanes, build and openapi checks: NOT RUN, stopped on the mandated source-preservation conflict. The original round's pnpm launcher refusal is historical; it was not retried or bypassed. Database and browser suites: NOT RUN (sandbox cannot start PostgreSQL / a browser). New unit/database files: NOT BUILT / NOT RUN. No first-failing unit run exists. Every acceptance criterion E1–E9, T1–T8, L1–L7, K1, U1 and R1 remains incomplete.
+
+Migration number 0143 remains reserved and unused by this builder. Default 60 minutes; allowed 15 to 240; chosen by the order drafter and confirmed by the integrator's answer to Q3. No rule UUID selected and no new GRANT. Standard F: no direct application write grant added. No object from 0111 or 0120 altered or restated. No 0129 object, sso_required_command, sso_required_append, protected source, existing test or pinned value was changed in r1. Migration 0129 SHA-256 remains `4bbeb8d9e88a8f65dc4c47ac369717b95c62e68b113793f5a0c0ad62a7446c50`.
+
+Self-review: read the actual coordinator patches, confirmed they resolve the two original STOPs, then checked the surviving fixtures against the mandated v2-only routine, immutable single owner rule and enriched success result. Stopped at the additional forbidden setup edits; did not preserve v1 success in the implementation or tolerate a fixture rule to work around the order. This receipt update is the only changed existing repository file; the new R1_COMMANDS.md is receipt evidence. No implementation or acceptance is claimed. Held/later items and limits in the original receipt remain unchanged.
+
+Builder receipt only — not independently verified, not accepted.
+
+## Original round — historical receipt
+
 # ENT-10e — blocked builder receipt
 
 Builder receipt only — not independently verified, not accepted.
