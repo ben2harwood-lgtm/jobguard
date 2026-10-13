@@ -244,3 +244,88 @@ Turbo emitted the existing shared-cache write `Operation not permitted` warnings
 **Database/migration and browser suites NOT RUN in this sandbox**, including E26, `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and `pnpm test:e2e`. The dispatcher states PostgreSQL cannot start and localhost cannot bind here; GitHub CI runs those suites after the dispatcher pushes. No database success is inferred from source inspection, syntax transpilation or core tests. No migration, backwards-compatibility impact, new operational alert or release-gate change. Independent exact-commit verdict, separate acceptance and CI remain pending.
 
 No git write command, commit or push was run. The intended conventional commit subject and body are written to `/private/tmp/jg-msg-ent-3d.txt` for the dispatcher.
+
+
+## Repair round r5 — merged refusal type, 13 October 2026
+
+This round was built by Codex. The first-line Claude attribution and earlier run records above are historical and were retained unchanged. This is a builder run receipt, not an independent verdict or acceptance.
+
+Starting and final existing head: `69ed28242bb53f7351a4d724e2f79063bd18c947`; branch `codex/sandbox/ent-3d`. No git write, commit, push, dependency install or package download was performed. The dispatcher owns the next commit.
+
+### Defect reproduced before editing
+
+`pnpm --filter @jobguard/db exec tsc -p tsconfig.json --noEmit` exited 1 (the underlying compiler exited 2): exactly three TS2345 diagnostics, at `site-extra-repository.ts:217:164`, `:280:56` and `:293:56`. The shared refusal could carry PHOTO_NOT_ACCEPTED or CONFIRMATION_MISMATCH into ENT-3c's narrow SorSiteExtraError constructor. This existing compiler check was the failing regression check; no test, assertion, setup, pinned list or pinned value was edited or added in this repair.
+
+### Repair and scope inspection
+
+Restored `Refusal` and `Authority` to their exact definitions on main at `59b1d08`. Added `SiteExtraRefusal = Refusal | EvidenceRefusal` for ENT-3d's evidence gate, free-text log and evidence refusal audit reasons. ENT-3c continues to use only narrow Refusal. Its entire append-only code block and `packages/core/src/site-extra-pricing.ts` are byte-identical to `59b1d08`; no ENT-3c code path or error type was edited. Restored the single blank line before `## 0141` in the migration index.
+
+Type-only repair: TypeScript transpilation of the repository before and after produces identical JavaScript (SHA-256 `72688c25067d74abdd32c665317d9dcec17d3e52269cc205c6b89e7a4c424969`). ENT-3c's unchanged append-only block SHA-256: `f911c7ea5ef4a36e9e9945d8bc629e5ca611e66c15adf2870e3148fb43a73ed9`. These are read-only inspection results, not permanent byte-pinning tests.
+
+All 457 tracked tests, SQL migrations and selected protected files checked against the starting HEAD were identical. The only tracked edits in this round are the repository type declarations, the migration-index blank line, and this appended receipt. No migration, data change, new operational alert or backwards-compatibility change. New GRANTs: none; standard F adds no application-login write grants in this repair.
+
+Code-only `git diff --stat` against the starting HEAD:
+
+```text
+ packages/db/MIGRATIONS.md                | 1 +
+ packages/db/src/site-extra-repository.ts | 9 +++++----
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+```
+
+SHA-256 inspection evidence:
+
+| File | Before | After / unchanged |
+|---|---|---|
+| packages/db/src/site-extra-repository.ts | 204508043b5a6003a48ba3871272abf2965c8560521259ed07ee44b0696491db | 21786923093bf3d6444e62566517486e9ca179b7794f7185fac9864a62a9d99e |
+| packages/db/MIGRATIONS.md | 74ca7ce301ba283c103d2e26bd6d506c3d18cb5e033f8a3f42d58d98c19e6e18 | 9960aa5ff9c32d68ae019271c2995b64e32a79d416c379ecc3bd34d1dcdc484f |
+| packages/core/src/site-extra-pricing.ts | unchanged | 0f425333e94e0b55da41d380f1e6f71daea11f92ea1c11a6f534c3963bc6da25 |
+| apps/api/src/auth/context-boundary.test.ts | unchanged | a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35 |
+| packages/db/test/site-extra-pricing.integration.test.ts | unchanged | 912d5435264afee4a9403ce353f8c63b368871493bac00d37ccb6b4c5bc42eb6 |
+| packages/db/test/site-extra-evidence.integration.test.ts | unchanged | 72e5e8b5db8fb19be6cf02a1dc47f6b23bf0cc7d53a828a07ecd3f8bf0706c26 |
+| packages/db/test/site-extra-evidence-routines.integration.test.ts | unchanged | 06580a23bec2a34dbd65fc086ec2139de81611dba2e896e49097a9510a47c728 |
+| packages/db/migrations/0141_site_extra_evidence.sql | unchanged | 253a65ba1297767cd30ed839cbbef0c570d0ffde99767f8b2de4b6a4ec85f93f |
+
+### Commands and results for r5
+
+Node `v24.17.0`, cached pinned pnpm `10.28.1`, TypeScript `5.8.3`, Turbo `2.10.12`, Vitest `4.1.11`. Every pnpm command began with `export PATH="$HOME/Library/pnpm/bin:$PATH"`. For working commands a second PATH prepend selected `/private/tmp/jg-ent-3d-r5-bin/pnpm`, a newly created temporary shim executing the already cached `~/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`. No repository tooling or pin changed.
+
+Before each heavy run, `memory_pressure | tail -1` reported 68% free (exit 0), and `df -g /System/Volumes/Data` reported 79 GB available (exit 0). Builds and tests never overlapped. All-package typecheck, lint and build ran exactly once after the repair, each with `--force`, zero cache hits:
+
+| Command | Exit | Result |
+|---|---|---|
+| pnpm --filter @jobguard/db exec tsc -p tsconfig.json --noEmit (before repair) | 1 | Three TS2345 diagnostics; compiler exit 2 |
+| pnpm exec turbo run typecheck --force | 0 | 7/7 package tasks executed, 0 cached |
+| LANE_BASE_REF=origin/main pnpm exec turbo run lint --force | 0 | 7/7 package tasks executed, 0 cached |
+| LANE_BASE_REF=origin/main node tools/lint.mjs | 0 | Purity (153 files), lane, money and commercial boundaries |
+| LANE_BASE_REF=origin/main pnpm lint:lanes | 0 | Registered ENT-3d lane passed |
+| pnpm build --concurrency=2 --force | 0 | 7/7 package tasks executed, 0 cached; web generated 30 static pages |
+| HEAVY_SLOTS=2 ~/.local/bin/heavy-slot ent-3d-r5-core pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/site-extra-evidence.test.ts | 0 | 1 file, 81 tests passed; gate inspection refusals below |
+| pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check | 0 | Same OpenAPI checker via the installed loader without CLI IPC; no generated-file edit |
+| git diff --check (before checks and after build) | 0 | No whitespace errors |
+| Read-only Node checks of main's ENT-3c block/types and 457 protected files | 0 | All comparisons equal |
+| Read-only Node transpilation and SHA-256 comparison | 0 | Identical JavaScript; source hashes above |
+| git rev-parse HEAD; git diff --stat; git diff --check; git status --short; shasum -a 256 packages/db/src/site-extra-repository.ts packages/db/MIGRATIONS.md docs/verdicts/ENT-3d/BUILDER_RECEIPT.md | 0 | Existing head unchanged; two code/documentation files edited before appending this receipt |
+
+Inspection command inventory (compound inspection shells exited 0 unless otherwise stated; no tests in these reads): `pwd`, `git status --short`, `git rev-parse HEAD`, `cat AGENTS.md`, `rg -n 'ENT-3d|ENT-3c|site.extra|0141' BUILD_PLAN.md packages/db/MIGRATIONS.md`, `cat package.json`, `cat packages/db/package.json`, and `cat ~/.local/share/full-steam/handoffs/jobguard-task.md`.
+Further reads: `sed -n '1,420p' packages/db/src/site-extra-repository.ts`; `sed -n '205,330p' packages/db/src/site-extra-repository.ts`; `rg -n 'ENT-3|9.1.4|9.1.8|9.1.9|9.1.11|## 014' BUILD_PLAN.md packages/db/MIGRATIONS.md`; `rg --files` filtered for site-extra, receipt, Vitest and lane paths; `cat ~/.local/bin/heavy-slot`; `which pnpm`; `cat packages/db/vitest.config.ts`; `cat ~/Library/pnpm/bin/pnpm`; `sed -n '1730,1905p' BUILD_PLAN.md`; `cat docs/contracts/site-extra-evidence-v1.md`; `cat docs/verdicts/ENT-3d/BUILDER_RECEIPT.md`; `tail -25 packages/db/MIGRATIONS.md`; `cat turbo.json`; `git show 59b1d08:packages/db/src/site-extra-repository.ts | sed -n '1,90p'`.
+Further reads: `rg -n '^## 9|^### 9|^### ENT-3' BUILD_PLAN.md`; `sed -n '1,65p' docs/verdicts/ENT-3d/BUILDER_RECEIPT.md`; `cat pnpm-workspace.yaml`; `ls ~/Library/pnpm/.tools/pnpm`; `sed -n '1,120p' tools/lint.mjs`; `sed -n '1,100p' tools/agent-lane-boundary-lint.mjs`; `rg -n 'openapi:check|scripts' apps/api/package.json`; `cat packages/db/tsconfig.json`; `sed -n '538,706p' BUILD_PLAN.md`; `sed -n '790,821p' BUILD_PLAN.md`; `sed -n '795,820p' BUILD_PLAN.md`; `sed -n '821,835p' BUILD_PLAN.md`; `cat packages/core/src/site-extra-pricing.ts | head -70`; `sed -n '1,90p' packages/core/src/site-extra-pricing.ts`; `sed -n '1,110p' apps/api/src/contractor/site-extra-evidence.application.test.ts`; `cat packages/core/package.json`; `cat docs/contracts/site-extra-v1.md | head -35`; `git diff 59b1d08 HEAD -- packages/db/src/site-extra-repository.ts`; `tail -35 docs/verdicts/ENT-3d/BUILDER_RECEIPT.md`.
+Tool discovery reads: `ls -l node_modules/.bin/tsc node_modules/.bin/turbo`; `ls ~/Library/pnpm/.tools/pnpm/11.8.0/bin`; `rg --files --hidden` across existing corepack and pnpm cache directories, filtered for pnpm.cjs, 10.28.1 and rc.json; `head -45 node_modules/.bin/tsc`; `head -45 node_modules/.bin/turbo`; `cat ~/Library/pnpm/.tools/pnpm/11.8.0/bin/pnpm | head -10`. Reads of missing optional `~/.local/bin/pnpm`, `~/.local/share/pnpm/pnpm`, `.npmrc`, `apps/api/vitest.config.ts` reported absent files (exit 1); nothing was installed or changed. `ls -l /opt/homebrew/bin/pnpm ~/.local/share/pnpm/pnpm` and `ls -l ~/Library/pnpm/bin/pnpm ~/.local/bin/pnpm` were discovery reads, not executable fallbacks. `ls -l /private/tmp/jg-msg-ent-3d.txt` exited 0: the dispatcher's specified message path already existed.
+The uncached global launcher attempts `pnpm --version`, `npm_config_manage_package_manager_versions=false pnpm --version`, and `pnpm --manage-package-manager-versions=false --version` stalled and were interrupted (exit 130 each). No success claimed for them. Temporary shim creation via Node exited 0; its `pnpm --version` returned 10.28.1 (exit 0). The type and blank-line repair used apply_patch successfully. Receipt append and message writing use Node; the existing message is preserved in a separate temporary file before writing the specifically requested dispatcher path.
+
+### STOP and NOT RUN
+
+Process inspection STOP: `ps -axo pid,ppid,etime,comm | rg 'pnpm|40586'` reported `zsh:1: operation not permitted: ps`. No retry or alternative process-list command was used by the builder.
+
+Unit-test gate STOP: the exact heavy-slot command above reported `sysctl: sysctl fmt -1 1024 1: Operation not permitted`, `sysmon request failed with error: sysmond service not found`, and `pgrep: Cannot get process list`. A stop signal was sent as soon as the output was inspected; by then the command had already completed with exit 0 and 81 tests passed. No further gate run or alternative test route was attempted. API `apps/api/src/contractor/site-extra-evidence.application.test.ts` and web `apps/web/app/api/contractor/jobs/[id]/site-extras/route.evidence.test.ts` are NOT RUN in r5 because the shared gate's system/process inspection was refused. The repaired repository has no standalone unit file; its database coverage remains with CI.
+
+Database `packages/db/test/site-extra-evidence.integration.test.ts`, `packages/db/test/site-extra-evidence-routines.integration.test.ts`, the ENT-3c integration suites, `pnpm test:db`, `pnpm test:migrations`, browser `pnpm test:e2e` and the whole-repository `pnpm test` are NOT RUN (dispatch order: this sandbox cannot start PostgreSQL or a browser; CI and the dispatcher run them). No database or browser startup attempted. No clean install run (preinstalled dependencies only).
+
+Turbo emitted `WARNING IO error: Operation not permitted (os error 1)` for shared-cache I/O; each forced package task still executed and returned success, and cache writes were not retried. Next.js emitted the existing workspace-root, cache-serialization and CSS/autoprefixer warnings; these did not fail the build.
+
+### Builder scope check and remaining gates
+
+Read-only scope inspection: narrow Refusal and ENT-3c's types restored, ENT-3c methods unchanged, evidence codes still available on ENT-3d's path, emitted repository behavior unchanged, no merged test edits, no pinned-value edits, no new privileges, migrations or screens. This is source inspection plus the executed checks above, not an independent review. No code STOP or policy question is required; the environment refusals and unexecuted suites are recorded above. Exact-new-commit independent review, separate acceptance, and CI remain pending. The dispatcher must bind those to its eventual commit; the only existing head available to this builder remains `69ed28242bb53f7351a4d724e2f79063bd18c947`.
+
+Intended message path: `/private/tmp/jg-msg-ent-3d.txt`, subject `fix(db): isolate site extra evidence refusals from SoR paths`.
+
+Final verification command batch: `git diff --check; git diff --stat; git status --short; git rev-parse HEAD` plus read-only Node assertions of the exact three edited paths, append-only historical receipt, unchanged main ENT-3c block/error file and dispatcher message: exit 0. Snapshot before this final log line: 3 files changed, 89 insertions(+), 4 deletions(-), including 83 receipt lines. Receipt/message Node writer: exit 0. No further source edits or heavy runs.

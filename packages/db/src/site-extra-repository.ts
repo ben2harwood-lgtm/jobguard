@@ -19,7 +19,8 @@ type InputV3 = z.infer<typeof inputV3>;
 type EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED" | "CONFIRMATION_MISMATCH"; reason: "photo_not_accepted" | "confirmation_mismatch" };
 export type EvidenceFacts = { photoEvidenceId: string | null; residentConfirmationEvidenceId: string | null; contentSha256: string };
 export type LoggedSiteExtra = RaisedExtra & { evidence?: EvidenceFacts };
-type Refusal = { code: "TRACK_FORBIDDEN" | "EXTRA_FORBIDDEN" | "NOT_FOUND"; reason: "track_not_contractor" | "member_inactive" | "role_not_permitted" | "job_out_of_scope" } | EvidenceRefusal;
+type Refusal = { code: "TRACK_FORBIDDEN" | "EXTRA_FORBIDDEN" | "NOT_FOUND"; reason: "track_not_contractor" | "member_inactive" | "role_not_permitted" | "job_out_of_scope" };
+type SiteExtraRefusal = Refusal | EvidenceRefusal;
 type Authority = { grant: string } | Refusal;
 const answerV1 = z.discriminatedUnion("decision", [
  z.object({ decision: z.literal("allowed"), reason_code: z.literal("allowed"), raising_grant: z.string().uuid() }).strict(),
@@ -56,7 +57,7 @@ export class SiteExtraRepository {
    return { code: "EXTRA_FORBIDDEN", reason: answer.data.reason_code === "role_not_permitted" ? "role_not_permitted" : "member_inactive" };
   });
  }
- private async recordRefusal(context: VerifiedTenantContext, actor: AuthenticatedMembership, input: Input, reason: Refusal["reason"]): Promise<void> {
+ private async recordRefusal(context: VerifiedTenantContext, actor: AuthenticatedMembership, input: Input, reason: SiteExtraRefusal["reason"]): Promise<void> {
   try { await withTenant(this.pool, context, async db => {
    const tenant = context.tenantId.toLowerCase(), id = derivedUuid(`extra-refusal:${tenant}:${input.commandId.toLowerCase()}:${reason}`);
    // Serialize the existence check before the final audit-head lock, including concurrent retries.
@@ -90,7 +91,7 @@ export class SiteExtraRepository {
   return shown !== null && shown !== check.content ? mismatchRefusal : undefined;
  }
  /** ENT-3d steps (i) and (ii). With no photo and no hash shown there are none: every step and result is then ENT-3a's. */
- private async evidenceGate(context: VerifiedTenantContext, actor: AuthenticatedMembership, input: InputV3): Promise<Gate | Refusal> {
+ private async evidenceGate(context: VerifiedTenantContext, actor: AuthenticatedMembership, input: InputV3): Promise<Gate | SiteExtraRefusal> {
   const photo = input.photoEvidenceId?.toLowerCase() ?? null, shown = input.shownContentSha256 ?? null;
   if (photo === null && shown === null) return { raise: {} };
   const tenant = context.tenantId.toLowerCase(), job = input.jobId.toLowerCase(), command = input.commandId.toLowerCase();
@@ -139,7 +140,7 @@ export class SiteExtraRepository {
  async logSiteExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<LoggedSiteExtra> {
   const parsed = inputV3.safeParse(raw); if (!parsed.success) throw new SiteExtraError("INVALID_COMMAND");
   const input = parsed.data;
-  let refusal: Refusal | undefined;
+  let refusal: SiteExtraRefusal | undefined;
   let liveRefusal: WatchdogError | undefined;
   try {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();

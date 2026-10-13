@@ -969,6 +969,7 @@ trigger rejects UPDATE and DELETE.
 
 Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
 `packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
+
 ## 0141 — site extra evidence (ENT-3d)
 
 Adds exactly five routines in schema `app` and their EXECUTE grants to `jobguard_runtime` (explicit list, none to PUBLIC or `jobguard_infrastructure`): `ent3d_content_sha256`, `ent3d_confirmation_document`, `ent3d_site_extra_evidence`, `ent3d_record_resident_confirmation` and `ent3d_require_site_extra_evidence`. All are SECURITY INVOKER with a `pg_catalog` search path, owned by `jobguard_migration`. No table, column, index, trigger, constraint, policy or table grant; no existing row changed; no earlier routine replaced. The only writer of a confirmation object is `ent3d_record_resident_confirmation`; it runs with the application login's pre-existing INSERT rights on the two evidence tables (none added) and carries its own authority check (`ent3a_extra_authority`).
