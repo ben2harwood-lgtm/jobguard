@@ -379,3 +379,55 @@ R2 code-only patch SHA-256 (`git diff HEAD --` the three files below): `3bce19a4
 | `packages/db/test/site-extra-evidence-fixtures.ts` | `611276c5b0e863111cada2369259be7e14ce7ed610e9954a803c0ab5819de5de` |
 
 Candidate/incoming HEAD remains `b1e87ecacc61e4014c9c8422c7112db169b07897`; there is no builder-created r2 commit. Intended conventional commit subject/body was overwritten at `/private/tmp/jg-msg-ent-5.txt`. The fixture edit is also present identically in ENT-3d #170. `git diff --check` passed. This receipt does not satisfy technical acceptance or authorize merge/release.
+
+
+## Catch-up r4 — dispatcher 4, 13 October 2026
+
+Incoming/local HEAD remains `1098357d33327e8ef647d4b9fe0775e3d698b618`. `origin/main` and `MERGE_HEAD` are both `e4cb8437d044746300c377647f6061d06cd960cc`. ENT-3d #170 is merged as `41d2761`; this supersedes the earlier dependency hold. This section is a builder run receipt for the working tree, not an independent verdict or acceptance. The dispatcher must finish the merge and bind review to the resulting commit.
+
+Read AGENTS.md, BUILD_PLAN §§9.1.2–9.1.7, §§9.1.12–13 and ENT-5, the three ENT-5 contracts, the existing receipt, lane checker and package/check configuration. The only code/config edit in this round is the conflict resolution in `config/agent-lane-assignments.json`: main's FIXLATER-8 conflict entry comes first, followed by the existing ENT-5 entry. Removing only ENT-5's line reproduces origin/main's entire registry byte-for-byte. JSON parses; no allow list, existing lane entry, merged test or pinned value was edited. This receipt is the only other repository edit.
+
+The read-only two-endpoint working-tree comparison `git diff --no-renames --name-only -z origin/main --` has **25 files**, every one covered by ENT-5's unchanged allow list. The earlier ENT-3d feature files have dropped out. One inherited r2 type-import repair still differs from main: `packages/db/test/site-extra-evidence-fixtures.ts` imports `Cluster` from `extra-fixtures.js` rather than `site-extra-fixtures.js`. It is already allowed, unchanged from incoming HEAD and passes strict compilation. The four already-authorized tenancy catalogue additions are likewise unchanged from incoming HEAD.
+
+Migration `0147_extra_approval.sql` and its runner registration remain unchanged; there is no renumbering, backfill, provider, schema, prompt, alert or production capability change in r4. 0142–0146 remain allocated to other pieces per the dispatcher. All ENT-5 product-question holds and real-data/fee gates remain in force.
+
+The standard lane checker computes the committed merge-base diff and then unions staged changes against old HEAD. During this unfinished merge it therefore refuses exactly these **main-owned**, byte-identical-to-main files:
+
+- `docs/verdicts/FIXLATER-8/BUILDER_RECEIPT.md`
+- `docs/verdicts/FIXLATER-8/CATALOG_SCOPE.md`
+- `packages/db/test/catalog-fixlater-8.integration.test.ts`
+
+They are absent from the actual working-tree diff against origin/main. No lane widening, alternate base, Git index edit or checker change was used. The dispatcher must stage the resolved file, finish the merge and rerun lane/root lint checks. `git status` still shows `UU` for the registry because the builder is expressly forbidden to stage/commit; working-tree contents have no markers.
+
+All pnpm checks use the already-installed 10.28.1 binary through `PATH="/private/tmp/ent-5-tools:$PATH"`. Node is v24.17.0; the unchanged .nvmrc pins v24.15.0. Dependencies were not reinstalled, so this is not a clean-install or exact .nvmrc-runtime rehearsal. An initial global-shim version probe was cancelled (130); the existing pinned binary probe passed. No package installation, Git write, push, external message or automatic-approval escalation was performed.
+
+| Actual r4 command | Exit / result | Evidence |
+|---|---|---|
+| `pnpm exec turbo run typecheck --force` | 0; 7 successful, 0 cached; 31.331s | `/private/tmp/jg-ent-5-r4-typecheck.log` |
+| `pnpm exec turbo run lint --force` | 0; 7 successful, 0 cached; 47.212s | `/private/tmp/jg-ent-5-r4-package-lint.log` |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 1; exactly the three main-owned staged files above | `/private/tmp/jg-ent-5-r4-boundary.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1; same three paths | `/private/tmp/jg-ent-5-r4-lanes.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1; core purity passes, lane prerequisite refuses those three paths; package lint not reached here | `/private/tmp/jg-ent-5-r4-root-lint.log` |
+| `node tools/core-purity-lint.mjs`, `node tools/money-arithmetic-lint.mjs`, `node tools/commercial-boundary-lint.mjs` | 0 each; core purity covers 162 TypeScript files | Actual terminal output; separate supplemental checks, not a root-lint pass |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | 0; 83 files, 2,436 tests; 22.00s | `/private/tmp/jg-ent-5-r4-core-unit.log` |
+| `pnpm --filter @jobguard/config exec vitest run src --maxWorkers=2` | 0; 1 file, 1 test | `/private/tmp/jg-ent-5-r4-config-unit.log` |
+| `pnpm --filter @jobguard/storage exec vitest run src --maxWorkers=2` | 0; 1 file, 2 tests | `/private/tmp/jg-ent-5-r4-storage-unit.log` |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2` | 0; 5 files, 80 tests; fixtures, no live model | `/private/tmp/jg-ent-5-r4-ai-unit.log` |
+| DB unit command below | 0; 11 files, 153 tests; doubles/offline verifier tests, no PostgreSQL proof | `/private/tmp/jg-ent-5-r4-db-unit.log` |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | 0; 33 files, 784 tests | `/private/tmp/jg-ent-5-r4-web-unit.log` |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/extra-approval-authority.integration.test.ts test/extra-evidence-packs.integration.test.ts test/extra-approval-upgrade.integration.test.ts` | 0; no diagnostics; compilation only | `/private/tmp/jg-ent-5-r4-db-test-types.log` |
+| `pnpm build --concurrency=2 --force` | 0; 7 successful, 0 cached; 4m23.603s | `/private/tmp/jg-ent-5-r4-build.log` |
+| API command below | 1; 62 files passed, 1 suite blocked; 1,542 tests passed, 1 skipped; 55.41s | `/private/tmp/jg-ent-5-r4-api-unit.log` |
+| `pnpm openapi:check` | 1; tsx CLI IPC listen EPERM before schema comparison | `/private/tmp/jg-ent-5-r4-openapi.log` |
+| `node --import tsx src/generate-openapi.ts --check` from `apps/api` | 0; same unchanged generator's actual schema comparison passes without CLI IPC server | `/private/tmp/jg-ent-5-r4-openapi-loader.log` |
+| Read-only JSON/main-byte/allow-list/migration/marker assertions | 0; 25 covered files, zero violations, refused files identical to main, 0147 identical to HEAD | `/private/tmp/jg-ent-5-r4-scope.log` |
+| `git grep -n '<<<<<<<\|>>>>>>>' -- . ':!docs/verdicts'` | 1; no matches (expected grep result) | Direct invocation and scope assertion |
+| `git diff --check` | 0; no whitespace errors | Actual terminal output |
+
+DB unit command: `pnpm --filter @jobguard/db exec vitest run src test/contractor-session-context.test.ts test/recovery-case-join.test.ts test/site-extra-evidence-compatibility.test.ts test/recovery-message-repository.test.ts test/recovery-case-outcome.test.ts test/verify-audit-export-cli.test.ts test/verify-evidence-pack-cli.test.ts --maxWorkers=2`.
+
+API command: `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude "src/contractor/*.http.test.ts" --exclude src/auth/sso/action-paths.test.ts`. Seven socket/database-dependent files were excluded at invocation, without changing configuration or tests. The initial source scan missed an eighth indirect dependency: `final-account-lock.isolation.test.ts` dynamically imports the PostgreSQL fixture. Its DW8 database suite was refused at `freePort` with `no free port in 58400..58650`, before PostgreSQL startup. The broader API run is **not passed**. The test remains unchanged and is owed in CI; no retry using weaker assertions or changed timeout was attempted.
+
+The six completed local unit invocations passed 3,456 tests in 134 files. Source filters avoid generated dist duplicates; they do not constitute the full mandatory `pnpm test` run. Heavy unit runs and build were sequential; the extra strict integration-test compilation overlapped build, not database/test execution. Observed memory free was 70% and available disk 49 GB. Turbo retained sandbox I/O warnings; Next retained its existing workspace-root and autoprefixer warnings. They did not prevent the forced typecheck/package-lint/build passes.
+
+`pnpm test`, `pnpm test:db`, `pnpm test:migrations` and browser suites were not invoked; required PostgreSQL/browser execution and the blocked API database suite remain for GitHub CI after the dispatcher pushes. This is no claim of verified RLS, migrations, approval races or browser behavior. Root/lane lint and the standard OpenAPI package script remain owed outside the unfinished merge/IPC restriction. An independent verdict on the resulting exact commit and separate acceptance remain required. Intended conventional commit message is overwritten at `/private/tmp/jg-msg-ent-5.txt`; no builder commit was made.
