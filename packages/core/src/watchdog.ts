@@ -45,6 +45,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/readiness/[action]": "watchdog_live_only",
   "/api/jobs/[id]/recovery/[action]": "post_live_billing",
   "/api/jobs/[id]/recovery": "post_live_billing",
+  "/api/jobs/[id]/recovery-cases/terms": "post_live_billing", "nest:/jobs/:id/recovery-cases/terms": "post_live_billing", "command:recovery.terms.approve": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/eligibility": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations": "post_live_billing",
   "/api/jobs/[id]/recovery-allocations/reversals": "post_live_billing",

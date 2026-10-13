@@ -16,7 +16,7 @@ CH-7-F17-BEFORE-OPEN applies the same timing decision to F17's bound `duplicate_
 
 B2's table provides tenant/job/case/review-qualified credit-note, later supplier-invoice and settled-movement links. Its positive stored path is blocked: the merged M4-7-S catalogue contains customer receipts and a supplier refund, but no supplier-invoice payment. A customer receipt cannot establish that a supplier invoice is paid in full. F15's generated below-minimum candidate stores zero without claiming any invoice is paid. The core's synthetic F14/F15/F16 reference tests and existing SV-1 £250 boundary tests are available; database/browser positive F14/F16 coverage remains owed pending a coordinator ruling/source dependency. No customer cash is relabelled, no alternative settled source is created, and no production credit fee path is enabled.
 
-B4/DW2/DW3 are HELD under Q6. There is no terms table, approval command or pursuit guard. The live M4-5 integration remains later work after that hold is released.
+B4 and DW2 are built by CH-7-TERMS (see `recovery-case-terms-v1.md`), pending technical acceptance and the recorded T8 timestamp ruling. DW3 remains HELD, and the live M4-5 call to the shared terms guard is owed.
 
 B5 and insurer wording are HELD under Q7: CH-3a binds a paying party to the job, but no paying-party type is bound to the merged receipt fact. F19 interest-exclusion wording and F21 wording remain null under Q4 (the individual interest and unpaid-bill outcomes still compute zero). F22 uses the pre-existing verbatim wording `Prevented spending is not recovered cash` from `recovery-eligibility.ts`. Held wording is never replaced by invented explanatory copy.
 
