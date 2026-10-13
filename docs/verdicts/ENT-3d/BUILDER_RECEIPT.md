@@ -189,3 +189,58 @@ Turbo reported shared-cache write `Operation not permitted` warnings; forced che
 **Database/migration and browser suites NOT RUN in this sandbox**, including the repaired [E8] test, `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and `pnpm test:e2e`: the dispatcher states PostgreSQL cannot start and localhost cannot bind here. GitHub CI runs them after the dispatcher pushes; local unit success does not verify the repaired database test's CI timing. No migration or backwards-compatibility impact, new operational alert or release-gate change. Independent exact-commit verdict, separate acceptance and CI remain pending.
 
 No git write command, commit or push was run. Intended conventional commit subject and body are written to `/private/tmp/jg-msg-ent-3d.txt` for the dispatcher.
+
+## Repair round 3
+
+13 October 2026. Tests-only repair of clean head `20c14d55095747cb09bf21609a608ddd1aaf5dd4` on `codex/sandbox/ent-3d`, PR #170, by Codex. The dispatcher supplied the two proof gaps from `jg-runs/ent-3d-solcheck-20261013T165216.md` (REPAIR) and the earlier Opus L1 note; that fresh report is not present in this checkout. This is a builder run receipt, not an independent verdict or acceptance.
+
+Exactly three repository files changed: the core evidence test, the database evidence integration test and this append-only receipt. No product code, migration byte, lane entry, fixture, dependency or configuration changed. No existing expected value changed, no assertion was dropped or weakened, and nothing was deleted.
+
+### Persisted-facts reconstruction proof
+
+Added one named test at `packages/db/test/site-extra-evidence.integration.test.ts:104`: **[E26] the stored confirmation document rebuilds from persisted facts: bytes, hash and length**. The governed repository command creates an extra with a verified photo and a confirmation. A subsequent SELECT reads back `variation.description`, `variation.capture_text`, the stored job/tenant ids, `extra_origin.evidence_hash`, the linked confirmation object's id, hash and length, and the recorded confirmation audit event. Fixture inputs are used only for setup and selecting the new row; every serializer input and expected value in the proof comes from persisted rows.
+
+The production core content hasher and `residentConfirmationDocumentV1` rebuild UTF-8 bytes from those variation/origin/evidence facts. The production SQL document serializer independently rebuilds bytes from the confirmation event's stored tenant, job, confirmation and content hash. In this one test, the content hashes agree, both byte buffers agree, SHA-256 of the rebuilt buffer agrees with both the stored object hash and recorded document hash, and its byte length agrees with the stored object length. The SELECT must return exactly one row.
+
+**Existing L6 limitation:** `docs/contracts/site-extra-evidence-v1.md` explicitly says confirmation bytes are not persisted as a file; the object pins hash, length and type, and the audit event pins the content hash. Therefore the order's "stored bytes" comparison is implemented as equality with production SQL serialization of the persisted confirmation facts. This does not claim retrieval of a persisted byte blob, which does not exist. Literal persisted-byte retrieval remains unavailable within the tests-only scope; no production or migration change was made to invent one.
+
+Source inspection, not database execution: checked the query's columns/types against migrations `0001_audit.sql`, `0002_evidence.sql`, `0014_variations.sql` and `0053_shared_money_origin.sql`; checked the origin hash source and persisted description/note against `0122_extra_origin_persistence.sql` and the repository's replay SELECT; checked the writer, UTF-8 conversion and reconstruction guard against routines 2, 4 and 5 in `0141_site_extra_evidence.sql`; checked the event's payload keys/type against `SiteExtraRepository.evidenceGate`; checked the core serializer exports. Joins qualify the tenant and job between variation, origin and evidence, and qualify the event by tenant, confirmation subject and exact event type. `convert_to(...,'UTF8')` returns bytea (node-postgres Buffer); stored bigint length is explicitly selected as text and compared with the buffer length's decimal string. Existing test fixtures and lifecycle hooks are reused.
+
+A read-only Node comparison against HEAD removed only E26 and its added imports and confirmed the remaining database file is byte-identical. TypeScript `transpileModule` reported no syntax diagnostics for either changed test file. These are deterministic source checks, not PostgreSQL proof or an independent review; the normal db tsconfig includes `src`, not integration tests.
+
+### Exact old-to-new assertion map
+
+The former grouped [E1] test had five executions of `expect(siteExtraContentSha256V1(input)).not.toBe(digest)` and one distinct-hash count assertion. Its `base`, `digest` and five `changed` inputs are unchanged. Each old assertion occurs in exactly one new named test:
+
+| Old assertion/input | New test and line | Unchanged expectation |
+|---|---|---|
+| `changed[0]`: only job id ends in `112` | `[E1] changing only the stored job changes the hash`, line 27 | `.not.toBe(digest)` |
+| `changed[1]`: only description gains `!` | `[E1] changing only the stored description changes the hash`, line 28 | `.not.toBe(digest)` |
+| `changed[2]`: only note gains `!` | `[E1] changing only the stored note changes the hash`, line 29 | `.not.toBe(digest)` |
+| `changed[3]`: only photo hash becomes `"ac".repeat(32)` | `[E1] changing only the stored photo changes the hash`, line 31 | `.not.toBe(digest)` |
+| `changed[4]`: only photo becomes `null` | Same photo test, line 32 | `.not.toBe(digest)` |
+| `new Set(changed.map(siteExtraContentSha256V1)).size` | `[E1] all five single-fact mutations have distinct hashes`, line 34 | `.toBe(changed.length)` (5), exact old assertion retained |
+
+The version-string test is unchanged. A read-only Node comparison against HEAD confirmed every byte outside the split block is unchanged, the original input/base/digest declarations remain, each of the five mutation assertions appears once with the same expectation, and the exact old uniqueness assertion appears once. Splitting one test into these five raises the core file's count from 77 to 81 without adding or removing assertions.
+
+### Commands and outcomes
+
+Node `v24.17.0`, pnpm `10.28.1`; installed dependencies only, no install or download. All pnpm commands used `PATH="/private/tmp/jg-ent-3d-bin:$PATH"`, the existing cached-pnpm selector from round 1. Checks ran serially, build ran alone, and the single Vitest invocation used `--maxWorkers=2` with exactly one file. Typecheck, package lint and build also passed before E26 was added; they were then repeated with `--force` after the final test edits, with the final results below.
+
+| Command | Exit code | Result |
+|---|---|---|
+| `pnpm exec turbo run typecheck --force` | 0 | 7 successful tasks, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 0 | 7 successful tasks, 0 cached |
+| `pnpm build --concurrency=2 --force` | 0 | 7 successful tasks, 0 cached |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/site-extra-evidence.test.ts` | 0 | 1 file, 81 tests passed |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | 0 | Root purity, lane, money and commercial boundary checks; 7 successful package tasks, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Registered ENT-3d lane passed |
+| `pnpm openapi:check` | 1 | `tsx` CLI IPC socket denied with `listen EPERM`; checker did not execute |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Same checker without CLI IPC; committed OpenAPI matches |
+| `git diff --check` | 0 | No whitespace errors |
+
+Turbo emitted the existing shared-cache write `Operation not permitted` warnings; forced tasks executed successfully. Next.js emitted the existing workspace-root and CSS/autoprefixer warnings; build passed.
+
+**Database/migration and browser suites NOT RUN in this sandbox**, including E26, `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and `pnpm test:e2e`. The dispatcher states PostgreSQL cannot start and localhost cannot bind here; GitHub CI runs those suites after the dispatcher pushes. No database success is inferred from source inspection, syntax transpilation or core tests. No migration, backwards-compatibility impact, new operational alert or release-gate change. Independent exact-commit verdict, separate acceptance and CI remain pending.
+
+No git write command, commit or push was run. The intended conventional commit subject and body are written to `/private/tmp/jg-msg-ent-3d.txt` for the dispatcher.

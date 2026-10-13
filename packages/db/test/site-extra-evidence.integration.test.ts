@@ -1,8 +1,8 @@
 // ENT-3d governed path: a verified photo and a server-written resident confirmation on a logged site extra (log-site-extra.v3).
 // Written before the repository code. The migration SQL was drafted before these tests; the repository was not.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { extraOriginHashV1, SiteExtraError, siteExtraFailureV1, siteExtraHttpStatus, residentConfirmationContentType, residentConfirmationObjectVersion } from "@jobguard/core";
+import { extraOriginHashV1, SiteExtraError, siteExtraFailureV1, siteExtraHttpStatus, residentConfirmationContentType, residentConfirmationObjectVersion, siteExtraContentSha256V1, residentConfirmationDocumentV1 } from "@jobguard/core";
 import { SiteExtraRepository, siteExtraAuthoritySeam, WatchdogError, ExtraRepository, withTenant } from "../src/index.js";
 import {
  cluster, siteFixture, chain, direct, invite, ownerTx, originSql, originHashInput, note, description,
@@ -100,6 +100,36 @@ describe("ENT-3d verified photo and resident confirmation", () => {
   expect(events).toEqual([{ actor_ref: `membership:${a.member.membershipId}`, subject_type: "evidence", subject_ref: confirmation, payload: { references: { command: commandId, job: f.jobId, confirmation, environment: "synthetic_demo" }, hashes: { content, document: documentHash } } }]);
   const payloads = (await c.admin.query("SELECT payload::text body FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows.map(r => r.body as string).join("\n");
   expect(payloads).not.toContain(note); expect(payloads).not.toContain(description); await chain(c, f);
+ });
+ it("[E26] the stored confirmation document rebuilds from persisted facts: bytes, hash and length", async () => {
+  const f = await siteFixture(c), p = await photo(c, where(f));
+  const result = await repo.logSiteExtra(f.ctx, f.members.supervisor.member, v3(f, { photoEvidenceId: p.id, shownContentSha256: shownFor(f, p.sha256) }));
+  const stored = await c.admin.query<{
+   tenant_id: string; job_id: string; confirmation_id: string; description: string; capture_text: string; evidence_hash: string;
+   document_sha256: string; byte_length: string; recorded_content_sha256: string; recorded_document_sha256: string; recorded_document_bytes: Buffer;
+  }>(`SELECT v.tenant_id::text,v.job_id::text,e.id::text confirmation_id,v.description,v.capture_text,o.evidence_hash::text,
+    e.sha256::text document_sha256,e.byte_length::text,a.payload->'hashes'->>'content' recorded_content_sha256,
+    a.payload->'hashes'->>'document' recorded_document_sha256,
+    convert_to(app.ent3d_confirmation_document(a.tenant_id,(a.payload->'references'->>'job')::uuid,
+      (a.payload->'references'->>'confirmation')::uuid,a.payload->'hashes'->>'content'),'UTF8') recorded_document_bytes
+   FROM app.variation v
+   JOIN app.extra_origin o ON (o.tenant_id,o.job_id,o.variation_id)=(v.tenant_id,v.job_id,v.id)
+   JOIN app.evidence_object e ON (e.tenant_id,e.job_id,e.id)=(o.tenant_id,o.job_id,o.resident_confirmation_evidence_id)
+   JOIN app.audit_event a ON a.tenant_id=e.tenant_id AND a.subject_ref=e.id::text
+    AND a.event_type='contractor.extra.resident_confirmation_recorded'
+   WHERE v.tenant_id=$1 AND v.id=$2`, [f.p.tenantId, result.variationId]);
+  expect(stored.rows).toHaveLength(1);
+  const facts = stored.rows[0]!;
+  const contentSha256 = siteExtraContentSha256V1({ jobId: facts.job_id, description: facts.description, note: facts.capture_text, photoSha256: facts.evidence_hash });
+  const rebuilt = residentConfirmationDocumentV1({ tenantId: facts.tenant_id, jobId: facts.job_id, confirmationId: facts.confirmation_id, contentSha256 });
+  const rebuiltBytes = Buffer.from(rebuilt, "utf8");
+  const rebuiltSha256 = createHash("sha256").update(rebuiltBytes).digest("hex");
+  // Contract L6: bytes are reconstructed, not persisted; the independent SQL reconstruction uses the persisted confirmation event.
+  expect(contentSha256).toBe(facts.recorded_content_sha256);
+  expect(rebuiltBytes).toEqual(facts.recorded_document_bytes);
+  expect(rebuiltSha256).toBe(facts.document_sha256);
+  expect(rebuiltSha256).toBe(facts.recorded_document_sha256);
+  expect(String(rebuiltBytes.byteLength)).toBe(facts.byte_length);
  });
  it("[E12] a hash shown for different content is CONFIRMATION_MISMATCH each time; nothing written, no evidence row either, one refusal event", async () => {
   const f = await siteFixture(c), p = await photo(c, where(f)), other = await photo(c, where(f)), a = f.members.supervisor.member;

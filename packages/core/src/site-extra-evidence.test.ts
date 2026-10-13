@@ -21,11 +21,17 @@ const both = { ...valid, photoEvidenceId: "00000000-0000-4000-8000-000000000002"
 
 describe("site-extra-content.v1", () => {
  it.each(fixed)("[E1] fixed input: $name", ({ input, expected }) => { expect(siteExtraContentSha256V1(input)).toBe(expected); });
- it("[E1] changing any ONE of job, description, note or photo changes the hash", () => {
+ describe("[E1] changing one stored fact changes the hash", () => {
   const base = fixed[2].input, digest = siteExtraContentSha256V1(base);
   const changed = [{ ...base, jobId: "11111111-1111-4111-8111-111111111112" }, { ...base, description: `${base.description}!` }, { ...base, note: `${base.note}!` }, { ...base, photoSha256: "ac".repeat(32) }, { ...base, photoSha256: null }];
-  for (const input of changed) expect(siteExtraContentSha256V1(input)).not.toBe(digest);
-  expect(new Set(changed.map(siteExtraContentSha256V1)).size).toBe(changed.length);
+  it("[E1] changing only the stored job changes the hash", () => { expect(siteExtraContentSha256V1(changed[0]!)).not.toBe(digest); });
+  it("[E1] changing only the stored description changes the hash", () => { expect(siteExtraContentSha256V1(changed[1]!)).not.toBe(digest); });
+  it("[E1] changing only the stored note changes the hash", () => { expect(siteExtraContentSha256V1(changed[2]!)).not.toBe(digest); });
+  it("[E1] changing only the stored photo changes the hash", () => {
+   expect(siteExtraContentSha256V1(changed[3]!)).not.toBe(digest);
+   expect(siteExtraContentSha256V1(changed[4]!)).not.toBe(digest);
+  });
+  it("[E1] all five single-fact mutations have distinct hashes", () => { expect(new Set(changed.map(siteExtraContentSha256V1)).size).toBe(changed.length); });
  });
  it("[E1] the version string is part of the hashed input", () => {
   // The framing is the version line + LF, so a different version line cannot give the same value as v1.
