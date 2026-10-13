@@ -969,3 +969,9 @@ trigger rejects UPDATE and DELETE.
 
 Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
 `packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
+
+## 0143 — ENT-10e owner emergency windows
+
+Replaces the held rule with the single company-owner rule, adds immutable tenant-qualified emergency windows, derives effective SSO requirements from the database clock in the six existing gates/view, and adds the administrator detail projection. The owner command creates and consumes its approval in one transaction. No existing column, command/append primitive, 0111 or 0120 object changes. Only identity SELECT on the window and EXECUTE on the checked detail routine are granted; the state routine is private. Synthetic database name remains required.
+
+Forward fix only: never remove consumed approvals/windows or rewrite history. Deploy repository/service/transport v2 together after 0143; the previous v1 emergency requests are refused. Existing administrative switch, state and ordinary sign-in contracts remain compatible. No worker or expiry migration runs when a window closes. Upgrade and rolled-back controls: sso-emergency-owner-upgrade.integration.test.ts [U1], NOT RUN in builder sandbox.

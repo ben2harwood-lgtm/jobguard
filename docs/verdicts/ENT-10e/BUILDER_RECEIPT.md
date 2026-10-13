@@ -1,3 +1,140 @@
+Built by Codex (actual builder); dispatched 13 Oct 2026.
+
+# ENT-10e continuation r3 — builder receipt
+
+Builder receipt only — not independently verified, not accepted.
+
+This section supersedes the STOP status of the historical rounds below. The r3 coordinator ruling authorized all named setup re-points and the exact equality enrichment at concurrency line 152. No assertion STOP remains. The working tree contains migration 0143, code, strict schemas, both transports, new tests, contracts and evidence. **OpenAPI regeneration is the outstanding build item:** the repository generator was refused by the sandbox's IPC socket restriction. The checked-in OpenAPI file was not rewritten through another route. PostgreSQL/browser execution and both RED verdicts remain pending; this is not a completed technical acceptance.
+
+The requested Claude Sonnet attribution would name a different builder. Actual attribution is Codex; no Claude review or co-author contribution is claimed. No agent was spawned and no builder accepted its own work.
+
+## Head, catch-up and scope
+
+Initial and final existing HEAD: `a390b739095a4250c8f36dacb74ef3e0bfaaa672`, branch `codex/sandbox/ent-10e`, PR #180 retained. Initial tree was clean. Initial local origin/main: `6659fb58791ec22588948f005b2bd4f6b299fa48`; divergence 9 branch / 17 main commits. Legacy read-only merge-tree inspection showed no actual initial merge conflict. Per r3 the dispatcher does the catch-up; this builder built on the current head and performed no git write. The local origin/main moved externally during work to `e4cb8437d044746300c377647f6061d06cd960cc` (divergence then 9 / 39). No fetch or merge by this builder. The receipt binds to the reviewable uncommitted working tree; the dispatcher must bind subsequent independent verdicts to its exact resulting commit and catch-up.
+
+ENT-10d draft reference was `baf5cdae62118556474d099ce993a32a6f85bcc0`; it was already merged before this issued branch. Migration 0129 on this head is byte-identical, SHA-256 `4bbeb8d9e88a8f65dc4c47ac369717b95c62e68b113793f5a0c0ad62a7446c50`. The issued lane line was already present from the original round, after ent-10d and before ent-2; it was not widened or rewritten in r3. BUILD_PLAN.md/AGENTS.md untouched. All working-tree paths are within that lane; file/stat/hash evidence is appended below and in R3_UNCHANGED_SHA256.txt.
+
+The coordinator commits remain applied:
+
+- `e77ef5c8ee9ab26c47e0558308a7791637cfa07a`: five held-state retirements, 35 removed lines, two files.
+- `8ad002aa4e597f86ea506e4851db431061406ab7`: expired approval re-pointed to complete expired window and fresh owner use; all its assertions retained.
+- `a942cdc0cfa9cc85bc5b817e18bbdb6382600b7a`: existing rows matched by primary key, exactly one added approval/use/window; those checks retained.
+
+No further check was retired. R3_ASSERTION_TABLES.md contains one row for every individual pre-existing `expect` (100 across the two database and two unit files), and one before/after row for every touched line in the two emergency database files, including additions. Statuses are KEPT / STRENGTHENED / RE-POINTED only. In particular, original integration line 168 remains `expect(result.used).toBe(true);` against a valid v2 owner use. Original concurrency line 152 retains `toEqual`, all four original fields, and gains eventId/windowMinutes/closesAt, each compared to the stored window selected by the winning **command id**. No result projection or partial matcher substitutes for exact equality. The v1 schema remains exported and byte-identical; U4 E9 and D2 E9, plus D4 T2 direct SQL input checks, refuse the retired shape.
+
+## Five coordinator retirements and their replacements
+
+| Coordinator-retired check | Replacement test id and file:line (full titles in acceptance map) | Proof / execution |
+| --- | --- | --- |
+| S10a, original integration 90–103 | E9: packages/db/test/sso-emergency.integration.test.ts:290; E1: packages/db/test/sso-emergency.integration.test.ts:207; E2: packages/db/test/sso-emergency.integration.test.ts:234; E7: packages/db/test/sso-emergency.integration.test.ts:273 | Non-owners/outsiders still refused, v1 refused for shape, exactly one immutable rule. PostgreSQL NOT RUN; both reviewers pending. |
+| S10b, original integration 104–115 | E1: packages/db/test/sso-emergency.integration.test.ts:207; E2: packages/db/test/sso-emergency.integration.test.ts:234; E3: packages/db/test/sso-emergency.integration.test.ts:247; E4: packages/db/test/sso-emergency.integration.test.ts:256 | Admin/non-member refusals and successful owner uses recorded; failed audit rolls all effects back. PostgreSQL NOT RUN; both reviewers pending. |
+| S10c, original integration 116–121 | E7: packages/db/test/sso-emergency.integration.test.ts:273 | Single fixed rule, different insert/update/delete refused, no application approval writer. PostgreSQL NOT RUN; both reviewers pending. |
+| S10d, original integration 143–144 | E7: packages/db/test/sso-emergency.integration.test.ts:273 | Old held/rule assertions replaced; added approval/use zero after rollback at integration line 140. PostgreSQL NOT RUN; both reviewers pending. |
+| Concurrency original line 115 latch assertion | E6: packages/db/test/sso-emergency-concurrency.integration.test.ts:105; E7: packages/db/test/sso-emergency.integration.test.ts:273 | Two checked execution connections, two consumed real mailbox proofs, both command-id variants, five rounds, one new approval/use/window and strict audit/history assertions. PostgreSQL NOT RUN; both reviewers pending. |
+
+
+Both fresh reviewers (Opus and Sol) must confirm this mapping and every assertion/touched-line table row. Their execution evidence and verdicts are NOT supplied by the builder. A weakened row remains BLOCKING; none is claimed as authorized by this receipt.
+
+## Built definitions, implementation and acceptance
+
+The complete definitions are in docs/contracts/sso-required-v1.md, ENT-10e section. Every criterion E1–E9, T1–T8, L1–L7, K1 and U1 has a named test; R3_ACCEPTANCE_MAP.md lists current titles and file:line, with unit PASS and database NOT RUN distinguished. BUILT means authored, not independently verified or acceptance satisfied.
+
+| Definition | Implementation / named evidence | State |
+| --- | --- | --- |
+| Owner | Only the current_memberships role owner plus merged contractor_allowed organisation.manage; any current owner, no group mapping promotion. E1/E2/E7. | BUILT; database NOT RUN |
+| One-step approval | The owner's mailbox-proven command records named approval and consumes it in the same transaction. E3/E4. | BUILT; database NOT RUN |
+| Emergency window | One immutable exact-duration row per use, tenant-qualified keys/references and unique command id. T2/T5/K1. | BUILT; database NOT RUN |
+| Effective required state | One private clock-based state routine, six existing gate/view reads replaced, missing window fails closed. T3/T4/T6. | BUILT; database NOT RUN |
+| Automatic switch-back | No clock process, new row or expiry audit; deadline governs each check. T4/T7. | BUILT; database NOT RUN |
+| Sessions | Ordinary sessions retain lifetime/other companies and lose this company at the first closed-window check. T4/T8. | BUILT; database NOT RUN |
+| People joining during a window | Invitations work while open; strict ON can refuse new unlinked member, automatic close cannot. T3/T7. | BUILT; database NOT RUN |
+| Not yet linked | Same guard population, never_linked/earlier-membership distinction, own addresses and separate pending invitations, 200 row cap/order. L1/L2/L4/L5. | BUILT; database NOT RUN |
+| Replay | Latest mailbox code, one consumed approval and forever company-unique commandId. E5/E6. | BUILT; unit PASS; database NOT RUN |
+
+Default 60 minutes; allowed 15 to 240; chosen by the order drafter and confirmed by the integrator's answer to Q3. Unset or empty setting defaults to 60; invalid settings refuse rather than clamp/round/default. Only the service-composition line reads JOBGUARD_SSO_EMERGENCY_WINDOW_MINUTES; its required function import is the only companion import edit. No request setting key is accepted. An absent fifth service argument or invalid configuration reaches SQL as null. The routine independently checks JSON numeric integer 15–240 and the table checks bounds and exact deadline.
+
+Fixed rule row: `14300000-0000-4000-8000-000000000001`, `company-owner-only.v1`, `{"approver":"company_owner"}`. Its id/version/definition CHECK permits only that row; the merged immutable trigger prevents update/delete. No new rule privilege. Existing approval SELECT for the restricted identity role remains as established by 0129; approval writes remain denied to application roles. E7 tests write denial rather than claiming the unchanged existing SELECT grant disappeared.
+
+New objects: identity.sso_emergency_window (migration owned, FORCE RLS, immutable), identity.sso_required_state(uuid) (private SECURITY DEFINER, search_path pg_catalog), identity.sso_required_detail(character,uuid) (checked administrator SECURITY DEFINER, same search_path). Seven CREATE OR REPLACE routines keep their signatures/owners/ACL: sso_session_memberships, sso_code_signin_allowed, sso_invitation_accept_allowed, sso_invite_member, sso_required_refusal_target, sso_required_view, sso_emergency_use. **No object from 0111 or 0120 altered or restated. 0129 changed only as the order names.** Its file remains unchanged. sso_required_command and sso_required_append are not replaced. Six gate/view bodies were compared to 0129 and differ only in the single read, documented before/after in R3_GATE_READS.md; aggregate reads fail closed while preserving the original typed view record and other statements.
+
+The seventh replacement accepts only strict v2 SQL fields, derives actor/role from the merged active membership routine, retains the company lock and permission check, checks owner/rule/minutes/replay in order, records approval with SHA-256 of UTF-8 reason bytes and one clock time, appends OFF through the unchanged private helper, then inserts use/window/log. The repository's unchanged audit append shares that transaction. New causes EMERGENCY_NOT_OWNER / EMERGENCY_WINDOW_INVALID / EMERGENCY_COMMAND_REPLAYED remain server-only. The existing public code/status list is unchanged. All emergency refusals are code-only 403 and issue no session; successful v2 response returns requiredAgainAt and configured minutes.
+
+The new detail projection is parsed through strict ssoRequiredDetailV1 and is accepted per verified context call, never stored. Nest GET /auth/sso-required/detail and thin Next GET /api/auth/sso-required/detail are no-store. The strict ON refusal enriches its one 409 with this company's unlinked object only after rollback and the existing refusal audit; it rechecks the same credentials/current authority and fails to code-only if the read fails, with no second refusal audit. Every other body stays code-only. C1/C2 source slice is built; checked-in generated OpenAPI remains HELD on the generator permission refusal. No screens or browser specification added (C7 not claimed).
+
+### Every new GRANT, standard F
+
+- `GRANT SELECT ON identity.sso_emergency_window TO jobguard_identity;`
+- `GRANT EXECUTE ON FUNCTION identity.sso_required_detail(character,uuid) TO jobguard_identity;`
+
+Exactly two new grants. No INSERT/UPDATE/DELETE grant to jobguard_runtime or any application login on authorization, membership, receipt, audit or money tables. Only the checked owner routine writes approval/window facts; it has its own authority check. PUBLIC/jobguard_runtime/jobguard_infrastructure get nothing; private state gets no application EXECUTE. No replaced routine appears in a new GRANT/REVOKE. Standard F job-route registry/own-live/replay requirements are inapplicable to these identity/control-plane routes: no contractor job write route is added; watchdog registries/harness/replay suite remain untouched.
+
+### E8 history and U1 upgrade
+
+E8/S11 compare nonempty journal, journal_line, evidence_object, earlier audit, sso_connection, verified_domain, idp_group_role_mapping, sso_subject, sso_session_binding, sso_grant, session, app.membership and app.role_grant. New E8 uses canonical PostgreSQL row text, preserving microseconds; inherited S11 exact comparisons and true successful-use assertion remain. E6 keeps every earlier authority/history row by primary key and requires exactly one new approval/use/window for each race, with both real backend ids observed waiting on the third connection's lock. Both same/different command ids run five rounds; two actual latest mailbox challenges are consumed before competing checked execution calls. No latch lift or fixture rule seed remains.
+
+U1 installs every migration before 0143, creates ON and no-row companies through the as-built administrative/SAML services and records a pre-N legacy v1 refused use through the as-built routine plus real repository audit primitive. At least one row in each compared table is required: identity.sso_required_event, sso_emergency_event, sso_subject, session, membership_locator, app.membership. Snapshots capture actual primary keys, each pre-existing name and full format_type, and row_to_json(t)::text over exactly named pre-existing columns. It applies N alone, compares rows/functions (all other pre-existing routines unchanged at this step; seven retain signature/owner/prosecdef/config/ACL), proves fixed rule/constraint and old effective states, then applies later migrations successfully twice and compares only captured identities. Rolled-back controls use the same comparator: one microsecond and retype FAIL; nullable later column and replaced function PASS; later inserted row PASS. A stored row missing or changed fails. Approval/use/window cannot have pre-N rows under the held rule/FK and are not compared. Upgrade proof is authored and compiled, NOT RUN against PostgreSQL.
+
+Migration registered in numeric order, MIGRATIONS.md appended. Forward fix only; no history deletion/rollback of consumed windows. Deploy v2 service/repository/transport with 0143; v1 emergency requests are refused, the admin command/state contract stays compatible. No external action, charge, vendor dependency or live data route is added.
+
+## Executed checks and limitations
+
+Full command/result journal: R3_COMMANDS.md. Tests were written before the implementation they cover. The first unit attempt failed to resolve unbuilt @jobguard/db (two failed suites, zero tests collected); no pre-implementation business-assertion failure is claimed. The initial pnpm 11 launcher was stopped when it stalled; pinned 10.28.1 was found already cached and used without changing pins/lockfile. No intentional package download/install command was issued. One pnpm 11 diagnostic spawned its own internal install check, which engines refused before a build; that result is recorded rather than hidden.
+
+Observed passing checks:
+
+- 47 unit tests, four permitted files: new owner/unlinked files, emergency's v2 input-only edit and disclosure's v2 SQL shape/config edit. All other pre-existing expectations unchanged, mapped individually.
+- API dependency build: --force, 6 successful tasks, 0 cached.
+- Full typecheck: pnpm exec turbo run typecheck --force, 7 successful tasks, 0 cached.
+- Package lint: pnpm exec turbo run lint --force, 7 successful tasks, 0 cached.
+- Full build: pnpm build --concurrency=2 --force, 7 successful tasks, 0 cached, including Next detail route. Existing CSS/root-inference and shared-cache IO warnings recorded, not a cache-hit green.
+- Own five database files compile with temporary targeted tsc configuration (two runs after test repairs); this does not prove PostgreSQL behavior.
+- Origin/main lane check passed with its actual later ref. Mandated 4db7381 root lint/lint:lanes **failed**, because their comparison includes 42 inherited merged files outside the lane. Core purity passed, 151 TS files. No unrelated file changed and no lane widened. Root lint is not reported as passed.
+- Repeated whitespace/source-preservation/hash checks pass. No git write, independent review or acceptance.
+
+### STOP item and NOT RUN list
+
+**OpenAPI generation:** `pnpm --filter @jobguard/api openapi:generate`, exit 1, `listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/54459.pipe`, raised by tsx's IPC listener. Stopped this item; no generator fallback/manual rewrite. apps/api/openapi.json remains byte-identical to HEAD and must be regenerated by the dispatcher before technical acceptance. `pnpm openapi:check`: NOT RUN after the same runner's permission refusal. The incidental `ps -axo pid,ppid,etime,command` inspection was refused (`zsh:1: operation not permitted: ps`) and was not retried. No automatic approval review rejection occurred.
+
+All the following files are NOT RUN (sandbox cannot start PostgreSQL / a browser); no skipped or loosened assertion is used to represent them as passing. Dispatcher/CI should run them through heavy-slot, maxWorkers=2, at most three files, one run at a time:
+
+```sh
+~/.local/bin/heavy-slot ent-10e-db1 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/sso-emergency.integration.test.ts test/sso-emergency-concurrency.integration.test.ts test/sso-emergency-window.integration.test.ts
+~/.local/bin/heavy-slot ent-10e-db2 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/sso-required-unlinked.integration.test.ts test/sso-emergency-owner-upgrade.integration.test.ts test/sso-required.integration.test.ts
+~/.local/bin/heavy-slot ent-10e-db3 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/enterprise-identity.integration.test.ts test/identity.integration.test.ts
+~/.local/bin/heavy-slot ent-10e-unedited pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/auth/sso/sso-required.test.ts src/auth/sso/sso-required-paths.test.ts src/auth/context-boundary.test.ts
+~/.local/bin/heavy-slot ent-10e-browser pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop ENT-10d.spec.ts
+```
+
+The unedited unit regression trio is NOT RUN by the builder under the own-file-only instruction (not claimed unable to execute Vitest). Whole-package/repository suites, test:db/test:migrations/test:regression, CI, live model/eval/native/device/restore/deployment/real IdP tests: NOT RUN. No AI behavior change, native subsystem or live provider in this lane. Synthetic-only, D04/G5, both independent RED verdicts, row-by-row confirmation and separate actor acceptance remain gates.
+
+## Stated limits and HELD / LATER
+
+A request past its check before closes_at may finish after it; first check starting at/after closing time requires SSO. No row or audit event is written at expiry. The route signs nobody in and does not repair the identity provider; a new code/command after closure may open a new recorded use. Joiners and re-invited people remain unlinked until linked, and auto-close never waits for them. RLS/context boundary retains its stated limit against compromised privileged/identity credentials; hash chaining is not independent proof of underlying facts.
+
+- Second-person post-use sign-off: HELD; not authorized by naming the company owner as approver.
+- JobGuard support approval: ruled out by Ben, not built.
+- Written switch-back event or a credential clock process: not built by Q4; clock checks supply effective state.
+- FIX-LATER: all parked screens (owner form, member/window display and the stale identity-page held-rule text); no page/browser spec edited.
+- Per-company limits and two-step request/approve: not in this order.
+- Re-invited-member re-link path (ENT-10a LATER 13), domain capture and OFF session-scoped grants: LATER.
+- OIDC, SCIM/native paths for this route, D04/G5 founder evidence, real identity provider/person/data: HELD or later as in ENT-10a/10d, not built or enabled.
+
+## Self-review (builder source inspection only)
+
+Re-read the diff/order and named tests; compared all six gate/view bodies against 0129 with only their ordered reads transformed; checked command/append and 0111/0120 untouched, explicit grant list, fixed immutable rule, owner plus permission before successful append, both minute bounds, one clock time/no caller clock, canonical UTC deadlines, private state/RLS controls and correct tenant-qualified keys. Verified v1 input/schema distinction and exact old expectation preservation. The stored race window lookup was strengthened to use the winning command id, independent of the returned event id. Added invalid/scalar direct SQL boundary checks before separating the scalar refusal branch. Repaired test fixtures so linkable people have the merged contractor-member active prerequisite, reduced repeated role setup, held one client for state-context reads, and kept direct invalid-window refusal log/audit together. No clock override, latch seed, new dependency, fingerprinted column, broad privilege, context construction/cast/storage or commercial action added.
+
+New database tests remain unexecuted and may reveal SQL/provider fixture defects in CI; this is a material limitation, not a database pass. No old assertion changed except the explicitly approved equality gaining three persisted checks; no expected refusal/count/cause/true was flipped, removed or loosened. No standing file hash/whole-file pin test was added. Protected source/test hashes are receipt evidence only. OpenAPI generator permission STOP was not worked around. Main catch-up and exact-commit independent checks remain the dispatcher's/reviewers' work.
+
+Intended commit message is overwritten at `/private/tmp/jg-msg-ent-10e.txt`, as expressly authorized in r3. No commit/push/merge/PR action by this builder. Final existing HEAD remains a390b739095a4250c8f36dacb74ef3e0bfaaa672.
+
+Builder receipt only — not independently verified, not accepted.
+
+## Artifact preservation and final scope
+
+Own generated dist/Next/TypeScript/Turbo outputs (15 paths, created in this r3 run as confirmed by directory birth times) were moved intact to `/private/tmp/jg-ent10e-r3-build-artifacts-ukyu_jqb` after checks, with no deletion. No build output or test-results addition remains in the working tree. The pre-existing `.pnpm-store/v11` existed at 13:36 before r3; it is retained under the prohibition on deleting existing files. No new store directory was intentionally created; the pnpm 11 launcher diagnosis may have used that existing index. This exception is reported rather than erasing a pre-existing uncommitted directory. Protected SHA-256 inventory covers 91 byte-identical files including the scanner, all its construction/pinned paths, hard-limit sources, both sign-in pages, merged identity/SSO regressions, manifests/lockfile and config. R3_FINAL_SCOPE.md records git diff --stat, untracked additions, final hashes and HEAD. OpenAPI remains unchanged on the stated STOP.
+
+## Historical receipts (previous rounds; superseded by r3 above)
+
 Built by Codex; dispatched 13 Oct 2026.
 
 ## Continuation r2 — STOP, 13 October 2026
