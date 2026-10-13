@@ -372,25 +372,58 @@ describe("ENT-3b the audit event is in the same transaction", () => {
   const fragments = ["INSERT INTO app.command_receipt", kind === "start" ? "app.ent3b_start_visit" : "app.ent3b_complete_visit", "INSERT INTO app.audit_event", "COMMIT"];
   for (const fragment of fragments) {
    const before = await snapshot(c, f.p.tenantId), head = await auditHead(c, f.p.tenantId);
-   const connect = c.runtime.connect.bind(c.runtime), spy = vi.spyOn(c.runtime, "connect");
+   const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
+   const connect = c.runtime.connect.bind(c.runtime), wrapped = new WeakSet<object>(), spy = vi.spyOn(c.runtime, "connect");
+   const failureText = "ENT-3b injected PostgreSQL failure";
+   let reached = 0;
    spy.mockImplementation((async () => {
-    const client = await connect(), original = client.query.bind(client), querySpy = vi.spyOn(client, "query");
-    querySpy.mockImplementation((async (sql: any, params?: any) => { const value = await original(sql, params); if (String(sql).includes(fragment) && fragment !== "COMMIT") throw new Error("injected failure"); return value; }) as any);
-    if (fragment === "COMMIT") querySpy.mockImplementation((async (sql: any, params?: any) => { if (sql === "COMMIT") { await original("SET CONSTRAINTS ALL IMMEDIATE"); throw new Error("injected failure"); } return original(sql, params); }) as any);
+    const client = await connect();
+    // The pre-check releases its client before the command borrows it again.
+    // Capture the real query once, following the merged ENT-3a/ENT-4c pattern.
+    if (wrapped.has(client)) return client;
+    wrapped.add(client);
+    const original = client.query.bind(client);
+    let commandTransaction = false;
+    vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
+     if (sql === "BEGIN") commandTransaction = false;
+     if (String(sql).includes("require_watchdog_live")) commandTransaction = true;
+     if (String(sql).includes(fragment) && (fragment !== "COMMIT" || commandTransaction)) {
+      // Exercise the deferred checks, but never execute COMMIT before failing.
+      if (fragment === "COMMIT") await original("SET CONSTRAINTS ALL IMMEDIATE");
+      reached++;
+      throw Object.assign(new Error(failureText), { code: "23514", detail: failureText, table: "site_visit" });
+     }
+     return original(sql, params);
+    }) as any);
     return client;
    }) as any);
-   try { await expect(kind === "start" ? start(f, a) : complete(f, a, open!.visitId, "yes")).rejects.toMatchObject({ code: "SITE_VISIT_UNAVAILABLE", message: "SITE_VISIT_UNAVAILABLE" }); } finally { vi.restoreAllMocks(); }
+   try {
+    const pending = kind === "start" ? repo.startVisit(f.ctx, a.member, raw) : repo.completeVisit(f.ctx, a.member, raw);
+    await expect(pending).rejects.toMatchObject({ code: "SITE_VISIT_UNAVAILABLE", message: "SITE_VISIT_UNAVAILABLE" });
+    expect(reached, `${kind}: ${fragment} must be reached`).toBe(1);
+    const error = await errorOf(() => pending);
+    expect(error).toBeInstanceOf(SiteVisitError);
+    expect(plain(error)).toEqual({ name: "SiteVisitError", message: "SITE_VISIT_UNAVAILABLE", code: "SITE_VISIT_UNAVAILABLE" });
+    expect(JSON.stringify(error)).not.toContain(failureText);
+    expect(error).not.toHaveProperty("detail"); expect(error).not.toHaveProperty("table");
+   } finally { vi.restoreAllMocks(); }
    expect(await snapshot(c, f.p.tenantId), fragment).toEqual(before); expect(await auditHead(c, f.p.tenantId), fragment).toBe(head);
+   expect((await c.admin.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows, fragment).toEqual([]);
+   expect((await snapshot(c, f.p.tenantId)).answers, fragment).toEqual([]);
+   if (kind === "start") expect((await snapshot(c, f.p.tenantId)).visits, fragment).toEqual([]);
+   else expect((await visitRow(open!.visitId, f.p.tenantId)).completed, fragment).toBeNull();
   }
  });
  it("[B12] the visit update, the answer row and the completion audit event carry the same transaction id", async () => {
   const f = await visitFixture(c), a = f.members.operative, open = await start(f, a);
+  // Read the start's tuple version before completion updates the visit's xmin.
+  const started = (await c.admin.query("SELECT v.xmin::text visit_x, e.xmin::text event_x FROM app.site_visit v JOIN app.audit_event e ON(e.tenant_id,e.id)=(v.tenant_id,v.id) WHERE v.tenant_id=$1 AND v.id=$2 AND e.event_type='contractor.visit.started'", [f.p.tenantId, open.visitId])).rows;
+  expect(started).toHaveLength(1);
+  expect(started[0].visit_x).toBe(started[0].event_x);
   await complete(f, a, open.visitId, "yes");
   const rows = (await c.admin.query(`SELECT v.xmin::text visit_x, a.xmin::text answer_x, e.xmin::text event_x FROM app.site_visit v JOIN app.closeout_answer a ON(a.tenant_id,a.site_visit_id)=(v.tenant_id,v.id)
    JOIN app.audit_event e ON(e.tenant_id,e.id)=(a.tenant_id,a.id) WHERE v.tenant_id=$1 AND v.id=$2`, [f.p.tenantId, open.visitId])).rows;
   expect(rows).toHaveLength(1); expect(rows[0].visit_x).toBe(rows[0].answer_x); expect(rows[0].answer_x).toBe(rows[0].event_x);
-  const started = (await c.admin.query("SELECT v.xmin::text visit_x, e.xmin::text event_x FROM app.site_visit v JOIN app.audit_event e ON(e.tenant_id,e.id)=(v.tenant_id,v.id) WHERE v.tenant_id=$1 AND v.id=$2 AND e.event_type='contractor.visit.started'", [f.p.tenantId, open.visitId])).rows;
-  expect(started).toHaveLength(1);
  });
  it("[B12] an answer row inserted by the owner with no matching audit event fails at commit with CLOSEOUT_AUDIT_REQUIRED, also when another company has an event with the same id", async () => {
   const f = await visitFixture(c), other = await visitFixture(c), a = f.members.operative, visit = await ownerVisit(c, f, a.member.membershipId);
@@ -450,8 +483,27 @@ describe("ENT-3b the refusal record", () => {
  });
  it("[B13] with the audit append made to fail the caller still receives the same typed refusal", async () => {
   const f = await visitFixture(c), raw = startInput(f), connect = c.runtime.connect.bind(c.runtime), spy = vi.spyOn(c.runtime, "connect");
-  spy.mockImplementation((async () => { const client = await connect(), original = client.query.bind(client); vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => { if (String(sql).includes("INSERT INTO app.audit_event")) throw new Error("injected failure"); return original(sql, params); }) as any); return client; }) as any);
-  try { expect(plain(await errorOf(() => repo.startVisit(f.ctx, f.unassigned.member, raw)))).toEqual({ name: "SiteVisitError", message: "NOT_FOUND", code: "NOT_FOUND" }); } finally { vi.restoreAllMocks(); }
+  const wrapped = new WeakSet<object>(), before = await snapshot(c, f.p.tenantId), head = await auditHead(c, f.p.tenantId);
+  let reached = 0;
+  spy.mockImplementation((async () => {
+   const client = await connect();
+   if (wrapped.has(client)) return client;
+   wrapped.add(client);
+   const original = client.query.bind(client);
+   vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
+    if (String(sql).includes("INSERT INTO app.audit_event")) { reached++; throw new Error("injected failure"); }
+    return original(sql, params);
+   }) as any);
+   return client;
+  }) as any);
+  try {
+   const error = await errorOf(() => repo.startVisit(f.ctx, f.unassigned.member, raw));
+   expect(plain(error)).toEqual({ name: "SiteVisitError", message: "NOT_FOUND", code: "NOT_FOUND" });
+   expect(error).toBeInstanceOf(SiteVisitError);
+   expect(JSON.stringify(error)).not.toContain("injected failure");
+  } finally { vi.restoreAllMocks(); }
+  expect(reached, "the refusal audit append must be reached").toBe(1);
+  expect(await snapshot(c, f.p.tenantId)).toEqual(before); expect(await auditHead(c, f.p.tenantId)).toBe(head);
   expect((await refusalEvents(c, f.p.tenantId)).filter(e => e.subject_ref === raw.commandId)).toEqual([]);
   expect((await errorOf(() => repo.startVisit(f.ctx, f.unassigned.member, raw))).code).toBe("NOT_FOUND");
   expect((await refusalEvents(c, f.p.tenantId)).filter(e => e.subject_ref === raw.commandId)).toHaveLength(1);
