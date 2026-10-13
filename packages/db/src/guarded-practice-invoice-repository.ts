@@ -11,13 +11,15 @@ const invoiceRefusals = new Set<FinalAccountLockErrorCode>([
  "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "INVOICE_SOURCE_CORRECTION_REQUIRED",
 ]);
 /** Keeps merged projections and carries the existing persisted-session digest into SQL. */
-export class GuardedPracticeInvoiceRepository extends PracticeInvoiceRepository {
- constructor(pool: Pool, sessionId?: string) {
-  super(sessionId ? practiceMaterialPool(pool,createHash("sha256").update(sessionId).digest("hex")) : pool);
+export class GuardedPracticeInvoiceRepository {
+ constructor(private readonly pool: Pool, private readonly sessionId?: string) {}
+ private scopedPool(): Pool {
+  return this.sessionId ? practiceMaterialPool(this.pool,createHash("sha256").update(this.sessionId).digest("hex")) : this.pool;
  }
- override async issue(context: Parameters<PracticeInvoiceRepository["issue"]>[0], input: Parameters<PracticeInvoiceRepository["issue"]>[1]) {
+ private projection(): PracticeInvoiceRepository { return new PracticeInvoiceRepository(this.scopedPool()); }
+ async issue(context: Parameters<PracticeInvoiceRepository["issue"]>[0], input: Parameters<PracticeInvoiceRepository["issue"]>[1]) {
   try {
-   return await withTenant(this.pool,context,async db=>{
+   return await withTenant(this.scopedPool(),context,async db=>{
     const existing=(await db.$client.query("SELECT 1 FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3",[context.tenantId,input.jobId,input.finalAccountRevisionId])).rowCount;
     const result=(await db.$client.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)",[context.tenantId,input.jobId,input.finalAccountRevisionId,input.actorMembershipId,input.commandId,input.recipient,input.issuedOn])).rows[0];
     // The routine holds the job lock. Replays see the first committed audit and append nothing.
@@ -33,4 +35,12 @@ export class GuardedPracticeInvoiceRepository extends PracticeInvoiceRepository 
    throw error;
   }
  }
+ list(...args: Parameters<PracticeInvoiceRepository["list"]>) { return this.projection().list(...args); }
+ artifact(...args: Parameters<PracticeInvoiceRepository["artifact"]>) { return this.projection().artifact(...args); }
+ creditView(...args: Parameters<PracticeInvoiceRepository["creditView"]>) { return this.projection().creditView(...args); }
+ previewCredit(...args: Parameters<PracticeInvoiceRepository["previewCredit"]>) { return this.projection().previewCredit(...args); }
+ issueCredit(...args: Parameters<PracticeInvoiceRepository["issueCredit"]>) { return this.projection().issueCredit(...args); }
+ receiptView(...args: Parameters<PracticeInvoiceRepository["receiptView"]>) { return this.projection().receiptView(...args); }
+ recordReceipt(...args: Parameters<PracticeInvoiceRepository["recordReceipt"]>) { return this.projection().recordReceipt(...args); }
+ reverseReceipt(...args: Parameters<PracticeInvoiceRepository["reverseReceipt"]>) { return this.projection().reverseReceipt(...args); }
 }

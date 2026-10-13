@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createLockFixture, closeLockFixture, seedAccount, prepareLock, asFixtureTenant } from "./sv5pre-fixtures.js";
+import { createLockFixture, closeLockFixture, seedAccount, prepareLock, asFixtureTenant, publishFixtureCompletion } from "./sv5pre-fixtures.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { FinalCheckCompletionRepository } from "../src/final-check-completion-repository.js";
+import { FinalCheckCompletionRepository } from "../src/shadow-detection-repository.js";
 
 describe("SV5PRE authoritative completion", () => {
  let f: Awaited<ReturnType<typeof createLockFixture>>;
@@ -30,6 +30,21 @@ describe("SV5PRE authoritative completion", () => {
   await repo.bindEmptyRun(a.context,{version:"final-check-empty-run.v1",jobId:a.jobId,manifestId:manifest.id,runId,executionId:randomUUID()});
   await repo.publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId,checkId}); await repo.publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId,checkId});
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
+ });
+ it("S3 non-empty fixture commits inventory before recording both stages and completion", async () => {
+  const a=await seedAccount(f.admin),uploadId=randomUUID(),evidenceId=randomUUID();
+  await asFixtureTenant(f.admin,a.tenantId,async db=>{
+   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]);
+   await db.query("UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='immutable.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]);
+   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) SELECT tenant_id,job_id,$3,id,scope_item_id,'original','photo',object_key,object_version_id,expected_sha256,1,'image/png',retention_class,server_received_at,server_verified_at FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId,evidenceId]);
+  });
+  const lock=await prepareLock(f,a);await lock.lock(a.context,a.input);
+  const checkId=await publishFixtureCompletion(f.shadow,f.admin,a.tenantId,a.jobId);
+  const source=(await f.admin.query("SELECT id,manifest_id FROM app.final_check_manifest_source WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows;
+  expect(source).toHaveLength(1);
+  const attempts=(await f.admin.query("SELECT source_id,manifest_id,stage,outcome,evidence_id FROM app.final_check_source_attempt WHERE tenant_id=$1 AND job_id=$2 ORDER BY stage",[a.tenantId,a.jobId])).rows;
+  expect(attempts).toEqual(["detection","reconciliation"].map(stage=>({source_id:source[0].id,manifest_id:source[0].manifest_id,stage,outcome:"succeeded",evidence_id:evidenceId})));
+  expect((await f.admin.query("SELECT check_id,manifest_id FROM app.final_check_completion WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{check_id:checkId,manifest_id:source[0].manifest_id}]);
  });
  async function sourceFixture(){
   const a=await seedAccount(f.admin),uploadId=randomUUID();

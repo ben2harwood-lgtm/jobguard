@@ -91,4 +91,5 @@ export * from "./scim-repository.js";
 export * from "./recovery-allocation-repository.js";
 
 export { GuardedPracticeInvoiceRepository } from "./guarded-practice-invoice-repository.js";
-export { FinalCheckCompletionRepository, FinalCheckPersistenceError } from "./final-check-completion-repository.js";
+export { FinalCheckPersistenceError } from "./final-check-completion-repository.js";
+export { FinalCheckCompletionRepository } from "./shadow-detection-repository.js";

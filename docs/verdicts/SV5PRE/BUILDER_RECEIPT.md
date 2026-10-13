@@ -1,4 +1,65 @@
-Built by Codex; repair r2 dispatched 13 Oct 2026. Codex was available; the dispatch addendum's requested Claude author line is factually inapplicable.
+Built by Codex; repair r3 dispatched 13 Oct 2026. Codex was available; the dispatch addendum's requested Claude author line is factually inapplicable.
+
+## Repair r3 — S1–S4 only (13 October 2026, dispatcher 4)
+
+Repair base and unchanged local HEAD: `2e981771936ad2bf86a7a58e6ba7527038b4de28` (r1 plus coordinator-approved amendments). Built by Codex; no independent review or acceptance is claimed. The r3 user order authorizes ONLY the four Sol findings below. This section supersedes r2's OPEN implementation findings, but does not close or amend any r2 STOP. No merged test, pinned list, migration, GRANT, release gate, UI, or provider integration changes in r3. No Git write commands were run. Dispatcher owns the final commit and CI.
+
+Authority read: `/Users/benharwood/.local/share/full-steam/jg-orders/SV5PRE-r2-rulings.txt`, `/Users/benharwood/.local/share/full-steam/jg-runs/sv5pre-solcheck-20261013T211754.md`, and the prerequisite packet under `/Users/benharwood/.local/share/full-steam/jg-runs/sv-5-prereq-patch/`. The cited report's verdict is REPAIR for bfae9df, not a verdict for r3. Rulings (a)–(c) and the standing rule are recorded in the r2 section below; r3 makes no further amendment to those merged tests.
+
+| Finding | Before | r3 change and proof |
+| --- | --- | --- |
+| S1 | Guarded invoice repository inherited from `PracticeInvoiceRepository`; unchanged registry scanner refused it | Explicit composition delegates all eight projection/credit/receipt methods. Guarded issue SQL, money projection, typed refusals and replay/audit behavior are preserved. `watchdog-registry.test.ts` unchanged. |
+| S2 | Completion methods wrote hidden run state from a module outside the pinned worker seam | All seven methods and their versioned schemas moved into the already-permitted `shadow-detection-repository.ts`. Original completion file contains only error constants/class and types. Barrel export resolves to that worker module; OWN integration import follows it. Structural capability discovery now classifies the completion class as worker-only and rejects its request-side use. No pinned catalogue edit. |
+| S3 | Manifest and sources were uncommitted while an independent admin connection read them | Inventory transaction now commits before that read. Restricted attempts, run binding and checked publication remain in their own transaction. OWN PostgreSQL regression `S3 non-empty fixture commits inventory before recording both stages and completion` asserts one source, exactly two successful attempts with that source/manifest/evidence identity, and the checked completion certificate. Added before implementation; NOT RUN here under the dispatcher environment restriction. |
+| S4 | Constructor called the scoped pool before asynchronous application access | Constructor retains only pool/session. Each method initializes the persisted-session scoped pool when invoked; the existing application access check still runs first. `practice-session.test.ts` unchanged. |
+
+The SV5PRE lane gains exactly `packages/db/src/shadow-detection-repository.ts` to implement S2 inside the existing permitted seam; no other lane is widened. It receives one import and appended completion implementation only. Python reconstruction verifies the original detector implementation byte-for-byte, and all completion methods are a byte-identical relocation. The three cited API test files, context boundary test, migration 0147, existing application access paths, uninstalled task executor, and all four r2 STOP files are byte-identical to repair HEAD. No new SQL privileges, operational alerts, or data migration. Direct implementation imports of the completion class must now use the worker seam; the inert barrel retains its named export.
+
+Final r3 verification: Node `v24.17.0`, installed pinned pnpm `10.28.1`, Vitest `4.1.11`. The global pnpm shim stalled before starting Vitest and was cancelled (exit 130); subsequent commands used the already-installed pinned corepack binary through `/private/tmp/sv5pre-independent/bin/pnpm`. No install command or package download was requested. Each pnpm command used `export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/sv5pre-independent/bin:$PATH"`. Runs are sequential, with at most three explicit test files and `--maxWorkers=2`; no build/test overlap. Memory probes before heavy checks passed (56–72% free); available disk stayed 50–51 GB (>45 GB). Turbo emitted shared-cache IO permission warnings while forced checks actually executed; no cache-hit result is used as evidence.
+
+| Executed r3 command | Exit | Result/log |
+| --- | ---: | --- |
+| Required API batch before implementation: `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/watchdog-registry.test.ts src/shadow-detection.worker.test.ts src/practice-session.test.ts` | 1 | 3 files, 266 passed / 11 failed; reproduces S1, S2 and all nine S4 failures. `/private/tmp/sv5pre-r3-first-api.log` |
+| Same batch after source repair but before rebuild | 1 | 2 structural files pass; 268 passed / 9 failed against the old compiled DB constructor. `/private/tmp/sv5pre-r3-api.log` (superseded by the final rebuilt run below) |
+| `pnpm exec turbo run typecheck --force --concurrency=2` | 0 | 7 successful packages, 0 cached. `/private/tmp/sv5pre-r3-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | 0 | Root purity/lane/money/commercial checks; 7 successful package checks, 0 cached. `/private/tmp/sv5pre-r3-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | sv5pre boundary passes including the one worker-module lane addition. `/private/tmp/sv5pre-r3-lanes.log` |
+| `node --input-type=module` TypeScript `transpileModule` check | 0 | Changed OWN PostgreSQL test syntax only; not semantic test typecheck or PostgreSQL execution. |
+| Python read-only HEAD reconstruction and hash inspection | 0 | 12 protected files unchanged; original detector and relocated methods byte-identical. `/private/tmp/sv5pre-r3-preservation.json` |
+| `git diff --check` | 0 | Clean |
+| `pnpm build --concurrency=2 --force` | 0 | 7 successful packages, 0 cached, including production Next build. Existing CSS/cache warnings only. `/private/tmp/sv5pre-r3-build.log` |
+| Required API batch after forced rebuild (same three explicit files) | 0 | 3 files, 277 passed, 0 failed/skipped. `/private/tmp/sv5pre-r3-api-rebuilt.log` |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/sv5pre-worker-registration.test.ts src/final-account-lock.application.test.ts` | 0 | 2 files, 20 passed, 0 failed/skipped. `/private/tmp/sv5pre-r3-api-own.log` |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/final-check-completion.test.ts` | 0 | 1 file, 11 passed, 0 failed/skipped. `/private/tmp/sv5pre-r3-core.log` |
+| `pnpm openapi:check` (delegates to API `tsx src/generate-openapi.ts --check`) | 1 | BLOCKED before generator execution: `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/31187.pipe`. Stopped this check; no workaround or escalation. `/private/tmp/sv5pre-r3-openapi.log` |
+
+Local lane lint resolved `origin/main` to `e4cb8437d044746300c377647f6061d06cd960cc`; no Git command updated that ref. Final executed unit coverage is 297 targeted API tests plus 11 OWN core tests (308 total, six files). PostgreSQL/migrations, durable worker integration, socket HTTP and browser journeys remain NOT RUN (sandbox cannot start PostgreSQL or bind localhost); GitHub CI after dispatcher push supplies that evidence. Real orchestration remains explicitly uninstalled; no synthetic fixture is described as a live integration.
+
+
+Files NOT RUN: `packages/db/test/sv5pre-completion.integration.test.ts` (includes new S3 regression), `sv5pre-completion-access.integration.test.ts`, `sv5pre-legacy-invoice.integration.test.ts`, `sv5pre-upgrade.integration.test.ts`, `final-account-lock-invoice.integration.test.ts`; `apps/api/src/sv5pre-worker-execution.integration.test.ts`; `apps/api/src/sv5pre-invoice.http.test.ts`; affected browser journeys. PostgreSQL, localhost and browser infrastructure are unavailable under the dispatcher's sandbox instruction. Root/package-wide suites were not launched: dispatcher limits execution to named batches of at most three files and two workers, and its CI supplies the complete DB/migration/browser suites. AI/model/schema content and matching policies are unchanged; no live-model evaluation is claimed.
+
+Other actual commands: read-only `pwd`, `git status --short`, `git rev-parse HEAD`, `git symbolic-ref --short HEAD`, `git diff --stat`, targeted `git diff -- <paths>`, `git diff --check`, Python `git show HEAD:<path>` reconstruction; `rg --files`, `rg -n`, `cat`, `sed -n`, `head`, `tail`, `nl -ba`, `ls -l` on the named packet/source/test/config/log files; `memory_pressure | tail -1`, `df -g /System/Volumes/Data`, `node --version`, pinned `pnpm --version` (10.28.1). Successful reads/probes returned 0; initial packet subpaths did not exist (cat exit 1) and absent Vitest/config/helper globs reported no matches. Diagnostic command `ps -ax -o pid,ppid,etime,command | rg 'pnpm|vitest' | head -20` reported `zsh:1: operation not permitted: ps`; stopped that diagnostic and did not retry process inspection. Python source/lane/test/contract/receipt/message edits returned 0. No install, Git write, external action, new approval or independent model verdict.
+
+No new merged-test STOP is required for S1–S4. Prior r2 STOP lines (practice facts/feed, SV-4 and shadow-isolation) remain untouched and held; r3 is not their authorization or acceptance. The local HEAD remains `2e981771936ad2bf86a7a58e6ba7527038b4de28`; all r3 work is uncommitted. The conventional commit subject/body is overwritten at `/private/tmp/jg-msg-sv5pre.txt`; dispatcher must bind later reviewer/CI evidence to its new commit.
+
+### r3 final byte/hash evidence
+
+Final read-only `git diff --stat` snapshot: `/private/tmp/sv5pre-r3-diffstat.txt` (captured before this final receipt pointer/author update). Only the nine files listed in that snapshot changed. Final preservation and `git diff --check` returned 0.
+
+Protected-file hashes and reconstruction: `/private/tmp/sv5pre-r3-preservation.json` (12 protected files unchanged; original detector, all completion methods and versioned schemas preserved byte-for-byte). No new GRANT and no migration edits.
+
+| r3 changed non-receipt file | SHA-256 |
+| --- | --- |
+| `config/agent-lane-assignments.json` | `72d13fdc4ab084d01c5f3a3c2abb3528eb9fa8dc2f44e6f5f53ea529b2f89ee7` |
+| `docs/contracts/sv5pre-completion-v1.md` | `17f5c4bdc329a5c251e1982cf0f5c667b5075fb2444a4c6fdbdb379f91aeda71` |
+| `packages/db/src/final-check-completion-repository.ts` | `3efbc5ad95268d64d8e658ef7bb7cd1b729a8d2834d695c09bee412e248a5850` |
+| `packages/db/src/guarded-practice-invoice-repository.ts` | `e5ebe5dfa4226a45410df8570fd627b2878791d488e351c8d0af6089d9308cfa` |
+| `packages/db/src/index.ts` | `cc986146fdd56afb6b722f75f17005a397878b45ca416c20c62f6fb7435b1b3a` |
+| `packages/db/src/shadow-detection-repository.ts` | `de907110911876ffcae6d7935de9251e612dffa34919c70f4aa4cc61fc093ab7` |
+| `packages/db/test/sv5pre-completion.integration.test.ts` | `0a7949feac1b4283770894b24f830fb4123d28fa954889c0a7a0afaa6b51b57b` |
+| `packages/db/test/sv5pre-fixtures.ts` | `02b724aa1ece903937c0ba895456049c7b560d1c0f1305135400c21cf348bf8a` |
+
+
 
 # SV5PRE builder receipt — partial construction, RED review owed
 
