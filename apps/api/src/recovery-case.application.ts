@@ -1,3 +1,5 @@
+import { RecoveryCaseTermsRepository } from "@jobguard/db";
+import { recoveryCaseTermsCommandV1 } from "./recovery-case.contracts.js";
 import { PracticeAccess } from "./practice-access.js";
 import { ZodError } from "zod";
 import type { Pool } from "pg";
@@ -33,6 +35,13 @@ export class RecoveryCaseApplication {
   const affected = await this.repository(practice).command(practice.context, jobId, recoveryCaseCommandV1.parse(await recoveryInput(raw)),
    {membershipId:practice.membershipId,identityUserId:practice.identityUserId});
   return this.committedView(jobId, practice, affected.id);
+ }
+ async terms(jobId: string, raw: unknown) {
+  if(process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
+  const practice = await this.access.job(jobId);
+  const input = recoveryCaseTermsCommandV1.parse(await recoveryInput(raw));
+  return new RecoveryCaseTermsRepository(practiceMaterialPool(this.pool, practice.digest)).approve(practice.context, jobId, input,
+   {membershipId:practice.membershipId,identityUserId:practice.identityUserId});
  }
  async eligibility(jobId: string, raw: unknown, sessionId?: string) {
   if(process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");

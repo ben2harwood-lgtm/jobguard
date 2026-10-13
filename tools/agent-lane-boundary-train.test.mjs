@@ -23,6 +23,8 @@ function fixture(t, options = {}) {
   const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
   if (!cached) {
     git("init", "-b", "main"); git("config", "user.name", "Train test"); git("config", "user.email", "train-test@example.invalid");
+    git("config", "gc.auto", "0");
+    git("config", "maintenance.auto", "false");
     git("config", "commit.gpgsign", "false"); git("config", "merge.gpgsign", "false");
   }
   const write = (path, text = "piece\n") => { mkdirSync(dirname(join(cwd, path)), { recursive: true }); writeFileSync(join(cwd, path), text); };

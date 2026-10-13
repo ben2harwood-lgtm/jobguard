@@ -1,3 +1,4 @@
+export { recoveryCaseTermsCommandV1, recoveryCaseTermsV1 } from "@jobguard/core";
 import { z } from "zod";
 import { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryCaseStateFullV1, recoveryCaseTypeV1, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, money } from "@jobguard/core";
 export { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryEligibilityCommandV3 };
@@ -12,6 +13,13 @@ export { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryEligibilit
 // AFTER matching the exact immutable review revision. Those three refusals cannot
 // become false without invalidating the command's bound revision.
 export const recoveryCommandRefusalRulesV1 = {
+ RECOVERY_TERMS_FORBIDDEN: { status: 403, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_TERMS_CASE_NOT_FOUND: { status: 404, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_TERMS_COMMAND_CONFLICT: { status: 409, stage: "recorded_conflict", settlesUnknown: true },
+ RECOVERY_TERMS_NOT_APPLICABLE: { status: 409, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_TERMS_POLICY_MISMATCH: { status: 409, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_TERMS_ALREADY_APPROVED: { status: 409, stage: "after_replay", settlesUnknown: false },
+ RECOVERY_TERMS_AUTHORIZATION_INVALID: { status: 409, stage: "after_replay", settlesUnknown: false },
  INVALID_COMMAND: { status: 400, stage: "before_replay", settlesUnknown: false },
  NOT_FOUND: { status: 404, stage: "before_replay", settlesUnknown: false },
  SYNTHETIC_MODE_REQUIRED: { status: 403, stage: "before_replay", settlesUnknown: false },
