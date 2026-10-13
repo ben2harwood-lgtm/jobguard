@@ -27,10 +27,14 @@ const answerV1 = z.discriminatedUnion("decision", [
  z.object({ decision: z.literal("forbidden"), reason_code: z.enum(["member_inactive", "command_type_not_permitted", "role_not_permitted"]), raising_grant: z.null() }).strict(),
  z.object({ decision: z.literal("not_found"), reason_code: z.literal("job_out_of_scope"), raising_grant: z.null() }).strict(),
 ]);
-/** The checks run before ENT-4b's final audit append; raiseExtra already holds its per-job lock. ENT-3d's evidence guard follows ENT-3a's two statements. */
-export const siteExtraAuthoritySeam: ExtraTransactionSeam = async (db, fact) => {
+/** Main's authority checks also work before the evidence migration is installed. */
+const siteExtraBaseAuthoritySeam: ExtraTransactionSeam = async (db, fact) => {
  await requireLiveJob(db, fact.jobId);
  await db.$client.query("SELECT app.ent3a_require_extra_authority($1,$2)", [fact.jobId, fact.variationId]);
+};
+/** The v3 evidence checks run before ENT-4b's final audit append; raiseExtra already holds its per-job lock. */
+export const siteExtraAuthoritySeam: ExtraTransactionSeam = async (db, fact) => {
+ await siteExtraBaseAuthoritySeam(db, fact);
  await db.$client.query("SELECT app.ent3d_require_site_extra_evidence($1,$2)", [fact.jobId, fact.variationId]);
 };
 const answerEvidence = z.object({ decision: z.enum(["accepted", "photo_refused", "confirmation_refused"]), reason_code: z.string(), photo_sha256: z.string().regex(/^[0-9a-f]{64}$/u).nullable(), content_sha256: z.string().regex(/^[0-9a-f]{64}$/u).nullable() }).strict();
@@ -153,7 +157,10 @@ export class SiteExtraRepository {
      if ("code" in gate) refusal = gate; else
      try {
       return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...gate.raise }, async (db, fact) => {
-       try { await siteExtraAuthoritySeam(db, fact); } catch (error) {
+       try {
+        if (gate.evidence) await siteExtraAuthoritySeam(db, fact);
+        else await siteExtraBaseAuthoritySeam(db, fact);
+       } catch (error) {
         if (error instanceof WatchdogError) {
          liveRefusal = error;
          // A known persistence error rolls back; retain the typed guard failure outside raiseExtra.
@@ -252,7 +259,7 @@ export class SiteExtraRepository {
    raised = await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: planned.description,
     sorItem: { versionId: planned.versionId, code: input.sorCode }, ...(planned.check.outcome === "more_than_ordered" ? { excessOfScopeItemId: planned.check.orderLineScopeItemId } : {}) }, async (db, fact) => {
     try { await requireLiveJob(db, fact.jobId); } catch (error) { remember(error); }
-    try { await siteExtraAuthoritySeam(db, fact); } catch (error) { remember(error); }
+    try { await siteExtraBaseAuthoritySeam(db, fact); } catch (error) { remember(error); }
     try { await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,$3,$4)", [fact.jobId, fact.variationId, input.quantity, requestHash]); } catch (error) { remember(error); }
    });
   } catch (error) {

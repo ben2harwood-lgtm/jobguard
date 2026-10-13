@@ -329,3 +329,115 @@ Read-only scope inspection: narrow Refusal and ENT-3c's types restored, ENT-3c m
 Intended message path: `/private/tmp/jg-msg-ent-3d.txt`, subject `fix(db): isolate site extra evidence refusals from SoR paths`.
 
 Final verification command batch: `git diff --check; git diff --stat; git status --short; git rev-parse HEAD` plus read-only Node assertions of the exact three edited paths, append-only historical receipt, unchanged main ENT-3c block/error file and dispatcher message: exit 0. Snapshot before this final log line: 3 files changed, 89 insertions(+), 4 deletions(-), including 83 receipt lines. Receipt/message Node writer: exit 0. No further source edits or heavy runs.
+
+
+## Repair round r6 — pre-0141 compatibility, 13 October 2026
+
+Built by Codex for dispatcher 3. The mandated historical first line is preserved verbatim; its attribution does not describe this repair. Branch `codex/sandbox/ent-3d`, existing/final available head `d777aa47c61473f9e64f45ca8fa79ea0249081c9`. No git write command, commit, install or download was run. The dispatcher will commit these working-tree changes and bind CI/reviews to its new head; this receipt is neither an independent verdict nor acceptance.
+
+### Repair and tests-first evidence
+
+ENT-3c's merged upgrade proof populates its preceding schema through the HEAD repository (`site-extra-pricing-upgrade.integration.test.ts:92`). The shared authority seam had acquired an unconditional 0141 call. Added the regression tests before editing repository code. The first unit run reproduced exactly that failure: **1 file, 7 tests, 1 failed / 6 passed, exit 1**; the non-v3 log rejected with `SiteExtraError: SITE_EXTRA_UNAVAILABLE` at the repository's original line 184. The three missing-routine v3 cases and three installed-routine guard cases already passed before the fix. No final unit pass is claimed.
+
+Extracted main's two authority statements into a private base seam. Ordinary logs select it when the evidence gate has no evidence facts, and schedule-of-rates logs use it unconditionally. The exported evidence seam still runs the same three SQL statements, in order, on the evidence path: live guard, ENT-3a authority guard, ENT-3d evidence guard. No routine-existence fallback and no swallowed evidence failure. Missing 0141 on a photo, confirmation or combined request keeps the typed unavailable error.
+
+New unit file `packages/db/test/site-extra-evidence-compatibility.test.ts`: [R6], seven routing cases with adapter doubles, no PostgreSQL claim. Its explicit path was added only to ENT-3d's own lane row.
+Added [R6] to ENT-3d's existing `site-extra-evidence.integration.test.ts`: installs only through 0140, proves no `ent3d_` routine exists, ordinary log and replay, schedule-of-rates log and replay, photo/confirmation/both refused as typed unavailable with no receipt, business, evidence or audit change. This is a schema-compatibility regression, not a reshaped migration upgrade proof. Existing ENT-3d assertions and test titles are unchanged. The merged ENT-3c upgrade proof is untouched.
+
+### Executed checks and STOPs
+
+Installed Node `v24.17.0`; existing cached pnpm `10.28.1` selector at `/private/tmp/jg-ent-3d-r5-bin/pnpm` reused. Every pnpm command began with `export PATH="$HOME/Library/pnpm/bin:$PATH"`, followed by `export PATH="/private/tmp/jg-ent-3d-r5-bin:$PATH"`. No launcher replacement, package or pin change.
+Before each heavy invocation, `memory_pressure | tail -1` exited 0 and showed 70% free. `df -g /System/Volumes/Data` exited 0 and showed 77 GB before the unit/typecheck, 75 GB before lint, 74 GB before build (all over 45 GB). Runs were serial; build and tests never overlapped.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `HEAVY_SLOTS=2 ~/.local/bin/heavy-slot ent-3d-r6-first pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/site-extra-evidence-compatibility.test.ts` | 1 | First failing run: 1 file, 1 failed / 6 passed; helper inspection refusals below |
+| `pnpm exec turbo run typecheck --force` | 0 | 7/7 tasks executed, 0 cached; 26.295 s |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 0 | 7/7 tasks executed, 0 cached; 21.04 s |
+| `node tools/lint.mjs` | 0 | Core purity (153 TypeScript files), lane, money boundary |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0 | Same root checks after forced package lint |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | ENT-3d lane passes; includes new regression file |
+| `pnpm build --concurrency=2 --force` | 0 | 7/7 tasks executed, 0 cached; 37.694 s, 30 static pages |
+| `pnpm openapi:check` | 1 | STOP: tsx IPC socket startup refused; OpenAPI verification NOT RUN |
+| `git diff --check` | 0 | No whitespace errors |
+
+Typecheck, package lint and build ran **once each with --force**, no cache-hit claim. Their logs are `/private/tmp/jg-ent-3d-r6-{typecheck,lint,build}.log`. Turbo emitted shared-cache `WARNING IO error: Operation not permitted (os error 1)`; actual tasks executed successfully. No cache-write retry. Build's existing Next.js warnings did not fail the command.
+
+Test gate STOP at `/Users/benharwood/.local/bin/heavy-slot:11`: the exact unit command above emitted `sysctl: sysctl fmt -1 1024 1: Operation not permitted`, `sysmon request failed with error: sysmond service not found`, and `pgrep: Cannot get process list`. A Ctrl-C was requested immediately after seeing the output; the run had already completed with the first failure. No further gate run and no alternate test route attempted. Final verification of the new unit file is **NOT RUN (shared gate inspection permission refused)**. No production-code or merged-test STOP is needed.
+
+OpenAPI STOP: `pnpm openapi:check` invokes `tsx src/generate-openapi.ts --check` and emitted `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/21541.pipe`, from `node:net:1987` (tsx `cli.mjs:53`). Log `/private/tmp/jg-ent-3d-r6-openapi.log`. No retry or alternate invocation.
+
+NOT RUN: `packages/db/test/site-extra-evidence.integration.test.ts` (including the new 0140 regression), `packages/db/test/site-extra-evidence-routines.integration.test.ts`, `packages/db/test/site-extra-pricing-upgrade.integration.test.ts`, all other database suites, `pnpm test:db`, `pnpm test:migrations`: dispatcher order; cannot start PostgreSQL here, CI/dispatcher owns these runs. No PostgreSQL startup attempted. Browser suites and `pnpm test:e2e` NOT RUN (cannot start a browser here; no UI changes). Whole-repository/package tests and a clean install NOT RUN (scope and installed-dependencies order). Existing core/API/web evidence unit files NOT RUN in r6 after the gate refusal; their source/assertions are unchanged. No model/prompt/schema extraction change, so `pnpm eval` is inapplicable.
+
+### Inspection and edit command inventory
+
+The following read commands were executed in shell batches; successful batches returned 0 and performed no tests. The four batches ending in a missing optional file/glob returned 1, identified below. Commands are listed here in addition to the verification table so the receipt includes the unsuccessful discovery reads.
+
+- `pwd`; `git status --short`; `git rev-parse HEAD`; `cat AGENTS.md`; `rg -n 'ENT-3d|ENT-3c|5\.16|0141' BUILD_PLAN.md`; `cat package.json`; `cat packages/db/package.json`.
+- `cat /Users/benharwood/.local/share/full-steam/handoffs/jobguard-task.md`; `cat /Users/benharwood/.local/bin/heavy-slot`; memory/disk commands above.
+- `sed -n '1,320p' packages/db/src/site-extra-repository.ts`; `sed -n '55,115p' packages/db/test/site-extra-pricing-upgrade.integration.test.ts`.
+- `git show origin/main:packages/db/src/site-extra-repository.ts | sed -n '1,270p'`; `rg --files packages/db/test packages/core/src apps/api/src docs/verdicts/ENT-3d | rg 'site-extra|SITE|ENT-3d'`; `rg -n 'ENT-3|resident|photo' BUILD_PLAN.md | head -65`; optional `cat tools/agent-lanes* 2>/dev/null` (no matching file, batch exit 1).
+- `rg --files -g AGENTS.md -g '*vitest*'`; `cat docs/verdicts/ENT-3d/BUILDER_RECEIPT.md`; `cat packages/db/test/site-extra-evidence.integration.test.ts`.
+- `git diff origin/main -- packages/db/src/site-extra-repository.ts`; `sed -n '1,140p' packages/db/test/site-extra-pricing-upgrade.integration.test.ts`; optional `sed -n '1,100p' packages/db/test/site-extra-evidence-upgrade.integration.test.ts` (absent, batch exit 1).
+- `rg --files packages/db/test packages/core/src apps/api/src docs/verdicts/ENT-3d | rg 'site-extra|ENT-3d'`; `rg -n 'siteExtraAuthoritySeam|ExtraTransactionSeam|fact =' packages/db/src/extra-repository.ts packages/db/src/site-extra-repository.ts`; `rg -n 'ENT-3|resident|photo' BUILD_PLAN.md | tail -35`; `rg --files -g AGENTS.md -g '*vitest*' -g '*lane*' | head -40`; `sed -n '1,95p' docs/verdicts/ENT-3d/BUILDER_RECEIPT.md`.
+- Optional `sed -n '1,125p' packages/db/test/site-extra-evidence-test-helpers.ts` and `sed -n '1,100p' packages/db/test/site-extra-evidence.test.ts` (both absent, batch exit 1); `cat packages/db/vitest.config.ts` succeeds.
+- `rg --files packages/db/test | rg 'site-extra|extra-fixtures'`; `rg -n 'ENT-3d|site-extra-evidence|site-extra-repository' tools/agent-lane*`; `sed -n '1,95p' packages/db/src/extra-repository.ts`; `sed -n '55,105p' packages/db/test/site-extra-pricing-upgrade.integration.test.ts`; `sed -n '1,95p' packages/db/test/site-extra-evidence-fixtures.ts`; `sed -n '1,18p' docs/verdicts/ENT-3d/BUILDER_RECEIPT.md`; `rg -n '\| ENT-3 |9\.1\.4|Operative capture' BUILD_PLAN.md`.
+- `sed -n '80,110p' packages/db/test/site-extra-pricing-upgrade.integration.test.ts`; `sed -n '1,80p' packages/db/test/site-extra-pricing-fixtures.ts`; `sed -n '1,75p' packages/db/test/site-extra-fixtures.ts`; `sed -n '240,275p' packages/db/src/site-extra-repository.ts`.
+- `sed -n '566,600p' BUILD_PLAN.md`; `sed -n '795,824p' BUILD_PLAN.md`; `cat docs/contracts/site-extra-evidence-v1.md`; `rg -n 'seam|source|readFile|ent3d' apps/api/src/contractor/site-extra-evidence.application.test.ts packages/db/test/site-extra-evidence-routines.integration.test.ts`; `rg -n 'ent-3d' config/agent-lane-assignments.json`; `rg --files -g AGENTS.md`; `node --version`.
+- `sed -n '70,110p' apps/api/src/contractor/site-extra-evidence.application.test.ts`; `sed -n '1,36p' packages/db/test/site-extra-evidence.integration.test.ts`; `rg -n 'clusterBefore' packages/db/test/site-extra-pricing-fixtures.ts`; `sed -n '115,165p' packages/db/test/site-extra-pricing-fixtures.ts`; `cat packages/db/tsconfig.json`; optional `cat apps/api/vitest.config.ts` (absent, batch exit 1).
+- `cat packages/db/src/watchdog.ts | head -60`; `head -20 apps/api/src/contractor/site-extra-evidence.application.test.ts`; `sed -n '1,90p' packages/db/test/site-extra-pricing.integration.test.ts`; `cat tools/agent-lane-boundary-lint.mjs | head -70`; `sed -n '1,30p' packages/db/test/site-extra-evidence-routines.integration.test.ts`.
+- `sed -n '1,60p' packages/db/test/site-extra-pricing.integration.test.ts`; `sed -n '130,150p' packages/db/test/site-extra-evidence-routines.integration.test.ts`; `sed -n '1,30p' packages/db/src/tenant-context.ts`; `rg -n 'GRANT' packages/db/migrations/0141_site_extra_evidence.sql`; `tail -35 docs/verdicts/ENT-3d/BUILDER_RECEIPT.md`.
+- `sed -n '135,151p' packages/db/test/site-extra-evidence-routines.integration.test.ts`; `sed -n '1,28p' packages/db/src/tenant-context.ts`; grant search above repeated; `rg -n 'shim|pnpm.cjs|r5|--force' docs/verdicts/ENT-3d/BUILDER_RECEIPT.md | tail -18`; `ls -l /private/tmp/jg-msg-ent-3d.txt /Users/benharwood/Library/pnpm/bin/pnpm`.
+- `python3` heredoc: insert only the new unit path into ENT-3d's own lane allow array (assert one match), exit 0; memory/disk checks above; `ls -l /private/tmp/jg-ent-3d-r5-bin/pnpm`, exit 0. Three `apply_patch` operations succeeded: add unit file, add owned integration regression, then fix repository.
+- `sed -n '180,192p' packages/db/migrations/0141_site_extra_evidence.sql`; `git diff --stat`; `git diff -- packages/db/src/site-extra-repository.ts`; `git status --short`; `git rev-parse HEAD`; `sha256sum` on the four source/config paths below plus the merged upgrade proof and 0141 migration; batch exit 0.
+- `tail -12 /private/tmp/jg-ent-3d-r6-typecheck.log`; `tail -10 /private/tmp/jg-ent-3d-r6-build.log`, each exit 0. Forced check wrappers redirected output to their named log, saved the command status, printed the tail, and returned that status.
+- `python3` heredoc: read-only `git show HEAD:<path>` and SHA-256 comparison for the eight unchanged paths below, exit 0.
+- `cat /private/tmp/jg-ent-3d-r6-openapi.log`; `nl -ba /Users/benharwood/.local/bin/heavy-slot | head -18`; `git diff --numstat`; `wc -l packages/db/test/site-extra-evidence-compatibility.test.ts` (74 lines), batch exit 0.
+- Final `python3` heredoc: assert original receipt prefix equals HEAD, append this r6 receipt, preserve previous intended-message contents in a new `/private/tmp` file, write the authorized intended message. Final read-only verification checks whitespace, stats, status, head, exact five changed paths, append-only receipt, unit line count and receipt hash. Results are printed to the dispatcher; no git writes.
+
+### Privileges, unchanged files and scope
+
+**Standard F: no new GRANT in r6, no table write grant, no migration change.** For completeness, migration 0141's existing five EXECUTE grants (unchanged; one per line):
+
+- `app.ent3d_content_sha256(uuid,text,text,text)` → `jobguard_runtime`, EXECUTE.
+- `app.ent3d_confirmation_document(uuid,uuid,uuid,text)` → `jobguard_runtime`, EXECUTE.
+- `app.ent3d_site_extra_evidence(uuid,text,text,uuid,uuid,uuid)` → `jobguard_runtime`, EXECUTE.
+- `app.ent3d_record_resident_confirmation(uuid,uuid,uuid,uuid,text,text,uuid,text)` → `jobguard_runtime`, EXECUTE.
+- `app.ent3d_require_site_extra_evidence(uuid,uuid)` → `jobguard_runtime`, EXECUTE.
+
+Source/config SHA-256 after repair:
+
+```text
+d4d7aef40ec352ee1d76c748799929dd58b8aff7f3c7a5bf852c1c2ac1e1bc47  packages/db/src/site-extra-repository.ts
+ff78a242d486508887c958d0d808cab94e6812b3e2502561e100f7766813870c  packages/db/test/site-extra-evidence-compatibility.test.ts
+9f9ee253c7d98a548fcdb1d2af2a7767f660fc7fd3cebfe5681f78751cb3f4e1  packages/db/test/site-extra-evidence.integration.test.ts
+c18282bb1f1f592f83c31badb099ea1445040076f45da9f66adf88d03c6610cb  config/agent-lane-assignments.json
+```
+
+Unchanged from HEAD, verified against git-show bytes (no permanent file-hash test added):
+
+```text
+70966c60f796db9fa285b25be851ec2aa1385a39b6f31b1143997735da938341  packages/db/test/site-extra-pricing-upgrade.integration.test.ts
+253a65ba1297767cd30ed839cbbef0c570d0ffde99767f8b2de4b6a4ec85f93f  packages/db/migrations/0141_site_extra_evidence.sql
+06580a23bec2a34dbd65fc086ec2139de81611dba2e896e49097a9510a47c728  packages/db/test/site-extra-evidence-routines.integration.test.ts
+ce3db85c3a7d057cca592b73e89ecce468fe79d0b7c5961aa6368ef75125dbde  packages/db/src/extra-repository.ts
+efe6f104c0a9e7ae408ce661b23fcbd181a11eb6dce65624ba61b14a73ff9de9  packages/core/src/watchdog.ts
+3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6  packages/db/test/watchdog-command-harness.ts
+db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f  packages/db/test/command-replay-contract.integration.test.ts
+a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35  apps/api/src/auth/context-boundary.test.ts
+```
+
+`git diff --stat` before this append (untracked unit file is separately 74 added lines):
+
+```text
+ config/agent-lane-assignments.json                 |  2 +-
+ packages/db/src/site-extra-repository.ts           | 15 ++++++++---
+ .../test/site-extra-evidence.integration.test.ts   | 30 ++++++++++++++++++++++
+ 3 files changed, 42 insertions(+), 5 deletions(-)
+```
+
+Exactly five repair paths: repository, owned integration test, new unit file, ENT-3d's own lane row, this receipt. No change to BUILD_PLAN, merged tests, pinned values, routes, boundary lists, fingerprints or schema. Receipt retains its historical prefix byte for byte. Intended message: `/private/tmp/jg-msg-ent-3d.txt`, conventional subject `fix(db): preserve pre-0141 site extra logging`.
+
+### Builder scope check (source-inspected, not a reviewer verdict)
+
+The base seam emits main's original authority SQL; the SoR transaction preserves main's original live/authority/pricing order. Evidence-bearing calls still execute all existing read, writer and transaction guard routines. Missing evidence routines remain unavailable rather than a fallback to ordinary capture. Authority checks precede evidence access; existing audit/refusal, payload conflict and replay handling are untouched. Test doubles do not establish PostgreSQL behavior: the new integration case and the merged failing proof require CI. Rollback/forward fix is a repository-code change only; no data migration, commercial policy change, new alert or release authorization. No code STOP, merged assertion relaxation, or BLOCKING policy question. Remaining gates: final unit execution after the helper refusal is resolved, real database CI, OpenAPI verification in an environment that permits the IPC socket, exact-new-head independent verdict and separate acceptance. Final available head remains `d777aa47c61473f9e64f45ca8fa79ea0249081c9`; the dispatcher owns the new commit.

@@ -11,11 +11,41 @@ import {
  evidenceCounts, evidenceRowsText, refusalEvents, runtimeCall, type Cluster, type SiteFixture,
 } from "./site-extra-evidence-fixtures.js";
 import { fixture } from "./extra-fixtures.js";
+import { clusterBefore, sorInput, written, chainHead } from "./site-extra-pricing-fixtures.js";
 let c: Cluster, repo: SiteExtraRepository;
 beforeAll(async () => { c = await cluster(); repo = new SiteExtraRepository(c.runtime); }, 90_000);
 afterAll(async () => { await c?.close(); });
 const where = (f: SiteFixture) => ({ ctx: f.ctx, jobId: f.jobId });
 const errorOf = (work: Promise<unknown>) => work.then(() => { throw new Error("unexpected success"); }, e => e as Error);
+
+describe("ENT-3d pre-0141 schema compatibility", () => {
+ it("[R6] non-v3 and schedule-of-rates logs work at 0140; v3 evidence requests fail closed without writes", async () => {
+  const prior = await clusterBefore("0141_site_extra_evidence.sql");
+  try {
+   expect((await prior.admin.query("SELECT max(migration_name) AS last FROM public.jobguard_schema_migration")).rows[0]!.last).toBe("0140_site_extra_pricing.sql");
+   expect((await prior.admin.query("SELECT proname FROM pg_proc WHERE pronamespace='app'::regnamespace AND starts_with(proname,'ent3d_')")).rows).toEqual([]);
+   const f = await siteFixture(prior), repository = new SiteExtraRepository(prior.runtime), member = f.members.supervisor.member;
+   const plain = v3(f), first = await repository.logSiteExtra(f.ctx, member, plain);
+   expect(first).toEqual({ variationId: expect.any(String) });
+   const afterPlain = await written(prior, f.p.tenantId);
+   expect(await repository.logSiteExtra(f.ctx, member, plain)).toEqual(first);
+   expect(await written(prior, f.p.tenantId)).toEqual(afterPlain);
+   const priced = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "100" });
+   const sor = await repository.logSorSiteExtra(f.ctx, member, priced);
+   expect(sor).toMatchObject({ variationId: expect.any(String), sorCode: "CLEAR-GUTTER" });
+   const before = await written(prior, f.p.tenantId), evidence = await evidenceRowsText(prior, f), head = await chainHead(prior, f.p.tenantId);
+   expect(await repository.logSorSiteExtra(f.ctx, member, priced)).toEqual(sor);
+   for (const fields of [{ photoEvidenceId: randomUUID() }, { shownContentSha256: shownFor(f, null) }, { photoEvidenceId: randomUUID(), shownContentSha256: shownFor(f, null) }]) {
+    const raw = v3(f, fields), error = await errorOf(repository.logSiteExtra(f.ctx, member, raw));
+    expect(error).toBeInstanceOf(SiteExtraError); expect((error as SiteExtraError).code).toBe("SITE_EXTRA_UNAVAILABLE");
+    expect(await written(prior, f.p.tenantId)).toEqual(before);
+    expect(await evidenceRowsText(prior, f)).toEqual(evidence);
+    expect(await chainHead(prior, f.p.tenantId)).toBe(head);
+    expect((await prior.admin.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([]);
+   }
+  } finally { await prior.close(); }
+ }, 120_000);
+});
 /** A refusal: the typed error, nothing written (no row of any table, no evidence), the audit chain intact. */
 async function refused(f: SiteFixture, member: SiteFixture["p"], raw: Record<string, unknown>, code: string, expectedRefusalReason?: string) {
  const before = await evidenceCounts(c, f), rows = await evidenceRowsText(c, f);
