@@ -63,4 +63,6 @@ export * from "./contractor-practice-session.js";
 export * from "./site-extra.js";
 export * from "./recovery-allocation.js";
 export * from "./site-extra-pricing.js";
+export * from "./site-visit.js";
+export * from "./site-extra-evidence.js";
 export * from "./job-work-state.js";

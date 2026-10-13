@@ -1297,3 +1297,123 @@ Final `pnpm build --concurrency=2` exited 0 after the final B1 metadata edit:
 `git diff --check` exited 0. The commit-message file contains the conventional
 subject and body, reflecting the final empty variation-route diff. No
 Git-writing command was issued; dispatcher retains commit/push ownership.
+
+
+## Catch-up r5 — 13 October 2026, dispatcher 4
+
+Builder execution receipt, not an independent verdict or technical acceptance.
+Started at local HEAD `9d13b01f7ce454cf553eed6d0a4e16d515f7ccab`, in the
+already-started merge of `origin/main` at
+`e4cb8437d044746300c377647f6061d06cd960cc`. The dispatcher's reported Opus PASS
+belongs to the original HEAD, not this uncommitted merge resolution. Git's index
+still lists six unmerged paths because this sandbox cannot write `.git`; the
+dispatcher must stage the resolved working files and finish the merge.
+
+### Resolution and authorized extra
+
+All six working-file conflicts are resolved. Main content is retained exactly,
+with CH-4 additions integrated afterward:
+
+- `apps/api/src/app.module.ts`: main's SiteVisitController remains registered;
+  CH-4's JobWorkStateController and global JobWorkStateExceptionFilter remain.
+- `apps/api/src/workspace/application.ts`: main's startVisit, completeVisit,
+  assignedJobs and orderLines services remain; CH-4's frozen workState reader
+  and failure mapper are appended to the returned application.
+- Both package export indexes retain main's exports, followed by CH-4 exports.
+- Migration registration retains 0141 then 0144 in numeric order. The reserved
+  0142/0143 gaps remain reserved for CH-7-INSURER and ENT-10e. No migration SQL
+  bytes were edited. MIGRATIONS.md retains the exact main text then CH-4's 0144
+  explanation.
+
+The dispatcher expressly authorized a documented extra: variation POST OpenAPI
+now includes an explicit 422 alongside its original 201. Only ApiResponse import
+and decorators were added to the controller. A structured comparison of the
+regenerated variation POST against origin/main proves that deleting the new 422
+from the comparison yields the exact original operation, including the identical
+201 dictionary, operationId, parameters, summary and tags. Other controller
+metadata is unchanged. The CH-4 lane gains only that controller path and a note
+recording this response-metadata authorization; all other lane registrations
+remain identical to main. No broad lane permission was added.
+
+OpenAPI includes every main operation and CH-4's work-state read. The existing
+CH-4 422 responses on proof, purchase-order revision/placement and supplier
+intake remain. Main's site-visit and evidence API content is retained.
+
+Read-only preservation checks found both tenancy expectation lists still sorted
+by relname, matching their ORDER BY c.relname queries, with main's closeout_answer
+and all four CH-4 rows included. No tenancy test edit was needed. SHA-256 snapshots
+of 414 test/spec and package/pin files taken before resolution remain unchanged.
+No merged test, existing assertion, pin or fingerprint was edited.
+
+### Commands actually run
+
+Existing installed dependencies only. Successful pnpm invocations used:
+`export PATH="/private/tmp/ch4-pnpm-bin:/Users/benharwood/Library/pnpm/bin:$PATH"`.
+The existing shim invokes cached pnpm 10.28.1; Node is 24.17.0. The initial global
+pnpm version wrapper stalled and was interrupted (130); no install or package
+download was requested. Logs are `/private/tmp/jg-ch-4-r5-*.log`.
+
+| Command | Exit/result |
+| --- | --- |
+| `pnpm exec turbo run typecheck --force` | 0; 7 successful, 0 cached; run once |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 0; 7 successful, 0 cached; run once |
+| `pnpm exec turbo run build --force` | 0; 7 successful, 0 cached; run once; 31 generated pages |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 1; purity passes, then lane script rejects incoming main's staged paths; remaining root checks were run separately |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | 1; same lane rejection before Turbo can execute again |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1; incoming main paths rejected while merge remains uncommitted |
+| `node tools/money-arithmetic-lint.mjs` | 0 |
+| `node tools/commercial-boundary-lint.mjs` | 0 |
+| `pnpm --filter @jobguard/api openapi:generate` | 1; sandbox tsx IPC listen EPERM |
+| `pnpm openapi:check` | 1; same tsx IPC restriction |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts` | 0 after package build; same generator without CLI IPC; two early attempts failed on stale core/DB exports while build was pending |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; exact regenerated artifact/source match |
+| core `vitest run --maxWorkers=2 src` | 0; 81 files, 2,426 passed |
+| API source suite, with explicit environment exclusions listed below | 0; 66 files, 1,556 passed |
+| API `vitest run --maxWorkers=1 src/final-account-lock.isolation.test.ts -t 'DW8 application read'` | 0; 2 scripted reads passed; 1 real-DB case excluded |
+| config/storage/AI/web sequential tests, `--maxWorkers=2` | 1 initially: config 2, storage 4 and AI 80 passed; web 684 passed/100 failed on stale compiled API exports while build was pending |
+| `pnpm --filter @jobguard/web test --maxWorkers=2` after API build | 0; 33 files, 784 passed; stale-export failures resolved by the required build, no source/test change |
+| DB `vitest run --maxWorkers=1 src test/site-extra-evidence-compatibility.test.ts` | 1 initially; 91 passed, 1 existing audit-checkpoint source-graph 5-second timeout during concurrent work |
+| same DB command after concurrent suites/build finished | 0; 5 files, 92 passed; original timeout unchanged |
+| seven tooling test files, `node --test --test-concurrency=2` | 0; 19 passed |
+| `git grep -n '<<<<<<<\|>>>>>>>' -- . ':!docs/verdicts'` | 1 with no output: no conflict marker matches |
+| `git diff --check` | 0 |
+
+The exact API source command was:
+
+```sh
+pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src \
+  --exclude '**/shadow-isolation.application.test.ts' \
+  --exclude '**/final-account-lock.isolation.test.ts' \
+  --exclude '**/health.test.ts' \
+  --exclude '**/contractor-practice-session.http.test.ts' \
+  --exclude '**/site-extra.http.test.ts' \
+  --exclude '**/site-extra-pricing.http.test.ts' \
+  --exclude '**/site-visit.http.test.ts' \
+  --exclude '**/auth/sso/action-paths.test.ts'
+```
+
+Those files require PostgreSQL or a bound HTTP socket, both unavailable under the
+dispatcher's environment note. The isolated scripted DW8 reads were still run.
+The tooling run covered policy-gate-sites, dependency-audit, decision-check-purity,
+decision-records, core-purity, shared-money-origin and commercial-boundary;
+the two Git-fixture test suites were not run because they issue Git-writing
+commands. No script or mandatory CI assertion was weakened or made optional.
+
+The real lane-script result remains RED in this unfinished merge: its local mode
+includes staged changes relative to HEAD, so incoming main files count as local
+lane edits until the dispatcher completes the merge. The first run also identified
+the variation controller before its narrow dispatcher-authorized allowance was
+recorded. A separate read-only deterministic comparison of the final working tree
+to origin/main found all changed paths within the CH-4 allowlist. This diagnostic
+is not presented as a successful lane-script run. Rerun root lint and lint:lanes
+on the dispatcher's finished merge commit.
+
+Forced checks reported shared-cache IO warnings; Next build also emitted existing
+root/lockfile, CSS, file-type export and dynamic-import warnings. No new operational
+alert, grant, backfill, command authority, money policy or production capability.
+Database, migration, HTTP socket, full umbrella and both browser project suites
+remain GitHub CI work after the dispatcher pushes. G1 and held CH-4 scope remain
+unchanged; CH-4 is still the partial synthetic slice, not complete/unblocked MON-1.
+The new exact-commit independent verdict and separate acceptance remain pending.
+No Git-writing command was issued by the builder. Intended commit message is
+written to `/private/tmp/jg-msg-ch-4.txt`; dispatcher owns stage/commit/push.
