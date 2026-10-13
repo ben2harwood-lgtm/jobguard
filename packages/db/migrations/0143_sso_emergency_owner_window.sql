@@ -142,11 +142,16 @@ DECLARE t uuid; member record; actor uuid; owner_role text; event record; approv
  -- Authentication proved mailbox control before calling. Derive membership through the merged routine;
  -- an untrusted tenant UUID alone never grants authority to append a company's audit or emergency log.
  FOR member IN SELECT * FROM identity.current_memberships(u) LOOP
-  IF member.tenant_id=t THEN actor:=member.id; owner_role:=member.role; END IF;
+  IF member.tenant_id=t THEN actor:=member.id; END IF;
  END LOOP;
  IF actor IS NULL THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_MEMBER_NOT_ACTIVE'); END IF;
  PERFORM set_config('app.tenant_id',t::text,true);
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ -- Re-read the same membership under the company lock: an owner may have been
+ -- downgraded, revoked or expired while this use waited. Never cache its role before waiting.
+ SELECT m.role INTO owner_role FROM identity.current_memberships(u) m WHERE m.tenant_id=t AND m.id=actor;
+ -- current_memberships visits every company and changes the transaction-local context.
+ PERFORM set_config('app.tenant_id',t::text,true);
  -- Recheck under the tenant lock, using the existing permission/active-member contract.
  IF (app.contractor_allowed(actor,'organisation.manage',t)) IS NOT TRUE THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_PERMISSION_REFUSED'); END IF;
  SELECT * INTO event FROM identity.sso_required_state(t);

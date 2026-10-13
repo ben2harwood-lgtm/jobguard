@@ -123,6 +123,55 @@ async function invite(f:Fixture) {
  return new IdentityApplication(f.provider,origin).invite({version:"identity-invitation.v1",requested_tenant_id:f.principal.tenantId,email:`pending-${randomUUID()}@${f.domain}`,role:"finance"},f.ordinary);
 }
 describe("ENT-10e emergency window",()=>{
+ it.each(["downgraded","revoked","expired"] as const)("[E10] owner %s while emergency use waits on the company lock is refused",async change=>{
+  const f=await fixture();await f.enable();
+  // Prove mailbox control before execution, as in the existing emergency race fixture.
+  const challenge=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()});
+  expect(await f.provider.proveEmergencyMailbox(f.email,challenge.fixtureCode!)).toBe(f.principal.identityUserId);
+  const tables=["sso_required_event","sso_emergency_approval","sso_emergency_use","sso_emergency_window"];
+  const snapshot=()=>Promise.all(tables.map(t=>bytes(`identity.${t}`,f.principal.tenantId)));
+  const before=await snapshot(),earlierAudit=await audit(f.principal.tenantId);
+  const blocker=await admin.connect(),waiter=await identity.connect();
+  let pending:ReturnType<SsoRequiredRepository["emergency"]>|undefined;
+  try {
+   await blocker.query("BEGIN");
+   await blocker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))",[f.principal.tenantId]);
+   const blockerPid=(await blocker.query("SELECT pg_backend_pid() pid")).rows[0].pid;
+   const waiterPid=(await waiter.query("SELECT pg_backend_pid() pid")).rows[0].pid;
+   const repo=new SsoRequiredRepository({connect:async()=>({query:waiter.query.bind(waiter),release:()=>undefined})} as unknown as Pool);
+   pending=repo.emergency(f.principal.identityUserId,sqlInput(f),60);
+   // Attach a handler during the wait; the original promise still rejects on await.
+   void pending.catch(()=>undefined);
+   const deadline=Date.now()+5000;
+   let waiting=false;
+   while(Date.now()<deadline) {
+    waiting=(await admin.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND locktype='advisory' AND mode='ExclusiveLock' AND NOT granted AND $2=ANY(pg_blocking_pids(pid))) waiting",[waiterPid,blockerPid])).rows[0].waiting;
+    if(waiting)break;
+    await new Promise(resolve=>setTimeout(resolve,5));
+   }
+   expect(waiting).toBe(true);
+   // The blocked routine has already read the owner role in the vulnerable implementation.
+   // An admin still has organisation.manage, so permission alone cannot catch this downgrade.
+   if(change==="downgraded")await blocker.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,f.principal.membershipId]);
+   else if(change==="revoked")await blocker.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,f.principal.membershipId]);
+   else await blocker.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 minute' WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,f.principal.membershipId]);
+   await blocker.query("COMMIT");
+   expect(await pending).toEqual(change==="downgraded"
+    ?{used:false,cause:"EMERGENCY_NOT_OWNER",connectionId:f.connectionId,actorMembershipId:f.principal.membershipId}
+    :{used:false,cause:"EMERGENCY_PERMISSION_REFUSED"});
+   expect(await snapshot()).toEqual(before);
+   const afterAudit=await audit(f.principal.tenantId);
+   expect(afterAudit.slice(0,earlierAudit.length)).toEqual(earlierAudit);
+   expect(afterAudit.slice(earlierAudit.length).map(r=>({type:r.event_type,code:r.payload.references.code}))).toEqual(change==="downgraded"
+    ?[{type:"sso.emergency.refused",code:"EMERGENCY_NOT_OWNER"}]:[]);
+   const log=(await admin.query("SELECT outcome,cause_code FROM identity.sso_emergency_event WHERE tenant_id=$1 ORDER BY created_at,id",[f.principal.tenantId])).rows;
+   expect(log).toEqual(change==="downgraded"?[{outcome:"refused",cause_code:"EMERGENCY_NOT_OWNER"}]:[]);
+  } finally {
+   await blocker.query("ROLLBACK");
+   if(pending)await Promise.allSettled([pending]);
+   waiter.release();blocker.release();
+  }
+ },30000);
  it("[T2] database owns the integer bound and immutable exact window length",async()=>{
   const f=await fixture();await f.enable();
   const repo=new SsoRequiredRepository(identity);

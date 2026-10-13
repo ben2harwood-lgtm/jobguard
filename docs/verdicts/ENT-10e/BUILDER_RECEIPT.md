@@ -1,3 +1,54 @@
+# ENT-10e round r4 — builder receipt, 13 October 2026
+
+Actual builder: Codex; dispatcher 4; RED lane; draft PR #180. Builder receipt only — not independently verified, not accepted. This section supersedes the r3 status below; historical evidence is retained.
+
+Current existing HEAD: `749e693364e00f23f0026aa4c677b773e9c5400f`, branch `codex/sandbox/ent-10e`. The dispatcher started `git merge origin/main`; MERGE_HEAD and origin/main both name `e4cb8437d044746300c377647f6061d06cd960cc`. The r4 review target is the uncommitted tree on that HEAD during this merge. No git write was performed. The two conflict files now contain no markers, but their index entries remain unmerged until the dispatcher stages them and commits. No resulting commit exists to bind a new independent verdict to yet.
+
+Opus's verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/ent-10e-opus-749e693.md` and Sol's at `/Users/benharwood/.local/share/full-steam/jg-runs/ent-10e-solcheck-20261013T222257.md` both record REPAIR against HEAD 749e693. They are source reviews of the prior commit, not independent verification of this repair. LATER items remain deferred; database/browser CI and new exact-commit verdicts still precede technical acceptance.
+
+| r4 item | Repair / evidence | Result |
+| --- | --- | --- |
+| CATCH-UP: migration notes and runner | Main's bytes preserved exactly; its 0141 ENT-3d entry comes before this piece's 0143. No 0142 registration: CH-7-INSURER remains an open PR. Read-only comparison against origin/main and HEAD passed. | Both working-tree conflicts resolved; dispatcher must stage/finish merge. |
+| Sol security blocker: current owner under lock | 0143 is edited in place. Pre-lock membership discovery retains identity only. After taking the company advisory lock, the SECURITY DEFINER routine re-reads the same membership through `identity.current_memberships`, which excludes revoked/expired memberships; restores the requested company context; then checks the merged permission and current owner role before any window/approval/use write. | SOURCE-INSPECTED; PostgreSQL NOT RUN. |
+| Regression for permission changes while waiting | New `[E10]` cases in `sso-emergency-window.integration.test.ts` consume real fixture mailbox proof, observe the identity backend blocked by the company lock, then commit downgrade to admin, revocation or expiry before releasing the lock. Exact refusals, unchanged switch/approval/use/window rows, prior audit preservation and only the permitted refusal log/audit are asserted. The downgrade retains organisation.manage and would open a window with the old cached role, failing these assertions. | AUTHORED and test-file typechecked; NOT database-reproduced, including unfixed control. CI required. |
+| Opus/Sol OpenAPI blocker | Repository generator regenerated apps/api/openapi.json: GET `/auth/sso-required/detail`, required commandId, `sso-emergency.v2` body and 201 `sso-emergency-response.v2` description. Generator comparison passed, then the exact `pnpm openapi:check` passed with narrowly approved tsx IPC socket access. No schema hand-edit or manifest change. | PASS (generator/check execution). |
+| Existing expectation preservation | Both protected emergency test files remain byte-identical to 749e693. The own window-test edit adds only E10; no existing expectation changed. Main's merged tests and all pinned values remain untouched. | SOURCE-INSPECTED / SHA-256 verified. |
+| Local checks | Full typecheck, full build, all package lint tasks, database-test compilation, money/commercial boundary checks and OpenAPI comparison/check pass. Unit results and command details are recorded below. | RUN; database/browser evidence still pending. |
+| Root lint and lane checks | Both were run with LANE_BASE_REF=origin/main. The unfinished merge makes the lane scanner reject 52 staged paths inherited from main. All 52 are byte-identical to origin/main; no lane policy widened or scanner changed. | FAIL in unfinished merge; rerun after dispatcher commits catch-up. |
+
+No new grant, table, dependency, role policy, migration number, provider, external action, charge, alert or release enablement. Affected invariants: current membership/authorization under the company lock (AGENTS §§5.1/5.3), atomic approved effects and audit (§§5.4/5.7), preserved prior guarantees (§1). 0143 remains an unmerged migration, with its existing forward-fix-only strategy. No applied migration is edited; 0129 remains byte-identical. Backwards compatibility is unchanged from r3: retired emergency v1 remains refused; administrative switch/view behavior is preserved. Synthetic-only and all D04/G5/security/commercial release gates remain held.
+
+Protected SHA-256 values, verified both against HEAD and against the start of r4:
+
+| File | SHA-256 | r4 state |
+| --- | --- | --- |
+| packages/db/test/sso-emergency.integration.test.ts | 5c637b625854ac11b4b1a13b2a161a737c1eb47cb62a0dcd70b9e29f773f76c1 | UNCHANGED |
+| packages/db/test/sso-emergency-concurrency.integration.test.ts | 6457c251d2117b3b77f9e9cdff16f1be85eef37df87681fdfdbbe5d635c5f741 | UNCHANGED |
+| packages/db/migrations/0129_sso_required.sql | 4bbeb8d9e88a8f65dc4c47ac369717b95c62e68b113793f5a0c0ad62a7446c50 | UNCHANGED |
+
+## r4 executed checks
+
+R4_COMMANDS.md records exact commands, results and limitations. No clean reinstall or download was attempted: installed dependencies and cached pinned pnpm 10.28.1 were used, via the pre-existing temporary pnpm shim. Node v24.17.0. Ordinary global pnpm --version stalled and was interrupted (130); no override of the package-manager pin was applied.
+
+| Executed check | Result |
+| --- | --- |
+| `pnpm typecheck --force`; `pnpm build --concurrency=2 --force`; separate `turbo run lint --force --concurrency=2` | PASS: seven tasks each, zero cached. |
+| Five database-test-file TypeScript compile; money and commercial boundary scans | PASS; compilation is not PostgreSQL execution. |
+| Exact `pnpm openapi:check` with approved tsx IPC access | PASS; initial sandbox IPC refusal and identical node-loader comparison retained in journal. |
+| Focused SSO/owner/unlinked/disclosure/required/path/context units | PASS: seven files, 216 tests. |
+| Core source units; AI fixtures; web units; seven non-git-writing tool suites | PASS: 2415 core, 80 AI, 784 web, 19 tool tests. |
+| Initial selected Turbo unit run | FAIL: four core failures (two five-second timeouts and two emitted copies looking for source .ts files); 4826 core tests passed. Config/storage passed; AI not reached. Source-only core rerun passed without changing tests/timeouts. |
+| Broad API source run with explicit HTTP exclusions | FAIL: 64 files / 1563 tests passed, one skipped; existing final-account database fixture failed port allocation before PostgreSQL startup. |
+| Database-package non-integration units | FAIL: source-only run has 152 passed, one unchanged C-OPS-1 reachability test timed out (five-second bound). Initial run also found its emitted duplicate: 236 passed, two timeouts. No assertion or timeout relaxed. |
+| Root lint and lint:lanes, both with origin/main base | FAIL: 52 unchanged main paths exposed by unfinished merge; dispatcher must rerun after commit. |
+
+
+PostgreSQL acceptance/concurrency/RLS/upgrade tests, `pnpm test:db`, `pnpm test:migrations`, `pnpm test:e2e` and ENT-10d.spec.ts: NOT RUN here, as instructed; GitHub CI after dispatcher push is required. The initial broad API unit invocation encountered an existing database-backed suite hidden behind an ordinary source-test filename; it failed freePort before starting PostgreSQL. No database guarantee is inferred from source tests or compile checks. Full `pnpm test` is not claimed: it includes PostgreSQL and the lane-tool tests that issue git writes in temporary fixture repositories, contrary to this round's no-git-write scope. AI fixture tests do not establish any live-model/provider approval.
+
+Self-review: main-only rejected paths and exact conflict preservation checked by read-only git-show comparisons; under-lock role/active-member read and tenant-context reset inspected; E10 waiter/blocker synchronization and unchanged-effects assertions inspected; OpenAPI diff restricted to the requested SSO contract additions; protected tests and 0129 hashes rechecked. The downgrade control is logically regression-sensitive but not executed against PostgreSQL. No builder verdict/acceptance, sub-agent, commit, add, checkout, push or merge command. Intended conventional commit message overwritten at `/private/tmp/jg-msg-ent-10e.txt` for the dispatcher. Current HEAD remains 749e693; resulting commit/verdict binding remains the dispatcher's/reviewers' work.
+
+## Historical r3 receipt (superseded by r4)
+
 Built by Codex (actual builder); dispatched 13 Oct 2026.
 
 # ENT-10e continuation r3 — builder receipt

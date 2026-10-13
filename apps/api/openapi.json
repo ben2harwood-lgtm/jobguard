@@ -87,38 +87,133 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "version",
-                  "commandId",
-                  "note",
-                  "description"
-                ],
-                "properties": {
-                  "version": {
-                    "type": "string",
-                    "enum": [
-                      "log-site-extra.v1"
-                    ]
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "note",
+                      "description"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-site-extra.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "pattern": "\\S"
+                      }
+                    }
                   },
-                  "commandId": {
-                    "type": "string",
-                    "format": "uuid"
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "note",
+                      "description",
+                      "siteVisitId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-site-extra.v2"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "pattern": "\\S"
+                      },
+                      "siteVisitId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The caller's own open visit on this job"
+                      }
+                    }
                   },
-                  "note": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 5000,
-                    "pattern": "\\S"
-                  },
-                  "description": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500,
-                    "pattern": "\\S"
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "note",
+                      "description"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-site-extra.v3"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "pattern": "\\S"
+                      },
+                      "photoEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "residentConfirmation": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "shownContentSha256"
+                        ],
+                        "properties": {
+                          "shownContentSha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          }
+                        }
+                      }
+                    }
                   }
-                }
+                ]
               }
             }
           }
@@ -151,9 +246,38 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "PHOTO_NOT_ACCEPTED: the photo is not a verified site photo of this job. CONFIRMATION_MISMATCH: the hash shown is not the server's content hash.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "code"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "enum": [
+                        "site-extra-error.v1"
+                      ]
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "PHOTO_NOT_ACCEPTED",
+                        "CONFIRMATION_MISMATCH"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
-        "summary": "Log a note-only site extra in synthetic_demo; persisted session and database authority only",
+        "summary": "Log a site extra in synthetic_demo (v1 note only, v2 with an open visit, or v3 with a verified photo and a resident confirmation); persisted session and database authority only",
         "tags": [
           "contractor-site-extras"
         ]
@@ -339,6 +463,212 @@
         ]
       }
     },
+    "/contractor/jobs/{id}/site-visits/start": {
+      "post": {
+        "operationId": "SiteVisitController_start",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "start-site-visit.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Visit started, or the identical stored result replayed"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept visit commands. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a site visit in synthetic_demo; persisted session and database authority only",
+        "tags": [
+          "contractor-site-visits"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/site-visits/{visitId}/complete": {
+      "post": {
+        "operationId": "SiteVisitController_complete",
+        "parameters": [
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "closeoutAnswer"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "complete-site-visit.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "closeoutAnswer": {
+                    "type": "string",
+                    "enum": [
+                      "yes",
+                      "no"
+                    ],
+                    "description": "Did the resident ask for anything extra?"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Visit completed with its close-out answer, or the identical stored result replayed"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept visit commands. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Complete a site visit with the close-out answer in synthetic_demo; a visit cannot be completed without one",
+        "tags": [
+          "contractor-site-visits"
+        ]
+      }
+    },
+    "/contractor/site/jobs": {
+      "get": {
+        "operationId": "SiteVisitController_assignedJobs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The caller's assigned jobs, with their own open visit"
+          }
+        },
+        "summary": "List the jobs the caller is named on (site worker); no money, resident or address",
+        "tags": [
+          "contractor-site-visits"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/order-lines": {
+      "get": {
+        "operationId": "SiteVisitController_orderLines",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The lines of the order's current revision, without prices"
+          }
+        },
+        "summary": "List the order lines of one assigned job (site worker); no money",
+        "tags": [
+          "contractor-site-visits"
+        ]
+      }
+    },
     "/contractor/practice/session/revoke": {
       "post": {
         "operationId": "ContractorPracticeSessionController_revoke",
@@ -468,6 +798,42 @@
         ]
       }
     },
+    "/auth/sso-required/detail": {
+      "get": {
+        "operationId": "SsoRequiredController_detail",
+        "parameters": [
+          {
+            "name": "requested_tenant_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "sso-required-detail-view.v1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "sso-required-detail.v1; administrator, origin and CSRF required; no-store"
+          }
+        },
+        "summary": "Read the company administrator's not-yet-linked members and emergency window",
+        "tags": [
+          "sso-required"
+        ]
+      }
+    },
     "/auth/sso-required/emergency": {
       "post": {
         "operationId": "SsoRequiredController_emergency",
@@ -481,6 +847,7 @@
                 "required": [
                   "version",
                   "requested_tenant_id",
+                  "commandId",
                   "email",
                   "code",
                   "reason"
@@ -490,10 +857,14 @@
                   "version": {
                     "type": "string",
                     "enum": [
-                      "sso-emergency.v1"
+                      "sso-emergency.v2"
                     ]
                   },
                   "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "commandId": {
                     "type": "string",
                     "format": "uuid"
                   },
@@ -517,11 +888,14 @@
           }
         },
         "responses": {
+          "201": {
+            "description": "sso-emergency-response.v2; requiredAgainAt and windowMinutes; no session"
+          },
           "403": {
             "description": "SSO_EMERGENCY_REFUSED; identical for every cause; no session"
           }
         },
-        "summary": "Mailbox-proven emergency access; approver rule held, every request refused",
+        "summary": "Mailbox-proven company-owner emergency access with an immutable time limit",
         "tags": [
           "sso-required"
         ]
