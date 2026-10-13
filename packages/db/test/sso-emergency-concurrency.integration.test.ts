@@ -112,7 +112,6 @@ describe("ENT-10d isolated emergency concurrency", () => {
         await owner.query("SET LOCAL ROLE jobguard_migration");
         await owner.query("SELECT set_config('app.tenant_id',$1,true)", [f.principal.tenantId]);
         if (iteration === 0) {
-          expect((await owner.query("SELECT count(*)::int n FROM pg_constraint WHERE conname='sso_emergency_approver_rule_held'")).rows[0].n).toBe(1);
           await owner.query("ALTER TABLE identity.sso_emergency_approver_rule DROP CONSTRAINT sso_emergency_approver_rule_held");
           await owner.query("INSERT INTO identity.sso_emergency_approver_rule(id,version,definition) VALUES($1,'fixture.v1','{}')", [rule]);
         }

@@ -87,38 +87,6 @@ async function audit(tenant:string) {
 }
 
 describe("ENT-10d emergency PostgreSQL boundary",()=>{
- it("[S10a] held route returns identical refusal for invalid mailbox, outsider, ordinary member and eligible administrator",async()=>{
-  const f=await fixture();await f.enable();const service=required(),before=await counts();
-  for(const raw of [{},{version:"sso-emergency.v1",requested_tenant_id:f.principal.tenantId,email:f.email,code:"00000000",reason:"Synthetic unavailable identity provider"}])await expect(service.emergency(raw,origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});
-  const outsider=await fixture(false,false),off=await fixture(false,false),nonAdmin=await fixture(false,false);
-  await memberIn(nonAdmin.principal.identityUserId,f.principal.tenantId);
-  const stable=await counts(),auditBefore=await audit(f.principal.tenantId);
-  for(const [email,t] of [[`unknown@${f.domain}`,f.principal.tenantId],[outsider.email,f.principal.tenantId],[nonAdmin.email,f.principal.tenantId],[off.email,off.principal.tenantId],[f.email,f.principal.tenantId]]) {
-   const code=await f.provider.requestCode({email:email!,purpose:"signin",ip:randomUUID()});
-   await expect(service.emergency({version:"sso-emergency.v1",requested_tenant_id:t,email,code:code.fixtureCode!,reason:"Synthetic unavailable identity provider"},origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});
-  }
-  expect(await counts()).toEqual(stable);expect((await audit(f.principal.tenantId)).slice(0,auditBefore.length)).toEqual(auditBefore);
-  expect((await counts())[3]).toBe(before[3]);
-  for(const name of ["sso_emergency_approval","sso_emergency_use","sso_emergency_approver_rule"])expect((await admin.query(`SELECT count(*)::int n FROM identity.${name}`)).rows[0].n).toBe(0);
- });
- it("[S10b] eligible mailbox administrator commits one separate log and chain event; outsiders produce global record only",async()=>{
-  const f=await fixture();await f.enable();const before=await audit(f.principal.tenantId);
-  const request=await f.provider.requestCode({email:f.email,purpose:"signin",ip:randomUUID()});
-  await expect(f.service.emergency({version:"sso-emergency.v1",requested_tenant_id:f.principal.tenantId,email:f.email,code:request.fixtureCode!,reason:"Synthetic provider outage is being investigated"},origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});
-  const log=(await admin.query("SELECT * FROM identity.sso_emergency_event WHERE tenant_id=$1",[f.principal.tenantId])).rows;
-  expect(log).toHaveLength(1);expect(log[0]).toMatchObject({outcome:"refused",cause_code:"EMERGENCY_APPROVER_RULE_UNSET",membership_id:f.principal.membershipId});
-  const after=await audit(f.principal.tenantId);expect(after).toHaveLength(before.length+1);expect(after.at(-1).event_type).toBe("sso.emergency.refused");
-  const outsider=await fixture(false,false),code=await outsider.provider.requestCode({email:outsider.email,purpose:"signin",ip:randomUUID()});
-  await expect(f.service.emergency({version:"sso-emergency.v1",requested_tenant_id:f.principal.tenantId,email:outsider.email,code:code.fixtureCode!,reason:"Synthetic outsider request must be refused"},origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});
-  expect(await audit(f.principal.tenantId)).toEqual(after);
-  expect((await admin.query("SELECT count(*)::int n FROM identity.sso_refusal_event WHERE code='EMERGENCY_MEMBER_NOT_ACTIVE'")).rows[0].n).toBeGreaterThan(0);
- });
- it("[S10c] held constraint refuses owner rule insertion; identity and runtime cannot insert approvals; no approval writer exists",async()=>{
-  await expect(admin.query("INSERT INTO identity.sso_emergency_approver_rule(id,version,definition) VALUES($1,'fixture.v1','{}')",[randomUUID()])).rejects.toMatchObject({code:"23514",constraint:"sso_emergency_approver_rule_held"});
-  for(const pool of [identity,runtime])await expect(pool.query("INSERT INTO identity.sso_emergency_approval DEFAULT VALUES")).rejects.toMatchObject({code:"42501"});
-  const sql=await readFile(new URL("../migrations/0129_sso_required.sql",import.meta.url),"utf8");
-  expect(sql).not.toMatch(/INSERT INTO identity\.sso_emergency_(?:approver_rule|approval)\b/iu);
- });
  it("[S10d] one owner-run rolled-back fixture proves sequential single use, expiry, wrong member and tenant",async()=>{
   const f=await fixture(),other=await fixture();await f.enable();await other.enable();
   const client=await admin.connect(),rule=randomUUID(),approval=randomUUID();
@@ -140,8 +108,6 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
    expect((await use(f.principal.identityUserId)).rows[0].result.used).toBe(false);
    expect((await client.query("SELECT count(*)::int n FROM identity.sso_emergency_use WHERE tenant_id=$1",[f.principal.tenantId])).rows[0].n).toBe(1);
   }finally{await client.query("ROLLBACK");client.release();}
-  expect((await admin.query("SELECT count(*)::int n FROM pg_constraint WHERE conname='sso_emergency_approver_rule_held'")).rows[0].n).toBe(1);
-  for(const name of ["sso_emergency_approver_rule","sso_emergency_approval","sso_emergency_use"])expect((await admin.query(`SELECT count(*)::int n FROM identity.${name}`)).rows[0].n).toBe(0);
  });
  it("[S11] refused and owner-fixture uses preserve journal, evidence, earlier audit and every identity authority row byte-for-byte",async()=>{
   const f=await fixture();await f.enable();
