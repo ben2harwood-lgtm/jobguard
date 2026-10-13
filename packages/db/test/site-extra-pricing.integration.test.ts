@@ -190,7 +190,7 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
 });
 
 describe("ENT-3c replay, conflict and the six properties the coordinator named (B-prime)", () => {
-  it("replaying a command id returns the first result, never the job's current state", async () => {
+  it("[C12] replaying a command id returns the first result, never the job's current state", async () => {
     const f = await siteFixture(c), who = f.members.supervisor, raw = sorInput(f.jobId, { sorCode: "REPAIR-DOOR", quantity: "3" }), tenant = f.p.tenantId;
     const first = await repo.logSorSiteExtra(f.ctx, who.member, raw), snapshot = await rowText(c, tenant, "extra_sor_revision");
     // [C12] (a) the order now instructs the item in full, (b) a newer price list exists, (c) the member has a second covering grant.
@@ -203,7 +203,7 @@ describe("ENT-3c replay, conflict and the six properties the coordinator named (
     expect((await c.admin.query("SELECT result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, raw.commandId])).rows).toEqual([{ result: { variationId: first.variationId } }]);
   }, 60_000);
 
-  it("the same command id with a changed payload conflicts", async () => {
+  it("[C12] the same command id with a changed payload conflicts", async () => {
     const f = await siteFixture(c), raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "2" }), me = f.members.supervisor.member, tenant = f.p.tenantId;
     const invitedAgain = await invite(c, f, "supervisor", { kind: "tenant", id: tenant });
     const first = await repo.logSorSiteExtra(f.ctx, me, raw), before = await written(c, tenant), snapshot = await rowText(c, tenant, "extra_sor_revision");
@@ -222,7 +222,7 @@ describe("ENT-3c replay, conflict and the six properties the coordinator named (
     await expect(repo.logSiteExtra(f.ctx, me, { commandId: raw.commandId, jobId: f.jobId, note: noteText, description: "Clear gutters" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   }, 60_000);
 
-  it("the same command id on another job conflicts", async () => {
+  it("[C12] the same command id on another job conflicts", async () => {
     const f = await siteFixture(c), both = (await invite(c, f, "supervisor", { kind: "tenant", id: f.p.tenantId })).member, raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER" });
     for (const jobId of [f.jobId, f.otherJob]) expect((await decision(c, f, both, "LogSiteExtra", jobId))[0]!.decision).toBe("allowed");
     const first = await repo.logSorSiteExtra(f.ctx, both, raw), before = await written(c, f.p.tenantId);
@@ -231,7 +231,7 @@ describe("ENT-3c replay, conflict and the six properties the coordinator named (
     expect(await repo.logSorSiteExtra(f.ctx, both, raw)).toEqual(first);
   });
 
-  it("a successful no-op keeps its identity", async () => {
+  it("[C12] a successful no-op keeps its identity", async () => {
     // The first successful call is not a no-op. The property applies as follows: (1) a replay of the same id and body after success returns the same extra id, the same revision
     // and the same basis and writes nothing new; (2) the draft's "already on the order" outcome logs nothing, so asking again leaves nothing and gives the same refusal each time.
     const f = await siteFixture(c), who = f.members.operative, raw = sorInput(f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "1.5" }), tenant = f.p.tenantId;
@@ -243,7 +243,7 @@ describe("ENT-3c replay, conflict and the six properties the coordinator named (
     const e1 = await refused(f, who.member, within, "ALREADY_ON_ORDER"), e2 = await refused(f, who.member, within, "ALREADY_ON_ORDER"); expect(e2).toEqual(e1);
   });
 
-  it("a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written", async () => {
+  it("[C17] a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written", async () => {
     const f = await siteFixture(c), order = await newOrder(c, f, lines(["L1", "FIT-LOCK", "1"])), raw = sorInput(order.jobId, { sorCode: "CLEAR-GUTTER" });
     await leaveLive(c, f, order.jobId);
     const before = await written(c, f.p.tenantId), head = await chainHead(c, f.p.tenantId);
@@ -257,7 +257,7 @@ describe("ENT-3c replay, conflict and the six properties the coordinator named (
     expect((await c.admin.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND event_type IN('contractor.extra.raised','contractor.extra.refused') AND subject_ref IN($2,$3)", [f.p.tenantId, raw.commandId, order.jobId])).rowCount).toBe(0);
   });
 
-  it("an unauthorised caller gets the identical refusal for an unknown job, a foreign job, a not-live job and a live job", async () => {
+  it("[C9] an unauthorised caller gets the identical refusal for an unknown job, a foreign job, a not-live job and a live job", async () => {
     const f = await siteFixture(c), foreign = await fixture(c), notLive = await newOrder(c, f, lines(["L1", "FIT-LOCK", "1"]));
     await leaveLive(c, f, notLive.jobId);
     const targets = [["unknown", randomUUID()], ["foreign", foreign.jobId], ["not-live", notLive.jobId], ["live", f.jobId]] as const;
