@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityFactsV3, recoveryEligibilityViewV3 } from "./recovery-eligibility-v3.js";
+import { sha256 } from "./evidence-pack.js";
+import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityFactsV3, recoveryEligibilityViewV3, RECOVERY_NOT_COUNTED_WORDING_V1 } from "./recovery-eligibility-v3.js";
 import { assertRecoverySources, recoveryCaseTypeV1 } from "./recovery-case.js";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
 const facts = (fixture: string, changes: Record<string,unknown> = {}) => ({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:id(1),jobId:id(2),caseId:id(3),fixture,settlement:"settled",paymentTiming:"after_opening",sourceRef:id(4),...changes});
@@ -59,4 +60,35 @@ describe("CH-7-F17-BEFORE-OPEN timing parity",()=>{
   const result=evaluateRecoveryEligibilityV3(facts("F17",{paymentTiming:"before_opening",settlement}));
   expect(result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case",lines:[{netPence:45000,qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"}]});
  });
+});
+
+
+describe("CH-7-INSURER independent F19 wording",()=>{
+ const individual="Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.";
+ it("[B1 B2 DB16] F19 exact words and hash preserve principal and compensation header",()=>{
+  expect(individual).toHaveLength(173);expect(sha256(individual)).toBe("fb24c95b4190d5b342b52302d5f5e18734f6b75a06b1c943de313359fa07a72f");
+  const result=evaluateRecoveryEligibilityV3(facts("F19"));
+  expect(result).toMatchObject({qualifyingPrincipal:{pence:250000},reason:"Fixed statutory compensation is not part of the fee base",reasonHeld:false});
+  expect(result.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({reason:individual,reasonHeld:false,qualifyingPrincipal:{pence:0}});
+ });
+ it("[B2 DB16] F19 pending explains interest while preserving its pending header",()=>{
+  const result=evaluateRecoveryEligibilityV3(facts("F19",{settlement:"pending"}));
+  expect(result.reason).toBe("Pending money cannot qualify");expect(result.lines.find(l=>l.kind==="statutory_interest")?.reason).toBe(individual);
+ });
+ it("[B2] paid-before covers every F19 line and F18 interest is unchanged",()=>{
+  expect(evaluateRecoveryEligibilityV3(facts("F19",{paymentTiming:"before_opening"})).lines.every(l=>l.reason==="Paid before you opened this case")).toBe(true);
+  expect(evaluateRecoveryEligibilityV3(facts("F18")).lines.find(l=>l.kind==="statutory_interest")).toMatchObject({reason:null,qualifyingPrincipal:{pence:12000}});
+ });
+ it("[B2 DB18] legacy F19 null interest and held reasons remain readable",()=>{
+  const result=evaluateRecoveryEligibilityV3(facts("F19")),legacy={...result,reasonHeld:true,lines:result.lines.map(l=>({...l,reason:l.kind==="statutory_interest"?null:l.reason,reasonHeld:l.kind==="statutory_interest"}))};
+  expect(recoveryEligibilityViewV3.parse(legacy)).toEqual(legacy);
+ });
+});
+
+it("[B1] approved constants have the exact independent UTF-8 hashes without activating F21",()=>{
+ expect(RECOVERY_NOT_COUNTED_WORDING_V1.individualInterest).toHaveLength(173);
+ expect(sha256(RECOVERY_NOT_COUNTED_WORDING_V1.individualInterest)).toBe("fb24c95b4190d5b342b52302d5f5e18734f6b75a06b1c943de313359fa07a72f");
+ expect(RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced).toHaveLength(163);
+ expect(sha256(RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced)).toBe("44e291a1874a9c230b704f972df2a547fcb4d67256d1c0f69114682decaf0e21");
+ expect(evaluateRecoveryEligibilityV3(facts("F21"))).toMatchObject({reason:null,reasonHeld:true});
 });

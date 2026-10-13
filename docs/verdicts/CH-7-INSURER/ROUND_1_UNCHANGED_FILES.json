@@ -1,0 +1,38 @@
+{
+  "apps/api/src/recovery-eligibility-v3.application.test.ts": {
+    "equal_to_f1180b5": true,
+    "sha256": "4864ac3aa5e670abb53e95f0de02c0f130f632b553cb5f870fc7d831ac88104d"
+  },
+  "packages/db/test/recovery-eligibility-v3.integration.test.ts": {
+    "equal_to_f1180b5": true,
+    "sha256": "75817a9d3ef452fd7db87cde44a069d05ca0d2e61df2a3aa88c42030f1acf5d4"
+  },
+  "packages/db/src/recovery-eligibility-v3-repository.ts": {
+    "equal_to_f1180b5": true,
+    "sha256": "78437d93ac6b96dcfbf3f596aab48d98587620b7d37943d602c6bd1167d98a00"
+  },
+  "packages/db/migrations/0003_job_spine.sql": {
+    "equal_to_f1180b5": true,
+    "sha256": "7b00fd65d12fa1bd868622a784272cd6ed2c12c9634eb5a6ee326ce93de02a97"
+  },
+  "packages/db/migrations/0095_job_parties.sql": {
+    "equal_to_f1180b5": true,
+    "sha256": "9ee24d65cc32b8fd0e713e3e85a9e536803fdbdbb319ce2d5e3754cc3c5d03d4"
+  },
+  "packages/db/migrations/0119_recovery_eligibility_v3.sql": {
+    "equal_to_f1180b5": true,
+    "sha256": "15e217b0bf7926315859d92ebc708b86b3831942c82ff7627474d2b37b0028d7"
+  },
+  "packages/db/migrations/0130_recovery_eligibility_v3_f17_timing.sql": {
+    "equal_to_f1180b5": true,
+    "sha256": "bd73f33d36d44f4fafe16ba7a5bf395e49da2edf982cc98fd03ed9a3420315f1"
+  },
+  "packages/db/migrations/0134_recovery_case_terms.sql": {
+    "equal_to_f1180b5": true,
+    "sha256": "0f981e24c45f1e7decd69d7c872d49056b6c27d11512eebac774925cb5b88d5a"
+  },
+  "apps/api/openapi.json": {
+    "equal_to_f1180b5": true,
+    "sha256": "43db5d4a988a7e66002832f26d2914058e7fbbb3feab7c1292d609da5eb40505"
+  }
+}

@@ -18,11 +18,16 @@ export class RecoveryEligibilityV3Error extends Error {
 }
 export const recoveryClaimLineKindV3 = z.enum(["principal","statutory_interest","fixed_compensation"]);
 export const recoveryDebtorTypeV3 = z.enum(["business","individual"]);
-// Q4: no new wording for individual interest or unpaid-bill reductions. Null is deliberately not an invented explanation.
+/** Ben-approved message bytes. F21 activation remains stopped pending its merged-test ruling. */
+export const RECOVERY_NOT_COUNTED_WORDING_V1 = {
+ individualInterest: "Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.",
+ unpaidBillReduced: "Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.",
+} as const;
 export const recoveryEligibilityReasonV3 = z.enum([
  "Credit note below the £250 minimum","Credit note used against an invoice not yet paid in full",
  "Fixed statutory compensation is not part of the fee base","Paid before you opened this case",
  "Pending money cannot qualify","A manual payment record is not settlement evidence","Prevented spending is not recovered cash",
+ "Insurer proceeds never qualify", RECOVERY_NOT_COUNTED_WORDING_V1.individualInterest, RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced,
 ]);
 export const recoveryEligibilityViewV3 = z.object({
  version:z.literal("recovery-eligibility-review.v3"),policyVersion:z.literal("reference_recovery_eligibility_policy_v3"),
@@ -62,10 +67,12 @@ export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityVi
   const reason:RecoveryEligibilityViewV3["reason"]=f.fixture==="F22"?"Prevented spending is not recovered cash":
    refundBeforeOpening||f.fixture==="F20"||definition.category==="withheld_customer_payment"&&f.paymentTiming==="before_opening"?"Paid before you opened this case":
    line.kind==="fixed_compensation"?"Fixed statutory compensation is not part of the fee base":
+   line.kind==="statutory_interest"&&line.debtorType==="individual"?RECOVERY_NOT_COUNTED_WORDING_V1.individualInterest:
    f.fixture==="F15"?"Credit note below the £250 minimum":f.fixture==="F16-partial"?"Credit note used against an invoice not yet paid in full":f.fixture==="F21"?null:
    f.settlement==="pending"?"Pending money cannot qualify":f.settlement==="unverified"?"A manual payment record is not settlement evidence":null;
-  return {...line,qualifyingPrincipal:moneyFromBigInt(refundBeforeOpening?0n:parseExactPence(result.qualifyingPrincipal).numerator),reason,reasonHeld:f.fixture==="F21"||line.kind==="statutory_interest"&&line.debtorType==="individual"};
+  return {...line,qualifyingPrincipal:moneyFromBigInt(refundBeforeOpening?0n:parseExactPence(result.qualifyingPrincipal).numerator),reason,reasonHeld:f.fixture==="F21"};
  });
+ const headerReason=f.fixture==="F19"?(lines.find(l=>l.kind==="principal")?.reason??lines.find(l=>l.kind==="fixed_compensation")?.reason??null):lines.find(l=>l.reason!==null)?.reason??null;
  const q=sumExactPence(lines.map(l=>exactPence(BigInt(l.qualifyingPrincipal.pence))));
- return recoveryEligibilityViewV3.parse({version:"recovery-eligibility-review.v3",policyVersion:"reference_recovery_eligibility_policy_v3",fixture:f.fixture,outcome:q.numerator>0n?"eligible_for_review":"excluded",qualifyingPrincipal:moneyFromBigInt(q.numerator),reason:lines.find(l=>l.reason!==null)?.reason??null,reasonHeld:lines.some(l=>l.reasonHeld),terminal:f.fixture==="F22",productionEnabled:false,lines});
+ return recoveryEligibilityViewV3.parse({version:"recovery-eligibility-review.v3",policyVersion:"reference_recovery_eligibility_policy_v3",fixture:f.fixture,outcome:q.numerator>0n?"eligible_for_review":"excluded",qualifyingPrincipal:moneyFromBigInt(q.numerator),reason:headerReason,reasonHeld:lines.some(l=>l.reasonHeld),terminal:f.fixture==="F22",productionEnabled:false,lines});
 }

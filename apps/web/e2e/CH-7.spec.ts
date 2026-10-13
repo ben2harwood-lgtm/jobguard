@@ -29,6 +29,7 @@ for(const [name,button,movement,q,reason] of [
    await expect(view.getByTestId("v3-outcome")).toHaveText(q==="£0.00"?"Excluded":"Eligible for review");
    if(reason)await expect(view.getByTestId("v3-reason")).toHaveText(reason);
    if(name==="F19")await expect(view.getByTestId("v3-line-statutory_interest")).toContainText("£0.00");
+   if(name==="F19")await expect(view.getByTestId("v3-line-statutory_interest")).toContainText("Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.");
    if(name==="F21")await expect(view.getByTestId("v3-reason")).toHaveCount(0);
    await expect(view.getByText(banner,{exact:true})).toHaveCount(1);
    expect(await view.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
