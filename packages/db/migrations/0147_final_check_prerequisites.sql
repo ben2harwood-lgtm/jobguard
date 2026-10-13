@@ -10,13 +10,13 @@ CREATE TABLE app.final_check_manifest (
 );
 CREATE TABLE app.final_check_manifest_source (
  tenant_id uuid NOT NULL,job_id uuid NOT NULL,manifest_id uuid NOT NULL,id uuid NOT NULL,upload_id uuid NOT NULL,
- source_kind text NOT NULL CHECK(source_kind='evidence_upload'),evidence_id uuid,object_version_id text,sha256 char(64),source_received_at timestamptz NOT NULL,
+ source_kind text NOT NULL CHECK(source_kind='evidence_upload'),evidence_id uuid,object_version_id text,sha256 char(64),source_received_at timestamptz NOT NULL,evidence_received_at timestamptz,
  frozen_input_hash text NOT NULL CHECK(frozen_input_hash ~ '^[a-f0-9]{64}$'),adapter_version text NOT NULL,
  PRIMARY KEY(tenant_id,job_id,manifest_id,id),UNIQUE(tenant_id,job_id,manifest_id,upload_id),
  FOREIGN KEY(tenant_id,job_id,manifest_id) REFERENCES app.final_check_manifest(tenant_id,job_id,id) DEFERRABLE INITIALLY DEFERRED,
  FOREIGN KEY(tenant_id,upload_id) REFERENCES app.evidence_upload(tenant_id,id),
- FOREIGN KEY(tenant_id,job_id,evidence_id,object_version_id,sha256,source_received_at) REFERENCES app.evidence_object(tenant_id,job_id,id,object_version_id,sha256,server_received_at),
- CHECK((evidence_id IS NULL AND object_version_id IS NULL AND sha256 IS NULL) OR (evidence_id IS NOT NULL AND object_version_id IS NOT NULL AND sha256 IS NOT NULL))
+ FOREIGN KEY(tenant_id,job_id,evidence_id,object_version_id,sha256,evidence_received_at) REFERENCES app.evidence_object(tenant_id,job_id,id,object_version_id,sha256,server_received_at),
+ CHECK((evidence_id IS NULL AND object_version_id IS NULL AND sha256 IS NULL AND evidence_received_at IS NULL) OR (evidence_id IS NOT NULL AND object_version_id IS NOT NULL AND sha256 IS NOT NULL AND evidence_received_at IS NOT NULL))
 );
 CREATE TABLE app.final_check_source_attempt (
  tenant_id uuid NOT NULL,job_id uuid NOT NULL,manifest_id uuid NOT NULL,source_id uuid NOT NULL,id uuid NOT NULL,execution_id uuid NOT NULL,
@@ -89,18 +89,17 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant::text||':'||p_job::text,130));
 END $$;
 CREATE FUNCTION app.serialize_final_check_evidence() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE prior text:=current_setting('app.tenant_id',true); received timestamptz;
+DECLARE prior text:=current_setting('app.tenant_id',true);
 BEGIN
  IF NEW.tenant_id IS DISTINCT FROM nullif(prior,'')::uuid AND NOT pg_has_role(session_user,'jobguard_migration','USAGE') AND NOT (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true);
  PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE;
  IF TG_TABLE_NAME='evidence_upload' THEN
-  IF TG_OP='INSERT' THEN NEW.server_received_at:=clock_timestamp();
-  ELSIF ROW(NEW.tenant_id,NEW.id,NEW.job_id,NEW.server_received_at,NEW.object_key,NEW.expected_sha256,NEW.expected_content_type) IS DISTINCT FROM ROW(OLD.tenant_id,OLD.id,OLD.job_id,OLD.server_received_at,OLD.object_key,OLD.expected_sha256,OLD.expected_content_type) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_IDENTITY_CHANGED' USING ERRCODE='55000'; END IF;
+  -- Preserve supplied receipts. A later insert cannot claim a place before an existing lock.
+  IF TG_OP='INSERT' AND EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND NEW.server_received_at<=locked_at) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_IDENTITY_CHANGED' USING ERRCODE='55000';
+  ELSIF TG_OP='UPDATE' AND ROW(NEW.tenant_id,NEW.id,NEW.job_id,NEW.server_received_at,NEW.object_key,NEW.expected_sha256,NEW.expected_content_type) IS DISTINCT FROM ROW(OLD.tenant_id,OLD.id,OLD.job_id,OLD.server_received_at,OLD.object_key,OLD.expected_sha256,OLD.expected_content_type) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_IDENTITY_CHANGED' USING ERRCODE='55000'; END IF;
  ELSIF NEW.kind='original' THEN
-  SELECT server_received_at INTO received FROM app.evidence_upload WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND id=NEW.upload_id;
-  IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_IDENTITY_CHANGED' USING ERRCODE='23503'; END IF;
-  NEW.server_received_at:=received;
+  IF NOT EXISTS(SELECT 1 FROM app.evidence_upload WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND id=NEW.upload_id) THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_IDENTITY_CHANGED' USING ERRCODE='23503'; END IF;
  END IF;
  PERFORM set_config('app.tenant_id',coalesce(prior,''),true);RETURN NEW;
 END $$;
@@ -121,8 +120,8 @@ BEGIN
  PERFORM app.final_check_require_worker(NEW.tenant_id,NEW.job_id);
  IF NEW.lock_id IS NULL AND NEW.evidence_cutoff_at IS NULL THEN SELECT * INTO l FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id; NEW.lock_id:=l.id;NEW.evidence_cutoff_at:=l.locked_at; END IF;
  IF NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE (tenant_id,job_id,id,locked_at)=(NEW.tenant_id,NEW.job_id,NEW.lock_id,NEW.evidence_cutoff_at)) THEN RAISE EXCEPTION 'FINAL_CHECK_LOCK_BINDING_INVALID' USING ERRCODE='23503'; END IF;
- INSERT INTO app.final_check_manifest_source(tenant_id,job_id,manifest_id,id,upload_id,source_kind,evidence_id,object_version_id,sha256,source_received_at,frozen_input_hash,adapter_version)
- SELECT u.tenant_id,u.job_id,NEW.id,u.id,u.id,'evidence_upload',e.id,e.object_version_id,e.sha256,u.server_received_at,
+ INSERT INTO app.final_check_manifest_source(tenant_id,job_id,manifest_id,id,upload_id,source_kind,evidence_id,object_version_id,sha256,source_received_at,evidence_received_at,frozen_input_hash,adapter_version)
+ SELECT u.tenant_id,u.job_id,NEW.id,u.id,u.id,'evidence_upload',e.id,e.object_version_id,e.sha256,u.server_received_at,e.server_received_at,
  app.final_lock_hash(jsonb_build_object('upload',u.id,'receivedAt',to_char(u.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'expectedHash',u.expected_sha256,'contentType',u.expected_content_type)),NEW.detector_version
  FROM app.evidence_upload u LEFT JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id,e.kind)=(u.tenant_id,u.job_id,u.id,'original')
  WHERE u.tenant_id=NEW.tenant_id AND u.job_id=NEW.job_id AND u.server_received_at<=NEW.evidence_cutoff_at;
@@ -144,7 +143,8 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id)=(u.tenant_id,u.job_id,u.id)
    WHERE (u.tenant_id,u.job_id,u.id)=(s.tenant_id,s.job_id,s.upload_id) AND u.state='verified' AND e.kind='original'
    AND (e.id,e.object_version_id,e.sha256,e.server_received_at)=(NEW.evidence_id,NEW.object_version_id,NEW.sha256,NEW.source_received_at)
-   AND e.sha256=u.expected_sha256 AND e.object_version_id=u.object_version_id AND e.server_received_at=s.source_received_at AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation x WHERE x.tenant_id=NEW.tenant_id AND x.evidence_id=e.id)) THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_UNAVAILABLE'; END IF;
+   AND e.sha256=u.expected_sha256 AND e.object_version_id=u.object_version_id AND e.server_received_at<=m.evidence_cutoff_at
+   AND (s.evidence_id IS NULL OR (e.id,e.object_version_id,e.sha256,e.server_received_at)=(s.evidence_id,s.object_version_id,s.sha256,s.evidence_received_at)) AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation x WHERE x.tenant_id=NEW.tenant_id AND x.evidence_id=e.id)) THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_UNAVAILABLE'; END IF;
   IF NEW.stage='detection' AND NEW.input_hash IS DISTINCT FROM s.frozen_input_hash THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_MISMATCH'; END IF;
   IF NEW.stage='reconciliation' AND NOT EXISTS(SELECT 1 FROM app.final_check_source_attempt d WHERE (d.tenant_id,d.job_id,d.manifest_id,d.source_id,d.execution_id,d.stage,d.outcome,d.result_hash)=(NEW.tenant_id,NEW.job_id,NEW.manifest_id,NEW.source_id,NEW.execution_id,'detection','succeeded',NEW.input_hash) AND d.result_signal_ids=NEW.result_signal_ids) THEN RAISE EXCEPTION 'FINAL_CHECK_DETECTION_REQUIRED'; END IF;
   IF EXISTS(SELECT 1 FROM unnest(NEW.result_signal_ids) sid WHERE NOT EXISTS(SELECT 1 FROM app.shadow_signal_evidence se WHERE (se.tenant_id,se.job_id,se.signal_id,se.evidence_id,se.object_version_id,se.sha256,se.source_received_at)=(NEW.tenant_id,NEW.job_id,sid,NEW.evidence_id,NEW.object_version_id,NEW.sha256,NEW.source_received_at))) THEN RAISE EXCEPTION 'FINAL_CHECK_SIGNAL_BINDING_INVALID'; END IF;
@@ -191,14 +191,16 @@ BEGIN
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'inputHash',frozen_input_hash) ORDER BY id),'[]') INTO inventory FROM app.final_check_manifest_source WHERE (tenant_id,job_id,manifest_id)=(p_tenant,p_job,m.id);
  IF m.inventory_hash<>app.final_lock_hash(inventory) OR m.source_count<>jsonb_array_length(inventory)
  OR m.source_count<>(SELECT count(*) FROM app.evidence_upload WHERE tenant_id=p_tenant AND job_id=p_job AND server_received_at<=p_cutoff)
- OR EXISTS(SELECT 1 FROM app.evidence_upload u WHERE u.tenant_id=p_tenant AND u.job_id=p_job AND u.server_received_at<=p_cutoff AND NOT EXISTS(SELECT 1 FROM app.final_check_manifest_source ms WHERE (ms.tenant_id,ms.job_id,ms.manifest_id,ms.upload_id,ms.source_received_at)=(p_tenant,p_job,m.id,u.id,u.server_received_at))) THEN RAISE EXCEPTION 'FINAL_CHECK_INVENTORY_INCOMPLETE'; END IF;
+ OR EXISTS(SELECT 1 FROM app.evidence_upload u WHERE u.tenant_id=p_tenant AND u.job_id=p_job AND u.server_received_at<=p_cutoff AND NOT EXISTS(SELECT 1 FROM app.final_check_manifest_source ms WHERE (ms.tenant_id,ms.job_id,ms.manifest_id,ms.upload_id,ms.source_received_at)=(p_tenant,p_job,m.id,u.id,u.server_received_at)))
+ -- A supplied original-object receipt cannot introduce an unprocessed pre-cutoff source outside the frozen inventory.
+ OR EXISTS(SELECT 1 FROM app.evidence_object e WHERE e.tenant_id=p_tenant AND e.job_id=p_job AND e.kind='original' AND e.server_received_at<=p_cutoff AND NOT EXISTS(SELECT 1 FROM app.final_check_manifest_source ms WHERE (ms.tenant_id,ms.job_id,ms.manifest_id,ms.upload_id)=(p_tenant,p_job,m.id,e.upload_id))) THEN RAISE EXCEPTION 'FINAL_CHECK_INVENTORY_INCOMPLETE'; END IF;
  FOR s IN SELECT * FROM app.final_check_manifest_source WHERE (tenant_id,job_id,manifest_id)=(p_tenant,p_job,m.id) LOOP
   IF NOT EXISTS(SELECT 1 FROM app.evidence_upload u WHERE (u.tenant_id,u.job_id,u.id,u.server_received_at)=(p_tenant,p_job,s.upload_id,s.source_received_at)
    AND s.frozen_input_hash=app.final_lock_hash(jsonb_build_object('upload',u.id,'receivedAt',to_char(u.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'expectedHash',u.expected_sha256,'contentType',u.expected_content_type))) THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_MISMATCH'; END IF;
   SELECT * INTO d FROM app.final_check_source_attempt WHERE (tenant_id,job_id,manifest_id,source_id,execution_id,stage)=(p_tenant,p_job,m.id,s.id,b.execution_id,'detection') ORDER BY created_at DESC,id DESC LIMIT 1;
   SELECT * INTO r FROM app.final_check_source_attempt WHERE (tenant_id,job_id,manifest_id,source_id,execution_id,stage)=(p_tenant,p_job,m.id,s.id,b.execution_id,'reconciliation') ORDER BY created_at DESC,id DESC LIMIT 1;
   IF d.outcome IS DISTINCT FROM 'succeeded' OR r.outcome IS DISTINCT FROM 'succeeded' OR d.input_hash IS DISTINCT FROM s.frozen_input_hash OR d.version IS DISTINCT FROM b.detector_version OR r.version IS DISTINCT FROM b.reconciliation_version OR r.input_hash IS DISTINCT FROM d.result_hash OR r.result_signal_ids IS DISTINCT FROM d.result_signal_ids OR ROW(r.evidence_id,r.object_version_id,r.sha256,r.source_received_at) IS DISTINCT FROM ROW(d.evidence_id,d.object_version_id,d.sha256,d.source_received_at) THEN RAISE EXCEPTION 'FINAL_CHECK_NOT_COMPLETE'; END IF;
-  IF NOT EXISTS(SELECT 1 FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id)=(u.tenant_id,u.job_id,u.id) WHERE (u.tenant_id,u.job_id,u.id,u.state)=(p_tenant,p_job,s.upload_id,'verified') AND e.kind='original' AND (e.id,e.object_version_id,e.sha256,e.server_received_at)=(d.evidence_id,d.object_version_id,d.sha256,s.source_received_at) AND e.sha256=u.expected_sha256 AND e.object_version_id=u.object_version_id AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation x WHERE x.tenant_id=p_tenant AND x.evidence_id=e.id)) THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_UNAVAILABLE'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id)=(u.tenant_id,u.job_id,u.id) WHERE (u.tenant_id,u.job_id,u.id,u.state)=(p_tenant,p_job,s.upload_id,'verified') AND e.kind='original' AND (e.id,e.object_version_id,e.sha256,e.server_received_at)=(d.evidence_id,d.object_version_id,d.sha256,d.source_received_at) AND e.sha256=u.expected_sha256 AND e.object_version_id=u.object_version_id AND e.server_received_at<=p_cutoff AND (s.evidence_id IS NULL OR (e.id,e.object_version_id,e.sha256,e.server_received_at)=(s.evidence_id,s.object_version_id,s.sha256,s.evidence_received_at)) AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation x WHERE x.tenant_id=p_tenant AND x.evidence_id=e.id)) THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_UNAVAILABLE'; END IF;
   IF EXISTS(SELECT 1 FROM unnest(d.result_signal_ids) sid WHERE NOT EXISTS(SELECT 1 FROM app.shadow_signal_classification c JOIN app.final_check_reveal_proof p ON(p.tenant_id,p.job_id,p.run_id,p.signal_id,p.classification_id)=(c.tenant_id,c.job_id,c.run_id,c.signal_id,c.id) WHERE (c.tenant_id,c.job_id,c.run_id,c.signal_id)=(p_tenant,p_job,p_run,sid))) THEN RAISE EXCEPTION 'FINAL_CHECK_RESULT_UNAVAILABLE'; END IF;
  END LOOP;
  -- All held, pre-cutoff evidence-linked signals need classification, independently of detector output lists.

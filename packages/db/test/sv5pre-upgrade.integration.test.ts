@@ -14,7 +14,7 @@ const OWN = "0147_final_check_prerequisites.sql";
 const TABLES = ["app.customer_invoice", "app.customer_payment", "app.command_receipt", "app.customer_invoice_sequence",
   "app.decision", "app.decision_resolution", "app.action_authorization", "app.action_outbox", "app.audit_event",
   "audit_control.audit_head", "app.final_account_revision", "app.final_account_line", "app.final_account_draft", "app.job",
-  "app.final_account_invoice_binding"];
+  "app.final_account_invoice_binding", "app.evidence_upload", "app.evidence_object"];
 type Proof = Awaited<ReturnType<typeof proofBefore>>;
 type Account = Awaited<ReturnType<typeof seedAccount>>;
 type Queryable = Pick<Pool | PoolClient, "query">;
@@ -66,6 +66,12 @@ describe("SV5PRE own-migration upgrade and historical replay", () => {
     // A genuine pre-0147 invoice supplies this old lock-free kind binding; no fresh final is relabelled after upgrade.
     await asFixtureTenant(f.admin, interimAccount.tenantId, db => db.query(`INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,revision_id)
       VALUES($1,$2,$3,'interim',$4)`, [interimAccount.tenantId, interimAccount.jobId, interimInvoice.id, interimAccount.revisionId]));
+    // Deliberately distinct microsecond receipts are genuine pre-0147 evidence history.
+    const uploadId=randomUUID();
+    await asFixtureTenant(f.admin,a.tenantId,async db=>{
+      await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,server_received_at,state,server_verified_at,object_version_id) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','2026-09-30T10:00:00.000001Z','verified',clock_timestamp(),'historical.v1')",[a.tenantId,a.jobId,uploadId,`sv5pre/${uploadId}`]);
+      await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$3,'original','photo',$4,'historical.v1',repeat('a',64),1,'image/png','standard_evidence','2026-09-30T10:00:00.000002Z',clock_timestamp())",[a.tenantId,a.jobId,uploadId,`sv5pre/${uploadId}`]);
+    });
     await f.admin.query("CREATE FUNCTION app.sv5pre_upgrade_control() RETURNS integer LANGUAGE sql AS 'SELECT 1'");
     before = await proofBefore(f.admin, TABLES);
     for (const [table, snapshot] of Object.entries(before)) {
@@ -122,6 +128,16 @@ describe("SV5PRE own-migration upgrade and historical replay", () => {
     });
     await compare(f.admin, before);
   }, 90_000);
+
+  it("[PRE-MIG-01/PRE-Q5-03] r1 upgraded evidence serialization preserves supplied composite identities",async()=>{
+    const fresh=await seedAccount(f.admin,a.tenantId),uploadId=randomUUID();
+    await asFixtureTenant(f.admin,a.tenantId,async db=>{
+      await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,server_received_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','2026-09-30T10:00:00.000001Z')",[a.tenantId,fresh.jobId,uploadId,`sv5pre/${uploadId}`]);
+      await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$3,'original','photo',$4,'upgraded.v1',repeat('a',64),1,'image/png','standard_evidence','2026-09-30T10:00:00.000002Z',clock_timestamp())",[a.tenantId,fresh.jobId,uploadId,`sv5pre/${uploadId}`]);
+    });
+    expect((await f.admin.query("SELECT u.server_received_at='2026-09-30T10:00:00.000001Z'::timestamptz upload_time_exact,e.server_received_at='2026-09-30T10:00:00.000002Z'::timestamptz object_time_exact FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.upload_id)=(u.tenant_id,u.id) WHERE u.tenant_id=$1 AND u.id=$2",[a.tenantId,uploadId])).rows).toEqual([{upload_time_exact:true,object_time_exact:true}]);
+    await compare(f.admin,before);
+  });
 
   it("[PRE-Q4-04] historical invoice replay preserves original facts without inventing a lock", async () => {
     const counts = await effectCounts(f.admin);

@@ -2,13 +2,67 @@ Built by Codex; dispatched 13 Oct 2026. Codex was available; the dispatch addend
 
 # SV5PRE builder receipt — partial construction, RED review owed
 
-HEAD/base: `2350b1a718b76aabdedd1782f02e92f516914246`, matching issued origin/main. Branch `codex/sandbox/sv5pre`. No commit, add, push, merge or release was performed. Migration 0147 is the issued number. This receipt is builder evidence, not an independent verdict or acceptance. Both RED reviewers must confirm every preserved-assertion row and exact dispatcher commit.
+Repair r1 HEAD: `bfae9dfd38a6671d44e3db7f6f41ee32da461398`; original issued base: `2350b1a718b76aabdedd1782f02e92f516914246`. Current local origin/main: `6659fb58791ec22588948f005b2bd4f6b299fa48` (unchanged during r1). Branch `codex/sandbox/sv5pre`. No commit, add, push, merge or release was performed. Migration 0147 is the issued number. This receipt is builder evidence, not an independent verdict or acceptance. Both RED reviewers must confirm every preserved-assertion row and exact dispatcher commit.
 
 Core, migration/persistence, guarded invoice adapter and worker registration constructed. Fresh legacy issue is fail-closed. Some existing fixture premises require coordinator amendments beyond issued A-D; the exact STOP list below remains technical-acceptance blocking. UI, substantive detector/reconciliation, catches/dispositions, fees and real-data release remain held. SV5-32 is incomplete.
 
 Validation results, grant inventory, hashes, exact amendments and command log are appended after controlled end checks. PostgreSQL, browser and HTTP socket suites are NOT RUN (sandbox cannot start PostgreSQL or bind sockets). Existing aggregate suites belong to dispatcher sequential batching and were not run here. Dependencies were already installed; no install/download command was used.
 
-## Actual validation and commands
+## Repair r1 — dispatcher 4, 13 October 2026
+
+Scope: only Opus findings 1 and 2 in `/Users/benharwood/.local/share/full-steam/jg-runs/sv5pre-opus-bfae9df.md`. That independent verdict is REPAIR, source-inspected only, bound to bfae9df. No independent verdict exists for this uncommitted repair; no acceptance is claimed. Dispatcher owns both the commit split and review of the resulting exact commits. The initial build log and hashes below are historical evidence for bfae9df; r1 evidence here supersedes them where bytes changed.
+
+Finding 1: `serialize_final_check_evidence` retains job serialization and upload identity validation but assigns no field in either merged evidence table. Supplied upload and original-object receipts are preserved. A later upload claiming a receipt at/before an existing lock is refused instead of silently backdated. The new manifest-side `evidence_received_at` binds the object's exact composite identity separately from `source_received_at`, which still freezes the upload receipt. Attempt validation and authoritative publication independently require the object's receipt at/before cutoff and its frozen identity when available. An unfinished pre-lock upload remains inventoried; the existing evidence service's late finalization copies its original upload receipt. Both stages, verified input, matching versions, classifications, immutable result and certificate remain required. Invoice issue re-verifies the same predicate, including refusal of any original object claiming a pre-cutoff receipt outside the frozen upload inventory. No gate, authorization check, existing grant, policy, column or assertion is relaxed.
+
+Finding 2: a NEW `beforeAll(...,60000)` builds `createHistoricalInvoice()` and a new `afterAll` closes it. The old beforeAll and the interim assertion remain byte-identical; no existing test timeout changes. Read-only Python comparison against HEAD verified the exact assertion, old hook and exactly one added hook timeout.
+
+Tests were written before the SQL repair. Their first database run is **NOT RUN (cannot start PostgreSQL here)**, not a claimed observed failure. Added regression titles: `PRE-Q5-03 r1 preserves supplied upload and object times and their composite identity`; `PRE-Q5-03 r1 refuses a post-lock upload backdated into the frozen inventory`; `PRE-Q5-04 r1 a post-cutoff object cannot pass as pre-lock evidence`; `PRE-Q5-03 r1 a pre-cutoff object outside the frozen upload inventory blocks completion`. The last regression and its SQL predicate were added during final source inspection after forced build/lint/typecheck; no runtime TypeScript changed afterward. Database tests are outside packages/db/tsconfig.json's src-only check, so their syntax was separately transpiled without running PostgreSQL; none is claimed executed. The lane's late-finalization fixture now supplies the original stored upload receipt, as `EvidenceService` already does, instead of relying on a trigger overwrite. The own-0147 upgrade proof seeds both evidence tables with distinct microsecond receipt values, compares their named pre-existing columns and full types by original primary-key identity through N and later migrations, and exercises post-upgrade insertion preserving supplied composite identities. All original comparator controls are retained. The three merged evidence suites cited by Opus are untouched.
+
+All pnpm commands below prefixed `export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/jg-pnpm-sv5pre:$PATH"`. The existing wrapper invokes installed pinned pnpm 10.28.1; no install/download was attempted. Memory/disk probes before checks returned 0 with 74% free memory and 52 GB available. Each check ran sequentially, with at most two Vitest workers; no build/test overlap.
+
+| r1 command | Exit | Result |
+| --- | --- | --- |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/final-check-completion.test.ts` | 0 | 11 tests, 1 file passed |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/sv5pre-worker-registration.test.ts` | 0 | 5 tests, 1 file passed; mocked composition only |
+| `pnpm exec turbo run typecheck --force --concurrency=2` | 0 | 7/7 tasks, 0 cached |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0 | Core purity 153 files; lane/money boundary passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | sv5pre boundary passed |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force --concurrency=2` | 0 | 7/7 tasks, 0 cached |
+| `pnpm build --concurrency=2 --force` | 0 | 7/7 tasks, 0 cached; 30 Next static pages generated |
+| `pnpm --filter @jobguard/api openapi:check` | 1 | BLOCKED before generator execution: tsx socket `listen EPERM` |
+| Nonexecuting `node --input-type=module` / TypeScript `transpileModule` syntax check on the three changed database test files | 0 | 3 syntax checks passed; not database execution or semantic typechecking |
+
+Read-only r1 commands: `pwd`, `git status --short`, `git rev-parse HEAD`, `git rev-parse origin/main`, `git diff --check`, `git diff --stat`, `git diff --name-only`, targeted `git diff -- <paths>`; `cat`, `sed`, `rg -n`, `ls -l`, `node --version`, `memory_pressure | tail -1`, `df -g /System/Volumes/Data` on the named sources/configuration/verdict. All returned 0. Python source/test/receipt edits and read-only byte/hash comparisons returned 0. The read-only Python verifier used `git show HEAD:<path>` and `git show origin/main:<path>` for every coordinator STOP file and the three evidence suites. All 16 are identical to r1 HEAD; 15 are also identical to origin/main. UIWIRE-12 differs from origin/main only by its already-reviewed bfae9df amendment and is untouched in r1. No git write command was used.
+
+Source-inspected only: SQL receive-time repair, Q5 relational gate and upgrade controls. Test-executed: 16 prerequisite unit tests, forced compile/lint checks. Independently verified: prior Opus REPAIR verdict only; the r1 diff remains unreviewed.
+
+Repair r1 database NOT RUN files: `packages/db/test/sv5pre-completion.integration.test.ts`, `sv5pre-upgrade.integration.test.ts`, `final-account-lock-invoice.integration.test.ts` (cannot start PostgreSQL here). Also explicitly NOT RUN for this evidence-trigger repair: `packages/db/test/shadow-persistence.integration.test.ts`, `shadow-detection.integration.test.ts`, `shadow-isolation-query-log.integration.test.ts`, `practice-session.integration.test.ts`, `recovery.integration.test.ts`, `recovery-follow-up.integration.test.ts`, and the suites using `extra-fixtures.ts`/`evidence-pack-fixture.ts` (cannot start PostgreSQL here; dispatcher must cover them in exhaustive batching). The original NOT RUN manifest below remains in force, including own legacy/access/worker/socket suites, other merged boundary suites, the four P2 helpers and `apps/web/e2e/SV-4.spec.ts` (cannot start PostgreSQL/browser here). `pnpm test`, `test:db`, `test:migrations`, `test:e2e` and applicable eval remain dispatcher-owned, NOT RUN. No provider/model/prompt change.
+
+Standard F unchanged: r1 adds no GRANT. Every migration GRANT is listed individually in the existing Standard F section below; runtime still gains SELECT on opaque completion only, with no runtime DML or new callable helper. Forward-fix only; do not remove invoice gates or rewrite history.
+
+
+Named fixture consumers also NOT RUN (cannot start PostgreSQL here; read-only `rg -l` enumeration returned 0):
+
+- packages/db/test/contractor-session-context.integration.test.ts
+- packages/db/test/evidence-pack-sources.integration.test.ts
+- packages/db/test/evidence-pack-upgrade.integration.test.ts
+- packages/db/test/evidence-packs.integration.test.ts
+- packages/db/test/extra-links.integration.test.ts
+- packages/db/test/extra-origin-upgrade.integration.test.ts
+- packages/db/test/extra-origin.integration.test.ts
+- packages/db/test/extra-unlink.integration.test.ts
+- packages/db/test/recovery-follow-up-upgrade.integration.test.ts
+- packages/db/test/recovery-message-upgrade.integration.test.ts
+- packages/db/test/recovery-messages.integration.test.ts
+- packages/db/test/site-extra-authority.integration.test.ts
+- packages/db/test/site-extra-order-check.integration.test.ts
+- packages/db/test/site-extra-pricing-upgrade.integration.test.ts
+- packages/db/test/site-extra-pricing.integration.test.ts
+- packages/db/test/site-extra.integration.test.ts
+
+OpenAPI STOP command: `export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/jg-pnpm-sv5pre:$PATH"; pnpm --filter @jobguard/api openapi:check` (exit 1). Exact refusal: `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/34562.pipe`. No alternate route or escalation was attempted. OpenAPI generation/comparison is NOT RUN because tsx failed before loading the generator. Forced checks emitted Turbo cache IO warnings, and build retained existing Next workspace-root/CSS warnings; each forced check still executed all seven tasks with zero cache hits and exited 0. Final disk probe: 52 GB available, above 45 GB.
+
+## Original build validation and commands
 
 Node is v24.17.0. A local copy of pinned pnpm 10.28.1 was used without install/download. The default pnpm launcher (v11) stalled twice before unit tests and once in Turbo children: these attempts were interrupted (130). `/private/tmp/jg-pnpm-sv5pre/pnpm` points at the already-installed `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`. Each subsequent pnpm command prefixed `export PATH="$HOME/Library/pnpm/bin:$PATH"` and the temporary wrapper path. Repository package/config scripts are unchanged.
 
@@ -148,7 +202,7 @@ Line numbers are issued-base unless marked current. Before snippets are the exac
 | packages/db/test/practice-feed.integration.test.ts:64 | Same exact call as practice-facts above | Same missing baseline and held broader source setup; file fully restored. |
 | packages/db/test/UIWIRE-12.integration.test.ts:25 (current :26) | `const invoice=await repo.issue(context,{jobId,finalAccountRevisionId:revisionId,actorMembershipId:M,commandId:randomUUID(),recipient:"practice@example.invalid",issuedOn:"2026-09-19"});` | Same missing baseline in freshInvoice. Broader source setup held; issue unchanged; separately approved historical relocation retained. |
 | apps/api/src/shadow-detection.worker.test.ts:77 | `expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence"]);` | Needed `expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence","final_check"]);`. Protected merged expectation outside A-D; untouched. |
-| apps/api/src/shadow-isolation.application.test.ts:120–121/:134 and :300–301/:315 | Upload INSERT lacks verified state/version; original-object and later signal-evidence INSERTs use `fixed` receive time | Establish deterministic clock before receipt, perform genuine verified finalization and use server-copied upload receive time in exact signal FK. These earlier lines are outside :358–365 authority. Therefore :365's issue prerequisite also STOP; entire file untouched, all trace comparisons held. |
+| apps/api/src/shadow-isolation.application.test.ts:120–121/:134 and :300–301/:315 | Upload INSERT lacks verified state/version; original-object and later signal-evidence INSERTs use `fixed` receive time | r1 preserves the fixed composite timestamp. Verified state/version still requires coordinator-owned prerequisite setup; none of these lines changes. The required post-lock publication at :358–365 remains STOP below. |
 | apps/api/src/final-account-lock.application.ts:17 | `this.repo=new FinalAccountLockRepository(pool)` | Needed `this.repo=new FinalAccountLockRepository(practiceMaterialPool(pool,verifiedSessionDigest))` through the existing request/session seam, with reviewed imports/derivation. New explicit SQL session/job recheck fails closed because this older composition supplies no digest. File outside lane; unchanged. Never relax SQL guard. |
 | packages/db/src/migrate.ts:80 on current main | Worktree jumps from 0138 to 0140 | Current main adds `new URL("../migrations/0139_site_visit_closeout.sql", import.meta.url),` before 0140. Dispatcher rebase must carry actual 0139 and shared catalog/export rows; no out-of-lane copy attempted. |
 
@@ -164,15 +218,157 @@ P2 has four further unchanged STOP calls below. Before is each exact invoice cal
 
 - **apps/web/e2e/helpers/recovery-sources.ts:55**. Before: `const invoices = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: randomUUID(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-09-25" });`. After needed: checked fixture helper above, then that byte-identical call. No edit made.
 
+
+### Repair r1 complete coordinator STOP list
+
+All AFTER values below are proposals needing coordinator action, not changes made in r1. Every BEFORE excerpt was read from this worktree and checked against HEAD. All 13 files are unchanged during r1. Shared setup must use checked synthetic publication, retain all issue calls and later assertions, and never manufacture completion or relax SQL authority.
+
+- **STOP `packages/db/test/UIWIRE-10.integration.test.ts:5`**
+
+BEFORE (unchanged):
+
+```ts
+const first=await repository.issue(context,input)
+```
+
+AFTER PROPOSED: Establish the missing accepted baseline scope/revision/line under coordinator authority; insert `await prepareInvoicePrerequisites(admin,runtime,T,J,M,R)` immediately before the byte-identical issue call.
+
+- **STOP `packages/db/test/UIWIRE-11.integration.test.ts:4`**
+
+BEFORE (unchanged):
+
+```ts
+invoiceId=(await repo.issue(context,{jobId:J,finalAccountRevisionId:R,actorMembershipId:M,commandId:randomUUID(),recipient:"practice@example.invalid",issuedOn:"2026-09-18"})).id
+```
+
+AFTER PROPOSED: Establish the missing accepted baseline source identities and line, then checked terms/lock/completion before the byte-identical call. All credit/hash/money assertions stay.
+
+- **STOP `packages/db/test/UIWIRE-12.integration.test.ts:26`**
+
+BEFORE (unchanged):
+
+```ts
+const invoice=await repo.issue(context,{jobId,finalAccountRevisionId:revisionId,actorMembershipId:M,commandId:randomUUID(),recipient:"practice@example.invalid",issuedOn:"2026-09-19"});
+```
+
+AFTER PROPOSED: Original order :25 is current :26. Supply the missing baseline and checked prerequisites for head-time freshInvoice only; preserve historical construction, unchanged call and receipt/reversal assertions.
+
+- **STOP `packages/db/test/practice-facts.integration.test.ts:63`**
+
+BEFORE (unchanged):
+
+```ts
+  const issued = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), recipient: "practice@example.invalid", issuedOn: "2026-09-19" });
+```
+
+AFTER PROPOSED: Supply the missing baseline source identities and checked terms/lock/completion before this identical call; preserve every movement/replay/refusal/money assertion.
+
+- **STOP `packages/db/test/practice-feed.integration.test.ts:64`**
+
+BEFORE (unchanged):
+
+```ts
+  const issued = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), recipient: "practice@example.invalid", issuedOn: "2026-09-19" });
+```
+
+AFTER PROPOSED: Supply the missing baseline source identities and checked terms/lock/completion before this identical call; preserve every feed assertion.
+
+- **STOP `apps/api/src/shadow-detection.worker.test.ts:77`**
+
+BEFORE (unchanged):
+
+```ts
+   expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence"]);
+```
+
+AFTER PROPOSED: `expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence","final_check"]);` Coordinator-owned task-list expectation; all later task checks unchanged.
+
+- **STOP `apps/api/src/shadow-isolation.application.test.ts:358–365`**
+
+BEFORE (unchanged):
+
+```ts
+   await success("final-account lock",()=>app.finalAccountLock.lock(a.jobId,{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"}));
+   await success("final-account lock projection",()=>app.finalAccountLock.get(a.jobId));
+   // Real authorized delivery exercises notification content and retry telemetry, with no external provider.
+   let attempts=0;const adapter:import("@jobguard/db").OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async action=>{trace.notifications.push(action);return ++attempts===1?{kind:"retryable",code:"SYNTHETIC_RETRY"}:{kind:"succeeded",providerReference:"synthetic:Q"}},reconcile:async()=>"unknown"};
+   const executor=new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:(name:Parameters<import("@jobguard/db").SafeTelemetry["emit"]>[0],fields:Readonly<Record<string,string|number>>)=>trace.telemetry.push({name,fields})});
+   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   expect(trace.notifications).toHaveLength(2);expect(trace.telemetry).toContainEqual(expect.objectContaining({name:"outbox.retry"}));
+   await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:"a".repeat(64),recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
+```
+
+AFTER PROPOSED: Keep this entire block byte-identical and add checked worker fixture processing/publication for each copy after the lock, before issue. Earlier upload verification/version prerequisites are coordinator-owned. Preserve every trace, notification, export, error, cache and byte-equality assertion.
+
+- **STOP `apps/web/e2e/SV-4.spec.ts:112`**
+
+BEFORE (unchanged):
+
+```ts
+  await shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,other.jobId,randomUUID(),foreign.id,foreign.cutoff]);
+```
+
+AFTER PROPOSED: Replace only this successful unsupported completed-fact setup with genuine manifest/run/source/result processing and checked publication for other.jobId, bound to foreign.id/foreign.cutoff. Retain both prior 23503 refusals and every later FINAL_CHECK_NOT_COMPLETE/issue assertion. A raw completed string cannot authorize issue.
+
+- **STOP `apps/web/e2e/M4-3-S.spec.ts:57`**
+
+BEFORE (unchanged):
+
+```ts
+  const invoices = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: randomUUID(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-09-25" });
+```
+
+AFTER PROPOSED: Insert a coordinator-approved `await prepareAuthoritativeInvoiceFixture(page,jobId,final.account)` (terms/dispositions/lock plus checked synthetic worker publication) immediately before this identical call. UI-facing assertions unchanged; shared worker fixture port remains coordinator-owned.
+
+- **STOP `apps/web/e2e/helpers/customer-invoice-journey.ts:68`**
+
+BEFORE (unchanged):
+
+```ts
+ const issued=await jsonResult(page.request.post(`/api/jobs/${jobId}/customer-invoices`,{data:{version:"practice-customer-invoice.issue.v1",commandId:crypto.randomUUID(),finalAccountRevisionId:final.account.id,expectedSourceHash:final.account.sourceHash,recipient:"practice-customer@example.invalid",issuedOn:"2026-09-19"}}),"Issue synthetic invoice");
+```
+
+AFTER PROPOSED: Same checked fixture helper immediately before the identical call; all UI-facing assertions unchanged.
+
+- **STOP `apps/web/e2e/helpers/recovery-allocation-journey.ts:67`**
+
+BEFORE (unchanged):
+
+```ts
+  const issued = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: id(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-12" });
+```
+
+AFTER PROPOSED: Same checked fixture helper immediately before the identical call; all UI-facing assertions unchanged.
+
+- **STOP `apps/web/e2e/helpers/recovery-sources.ts:55`**
+
+BEFORE (unchanged):
+
+```ts
+  const invoices = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: randomUUID(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-09-25" });
+```
+
+AFTER PROPOSED: Same checked fixture helper immediately before the identical call; all UI-facing assertions unchanged.
+
+- **STOP `apps/api/src/final-account-lock.application.ts:17`**
+
+BEFORE (unchanged):
+
+```ts
+this.repo=new FinalAccountLockRepository(pool)
+```
+
+AFTER PROPOSED: `this.repo=new FinalAccountLockRepository(sessionId?practiceMaterialPool(pool,createHash("sha256").update(sessionId).digest("hex")):pool)` with coordinator-approved imports and session derivation consistent with the existing guarded invoice adapter. Carry the persisted-session digest through the existing scoped pool. Keep authority checks; do not relax the SQL guard.
+
 ## Self-review and evidence limits
 
-Source-inspected: no old migration edited, no fingerprinted column added, no protected constructor/source hash/caller list widened. Both issuer routines use the shared authoritative certificate gate. Publication is relational and audit-atomic; empty output/inventory is explicit. Original upload receipt serializes against freezing, finalization preserves its time, invalidation is rechecked, equal attempt timestamps are refused. Current owner/expiry/session/job access is rechecked before and after job wait and before replay. Application errors are normalized. No new fee/settlement/eligibility write path exists. Core consistency schemas remain in their own file (core index outside lane); SQL owns invoice authority. Lock order includes job/advisory locks before invoice sequence/audit head; no business network call in a transaction.
+Source-inspected: no old migration edited, no fingerprinted column added, no protected constructor/source hash/caller list widened. Both issuer routines use the shared authoritative certificate gate. Publication is relational and audit-atomic; empty output/inventory is explicit. Original upload receipt serializes against freezing; supplied object receipt is separately bound on the new manifest side and checked against cutoff; finalization supplies its original receipt; invalidation is rechecked, equal attempt timestamps are refused. Current owner/expiry/session/job access is rechecked before and after job wait and before replay. Application errors are normalized. No new fee/settlement/eligibility write path exists. Core consistency schemas remain in their own file (core index outside lane); SQL owns invoice authority. Lock order includes job/advisory locks before invoice sequence/audit head; no business network call in a transaction.
 
 Test-executed: 16 own unit tests; forced lint/build; lane/core-purity/money-boundary checks. PostgreSQL guarantees, history/upgrade controls, real durable scheduling/restart, socket HTTP, OpenAPI generation, browser acceptance and whole suites are NOT RUN. A successful mocked worker composition/injected callback does not prove installed SV-5 orchestration. The actual handler remains explicitly uninstalled. No live model/provider data or professional approval is claimed.
 
-Independently verified: NONE. Builder self-review is not a verdict. Both RED reviewers must bind their verdict to exact dispatcher commits and confirm the preservation table. No acceptance file is invented. The STOP lines, final forced typecheck, dispatcher exhaustive batching manifest and CI results remain required. Founder D12/D13, safety/legal/money decisions, catches/dispositions/UI and real-data release are held. LATER: reveal/UI belongs to the separate SV-5 finisher.
+Independent response: Opus REPAIR at bfae9df (source inspection only). The r1 working-tree repair has no independent verdict. Builder self-review is not a verdict. Both RED reviewers must bind their verdict to exact dispatcher commits and confirm the preservation table. No acceptance file is invented. The STOP lines, dispatcher exhaustive batching manifest and CI results remain required; r1 forced typecheck passed. Founder D12/D13, safety/legal/money decisions, catches/dispositions/UI and real-data release are held. LATER: reveal/UI belongs to the separate SV-5 finisher.
 
-## Byte/hash evidence
+## Original build byte/hash evidence (before r1)
 
 Read-only verification proved 31 protected files identical to issued HEAD, including eight reviewed practice bridges, protected context/replay/fingerprint/catalog tests, four stopped A files, four P2 callers and stopped composition/tests. Removing exactly two imports and one invocation reconstructs the old worker bytes. No permanent test pins shared/merged file hashes. Hash manifest covers 34 changed non-receipt files; untracked files are separately included by git status/lane lint.
 
@@ -278,6 +474,32 @@ An upgrade proof proves ITS OWN migration only: install everything before N, sna
 
 Own proof uses named-column canonical JSON text, full format_type names/types, captured primary-key identities, per-table seeded-row guards and rolled-back microsecond/retype failures plus nullable-column/function/later-insert passes. It remains NOT RUN, including after main rebase.
 
-Final builder HEAD `2350b1a718b76aabdedd1782f02e92f516914246` (uncommitted working tree). Intended implementation message `/private/tmp/jg-msg-sv5pre.txt`; separate amendment message `/private/tmp/jg-msg-sv5pre-coordinator-approved-A-D.txt`. Dispatcher owns rebase/commit/push; exact reviewed implementation SHA does not yet exist.
+Original pre-dispatch builder HEAD was `2350b1a718b76aabdedd1782f02e92f516914246`; dispatcher committed the original work at `bfae9dfd38a6671d44e3db7f6f41ee32da461398`. Current r1 edits are uncommitted at that head. Intended implementation message `/private/tmp/jg-msg-sv5pre.txt`; separate amendment message `/private/tmp/jg-msg-sv5pre-coordinator-approved-A-D.txt`. Dispatcher owns rebase/commit/push; exact reviewed implementation SHA does not yet exist.
 
-Final documentation/message write commands returned 0. Final `git diff --check` and read-only HEAD/status/hash checks returned 0; no code changed after the passing forced lint/build and 16-test unit verification.
+Original-build documentation/message write commands returned 0. Original-build `git diff --check` and read-only HEAD/status/hash checks returned 0; the r1 changes and their verification are recorded separately above.
+
+## Repair r1 final byte/hash evidence and handoff
+
+Read-only final scope/grant comparison (Python plus git diff/show) returned 0: exactly the six r1 files below changed, every GRANT line is byte-identical to bfae9df, and the serialization function assigns no receive-time field. All coordinator STOP files and the three cited merged evidence suites remain identical to bfae9df. No old migration, protected test, UI, shared worker or session composition was edited during repair. Receipt self-hash is omitted.
+
+| r1 changed file | SHA-256 |
+| --- | --- |
+| `docs/contracts/sv5pre-completion-v1.md` | `baa48bf5fcfd4864f536a4308f481d82b52ad9338e6711c8ff959a282248b527` |
+| `packages/db/migrations/0147_final_check_prerequisites.sql` | `a75ec3e6d819954628d5b32298ca436ba3bb9a8dae4845daa8ba27bd7cabff96` |
+| `packages/db/test/final-account-lock-invoice.integration.test.ts` | `ac0b6e2783daa5ec696ab2111cdaf3950bd8f2ba531f681e062d659972b10180` |
+| `packages/db/test/sv5pre-completion.integration.test.ts` | `7272642ae5509456d232023055b4462417fcb51933a03f16186226a2f2fd26c1` |
+| `packages/db/test/sv5pre-upgrade.integration.test.ts` | `0083ff31098a407ce440191a044bd53aeddc5d5c2e4ac9a89907ec6d3c0e8cb9` |
+
+Final read-only `git diff --stat HEAD` (working tree only):
+
+```text
+ docs/contracts/sv5pre-completion-v1.md             |   2 +-
+ docs/verdicts/SV5PRE/BUILDER_RECEIPT.md            | 238 ++++++++++++++++++++-
+ .../migrations/0147_final_check_prerequisites.sql  |  30 +--
+ .../final-account-lock-invoice.integration.test.ts |   6 +-
+ .../db/test/sv5pre-completion.integration.test.ts  |  43 +++-
+ .../db/test/sv5pre-upgrade.integration.test.ts     |  18 +-
+ 6 files changed, 308 insertions(+), 29 deletions(-)
+```
+
+Final local HEAD `bfae9dfd38a6671d44e3db7f6f41ee32da461398`; r1 remains uncommitted. Intended message overwritten at `/private/tmp/jg-msg-sv5pre.txt`. Dispatcher owns split/commit/push; the prior A-D list above remains its responsibility. No git write, new permission request or acceptance occurred. Final Python receipt/message writes and read-only diff/status/head checks returned 0.

@@ -15,6 +15,9 @@ async function appendCheck(f:LockFixture,a:Account,status:'pending'|'failed'|'co
 describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
  let f:LockFixture;
  beforeAll(async()=>{f=await createLockFixture()},60000);afterAll(async()=>closeLockFixture(f));
+ let historical:Awaited<ReturnType<typeof createHistoricalInvoice>>;
+ beforeAll(async()=>{historical=await createHistoricalInvoice()},60000);
+ afterAll(async()=>{if(historical)await historical.close()});
  const direct=(a:Account,input:ReturnType<typeof invoiceInput>)=>asFixtureTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,$6,$7,$8::date,$9)",[a.tenantId,input.jobId,input.finalAccountRevisionId,input.actorMembershipId,input.commandId,input.invoiceKind,input.recipient,input.issuedOn,input.expectedSourceHash]));
  it("missing lock, no completion, pending and failed are typed repository/routine refusals with no invoice effects",async()=>{
   const a=await seedAccount(f.admin),repo=new FinalAccountLockRepository(f.runtime);
@@ -95,12 +98,9 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
   expect(await counts()).toEqual(before);
  });
  it("Q1 historical interim side binding requires no lock",async()=>{
-  const historical=await createHistoricalInvoice();
-  try {
    const a=historical.account,invoice=historical.invoice;
    await asFixtureTenant(historical.fixture.admin,a.tenantId,db=>db.query("INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,revision_id) VALUES($1,$2,$3,'interim',$4)",[a.tenantId,a.jobId,invoice.id,a.revisionId]));
    expect((await historical.fixture.admin.query("SELECT invoice_kind,lock_id,check_id FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{invoice_kind:'interim',lock_id:null,check_id:null}]);
-  } finally { await historical.close(); }
  });
  it("a completion belonging to a foreign tenant cannot be bound or authorize either invoice kind",async()=>{
   const a=await seedAccount(f.admin),b=await seedAccount(f.admin);
