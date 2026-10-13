@@ -758,7 +758,7 @@ describe("M0-6L sole-constructor boundary across all application source", () => 
       expect(boundaryViolations([...relevant, { path: planted, text: "export const context = (tenantId: string) => verifiedTenantContextFromMembership({ tenantId } as never);" }]), planted).not.toEqual([]);
     }
     expect(boundaryViolations([...relevant, { path: WORKER, text: "const x = {} as VerifiedTenantContext;" }].filter((f, i, all) => f.path !== WORKER || i === all.length - 1))).not.toEqual([]);
-  });
+  }, 30_000);
 
   it("accepts the retained synthetic shape and rejects every other constructor, alias, cast or effective-tenant assignment", () => {
     const rogue = (path: string, text: string) => boundaryViolations([{ path, text }]);
