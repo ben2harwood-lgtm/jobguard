@@ -25,7 +25,9 @@ const storedStart = z.object({ visitId: uuid, startedAt: z.string().min(1) }).st
 const storedComplete = z.object({ visitId: uuid, completedAt: z.string().min(1), closeoutAnswer: z.enum(["yes", "no"]) }).strict();
 const timestampText = (column: string) => `to_char(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 /** Raised inside the command transaction when a fact the pre-check relied on has changed; the caller decides again, never from database text. */
-class FactsChanged extends Error {}
+class FactsChanged extends Error {
+ constructor(readonly authorizedCode: SiteVisitErrorCode = "SITE_VISIT_UNAVAILABLE", readonly refusal?: Refusal) { super(); }
+}
 const same = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 function routineFailure(error: unknown): SiteVisitErrorCode | FactsChanged {
  const message = (error as { message?: string } | null)?.message;
@@ -49,22 +51,23 @@ async function finish(db: TenantTransaction, tenant: string, commandId: string, 
 }
 /**
  * ENT-3b: visit start and complete, and the site worker's two read lists. The visit rule lives once, in app.ent3b_visit_authority; this class calls it.
- * Order of every command: tenant identity, pre-check (authority first, no lock), then one transaction that checks the job is live, claims the command,
+ * Order of every command: tenant identity, pre-check (authority first, no lock), then one transaction that locks tenant authority shared, rechecks authority/ownership, checks the job is live, claims the command,
  * calls the controlled routine and appends the one audit event last. A caller who may not visit the job never learns whether it is live.
  */
 export class SiteVisitRepository {
  constructor(private readonly pool: Pool) {}
  /** Authority first. Returns the refusal, or null when the caller may act on this job (and, for completion, owns this visit). */
  private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input): Promise<Refusal | null> {
-  return withTenant(this.pool, context, async db => {
-   const refusal = await this.decide(db, actor, input.jobId);
-   if (refusal) return refusal;
-   if (kind === "complete") {
-    const own = await db.$client.query("SELECT 1 FROM app.site_visit WHERE tenant_id=$1 AND id=$2 AND job_id=$3 AND membership_id=$4", [actor.tenantId, input.visitId, input.jobId, actor.membershipId]);
-    if (!own.rowCount) return { code: "NOT_FOUND", reason: "visit_out_of_scope" };
-   }
-   return null;
-  });
+  return withTenant(this.pool, context, db => this.visitAuthority(db, actor, kind, input));
+ }
+ private async visitAuthority(db: TenantTransaction, actor: AuthenticatedMembership, kind: Kind, input: Input): Promise<Refusal | null> {
+  const refusal = await this.decide(db, actor, input.jobId);
+  if (refusal) return refusal;
+  if (kind === "complete") {
+   const own = await db.$client.query("SELECT 1 FROM app.site_visit WHERE tenant_id=$1 AND id=$2 AND job_id=$3 AND membership_id=$4", [actor.tenantId, input.visitId, input.jobId, actor.membershipId]);
+   if (!own.rowCount) return { code: "NOT_FOUND", reason: "visit_out_of_scope" };
+  }
+  return null;
  }
  private async decide(db: TenantTransaction, actor: AuthenticatedMembership, jobId: string | null): Promise<Refusal | null> {
   try { await assertContractorGate(db, actor, "member"); } catch (error) {
@@ -94,9 +97,14 @@ export class SiteVisitRepository {
   try {
    return await withTenant(this.pool, context, async db => {
     const tenant = context.tenantId.toLowerCase();
-    // First business lock: the live guard, before any other lock (its not-found is a changed fact; its not-live keeps its name).
+    // First lock: the existing contractor administration key, shared. Membership, grant and assignment changes take it exclusively.
+    // Hold it through commit, including for a replay; the checked writer is never reached on that path.
+    await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [tenant]);
+    const authority = await this.visitAuthority(db, actor, kind, input);
+    if (authority) throw new FactsChanged("SITE_VISIT_UNAVAILABLE", authority);
+    // Authority first, then the live-job row share lock, then the receipt; audit head remains last.
     try { await requireLiveJob(db, input.jobId); } catch (error) {
-     if (error instanceof WatchdogError && error.code === "JOB_NOT_LIVE") throw new SiteVisitError("JOB_NOT_LIVE");
+     if (error instanceof WatchdogError && error.code === "JOB_NOT_LIVE") throw new FactsChanged("JOB_NOT_LIVE");
      if (error instanceof WatchdogError) throw new FactsChanged();
      throw error;
     }
@@ -104,7 +112,12 @@ export class SiteVisitRepository {
     const content = kind === "start" ? { commandType: type, jobId: input.jobId, membershipId: actor.membershipId } : { commandType: type, jobId: input.jobId, membershipId: actor.membershipId, visitId: input.visitId, closeoutAnswer: input.closeoutAnswer };
     const semantic = kind === "start" ? `site-visit-start:${input.jobId}:${actor.membershipId}:${input.commandId}` : `site-visit-complete:${input.jobId}:${input.visitId}:${input.commandId}`;
     const replay = await claim(db, tenant, input.commandId, type, semantic, sha256Hex(canonicalJson(content)), actor.membershipId);
-    if (replay !== null) { const stored = schema.safeParse(replay); if (!stored.success) throw new SiteVisitError("IDEMPOTENCY_CONFLICT"); return stored.data; }
+    if (replay !== null) {
+     // Claim can wait on another command. Recheck immediately before returning its cached answer, still under the shared authority lock.
+     const current = await this.visitAuthority(db, actor, kind, input);
+     if (current) throw new FactsChanged("SITE_VISIT_UNAVAILABLE", current);
+     const stored = schema.safeParse(replay); if (!stored.success) throw new SiteVisitError("IDEMPOTENCY_CONFLICT"); return stored.data;
+    }
     let result: StartedVisit | CompletedVisit, audit: AuditEventInput;
     const references = { command: input.commandId, job: input.jobId, environment: "synthetic_demo" };
     try {
@@ -147,9 +160,9 @@ export class SiteVisitRepository {
     else {
      try { return await this.command(context, actor, kind, input, schema); } catch (error) {
       if (!(error instanceof FactsChanged)) throw error;
-      // The facts changed between the pre-check and the command: decide again, and only call it unavailable if the caller is still allowed.
-      const current = await this.precheck(context, actor, kind, input);
-      if (!current) throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
+      // withTenant has rolled back. Recheck authority before exposing any job state, including a live-guard refusal.
+      const current = error.refusal ?? await this.precheck(context, actor, kind, input);
+      if (!current) throw new SiteVisitError(error.authorizedCode);
       refusal = current;
      }
     }

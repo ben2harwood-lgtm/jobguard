@@ -1,7 +1,7 @@
 // Written before the repository. Real PostgreSQL (embedded) through merged cluster(); the runtime role is the application login.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { SiteVisitError, siteAssignedJobsV1, siteOrderLinesV1 } from "@jobguard/core";
+import { SiteVisitError, siteAssignedJobsV1, siteOrderLinesV1, siteVisitFailureV1, siteVisitHttpStatus } from "@jobguard/core";
 import { JobSchedulingRepository, SiteVisitRepository, WorkOrderRepository, appendAuditBatch, demoFile, demoRow, derivedUuid, withTenant } from "../src/index.js";
 import { fixture } from "./extra-fixtures.js";
 import { ObservedPool, analyseLockOrder, mutableTables } from "./lock-observer.js";
@@ -312,6 +312,105 @@ for (const kind of ["start", "complete"] as const) describe(`B-prime replay and 
  });
 });
 
+describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
+ for (const kind of ["start", "complete"] as const) it(`[R2] ${kind}: replay holds the shared authority lock and rechecks authority and ownership after reading the receipt`, async () => {
+  const f = await visitFixture(c), a = f.members.operative;
+  const open = kind === "complete" ? await start(f, a) : undefined;
+  const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
+  const first = kind === "start" ? await repo.startVisit(f.ctx, a.member, raw) : await repo.completeVisit(f.ctx, a.member, raw);
+  const before = await snapshot(c, f.p.tenantId), head = await auditHead(c, f.p.tenantId);
+  const observed = new ObservedPool(c.runtime, c.admin), watched = new SiteVisitRepository(observed.pool);
+  const { value, transactions } = await observed.record(() => kind === "start" ? watched.startVisit(f.ctx, a.member, raw) : watched.completeVisit(f.ctx, a.member, raw));
+  expect(value).toEqual(first);
+  const replay = transactions.find(t => t.statements.some(s => /SELECT request_hash,status,result FROM app.command_receipt/u.test(s.sql)));
+  expect(replay).toBeDefined(); expect(replay!.outcome).toBe("commit");
+  const analysis = analyseLockOrder(replay!, { mutable: await mutableTables(c.admin) });
+  expect(analysis.firstStatement).toMatch(/pg_advisory_xact_lock_shared\(hashtextextended\(\$1,54\)\)/u);
+  expect(analysis.auditIndex).toBeUndefined(); expect(analysis.strongTableLocks).toEqual([]);
+  const statements = replay!.statements, receiptIndex = statements.findIndex(s => /SELECT request_hash,status,result FROM app.command_receipt/u.test(s.sql));
+  const checks = statements.flatMap((s, index) => /SELECT decision,reason_code FROM app.ent3b_visit_authority/u.test(s.sql) ? [index] : []);
+  expect(checks).toHaveLength(2); expect(checks[0]).toBeLessThan(receiptIndex); expect(checks[1]).toBeGreaterThan(receiptIndex);
+  const held = statements[statements.findIndex(s => s.sql === analysis.firstStatement)]!.footprint.advisory;
+  expect(held.size).toBe(1);
+  for (const statement of statements.slice(receiptIndex)) expect([...statement.footprint.advisory]).toEqual([...held]);
+  if (kind === "complete") expect(statements.slice(receiptIndex).some(s => /SELECT 1 FROM app.site_visit .*membership_id=\$4/u.test(s.sql))).toBe(true);
+  expect(await snapshot(c, f.p.tenantId)).toEqual(before); expect(await auditHead(c, f.p.tenantId)).toBe(head);
+ });
+ for (const kind of ["start", "complete"] as const) for (const path of ["live-guard", "replay"] as const) for (const change of ["membership-revocation", "job-removal"] as const) {
+  it(`[R2] ${kind} ${path}: ${change} after the pre-check receives the same authority refusal, with no writes or cached result`, async () => {
+   const f = await visitFixture(c), a = f.members.operative;
+   const open = kind === "complete" ? await start(f, a) : undefined;
+   const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
+   const run = () => kind === "start" ? repo.startVisit(f.ctx, a.member, raw) : repo.completeVisit(f.ctx, a.member, raw);
+   const first = path === "replay" ? await run() : undefined;
+   if (path === "live-guard") await moveOffLive(c, f);
+   const original = (repo as any).precheck.bind(repo);
+   let reached = 0, before: Awaited<ReturnType<typeof snapshot>> | undefined;
+   const spy = vi.spyOn(repo as any, "precheck").mockImplementation(async (...args: unknown[]) => {
+    const authority = await original(...args);
+    if (reached === 0) {
+     expect(authority, "the real pre-check must allow the caller before the race").toBeNull();
+     reached++;
+     // The pre-check has COMMITted and released its connection. This is a separate real PostgreSQL command/COMMIT before the visit transaction starts.
+     if (change === "membership-revocation") await command(c, f, { kind: "membership.revoke", membershipId: a.member.membershipId });
+     else await reviseOrder(c, f, f.revision, [f.named.member.membershipId]);
+     const decision = await withTenant(c.runtime, f.ctx, async db => (await db.$client.query("SELECT decision,reason_code FROM app.ent3b_visit_authority($1,$2)", [a.member.membershipId, f.jobId])).rows);
+     expect(decision).toEqual(change === "membership-revocation" ? [{ decision: "forbidden", reason_code: "member_inactive" }] : [{ decision: "not_found", reason_code: "job_out_of_scope" }]);
+     before = await snapshot(c, f.p.tenantId);
+    }
+    return authority;
+   });
+   let error: SiteVisitError;
+   try { error = await errorOf(run); } finally { spy.mockRestore(); }
+   expect(reached).toBe(1); expect(before).toBeDefined();
+   expect(error).toBeInstanceOf(SiteVisitError);
+   const code = change === "membership-revocation" ? "VISIT_FORBIDDEN" : "NOT_FOUND";
+   expect(plain(error)).toEqual({ name: "SiteVisitError", message: code, code });
+   const response = { status: siteVisitHttpStatus(error.code), body: siteVisitFailureV1.parse({ version: "site-visit-error.v1", code: error.code }) };
+   expect(response).toEqual({ status: change === "membership-revocation" ? 403 : 404, body: { version: "site-visit-error.v1", code } });
+   expect(error).not.toHaveProperty("result"); expect(error).not.toHaveProperty("closeoutAnswer"); expect(error).not.toHaveProperty("visitId");
+   expect(JSON.stringify(response)).not.toMatch(/visitId|startedAt|completedAt|closeoutAnswer|JOB_NOT_LIVE/u);
+   expect(await snapshot(c, f.p.tenantId)).toEqual(before);
+   const receipt = (await c.admin.query("SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows;
+   expect(receipt).toEqual(path === "replay" ? [{ status: "succeeded", result: first }] : []);
+   // The same request after the revoke (before its pre-check) must expose exactly the same error, status and body.
+   const head = await auditHead(c, f.p.tenantId), preRevoked = await errorOf(run);
+   expect(plain(preRevoked)).toEqual(plain(error));
+   expect({ status: siteVisitHttpStatus(preRevoked.code), body: siteVisitFailureV1.parse({ version: "site-visit-error.v1", code: preRevoked.code }) }).toEqual(response);
+   expect(await snapshot(c, f.p.tenantId)).toEqual(before); expect(await auditHead(c, f.p.tenantId)).toBe(head);
+   expect((await refusalEvents(c, f.p.tenantId)).filter(e => e.subject_ref === raw.commandId)).toHaveLength(1);
+   await chain(c, f);
+  });
+ }
+ for (const kind of ["start", "complete"] as const) it(`[R2] ${kind}: a live-guard refusal rolls back before rechecking authority and conceals job state if membership is then revoked`, async () => {
+  const f = await visitFixture(c), a = f.members.operative;
+  const open = kind === "complete" ? await start(f, a) : undefined;
+  const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
+  await moveOffLive(c, f);
+  const original = (repo as any).precheck.bind(repo);
+  let checks = 0, before: Awaited<ReturnType<typeof snapshot>> | undefined;
+  const spy = vi.spyOn(repo as any, "precheck").mockImplementation(async (...args: unknown[]) => {
+   checks++;
+   if (checks === 2) {
+    // This command needs the exclusive tenant lock. It can commit here only after the refused visit transaction has rolled back its shared lock.
+    await command(c, f, { kind: "membership.revoke", membershipId: a.member.membershipId });
+    before = await snapshot(c, f.p.tenantId);
+   }
+   const authority = await original(...args);
+   if (checks === 1) expect(authority).toBeNull();
+   return authority;
+  });
+  let error: SiteVisitError;
+  try { error = await errorOf(() => kind === "start" ? repo.startVisit(f.ctx, a.member, raw) : repo.completeVisit(f.ctx, a.member, raw)); } finally { spy.mockRestore(); }
+  expect(checks).toBe(2); expect(before).toBeDefined();
+  expect(plain(error)).toEqual({ name: "SiteVisitError", message: "VISIT_FORBIDDEN", code: "VISIT_FORBIDDEN" });
+  expect({ status: siteVisitHttpStatus(error.code), body: siteVisitFailureV1.parse({ version: "site-visit-error.v1", code: error.code }) }).toEqual({ status: 403, body: { version: "site-visit-error.v1", code: "VISIT_FORBIDDEN" } });
+  expect(await snapshot(c, f.p.tenantId)).toEqual(before);
+  expect((await c.admin.query("SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, raw.commandId])).rows).toEqual([]);
+  await chain(c, f);
+ });
+});
+
 describe("ENT-3b live only", () => {
  it("[B14] a named member on a not-live job gets JOB_NOT_LIVE for both commands; a member who may not visit it never learns that", async () => {
   const f = await visitFixture(c), a = f.members.operative, open = await start(f, a);
@@ -441,14 +540,20 @@ describe("ENT-3b the audit event is in the same transaction", () => {
   await expect(attempt()).rejects.toMatchObject({ message: "CLOSEOUT_AUDIT_REQUIRED", code: "23514" });
   expect((await visitRow(visit, f.p.tenantId)).completed).toBeNull(); expect(await answers(f.p.tenantId, visit)).toEqual([]);
  });
- for (const kind of ["start", "complete"] as const) it(`[B12] ${kind}: observed with the lock observer, the live guard is the first lock and no lock is taken after the audit append`, async () => {
+ for (const kind of ["start", "complete"] as const) it(`[B12] ${kind}: observed with the lock observer, the shared tenant-authority lock is first and no lock is taken after the audit append`, async () => {
   const f = await visitFixture(c), a = f.members.operative, observed = new ObservedPool(c.runtime, c.admin), watched = new SiteVisitRepository(observed.pool);
   const open = kind === "complete" ? await start(f, a) : undefined;
   const { transactions } = await observed.record(() => kind === "start" ? watched.startVisit(f.ctx, a.member, startInput(f)) : watched.completeVisit(f.ctx, a.member, completeInput(f, open!.visitId, "yes")));
   const command = transactions.find(t => t.statements.some(s => /require_watchdog_live/u.test(s.sql)));
   expect(command, "the command transaction").toBeTruthy();
   const analysis = analyseLockOrder(command!, { mutable: await mutableTables(c.admin) });
-  expect(analysis.firstStatement).toMatch(/require_watchdog_live/u);
+  expect(analysis.firstStatement).toMatch(/pg_advisory_xact_lock_shared\(hashtextextended\(\$1,54\)\)/u);
+  const statements = command!.statements.map(s => s.sql);
+  const authorityIndex = statements.findIndex(sql => /SELECT decision,reason_code FROM app.ent3b_visit_authority/u.test(sql));
+  const liveIndex = statements.findIndex(sql => /require_watchdog_live/u.test(sql));
+  const receiptIndex = statements.findIndex(sql => /INSERT INTO app.command_receipt/u.test(sql));
+  expect(authorityIndex).toBeGreaterThan(statements.indexOf(analysis.firstStatement!));
+  expect(liveIndex).toBeGreaterThan(authorityIndex); expect(receiptIndex).toBeGreaterThan(liveIndex);
   expect(analysis.auditIndex).toBeDefined();
   expect(analysis.afterAudit.map(v => `${v.statement} => ${v.locks.join(", ")}`)).toEqual([]);
   expect(analysis.strongTableLocks).toEqual([]);
