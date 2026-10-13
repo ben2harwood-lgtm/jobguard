@@ -203,3 +203,40 @@ Intended commit message: `/private/tmp/jg-msg-m4-8-s-r2.txt`. Dispatcher owns co
 
 **Observations for the reviewers (not changed).** (1) Core's zod schema counts the minus sign inside its 260,213-character `.max`, the database counts digits only (see item 3). (2) PostgreSQL's `numeric` holds at most 131,072 digits before the decimal point, so the writer's `::numeric` arithmetic would refuse an exact-pence value longer than that with an overflow error before any row is written; this fails closed and is not changed here (not exercised by a test). (3) The local `origin/main` is now eb1e616, ahead of the 96f051f that this branch merged, so `git diff origin/main` lists other lanes' files as deletions; the lane lint compares against the merge-base and passes. (4) The lock-wait flake was in the test, not in the lock: the status row can briefly show the previous statement, so the poll now waits for the advisory-lock statement itself.
 
+
+---
+
+## Mac verification (13 Oct)
+
+13 October 2026, Claude Sonnet 5.5 as the Mac-side helper (not a reviewer, no verdict). Tree under test: repair commit 416d374 plus merge a4dad86 (`origin/main` eb1e616 merged in). Nothing was patched: every run below is on the real, committed tree. Logs: `~/.local/share/full-steam/jg-runs/m4-8-s-mac/` (files starting `m2-`). **Result: GREEN.**
+
+**Merge of main (eb1e616; SV-4 and ENT-4c are on main).** Conflicts only in append-only files, main's lines first and this piece's additions once: `apps/api/src/app.module.ts` and `apps/api/src/workspace/application.ts` (long single lines: main's line taken, `RecoveryAllocationController` / `recoveryAllocations` inserted once), `apps/api/src/workspace/index.ts`, `packages/core/src/index.ts`, `packages/db/src/index.ts`, `packages/db/src/migrate.ts` (now ... 0131, 0132, 0136, with 0136 last), `packages/db/MIGRATIONS.md` (0132 section, then 0136). `apps/api/openapi.json` taken from main and regenerated (`pnpm openapi:generate`), `pnpm openapi:check` exit 0, +431 lines against main as before. `git diff origin/main --stat` shows 40 files, all this piece's.
+
+| Step | Command (all unpatched, real tree) | Exit | Result |
+| --- | --- | --- | --- |
+| unit | core `recovery-allocation` + `receipt-allocation` + `cumulative-fee`; core `watchdog` | 0, 0 | 140 passed; 7 passed (49 in `recovery-allocation`) |
+| unit | api `context-boundary` + `recovery-allocation.application` + `.controller` | 0 | 183 passed (145 + 38) |
+| unit | `node --test tools/*.test.mjs` | 0 | 85 passed |
+| db | `recovery-allocation.integration` + `recovery-line-allocation` + `recovery-allocation-upgrade` (rule 9) | 0 | 26 passed |
+| db | `recovery-allocation-races` (incl. 8 [M-LOCK]), run three times | 0, 0, 0 | 10 passed each run |
+| db | `recovery-case-join.integration` + `recovery-case-join.test` + `recovery-case-outcome.test` | 0 | 37 passed (join integration: 20, J-REQ1 four cases, J2, J3, J11) |
+| db | `command-replay-contract.integration` | 0 | 53 passed |
+| db | `pnpm test:migrations` (tenancy + demo-bootstrap) | 0 | 13 passed |
+| db | `UIWIRE-12` + `UIWIRE-10` + `UIWIRE-11` | 0 | 26 passed |
+| db | `recovery-cases` + `recovery-cases.workbench` + `recovery-eligibility-v3` | 0 | 84 passed |
+| db | `recovery-timing-pin` + `recovery.integration` + `recovery-follow-up` | 0 | 103 passed |
+| db | `recovery-messages` + `recovery-follow-up-upgrade` | 0 | 101 passed |
+| db | neighbours: `fingerprinted-row-shape` + `shadow-catalog` + `practice-feed`; `practice-facts` + `small-builder-origin` + `shared-money-origin`; `watchdog` + `audit-export` + `sso-required`; `enterprise-identity` + `final-account-lock` + `final-account-lock-invoice`; `final-account-lock-reveal` + `final-account-lock-upgrade` + `extra-origin` | 0 x5 | 46, 52, 66, 43, 35 passed |
+| static | `pnpm typecheck`; `LANE_BASE_REF=origin/main pnpm lint`; `pnpm lint:lanes`; `pnpm openapi:check` | 0 x4 | 7/7, 7/7, lane m4-8-s, passed |
+| build | `pnpm build` (after the tests, as CI does) | 0 | 7/7 tasks |
+| browser | `M4-8-S.spec.ts`, `mobile-360` and `desktop` (CI=1, production `next start`, channel chromium) | 0 | 12 passed |
+| browser | `M4-7-S`, `M4-1-S`, `M4-2-S`, `UIWIRE-12`, `UIWIRE-14`, both projects | 0 | 40 passed |
+| browser | `SV-4`, `UIWIRE-10`, `UIWIRE-11`, both projects | 0 | 14 passed |
+
+**[M-LOCK] (8 of 8 passed, each of three repeats):** same case with A first and B first; allocator versus `app.approve_synthetic_landing` (allocator first, v1 first); allocator versus the merged public recovery-case command (each first); two distinct same-case commands (A first, B first: the stale contender rolls back all business writes). DW8 (eight parallel repeats, one allocation, one case event, no extra audit) and DW3 conservation passed in the same file.
+
+**CI order check: `apps/api/dist` and `apps/web/.next` absent at test time.** Both folders were moved outside the worktree (`~/.local/share/full-steam/jg-runs/m4-8-s-mac/aside2/`), the tests below were run, and both folders were moved back (nothing deleted). `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` on this piece's api files plus `watchdog-registry`: exit 0, 3 files, 159 passed. The whole api suite (`vitest run src`, `--maxWorkers=1`): exit 0, 55 files, 1211 passed. So no api test of this piece, and none of the api suite, needs a compiled `apps/api/dist` or `apps/web/.next`. The web unit suite run directly without `apps/api/dist` fails in 5 files that are not this piece's (`recovery-case-requests`, `recovery-case-routes`, `recovery-cases`, `recovery-cases.behaviour`, `recovery-messages`) with "Cannot find package '@jobguard/api/...'", because `@jobguard/api` resolves to its `dist`; in CI this is covered because turbo's `@jobguard/web#test` depends on `@jobguard/api#build` (confirmed with `turbo run test --filter=@jobguard/web --dry=json`). This piece adds no web unit test. The browser helper imports `packages/core/dist/index.js` and `apps/api/dist/recovery-allocation.contracts.js`; both exist only after a build, and `pnpm test:e2e` runs after `pnpm build` in CI, so they exist at that point. Nothing depends on a compiled output at CI's test step.
+
+**GRANT reading, re-checked on this tree.** Unchanged by the repair: `GRANT SELECT ON app.<table> TO jobguard_runtime` for the six new tables after `REVOKE ALL ... FROM PUBLIC, jobguard_runtime`; `GRANT EXECUTE ON FUNCTION app.write_recovery_allocation(uuid,uuid,text,jsonb,jsonb) TO jobguard_runtime` after `REVOKE ALL ... FROM PUBLIC, jobguard_infrastructure`; the trigger function and the fraction helper are revoked from `PUBLIC` and `jobguard_runtime`. No direct INSERT, UPDATE or DELETE grant for the app login on any new table.
+
+**Observation, not a finding.** The Mac passes show execution only for the tests listed; they are not an independent review, a verdict or acceptance.
