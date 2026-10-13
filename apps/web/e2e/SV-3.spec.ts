@@ -5,6 +5,66 @@ import { openLiveWatchdogJob } from "./helpers/capture-journey";
 import { testTenantContext } from "../../../packages/db/test/tenant-context-test-utils";
 import { withTenant } from "../../../packages/db/src/tenant-context";
 const T="11111111-1111-4111-8111-111111111111";
+function installIntervalBarrier():void{
+ const intervals=new Set<number>();let stopped=false;
+ const schedule=window.setInterval.bind(window),clear=window.clearInterval.bind(window);
+ window.setInterval=(handler:TimerHandler,timeout?:number,...args:unknown[]):number=>{
+  if(stopped)return 0;
+  const id=schedule(()=>{
+   // A callback already queued when we stop must not start another request.
+   if(stopped)return;
+   if(typeof handler==='function')handler.apply(window,args);else window.eval(handler);
+  },timeout);
+  intervals.add(id);return id;
+ };
+ window.clearInterval=(id?:number):void=>{if(id!==undefined)intervals.delete(id);clear(id)};
+ Object.assign(window,{__sv3StopIntervals:()=>{
+  stopped=true;for(const id of intervals)clear(id);intervals.clear();
+ }});
+}
+async function stopAndDrain(page:import('@playwright/test').Page,drain:()=>Promise<void>):Promise<void>{
+ await page.evaluate(()=>{
+  const stop=(window as unknown as {__sv3StopIntervals?:()=>void}).__sv3StopIntervals;
+  if(!stop)throw new Error('Q interval registry was not installed before capture');
+  stop();
+ });
+ // Leave fetches and body reads intact; the existing drain reports every failure.
+ await drain();
+}
+// These controls exercise only the spec's timer barrier, without fixture API responses.
+test('SV-3-BARRIER-1: departure waits for the outstanding drain',async({page})=>{
+ await page.addInitScript(installIntervalBarrier);await page.goto('data:text/html,barrier');
+ let release!:()=>void;const outstanding=new Promise<void>(resolve=>{release=resolve});
+ let draining=false,departed=false;
+ const departure=stopAndDrain(page,async()=>{draining=true;await outstanding}).then(()=>{departed=true});
+ try{await expect.poll(()=>draining).toBe(true);expect(departed).toBe(false)}finally{release();await departure}
+ expect(departed).toBe(true);
+});
+test('SV-3-BARRIER-2: the departure boundary clears timers and blocks late registrations',async({page})=>{
+ await page.clock.install();await page.addInitScript(installIntervalBarrier);await page.goto('data:text/html,barrier');
+ await page.evaluate(()=>{Object.assign(window,{__sv3Ticks:0});setInterval(()=>{(window as unknown as {__sv3Ticks:number}).__sv3Ticks++},1500)});
+ await page.clock.runFor(1500);
+ expect(await page.evaluate(()=>(window as unknown as {__sv3Ticks:number}).__sv3Ticks)).toBe(1);
+ await stopAndDrain(page,async()=>{});
+ await page.evaluate(()=>{setInterval(()=>{(window as unknown as {__sv3Ticks:number}).__sv3Ticks++},1)});
+ await page.clock.runFor(3000);
+ expect(await page.evaluate(()=>(window as unknown as {__sv3Ticks:number}).__sv3Ticks)).toBe(1);
+});
+test('SV-3-BARRIER-3: each destination starts a fresh interval registry',async({page})=>{
+ await page.clock.install();await page.addInitScript(installIntervalBarrier);await page.goto('data:text/html,departing');
+ await stopAndDrain(page,async()=>{});await page.goto('data:text/html,destination');
+ await page.evaluate(()=>{Object.assign(window,{__sv3Ticks:0});setInterval(()=>{(window as unknown as {__sv3Ticks:number}).__sv3Ticks++},1500)});
+ await page.clock.runFor(1500);
+ expect(await page.evaluate(()=>(window as unknown as {__sv3Ticks:number}).__sv3Ticks)).toBe(1);
+});
+test('SV-3-BARRIER-4: drain failures retain the original route and error',async({page})=>{
+ await page.addInitScript(installIntervalBarrier);await page.goto('data:text/html,barrier');
+ for(const message of ['Q request failed: GET /api/jobs/control/materials: net::ERR_FAILED','Q response capture failed: GET /api/jobs/control/readiness: body read failed']){
+  const failure=new Error(message);let reported:unknown;
+  try{await stopAndDrain(page,async()=>{throw failure})}catch(error){reported=error}
+  expect(reported).toBe(failure);
+ }
+});
 test("I: mandatory must-surface Decision survives reload and return through Jobs",async({page})=>{
  await openLiveWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
@@ -35,6 +95,7 @@ test("I: mandatory must-surface Decision survives reload and return through Jobs
 
 test("Q: every visible count/badge/error, cache key, storage and notification surface ignores 25 linked held signals",async({page})=>{
  const testStarted=Date.now();
+ await page.addInitScript(installIntervalBarrier);
  await openLiveWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
  const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
@@ -147,6 +208,7 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    }
    const views:Array<{responseShape:string;counts:(string|null)[];badges:(string|null)[];errors:(string|null)[];cacheKeys:string[];notifications:unknown[];analytics:unknown[];storage:Array<Array<Array<string|null>>>}>=[];
    try{await drain();for(const route of ['/',`/jobs/${jobId}`]){
+    await stopAndDrain(page,drain);
     navigation={departingRequests:new Set([...inFlight].filter(request=>request.frame()===page.mainFrame())),committed:false};
     try{
      const destination=await page.goto(route);
