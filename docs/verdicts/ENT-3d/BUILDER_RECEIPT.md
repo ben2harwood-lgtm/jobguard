@@ -143,3 +143,49 @@ Additional requested verification:
 | `git diff --check` | 0 | No whitespace errors in the test repair |
 
 Database/migration and browser suites were not run: the dispatcher states this sandbox cannot start PostgreSQL or bind localhost, so those suites remain for GitHub CI after the dispatcher pushes. No git write command, commit or push was run. Intended conventional commit subject and body are written to `/private/tmp/jg-msg-ent-3d.txt`. Independent exact-commit review, separate acceptance and CI results remain pending; no release gate is changed.
+
+## Repair round 2
+
+13 October 2026. Tests-only repair of clean head `fe945d2ec993073ee29bdf71126b3013f79031b7` on `codex/sandbox/ent-3d`, PR #170. The dispatcher reported GitHub CI run `38392147416` timing out the [E8] refusal-cause test at Vitest's default 5 seconds. This receipt records builder checks, not independent verification or acceptance.
+
+Changed `packages/db/test/site-extra-evidence.integration.test.ts:66`: the named [E8] `it(...)` now has `60_000` as its third argument. Line 54 adds the one-line explanation: "Loops every refusal cause against a real database, which can exceed the default timeout in CI." The title is now at line 55. No assertion, expected value, cause, ordering, retry, other test or other timeout changed. No product code, migration bytes, lane entry, dependency or configuration changed; this receipt is append-only.
+
+Arithmetic: the `causes` array contains **10 causes**: pending upload, rejected upload, raw object over pending upload, another job, another company, another evidence type, preview, invalidation, unknown id, and a confirmation document used as a photo. The loop performs 10 initial refusals plus 10 same-command retries, with real database fixture setup and the existing before/after, audit and refusal-event checks. A read-only Node/TypeScript AST check counted the 10 array entries and compared against HEAD after removing exactly the new comment and timeout; exit 0 confirmed the entire remaining file is byte-identical.
+
+Other database-loop candidates in this same file, source-inspected only and **unchanged**, all still using the default per-test budget:
+
+| Current line / test | Loop shape |
+|---|---|
+| 104, [E12] confirmation mismatch | 5 hashes in the loop, plus 1 refusal afterward; each uses the database-backed `refused` helper |
+| 141, [E15] replay/conflict | 7 payload changes plus 3 additions, alongside success/replay and database-state checks |
+| 162, [E16] tenant isolation | 2 ids × 2 tables = 4 tenant reads; later 1 routine query per accumulated confirmation row |
+| 175, [E17] forbidden roles/scope | 6 roles × 2 photo ids + 3 members × 2 photo ids = 18 database-backed refusals |
+| 226, changed payload conflicts | 4 changes, each with database-state comparisons |
+| 234, another job conflicts | 2 variants, each with database-state comparisons |
+| 244, successful no-op | 3 replays, each with database-state comparisons |
+| 256, not-live refusal | 4 body shapes, each with database-state, refusal-event and receipt checks |
+| 269, unauthorised caller | 6 roles × 2 photo ids × 4 targets = 48 database-backed refusals |
+
+These are structural candidates, not measured timeouts. The [E10] nine-case loop rejects invalid input before database work. ENT-3d's core and application tests have loops over pure checks or mocked repositories, with no analogous real-database round-trip loop.
+
+Runtime: Node `v24.17.0`, pnpm `10.28.1`, Turbo `2.10.12`, Vitest `4.1.11`; existing dependencies only, no install or download. All pnpm commands used `PATH="/private/tmp/jg-ent-3d-bin:$PATH"`, the existing cached-pnpm selector documented in repair round 1. Every Vitest invocation used `--maxWorkers=2` and exactly two files. The build ran alone.
+
+| Command | Exit code | Result |
+|---|---|---|
+| `pnpm exec turbo run typecheck --force` | 0 | 7 successful tasks, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 0 | 7 successful tasks, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Registered ENT-3d lane passed |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/site-extra-evidence.test.ts src/site-extra.test.ts` | 0 | 2 files, 112 passed |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | 0 | Root purity, lane, money and commercial boundary checks; 7 successful package tasks, 0 cached |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/site-extra-evidence.application.test.ts src/contractor/site-extra.application.test.ts` | 0 | 2 files, 49 passed; mocked application boundaries |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/contractor/jobs/[id]/site-extras/route.evidence.test.ts' 'app/api/contractor/jobs/[id]/site-extras/route.test.ts'` | 0 | 2 files, 70 passed; route unit tests, not browser tests |
+| `pnpm build --concurrency=2 --force` | 0 | 7 successful tasks, 0 cached |
+| `pnpm openapi:check` | 1 | `tsx` CLI IPC socket denied with `listen EPERM`; checker did not execute |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Same OpenAPI checker executed without CLI IPC; committed document matches |
+| `git diff --check` | 0 | No whitespace errors |
+
+Turbo reported shared-cache write `Operation not permitted` warnings; forced checks still executed and passed. Next.js reported the existing workspace-root and CSS/autoprefixer warnings; build passed. An ancillary process-inspection command (`ps -axo pid,etime,pcpu,command` piped to `rg`) exited 1 because sandbox permissions deny `ps`; it was not a verification suite.
+
+**Database/migration and browser suites NOT RUN in this sandbox**, including the repaired [E8] test, `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and `pnpm test:e2e`: the dispatcher states PostgreSQL cannot start and localhost cannot bind here. GitHub CI runs them after the dispatcher pushes; local unit success does not verify the repaired database test's CI timing. No migration or backwards-compatibility impact, new operational alert or release-gate change. Independent exact-commit verdict, separate acceptance and CI remain pending.
+
+No git write command, commit or push was run. Intended conventional commit subject and body are written to `/private/tmp/jg-msg-ent-3d.txt` for the dispatcher.

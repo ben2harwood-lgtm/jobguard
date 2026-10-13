@@ -51,6 +51,7 @@ describe("ENT-3d verified photo and resident confirmation", () => {
   ["an unknown id", async () => randomUUID()],
   ["a confirmation document's id used as the photo", async f => { const id = randomUUID(), out = await repo.logSiteExtra(f.ctx, f.members.supervisor.member, v3(f, { commandId: id, shownContentSha256: shownFor(f, null) })); expect(out.evidence?.residentConfirmationEvidenceId).toBe(confirmationIdFor(f, id)); return confirmationIdFor(f, id); }],
  ];
+ // Loops every refusal cause against a real database, which can exceed the default timeout in CI.
  it("[E8] every cause of a photo that is not accepted gives the identical PHOTO_NOT_ACCEPTED, nothing written, one refusal event", async () => {
   const errors: Error[] = [];
   for (const [cause, make] of causes) {
@@ -62,7 +63,7 @@ describe("ENT-3d verified photo and resident confirmation", () => {
    await errorOf(repo.logSiteExtra(f.ctx, f.members.supervisor.member, raw)); expect(await refusalEvents(c, f, raw.commandId)).toEqual(["photo_not_accepted"]);
   }
   for (const error of errors) expect(error).toEqual(errors[0]);
- });
+ }, 60_000);
  it("[E9] the guard alone: merged raiseExtra with the seam and an unverified photo is rejected, nothing written", async () => {
   const f = await siteFixture(c), raw = await rawObjectOverPending(c, f, where(f)), before = await evidenceCounts(c, f), head = await chain(c, f);
   await expect(new ExtraRepository(c.runtime).raiseExtra(f.ctx, direct(f, f.members.supervisor, { evidenceId: raw.id }), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "INVALID_ORIGIN" });
