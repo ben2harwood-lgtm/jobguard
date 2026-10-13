@@ -1,0 +1,462 @@
+Built by Codex; dispatched 13 Oct 2026
+
+# CH-4 builder receipt — partial, not accepted
+
+Check lane RED. Branch `codex/sandbox/ch-4`. Issued base and final HEAD: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`.
+All changes are uncommitted. No add, checkout, commit, push, merge, release or
+acceptance was performed. Intended message: `/private/tmp/jg-msg-ch-4.txt`.
+The addendum's requested Sonnet attribution would be inaccurate: this work was
+built by Codex. No different-model verdict or separate acceptance exists yet.
+
+## Scope and source verification
+
+The CH-4 card, §10.1.5 meanings, CH-2 live predicate/registry contract, CH-3a party
+bindings, SV-4 lock contract and §12 ownership/dependencies were source-inspected
+on the issued base. AGENTS rev 3.0 was read. This is source inspection, not a
+claim that its acceptance tests passed. The issued base already has 0140 site-extra
+pricing, contrary to the draft's 0138 runner endpoint. Main wins: 0144 is appended
+after 0140. No historic 0067 or another piece's migration number was used.
+
+During work, origin/main advanced to `6659fb58791ec22588948f005b2bd4f6b299fa48`. Its changes include ENT-3b/0139,
+contractor visit/extra version-2 registrations, additional catalogue rows and
+shared barrels/composition/OpenAPI. Its only BUILD_PLAN change appends the ENT-3b
+ledger amendment; the cited CH-4/counting/live/lock contracts are unchanged.
+The worktree remains on the issued base as instructed. The dispatcher must merge
+both sets of additive registrations and rerun checks on the resulting commit.
+No open ENT branch implementation was copied or consumed. Preservation hashes
+below refer to the issued base; unchanged does not mean identical to newer main.
+
+Delivered: four immutable side tables; strict schemas and fact projection;
+normalized existing-source hooks with original microsecond times; deterministic
+first-evidence candidates and shared delivery/receipt deduplication; source-driven
+finish cancellation without rewriting history; post-lock guards and replay seams;
+new-lock/pending-check closure gating; immutable link/purpose integrity; one checked
+persisted read shared by Nest/Next; typed 422 source refusal with exact copy.
+No new mutation route or live-only registry key is introduced. Q-02's prerequisite
+was not needed for this source-hook/read slice; future keys remain coordinator-owned.
+
+Q-01/Q-03/Q-04/Q-05/Q-06 remain HELD exactly as issued. No finish/cancel/close/
+reopen/resume/link/snagging-admission command or public writer routine exists.
+No timers, intervals, eligibility restoration, money, capacity, counter, provider
+integration or screen is implemented. This does not complete CH-4 or unblock MON-1.
+
+## Executed checks and exact commands
+
+Node: `v24.17.0`; installed pinned CLI: `10.28.1`. Dependencies were supplied.
+`pnpm install --frozen-lockfile`: NOT RUN, dispatcher forbids downloads/install.
+The global pnpm wrapper stalled selecting a version and was cancelled (130).
+The existing cached 10.28.1 CLI was verified with:
+
+`export PATH="$HOME/Library/pnpm/bin:$PATH"; node "$HOME/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs" --version` — 0.
+
+A temporary shim `/private/tmp/ch4-pnpm-bin/pnpm` executes that exact cached CLI.
+Every subsequent pnpm command used this prefix (no package pin was changed):
+
+`export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/ch4-pnpm-bin:$PATH";`
+
+Before heavy commands, `memory_pressure -Q | tail -1` and
+`df -g /System/Volumes/Data` exited 0: observed free memory 67–72%, disk 65–83 GB.
+The initial `memory_pressure | tail -1` stalled and was cancelled (130); `-Q`
+queries the same free-memory percentage without the blocking default mode.
+No database/browser/heavy-slot run was attempted: the sandbox cannot start them.
+Tests used `--maxWorkers=2`, at most three files, serially; build and test never ran together.
+
+| Command / run | Exit | Evidence |
+|---|---:|---|
+| `packages/core/node_modules/.bin/vitest run --maxWorkers=2 packages/core/src/job-work-state.test.ts` first run | 1 | Missing CH-4 module; 1 failed suite, 0 collected tests |
+| Same command after implementation | 0 | 1 file, 9 tests passed |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-work-state.application.test.ts src/job-work-state.controller.test.ts src/job-work-state.http.test.ts` first run | 1 | 3 failed suites, 0 tests; package dist dependencies/controller unavailable |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-work-state.test.ts` strict-read regression red | 1 | 9 passed, 1 failed: missing read schema |
+| Same command strict-read green | 0 | 10 tests passed |
+| Same command late-receipt regression red | 1 | 10 passed, 1 failed: older activity incorrectly cancelled later finish |
+| Same command final green | 0 | 11 tests passed |
+| `pnpm exec turbo run typecheck --force` initial | 2 | 4 tasks passed; cross-package Zod type depth failed DB |
+| `pnpm exec turbo run typecheck --force --concurrency=2` correction 1 | 2 | 5 tasks passed; direct source imports in API test violated rootDir |
+| Same command correction 2 | 0 | 7 tasks executed, 0 cached |
+| Same command after fact/query changes | 0 | 7 tasks executed, 0 cached |
+| Same command final | 0 | 7 tasks executed, 0 cached, 31.091s |
+| `pnpm exec turbo run lint --force --concurrency=2` initial | 0 | 7 package tasks executed, 0 cached |
+| Same command final | 0 | 7 package tasks executed, 0 cached, 17.107s |
+| `pnpm build --concurrency=2 --force` | 0 | 7 tasks executed, 0 cached, 35.653s |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-work-state.application.test.ts src/job-work-state.controller.test.ts src/job-work-state.http.test.ts` green | 0 | 3 files, 7 tests passed |
+| Same command final including Next case | 0 | 3 files, 8 tests passed |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-work-state.http.test.ts src/job-work-state.isolation.test.ts` | 0 | 2 files, 4 tests passed (one overlaps previous batch) |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 1 | Core purity passed (153 TS files); lane gate refused initial HEAD=base comparison |
+| `node tools/money-arithmetic-lint.mjs` | 0 | Money arithmetic boundary check passed |
+| `node tools/commercial-boundary-lint.mjs` | 0 | No reported violation |
+| `pnpm --filter @jobguard/api openapi:generate` | 1 | tsx IPC listener refused with EPERM; JSON unchanged |
+| `git diff --check` (repeated after edits) | 0 | No whitespace errors |
+| `git diff --name-only --diff-filter=D` | 0 | No deleted tracked files |
+
+Final distinct unit coverage is 21 tests: 11 core plus 10 API. API application,
+controller, Next and isolation tests are scripted boundary/serialization checks,
+not real PostgreSQL or listening HTTP workflow evidence. The build ran the real
+Next/Nest/tsc steps. It emitted shared-cache IO permission warnings and existing
+Next workspace-root/CSS/file-type warnings; it exited 0. No cache-hit green is claimed.
+Root lint did NOT pass; package lint is a separate result. `lint:lanes` and
+`openapi:check` were not retried around refused gates.
+
+Read-only inspection commands used `pwd`, `git status --short`, `git rev-parse`,
+`git branch --show-current`, `git show`, `git diff`, `git log`, `rg`/`rg --files`,
+`cat`, `head`, `tail`, `sed`, `nl`, `ls`, `node --version`, and Python hash/path/
+JSON inspection. File writes used here-documents, Python and TypeScript AST
+insertion scripts; the generated paths are the file inventory below. Exploratory
+compound commands and write-script bodies were not retained as a complete exact
+shell transcript; this is an A28 receipt limitation, not a claimed complete log.
+Known nonzero inspection outcomes: missing guessed support/migration paths,
+zsh unmatched old migration globs, an initial lane-insertion assertion (no write),
+and the process inspection refusal below. These did not authorize edits outside the lane.
+A partial machine run log is preserved at `/private/tmp/ch4-command-results.json`.
+
+Tests-first evidence: the initial pure tests and initial source/storage/catalog/
+post-lock/race DB files preceded their implementations; API tests preceded the
+transport implementation. Strict-read and late-receipt tests have real assertion
+red/green evidence. Database red/green execution is NOT RUN. The upgrade proof
+and expanded later DB controls were authored after the initial SQL draft, so the
+strict tests-first requirement is not fully met; reviewers must retain that gap.
+
+## STOP / coordinator-owned items
+
+1. **Merged catalogue lists**, current main
+   `packages/db/test/tenancy.integration.test.ts:268,270,271,508,510,511`.
+   No line in this merged test was changed. The coordinator must add the following
+   rows in name order, retaining every existing row (current-main anchors shown):
+
+**Line 268 before:**
+
+```ts
+      { relname: "job_finding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+```
+
+**After (original line plus additions):**
+
+```ts
+      { relname: "job_finding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+```
+
+**Line 270 before:**
+
+```ts
+      { relname: "job_party_current", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+```
+
+**After (original line plus additions):**
+
+```ts
+      { relname: "job_party_current", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_photo_purpose", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+```
+
+**Line 271 before:**
+
+```ts
+      { relname: "job_record_proposal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+```
+
+**After (original line plus additions):**
+
+```ts
+      { relname: "job_record_proposal", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_site_source_receipt", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "job_work_state_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+```
+
+**Line 508 before:**
+
+```ts
+      { relname: "job_finding", owner: "jobguard_migration" },
+```
+
+**After (original line plus additions):**
+
+```ts
+      { relname: "job_finding", owner: "jobguard_migration" },
+      { relname: "job_link", owner: "jobguard_migration" },
+```
+
+**Line 510 before:**
+
+```ts
+      { relname: "job_party_current", owner: "jobguard_migration" },
+```
+
+**After (original line plus additions):**
+
+```ts
+      { relname: "job_party_current", owner: "jobguard_migration" },
+      { relname: "job_photo_purpose", owner: "jobguard_migration" },
+```
+
+**Line 511 before:**
+
+```ts
+      { relname: "job_record_proposal", owner: "jobguard_migration" },
+```
+
+**After (original line plus additions):**
+
+```ts
+      { relname: "job_record_proposal", owner: "jobguard_migration" },
+      { relname: "job_site_source_receipt", owner: "jobguard_migration" },
+      { relname: "job_work_state_event", owner: "jobguard_migration" },
+```
+
+2. **Lane gate**, `tools/agent-lane-boundary-lint.mjs:212` (unchanged):
+
+```js
+if (!branch || (base && base === target)) throw new Error("Missing branch or self-comparison range; refusing a misleading pass.");
+```
+
+The command was `LANE_BASE_REF=origin/main node tools/lint.mjs`, exit 1.
+At that run both refs were the issued base. After: **the line must stay unchanged**;
+the dispatcher supplies an actual commit/range and runs the gate. No fake range,
+check edit or alternative bypass was attempted after refusal.
+
+3. **OpenAPI**, `apps/api/src/generate-openapi.ts:9` / `apps/api/openapi.json:1`.
+Command: `pnpm --filter @jobguard/api openapi:generate`, exit 1.
+Exact refusal: `Error: listen EPERM: operation not permitted
+/var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/20902.pipe`.
+The existing JSON stayed unchanged. After: dispatcher runs the existing generator
+and adds only the CH-4 read operation and source 422 responses, preserving current
+main's ENT-3b operations and the pinned 409 enum. No alternate generation route
+was attempted. `openapi:check`: NOT RUN after this refusal.
+
+4. **Process inspection**: `ps -o pid,etime,command -p 93390` was refused with
+`zsh:1: operation not permitted: ps`. That item stopped; no alternative process
+inspection route was attempted.
+
+5. **Current-main reconciliation**: retain newer shared registrations during
+landing in `config/agent-lane-assignments.json`, core/DB barrels, migration runner/
+notes, API module/workspace composition and OpenAPI. No git-writing operation or
+out-of-lane copy was attempted. This is a dispatcher landing task, not permission
+to erase newer main's changes.
+
+Q-02 is a future STOP only if a new live-only registry key becomes necessary:
+`packages/db/test/command-replay-contract.integration.test.ts:20` and the shared
+harness remain untouched. No such key is needed or added by this delivered slice.
+
+## Every new GRANT — standard F
+
+No new direct INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER grant to
+`jobguard_runtime`, on any table family. No new membership, authorization, money,
+receipt or audit write privilege. Private helpers/trigger routines are revoked
+from PUBLIC, runtime, infrastructure, shadow and emergency-access roles.
+
+- `GRANT SELECT ON app.job_work_state_event TO jobguard_runtime;`
+- `GRANT SELECT ON app.job_site_source_receipt TO jobguard_runtime;`
+- `GRANT SELECT ON app.job_photo_purpose TO jobguard_runtime;`
+- `GRANT SELECT ON app.job_link TO jobguard_runtime;`
+- `GRANT EXECUTE ON FUNCTION app.ch4_read_work_facts(uuid,uuid,text) TO jobguard_runtime;`
+
+These are four SELECT grants and one EXECUTE grant on the checked read only.
+Catalogue/grantee ownership/RLS assertions exist but are NOT RUN here. No held
+routine receives EXECUTE. No shadow relation receives a new privilege or column.
+
+## NOT RUN files and required external evidence
+
+All six own PostgreSQL suites below are NOT RUN (cannot start PostgreSQL here),
+including first failing execution and fresh/upgrade/race/catalog checks:
+
+- `packages/db/test/job-work-state.integration.test.ts` — NOT RUN (cannot start PostgreSQL here).
+- `packages/db/test/job-work-state-sources.integration.test.ts` — NOT RUN (cannot start PostgreSQL here).
+- `packages/db/test/job-work-state-post-lock.integration.test.ts` — NOT RUN (cannot start PostgreSQL here).
+- `packages/db/test/job-work-state-races.integration.test.ts` — NOT RUN (cannot start PostgreSQL here).
+- `packages/db/test/job-work-state-catalog.integration.test.ts` — NOT RUN (cannot start PostgreSQL here).
+- `packages/db/test/job-work-state-upgrade.integration.test.ts` — NOT RUN (cannot start PostgreSQL here).
+
+Retained files were confirmed present on the issued checkout. All are unchanged:
+
+- `packages/db/test/watchdog.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/watchdog-lock-order.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/command-replay-contract.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/job-parties.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/variation.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/evidence.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/materials.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/supplier-documents.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/proof-replay.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/final-account-lock.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/final-account-lock-invoice.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/final-account-lock-reveal.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/final-account-lock-upgrade.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/fingerprinted-row-shape.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/tenancy.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/site-extra.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/site-extra-authority.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/shared-money-origin.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/extra-origin.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/extra-origin-upgrade.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/contractor-session-context.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/shadow-catalog.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/demo-bootstrap.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+- `packages/db/test/UIWIRE-12.integration.test.ts` — NOT RUN (cannot start PostgreSQL here; dispatcher-owned retained run).
+
+- `apps/api/src/auth/context-boundary.test.ts` — NOT RUN (local runs restricted to own files; source/hash inspection only).
+- `apps/api/src/watchdog-registry.test.ts` — NOT RUN (same restriction; registry unchanged).
+- Newer main's ENT-3b suites, site-extra visit coverage and small-builder-origin Rule-9 proof — NOT RUN; dispatcher runs after landing.
+- Existing affected browser journeys, mobile-360 and desktop — NOT RUN (cannot start a browser here). No new screen/spec was authorized.
+- `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, retained e2e umbrellas — NOT RUN locally under three-file limit; CI/checker evidence mandatory.
+- `pnpm lint:lanes` — NOT RUN after its underlying lane safety refusal.
+- `pnpm openapi:check` — NOT RUN after generator listener refusal.
+- `pnpm eval` — inapplicable: no model, prompt, extraction parser or AI gateway change.
+- No production/pilot activation, provider integration, real upload invitation, release/security/commercial approval, or professional sign-off.
+
+## Acceptance accounting
+
+No complete acceptance ID is declared passed. Executed units prove only the named
+independent assertions below; PostgreSQL acceptance is unverified and policy/
+authority sub-parts remain held. "Written" is not "passed".
+
+| ID | Available evidence / remaining hold |
+|---|---|
+| CH4-A01 | Core strict-command/read schema tests; API authority/query/mode tests executed. Held-command/snagging admission remains Q-06/Q-03. |
+| CH4-A02 | Core classifier executed; source suite written for photo, ready/held delivery and actual proof pending/finalize. DB NOT RUN. |
+| CH4-A03 | Core earliest identity executed; shared delivery/receipt and concurrent candidate tests written, DB NOT RUN. |
+| CH4-A04 | Core origin classes executed; real builder capture/replay/withdrawal source test written, DB NOT RUN. Full repricing/approval/rejection regression depends on retained suites. |
+| CH4-A05 | Core reserved-source contract executed; existing proof completion/replay source test written, DB NOT RUN. |
+| CH4-A06 | Pure representation and older-receipt regression executed; fixture immutable marker/cancel and automatic cancellation tests written, DB NOT RUN. Q-05 retrospective interval and Q-06 command holds remain. |
+| CH4-A07 | Pure reason/note shape executed; fixture close/history/audit-note exclusion test written, DB NOT RUN. Q-06 runtime close held. |
+| CH4-A08 | New pending-check/raw and existing lock-routine refusal fixture tests written, DB NOT RUN. Reopening/earlier/running/completed consequences Q-01; close authority Q-06 held. |
+| CH4-A09 | Pure immutable/terminal-lock representation executed; fixture reopen/resume storage written. Q-06 execution and Q-04/Q-05 interval/place semantics held. |
+| CH4-A10 | Core changed-identity check executed; existing source replay/conflict tests written, DB NOT RUN. Held command replay Q-06. |
+| CH4-A11 | Core microsecond/order/regression tests executed; stored photo-source exact time and upgrade comparators written, DB NOT RUN. |
+| CH4-A12 | Fact ordering only executed; no complete interval implementation/test. Q-04/Q-05 held. |
+| CH4-A13 | Pure offer and 422 mapper executed; DB guards cover order draft/revision/placement, invoice intake, image upload/finalization, builder origin, stage/link/progress writes. Own tests cover a raw table matrix, supplier/builder paths and six actual existing repository recipes through read-only harness reuse. The matrix is NOT RUN; checker execution and remaining edge coverage are mandatory. |
+| CH4-A14 | Pure no-activity classes executed; billing bank-receipt/helper exclusion boundary test written, DB NOT RUN. No live catch/payment/retention journey asserted. Sn agging admission Q-03 held. |
+| CH4-A15 | Builder pre-lock replay/changed/new identity and source replay tests written, DB NOT RUN. Existing non-live guards remain; no cross-lifecycle exception was invented. Six-repository replay/new-identity matrix is written but NOT RUN; refused-ID retry and remaining edge cases still need checker coverage. |
+| CH4-A16 | Concurrent source winner, actual lock-routine vs intake and revocation-while-waiting tests written, DB NOT RUN. Deferred plain-read authority recheck source-inspected only. |
+| CH4-A17 | Atomic rollback, excluded billing lock-helper and fixture closed lock refusal written, DB NOT RUN. Full close/check race and Q-01/Q-06 consequences held. |
+| CH4-A18 | Link integrity/invalid identity and valid common-binding fixture tests written, DB NOT RUN. Complete permission/cycle/replay journey Q-06 held. |
+| CH4-A19 | Fixture link job-byte/money-effect inventory written, DB NOT RUN; runtime linking Q-06 held. |
+| CH4-A20 | API authority-before-read and stamp-copy boundary tests executed; DB context/catalog and authenticated reader/expiry written, DB NOT RUN. Full real source/transport isolation and held command authority unverified/held. |
+| CH4-A21 | Actual catalogue/SELECT-only/private-helper assertions written, DB NOT RUN. Held command grants remain absent. |
+| CH4-A22 | Scripted fixed public query shape executed; real zero/many hidden-signal read equivalence written, DB NOT RUN. Held interval/command equivalence Q-04/Q-05/Q-06. |
+| CH4-A23 | Fresh service forwarding, Nest metadata and actual Next handler serialization/no-store boundary tests executed. Real persisted reader test written, DB NOT RUN; listening/framework journeys and held transports remain unverified/held. |
+| CH4-A24 | Rule-9 own-step/canonical text/types/PK-row comparator, later twice, negative/positive controls written, DB NOT RUN. Fingerprinted-table suite unchanged and unrun. |
+| CH4-A25 | Issued-base preservation hashes below. All retained runs NOT RUN; current-main landing regressions mandatory. |
+| CH4-A26 | No new job mutation key; registry/harness untouched. Future key coverage is coordinator-owned; held commands remain absent. Unchanged registry/replay suites NOT RUN. |
+| CH4-A27 | Synthetic-only constructor/query/read output tests executed; SQL mode/side-table and fixture effect inventory written, DB NOT RUN. No real provider initialized; held command/snagging paths remain absent. |
+| CH4-A28 | This receipt, intended message and hashes; uncommitted diff only. Complete shell transcript/test-first deviations noted. Independent exact-commit verdict and separate acceptance pending. |
+
+## Self-review (builder source inspection, not independent verdict)
+
+- New table families have SELECT-only grants; no new public mutation or guessed lifecycle role.
+- Existing hash/receipt arithmetic and live calls are retained; changes are additive imports, checks, catch mapping and composition/metadata.
+- Source locks precede sequence/advisory work and audit; excluded billing/catch facts return before the source business-lock helper.
+- Source audit is deferred; its post-insert source authority recheck uses plain reads only. Every failure rolls the transaction back.
+- Older received work does not cancel a later finish marker; source identity and original server timestamps remain immutable. No timer or retrospective interval rule selected.
+- First site evidence is an earliest-candidate projection, documented as a reversible implementation choice; no immutable historical winner is rewritten.
+- Photo purpose cannot relabel an existing progress source as snagging. Admission remains absent.
+- Current closed-state guard addresses new lock/pending admission only; absence of that refusal is not a restoration/eligibility approval.
+- Links enforce exact bindings, shared identities and serialized cycle detection as storage; the eventual authorization/adoption command journey remains held.
+- No hidden input, money writer, provider call, quoted-document/lock/source mutation or UI edit was added.
+- SQL, races, catalogues and upgrades are NOT RUN. Coverage gaps in A13/A15/A16/A17/A20/A23, the strict tests-first deviation and incomplete exact exploratory transcript remain technical holds, not approved exceptions.
+- OpenAPI artifact and root lane acceptance remain blocked as above; landing must preserve newer main.
+
+LATER: screens/offer presentation and held link/snagging/lifecycle command journeys after the issued rulings.
+
+## Preservation hashes, inventory and final head
+
+All eight reviewed practice bridge source hashes, the auth boundary test, shared
+watchdog/harness/replay tests, fingerprint test and contractor source on the
+issued base are unchanged. No permanent test was added to pin merged/shared file
+bytes. The following inspection is not retained-suite execution:
+
+```text
+9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14 packages/db/src/practice-session.ts UNCHANGED vs issued base
+56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c packages/db/src/contractor-repository.ts UNCHANGED vs issued base
+e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0 packages/db/src/contractor-party-repository.ts UNCHANGED vs issued base
+4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3 packages/db/src/work-order-repository.ts UNCHANGED vs issued base
+45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5 packages/db/src/sor-repository.ts UNCHANGED vs issued base
+ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d packages/db/src/job-scheduling-repository.ts UNCHANGED vs issued base
+cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386 packages/db/src/work-order-fixtures.ts UNCHANGED vs issued base
+a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c packages/db/src/contractor-session-context.ts UNCHANGED vs issued base
+a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35 apps/api/src/auth/context-boundary.test.ts UNCHANGED vs issued base
+efe6f104c0a9e7ae408ce661b23fcbd181a11eb6dce65624ba61b14a73ff9de9 packages/core/src/watchdog.ts UNCHANGED vs issued base
+3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6 packages/db/test/watchdog-command-harness.ts UNCHANGED vs issued base
+db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f packages/db/test/command-replay-contract.integration.test.ts UNCHANGED vs issued base
+41a9b7171e92a718f5f59f5a1879f3f5bc66aff94773ccbed2356516d5ab52ac packages/db/test/tenancy.integration.test.ts UNCHANGED vs issued base
+be34095677e52d4e63c771799c99a11e0e52a73fdf2d85808550b17a583ab3a8 packages/db/test/fingerprinted-row-shape.integration.test.ts UNCHANGED vs issued base
+e71f848bbf8978ac78bc8a4cdd3f0519e8d52f23d14fcd4e917e1ef02d246839 packages/db/src/site-extra-repository.ts UNCHANGED vs issued base
+1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab packages/db/migrations/0135_site_extra_authority.sql UNCHANGED vs issued base
+ae66c7ba5465ec9cd34d69af2085ab3f4c2a882f7580c7cae4a1ed68061ffba1 AGENTS.md UNCHANGED vs issued base
+abe4a650e2ca928c38ee21bc7168caf10e44e66c45f55e25aa80c6f238a6148b BUILD_PLAN.md UNCHANGED vs issued base
+06b501e413424d77fc5c3a1ac0f481b7230c271e36bfbde2cb953385ccccd349 pnpm-lock.yaml UNCHANGED vs issued base
+c368255cd5e89140d2c4d6422a373edab192e478c773ddf20fed1a21a51413b5 apps/api/openapi.json UNCHANGED vs issued base
+```
+
+`git diff --stat` (tracked edits; untracked additions listed separately):
+
+```text
+ apps/api/src/app.module.ts                         |  4 +++-
+ apps/api/src/proof/proof.application.ts            |  3 ++-
+ apps/api/src/workspace/application.ts              |  4 +++-
+ apps/web/app/api/jobs/[id]/proof/route.ts          |  4 ++--
+ .../jobs/[id]/purchase-orders/placement/route.ts   |  2 +-
+ .../jobs/[id]/purchase-orders/revisions/route.ts   |  2 +-
+ .../jobs/[id]/supplier-documents/intake/route.ts   |  2 +-
+ apps/web/app/api/jobs/[id]/variations/route.ts     |  4 ++--
+ config/agent-lane-assignments.json                 |  3 ++-
+ packages/core/src/index.ts                         |  1 +
+ packages/db/MIGRATIONS.md                          | 21 +++++++++++++++++
+ packages/db/src/evidence.ts                        | 26 ++++++++++++----------
+ packages/db/src/index.ts                           |  2 ++
+ packages/db/src/migrate.ts                         |  1 +
+ packages/db/src/proof-repository.ts                | 12 +++++-----
+ packages/db/src/purchase-order-repository.ts       |  5 +++--
+ packages/db/src/supplier-document-repository.ts    | 13 ++++++-----
+ packages/db/src/variation-repository.ts            | 12 +++++-----
+ 18 files changed, 80 insertions(+), 41 deletions(-)
+```
+
+Full non-receipt file inventory with SHA256 (working-tree inspection, not a lane-gate replacement):
+
+```text
+e9911c3af8efbd2cfd8a78ed2bbd6e42ffce4503ce9c58ad95d227071e6fae1d apps/api/src/app.module.ts
+c71dc10e38c04a602961e9e3eb44e8a7fa7c0eebf082687871dffbd3f8deaa49 apps/api/src/job-work-state.application.test.ts
+19d74e04f7eb75e90c20e7c36adbde307d38412bb303d6451026e79d4a697bf8 apps/api/src/job-work-state.application.ts
+2dd45fd7d8d589990d676e9a74b41d7fc32be35ffabc588e44f2a24398281467 apps/api/src/job-work-state.contracts.ts
+ed14a09854ed56dcfc0e3b1bb4811069c9426ec4f5ab9e7de97f1fa695f89759 apps/api/src/job-work-state.controller.test.ts
+a0c0f571f323916f44bee6a1c7e28866a8d051f542cb2b4f7c1526b983d73f84 apps/api/src/job-work-state.controller.ts
+605874c3a4192117461d0a61955463cd6138c3abfd8d96d4fb8c18a5f81c230e apps/api/src/job-work-state.errors.ts
+163a8e38acf8ea2551949d0ee7f0a3352b42e3986e16839909f0caee94dfeeaf apps/api/src/job-work-state.http.test.ts
+1d97400c24d254fa2c2032534b05e30932d15f9a091523e3e3f37519d0b3acc8 apps/api/src/job-work-state.isolation.test.ts
+a27c824bb559c33093bade3112e67742216b581b216f4b7176c479db1355e853 apps/api/src/proof/proof.application.ts
+56d0ec5c4df0e43847d52dc6fff0285b246cbee4a586d352628912e9e9e792cf apps/api/src/workspace/application.ts
+d86953b0acddd8169e8e52ef62e1ea371d185e555634253ff584328e05d1df4f apps/web/app/api/jobs/[id]/proof/route.ts
+d0730b72bd5b4d419889982454c24e7a294ac2d1411fa7774c9e942fb50aca48 apps/web/app/api/jobs/[id]/purchase-orders/placement/route.ts
+970c2dd0f9dbd5aac9eae603428ed99eb34ddd0cd5797f3371ca24aa60bf2417 apps/web/app/api/jobs/[id]/purchase-orders/revisions/route.ts
+cc50bc648acfdee3e48641faccdd82079c667110b5ddef07578c6e5d2e17468f apps/web/app/api/jobs/[id]/supplier-documents/intake/route.ts
+5771b6718f88acd4fa8275095e0506944ca9b7d6204d8521c9266b99ed60b725 apps/web/app/api/jobs/[id]/variations/route.ts
+1851ee0ef023fd6ff154f5b5c61fccae18cc69c7ad2cf867d164ad3cb94bf45f apps/web/app/api/jobs/[id]/work-state/route.ts
+5719ef4d2c3bc5122ae8f0b911491eeca4506a64e6aaddf348fefd2d4114b9be config/agent-lane-assignments.json
+6ca091032933dbb706944319af24b6593eb438b9fd3cbc87a47e774f41ce1cda docs/contracts/job-work-state-v1.md
+a74341374ebb2767dcc4c6036e63103b9ab7a1274b7d7bc3e4897743d3588f39 packages/core/src/index.ts
+3e3364a82341d097ae0d98a3b2d51889cc11723ff76f9968a0e92b6cf0d01afc packages/core/src/job-work-state.test.ts
+6ce44ec242714ebf8b1d312dd70e980f718f2089a5685bf4ec7d03e629bb37f6 packages/core/src/job-work-state.ts
+386531bd4c4edd506ce5498a378edfcc6977f711fa9bb33ada476006b3608b6b packages/db/MIGRATIONS.md
+1c5f360e84bc0cb304e3334a60239c55f0970bcb43bbf9fb8532479831bd2219 packages/db/migrations/0144_job_work_state.sql
+541f9e38802dcfd362b7716d3aa934d713bb485ee5980570c67c32ab97c0c546 packages/db/src/evidence.ts
+59d4de587417bc55aff9e0afd9982b07ccc9cee246b4b7c75761a4abc8003dc4 packages/db/src/index.ts
+26e62c39b4b971dcb8f354ffeda3c99d0ba0e4220ac286816a6adb4400062b9d packages/db/src/job-work-state-repository.ts
+8360b7836d3db2b8bce2c9b075f2eb43855eae8b8fc088dc2ccfcb08e8a77008 packages/db/src/job-work-state-sources.ts
+8f7751f88c684d334c43b1d6029d5538d8ea35068e1de0bc5b4be5f2064d9b5b packages/db/src/migrate.ts
+1e3c2070656c8e71e4f391535f6566e3082b604693e62b0594c41717585b54e9 packages/db/src/proof-repository.ts
+ee921d3f03e43e09e5561df4a3449277d0712059b314d18453da014fd2f17a36 packages/db/src/purchase-order-repository.ts
+6998004fa8fbe0b679cc7d640cbecf723fc7debd6f601c4d9bc393db00d547dc packages/db/src/supplier-document-repository.ts
+383bb186ced25eff6016e0970398ff6ef21ace0d672c6e10c1682ae8f34429f8 packages/db/src/variation-repository.ts
+ebabeeeea4ec1d0a52edbbb307cbf36f6fbda5dc63ec37453441c1c05eaf23ea packages/db/test/job-work-state-catalog.integration.test.ts
+0a84202955c554732016f3dcd07788413fe64ed06521ee34067f083439b5bf5a packages/db/test/job-work-state-fixtures.ts
+1b55959c8ed86455f57d79a779677ea5bb503040dd2ddee7685e1755f5f26e48 packages/db/test/job-work-state-post-lock.integration.test.ts
+bd4c57f8745a610d1735679b898b401af97bb05d334f9ad42c7ab5c1e6cb4329 packages/db/test/job-work-state-races.integration.test.ts
+7a81f948f8bb872f0b40e17bd26a3fc5d171ce5b432ade7581d8ce2c09f3acae packages/db/test/job-work-state-sources.integration.test.ts
+19cb3aae9ea71ec6939c20a34d2bef9d0b2113b48ff22ce76f25f0556a2fd7ad packages/db/test/job-work-state-upgrade.integration.test.ts
+2fc85c00343e2221a330ed3398e472312eba3ece8ec5b7e2b315feb103406c9b packages/db/test/job-work-state.integration.test.ts
+```
+
+All 41 changed/new files fit the issued lane ceiling; no deleted tracked file.
+This manual inventory does not replace the refused lane gate.
+
+Final HEAD: `269874640468a6e1dfdfed63edd4ce187d1d9dbb` (issued base; all delivered work uncommitted).
+Current observed origin/main: `6659fb58791ec22588948f005b2bd4f6b299fa48`.

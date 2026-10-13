@@ -969,3 +969,24 @@ trigger rejects UPDATE and DELETE.
 
 Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
 `packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
+
+### 0144 — CH-4 immutable work facts (partial synthetic scope)
+
+Creates `job_work_state_event`, `job_site_source_receipt`, `job_photo_purpose` and
+`job_link`, with FORCE RLS, qualified references, immutable mutation/truncate
+controls and runtime SELECT only. Adds the stage-completion job-qualified key.
+Existing photo finalization, ready delivery versions, goods receipts, builder
+origins and stage completion produce normalized facts in the source transaction.
+Original receipt timestamps retain PostgreSQL microseconds; no history is backfilled.
+The deterministic earliest qualifying candidate supplies first site evidence.
+Audit appends run as deferred constraint triggers, after source business locks.
+
+New-work triggers serialize with the existing final-account lock through its job
+row. A currently closed job refuses new lock and pending-check admission.
+The authenticated read routine rechecks the persisted synthetic session and job
+ownership. No held command receives an execution grant or transport.
+Q-01/Q-03/Q-04/Q-05/Q-06 remain held; this does not complete CH-4 or unblock MON-1.
+
+Forward-fix with a reviewed additive migration. Do not delete events or links,
+rewrite documents/money/audit, or reconstruct unknown historical site times.
+Database and upgrade proofs require the dispatcher's PostgreSQL environment.
