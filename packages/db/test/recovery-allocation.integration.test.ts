@@ -12,6 +12,7 @@ import { PracticeFeedRepository } from "../src/practice-feed-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { RecoveryCaseRepository } from "../src/recovery-case-repository.js";
 import { RecoveryAllocationRepository } from "../src/recovery-allocation-repository.js";
+import { RecoveryAllocationController } from "../../../apps/api/src/recovery-allocation.controller.js";
 import { issuePracticeSession, authenticatePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
 import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
@@ -138,7 +139,7 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
     feedView = await feed.command(context, actor, digest, jobId, { version: "practice-feed-command.v1", action: "advance", commandId: randomUUID(), expectedRevision: feedView.revision, movement, step: "settled" });
     feedView = await feed.command(context, actor, digest, jobId, { version: "practice-feed-command.v1", action: "match_receipt", commandId: randomUUID(), expectedRevision: feedView.revision, movement, paymentId });
   }
-  return { jobId, digest, invoiceId: invoice.id, invoices, cases, packs, feed, feedView, scopeId, lineId, revisionId,
+  return { session, jobId, digest, invoiceId: invoice.id, invoices, cases, packs, feed, feedView, scopeId, lineId, revisionId,
     case1: views[0]!, case2: views[1]!, payment1: payments[0]!, payment2: payments[1]!, evidence1: evidenceIds[0]!, evidence2: evidenceIds[1]! };
 }
 
@@ -165,6 +166,42 @@ async function originals(f: Fixture) {
   return Object.fromEntries(await Promise.all(tables.map(async table => [table,
     (await admin.query(`SELECT row_to_json(t)::text AS bytes FROM app.${table} t WHERE tenant_id=$1 AND job_id=$2 ORDER BY id`, [DEMO_TENANT_ID, f.jobId])).rows.map(row => row.bytes)])));
 }
+
+it("paid-invoice credit remains readable and reversible", async () => {
+  const f = await fixture();
+  await run(f, await reviewed(f));
+  const allocation = (await read(f)).allocations.find(row => row.paymentId === f.payment1)!;
+  await f.invoices.recordReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, actorMembershipId: actor.membershipId,
+    commandId: randomUUID(), paidOn: "2026-10-12", amountPence: 2256000 - 38400 - 300000,
+    method: "bank_transfer", reference: "Fictional remaining invoice payment" });
+  const creditInput = { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 32000, reason: "Fictional post-payment credit" };
+  const preview = await f.invoices.previewCredit(context, creditInput);
+  const credit = await f.invoices.issueCredit(context, { ...creditInput, actorMembershipId: actor.membershipId,
+    commandId: randomUUID(), previewHash: preview.previewHash });
+  expect(credit.totalPence).toBe(38400);
+
+  // No application, authentication or repository doubles: the issued session,
+  // PostgreSQL routines and controller response parser drive this journey.
+  const controller = new RecoveryAllocationController(runtime);
+  const request = { headers: { cookie: `jg_session=${f.session}` } };
+  await expect(controller.get(request, f.jobId, {})).resolves.toMatchObject({
+    invoiceBalancePence: -38400,
+    reversalSources: [{ allocationId: allocation.id, sourceId: credit.creditNoteId, kind: "credit_note", availableGrossPence: 38400 }],
+  });
+  const current = (await f.cases.listForMember(context, f.jobId, actor)).find(row => row.id === f.case1.id)!;
+  const input = { version, action: "review_reverse", commandId: randomUUID(), allocationId: allocation.id,
+    creditNoteId: credit.creditNoteId, expectedCaseRevision: current.revision, grossPence: 38400 };
+  const review = await controller.reverse(request, f.jobId, input);
+  expect(review).toMatchObject({ invoiceBalancePence: -38400,
+    review: { action: "reverse", allocationId: allocation.id, grossPence: 38400, eligibleNetPence: 32000, taxPence: 6400 } });
+  const approved = { ...input, action: "reverse", commandId: randomUUID(), approvalHash: review.review!.approvalHash };
+  const reversed = await controller.reverse(request, f.jobId, approved);
+  expect(reversed).toMatchObject({ invoiceBalancePence: -38400, eligibleNetPence: 0, allocatedTaxPence: 0, paused: true,
+    reversalSources: [], allocations: [{ id: allocation.id, grossPence: 38400, reversedPence: 38400 }] });
+  const beforeReplay = await countRows(f);
+  await expect(controller.reverse(request, f.jobId, approved)).resolves.toEqual(reversed);
+  expect(await countRows(f)).toEqual(beforeReplay);
+});
 
 it("DW1: approved £384 and £3,000 persist integer splits, provenance, Decisions and ordered audit", async () => {
   const f = await fixture();
