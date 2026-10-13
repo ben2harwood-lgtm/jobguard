@@ -969,3 +969,9 @@ trigger rejects UPDATE and DELETE.
 
 Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
 `packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
+
+## 0145 — SV-5 separable synthetic final-check persistence
+
+Adds migration-owned, FORCE RLS, append-only manifest/source/attempt/run/reveal/disposition side tables and seven exact controlled-routine EXECUTE grants. No new runtime table grant or DML; no fingerprinted column. Freezes all pre-cutoff original objects and pending uploads, persists explicit zero/failure accounting and controlled non-confirming answers. Adds the `missed_variation_final_account` case category only; its creation remains Q2-held. Adds a post-lock evidence-link exclusion trigger, retaining existing immutable objects and cutoff times. Q4/Q5 invoice enforcement/publication and Q6 executable worker registration are coordinator prerequisites and are not changed.
+
+The own-migration proof is `test/final-check-upgrade.integration.test.ts`: install before 0145, snapshot populated rows by named-column canonical text/full types/original primary keys, apply 0145 alone and compare, then apply later migrations and migrate twice. Rolled-back microsecond/retype controls fail and nullable-column/function-replacement/insert controls pass. No historical rewrite or origin backfill. Forward fix: disable new handlers, preserve all facts and apply an additive repair. Database execution is owed to dispatcher/CI under this lane's socket restriction.
