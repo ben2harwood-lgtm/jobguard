@@ -74,7 +74,7 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
    .toEqual(older.map(proname=>({proname,prosecdef:true,owner:"jobguard_migration",runtime:true,grantees:["jobguard_migration","jobguard_runtime"]})));
   // Every non-trigger routine in app that each new role can execute, by catalog. Trigger functions are not callable
   // directly (checked below). Two pure arithmetic INVOKER helpers keep their default PUBLIC EXECUTE by design.
-  const explicit:Record<string,string[]>={jobguard_shadow:["record_shadow_disclosure"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
+  const explicit:Record<string,string[]>={jobguard_shadow:["record_shadow_disclosure","surface_shadow_signal_early"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
   const pureHelpers=["half_even_ratio","reference_recovery_cap"];
   const callable=(await admin.query(`SELECT r.rolname AS role,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
    CROSS JOIN (VALUES ('jobguard_shadow'),('jobguard_shadow_emergency_access')) r(rolname)

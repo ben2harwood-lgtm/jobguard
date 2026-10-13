@@ -3,3 +3,4 @@ export * from "./fixture-provider.js";
 export * from "./gateway.js";
 export * from "./types.js";
 export * from "./capture.js";
+export * from "./shadow-proposal.js"; export * from "./shadow-evaluation.js";

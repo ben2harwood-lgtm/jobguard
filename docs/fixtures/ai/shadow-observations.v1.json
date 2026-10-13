@@ -1,0 +1,820 @@
+{
+  "version": "shadow-observation-corpus.v1",
+  "cases": [
+    {
+      "id": "held-out-1",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000110",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-1",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [],
+      "responses": {
+        "10000000-0000-4000-8000-000000000110": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-2",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000120",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-2",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [
+        {
+          "version": "shadow-capture.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "id": "10000000-0000-4000-8000-000000000302",
+          "scopeItemId": "10000000-0000-4000-8000-000000000302",
+          "revisionId": "10000000-0000-4000-8000-000000000402",
+          "serverRecordedAt": "2026-10-01T00:00:00Z",
+          "valuePence": null,
+          "kind": "baseline",
+          "state": null,
+          "scopeArea": "garden",
+          "description": "outside tap",
+          "recordedPhase": "pre_lock",
+          "aiStructured": false,
+          "sourceRef": "synthetic:capture-2"
+        }
+      ],
+      "responses": {
+        "10000000-0000-4000-8000-000000000120": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-3",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000130",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-3",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [
+        {
+          "version": "shadow-capture.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "id": "10000000-0000-4000-8000-000000000303",
+          "scopeItemId": "10000000-0000-4000-8000-000000000303",
+          "revisionId": "10000000-0000-4000-8000-000000000403",
+          "serverRecordedAt": "2026-10-01T00:00:00Z",
+          "valuePence": null,
+          "kind": "log_extra",
+          "state": "draft",
+          "scopeArea": "garden",
+          "description": "outside tap",
+          "recordedPhase": "pre_lock",
+          "aiStructured": false,
+          "sourceRef": "synthetic:capture-3"
+        }
+      ],
+      "responses": {
+        "10000000-0000-4000-8000-000000000130": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-4",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000140",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-4",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "chat",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [],
+      "responses": {
+        "10000000-0000-4000-8000-000000000140": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": []
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-5",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "supplier_line",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000150",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-5",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "alternative_material",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [],
+      "responses": {
+        "10000000-0000-4000-8000-000000000150": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": []
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-6",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000160",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-6",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        },
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000161",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-6",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [],
+      "responses": {
+        "10000000-0000-4000-8000-000000000160": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        },
+        "10000000-0000-4000-8000-000000000161": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-7",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000170",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-7",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "cancelled",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [],
+      "responses": {
+        "10000000-0000-4000-8000-000000000170": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": []
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-8",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "supplier_line",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000180",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-8",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "spare",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [],
+      "responses": {
+        "10000000-0000-4000-8000-000000000180": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": []
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-9",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000190",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-9",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "builder_mistake",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [],
+      "responses": {
+        "10000000-0000-4000-8000-000000000190": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": []
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-10",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000200",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-10",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [
+        {
+          "version": "shadow-capture.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "id": "10000000-0000-4000-8000-000000000310",
+          "scopeItemId": "10000000-0000-4000-8000-000000000310",
+          "revisionId": "10000000-0000-4000-8000-000000000410",
+          "serverRecordedAt": "2026-10-01T00:00:00Z",
+          "valuePence": null,
+          "kind": "log_extra",
+          "state": "draft",
+          "scopeArea": "garden",
+          "description": "outside tap",
+          "recordedPhase": "pre_lock",
+          "aiStructured": false,
+          "sourceRef": "synthetic:capture-10"
+        }
+      ],
+      "responses": {
+        "10000000-0000-4000-8000-000000000200": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        }
+      }
+    },
+    {
+      "id": "held-out-11",
+      "observations": [
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "customer_request",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000210",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-11",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        },
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "note_or_voice",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000211",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-11",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        },
+        {
+          "version": "observation.v1",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "jobId": "10000000-0000-4000-8000-000000000002",
+          "kind": "completion_photo",
+          "evidence": {
+            "id": "10000000-0000-4000-8000-000000000212",
+            "objectVersionId": "synthetic-v1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "serverReceivedAt": "2026-10-01T00:00:00Z"
+          },
+          "text": "Fitted outside tap.",
+          "facts": {
+            "workReference": "work-11",
+            "scopeArea": "garden",
+            "description": "outside tap",
+            "status": "completed",
+            "estimatedValuePence": null,
+            "safetyImplication": false,
+            "customerClearlyRequested": false,
+            "needsPriorWrittenAgreement": false,
+            "significantWork": null,
+            "activeDispute": false,
+            "silenceMateriallyWorsensDispute": false,
+            "disclosureDuty": false
+          },
+          "citations": [
+            {
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          ]
+        }
+      ],
+      "captures": [],
+      "responses": {
+        "10000000-0000-4000-8000-000000000210": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        },
+        "10000000-0000-4000-8000-000000000211": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        },
+        "10000000-0000-4000-8000-000000000212": {
+          "output": {
+            "version": "shadow-ai-proposals.v1",
+            "proposals": [
+              {
+                "description": "outside tap",
+                "confidenceBand": "low",
+                "recommendation": "hold",
+                "citation": {
+                  "start": 0,
+                  "end": 19,
+                  "quote": "Fitted outside tap."
+                }
+              }
+            ]
+          },
+          "citations": []
+        }
+      }
+    }
+  ]
+}
