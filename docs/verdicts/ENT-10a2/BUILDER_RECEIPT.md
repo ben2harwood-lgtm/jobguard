@@ -295,3 +295,42 @@ None involves the migration or product code; the migration-level tests (K1, U1, 
 - line 97: `REVOKE ALL ON FUNCTION identity.scim_deactivate(uuid,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_identity;`
 - line 98: `GRANT EXECUTE ON FUNCTION identity.scim_deactivate(uuid,jsonb) TO jobguard_identity;`
 No INSERT, UPDATE or DELETE grant to `jobguard_runtime` (or anyone) on money, membership, authorization, receipt or audit tables; the only writes to membership, session and grant-revocation rows are the checked routine's, and the only new privilege is EXECUTE on that routine for `jobguard_identity`.
+
+## Repair round 1 (13 Oct): five Mac-found test/fixture defects, built by Claude, Codex unavailable
+
+Built by a Claude Sonnet 5.5 builder (Codex unavailable), dispatched by the Claude session "JobGuard dispatcher, Monday". Not a review and not a verdict. Order: `ENT-10a2-r1-test-repair.txt`. Tests and fixtures only: no migration byte, no product code, no merged file, no other test, no scanner/list edit. Edited files: `packages/db/test/scim-fixtures.ts`, `packages/db/test/scim-deactivation.integration.test.ts` (and this receipt). `scim-deactivation-access.integration.test.ts` needed no edit (its two failures came from the shared fixture). No assertion was weakened, skipped, deleted or reworded; the test-side diff is 2 changed lines and 2 added lines, all listed below. Logs: `~/.local/share/full-steam/jg-runs/ent-10a2-repair1/`.
+
+### The five defects and their fixes
+
+**1. [B3] `scim-deactivation.integration.test.ts:96`, 2. [G6] `scim-deactivation-access.integration.test.ts:84`, 3. [G7] `scim-deactivation-access.integration.test.ts:96` (one cause, one fix, in `scim-fixtures.ts`).** Cause: the fixture helper `person()` asks for a sign-in code for the new person's address (to make the person's ordinary code session), then each test asks for a second sign-in code for the same address within the same second; the merged auth provider (`persisted-auth-provider.ts:33`) refuses a second request for the same address and purpose inside 60 seconds (`RATE_LIMITED`). Fix: at the end of `person()`, as the table owner, move that stored first request 61 seconds into the past, the table-owner way merged identity tests already move time (those tests advance an injected clock by 60001 ms; this harness's provider uses the real clock, so the stored time is moved instead).
+- Before: nothing between `scim-fixtures.ts:88` (`const ordinary...`) and the `return`.
+- After (new lines 89 and 90):
+  - ` // Table-owner set-up, as merged identity tests advance their clock: age this stored sign-in request past the merged 60-second same-address cooldown, so a later request a test makes for this address is a real, otherwise-allowed one.`
+  - ` await f.h.admin.query("UPDATE identity.challenge SET requested_at=requested_at-interval '61 seconds',expires_at=expires_at-interval '61 seconds' WHERE email=$1 AND purpose='signin'",[email]);`
+- Why set-up only: it runs inside the fixture, after the person's own code has been verified and consumed, and before any test body; it touches only that address's earlier sign-in challenge row (`expires_at` moves with `requested_at`, so the table's `expires_at>requested_at` check still holds). The merged auth provider, the 60-second rule and every assertion are unchanged; the request each test makes ([B3] `toMatchObject({accepted:true})`, [G6] and [G7] code request then `verifyCode`) is now a real request the provider would allow after a minute, and it is still made without any clock change, so the tests still prove what their titles say (a deactivated person's NEW code request is accepted, signs in as an ordinary session, and lists no membership). No scim test expects `RATE_LIMITED`, so no other test depends on the old timing.
+
+**4. [A3] `scim-deactivation.integration.test.ts:65`** (the `migrate(alternate)` call failed with an empty-password error from the second database's pool). Cause: `pg` keeps the pool's `password` option non-enumerable, so `{...h.admin.options,...}` drops it (the same note sits in `audit-export.integration.test.ts` at the line that copies `runtime.options.password`; `sso-required.integration.test.ts:182` builds its second pool the same way with an explicit password). Fix: copy it explicitly from the fixture's own admin pool; no new credential text is written.
+- Before: `  const alternate=new Pool({...h.admin.options,database:"jobguard_scim_other"});`
+- After: `  const alternate=new Pool({...h.admin.options,password:h.admin.options.password,database:"jobguard_scim_other"});`
+- Why set-up only: it changes only how the second database's connection is opened; every statement and assertion after it ("route blocked" on the other database, event count unchanged) is untouched.
+
+**5. [T1] bound-and-ordinary case, `scim-deactivation.integration.test.ts:132`** (`ZodError unrecognized_keys ["sessionId"]` from the strict credentials schema in `principal-bridge.ts`). Cause: `seedBinding()` returns `{sessionId,sessionToken,csrfToken,origin}` and the test spread all of it into `identityApp.context`, whose schema allows only `sessionToken`, `requestedTenantId`, `tenantHeader`, `csrfToken` and `origin`. Fix: pass exactly the allowed keys from the same object. `otherBound.sessionId` is still used where it belongs (the `identity.session` row snapshots on lines 129 and 130).
+- Before (the changed call, rest of the line identical): `(await h.identityApp.context({...otherBound,requestedTenantId:b.principal.tenantId})).tenantId`
+- After: `(await h.identityApp.context({sessionToken:otherBound.sessionToken,csrfToken:otherBound.csrfToken,origin:otherBound.origin,requestedTenantId:b.principal.tenantId})).tenantId`
+- Why set-up only: the expectation (`.tenantId` equals the other company's id, i.e. a person bound to the other company keeps that company's access after deactivation here) is unchanged; only the shape of the credentials object handed in is corrected to what the merged schema accepts.
+
+### Run table (13 Oct, Mac; every run through `heavy-slot` with at most two slots, database files `--maxWorkers=1`, three files per run at most)
+
+| step | command | exit | count |
+|---|---|---|---|
+| dist check | each of core, db, storage, config, ai, api: any `src` file newer than the newest `dist` file? | n/a | none newer in any of the six, so no rebuild was needed (nothing under `src` changed in this round) |
+| (a) run 1 | `scim-deactivation`, `scim-deactivation-access`, `scim-deactivation-concurrency` | 0 | 41 passed, 0 failed |
+| (a) run 2 | same three files | 0 | 41 passed, 0 failed |
+| (a) run 3 | same three files | 0 | 41 passed, 0 failed |
+| (b) group 1 | `scim-deactivation-upgrade`, `enterprise-identity`, `sso-required` | 0 | 37 passed |
+| (b) group 2 | `identity`, `sso-emergency`, `sso-emergency-concurrency` | 0 | 17 passed |
+| (c) `pnpm typecheck` | | 0 | 7/7 tasks |
+| (c) `LANE_BASE_REF=origin/main pnpm lint` | | 0 | 7/7 tasks; core purity, lane boundary (27 files) and money arithmetic boundary all passed |
+| (c) edited test files type-checked | scratch `tsconfig` (outside the repository) extending the root `tsconfig.json`, `noEmit`, files: `scim-fixtures.ts`, `scim-deactivation.integration.test.ts`, `scim-deactivation-access.integration.test.ts`, run with the db package's `tsc` | 0 | no diagnostics (the three files plus `scim-repository.ts` confirmed in the file list) |
+
+The embedded PostgreSQL started first time (no `hydrate-symlinks.js` run was needed). The migration, the product code and every merged file are byte-identical to the head this round started from (`36f42dd`); `git diff --stat` for this round shows only the two test/fixture files and this receipt.

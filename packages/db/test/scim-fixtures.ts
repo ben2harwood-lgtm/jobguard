@@ -86,6 +86,8 @@ export async function person(f:ScimFixture,role="finance",subject:string=randomU
  const membership=(await f.h.provider.findMembership(principal,f.principal.tenantId))!;
  const request=await f.h.provider.requestCode({email,purpose:"signin",ip:randomUUID()});
  const ordinary:Credentials={...await f.h.provider.verifyCode(email,"signin",request.fixtureCode!),origin};
+ // Table-owner set-up, as merged identity tests advance their clock: age this stored sign-in request past the merged 60-second same-address cooldown, so a later request a test makes for this address is a real, otherwise-allowed one.
+ await f.h.admin.query("UPDATE identity.challenge SET requested_at=requested_at-interval '61 seconds',expires_at=expires_at-interval '61 seconds' WHERE email=$1 AND purpose='signin'",[email]);
  return {subject,email,userId:principal.identityUserId,membershipId:membership.id,bound,ordinary,sessionId:principal.sessionId};
 }
 export type ScimPerson=Awaited<ReturnType<typeof person>>;

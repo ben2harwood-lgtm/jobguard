@@ -62,7 +62,7 @@ describe("[D1] ENT-10a2 database deactivation",()=>{
   expect(await companySnapshot(a.principal.tenantId)).toEqual(beforeA);expect(await companySnapshot(b.principal.tenantId)).toEqual(beforeB);expect(await refusalCount()).toBe(global+2);
   await expect(deactivate(a,p)).resolves.toMatchObject({outcome:"deactivated",cause:"SCIM_DEACTIVATED"});
   await h.admin.query("CREATE DATABASE jobguard_scim_other");
-  const alternate=new Pool({...h.admin.options,database:"jobguard_scim_other"});
+  const alternate=new Pool({...h.admin.options,password:h.admin.options.password,database:"jobguard_scim_other"});
   try {await migrate(alternate);const before=(await alternate.query("SELECT count(*)::int n FROM identity.scim_event")).rows[0].n;
    await expect(alternate.query("SELECT identity.scim_deactivate($1,'{}'::jsonb)",[a.connectionId])).rejects.toMatchObject({code:"42501",message:"SCIM_ROUTE_BLOCKED"});
    expect((await alternate.query("SELECT count(*)::int n FROM identity.scim_event")).rows[0].n).toBe(before);
@@ -129,7 +129,7 @@ describe("[D1] ENT-10a2 database deactivation",()=>{
   const otherRows=await companySnapshot(b.principal.tenantId),otherSessions=await canonicalRows(h,"identity.session",otherBound?"id=$1":"user_id=$1",[otherBound?.sessionId??b.principal.identityUserId]);
   await deactivate(a,p);expect(await companySnapshot(b.principal.tenantId)).toEqual(otherRows);expect(await canonicalRows(h,"identity.session",otherBound?"id=$1":"user_id=$1",[otherBound?.sessionId??b.principal.identityUserId])).toEqual(otherSessions);
   expect((await h.identityApp.session(p.ordinary.sessionToken)).memberships.map(m=>m.tenantId)).toEqual([b.principal.tenantId]);expect((await h.identityApp.context({...p.ordinary,requestedTenantId:b.principal.tenantId})).tenantId).toBe(b.principal.tenantId);
-  await expect(h.identityApp.context({...p.ordinary,requestedTenantId:a.principal.tenantId})).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});if(otherBound){expect(await h.provider.authenticate(otherBound.sessionToken)).toBeDefined();expect((await h.identityApp.context({...otherBound,requestedTenantId:b.principal.tenantId})).tenantId).toBe(b.principal.tenantId);}
+  await expect(h.identityApp.context({...p.ordinary,requestedTenantId:a.principal.tenantId})).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});if(otherBound){expect(await h.provider.authenticate(otherBound.sessionToken)).toBeDefined();expect((await h.identityApp.context({sessionToken:otherBound.sessionToken,csrfToken:otherBound.csrfToken,origin:otherBound.origin,requestedTenantId:b.principal.tenantId})).tenantId).toBe(b.principal.tenantId);}
  });
  it("[T2] another company's subject is indistinguishable from an unlinked subject",async()=>{
   const a=await fixture(h),b=await fixture(h),p=await person(b),before=await companySnapshot(b.principal.tenantId),eventId=randomUUID();
