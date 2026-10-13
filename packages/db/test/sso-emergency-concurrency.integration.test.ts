@@ -121,6 +121,14 @@ describe("ENT-10d isolated emergency concurrency", () => {
       } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
 
       const before = await snapshot(), earlierAudit = await audit(f.principal.tenantId);
+      type SnapshotRow = { value: Record<string, unknown> };
+      const createdTables = ["identity.sso_emergency_approval", "identity.sso_emergency_use", "identity.sso_emergency_window"];
+      const emergencySnapshot = async () => {
+        const rows: Record<string, SnapshotRow[]> = {};
+        for (const name of createdTables.slice(1)) rows[name] = (await admin.query<SnapshotRow>(`SELECT to_jsonb(r) value FROM ${name} r ORDER BY to_jsonb(r)::text`)).rows;
+        return rows;
+      };
+      const emergencyBefore = await emergencySnapshot();
       const allEarlierAudit = (await admin.query("SELECT * FROM app.audit_event ORDER BY tenant_id,sequence")).rows;
       const revisionsBefore = (await admin.query("SELECT * FROM identity.sso_required_event WHERE tenant_id=$1 ORDER BY revision", [f.principal.tenantId])).rows;
       const logsBefore = (await admin.query("SELECT * FROM identity.sso_emergency_event WHERE tenant_id=$1 ORDER BY created_at,id", [f.principal.tenantId])).rows;
@@ -147,12 +155,35 @@ describe("ENT-10d isolated emergency concurrency", () => {
         await Promise.allSettled(race);
         first.release(); second.release(); blocker.release();
       }
-      expect(await snapshot()).toEqual(before);
+      const allBefore = { ...before, ...emergencyBefore };
+      const allAfter = { ...await snapshot(), ...await emergencySnapshot() };
+      const existing: Record<string, unknown> = {}, added: Record<string, SnapshotRow[]> = {};
+      for (const name of Object.keys(allBefore)) {
+        // Use the actual primary key, including every column of composite keys.
+        const primaryKey = (await admin.query<{ name: string }>("SELECT a.attname name FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum,position) JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum WHERE i.indisprimary AND i.indrelid=$1::regclass ORDER BY k.position", [name])).rows.map(r => r.name);
+        expect(primaryKey.length).toBeGreaterThan(0);
+        const key = (r: SnapshotRow) => JSON.stringify(primaryKey.map(column => r.value[column]));
+        const prior = allBefore[name] as SnapshotRow[], current = allAfter[name] as SnapshotRow[];
+        const priorKeys = new Set(prior.map(key));
+        existing[name] = current.filter(r => priorKeys.has(key(r)));
+        added[name] = current.filter(r => !priorKeys.has(key(r)));
+      }
+      // Missing or changed earlier rows fail the original full-row comparison.
+      expect(existing).toEqual(allBefore);
+      for (const name of unchangedTables.filter(name => !createdTables.includes(name))) expect(added[name]).toEqual([]);
+      for (const name of createdTables) expect(added[name]).toHaveLength(1);
+      const newApproval = added["identity.sso_emergency_approval"]![0]!.value;
+      const newUse = added["identity.sso_emergency_use"]![0]!.value;
+      const newWindow = added["identity.sso_emergency_window"]![0]!.value;
       const revisionsAfter = (await admin.query("SELECT * FROM identity.sso_required_event WHERE tenant_id=$1 ORDER BY revision", [f.principal.tenantId])).rows;
       expect(revisionsAfter.slice(0, revisionsBefore.length)).toEqual(revisionsBefore);
       expect(revisionsAfter).toHaveLength(revisionsBefore.length + 1);
       expect(revisionsAfter.at(-1)).toMatchObject({ required: false, revision: iteration * 2 + 2, actor_kind: "emergency" });
-      const uses = (await admin.query("SELECT * FROM identity.sso_emergency_use WHERE tenant_id=$1 AND approval_id=$2", [f.principal.tenantId, approval])).rows;
+      // The sole new OFF event belongs to the winner; no losing side effect may remain.
+      expect(newApproval).toMatchObject({ tenant_id: f.principal.tenantId, membership_id: f.principal.membershipId });
+      expect(newUse).toMatchObject({ tenant_id: f.principal.tenantId, approval_id: newApproval.id, event_id: revisionsAfter.at(-1).id });
+      expect(newWindow).toMatchObject({ tenant_id: f.principal.tenantId, approval_id: newApproval.id, event_id: newUse.event_id, owner_membership_id: f.principal.membershipId });
+      const uses = (await admin.query("SELECT * FROM identity.sso_emergency_use WHERE tenant_id=$1 AND approval_id=$2", [f.principal.tenantId, newApproval.id])).rows;
       expect(uses).toHaveLength(1);
       expect(uses[0].event_id).toBe(revisionsAfter.at(-1).id);
       expect((await admin.query("SELECT count(*)::int n FROM identity.sso_emergency_use WHERE tenant_id=$1", [f.principal.tenantId])).rows[0].n).toBe(iteration + 1);
