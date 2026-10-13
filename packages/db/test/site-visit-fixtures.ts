@@ -1,9 +1,9 @@
 // Shared set-up for the ENT-3b database files. Builds on merged cluster()/fixture() and ENT-3a's site-extra-fixtures.ts (imported, never edited).
 import { randomUUID } from "node:crypto";
 import { WorkOrderRepository, demoFile, demoRow, withTenant, type AuthenticatedMembership } from "../src/index.js";
-import { siteFixture, invite, chain, ownerTx, cluster, command, smallJob, type SiteFixture, type Actor } from "./site-extra-fixtures.js";
+import { siteFixture, invite, chain, ownerTx, cluster, command, smallJob, smallTrack, type SiteFixture, type Actor } from "./site-extra-fixtures.js";
 import type { Cluster } from "./extra-fixtures.js";
-export { cluster, ownerTx, invite, command, chain, smallJob, siteFixture };
+export { cluster, ownerTx, invite, command, chain, smallJob, smallTrack, siteFixture };
 export type { Cluster, SiteFixture, Actor };
 /** The seven roles that may not visit, in the order the rule names them. */
 export const forbiddenRoles = ["owner", "admin", "surveyor", "commercial_manager", "finance", "read_only", "client_approver"] as const;
@@ -27,11 +27,18 @@ export async function cancelOrder(c: Cluster, f: VisitFixture) {
  await reviseOrder(c, f, f.revision, [], { status: "cancelled", lines: [] });
  f.revision += 1;
 }
-/** Moves the work-order job off live as the table owner (the merged watchdog tests put jobs in other states by owner writes). */
-export async function moveOffLive(c: Cluster, f: VisitFixture, status = "invoiced") {
- await ownerTx(c, f.p.tenantId, async db => { await db.$client.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, f.jobId, status]); });
+/** Moves a work-order job off live as the table owner (the merged watchdog tests put jobs in other states by owner writes). */
+export async function moveOffLive(c: Cluster, f: VisitFixture, status = "invoiced", jobId = f.jobId) {
+ await ownerTx(c, f.p.tenantId, async db => { await db.$client.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, jobId, status]); });
 }
-export async function backToLive(c: Cluster, f: VisitFixture) { await moveOffLive(c, f, "live"); }
+/** Another order (and so another work-order job) in the same organisation and branch; returns its job and order ids. */
+export async function extraOrder(c: Cluster, f: VisitFixture, n: number, assigned: string[], overrides: Record<string, unknown> = {}) {
+ await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: `fictional-ent3b-${n}.csv`, kind: "csv", csv: demoFile([demoRow(f.demo, n, { assignedMembershipIds: assigned, ...overrides })]) });
+ const row = (await c.admin.query("SELECT job_id,id FROM app.work_order WHERE tenant_id=$1 AND client_id=$3 AND reference=$2", [f.p.tenantId, `WO-DEMO-${String(n).padStart(4, "0")}`, f.demo.clientId])).rows[0]!;
+ return { jobId: row.job_id as string, orderId: row.id as string };
+}
+/** A second order that names the demo operative and the named supervisor, for the cases that need the same caller on two jobs. */
+export const secondJob = (c: Cluster, f: VisitFixture, overrides: Record<string, unknown> = {}) => extraOrder(c, f, 2, [f.demo.operativeMembershipId, f.named.member.membershipId], overrides);
 /** The runtime role inside the tenant, exactly as a request would call it. */
 export async function authority(c: Cluster, f: VisitFixture, member: string | null, job: string | null = f.jobId) {
  return withTenant(c.runtime, f.ctx, async db => (await db.$client.query("SELECT * FROM app.ent3b_visit_authority($1,$2)", [member, job])).rows);
@@ -45,6 +52,7 @@ export async function snapshot(c: Cluster, tenantId: string) {
   visits: await one("SELECT row_to_json(v)::text row FROM app.site_visit v WHERE tenant_id=$1 ORDER BY id"),
   answers: await one("SELECT row_to_json(a)::text row FROM app.closeout_answer a WHERE tenant_id=$1 ORDER BY id"),
   events: await one("SELECT id,event_type FROM app.audit_event WHERE tenant_id=$1 AND event_type IN('contractor.visit.started','contractor.visit.completed') ORDER BY id"),
+  otherAudit: await one("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type<>'contractor.visit.refused'"),
  };
 }
 export async function refusalEvents(c: Cluster, tenantId: string) {
