@@ -99,10 +99,19 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    const inFlight=new Set<import('@playwright/test').Request>(),failures:Error[]=[];
    const retrievals:Array<{at:string;before:number;after:number}>=[];
    let visibleClocks=0,lastActivity=Date.now();
-   const requestListener=(request:import('@playwright/test').Request)=>{inFlight.add(request);lastActivity=Date.now()};
+   let navigation:{departingRequests:Set<import('@playwright/test').Request>;committed:boolean}|undefined;
+   const requestListener=(request:import('@playwright/test').Request)=>{
+    inFlight.add(request);lastActivity=Date.now();
+    if(navigation&&!navigation.committed&&request.frame()===page.mainFrame())navigation.departingRequests.add(request);
+   };
+   const navigatedListener=(frame:import('@playwright/test').Frame)=>{if(navigation&&frame===page.mainFrame())navigation.committed=true};
    const finishedListener=(request:import('@playwright/test').Request)=>{inFlight.delete(request);lastActivity=Date.now()};
    const failedListener=(request:import('@playwright/test').Request)=>{
-    finishedListener(request);failures.push(new Error(`Q request failed: ${request.method()} ${request.url()}: ${request.failure()?.errorText}`));
+    finishedListener(request);
+    // Only this goto may cancel the departing document's exact things-to-check polling fetch.
+    // Every other route/error, or request from the destination document, remains a failure.
+    if(navigation?.departingRequests.has(request)&&request.failure()?.errorText==='net::ERR_ABORTED'&&request.method()==='GET'&&request.resourceType()==='fetch'&&request.url()===new URL(`/api/jobs/${jobId}/things-to-check`,page.url()).href)return;
+    failures.push(new Error(`Q request failed: ${request.method()} ${request.url()}: ${request.failure()?.errorText}`));
    };
    const listener=(response:import('@playwright/test').Response)=>{
     const dateAfter=Date.now();
@@ -126,7 +135,7 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
      });
     }
    };
-   page.on('request',requestListener);page.on('requestfinished',finishedListener);page.on('requestfailed',failedListener);page.on('response',listener);
+   page.on('request',requestListener);page.on('requestfinished',finishedListener);page.on('requestfailed',failedListener);page.on('response',listener);page.on('framenavigated',navigatedListener);
    async function drain(){
     // Recheck the live sets: requests/responses arriving during the wait extend it.
     await expect.poll(()=>{
@@ -138,7 +147,14 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    }
    const views:Array<{responseShape:string;counts:(string|null)[];badges:(string|null)[];errors:(string|null)[];cacheKeys:string[];notifications:unknown[];analytics:unknown[];storage:Array<Array<Array<string|null>>>}>=[];
    try{await drain();for(const route of ['/',`/jobs/${jobId}`]){
-    await page.goto(route);if(route==='/'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
+    navigation={departingRequests:new Set([...inFlight].filter(request=>request.frame()===page.mainFrame())),committed:false};
+    try{
+     const destination=await page.goto(route);
+     expect(destination,'Q destination navigation returned a response').not.toBeNull();
+     expect(destination!.status(),'Q destination document returned HTTP 200').toBe(200);
+     expect(destination!.url(),'Q destination response is the requested page').toBe(new URL(route,page.url()).href);
+    }finally{navigation=undefined}
+    if(route==='/'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
     else{const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();await price.click();await expect(page.locator('.quote-editor')).toBeVisible()} // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
     await drain();
     const view=await page.evaluate(()=>{
@@ -153,7 +169,7 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
      return clockPlaceholder;
     });
     views.push(view);await drain();
-   }}finally{page.off('request',requestListener);page.off('requestfinished',finishedListener);page.off('requestfailed',failedListener);page.off('response',listener)}
+   }}finally{page.off('request',requestListener);page.off('requestfinished',finishedListener);page.off('requestfailed',failedListener);page.off('response',listener);page.off('framenavigated',navigatedListener)}
    expect(retrievals.length,'prevention-checks response was checked').toBeGreaterThan(0);
    expect(visibleClocks,'visible Retrieved: value was checked').toBeGreaterThan(0);
    expect(responses.size).toBeGreaterThan(0);
