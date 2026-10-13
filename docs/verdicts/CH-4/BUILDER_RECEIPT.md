@@ -1,3 +1,217 @@
+# CH-4 repair round r6 — 13 October 2026, dispatcher 4
+
+Builder run receipt; not an independent verdict or technical acceptance. Starting
+and final HEAD: `5066f0ea545cd7b3977f161f2d6cc856029fdd0a` (PR #185).
+Observed `origin/main`: `45125a4bb19cb32ca72b262229de5c030d2c33cf`; no fetch.
+Working tree was clean at entry. No Git-writing command, install, package download,
+PostgreSQL startup, socket-binding test, commit, push, merge or release was run.
+Node v24.17.0 and installed pnpm 10.28.1 were used. All successful pnpm commands
+below used `PATH=/private/tmp/ch4-pnpm-bin:$PATH`, the existing pinned shim.
+An initial unqualified `pnpm --version` hung without returning a version and was
+interrupted (exit 130); it was not used for checks or installation.
+
+## Root cause and exact repair
+
+`packages/db/src/migrate.ts:98` does **not split migration statements**. It reads
+each registered file and sends that entire file as one `pool.query(sql)` call.
+Only 0095 has a mode substitution; 0144 is sent unchanged, beginning `BEGIN;`.
+Thus PostgreSQL's 1-based position 18569 refers to the full 39,972-character
+original 0144 file, not a separately split routine or the chain concatenated.
+It maps to line 175, column 190, immediately before the CASE expression's first
+`THEN` (character 18570). The enclosing `CREATE FUNCTION
+app.ch4_storage_integrity()` starts at character 14138, line 142.
+
+The IF condition compared `latest.kind IS DISTINCT FROM CASE WHEN ... THEN ...
+ELSE ... END`. PL/pgSQL reads an IF expression only until the first THEN outside
+parentheses/brackets; this CASE's THEN ended it prematurely, leaving incomplete
+SQL. This is confirmed by PostgreSQL 16's
+[read_sql_construct implementation](https://raw.githubusercontent.com/postgres/postgres/REL_16_STABLE/src/pl/plpgsql/src/pl_gram.y)
+(lines 2557–2574), rather than inferred from balanced dollar quotes alone.
+
+Edited own unmerged migration 0144 in place: parenthesized that CASE expression.
+A preservation check reconstructs the final file from HEAD with this single
+replacement, proving the only SQL changes are the two parentheses. The resulting
+predicate, tenant checks, predecessor semantics, privileges and commercial policy
+are unchanged. No merged test changed.
+
+Added `packages/db/test/job-work-state-syntax.test.ts`, plus that one exact path
+in CH-4's own lane allowlist. Parsed comparison proves every other lane and every
+other CH-4 field unchanged. The new test drives the real migration runner with a
+scripted query adapter and verifies that its actual 0144 query equals the file.
+The adapter establishes runner behavior only, not PostgreSQL execution.
+
+The lexical guard checks the entire outer query and all 13 dollar bodies (10
+functions and 3 DO blocks): quotes/comments, parentheses/brackets, the
+BEGIN/IF/LOOP/CASE nesting used here, and all IF/ELSIF conditions. It rejects an
+unprotected CASE before a condition's terminating THEN. Mutation controls remove
+the actual fix in memory and prove rejection; additional controls cover missing
+dollar/quote/comment terminators, parentheses, THEN and END. A positive control
+covers tagged dollar quotes, nested comments, escaped/doubled quotes and SQL CASE
+inside an EXISTS subquery. No SQL fixture, package or production parser was added.
+This is a narrow guard for this migration's syntax forms, not a complete SQL or
+PL/pgSQL parser, and cannot establish grants, RLS, execution or migration success.
+
+Source-inspected every remaining statement of 0144, including all routine/DO
+endings, trigger/constraint declarations and remaining CASE expressions. The
+guard checks all bodies rather than just the failing function. No second instance
+of this syntax class was found. PostgreSQL must still validate the complete chain.
+
+## Tests-first evidence and executed checks
+
+Before the SQL edit, the new 8-case suite exited 1: the full-query check rejected
+`CASE in IF/ELSIF must be parenthesized`; the mutation control also correctly
+reported that the expected fixed expression was absent. Six guard controls passed.
+After the two-parenthesis fix, all 8 cases passed. After adding the two block-END
+controls, the final standalone suite passed all **10** cases (exit 0).
+
+Exact commands and results (logs at `/private/tmp/ch-4-r6-*.log`):
+
+| Command | Exit | Result / log suffix |
+|---|---:|---|
+| `pnpm typecheck --concurrency=2 --force` | 0 | 7 executed tasks, 0 cached; `typecheck` |
+| `LANE_BASE_REF=origin/main pnpm lint --concurrency=2 --force` | 0 | root invariants and 7 executed package tasks, 0 cached; `lint` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | merge-base plus working tree; `lanes` |
+| `pnpm build --concurrency=2 --force` | 0 | 7 executed tasks, 0 cached; `build` |
+| `pnpm openapi:check` | 1 | tsx CLI IPC `listen EPERM` before checker; `openapi` |
+| `node --import tsx src/generate-openapi.ts --check` from `apps/api` | 0 | same source checker without CLI listener; `openapi-source` |
+| `pnpm --filter @jobguard/core test --maxWorkers=2` | 1 | duplicate built-test collection issue below; `core` |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | 0 | 81 files, 2,426 source tests; `core-source` |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude src/health.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude 'src/contractor/*.http.test.ts' --exclude src/final-account-lock.isolation.test.ts --exclude src/shadow-isolation.application.test.ts` | 0 | 66 files, 1,556 tests; `api` |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | 0 | 33 files, 784 tests; `web` |
+| `pnpm --filter @jobguard/ai exec vitest run src --maxWorkers=2` | 0 | 5 files, 80 synthetic adapter/evaluation tests; `ai` |
+| `pnpm --filter @jobguard/config exec vitest run src --maxWorkers=2` | 0 | 1 test; `config` |
+| `pnpm --filter @jobguard/storage exec vitest run src --maxWorkers=2` | 0 | 2 tests; `storage` |
+| DB unit batch command below | 0 | 8 files, 76 tests (syntax suite then had 8 cases); `db-unit` |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/job-work-state-syntax.test.ts` | 0 | final 10 cases; `syntax` |
+| `pnpm exec tsc -p /private/tmp/ch-4-r6-test-tsconfig.json` | 0 | strict typecheck of the new test and imports; `test-typecheck` |
+| selected `node --test` tool batch below | 0 | 7 files, 19 tests; `tools` |
+| `git diff --check` | 0 | no whitespace errors |
+| Python exact SQL/lane preservation inspection | 0 | only two SQL parentheses, one lane path; no tracked-test edits |
+
+The temporary test tsconfig extends the repository's strict config with noEmit,
+no declarations/source map, and only the absolute new test path in `files`.
+It is needed because the db package's normal typecheck includes `src` only.
+
+DB unit batch:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 \
+  test/recovery-case-join.test.ts test/site-extra-evidence-compatibility.test.ts \
+  test/recovery-message-repository.test.ts test/recovery-case-outcome.test.ts \
+  test/verify-audit-export-cli.test.ts test/contractor-session-context.test.ts \
+  test/job-work-state-syntax.test.ts test/verify-evidence-pack-cli.test.ts
+```
+
+Tool batch was executed through Python `subprocess.run(['node','--test',...])`
+using the sorted seven tool test paths listed in
+`/private/tmp/ch-4-r6-tools-files.txt`: all `tools/*.test.mjs` except
+`agent-lane-boundary.test.mjs` and `agent-lane-boundary-train.test.mjs`. Those two
+create temporary Git repositories and run Git-writing commands, so they were
+NOT RUN under this round's explicit no-Git-writes instruction. The lane checker
+itself was run and passed. The eight API exclusions comprise two real-DB files
+and six socket-based HTTP files; db `free-port.test.ts` also needs socket binding
+and was NOT RUN. No retained suite was edited or made optional.
+
+Build warnings: existing Next workspace-root/lockfile warning, CSS autoprefixer
+`end` compatibility, webpack cache serialization, Nest file-type export and
+load-esm dynamic-import warnings. Build exited 0. OpenAPI JSON was not edited.
+
+Discovered later: default core tests after a build collect both `src` and `dist`.
+Two built tests (`dist/recovery-allocation.test.js` DW9 and
+`dist/site-extra-pricing.test.js` C3) fail with ENOENT while reading their adjacent
+`.ts` files from `dist`. That run had 2 failed / 4,850 passed tests in 162 files;
+source-only execution passed all 2,426 tests in 81 files. This is separate from
+0144's SQL fix and was not repaired by changing merged tests or test discovery.
+Do not describe the full `pnpm test` umbrella as passed in this sandbox.
+
+## Whole filtered CI log inspection — run 38472273971
+
+Inspected the full supplied 2,351-line log (not a full unfiltered Actions log):
+`/Users/benharwood/.local/share/full-steam/jg-runs/ch-4-ci-failed-38472273971.log`.
+ANSI-cleaned inspection copy: `/private/tmp/ch-4-ci-clean.log`.
+
+Observed failures:
+
+1. API `final-account-lock.isolation.test.ts`, DW8 real database setup at line 37:
+   42601, end-of-input, position 18569 from `migrate.ts:98`.
+2. API `shadow-isolation.application.test.ts`, setup at line 108: same 42601 and
+   position; all 22 tests skipped on setup failure. API totals: 2 failed files,
+   72 passed; 1,682 passed tests, 23 skipped.
+3. DB `job-parties.integration.test.ts`: "applies the full migration chain to a
+   SQL_ASCII database without UTF8 encoding" failed (85 other cases passed).
+   Its detailed error is absent from the supplied filtered log. Source shows it
+   calls `migrate(ascii)` at line 304; the 0144 cause is consistent but not proven
+   for this particular failure without its detailed trace or a rerun.
+4. DB `recovery-follow-up-upgrade.integration.test.ts`: "preserves
+   preview/approve/revoke/deliver/reconcile and their refusals on upgraded messages
+   without resending" failed; its other two cases passed. The log explicitly
+   prints end-of-input at character 18569 followed by the full 0144 query.
+   Source calls `migrate(admin)` at line 248 after its own upgrade assertions.
+
+The other logged DB suites show skipped cases after setup; Turbo aborted on
+`@jobguard/api#test` with 11/13 tasks successful, so the log has no final DB error
+summary. This is not evidence of individual DB assertion regressions or passes.
+The logged `RECOVERY_MESSAGE_CHANGED` and `RECOVERY_MESSAGE_EXISTING_EFFECT`
+errors are expected negative controls (asserted rejections at upgrade test lines
+208, 220 and 238), not other failing assertions. No additional independent
+failure signature appears in the supplied log. Non-fatal CI warnings include
+cache restore HTTP 400, Node/url.parse deprecation and Turbo test-output warnings.
+The checks job stopped before build/browser steps; the supplied log does not
+establish results for separate secrets/dependency-review jobs.
+
+## Dispatcher execution required on the Mac / GitHub CI
+
+PostgreSQL, migrations, socket-based HTTP, browser and full umbrella checks are
+**NOT RUN here**. Use the pinned install and run:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 \
+  test/job-work-state.integration.test.ts \
+  test/job-work-state-sources.integration.test.ts \
+  test/job-work-state-post-lock.integration.test.ts \
+  test/job-work-state-races.integration.test.ts \
+  test/job-work-state-catalog.integration.test.ts \
+  test/job-work-state-upgrade.integration.test.ts \
+  test/job-parties.integration.test.ts \
+  test/recovery-follow-up-upgrade.integration.test.ts
+pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 \
+  src/final-account-lock.isolation.test.ts src/shadow-isolation.application.test.ts
+pnpm test:db
+pnpm test:migrations
+pnpm test
+pnpm openapi:check
+pnpm build
+pnpm test:e2e
+```
+
+The focused six CH-4 suites cover fresh/upgrade application of 0144, exact
+catalog/grants/RLS, source replay, post-lock refusal and races. The retained
+SQL_ASCII and follow-up-upgrade files are named above because this CI also showed
+failures there. Full db/API umbrellas must cover every retained suite, including
+ones aborted or skipped in the supplied log. Browser execution retains the
+existing mobile-360 and desktop projects and all earlier mandatory journeys.
+
+Migration strategy: 0144 is own/unmerged and repaired in place. Its BEGIN/COMMIT
+transaction retains atomic application. No backfill, schema-shape change,
+policy change, new grants, new alert or external action. A failed application
+must roll back its transaction before retrying the corrected full chain; a later
+failure after commit but before migration-name recording requires inspection,
+not blind reapplication. This receipt does not prove runtime rollback behavior.
+Existing historical migrations and customer records were untouched.
+
+Affected invariants: tenant-qualified storage/RLS, immutable work/predecessor
+facts, exact source/audit transaction behavior and durable migration application.
+Their database guarantees still require actual PostgreSQL results. Q-01/Q-03/
+Q-04/Q-05/Q-06 remain HELD; no held capability is admitted by this repair.
+Independent different-model verdict bound to the dispatcher's eventual exact
+commit and separate acceptance remain required. No acceptance/release claim.
+Intended conventional commit message is overwritten at
+`/private/tmp/jg-msg-ch-4.txt`; dispatcher owns commit/push.
+
+---
+
+## Retained earlier receipt history
+
 Built by Codex; dispatched 13 Oct 2026
 
 # CH-4 repair round r2 — partial, not accepted

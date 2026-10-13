@@ -172,7 +172,7 @@ BEGIN
   IF NEW.source_receipt_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM app.job_site_source_receipt r WHERE (r.tenant_id,r.job_id,r.id,r.received_at,r.source_hash)=(NEW.tenant_id,NEW.job_id,NEW.source_receipt_id,NEW.fact_at,NEW.request_hash)) THEN RAISE EXCEPTION 'INVALID_WORK_SOURCE'; END IF;
   IF NEW.kind IN('finished_cancelled','reopened') THEN
    SELECT * INTO latest FROM app.job_work_state_event WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND kind IN(CASE WHEN NEW.kind='finished_cancelled' THEN 'finished_on_site' ELSE 'closed' END,NEW.kind) ORDER BY sequence DESC LIMIT 1;
-   IF (NEW.kind='finished_cancelled' AND latest.fact_at>NEW.fact_at) OR latest.id IS DISTINCT FROM NEW.predecessor_id OR latest.kind IS DISTINCT FROM CASE WHEN NEW.kind='finished_cancelled' THEN 'finished_on_site' ELSE 'closed' END THEN RAISE EXCEPTION 'INVALID_WORK_PREDECESSOR'; END IF;
+   IF (NEW.kind='finished_cancelled' AND latest.fact_at>NEW.fact_at) OR latest.id IS DISTINCT FROM NEW.predecessor_id OR latest.kind IS DISTINCT FROM (CASE WHEN NEW.kind='finished_cancelled' THEN 'finished_on_site' ELSE 'closed' END) THEN RAISE EXCEPTION 'INVALID_WORK_PREDECESSOR'; END IF;
   END IF;
   IF NEW.kind IN('first_site_evidence','site_activity','resumed','finished_on_site') AND EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
  END IF;
