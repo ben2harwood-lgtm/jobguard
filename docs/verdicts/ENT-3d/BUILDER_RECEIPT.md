@@ -86,3 +86,60 @@ L1 the checks bind the governed path only. L2 the server cannot know a resident 
 Checked: every [E] line has a test with its ID that failed first or is a catalogue/negative property (E10 and the web key cases passed already on old code, noted above); both formats identical in core and SQL; no request value reaches the document, its hash, the actor, the command type, the grant or the tenant (the actor is the session object's membership; the command type is the one module constant; the tenant comes from the context; the request supplies only ids and the hash shown, which is compared and never stored as content); routine 4 has no content parameter ([E14c]) and is the only writer (the repository file names it once, [E6]); the seam runs the two guards and nothing else; `evidence.ts`, `watchdog.ts`, the boundary scanner, every merged and ENT-3a test are byte-identical (hashes above); the four [A18] text conditions hold (ENT-3a's [A18] passes unedited, and [E6] repeats them); no `commandType: "` text in any lane source file; no role name written anywhere; every routine fails closed on an absent, empty or malformed tenant setting ([E21] to [E23]); the EXECUTE list is explicit; `PHOTO_NOT_ACCEPTED` is one identical error for ten causes ([E8]); a v1 body is passed to the repository with exactly the same four keys and gets the v1 answer (ENT-3a's application test unedited passes); nothing about a resident anywhere ([E19]); no rule-11 string; no rule-12 test (the one source-text test reads only the properties the order names).
 Changed after self-review: the "other job" test originally reused the first command's hash shown for its no-hash variant (test bug, fixed); the MIGRATIONS.md line first said database tests were not run (they were run here; corrected before commit); removed unused imports from the test files.
 Not claimed: independent verification, acceptance, or that the last-instant limit L4 is closed.
+
+## Repair round 1 (typecheck)
+
+13 October 2026. Repair of head `282076727e7d84f1f7c1f2ab5f038ef147058347` on `codex/sandbox/ent-3d`, by Codex. Builder repair receipt only; not an independent verdict or acceptance. The issued order was not present at `jg-orders/ENT-3d-issued-v3.txt` in this checkout; this repair follows the dispatcher's explicit one-file repair instructions and changes no other implementation file.
+
+Only `packages/core/src/site-extra-evidence.test.ts` changed, plus this appended receipt. Reuse the existing dependency-free UTF-8 SHA-256 function from `evidence-pack.ts`, as existing core sources and tests do. Every test title, assertion and expected value is unchanged. No dependency, Node types, package manifest, TypeScript configuration, lockfile or other configuration changed.
+
+Old line (1):
+
+```ts
+import { createHash } from "node:crypto";
+```
+
+New line (1):
+
+```ts
+import { sha256 } from "./evidence-pack.js";
+```
+
+Old line (34):
+
+```ts
+  const frame = (version: string) => `${version}\nS36:${job};S2:ab;S1:c;N;`, digest = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
+```
+
+New line (34):
+
+```ts
+  const frame = (version: string) => `${version}\nS36:${job};S2:ab;S1:c;N;`, digest = sha256;
+```
+
+The earlier "typecheck green" claim was wrong because the Turbo cache hid the `node:crypto` import's TS2307 failure in core, which has no Node type declarations. The earlier lint/build green claims also did not establish uncached success. This repair's forced executions replace those claims with the results below.
+
+Runtime: Node `v24.17.0`, pnpm `10.28.1`, Turbo `2.10.12`, Vitest `4.1.11`; dependencies already installed. The default pnpm launcher stalled selecting its version, so its preliminary version/typecheck attempts were interrupted (exit 130). No packages were downloaded or installed. A temporary symlink at `/private/tmp/jg-ent-3d-bin/pnpm` selects the existing cached `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`; all completed pnpm commands below used `PATH="/private/tmp/jg-ent-3d-bin:$PATH"`.
+
+Required commands run in the issued order, serially; build ran alone and no build/test overlapped:
+
+| Command | Exit code | Result |
+|---|---|---|
+| `pnpm exec turbo run typecheck --force` | 0 | 7 successful tasks; 0 cached |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 0 | 7 successful tasks; 0 cached |
+| `pnpm build --concurrency=2 --force` | 0 | 7 successful tasks; 0 cached |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/site-extra-evidence.test.ts` | 0 | 1 file, exactly 77 passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Registered `ent-3d` lane passed against `origin/main` |
+
+The three Turbo checks use `--force`; the fourth primary check invokes Vitest directly, which executes the 77 tests without Turbo caching. Turbo emitted shared-cache write `Operation not permitted` warnings under the sandbox, but all tasks executed and the forced commands exited 0. Next.js emitted workspace-root and existing CSS/autoprefixer warnings; build exited 0.
+
+Additional requested verification:
+
+| Command | Exit code | Result |
+|---|---|---|
+| `LANE_BASE_REF=origin/main pnpm lint --force` | 0 | Root purity, lane, money and commercial boundary checks; 7 successful forced package lint tasks, 0 cached |
+| `pnpm openapi:check` | 1 | Sandbox refused the `tsx` CLI IPC socket (`listen EPERM`); checker did not execute |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Same OpenAPI checker executed without the CLI IPC socket; committed OpenAPI matches |
+| `git diff --check` | 0 | No whitespace errors in the test repair |
+
+Database/migration and browser suites were not run: the dispatcher states this sandbox cannot start PostgreSQL or bind localhost, so those suites remain for GitHub CI after the dispatcher pushes. No git write command, commit or push was run. Intended conventional commit subject and body are written to `/private/tmp/jg-msg-ent-3d.txt`. Independent exact-commit review, separate acceptance and CI results remain pending; no release gate is changed.

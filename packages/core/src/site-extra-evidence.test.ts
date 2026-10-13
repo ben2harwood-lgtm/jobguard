@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256 } from "./evidence-pack.js";
 import { describe, expect, it } from "vitest";
 import {
  siteExtraContentSha256V1, residentConfirmationDocumentV1, logSiteExtraV3, siteExtraLoggedV3, logSiteExtraV1,
@@ -31,7 +31,7 @@ describe("site-extra-content.v1", () => {
   // The framing is the version line + LF, so a different version line cannot give the same value as v1.
   expect(siteExtraContentFormatV1).toBe("site-extra-content.v1");
   // Recomputed outside the implementation: the stored value is the hash of the framing that begins with the version line; the same facts framed under another version line hash differently.
-  const frame = (version: string) => `${version}\nS36:${job};S2:ab;S1:c;N;`, digest = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
+  const frame = (version: string) => `${version}\nS36:${job};S2:ab;S1:c;N;`, digest = sha256;
   expect(siteExtraContentSha256V1({ jobId: job, description: "ab", note: "c", photoSha256: null })).toBe(digest(frame("site-extra-content.v1")));
   expect(digest(frame("site-extra-content.v2"))).not.toBe(digest(frame("site-extra-content.v1")));
   expect(siteExtraContentSha256V1({ jobId: job, description: "ab", note: "c", photoSha256: null })).toBe("352db87e0df3e54e253e0979d15e2ac33db975a136e5b79fdf69a8369b939998");
