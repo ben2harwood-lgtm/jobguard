@@ -76,5 +76,6 @@ export { AuditExportApplication, auditExportHttpFailure, assertAuditExportMode }
 export * from "../final-account-lock.application.js";
 export * from "../final-account-lock.contracts.js";
 export { ContractorPracticeSessionApplication, assertContractorPracticeSessionMode, contractorPracticeSessionHttpFailure, createContractorPracticeSessionApplication } from "../contractor/contractor-practice-session.application.js";
+export { SiteExtraApplication, assertSiteExtraMode, siteExtraHttpFailure } from "../contractor/site-extra.application.js";
 export * from "../auth/sso/scim.application.js";
 export * from "../auth/sso/scim.contracts.js";
