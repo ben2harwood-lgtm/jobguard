@@ -950,3 +950,22 @@ Forward fix preferred. A rollback restoring the three 0054 routines must also dr
 Renumbered from 0129 to 0133 on 12 October 2026 under the merge-ahead ruling because 0129 (ENT-10d), 0130 (CH-7-F17) and 0131 (PRACTICE-FACTS-1) merged first and 0132 is SV-4; the SQL bytes are unchanged (sha256 6d317e043790d4bb97acfb91d918b755a0e2ee9a08fdf6cbeefeb26fbdfe5aa6).
 
 `0133_shadow_detection.sql`: SV-3: append-only FORCE-RLS `shadow_must_surface_firing`, shadow-only `surface_shadow_signal_early` EXECUTE, and the single `must_surface_signal` finding kind. Atomic Decision/disclosure/firing/audit; no new business-table grants. Forward fix only: retain immutable firings and disclosures; disable the worker to stop new detections. Database upgrade proof is in `shadow-detection.integration.test.ts`.
+
+## 0140 — site extra pricing (ENT-3c)
+
+Additive only: two new tables, `app.extra_sor_revision` (the server-priced first revision of a schedule-item site extra, one row at most per extra, `revision=1`) and
+`app.extra_pricing_basis` (how a revision's price was reached, keyed by extra and revision number, only `server_sor` for revision 1 can be written here), five routines
+(`app.ent3c_record_sor_revision(uuid,uuid,text,text)`, `app.ent3c_sor_revision_guard()`, `app.ent3c_require_sor_revision_audit()`, `app.ent3c_pricing_basis_guard()`,
+`app.ent3c_require_pricing_basis()`) and triggers on the two new tables only. It needs 0110 and 0122 and calls no ENT-3a routine. No column, index, constraint, policy,
+grant or trigger is added to any existing table, no row of `app.variation_revision` is written, no existing object is replaced or dropped, nothing is backfilled and no existing row changes.
+
+Standard F: the application login holds SELECT only on both new tables. The only writer is the SECURITY DEFINER routine `app.ent3c_record_sor_revision`
+(owner `jobguard_migration`, `search_path=pg_catalog`, EXECUTE granted to `jobguard_runtime` by exact signature, revoked from PUBLIC and infrastructure). It takes no actor,
+rate, price, outcome or time: it reads the stored origin, receipt, variation, baseline revision, schedule item and order lines of the raising transaction, decides the
+order check again, prices the extra quantity alone through the merged `app.sor_line_net_pence`, and runs only while the raising command's own receipt is still processing.
+The two BEFORE INSERT guards bind every writer, the table owner included, and set `content_hash` and `server_recorded_at` themselves; two deferred constraint triggers require
+the raising transaction's one audit event and the basis row at commit. Row security is enabled and forced with the merged two-role tenant policy; the merged immutability
+trigger rejects UPDATE and DELETE.
+
+Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
+`packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
