@@ -46,7 +46,7 @@ async function connected() {
 }
 // A real issued practice invoice (£1,320.00) so that builder-attested receipts are recorded through the real routine.
 async function invoice(jobId: string) {
-  const invoices = new PracticeInvoiceRepository(runtime), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();
+  const invoices = new PracticeInvoiceRepository(practiceMaterialPool(runtime, (await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, jobId])).rows[0].practice_session_digest)), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();
   await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,110000,'accepted')", [quoteId, DEMO_TENANT_ID, jobId, "b".repeat(64)]);
   // CH-2/CH-3a: take the job live through the real lifecycle routine, under the tenant context that the live-job and party guards read.
   const lifecycle = await admin.connect();

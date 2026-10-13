@@ -1,3 +1,67 @@
+## Current status — round r7 coordinator ruling (13 October 2026, dispatcher 4)
+
+Base / unchanged local HEAD: `c593a4c738b63b5f69ab0aca9466458232b97875` (after r6). This is an uncommitted builder handoff; dispatcher owns commit/push and exact-commit CI, independent verdict and separate acceptance. All earlier status sections below are historical. No technical acceptance or release is claimed.
+
+Authority, verbatim: "(1) practice-facts:49 and practice-feed:50 (repository CONSTRUCTION line to use the scoped pool): YES. It follows a rule that got stricter (an absent session digest is now refused), the issue call and every assertion stay byte-for-byte, and the receipt lists the two lines as RE-POINTED. Condition: SV5PRE must also contain a test proving the other side: the same issue on a session-owned job through an UNSCOPED repository (no digest) is refused FORBIDDEN and writes nothing. Without that the re-point would hide the rule instead of proving it."
+
+Read AGENTS.md, BUILD_PLAN SV-4/SV-5 and the versioned SV5PRE completion contract. Scope is exactly the two construction lines, one new piece-owned PostgreSQL test, the sv5pre lane metadata and this receipt. `apps/api/src/shadow-isolation.application.test.ts` is entirely byte-identical to HEAD; line 393 remains held for Ben. No production source, migration, grant, policy, timeout or existing assertion changed.
+
+### Exact before/after
+
+| File:line | Classification | Before | After |
+| --- | --- | --- | --- |
+| `packages/db/test/practice-facts.integration.test.ts:49` | **RE-POINTED** | `const invoices = new PracticeInvoiceRepository(runtime), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();` | `const invoices = new PracticeInvoiceRepository(practiceMaterialPool(runtime, (await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, jobId])).rows[0].practice_session_digest)), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();` |
+| `packages/db/test/practice-feed.integration.test.ts:50` | **RE-POINTED** | `const invoices = new PracticeInvoiceRepository(runtime), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();` | `const invoices = new PracticeInvoiceRepository(practiceMaterialPool(runtime, (await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, jobId])).rows[0].practice_session_digest)), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();` |
+
+The existing `setupPool` is declared later in each fixture. Each construction-line-only change therefore wraps `runtime` with `practiceMaterialPool` using the server-persisted digest fetched inline. The later setup, unchanged issue call, return, receipt calls and all assertions are preserved. Replacing only the changed construction line reconstructs the entire original file byte-for-byte; issue-and-assertion tail hashes match. Evidence: `/private/tmp/sv5pre-r7-preservation.json`. Whole-file preservation check also proves 371 other existing test files unchanged from r7 HEAD.
+
+### New refusal proof and lane entries
+
+New file: `packages/db/test/sv5pre-session-invoice.integration.test.ts`. It creates a real persisted practice session via the runtime login, authenticates it, selects its live owned job, and prepares a final account, lock and checked empty-manifest completion through the scoped pool. It explicitly verifies the unscoped repository's transaction has no `app.practice_material_digest`. The same seven-argument issue command then must reject with message `FORBIDDEN` and PostgreSQL code `42501`.
+
+Before and after reads compare tenant-wide counts for 26 source/effect relations, including invoices, sequence, evidence/line bindings, Decision/resolution, authorization, outbox, command receipt and audit. Canonical PostgreSQL JSON text additionally compares all rows, detecting updates that preserve row counts. A positive control sends the identical command through the scoped pool and requires one invoice and one new receipt, proving the prepared account is issuable. This is real-PostgreSQL test construction; execution is owed to CI, not replaced by local TypeScript checks.
+
+The sv5pre allow list retains the existing exact practice-facts/feed test entries and adds the new test path. Its note records coordinator approval for all three paths and the r7 preservation conditions. Every other lane is unchanged.
+
+### Local verification
+
+Commands executed:
+
+| Executed command | Exit | Result / log |
+| --- | --- | --- |
+| `pnpm typecheck --force --concurrency=2` | 0 | Seven tasks, zero cached; `/private/tmp/sv5pre-r7-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | 0 | Root boundary checks and seven package tasks, zero cached; `/private/tmp/sv5pre-r7-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | sv5pre scope including new test; base `e9f9bc9ef4f4aa46394c414c9a3971c523fac2e4`; `/private/tmp/sv5pre-r7-lanes.log` |
+| `node --test tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/core-purity.test.mjs tools/shared-money-origin.test.mjs tools/commercial-boundary.test.mjs` | 0 | 19 passed, zero failed/skipped; `/private/tmp/sv5pre-r7-tools.log` |
+| `node` heredoc using TypeScript `createProgram` on all three r7 DB test paths plus imported dependencies, strict DB compiler options, no emit | 0 | Zero semantic diagnostics; `/private/tmp/sv5pre-r7-db-semantic.log`. DB package typecheck excludes integration tests, so this is additional compile evidence, not SQL execution. |
+| `pnpm openapi:check` | 1 | `tsx` CLI IPC `listen EPERM` before generator; `/private/tmp/sv5pre-r7-openapi.log` |
+| `node --import tsx src/generate-openapi.ts --check` from `apps/api` | 0 | Same actual source checker without CLI IPC; `/private/tmp/sv5pre-r7-openapi-direct.log`. Published document unchanged. |
+| 63 named `pnpm --filter @jobguard/<package> exec vitest run --maxWorkers=<1 or 2> <up to three explicit files>` batches | First 62 exit 0; batch 63 exit 1 | 180 files: 4,497 passed, one failed, zero skipped. Existing `packages/db/src/audit-checkpoint-handoff.test.ts:279` dependency scanner exceeds its unchanged 5,000 ms timeout (6,752 ms). Exact file lists, commands, exits and logs: `/private/tmp/sv5pre-r7-unit-batches-manifest.json`, `/private/tmp/sv5pre-r7-unit-batches-results.json`; totals: `/private/tmp/sv5pre-r7-unit-totals.json`. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src/audit-checkpoint-handoff.test.ts` (isolated rerun) | 1 | Same unchanged scanner times out again; 55 passed / one failed, suite test bodies 6.44 s. `/private/tmp/sv5pre-r7-scanner-rerun.log`. No timeout, assertion or implementation modification. |
+
+All named unit files other than that unchanged scanner pass. The scanner is an unresolved local failure, not a green mandatory-suite result. `pnpm build --force --concurrency=2` exits 0: seven successful tasks, zero cached, 2m50.27s. Log: `/private/tmp/sv5pre-r7-build.log`. Existing Turbo cache-permission, Next workspace-root and CSS/autoprefixer warnings remain; compilation and production build succeeded. Uses installed Node v24.17.0 and pinned pnpm 10.28.1 via `/private/tmp/sv5pre-independent/bin/pnpm`; no dependency installation. Each Turbo/unit command uses at most two configured workers/concurrency. Lint, unit batches and build run in separate stages; supplemental semantic checking overlapped typecheck. Dependencies were preinstalled; this is not a clean-install proof.
+
+### Limits and handoff
+
+NOT RUN here: new PostgreSQL proof, both changed integration suites, full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, actual HTTP/worker execution and `pnpm test:e2e`. Dispatcher states localhost binding and PostgreSQL startup are unavailable; database and browser checks remain mandatory in GitHub CI after push. Root Git-fixture tests that write Git are excluded from local commands under the explicit no-Git-writes instruction. No suite is weakened or made optional. CI must also resolve/provide the mandatory unchanged scanner result; two local timeout failures are retained in this receipt. The focused CI command is `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/sv5pre-session-invoice.integration.test.ts test/practice-facts.integration.test.ts test/practice-feed.integration.test.ts`, in addition to all mandatory full suites.
+
+Affected invariants: AGENTS §§5.1, 5.3, 5.4 and 5.7 (session/tenant authorization and no persisted issue/audit effects on refusal). No data migration, backwards-compatibility change to production, provider action, new alert or AI/model change. All prior release gates and independent-review/acceptance requirements remain. r7 resolves only the authorized practice construction STOPs; shadow-isolation and other earlier holds are not resolved by this round. Intended conventional subject/body is overwritten at `/private/tmp/jg-msg-sv5pre.txt`. No Git write, push or self-acceptance.
+
+### Final scope and payload binding
+
+Final read-only scope reconstruction and `git diff --check` pass. Exactly five working-tree paths are changed (four tracked plus the new test). Both prior suites have only their one approved constructor line changed. Shadow-isolation, scanner source, migration 0147 and published OpenAPI are byte-identical to r7 HEAD. Every other lane is unchanged. The 371-file existing-test preservation check is recorded above. No Git write occurred.
+
+| r7 non-receipt path | SHA-256 |
+| --- | --- |
+| `config/agent-lane-assignments.json` | `0e2c394115ce400177674e85e86b99bd67bd5daaaa66427556849da23213a753` |
+| `packages/db/test/practice-facts.integration.test.ts` | `c69bcede40b999793ff0c3fd9dae8b1a7c754052be1afc79b5ddada8d5cf7a53` |
+| `packages/db/test/practice-feed.integration.test.ts` | `52782dbafcb8ecf3854e0f51831b8022885e2f67d57276c149f0981878618d14` |
+| `packages/db/test/sv5pre-session-invoice.integration.test.ts` | `2bdae894327bd51c1ca43a57671850c80ab9f1f25a2a97ee718f2f3de8185115` |
+
+Final candidate including receipt hash: `/private/tmp/sv5pre-r7-candidate.json`; preservation reconstruction: `/private/tmp/sv5pre-r7-preservation.json`. Receipt self-hash is kept only in the external candidate manifest. Local HEAD remains `c593a4c738b63b5f69ab0aca9466458232b97875`; no r7 commit exists yet. Dispatcher binds this evidence to its new commit and supplies the CI results, independent verdict and separate acceptance. This handoff remains held for those requirements and the recorded scanner failure.
+
+---
+
 ## Current status — round r5 repairs (13 October 2026, dispatcher 4)
 
 Repair base / unchanged local HEAD: `6ea816c6df01c758993cd2a597070088117e4de0` (dispatcher committed r4). All r5 changes are **uncommitted working-tree changes**. Built by Codex; no Git write command, package installation/download, independent review, technical acceptance, push or release. Dispatcher owns the commit and subsequent exact-commit CI/review. Intended conventional commit message is overwritten at `/private/tmp/jg-msg-sv5pre.txt`. All r1–r4 current-status statements below are historical.
