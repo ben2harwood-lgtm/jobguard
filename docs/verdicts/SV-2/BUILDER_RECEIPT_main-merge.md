@@ -107,3 +107,9 @@ Why not weaker: a bare count of 5 became an exact list of the six routine names,
 
 The full unit suite, the browser (Playwright) suites and GitHub CI were not run here. Nothing under `.pnpm-store`, `node_modules`, build output or test results is committed.
 Builder receipt only — not independently verified, not accepted.
+
+## FIXLATER-6 clarification — 13 October 2026
+
+The hand-bound `app.job_commercial_track` row shown in Fix 1 was administrative test-fixture setup through the `admin` pool, as the merged test still shows at `packages/db/test/small-builder-origin.integration.test.ts:90–92`. It was not a write by the application login. The deployed `jobguard_runtime` role has SELECT on this table and cannot directly INSERT, UPDATE, DELETE or TRUNCATE it.
+
+This clarification changes no historical command or result and grants no application authority to choose a job's commercial track. The suggested alternative of copying the home job's track row is not implemented here: changing that merged test's setup is outside FIXLATER-6.
