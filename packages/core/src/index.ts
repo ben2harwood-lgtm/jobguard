@@ -57,3 +57,4 @@ export * from "./extra-persistence.js";
 
 export * from "./practice-facts.js";
 export * from "./final-account-lock.js";
+export * from "./recovery-case-terms.js";
