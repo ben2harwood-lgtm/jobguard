@@ -296,3 +296,46 @@ The `pg` and `@jobguard/db` (compiled entry, for `DEMO_TENANT_ID`) dynamic impor
 **Merge of main.** `origin/main` 6fad00a (practice-session hardening, migration 0138) was not yet in the branch and is merged as its own commit 124f9f8. Conflicts were only in append-only registration files and were resolved by union, main's lines first: `apps/api/src/app.module.ts` (main's long `@Module` line taken, `RecoveryAllocationController` appended), `apps/api/src/workspace/index.ts`, `packages/core/src/index.ts`, `packages/db/src/index.ts`, `packages/db/src/migrate.ts` (0136 then 0138) and `packages/db/MIGRATIONS.md` (0136 then 0138). `apps/api/openapi.json` merged without conflict and was NOT hand-merged; `pnpm openapi:check` passes.
 
 **Observation, not a finding.** These runs show execution only; they are not an independent review, a verdict or acceptance.
+
+## Repair round 4 (13 Oct): outward wording 'verified' replaced, built by Claude, Codex unavailable
+
+**The defect.** GitHub CI run 38328750351 (on 3da6557) failed the merged browser test `apps/web/e2e/UIWIRE-7.spec.ts:4` ("fails closed for malformed, live-mode, wrong-scope and unfinalized proof requests") on both projects: it expects `getByText(/verified|guaranteed/iu)` to find 0 matches on the page and found 1, this piece's own panel. The repository's claims vocabulary bans a bare "verified" in outward copy, so the piece's copy changed; `UIWIRE-7.spec.ts` and every other merged test are untouched. Round 3 had already reported this as the second CI failure (see "Second CI failure that this repair does NOT fix" above, which stays as history).
+
+**Strings changed** (every visible string, `aria-label`, `placeholder`, `title`, option text and error text in the piece's UI containing "verif" or "guarantee" was searched; these were all there were; only the wording changed, no markup, state, ids, test ids, ordering or select value).
+
+| Where | Before | After |
+| --- | --- | --- |
+| `apps/web/app/ui/recovery-allocations.tsx:96` (label) | `Verified recovery evidence` | `Recovery evidence on file` |
+| `apps/web/app/ui/recovery-allocations.tsx:96` (placeholder option) | `Choose verified evidence` | `Choose evidence on file` |
+| `apps/web/app/ui/recovery-allocations.tsx:51` (error text when a pick is missing) | `Choose a case, a matched receipt and verified evidence.` | `Choose a case, a matched receipt and evidence on file.` |
+
+The selector still lists exactly the evidence that has passed the server's evidence checks; "on file" is the plain description of that. The test-only line `expect(finalized.upload.state).toBe("verified")` in `recovery-allocation-journey.ts:57` is the API's stored state value, not rendered text, and is unchanged.
+
+**Places that look the label up** (expected string only; no assertion weakened, removed or skipped):
+
+| File:line | Before | After |
+| --- | --- | --- |
+| `apps/web/e2e/M4-8-S.spec.ts:111` | `getByRole("combobox", { name: "Verified recovery evidence", exact: true })` | `getByRole("combobox", { name: "Recovery evidence on file", exact: true })` |
+| `apps/web/e2e/M4-8-S.spec.ts:154` | same | same, new name |
+| `apps/web/e2e/helpers/recovery-allocation-journey.ts:94` | same | same, new name |
+
+The piece has no web unit tests (no `*.test.*` for the allocation panel exists under `apps/web`), and `docs/contracts/recovery-allocation-v1.md` does not quote the label, so neither needed a change. `grep -rn -i "verified recovery evidence\|choose verified evidence\|verified evidence" apps packages docs/contracts` now finds no hit for this panel (the remaining hits for the looser phrase "verified evidence" are in other, merged pieces' files and comments, such as proof capture, and are not this piece's). The only mentions left in `docs/verdicts` are the history in this receipt (the round 2 table and the round 3 note above).
+
+**Merge of main.** `origin/main` had moved from 6fad00a to c84c6b3 (ENT-3a, migration 0135, site extras), so it was merged first as its own commit c3e10b5. Conflicts were only in append-only registration files: `apps/api/src/workspace/index.ts`, `packages/core/src/index.ts` and `packages/db/src/index.ts` by union with main's lines first; `packages/db/src/migrate.ts` in numeric order (0135, then this piece's 0136, then 0138); `apps/api/src/app.module.ts` (main's long `@Module` line taken, `RecoveryAllocationController` re-applied after `FinalAccountLockController`) and `apps/api/src/workspace/application.ts` (main's long return line taken, this piece's single `recoveryAllocations` entry re-applied after `practiceFacts`), each checked against both parents; `packages/db/MIGRATIONS.md` sections put in numeric order (0135, 0136, 0138). `apps/api/openapi.json` merged without conflict, was not hand-merged, and `pnpm openapi:check` passes on the merged tree and on the final tree.
+
+**Run table** (Mac, 13 Oct, tree = merge commit c3e10b5 plus this change; heavy steps through `heavy-slot` with two slots; `CI=1`, production `next start`, one worker, channel chromium, both projects; logs in `~/.local/share/full-steam/jg-runs/m4-8-s-mac/repair4/`).
+
+| Run | Command / scope | Result |
+| --- | --- | --- |
+| build | `@jobguard/core`, `storage`, `config`, `ai`, `db`, then `@jobguard/api`, each built alone | all exit 0 |
+| build | `pnpm --filter @jobguard/web build` (the built output contains the new label and not the old one) | exit 0 |
+| browser | ONE invocation, fresh empty `PWTEST_CACHE_DIR`: `UIWIRE-7`, `ENT-10a`, `ENT-10d`, `M4-8-S`, `M4-7-S`, `M4-1-S`, `UIWIRE-12`, `--workers=1`, both projects | 56 passed, 0 failed (includes `UIWIRE-7.spec.ts:4` on both projects, the CI failure) |
+| unit | web `vitest run --maxWorkers=2` on `workspace-lifecycle`, `recovery-cases`, `recovery-cases.behaviour` (nearest existing web tests; the piece has none of its own) | 3 files, 140 tests passed |
+| claims gate | `packages/floor/src/claims-gate.mjs` and its tests do not exist in this repository (they are in the Next Gen Learning Platform repository); here the rule is enforced by `UIWIRE-7`, run above | not applicable; `UIWIRE-7` passed |
+| static | `pnpm typecheck` | 7/7, exit 0 |
+| static | `LANE_BASE_REF=origin/main pnpm lint` (includes the lane check, lane `m4-8-s`, which passed) | 7/7, exit 0 |
+| static | `pnpm openapi:check` (after the merge, and again after the change) | exit 0 both times |
+
+**For the founder's copy list:** the allocation panel's evidence picker is labelled 'Recovery evidence on file' (wording chosen by the dispatcher; Ben may change it in his UI pass).
+
+**Observation, not a finding.** These runs show execution only; they are not an independent review, a verdict or acceptance.

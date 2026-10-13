@@ -108,7 +108,7 @@ test("DW3 refuses unavailable cash with a focused error; concurrent alternate ap
   const fixture = await recovery18800(page), source = fixture.cases[0]!, panel = allocationPanel(page);
   await panel.getByRole("combobox", { name: "Recovery case", exact: true }).selectOption(source.caseId);
   await panel.getByRole("combobox", { name: "Matched receipt", exact: true }).selectOption(source.paymentId);
-  await panel.getByRole("combobox", { name: "Verified recovery evidence", exact: true }).selectOption(source.evidenceId);
+  await panel.getByRole("combobox", { name: "Recovery evidence on file", exact: true }).selectOption(source.evidenceId);
   await panel.getByLabel("Allocation gross (£)", { exact: true }).fill("390.00");
   await panel.getByRole("button", { name: "Review receipt allocation", exact: true }).click();
   await expect(panel.getByTestId("recovery-allocation-error")).toContainText("exceeds"); await expect(panel.getByTestId("recovery-allocation-error")).toBeFocused();
@@ -151,7 +151,7 @@ test("pauses after unknown command and failed refresh until a successful saved-s
   const fixture = await recovery18800(page), source = fixture.cases[0]!, panel = allocationPanel(page);
   await panel.getByRole("combobox", { name: "Recovery case", exact: true }).selectOption(source.caseId);
   await panel.getByRole("combobox", { name: "Matched receipt", exact: true }).selectOption(source.paymentId);
-  await panel.getByRole("combobox", { name: "Verified recovery evidence", exact: true }).selectOption(source.evidenceId);
+  await panel.getByRole("combobox", { name: "Recovery evidence on file", exact: true }).selectOption(source.evidenceId);
   await panel.getByLabel("Allocation gross (£)", { exact: true }).fill("384.00");
   let writes = 0, blockRead = false;
   const pattern = `**${allocationPath(fixture.jobId)}`;

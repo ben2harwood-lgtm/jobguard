@@ -91,7 +91,7 @@ export async function allocateThroughUi(page: Page, source: { caseId: string; ev
   const panel = allocationPanel(page);
   await panel.getByRole("combobox", { name: "Recovery case", exact: true }).selectOption(source.caseId);
   await panel.getByRole("combobox", { name: "Matched receipt", exact: true }).selectOption(source.paymentId);
-  await panel.getByRole("combobox", { name: "Verified recovery evidence", exact: true }).selectOption(source.evidenceId);
+  await panel.getByRole("combobox", { name: "Recovery evidence on file", exact: true }).selectOption(source.evidenceId);
   await panel.getByLabel("Allocation gross (£)", { exact: true }).fill(pounds);
   await panel.getByRole("button", { name: "Review receipt allocation", exact: true }).click();
   await expect(panel.getByTestId("allocation-review-split")).toHaveText(split);

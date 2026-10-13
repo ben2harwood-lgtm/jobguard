@@ -48,7 +48,7 @@ export function RecoveryAllocations({ jobId }: { jobId: string }) {
   }
   function reviewAllocation() {
     const selected = view?.cases.find(item => item.caseId === caseId);
-    if (!selected || !paymentId || !evidenceId) { report("Choose a case, a matched receipt and verified evidence."); return; }
+    if (!selected || !paymentId || !evidenceId) { report("Choose a case, a matched receipt and evidence on file."); return; }
     let grossPence: number; try { grossPence = parsePoundsToPence(amount); } catch { report("Enter a positive amount in pounds with at most two decimal places."); return; }
     if (grossPence <= 0) { report("Enter a positive amount in pounds."); return; }
     void send({ version: "recovery-allocation-command.v1", commandId: crypto.randomUUID(), action: "review", caseId, paymentId, evidenceId, ...(remittanceEvidenceId ? { remittanceEvidenceId } : {}), expectedCaseRevision: selected.revision, grossPence });
@@ -93,7 +93,7 @@ export function RecoveryAllocations({ jobId }: { jobId: string }) {
       <fieldset disabled={locked} className={styles.form}><legend>Review allocation</legend>
         <label>Recovery case<select value={caseId} onChange={event => { setCaseId(event.target.value); setReview(null); }}><option value="">Choose a case</option>{view.cases.map(item => <option key={item.caseId} value={item.caseId}>{pounds(item.claimedNetPence)} claim · {item.caseType}</option>)}</select></label>
         <label>Matched receipt<select value={paymentId} onChange={event => { setPaymentId(event.target.value); setReview(null); }}><option value="">Choose a receipt</option>{view.receipts.filter(item => !item.reversed).map(item => <option key={item.paymentId} value={item.paymentId}>{pounds(item.grossPence)} receipt · {pounds(item.availablePence)} available</option>)}</select></label>
-        <label>Verified recovery evidence<select value={evidenceId} onChange={event => { setEvidenceId(event.target.value); setReview(null); }}><option value="">Choose verified evidence</option>{view.availableEvidence.map(item => <option key={item.evidenceId} value={item.evidenceId}>{item.label}</option>)}</select></label>
+        <label>Recovery evidence on file<select value={evidenceId} onChange={event => { setEvidenceId(event.target.value); setReview(null); }}><option value="">Choose evidence on file</option>{view.availableEvidence.map(item => <option key={item.evidenceId} value={item.evidenceId}>{item.label}</option>)}</select></label>
         <label>Remittance evidence (optional)<select value={remittanceEvidenceId} onChange={event => { setRemittanceEvidenceId(event.target.value); setReview(null); }}><option value="">No explicit remittance selected</option>{view.availableEvidence.map(item => <option key={item.evidenceId} value={item.evidenceId}>{item.label}</option>)}</select></label>
         <label>Allocation gross (£)<input inputMode="decimal" value={amount} onChange={event => { setAmount(event.target.value); setReview(null); }} /></label>
         <button type="button" onClick={reviewAllocation}>Review receipt allocation</button>
