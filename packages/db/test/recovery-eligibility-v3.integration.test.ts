@@ -90,14 +90,14 @@ async function fixture(type="withheld_customer_payment",before=false){
  const sessionId=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,sessionId),jobId=randomUUID();
  await admin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario)VALUES($1,$2,'CH-7 generated job',$3,'capture')",[jobId,T,auth.digest]);
  const cases=new RecoveryCaseRepository(practiceMaterialPool(runtime,auth.digest)),feed=new PracticeFeedRepository(runtime,"synthetic_demo");let revision=0;
- const advance=async(movement:string,step="settled")=>{const reply=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:revision,action:revision===0?"connect":"advance",...(revision===0?{}:{movement,step})});revision=reply.revision;};
+ const advance=async(movement:string,step="settled")=>{if(movement==="receipt-interest-120"){const reply=await feed.factsCommand(ctx,actor,auth.digest,jobId,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:revision,action:"advance",movement,step});revision=reply.revision;return;}const reply=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:revision,action:revision===0?"connect":"advance",...(revision===0?{}:{movement,step})});revision=reply.revision;};
  await advance("receipt-384");if(before)await advance("receipt-384");
  const c=await cases.command(ctx,jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"open",caseType:type,claimedNetPence:300000,counterparty:"Fictional debtor",book:type==="withheld_customer_payment"?"builder_customer":"supplier_cost",sourceType:type==="withheld_customer_payment"?"customer_invoice":"supplier_documents",sourceRefs:type==="withheld_customer_payment"?["Generated customer invoice INV-18800"]:["Supplier invoice INV-320"],expectedRevision:0},actor);
  return {auth,jobId,c,cases,advance,repo:new RecoveryEligibilityV3Repository(practiceMaterialPool(runtime,auth.digest),"synthetic_demo")};
 }
 const review=(c:{id:string;revision:number},fixture:string,expectedReviewRevision=0)=>({version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,expectedReviewRevision,fixture});
 it.each([["F15","merchant_overcharge",0,"Credit note below the £250 minimum"],["F17","duplicate_supplier_payment",45000,null],["F18","withheld_customer_payment",262000,"Fixed statutory compensation is not part of the fee base"],["F19","withheld_customer_payment",250000,"Fixed statutory compensation is not part of the fee base"],["F20","withheld_customer_payment",0,"Paid before you opened this case"],["F21","merchant_overcharge",0,null],["F22","prevention",0,"Prevented spending is not recovered cash"]] as const)("DW1 %s uses M4-7-S facts and persists exact Q/reason",async(name,type,q,reason)=>{
- const f=await fixture(type,name==="F20");if(name!=="F20"&&name!=="F15")await f.advance(name==="F17"?"supplier-refund-540":"receipt-3000");
+ const f=await fixture(type,name==="F20");if(name!=="F20"&&name!=="F15")await f.advance(name==="F17"?"supplier-refund-540":"receipt-3000");if(name==="F18")await f.advance("receipt-interest-120");
  const command=review(f.c,name),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
  expect(r.result).toMatchObject({qualifyingPrincipal:{pence:q,currency:"GBP"},reason,outcome:q>0?"eligible_for_review":"excluded",terminal:name==="F22",productionEnabled:false});
  if(["F15","F21","F22"].includes(name))expect(r.sourceEventId).toBeNull();
@@ -293,7 +293,7 @@ it("settlement at exactly the case opening instant is excluded with zero Q",asyn
  expect(r.result).toMatchObject({qualifyingPrincipal:{pence:0,currency:"GBP"},outcome:"excluded",reason:"Paid before you opened this case"});
 });
 it("settled-before-opening is decided in PostgreSQL on microsecond timestamps: settlement 800 microseconds AFTER opening in the same millisecond qualifies at the plan figure",async()=>{
- const f=await fixture();await f.advance("receipt-3000");
+ const f=await fixture();await f.advance("receipt-3000");await f.advance("receipt-interest-120");
  await stampTimes(f,"receipt-3000","2026-10-11T12:00:00.000100Z","2026-10-11T12:00:00.000900Z");
  const r=await f.repo.review(ctx,f.jobId,review(f.c,"F18"),actor,f.auth.digest);
  expect(r.result).toMatchObject({qualifyingPrincipal:{pence:262000,currency:"GBP"},outcome:"eligible_for_review",reason:"Fixed statutory compensation is not part of the fee base"});

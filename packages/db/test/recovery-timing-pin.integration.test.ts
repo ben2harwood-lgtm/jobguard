@@ -71,7 +71,13 @@ async function fixture(db = admin, business = runtime) {
     caseType: "withheld_customer_payment", claimedNetPence: receipt.grossPence, counterparty: "Fictional debtor",
     book: "builder_customer", sourceType: "customer_invoice", sourceRefs: ["Generated customer invoice INV-18800"],
   }, actor);
-  return { db, business, auth, jobId, cases, repo, advance, open, accountId: connect.accountId!, nextRevision: () => revision + 1 };
+  // MIGFIX-6 set-up: F18 statutory interest settles through its own receipt (receipt-interest-120). The latest stored feed revision is read
+  // from the database because the raw-row tests consume revisions outside this closure.
+  const settleInterest = async () => {
+    const latest = (await db.query("SELECT max(revision)::int revision FROM app.practice_feed_command WHERE tenant_id=$1 AND job_id=$2", [T, jobId])).rows[0]!.revision as number;
+    await feed.factsCommand(ctx, actor, auth.digest, jobId, { version: "practice-facts-command.v1", commandId: randomUUID(), expectedRevision: latest, action: "advance", movement: "receipt-interest-120", step: "settled" });
+  };
+  return { db, business, auth, jobId, cases, repo, advance, open, settleInterest, accountId: connect.accountId!, nextRevision: () => revision + 1 };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
@@ -175,7 +181,7 @@ it.each(["F18", "F19"] as const)("[AC6] %s settled then raw case with chosen pas
 });
 it.each(["F18", "F19"] as const)("[AC6] %s opened then raw settled row with chosen past time retains full figure", async name => {
   const f = await fixture(), c = await f.open();
-  expect(await rawAdvance(f, past)).toMatchObject({ pinned: true, kept_chosen: false }); await assertReview(f, c.id, name, false);
+  expect(await rawAdvance(f, past)).toMatchObject({ pinned: true, kept_chosen: false }); if (name === "F18") await f.settleInterest(); await assertReview(f, c.id, name, false);
 });
 it("[AC6] F18 raw settled row with chosen future time then product opening remains excluded", async () => {
   const f = await fixture(); expect(await rawAdvance(f, future)).toMatchObject({ pinned: true, kept_chosen: false });
@@ -183,7 +189,7 @@ it("[AC6] F18 raw settled row with chosen future time then product opening remai
 });
 it.each(["F18", "F19"] as const)("[AC6] %s product-only controls preserve both money answers and replay", async name => {
   const before = await fixture(); await before.advance(); await assertReview(before, (await before.open()).id, name, true);
-  const after = await fixture(), c = await after.open(); await after.advance(); await assertReview(after, c.id, name, false);
+  const after = await fixture(), c = await after.open(); await after.advance(); if (name === "F18") await after.settleInterest(); await assertReview(after, c.id, name, false);
 });
 
 async function storedTime(f: Fixture, table: typeof tables[number], id: string) {

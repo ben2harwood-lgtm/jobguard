@@ -143,7 +143,10 @@ async function fixture(type="withheld_customer_payment",insurer=true,before=fals
   await admin.query("UPDATE app.job_party_current SET binding_id=$3 WHERE tenant_id=$1 AND job_id=$2",[T,jobId,binding]);
  }
  const pool=practiceMaterialPool(runtime,auth.digest),cases=new RecoveryCaseRepository(pool),feed=new PracticeFeedRepository(runtime,"synthetic_demo");let revision=0;
- const advance=async(movement:string,step="settled")=>{const reply=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:revision,action:revision===0?"connect":"advance",...(revision===0?{}:{movement,step})});revision=reply.revision;};
+ const advance=async(movement:string,step="settled")=>{const reply=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:revision,action:revision===0?"connect":"advance",...(revision===0?{}:{movement,step})});revision=reply.revision;
+  // MIGFIX-6 set-up: F18 interest has its own receipt. These fixtures settled one £3,000 receipt and assumed the £120 interest came with it,
+  // so settling the principal receipt now also settles the separate interest receipt. No assertion in this file changes.
+  if(movement==="receipt-3000"&&step==="settled"){const facts=await feed.factsCommand(ctx,actor,auth.digest,jobId,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:revision,action:"advance",movement:"receipt-interest-120",step:"settled"});revision=facts.revision;}};
  await advance("receipt-384");if(before)await advance("receipt-384");
  const c=await cases.command(ctx,jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"open",caseType:type,claimedNetPence:300000,counterparty:"Fictional debtor",book:type==="withheld_customer_payment"?"builder_customer":"supplier_cost",sourceType:type==="withheld_customer_payment"?"customer_invoice":"supplier_documents",sourceRefs:type==="withheld_customer_payment"?["Generated customer invoice INV-18800"]:["Supplier invoice INV-320"],expectedRevision:0},actor);
  const evidence=randomUUID(),upload=randomUUID(),objectKey=`synthetic/recovery/${evidence}`;
@@ -428,7 +431,9 @@ it("[A6 DB2] missing binding keeps the merged non-insurer result and omits payer
  const unbound=randomUUID();await admin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario)VALUES($1,$2,'Unbound review control',$3,'capture')",[unbound,T,f.auth.digest]);
  const c=await new RecoveryCaseRepository(f.pool).command(ctx,unbound,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",claimedNetPence:300000,counterparty:"Fictional debtor",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:["Generated customer invoice INV-18800"],expectedRevision:0},actor);
  const feed=new PracticeFeedRepository(runtime,"synthetic_demo");const connected=await feed.command(ctx,actor,f.auth.digest,unbound,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
- await feed.command(ctx,actor,f.auth.digest,unbound,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:connected.revision,action:"advance",movement:"receipt-3000",step:"settled"});
+ const unboundAdvanced=await feed.command(ctx,actor,f.auth.digest,unbound,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:connected.revision,action:"advance",movement:"receipt-3000",step:"settled"});
+ // MIGFIX-6 set-up: the separate F18 interest receipt settles too (see the fixture's advance helper).
+ await feed.factsCommand(ctx,actor,f.auth.digest,unbound,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:unboundAdvanced.revision,action:"advance",movement:"receipt-interest-120",step:"settled"});
  f.jobId=unbound;f.c=c;
  const saved=await reviewPayer(f);
  expect(saved.result.qualifyingPrincipal.pence).toBe(262000);
