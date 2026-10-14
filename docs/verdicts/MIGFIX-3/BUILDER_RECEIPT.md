@@ -355,3 +355,33 @@ apps/api/src/proof/proof.application.ts         |  7 +++--
 | `packages/db/test/migfix-3-upgrade.integration.test.ts` | 80 | `63a9c82cd259feb511065f7d6214fbc86802a562e1356226f17ea0e701057ddc` |
 
 Intended commit message is `/private/tmp/jg-msg-migfix-3.txt`. Final head is `bd959b01e857de0ba7cbd3588bab84add7d0f493`; it is the unchanged base, not a commit containing this work. Fresh independent RED verdict, separate acceptance, coordinator catalogue integration, real database/browser runs, pinned forced checks and OpenAPI verification remain pending.
+
+---
+
+# Post-merge PostgreSQL repair (Claude Sonnet 5.5, 14 Oct 2026)
+
+Builder: Claude Sonnet 5.5. Not independently verified, not accepted. Starting head `33e98598` (main `c884b138` merged into `27f220e1`). First real PostgreSQL run of the piece's own new files: 5 failures, all in this piece's own new tests/code; no merged test touched, no assertion weakened or removed.
+
+## proof-repository.ts was hand-merged
+The merge of main into the piece was resolved by hand in `packages/db/src/proof-repository.ts`: the piece's rewritten `complete` and `invalidate` were kept, together with main's `checkPostLockSourceLifecycle`, `refuseLockedNewSource` and `rethrowJobWorkState` inside `complete`. Reviewers should read that merge result in full.
+
+## Fixes (root cause each)
+| # | Test | Cause | Fix |
+|---|---|---|---|
+| 1 | migfix-3.integration `[MIGFIX-3.5/7]` | test used nonexistent column `app.job.lifecycle_point`; the job column is `status` (CHECK allows `invoiced`) | set-up now `UPDATE app.job SET status='invoiced'`; assertions unchanged |
+| 2 | `[MIGFIX-3.4]` | `$2` used bare (uuid) and as `$2::text` | `$1::uuid,$2::uuid` casts; assertion unchanged |
+| 3 | `[MIGFIX-3.7]` | `state='rejected'` needs `rejection_code NOT NULL` (evidence_upload_state_ck) | set-up also sets `rejection_code='content_mismatch'`; same situation modelled |
+| 4 | `[MIGFIX-3.4/5]` | REAL CODE BUG in `proof-repository.ts` `complete`: after an earlier repair the semantic key no longer carried the replacement suffix, so the replay lookup `command_id=$2 OR semantic_key=$3` could return the ORIGINAL completion's receipt (different hash) first and raise COMMAND_CONFLICT for a valid identical retry | lookup now `ORDER BY (command_id=$2) DESC LIMIT 1` |
+| 5 | `migfix-3-upgrade` U1 | rolled-back `UPDATE app.stage_completion.completed_at` hit main's 0144 FK `job_site_source_receipt_..._fkey1` | control runs `SET LOCAL session_replication_role=replica` inside its rolled-back transaction (still proves a 1 microsecond change fails the comparison); a second `$1` bare/`::text` typing slip in the later-insert control fixed with `$1::uuid` |
+
+## Commands (worktree m4-6-s, through heavy-slot, vitest --maxWorkers=2)
+| Command | Exit | Result |
+|---|---:|---|
+| migfix-3.integration + migfix-3-upgrade.integration (before) | 1 | 5 failed, 8 passed |
+| migfix-3.integration (after fixes 1-4) | 0 | 12/12 |
+| migfix-3-upgrade.integration | 0 | 1/1 |
+| `pnpm exec turbo run typecheck --force` | 0 | 7/7, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 0 | 7/7, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | passed |
+
+Not run here: full build, full db suite, browser e2e, tenancy.integration.test.ts (dispatcher/CI).
