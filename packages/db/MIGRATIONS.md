@@ -950,3 +950,102 @@ Forward fix preferred. A rollback restoring the three 0054 routines must also dr
 Renumbered from 0129 to 0133 on 12 October 2026 under the merge-ahead ruling because 0129 (ENT-10d), 0130 (CH-7-F17) and 0131 (PRACTICE-FACTS-1) merged first and 0132 is SV-4; the SQL bytes are unchanged (sha256 6d317e043790d4bb97acfb91d918b755a0e2ee9a08fdf6cbeefeb26fbdfe5aa6).
 
 `0133_shadow_detection.sql`: SV-3: append-only FORCE-RLS `shadow_must_surface_firing`, shadow-only `surface_shadow_signal_early` EXECUTE, and the single `must_surface_signal` finding kind. Atomic Decision/disclosure/firing/audit; no new business-table grants. Forward fix only: retain immutable firings and disclosures; disable the worker to stop new detections. Database upgrade proof is in `shadow-detection.integration.test.ts`.
+
+## 0139 — site visit start and complete, and the close-out answer (ENT-3b)
+
+Additive: one table and six PL/pgSQL functions, all owned by `jobguard_migration` with `search_path=pg_catalog`. `app.closeout_answer` holds one immutable row per visit (forced row security, the merged `tenant_isolation` policy, runtime SELECT only, update and delete refused by the merged immutable trigger). `app.ent3b_visit_authority(uuid,uuid)` (STABLE, SECURITY INVOKER) is the one place the visit rule lives and calls merged routines only. `app.ent3b_start_visit(uuid,uuid,uuid)` and `app.ent3b_complete_visit(uuid,uuid,uuid,uuid,text)` are the only writers of `app.site_visit` and `app.closeout_answer` (SECURITY DEFINER; they re-decide the rule under the shared tenant administration lock, check the command receipt and take the visit locks 3101 and 3102). `app.ent3b_require_open_visit(uuid,uuid)` (SECURITY INVOKER) is called by the site-extra seam when an extra names a visit. `app.ent3b_closeout_guard()` and `app.ent3b_require_closeout_audit()` are trigger functions, not executable by the runtime role.
+
+One deferred trigger is added to the merged `app.site_visit` table, so that a completed visit without exactly one matching answer (and a visit that has an answer but is not completed) cannot commit for any writer, the table owner included. No column, index, constraint, policy or grant is added to any existing table; no existing object is replaced or removed; no row is changed or backfilled. The application login gains SELECT on the new table and EXECUTE on four functions by an explicit list, and no write grant on any table.
+
+Upgrade proof and catalogue: `site-visit-upgrade.integration.test.ts` and `site-visit-authority.integration.test.ts`. Forward fix preferred: stop the two routes and issue a reviewed correction; the answer table holds records that must be kept. Removing the new objects is permissible only before any visit has been completed through it. No historical data rollback is needed.
+
+## 0140 — site extra pricing (ENT-3c)
+
+Additive only: two new tables, `app.extra_sor_revision` (the server-priced first revision of a schedule-item site extra, one row at most per extra, `revision=1`) and
+`app.extra_pricing_basis` (how a revision's price was reached, keyed by extra and revision number, only `server_sor` for revision 1 can be written here), five routines
+(`app.ent3c_record_sor_revision(uuid,uuid,text,text)`, `app.ent3c_sor_revision_guard()`, `app.ent3c_require_sor_revision_audit()`, `app.ent3c_pricing_basis_guard()`,
+`app.ent3c_require_pricing_basis()`) and triggers on the two new tables only. It needs 0110 and 0122 and calls no ENT-3a routine. No column, index, constraint, policy,
+grant or trigger is added to any existing table, no row of `app.variation_revision` is written, no existing object is replaced or dropped, nothing is backfilled and no existing row changes.
+
+Standard F: the application login holds SELECT only on both new tables. The only writer is the SECURITY DEFINER routine `app.ent3c_record_sor_revision`
+(owner `jobguard_migration`, `search_path=pg_catalog`, EXECUTE granted to `jobguard_runtime` by exact signature, revoked from PUBLIC and infrastructure). It takes no actor,
+rate, price, outcome or time: it reads the stored origin, receipt, variation, baseline revision, schedule item and order lines of the raising transaction, decides the
+order check again, prices the extra quantity alone through the merged `app.sor_line_net_pence`, and runs only while the raising command's own receipt is still processing.
+The two BEFORE INSERT guards bind every writer, the table owner included, and set `content_hash` and `server_recorded_at` themselves; two deferred constraint triggers require
+the raising transaction's one audit event and the basis row at commit. Row security is enabled and forced with the merged two-role tenant policy; the merged immutability
+trigger rejects UPDATE and DELETE.
+
+Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
+`packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
+
+## 0141 — site extra evidence (ENT-3d)
+
+Adds exactly five routines in schema `app` and their EXECUTE grants to `jobguard_runtime` (explicit list, none to PUBLIC or `jobguard_infrastructure`): `ent3d_content_sha256`, `ent3d_confirmation_document`, `ent3d_site_extra_evidence`, `ent3d_record_resident_confirmation` and `ent3d_require_site_extra_evidence`. All are SECURITY INVOKER with a `pg_catalog` search path, owned by `jobguard_migration`. No table, column, index, trigger, constraint, policy or table grant; no existing row changed; no earlier routine replaced. The only writer of a confirmation object is `ent3d_record_resident_confirmation`; it runs with the application login's pre-existing INSERT rights on the two evidence tables (none added) and carries its own authority check (`ent3a_extra_authority`).
+
+Forward fix preferred. A confirmation object is two ordinary evidence rows, so nothing is ever deleted: to stop the feature, stop the v3 body in the application; the five routines can be replaced by a reviewed forward migration. Upgrade proof (`site-extra-evidence.integration.test.ts`, rule 9) snapshots existing rows by named columns, full column types and primary keys before this migration, applies it alone, then applies everything after it twice. The two database files ran against embedded PostgreSQL on the builder's Mac (receipt lists counts); reviewers re-run them.
+
+### 0142 — recovery insurer money (CH-7-INSURER Round 2)
+
+Adds the shared current payer function and append-only, FORCE-RLS payment marks with exact evidence references, timestamp pinning, immutable history and deferred audit completeness. Standard F gives runtime SELECT only; the session-bound controlled writer and job-lock helper each check authority, check/set tenant context and fix search_path. No app.job grant or merged table/column/policy/grant change. Restates only the newest 0130 review guard and 0119 effect trigger, adding Part A's insurer exclusion after paid-before and its line reason, plus F19's individual-interest message and reasonHeld release. A6 derives a required payer fact after the exact payment and job locks and cites current insurer binding/mark IDs in audit. The insurer exclusion has its own reason; F21 remains null/held under the Round 2 ruling. 0142 never rewrites saved reviews or lines; forward-fix is the rollback strategy, retaining readers and mark history. The previous application ignores marks but its insurer review inserts now fail closed; coordinate the three coordinator-owned setup-only payer additions and CI evidence before rollout. PostgreSQL fresh, upgrade, catalog and concurrency checks are NOT RUN in the builder sandbox; rule-9 upgrade proof compares named original F19/F21 rows and full column types, with identity matching and rolled-back controls. No new external alert or provider.
+
+### 0144 — CH-4 immutable work facts (partial synthetic scope)
+
+Creates `job_work_state_event`, `job_site_source_receipt`, `job_photo_purpose` and
+`job_link`, with FORCE RLS, qualified references, immutable mutation/truncate
+controls and runtime SELECT only. Adds the stage-completion job-qualified key
+and a source key binding tenant/job/id/completed-at/evidence-link. Stage receipts
+reference both keys and validate the source/link hash; no older table gains a
+policy or grant. Existing rows, types and primary identities remain unchanged.
+Existing photo finalization, ready delivery versions, goods receipts, builder
+origins and stage completion produce normalized facts in the source transaction.
+Original receipt timestamps retain PostgreSQL microseconds; no history is backfilled.
+The deterministic earliest qualifying candidate supplies first site evidence.
+Audit appends run as deferred constraint triggers, after source business locks.
+Evidence finalization drains them after its completion callback and last business
+write, while the transaction remains open. Exact PO placement command replays
+retain their first result; a new identity cannot use semantic deduplication to
+admit post-lock work.
+
+New-work triggers serialize with the existing final-account lock through its job
+row. A currently closed job refuses new lock and pending-check admission.
+The authenticated read routine rechecks the persisted synthetic session and job
+ownership. No held command receives an execution grant or transport.
+Q-01/Q-03/Q-04/Q-05/Q-06 remain held; this does not complete CH-4 or unblock MON-1.
+
+Forward-fix with a reviewed additive migration. Do not delete events or links,
+rewrite documents/money/audit, or reconstruct unknown historical site times.
+Database and upgrade proofs require the dispatcher's PostgreSQL environment.
+
+## 0150 — membership authority repair (MIGFIX-1, repair r1)
+
+Replaces three existing identity routines (`current_memberships(uuid)`,
+`invite_member(char,uuid,varchar,varchar)`, `provision_verified_challenge(uuid)`)
+to exclude tenant-qualified contractor revocations. Invitation authorization and
+replacement provisioning serialize with the existing contractor tenant advisory
+lock (seed 54). A fresh verified invitation creates a replacement membership and
+repoints its locator without changing historical membership or revocation rows.
+Existing routine signatures, owners, SECURITY DEFINER settings and EXECUTE ACLs
+are retained. No business rows are rewritten or backfilled.
+
+Repair r1 completes the previously partial direct-UPDATE defense under the
+dispatcher's ruling: retains all table grants, including UPDATE needed for runtime
+`FOR SHARE`, and adds `app.guard_membership_authority_update()` plus one BEFORE
+UPDATE row trigger on `app.membership`. The function is SECURITY INVOKER, owned
+by `jobguard_migration`, with `search_path=pg_catalog`; ALL is revoked from PUBLIC,
+runtime, identity and infrastructure, with no new grant. It checks the effective
+caller: only the table owner or a superuser may change membership identifiers or
+role, or clear/later-date existing revoked/expiry timestamps. Other callers receive
+`42501`. No-ops and earlier timestamps remain allowed. Migration-owned definer
+writers retain authority; locks remain usable. No table, column, constraint or
+policy changes; no grant changes on any pre-existing object.
+
+Forward-fix only: keep migration history and issue a reviewed additive correction;
+never rewrite membership, invitation or revocation history to roll back. Upgrade
+proof: `migfix-1-upgrade.integration.test.ts` installs predecessors, snapshots
+populated rows by named columns/full types/identity/canonical text, applies 0150
+alone, compares pre-existing catalog objects, checks the new guard/trigger and
+actual runtime/owner/superuser behavior, then runs later migrations twice. Existing
+rolled-back sensitivity controls remain. `migfix-1.integration.test.ts` covers
+authority refusals, retained locks, sessions, races and replacement history.
+PostgreSQL and browser execution remain pending GitHub CI after dispatcher push;
+this register records implementation, not independent acceptance or release approval.
