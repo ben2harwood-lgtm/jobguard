@@ -951,6 +951,14 @@ Renumbered from 0129 to 0133 on 12 October 2026 under the merge-ahead ruling bec
 
 `0133_shadow_detection.sql`: SV-3: append-only FORCE-RLS `shadow_must_surface_firing`, shadow-only `surface_shadow_signal_early` EXECUTE, and the single `must_surface_signal` finding kind. Atomic Decision/disclosure/firing/audit; no new business-table grants. Forward fix only: retain immutable firings and disclosures; disable the worker to stop new detections. Database upgrade proof is in `shadow-detection.integration.test.ts`.
 
+## 0139 — site visit start and complete, and the close-out answer (ENT-3b)
+
+Additive: one table and six PL/pgSQL functions, all owned by `jobguard_migration` with `search_path=pg_catalog`. `app.closeout_answer` holds one immutable row per visit (forced row security, the merged `tenant_isolation` policy, runtime SELECT only, update and delete refused by the merged immutable trigger). `app.ent3b_visit_authority(uuid,uuid)` (STABLE, SECURITY INVOKER) is the one place the visit rule lives and calls merged routines only. `app.ent3b_start_visit(uuid,uuid,uuid)` and `app.ent3b_complete_visit(uuid,uuid,uuid,uuid,text)` are the only writers of `app.site_visit` and `app.closeout_answer` (SECURITY DEFINER; they re-decide the rule under the shared tenant administration lock, check the command receipt and take the visit locks 3101 and 3102). `app.ent3b_require_open_visit(uuid,uuid)` (SECURITY INVOKER) is called by the site-extra seam when an extra names a visit. `app.ent3b_closeout_guard()` and `app.ent3b_require_closeout_audit()` are trigger functions, not executable by the runtime role.
+
+One deferred trigger is added to the merged `app.site_visit` table, so that a completed visit without exactly one matching answer (and a visit that has an answer but is not completed) cannot commit for any writer, the table owner included. No column, index, constraint, policy or grant is added to any existing table; no existing object is replaced or removed; no row is changed or backfilled. The application login gains SELECT on the new table and EXECUTE on four functions by an explicit list, and no write grant on any table.
+
+Upgrade proof and catalogue: `site-visit-upgrade.integration.test.ts` and `site-visit-authority.integration.test.ts`. Forward fix preferred: stop the two routes and issue a reviewed correction; the answer table holds records that must be kept. Removing the new objects is permissible only before any visit has been completed through it. No historical data rollback is needed.
+
 ## 0140 — site extra pricing (ENT-3c)
 
 Additive only: two new tables, `app.extra_sor_revision` (the server-priced first revision of a schedule-item site extra, one row at most per extra, `revision=1`) and
@@ -969,6 +977,16 @@ trigger rejects UPDATE and DELETE.
 
 Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
 `packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
+
+## 0141 — site extra evidence (ENT-3d)
+
+Adds exactly five routines in schema `app` and their EXECUTE grants to `jobguard_runtime` (explicit list, none to PUBLIC or `jobguard_infrastructure`): `ent3d_content_sha256`, `ent3d_confirmation_document`, `ent3d_site_extra_evidence`, `ent3d_record_resident_confirmation` and `ent3d_require_site_extra_evidence`. All are SECURITY INVOKER with a `pg_catalog` search path, owned by `jobguard_migration`. No table, column, index, trigger, constraint, policy or table grant; no existing row changed; no earlier routine replaced. The only writer of a confirmation object is `ent3d_record_resident_confirmation`; it runs with the application login's pre-existing INSERT rights on the two evidence tables (none added) and carries its own authority check (`ent3a_extra_authority`).
+
+Forward fix preferred. A confirmation object is two ordinary evidence rows, so nothing is ever deleted: to stop the feature, stop the v3 body in the application; the five routines can be replaced by a reviewed forward migration. Upgrade proof (`site-extra-evidence.integration.test.ts`, rule 9) snapshots existing rows by named columns, full column types and primary keys before this migration, applies it alone, then applies everything after it twice. The two database files ran against embedded PostgreSQL on the builder's Mac (receipt lists counts); reviewers re-run them.
+
+### 0142 — recovery insurer money (CH-7-INSURER Round 2)
+
+Adds the shared current payer function and append-only, FORCE-RLS payment marks with exact evidence references, timestamp pinning, immutable history and deferred audit completeness. Standard F gives runtime SELECT only; the session-bound controlled writer and job-lock helper each check authority, check/set tenant context and fix search_path. No app.job grant or merged table/column/policy/grant change. Restates only the newest 0130 review guard and 0119 effect trigger, adding Part A's insurer exclusion after paid-before and its line reason, plus F19's individual-interest message and reasonHeld release. A6 derives a required payer fact after the exact payment and job locks and cites current insurer binding/mark IDs in audit. The insurer exclusion has its own reason; F21 remains null/held under the Round 2 ruling. 0142 never rewrites saved reviews or lines; forward-fix is the rollback strategy, retaining readers and mark history. The previous application ignores marks but its insurer review inserts now fail closed; coordinate the three coordinator-owned setup-only payer additions and CI evidence before rollout. PostgreSQL fresh, upgrade, catalog and concurrency checks are NOT RUN in the builder sandbox; rule-9 upgrade proof compares named original F19/F21 rows and full column types, with identity matching and rolled-back controls. No new external alert or provider.
 
 ## 0147 — SV5PRE final-check prerequisites (13 October 2026)
 
