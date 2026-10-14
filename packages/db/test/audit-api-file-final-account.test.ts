@@ -88,6 +88,14 @@ class FinalAccountSql {
     if (sql.includes("lock_audit_head")) return rows([]);
     if (sql.includes("clock_timestamp() AS occurred_at")) return rows([{ occurred_at: new Date() }]);
     if (/^(BEGIN|COMMIT|ROLLBACK|SELECT set_config|SELECT pg_advisory_xact_lock|INSERT INTO app.audit_event|INSERT INTO app.stage_review_event|SELECT app.advance_audit_head)/u.test(sql)) return rows([]);
+    // Set-up only (MIGFIX-3): invalidation is now a checked SQL routine whose answer is recorded in the same transaction. These
+    // stand-ins give the same effect the scripted INSERT above gave; nothing the test expects changes.
+    if (sql.includes("FROM app.proof_invalidation_response")) return rows([]);
+    if (sql.startsWith("SELECT app.invalidate_proof_command")) {
+      const id = randomUUID(); this.invalidations.push({ id, evidence_id: values[3] });
+      return rows([{ outcome: { replay: false, result: { evidenceId: values[3], reviewRequired: true }, invalidationId: id, auditEventId: randomUUID() } }]);
+    }
+    if (sql.startsWith("SELECT app.record_invalidation_response")) return rows([{ response: JSON.parse(values[4]) }]);
     throw new Error(`Unexpected SQL: ${sql}`);
   };
   pool(): Pool {
@@ -150,6 +158,8 @@ describe("night audit final-account regressions (scripted SQL)", () => {
     sql.authorizations.push({ hash: proven.account!.sourceHash, revoked: false });
     const proof = new ProofApplication(sql.pool(), jobId);
     vi.spyOn(proof, "get").mockResolvedValue({} as never);
+    // Set-up only (MIGFIX-3): the invalidation answer is now projected inside its own transaction, so the projection is stubbed like get.
+    vi.spyOn(proof as unknown as { project: () => Promise<unknown> }, "project").mockResolvedValue({});
     await proof.command(jobId, { version: "practice-proof-command.v1", action: "invalidate", commandId: randomUUID(), evidenceId, reasonCode: "verification_invalid" });
     const rebuilt = await app.build(jobId, command(2));
     expect(rebuilt.account).toMatchObject({ revision: 3, issueBlocked: true, proof: [] });
