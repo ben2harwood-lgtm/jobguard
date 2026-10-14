@@ -177,4 +177,17 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
     expect([...applied].filter(name => name === target)).toHaveLength(1);
     expect(priorData).toEqual(["synthetic prior row"]);
   });
+  it("accepts a migration whose BEGIN follows leading comment and blank lines", async () => {
+    const target = "0153_quote_supersession_guard.sql";
+    const sent: string[] = [];
+    const connection = { query: async (sql: string, values?: unknown[]) => {
+      if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")) return { rows: [], rowCount: values?.[0] === target ? 0 : 1 };
+      if (!sql.startsWith("CREATE TABLE IF NOT EXISTS")) sent.push(sql);
+      return { rows: [], rowCount: 0 };
+    } } as unknown as Pick<Pool, "query">;
+    await expect(migrate(connection)).resolves.toBeUndefined();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.startsWith("--")).toBe(true);
+    expect(sent[0]).toMatch(/VALUES\('0153_quote_supersession_guard\.sql'\) ON CONFLICT DO NOTHING;\nCOMMIT;\n$/u);
+  });
 });

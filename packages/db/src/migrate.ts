@@ -103,7 +103,8 @@ export async function migrate(pool: Pick<Pool | PoolClient, "query">): Promise<v
     // Submit schema and bookkeeping as one transaction on one connection, even
     // for Pool.query. A lost COMMIT acknowledgement can then safely be retried.
     // Refuse scripts outside the repository's explicit transaction convention.
-    if (!/^BEGIN;/u.test(sql) || !/COMMIT;\s*$/u.test(sql)) {
+    // Leading blank lines and `--` comment lines (e.g. a migration header) may precede BEGIN.
+    if (!/^(?:\s*(?:--[^\n]*)?\n)*\s*BEGIN;/u.test(sql) || !/COMMIT;\s*$/u.test(sql)) {
       throw new Error(`MIGRATION_TRANSACTION_REQUIRED: ${migrationName}`);
     }
     const migrationLiteral = migrationName.replaceAll("'", "''");
