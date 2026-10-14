@@ -37,7 +37,7 @@ async function accepted(name: string) {
   return { job, documentId: a.documentId, documentVersion: a.documentVersion, documentHash: a.documentHash };
 }
 type Doc = Awaited<ReturnType<typeof accepted>>;
-const cancel = (d: Doc, at = "2026-10-02T09:00:00.000Z") => acceptance.disposition(context, d.job, { commandId: randomUUID(), documentId: d.documentId, documentHash: d.documentHash, documentVersion: d.documentVersion, kind: "acceptance_cancelled", occurredAt: at });
+const cancel = (d: Doc, at = "2026-10-02T09:00:00.000Z", commandId = randomUUID()) => acceptance.disposition(context, d.job, { commandId, documentId: d.documentId, documentHash: d.documentHash, documentVersion: d.documentVersion, kind: "acceptance_cancelled", occurredAt: at });
 const accept = (d: Doc, fields: { name?: string; method?: "verbal" | "email" | "message" | "signed-paper"; at?: string; commandId?: string } = {}) => acceptance.accept(context, d.job, { commandId: fields.commandId ?? randomUUID(), documentId: d.documentId, documentHash: d.documentHash, documentVersion: d.documentVersion, statedCustomerName: fields.name ?? "Practice Customer", statedMethod: fields.method ?? "email", acceptedAt: fields.at ?? "2026-10-02T10:00:00.000Z" });
 const acceptances = async (job: string) => (await admin.query(`SELECT a.*,s.acceptance_sequence,s.replaces_acceptance_id FROM app.quote_acceptance a LEFT JOIN app.quote_acceptance_sequence s ON(s.tenant_id,s.acceptance_id)=(a.tenant_id,a.id) WHERE a.tenant_id=$1 AND a.job_id=$2 ORDER BY coalesce(s.acceptance_sequence,1)`, [T, job])).rows;
 const kinds = (view: { events: { kind: string }[] }) => view.events.map(e => e.kind);
@@ -115,6 +115,27 @@ describe("quote re-acceptance after cancellation", () => {
     expect(await count()).toEqual(before);
     await expect(accept(d, { commandId: id, name: "Changed Name" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
     expect(await count()).toEqual(before);
+  });
+
+  it("a reused command id with a changed method, stated time or cancellation time is a COMMAND_CONFLICT (first and later acceptances)", async () => {
+    const d = await accepted("reaccept-changed-facts");
+    const count = async () => (await admin.query("SELECT (SELECT count(*)::int FROM app.quote_acceptance WHERE job_id=$1) a,(SELECT count(*)::int FROM app.acceptance_event WHERE job_id=$1) e,(SELECT count(*)::int FROM app.command_receipt WHERE tenant_id=$2) r", [d.job, T])).rows[0];
+    const cancelId = randomUUID(), acceptId = randomUUID();
+    await cancel(d, "2026-10-02T09:00:00.000Z", cancelId);
+    await accept(d, { commandId: acceptId, method: "email", at: "2026-10-02T10:00:00.000Z" });
+    const before = await count();
+    // identical replays still succeed and write nothing
+    await expect(accept(d, { commandId: acceptId, method: "email", at: "2026-10-02T10:00:00.000Z" })).resolves.toMatchObject({ jobStatus: "accepted" });
+    await expect(cancel(d, "2026-10-02T09:00:00.000Z", cancelId)).resolves.toMatchObject({ jobStatus: "accepted" });
+    expect(await count()).toEqual(before);
+    await expect(accept(d, { commandId: acceptId, method: "verbal", at: "2026-10-02T10:00:00.000Z" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    await expect(accept(d, { commandId: acceptId, method: "email", at: "2026-10-02T10:00:01.000Z" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    await expect(cancel(d, "2026-10-02T09:00:01.000Z", cancelId)).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    expect(await count()).toEqual(before);
+    // the very first acceptance of a fresh job too
+    const f = await accepted("reaccept-changed-facts-first"), id = randomUUID();
+    await cancel(f); await accept(f, { commandId: id, method: "message", at: "2026-10-03T10:00:00.000Z" });
+    await expect(accept(f, { commandId: id, method: "signed-paper", at: "2026-10-03T10:00:00.000Z" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   });
 
   it("accept, cancel, accept, then switch live uses the re-accepted document; cancel and re-accept are refused once live", async () => {
