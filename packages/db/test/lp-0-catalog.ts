@@ -11,7 +11,16 @@
  * readProtectionRecord) so reviewers can inspect them, but nothing in this module compares them.
  */
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import EmbeddedPostgres from "embedded-postgres";
+import { Pool } from "pg";
 import { z } from "zod";
+import { migrate, MIGRATION_URLS } from "../src/index.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 export type Queryable = { query: (text: string, values?: unknown[]) => Promise<{ rows: any[] }> };
 
@@ -619,3 +628,50 @@ export function pathCompleteness(inv: Inventory, fileExists: (path: string) => b
   }
   return problems;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Disposable-database harness (test-only). Owner setup, runtime access and catalogue inspection stay visibly separate.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+export const INVENTORY_PATH = join(REPO_ROOT, "docs/contracts/lp-0-effective-privileges-v1.json");
+export const repoFileExists = (path: string) => existsSync(join(REPO_ROOT, path));
+export const RUNTIME_TEST_PASSWORD = "synthetic-lp0-runtime-only";
+
+/** Reads the committed reviewed inventory from disk. Missing or malformed files throw: there is no fallback. */
+export async function loadReviewedInventory(): Promise<{ raw: unknown; inventory: Inventory }> {
+  const raw = JSON.parse(await readFile(INVENTORY_PATH, "utf8")) as unknown;
+  return { raw, inventory: parseInventory(raw) };
+}
+
+export type Lp0Database = {
+  port: number; databaseName: string; admin: Pool; dir: string; migrationNames: string[];
+  runtimeClient: () => Promise<import("pg").Client>; bootstrapRuntimeLogin: () => Promise<void>; stop: () => Promise<void>;
+};
+
+/** Starts disposable PostgreSQL 16, applies the COMPLETE migration registry once, and returns separate owner and runtime access. */
+export async function startLp0Database(portBase: number): Promise<Lp0Database> {
+  process.env.JOBGUARD_ENV = "synthetic_demo";
+  const dir = await mkdtemp(join(tmpdir(), "jg-lp0-"));
+  const port = await freePort(portBase, 300);
+  const postgres = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
+  await postgres.initialise(); await postgres.start();
+  const databaseName = "jobguard_synthetic_demo";
+  const control = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" });
+  await control.query(`CREATE DATABASE ${databaseName}`); await control.end();
+  const admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: databaseName, max: 4 });
+  await migrate(admin);
+  const { Client } = await import("pg");
+  return {
+    port, databaseName, admin, dir, migrationNames: MIGRATION_URLS.map(u => u.pathname.split("/").at(-1)!),
+    // The synthetic-bootstrap posture of demo-bootstrap.ts: the real business role becomes LOGIN. Not a wrapper login.
+    bootstrapRuntimeLogin: async () => { await admin.query(`ALTER ROLE ${APPLICATION_ROLE} LOGIN PASSWORD '${RUNTIME_TEST_PASSWORD}'`); },
+    runtimeClient: async () => { const c = new Client({ host: "127.0.0.1", port, user: APPLICATION_ROLE, password: RUNTIME_TEST_PASSWORD, database: databaseName }); await c.connect(); return c; },
+    stop: async () => { await closeTestPools(admin); await postgres.stop(); await rm(dir, { recursive: true, force: true }); },
+  };
+}
+
+export const liveFacts = async (db: Queryable) => deriveFacts(await readCatalogue(db));
+export const compareLive = async (inv: Inventory, db: Queryable) => compareInventory(inv, await liveFacts(db));
+/** Compact view of diagnostics for assertions: code + object + privilege + grantee. */
+export const brief = (c: Comparison) => c.diagnostics.map(d => `${d.code} ${d.object}${d.column ? "." + d.column : ""}${d.privilege ? " " + d.privilege : ""}${d.grantee ? " -> " + d.grantee : ""}`).sort();
