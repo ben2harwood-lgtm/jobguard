@@ -1,3 +1,91 @@
+## Repair r9 — migration parser repair (14 October 2026, dispatcher 5)
+
+PR #189; dispatch head `c335f3c`; local HEAD is `b70cd18cc58d62eb71091ad7433d449f882eac5c` on `codex/sandbox/sv5pre`. Git state was not changed. Read-only comparison confirms migration 0147 is byte-identical at those two commits before this repair. Local checks below cover the existing worktree, not the merged dispatch head. No independent verdict or acceptance is claimed.
+
+At `packages/db/migrations/0147_final_check_prerequisites.sql:139`, `guard_final_check_attempt` used `IF NEW.version IS DISTINCT FROM CASE ... THEN ... END THEN`. The PL/pgSQL condition reader terminates at the first unparenthesized THEN, passing an incomplete CASE expression to the SQL parser. PostgreSQL's reported position 15611 lands on this condition. Parenthesized the SQL CASE expression: `IS DISTINCT FROM (CASE ... END) THEN`. Exactly two parentheses are the only code change. Version selection, refusal codes, evidence/completion gates, grants, policies, money, fingerprints and expected values retain their semantics.
+
+Re-read all 14 function bodies and both DO blocks for dollar-quote delimiters, BEGIN/END, IF/END IF, LOOP/END LOOP, CASE/END and parentheses. All 32 dollar-quote delimiters pair; a local structural scan confirms balanced blocks/parentheses. The other six CASE expressions occur in the two invoice SQL queries and are balanced; none is another ungrouped IF condition. This is source/structure evidence, not PostgreSQL syntax execution. Log: `/private/tmp/sv5pre-r9-sql-review.log`.
+
+Every existing test file is untouched. The complete `apps/api/src/shadow-isolation.application.test.ts` (including accepted setup and line 393) and `apps/api/src/auth/context-boundary.test.ts` match both local HEAD and dispatched `c335f3c` byte-for-byte. No existing expected value, refusal, count, pinned name, fingerprint or hash was edited. Existing full-chain migration tests already exercise the parser regression; no new expectation or mirror test was added.
+
+### Every failure in supplied CI log
+
+Read `/Users/benharwood/.local/share/full-steam/jg-runs/sv5pre-ci-failed-38488167020.log` in full via structured filtering; run **38488167020** is RED. The three explicit API failure blocks all report SQLSTATE **42601**, “syntax error at end of input”, position **15611**, through `packages/db/src/migrate.ts:99`. Duplicate GitHub error annotations repeat those same failures.
+
+| Suite/test marked failed | Evidence |
+| --- | --- |
+| `apps/api/src/final-account-lock.isolation.test.ts` — DW8 real database application isolation | Fixture at :37, `createLockFixture` :25, `createApplicationIsolationFixture` :90; migration syntax error |
+| `apps/api/src/shadow-isolation.application.test.ts` — suite setup | :108:108; migration syntax error; 22 skipped |
+| `apps/api/src/sv5pre-worker-execution.integration.test.ts` — suite setup | :56:3; migration syntax error; 2 skipped |
+| `packages/db/test/job-parties.integration.test.ts` — applies the full migration chain to a SQL_ASCII database without UTF8 encoding | 1 failed of 86; full-chain migration failure |
+| `packages/db/test/recovery-follow-up-upgrade.integration.test.ts` — preserves preview/approve/revoke/deliver/reconcile and their refusals on upgraded messages without resending | 1 failed of 3; PostgreSQL stdout explicitly prints the 0147 statement and syntax error at character 15611 |
+
+The log also marks all of the following database suites with `❯` and all tests skipped. These are recorded separately as interrupted/setup failures, not as executed assertion failures; Turbo aborted before a final DB summary:
+
+| Database suite | Tests skipped |
+| --- | --- |
+| `packages/db/test/recovery-messages.integration.test.ts` | 98 |
+| `packages/db/test/recovery-follow-up.integration.test.ts` | 61 |
+| `packages/db/test/work-order-import.integration.test.ts` | 49 |
+| `packages/db/test/recovery-cases.workbench.integration.test.ts` | 41 |
+| `packages/db/test/practice-feed.integration.test.ts` | 27 |
+| `packages/db/test/recovery-eligibility-v3.integration.test.ts` | 31 |
+| `packages/db/test/site-extra-pricing.integration.test.ts` | 35 |
+| `packages/db/test/site-visit.integration.test.ts` | 56 |
+| `packages/db/test/recovery-insurer-money.integration.test.ts` | 40 |
+| `packages/db/test/contractor.integration.test.ts` | 19 |
+| `packages/db/test/tenancy.integration.test.ts` | 9 |
+| `packages/db/test/recovery-allocation.integration.test.ts` | 16 |
+| `packages/db/test/practice-facts.integration.test.ts` | 30 |
+| `packages/db/test/enterprise-identity.integration.test.ts` | 19 |
+| `packages/db/test/audit-export.integration.test.ts` | 11 |
+| `packages/db/test/recovery.integration.test.ts` | 15 |
+| `packages/db/test/contractor-parties.integration.test.ts` | 19 |
+| `packages/db/test/recovery-case-terms.integration.test.ts` | 46 |
+| `packages/db/test/extra-origin.integration.test.ts` | 32 |
+| `packages/db/test/extra-unlink.integration.test.ts` | 18 |
+| `packages/db/test/final-account-lock.integration.test.ts` | 14 |
+| `packages/db/test/site-extra-evidence.integration.test.ts` | 22 |
+
+API summary: **3 failed files, 73 passed files; 1,695 passed tests, 25 skipped**. Root Turbo: **11 successful tasks of 13**, failed `@jobguard/api#test`; API test exit 1, root ELIFECYCLE exit 1 and GitHub step exit 1. `@jobguard/db` output is partial after the API failure. Expected adversarial diagnostics `RECOVERY_MESSAGE_CHANGED`, `RECOVERY_MESSAGE_EXISTING_EFFECT`, and Nest's deliberately injected “private SQL diagnostic” are present; they are not additional failed assertions. CI emitted no subsequent DB/migration/browser pass.
+
+### Local executed checks
+
+Node **24.17.0** / cached pinned pnpm **10.28.1**; no dependency install/download command issued. The default global pnpm launcher stalled before running commands (only its ignored-overrides warning appeared); those invocations were interrupted. Subsequent commands use `PATH=/private/tmp/sv5pre-r9-bin:$PATH` with a shim invoking the already-cached `~/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`.
+
+| Command actually run | Result / evidence |
+| --- | --- |
+| `pnpm typecheck` | PASS, 7 tasks successful, 2 cached; `/private/tmp/sv5pre-r9-typecheck-final.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS, 7 tasks successful, 2 cached; `/private/tmp/sv5pre-r9-lint-final.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` (initial + final) | PASS; `/private/tmp/sv5pre-r9-lanes.log`, `/private/tmp/sv5pre-r9-lanes-final.log` |
+| `pnpm build` | PASS, 7 tasks successful, 2 cached; `/private/tmp/sv5pre-r9-build.log` |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage exec vitest run src` | Initial run: config 1 passed; storage 2 passed; core 2,248 passed, 1 timed out at 5 seconds; pnpm aborted before AI completion. `/private/tmp/sv5pre-r9-units.log` |
+| `pnpm --filter @jobguard/core exec vitest run src/receipt-allocation.test.ts --maxWorkers=1` | PASS, 34 tests including the timeout retry; `/private/tmp/sv5pre-r9-receipt-unit-retry.log` |
+| `pnpm --filter @jobguard/ai --filter @jobguard/storage exec vitest run src --maxWorkers=1` | PASS, AI 80 and storage 2 tests; `/private/tmp/sv5pre-r9-units-remaining.log`. Across the initial/retry source runs all 2,332 unique source tests passed at least once; no full single-run pass claimed. |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 --exclude '**/*.http.test.ts' --exclude src/final-account-lock.isolation.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/sv5pre-worker-execution.integration.test.ts --exclude src/health.test.ts --exclude src/auth/sso/action-paths.test.ts` | PASS after build, 1,483 tests / 62 files; `/private/tmp/sv5pre-r9-unit-api-socket-free.log` |
+| `pnpm --filter @jobguard/api exec vitest run src/sv5pre-worker-registration.test.ts src/shadow-detection.worker.test.ts src/final-account-lock.application.test.ts src/final-account-lock.controller.test.ts src/customer-invoice-sv5pre.filter.test.ts --maxWorkers=1` | PASS, 36 tests / 5 files; `/private/tmp/sv5pre-r9-unit-api-targeted.log` |
+| `pnpm --filter @jobguard/web exec vitest run` | PASS, 666 tests / 28 files; `/private/tmp/sv5pre-r9-unit-web.log` |
+| `node --test tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/core-purity.test.mjs tools/shared-money-origin.test.mjs tools/commercial-boundary.test.mjs` | PASS, 19 tests; `/private/tmp/sv5pre-r9-unit-tools.log` |
+| `pnpm openapi:check` | BLOCKED: tsx IPC socket `listen EPERM`; `/private/tmp/sv5pre-r9-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` (initial + after build) | PASS, same OpenAPI generation/comparison without CLI IPC; `/private/tmp/sv5pre-r9-openapi-node.log`, `/private/tmp/sv5pre-r9-openapi-node-final.log` |
+| Read-only `git diff --check`, exact SQL delta, full protected-file byte comparisons against local and dispatched heads | PASS; only the migration and receipt are changed |
+
+Initial typecheck/lint each exited 2 on stale `.next/types` references to four routes absent from this local older checkout: contractor order-lines, site-visits/start, site-visits/complete and site/jobs (TS2307). Logs: `/private/tmp/sv5pre-r9-typecheck.log`, `/private/tmp/sv5pre-r9-lint.log`. Rebuilt generated output before final retries; no source/expectation change.
+
+Initial broad API command was `pnpm --filter @jobguard/api exec vitest run src --exclude src/final-account-lock.isolation.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/sv5pre-worker-execution.integration.test.ts --exclude src/health.test.ts --exclude src/sv5pre-invoice.http.test.ts`: **77 failed, 1,495 passed**, 6 failed / 60 passed files; `/private/tmp/sv5pre-r9-unit-api.log`. 73 failures were blocked socket tests (39 contractor-practice-session HTTP, 16 site-extra-pricing HTTP, 16 site-extra HTTP, 2 SSO action-path tests). Four other failures were recovery-eligibility-v3's “replays the immutable v3 command result when the workbench has a newer candidate” (`INVALID_COMMAND`), watchdog-registry's “fails when any job mutation route is unclassified”, “classifies standalone job mutations and dispatcher command literals too” (route arrays), and “registers every migration once, with CH-2 after the merged SH-1 schema” (migration names). All four cleared after regenerating build outputs in the final socket-free run. No failing expected value was changed.
+
+Build retains existing CSS autoprefixer/cache warnings, Next's multiple-lockfile workspace-root warning and sandbox Turbo cache IO warnings. Neither cache replay nor static inspection is independent model/database evidence.
+
+Whole `pnpm test` was not invoked because its root lane fixture tests issue forbidden git-writing commands, and its DB/HTTP suites require disallowed sockets/PostgreSQL. Ran the seven safe root tool files instead (19 passed). No PostgreSQL, database/migration suites or browser server was started; dispatcher must run `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and applicable browser journeys at the resulting commit. A fresh install, live provider/model evaluation and production readiness are not claimed.
+
+### Scope, migration and handoff
+
+Only unmerged migration 0147 and this receipt change. Transactional migration is edited in place as explicitly directed; no historical data rewrite/backfill, new alert or compatibility change. Migration runs inside BEGIN/COMMIT; rollback a failed transaction before rerunning the corrected unmerged migration. Existing final-check, D12/D13, synthetic-only, real-data/release and SV-5 implementation holds remain. This builder cannot record its own independent verdict or technical acceptance; dispatcher commit requires the existing separate review/acceptance loop.
+
+Commit message overwritten at `/private/tmp/jg-msg-sv5pre.txt`; no git add/commit/checkout/push or other git-writing command executed.
+
+---
+
 ## Current status — round r7 coordinator ruling (13 October 2026, dispatcher 4)
 
 Base / unchanged local HEAD: `c593a4c738b63b5f69ab0aca9466458232b97875` (after r6). This is an uncommitted builder handoff; dispatcher owns commit/push and exact-commit CI, independent verdict and separate acceptance. All earlier status sections below are historical. No technical acceptance or release is claimed.

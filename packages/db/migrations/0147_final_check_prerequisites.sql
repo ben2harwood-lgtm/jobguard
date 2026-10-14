@@ -136,7 +136,7 @@ BEGIN
  SELECT * INTO s FROM app.final_check_manifest_source WHERE (tenant_id,job_id,manifest_id,id)=(NEW.tenant_id,NEW.job_id,NEW.manifest_id,NEW.source_id);
  IF NOT FOUND THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_IDENTITY_CHANGED' USING ERRCODE='23503'; END IF;
  SELECT * INTO m FROM app.final_check_manifest WHERE (tenant_id,job_id,id)=(s.tenant_id,s.job_id,s.manifest_id);
- IF NEW.version IS DISTINCT FROM CASE NEW.stage WHEN 'detection' THEN m.detector_version ELSE m.reconciliation_version END THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_MISMATCH'; END IF;
+ IF NEW.version IS DISTINCT FROM (CASE NEW.stage WHEN 'detection' THEN m.detector_version ELSE m.reconciliation_version END) THEN RAISE EXCEPTION 'FINAL_CHECK_INPUT_MISMATCH'; END IF;
  IF NEW.outcome='succeeded' THEN
   IF NOT EXISTS(SELECT 1 FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id)=(u.tenant_id,u.job_id,u.id)
    WHERE (u.tenant_id,u.job_id,u.id)=(s.tenant_id,s.job_id,s.upload_id) AND u.state='verified' AND e.kind='original'
