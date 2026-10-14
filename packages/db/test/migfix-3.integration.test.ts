@@ -193,32 +193,43 @@ describe("MIGFIX-3 original-stage replacement", () => {
   });
   const receipt = (id: string) => ({ text: `INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
     VALUES($1::uuid,$2::uuid,'fixture.command',$2::text,repeat('a',64),'processing',$3)`, values: [h.tenant, id, h.member] });
-  it("[MIGFIX-3.4] an unlocked command_receipt insert racing an invalidation with the same id never commits in both namespaces", async () => {
-    // Receipt first (uncommitted, no per-id lock of its own: 'fixture.command' has no 0096 reservation): the invalidation must fail, not miss it.
+  it("[MIGFIX-3.4] an unlocked command_receipt insert racing an invalidation with the same id never commits in both namespaces (both orders)", async () => {
+    // Receipt first (uncommitted, no per-id reservation of its own beyond the guard): the invalidation waits for it, then finds it committed.
     const f = await initial(), id = randomUUID(), holder = await h.admin.connect();
     await holder.query("BEGIN");
     try {
       await holder.query(receipt(id));
-      await expect(h.repos.proof.invalidate(h.ctx, invalidation(f.evidence, id))).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+      const pending = h.repos.proof.invalidate(h.ctx, invalidation(f.evidence, id)), outcome = expect(pending).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+      let waiting = false;
+      for (let i = 0; i < 200 && !waiting; i++) {
+        waiting = (await h.admin.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype IN('transactionid','advisory') AND NOT granted) waiting")).rows[0].waiting;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
       await holder.query("COMMIT");
+      await outcome;
     } finally { await holder.query("ROLLBACK"); holder.release(); }
     expect((await h.admin.query("SELECT * FROM app.proof_invalidation_command WHERE command_id=$1", [id])).rows).toHaveLength(0);
     expect((await h.admin.query("SELECT * FROM app.evidence_invalidation WHERE evidence_id=$1", [f.evidence])).rows).toHaveLength(0);
-    // Invalidation first (suspended before commit): the unlocked receipt insert must fail rather than slip in beside it.
+    // Invalidation first (suspended before commit): the unlocked receipt insert waits for it and then fails rather than slipping in beside it.
     const id2 = randomUUID();
     let resume!: () => void, reached!: () => void;
     const suspended = new Promise<void>(resolve => { resume = resolve; }), ready = new Promise<void>(resolve => { reached = resolve; });
     const invalidating = h.repos.proof.invalidate(h.ctx, invalidation(f.evidence, id2), async () => { reached(); await suspended; });
     await ready;
-    try { await expect(h.admin.query(receipt(id2))).rejects.toThrow(/IDEMPOTENCY_CONFLICT/); } finally { resume(); }
+    const racing = h.admin.query(receipt(id2)), refused = expect(racing).rejects.toThrow(/IDEMPOTENCY_CONFLICT/);
+    try {
+      let waiting = false;
+      for (let i = 0; i < 200 && !waiting; i++) {
+        waiting = (await h.admin.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype IN('transactionid','advisory') AND NOT granted) waiting")).rows[0].waiting;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+    } finally { resume(); }
+    await refused;
     await invalidating;
     expect((await h.admin.query("SELECT * FROM app.command_receipt WHERE command_id=$1", [id2])).rows).toHaveLength(0);
     expect((await h.admin.query("SELECT * FROM app.proof_invalidation_command WHERE command_id=$1", [id2])).rows).toHaveLength(1);
-    // Concurrent same-command inserts into an old store do not conflict with each other (shared key): replays are unchanged.
-    const same = randomUUID(), a = await h.admin.connect(), b = await h.admin.connect();
-    await a.query("BEGIN"); await b.query("BEGIN");
-    try { await a.query(receipt(same)); await a.query("ROLLBACK"); await b.query(receipt(same)); await b.query("ROLLBACK"); }
-    finally { a.release(); b.release(); }
   });
   it("[MIGFIX-3.7] every 0152 routine is migration-owned, SECURITY DEFINER, search_path pinned and has exact EXECUTE grantees; nothing in app is runtime-owned", async () => {
     const routines = (await h.admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,

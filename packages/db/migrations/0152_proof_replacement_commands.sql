@@ -42,8 +42,15 @@ CREATE TABLE app.proof_invalidation_response (
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  PRIMARY KEY(tenant_id,command_id),
  FOREIGN KEY(tenant_id,command_id,job_id) REFERENCES app.proof_invalidation_command(tenant_id,command_id,job_id));
+-- One row per command id that any older command store or an invalidation has used (kind 'store' | 'invalidation'). The unique key is
+-- the only serialization point between an insert into an older store and an invalidation of the same id: a unique-key conflict waits
+-- for the other transaction's outcome and then sees it, with no advisory lock taken in the older stores' transactions. The id is kept
+-- as text (command_ref) so it is not a second uuid home for every command id; only the two migration-owned routines below write it.
+CREATE TABLE app.proof_command_namespace (
+ tenant_id uuid NOT NULL, command_ref text NOT NULL CHECK(command_ref ~ '^[0-9a-f-]{36}$'), kind varchar(16) NOT NULL CHECK(kind IN('store','invalidation')),
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(), PRIMARY KEY(tenant_id,command_ref));
 DO $$ DECLARE n text; BEGIN
- FOREACH n IN ARRAY ARRAY['stage_proof_replacement','proof_invalidation_command','proof_invalidation_response'] LOOP
+ FOREACH n IN ARRAY ARRAY['stage_proof_replacement','proof_invalidation_command','proof_invalidation_response','proof_command_namespace'] LOOP
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
@@ -53,6 +60,9 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('CREATE TRIGGER proof_history_immutable BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_authorization_record()',n);
  END LOOP;
 END $$;
+-- Writers reach this table only through the two migration-owned routines (runtime has SELECT only), some of them inside transactions
+-- that carry no tenant setting (previous-schema writers), so the migration role's policy cannot depend on that setting.
+CREATE POLICY migration_writer ON app.proof_command_namespace TO jobguard_migration USING(true) WITH CHECK(true);
 CREATE VIEW app.current_stage_proof WITH(security_invoker=true) AS
  SELECT s.tenant_id,s.id,s.job_id,s.scope_item_id,s.stage,
  coalesce(r.evidence_link_id,s.evidence_link_id) evidence_link_id,l.evidence_id,
@@ -76,19 +86,18 @@ END $$;
 ALTER FUNCTION app.require_proof_writer(uuid,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.require_proof_writer(uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
 
--- Cross-namespace guard; no command-kind CHECK is extended and nothing here waits. Stores that already have 0096's non-waiting
--- per-id reservation are covered by it, but several command_receipt types and other stores have none, so this guard takes a SHARED
--- non-waiting advisory lock on a proof-specific key (shared holders never conflict with each other, so same-command replays and
--- concurrent same-command inserts behave exactly as before). invalidate_proof_command takes the same key exclusively, also without
--- waiting; whichever side meets the other's uncommitted work raises IDEMPOTENCY_CONFLICT instead of both committing one id.
+-- Cross-namespace guard; no command-kind CHECK is extended and it takes no advisory or row lock (older stores' transactions are
+-- lock-order-tested: no new contending lock after the audit append). It records the id in app.proof_command_namespace (first writer
+-- wins) and refuses when an invalidation owns it. If an invalidation of the same id is still uncommitted, the insert waits for its
+-- outcome on the unique key, then sees it; invalidate_proof_command does the same against an uncommitted older-store insert. Rows
+-- written before 0152 have no namespace row: the application checks the older stores for them (committed rows are all it needs).
 CREATE FUNCTION app.guard_proof_command_namespace() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE cid uuid := (to_jsonb(NEW)->>TG_ARGV[0])::uuid;
 BEGIN
  IF cid IS NULL THEN RETURN NEW; END IF;
- IF NOT pg_try_advisory_xact_lock_shared(hashtextextended('proof-command-guard:'||NEW.tenant_id::text||':'||cid::text,0))
- THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
- IF EXISTS(SELECT 1 FROM app.proof_invalidation_command WHERE tenant_id=NEW.tenant_id AND command_id=cid)
+ INSERT INTO app.proof_command_namespace(tenant_id,command_ref,kind) VALUES(NEW.tenant_id,cid::text,'store') ON CONFLICT(tenant_id,command_ref) DO NOTHING;
+ IF EXISTS(SELECT 1 FROM app.proof_command_namespace WHERE tenant_id=NEW.tenant_id AND command_ref=cid::text AND kind='invalidation') OR EXISTS(SELECT 1 FROM app.proof_invalidation_command WHERE tenant_id=NEW.tenant_id AND command_id=cid)
  THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
  RETURN NEW;
 END $$;
@@ -113,10 +122,10 @@ BEGIN
   THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
   RETURN jsonb_build_object('replay',true,'result',prior.result,'jobId',prior.job_id);
  END IF;
- -- The older command stores are invisible to this role, so the application checks them in this transaction right after this call
- -- (it sees every committed row). This non-waiting exclusive key makes any uncommitted insert into them fail or be failed, not missed.
- IF NOT pg_try_advisory_xact_lock(hashtextextended('proof-command-guard:'||t::text||':'||c::text,0))
- THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+ -- The older command stores are invisible to this role. The application checks them in this transaction right after this call; it
+ -- sees every committed row. An uncommitted insert into them is serialized by the namespace key below.
+ INSERT INTO app.proof_command_namespace(tenant_id,command_ref,kind) VALUES(t,c::text,'invalidation') ON CONFLICT(tenant_id,command_ref) DO NOTHING;
+ IF NOT FOUND THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
  -- Separate statement before the authoritative read: waiting must not reuse a stale snapshot.
  PERFORM 1 FROM app.evidence_upload u JOIN app.evidence_object proof_object ON(proof_object.tenant_id,proof_object.upload_id)=(u.tenant_id,u.id)
  WHERE proof_object.tenant_id=t AND proof_object.id=eid FOR UPDATE OF u;
