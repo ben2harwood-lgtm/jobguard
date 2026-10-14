@@ -72,8 +72,8 @@ export class PracticeInvoiceRepository {
   return withTenant(this.pool,context,async db=>{
    await this.lockCredits(db,context,input.invoiceId);
    const row=await this.creditAmounts(db,context,input);
-   // Same VAT ceiling as app.issue_practice_customer_credit_note (0156): half-up per credit, never above the VAT left on the invoice.
-   const tax=Math.min(Math.floor((input.netPence+2)/5),Math.max(0,Number(row.tax_pence)-Number(row.credited_tax))),gross=input.netPence+tax;
+   // Same cumulative whole-invoice VAT rule as app.issue_practice_customer_credit_note (0156): half-up on cumulative net; the credit reaching full net takes exactly the original VAT.
+   const cumulativeNet=Number(row.credited_net)+input.netPence,cumulativeTax=cumulativeNet===Number(row.net_pence)?Number(row.tax_pence):Math.min(Math.floor((cumulativeNet+2)/5),Number(row.tax_pence)),tax=Math.max(0,Math.min(cumulativeTax-Number(row.credited_tax),Number(row.tax_pence)-Number(row.credited_tax))),gross=input.netPence+tax;
    if(gross>Number(row.total_pence)-Number(row.credited))throw new Error("CREDIT_EXCEEDS_AVAILABLE_AMOUNT");
    return {previewHash:createHash("sha256").update(`${input.jobId}${input.invoiceId}${input.netPence}${row.credited}${row.pdf_sha256.trim()}`).digest("hex"),invoiceNumber:row.invoice_number,netPence:-input.netPence,taxPence:-tax,totalPence:-gross,reason:input.reason,availablePence:Number(row.total_pence)-Number(row.credited)};
   });

@@ -146,10 +146,10 @@ describe("MIGFIX-5 customer billing integrity", () => {
       const done = await practice.issueCredit(a.context, { jobId: a.jobId, invoiceId: invoice.id, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), netPence: net, reason: "Synthetic correction", previewHash: preview.previewHash });
       expect(done.totalPence, "preview and issued credit agree").toBe(-(net + -preview.taxPence)); issued.push(done.totalPence);
     }
-    // Merged per-credit VAT rounding is unchanged (the stray penny stays owed, as pinned in practice-invoice-audit); only the ceilings are new.
-    expect(issued).toEqual([-12001, -12002]);
-    expect(await creditTotals(a, invoice.id)).toEqual({ net: 20003, tax: 4000, gross: 24003, count: 2 });
-    await expect(credit(f, a, invoice, 1, 24003)).rejects.toThrow("CREDIT_EXCEEDS_AVAILABLE_AMOUNT");
+    // Cumulative whole-invoice VAT (Ben decisions 7, 8a): the credit reaching full net takes exactly the original VAT; the stray penny is the customer's.
+    expect(issued).toEqual([-12001, -12003]);
+    expect(await creditTotals(a, invoice.id)).toEqual({ net: 20003, tax: 4001, gross: 24004, count: 2 });
+    await expect(credit(f, a, invoice, 1, 24004)).rejects.toThrow("CREDIT_EXCEEDS_AVAILABLE_AMOUNT");
     expect(await creditTotals(a, invoice.id)).toMatchObject({ net: 20003, count: 2 });
   }, 90000);
 

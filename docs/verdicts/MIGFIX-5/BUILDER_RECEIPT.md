@@ -16,10 +16,18 @@ New GRANTs: none. New tables/columns/policies/helpers: none.
 
 - **Tests 1 and 2 (legacy issuer needs lock and completed check; second full invoice refuses).** Open PR #189 (`sv5pre`, migration 0147, `packages/db/migrations/0147_final_check_prerequisites.sql:288`) already restates `app.issue_practice_customer_invoice` with exactly these guards (`app.require_authoritative_final_check`, lock revision match, `FINAL_INVOICE_ALREADY_ISSUED`). A 0156 restatement would either be overwritten by or overwrite it, and requiring a lock would break about 15 merged legacy fixtures. Re-run draft tests 1 and 2 after #189 merges. The lock-bound path's refusal of a second full invoice and 132,000p aggregate is covered here as a regression (it already passes).
 - **Test 7 (real, parseable PDF) and the PDF storage part.** Ben decision 7: real PDFs later.
-- **Cumulative whole-invoice VAT rounding for credits (Ben decisions 7 and 8a: stray penny in the customer's favour).** Needs an existing merged expectation to change, and the narrow override was not named for this change. Exact change, `packages/db/test/practice-invoice-audit.integration.test.ts` "split credits cannot exceed original net principal":
-  - line 107: `balancePence:1` becomes `balancePence:0`;
-  - line 109: `.toBe(24003)` becomes `.toBe(24004)`.
-  The matching rule (cumulative VAT on cumulative net, the credit reaching full net takes exactly the original VAT, so 10,001 then 10,002 net credit 12,001 then 12,003) was built and passed my tests, then removed. To apply: in `0156` replace the `tax:=least(...)` line by `cumulative_tax:=CASE WHEN credited_net+p_net_pence=inv.net_pence THEN inv.tax_pence ELSE least((credited_net+p_net_pence+2)/5,inv.tax_pence) END; tax:=greatest(least(cumulative_tax-credited_tax,inv.tax_pence-credited_tax),0);`, mirror in `previewCredit`, and in `migfix-5.integration.test.ts` set the split test to `[-12001,-12003]`, totals `{net:20003,tax:4001,gross:24004}`, last-penny gross arg `24004`.
+- **Test 7 (real PDF)** stays held as above.
+
+## Cumulative whole-invoice VAT rounding (built 14 Oct, Ben decisions 7, 8a, 26)
+
+Rule in 0156 (edited in place) and mirrored in `PracticeInvoiceRepository.previewCredit`: cumulative VAT is half-up 20% of cumulative credited net; the credit that reaches the full invoice net takes exactly the original invoice VAT; a credit's own VAT is cumulative VAT less VAT already credited. Stray penny falls in the customer's favour.
+
+| Item | Before | After |
+|---|---|---|
+| `practice-invoice-audit.integration.test.ts` line 107 | `balancePence:1` | `balancePence:0` |
+| `practice-invoice-audit.integration.test.ts` line 109 | `.toBe(24003)` | `.toBe(24004)` |
+| migfix-5 split test (net 10,001 then 10,002) credit totals | `[-12001,-12002]`, tax 4000, gross 24003, last-penny arg 24003 | `[-12001,-12003]`, tax 4001, gross 24004, last-penny arg 24004 |
+| 0156 VAT line | `tax:=least((p_net_pence+2)/5,greatest(inv.tax_pence-credited_tax,0))` | cumulative rule above |
 
 ## Failing-first and results
 

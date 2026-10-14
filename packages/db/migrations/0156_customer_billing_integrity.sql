@@ -59,7 +59,7 @@ CREATE OR REPLACE FUNCTION app.issue_practice_customer_credit_note(
  p_tenant uuid,p_job uuid,p_invoice uuid,p_actor uuid,p_command uuid,p_net_pence bigint,p_reason text,p_preview_hash text
 ) RETURNS TABLE(credit_note_id uuid,credit_number text,pdf_sha256 text,total_pence bigint)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE inv app.customer_invoice%ROWTYPE; prior jsonb; credited bigint; credited_net bigint; credited_tax bigint; tax bigint; gross bigint; paid bigint;
+DECLARE inv app.customer_invoice%ROWTYPE; prior jsonb; credited bigint; credited_net bigint; credited_tax bigint; cumulative_tax bigint; tax bigint; gross bigint; paid bigint;
  request_digest text; expected_preview text; n bigint; number text; artifact text; digest text;
  decision_id uuid:=gen_random_uuid(); resolution_id uuid:=gen_random_uuid(); authorization_id uuid:=gen_random_uuid(); new_id uuid:=gen_random_uuid();
 BEGIN
@@ -80,10 +80,11 @@ BEGIN
  IF p_preview_hash<>expected_preview THEN RAISE EXCEPTION 'STALE_CREDIT_PREVIEW'; END IF;
  -- MIGFIX-5: credits conserve the ORIGINAL invoice. Net can never pass the invoice net, whatever VAT rounding leaves behind.
  IF credited_net+p_net_pence>inv.net_pence THEN RAISE EXCEPTION 'CREDIT_EXCEEDS_AVAILABLE_AMOUNT'; END IF;
- -- VAT keeps the merged per-credit positive half-up 20% (existing pinned results are unchanged) but can never pass the VAT still
- -- remaining on the original invoice. Cumulative whole-invoice VAT rounding (final credit takes the exact remainder) is HELD:
- -- it changes the merged expectation in practice-invoice-audit.integration.test.ts (see the MIGFIX-5 receipt).
- tax:=least((p_net_pence+2)/5,greatest(inv.tax_pence-credited_tax,0));
+ -- Cumulative whole-invoice VAT rounding (Ben decisions 7 and 8a): VAT is half-up 20% of the CUMULATIVE credited net, and the
+ -- credit that reaches the full invoice net takes exactly the original invoice VAT, so credits always sum to the invoice. Any
+ -- stray penny therefore falls in the customer's favour. The credit's own VAT is the cumulative VAT less what earlier credits took.
+ cumulative_tax:=CASE WHEN credited_net+p_net_pence=inv.net_pence THEN inv.tax_pence ELSE least((credited_net+p_net_pence+2)/5,inv.tax_pence) END;
+ tax:=greatest(least(cumulative_tax-credited_tax,inv.tax_pence-credited_tax),0);
  gross:=p_net_pence+tax;
  IF gross>inv.total_pence-credited THEN RAISE EXCEPTION 'CREDIT_EXCEEDS_AVAILABLE_AMOUNT'; END IF;
  INSERT INTO app.customer_credit_note_sequence(id,tenant_id,next_number)VALUES(gen_random_uuid(),p_tenant,2)
