@@ -1,0 +1,10 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/m4-6-s/packages/db
+
+
+ Test Files  2 passed (2)
+      Tests  13 passed (13)
+   Start at  10:36:20
+   Duration  3.42s (transform 1.03s, setup 0ms, import 1.89s, tests 4.62s, environment 0ms)
+
