@@ -82,3 +82,12 @@ No new operational alert, external destination, commercial policy, grant, schema
 - `packages/db/src/supplier-match-repository.ts`: SHA-256 `e70692812964d379b175caf2207f129e8f1683aae4b574316fceaf677d2b74f9`
 - `packages/db/test/audit-dbsrc-16.test.ts`: SHA-256 `b9e6e81b6b9808ed447e266d58a08351050243710657c1e474d994521f904e02`
 - `packages/db/test/audit-dbsrc-16.integration.test.ts`: SHA-256 `a4e7ac75baa3d80978837779876b6f3c65c94dcd82321ce7aecc8c57655505ec`
+
+## Round 2 (14 Oct): decision 4 test change, merge of origin/main 59e8e504, STOPPED before push
+
+Commit f059c251, "Ben, 14 Oct, coordinator chat, decision 4". Only changed line, `apps/web/e2e/M2-2-S.spec.ts`:
+before `await page.reload();await V(page,"delivery-accepted","1 each")` -> after `await page.reload();await V(page,"delivery-accepted","9 each")` (8 accepted + 1 later = 9 running total; derived from the fixed view query). Nothing else in that test changed.
+
+Merge of origin/main (twice; lane-union.py for the registry). Hand-resolved: `supplier-document-repository.ts` (took main's exact-decimal + CH-4 guard code, re-applied this branch's cumulative-total query in `view`), `supplier-match-repository.ts` (took main's per-delivery sources and allocation check). Lane path for M2-2-S.spec.ts added (own commit).
+
+Results after merge (core `dist` rebuilt, it was stale): lane lint, `lint`, `typecheck`, `lint:lanes` pass. `audit-dbsrc-16.test.ts` and `.integration.test.ts`: 8 failures (of the 16 runs). Not pushed, no PR. M2-2-S browser spec not run. Not independently verified, not accepted.
