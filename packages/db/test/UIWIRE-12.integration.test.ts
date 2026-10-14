@@ -65,7 +65,8 @@ beforeAll(async()=>{
   const f=await freshInvoice(),p=await repo.recordReceipt(context,command(f)),next=randomUUID();
   await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)VALUES($1,$2,$3,$4,2,$5,$6,$7,'GBP','candidate_m1_standard_v1',100000,20000,120000,false,'[]')`,[next,T,f.jobId,f.draftId,f.revisionId,"c".repeat(64),f.quoteId]);
   await admin.query(`UPDATE app.final_account_draft SET revision=2,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`,[T,f.draftId,next]);
-  const other=await repo.issue(context,{jobId:f.jobId,finalAccountRevisionId:next,actorMembershipId:M,commandId:randomUUID(),recipient:"practice@example.invalid",issuedOn:"2026-09-19"});
+  // Repository commands now refuse a rebill; the unchanged stored routine still builds the historical fixture (as on main).
+  const other={id:(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)`,[T,f.jobId,next,M,randomUUID(),"practice@example.invalid","2026-09-19"]))).rows[0].invoice_id};
   reversalHistory={f,p,other};
  }
  await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
