@@ -2,14 +2,14 @@ Built by Codex; dispatched 13 Oct 2026. Actual builder attribution supersedes th
 
 # MIGFIX-8 builder receipt — partial evidence, RED lane
 
-The addendum requested the first line “Built by Claude Sonnet 5.5, Codex unavailable; dispatched 13 Oct 2026”. That attribution is incorrect for this build and is recorded here as supplied text, not asserted as a fact. This work was built by Codex. No independent verdict or acceptance is claimed.
+The addendum requested the first line “Built by Claude Sonnet 5.5, Codex unavailable; dispatched 13 Oct 2026”. That attribution is incorrect for this build and is recorded here as supplied text, not asserted as a fact. This work was built by Codex. Opus subsequently recorded a source-only **REPAIR** verdict for `8872bb73009a4d998d82aa6e368ea376f81b8d66`; no PASS or acceptance is claimed. The original-build evidence below is historical; the 14 October repair-r1 section records the current working tree and checks.
 
 ## Identity and baseline
 
 - Issued task: MIGFIX-8; migration **0154_follow_up_clock_fence.sql** (header wins over the draft's 0157).
 - Reused worktree: `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-facts-1`.
 - Branch: `codex/sandbox/migfix-8`.
-- Verified initial/final HEAD and `origin/main`: `bd959b01e857de0ba7cbd3588bab84add7d0f493`. Main matches the issued base. No Git write, commit, push, PR or review was performed.
+- Original build baseline: `bd959b01e857de0ba7cbd3588bab84add7d0f493`; it was both HEAD and `origin/main` during that build. The dispatcher later committed the implementation. Repair-r1 starts at HEAD `8872bb73009a4d998d82aa6e368ea376f81b8d66`, branch `codex/sandbox/migfix-8`; current `origin/main` is `077ab6383e1d3c35e6ac37691f557e67c551011d`. This builder performs no Git writes, commit or push.
 - Main already contains migrations through 0142, including 0139–0142. Registration adds only this migration after those actual main entries.
 - Read repository AGENTS.md, BUILD_PLAN.md §2.4 and M4-6-S (§10.4), and the standing handoff rules. No skill applies to this database repair. No sub-agent was used.
 - Main source: scheduling guard at `0115_recovery_follow_up_repair.sql:8`, atomic evaluation/audit at `:57`, AFTER advanced-event trigger at `0112_recovery_follow_up.sql:469`; repository schedule at `recovery-follow-up-repository.ts:100`, active-run tick read previously at `:445`; sandbox advance previously at `sandbox-repository.ts:36`. Clock limit remains 3 (`packages/core/src/recovery-follow-up.ts:16`) and scheduling owner remains `practice_fake_clock` (`:18`). The external source report `mig-0112-0120.md` was supplied by reference in the order; its database assertions were checked against these actual main sources.
@@ -51,7 +51,7 @@ Rule 9 (verbatim):
 
 No row backfill or commercial-history normalization. Install forward through the registered migration. If installation fails, its transaction rolls back. For an installed regression, ship a separately reviewed forward fix, retaining row history and privileges; do not edit this or any merged migration, remove data or drop the fence without a reviewed replacement. Existing repository code remains schema compatible; the database trigger enforces the schedule/clock fence even before repository deployment, while updated repository ordering avoids case-before-run waits. Independent DB validation is still required before accepting this rollout claim.
 
-## Executed command ledger
+## Original-build executed command ledger (13 October; historical)
 
 All shell commands were run in this worktree. Read/edit batches below identify the actual command forms and operands; heredoc bodies are the in-session scripts writing the listed owned files. No command invoked Git writes or package installation explicitly. Counts are test counts only where a test actually ran (none).
 
@@ -122,13 +122,13 @@ export PATH="$HOME/Library/pnpm/bin:$PATH"
 ~/.local/bin/heavy-slot migfix-8 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/migfix-8.integration.test.ts test/migfix-8-upgrade.integration.test.ts
 ```
 
-## Self-inspection and limits
+## Original-build self-inspection and limits
 
-Checked the run/case/intent/audit ordering, session-before-fence ownership checks, original routine refusals, private-helper privileges, canonical-text upgrade comparisons, actual immutable-session fixture binding and bounded race-test cleanup. This is builder source inspection only; PostgreSQL scheduling, role/catalog behavior, upgrade controls and all tests still need execution. No independent model reviewed this diff and the builder does not accept it.
+Checked the run/case/intent/audit ordering, session-before-fence ownership checks, original routine refusals, private-helper privileges, canonical-text upgrade comparisons, actual immutable-session fixture binding and bounded race-test cleanup. This was builder source inspection only; PostgreSQL scheduling, role/catalog behavior and upgrade controls still need execution. At original handoff no independent review existed. The subsequent Opus source inspection returned REPAIR, as recorded above; the builder does not accept its own work.
 
 Acceptance remains **partial / held for execution and RED review**. Independent different-model verdict bound to the dispatcher's exact eventual commit and separate acceptance remain required. No production or commercial release gate advances.
 
-## Change manifest
+## Original-build change manifest (13 October; historical)
 
 SHA-256 of final code/registration/test bytes (receipt excluded to avoid a self-referential hash):
 
@@ -162,6 +162,45 @@ Tracked `git diff --stat` before receipt creation (new untracked files are liste
  4 files changed, 27 insertions(+), 10 deletions(-)
 ```
 
-New untracked files: the 150-line 0154 migration, two new test files (8 declarations), and this receipt. Final status must contain exactly these plus the four tracked paths above. No lockfile/package/config/environment data changes. Intended commit message is `/private/tmp/jg-msg-migfix-8.txt`.
+At the original handoff, the 150-line 0154 migration, two new test files (8 declarations), and this receipt were untracked, alongside the four tracked paths above. The dispatcher committed those eight files in `8872bb73`; they are tracked at repair-r1 start. This original manifest describes the original bytes, before the approved repair below. Intended commit message is `/private/tmp/jg-msg-migfix-8.txt`.
 
-Final HEAD: **bd959b01e857de0ba7cbd3588bab84add7d0f493** (unchanged base; work is uncommitted). Eventual dispatcher commit/review SHA: **pending**.
+Repair-r1 HEAD: **8872bb73009a4d998d82aa6e368ea376f81b8d66**. The implementation is committed at that head; only repair-r1 changes remain uncommitted for the dispatcher. Successor commit and independent review of it: **pending**.
+
+## Repair round r1 — 14 October 2026, dispatcher 5
+
+Authority: the dispatcher issued B1–B3 from the Opus verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/migfix-8-opus-8872bb7.md` (source inspection only, nothing executed). The widening of this lane to `packages/db/MIGRATIONS.md` is explicitly approved. B1 adds only that allowed path and a 0154 section documenting the private invoker helper, two BEFORE INSERT fences, two restated routines, unchanged privileges/history, upgrade proof and forward-fix strategy. B2 changes only the later-insert control's event index from 2 to 3: the fixture already has created index 1 and advanced index 2, so 3 avoids the existing tenant/run/index uniqueness collision. Its test and expectations are preserved. B3 corrects current HEAD/commit wording and records execution limits and this round's actual checks.
+
+No migration, production source, existing merged test, expectation, or `apps/api/src/auth/context-boundary.test.ts` is changed. No new migration, compatibility impact, external action, operational alert or commercial-policy approval belongs to this round. Shared documentation and lane registry edits remain serialized in this lane.
+
+**Database and browser suites: NOT RUN. No database test could run in this sandbox**, which cannot bind localhost or start PostgreSQL. No baseline-first race run, migration/catalog/upgrade pass or browser pass is claimed. Both MIGFIX-8 integration files, `pnpm test:db`, `pnpm test:migrations`, the full `pnpm test` and browser regressions remain required in GitHub CI after the dispatcher pushes. Unit checks do not prove these PostgreSQL guarantees. No model/prompt/parser/gateway change requires an evaluation for this repair.
+
+The dispatcher owns the successor commit and push. A fresh or explicitly rebound independent verdict against that exact commit, green mandatory CI and separate acceptance remain required; this receipt is builder evidence only.
+
+
+### Repair-r1 executed checks
+
+Node `v24.17.0`; installed pinned pnpm binary verified as `10.28.1`. The default launcher (`/Users/benharwood/Library/pnpm/bin/pnpm`) stalled before running `pnpm typecheck` and was interrupted with exit 130. No package download/install command or safety override was issued. Subsequent pnpm commands used the already installed binary by prepending `/Users/benharwood/Library/pnpm/store/v11/links/@pnpm/macos-arm64/10.28.1/6adbece7fcd33fcfc0543fbc54147847898d5c988debc7796a9f48f7b526903c/node_modules/@pnpm/macos-arm64` to PATH. Turbo reported cache-write IO warnings under the sandbox; `--force` ensured checks were executed. Logs are `/private/tmp/jg-migfix-8-r1-*.log`.
+
+| Actual command | Exit and result |
+| --- | --- |
+| `pnpm typecheck --force` | **2**; four package checks successful; DB failed TS2375 at `packages/db/src/recovery-follow-up-repository.ts:384`; dependent checks did not run |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | **2**; root purity, lane, money and commercial checks completed; package lint failed on the same TS2375 |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **0**, pass; also direct `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` passed |
+| `pnpm build --concurrency=2 --force` | **2**; four package builds successful; DB failed on the same TS2375, preventing API/web builds |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage --filter @jobguard/web --workspace-concurrency=2 test` | **1**; config 2 and storage 4 tests passed; core discovered generated `dist` tests as well as source and reported 4,888 passed/2 failed (missing sibling TypeScript source in `dist`); downstream AI/web did not run in this invocation |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | **0**; all 81 source test files, **2,445 tests passed**, including the source counterparts of both generated-file failures; no test/expectation changed |
+| `pnpm --filter @jobguard/ai --filter @jobguard/web --workspace-concurrency=2 test --exclude '**/dist/**'` | **1** overall; AI 5 files/**80 tests passed**; web 22 files/462 tests passed, 11 files/322 tests failed; missing functions include `siteVisitHttpFailure` and `sorSiteExtraHttpFailure`. API/web build prerequisites were not completed because of the compiler failure; no claim that web regressions pass |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts'` | **0**; **18 files/256 unit tests passed**; these are unit/scripted/CLI checks, not PostgreSQL integration evidence |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude 'src/contractor/*.http.test.ts'` | **1**; 64 files/1,557 tests passed; `final-account-lock.isolation.test.ts` failed in setup (`no free port in 58400..58650`) and its one test was skipped. That indirectly imported database harness could not initialize PostgreSQL. HTTP/socket suites were excluded only for this local invocation; no mandatory CI discovery changed |
+| `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` | **0**; **19 tests passed**. The two agent-lane fixture suites were not invoked because they execute Git writes, prohibited by this repair order |
+| `pnpm openapi:check` | **1**; tsx CLI could not bind its IPC socket (`listen EPERM`), before validating OpenAPI |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | **0**; the same generator/check completed through the installed Node loader, without the CLI IPC socket; committed OpenAPI matches |
+| Python exact-byte/registry/source checks; `git diff --check` | **0**; preservation checks below passed, no whitespace errors |
+
+**Compiler blocker exposed by execution:** the committed `begin()` returns `{ replayed: false, jobId: found.job_id, run }`, where `run` is `undefined` for non-schedule commands, but declares `run?: { id: string; tick: number } | null` with `exactOptionalPropertyTypes`. This source is byte-for-byte unchanged from `8872bb73`. The issued B1–B3 repair remains confined to documentation, the approved lane widening and the single fixture index correction; the compiler blocker requires follow-up before acceptance. Typecheck, lint and build are **FAIL**, not green or merely NOT RUN. Web unit failures and the sandbox-blocked API setup remain unresolved execution evidence.
+
+### Repair-r1 final source evidence
+
+Exact HEAD-versus-working-tree comparisons confirm migration 0154 is unchanged (SHA-256 `f51a4eeea6aaf74f6535f0adef99f1dc495ad5c52330ee6b2c5beaedb31ba1c4`). The upgrade file differs only at the approved index `2 → 3`; all test declarations, assertions and expectations otherwise remain byte-identical. The concurrency suite, both repositories, migration runner, tenancy integration test and `apps/api/src/auth/context-boundary.test.ts` are unchanged. The lane JSON differs only by the single approved documentation path, and all pre-existing MIGRATIONS.md bytes are preserved with 0154 appended.
+
+Exactly four tracked paths differ from HEAD: `config/agent-lane-assignments.json`, `packages/db/MIGRATIONS.md`, `packages/db/test/migfix-8-upgrade.integration.test.ts` and this receipt. This is deterministic builder source evidence, not an independent review or database catalog result. HEAD remains `8872bb73009a4d998d82aa6e368ea376f81b8d66`; the original implementation is committed there, and only these repair changes await the dispatcher. The intended conventional commit subject/body overwrites `/private/tmp/jg-msg-migfix-8.txt`. No Git write, commit, push or permission escalation was performed. Mandatory CI, the compiler follow-up, independent review bound to the successor commit and separate acceptance remain owed.

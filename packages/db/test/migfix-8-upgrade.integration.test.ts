@@ -189,7 +189,7 @@ describe("MIGFIX-8 upgrade", () => {
       await control("ALTER TABLE app.sandbox_run ALTER COLUMN scenario TYPE varchar(80)", false);
       await control("ALTER TABLE app.sandbox_run ADD COLUMN migfix_8_nullable text", true);
       await control("CREATE OR REPLACE FUNCTION app.recovery_follow_up_run_tick(p_tenant uuid,p_run uuid) RETURNS integer LANGUAGE sql STABLE AS 'SELECT 0'", true);
-      await control("INSERT INTO app.sandbox_run_event(id,tenant_id,run_id,event_index,kind,fake_clock_tick,command_id,payload_hash) VALUES($1,$2,$3,2,'archived',0,$4,$5)", true, [randomUUID(), tenantId, runId, randomUUID(), "b".repeat(64)]);
+      await control("INSERT INTO app.sandbox_run_event(id,tenant_id,run_id,event_index,kind,fake_clock_tick,command_id,payload_hash) VALUES($1,$2,$3,3,'archived',0,$4,$5)", true, [randomUUID(), tenantId, runId, randomUUID(), "b".repeat(64)]);
       await preserved(db, before);
     } finally { await db.query("ROLLBACK"); await db.query("RESET ROLE"); db.release(); }
   }, 60_000);
