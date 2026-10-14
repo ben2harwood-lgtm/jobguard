@@ -77,7 +77,10 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0136_recovery_allocation.sql", import.meta.url),
   new URL("../migrations/0137_scim_deactivation.sql", import.meta.url),
   new URL("../migrations/0138_practice_session_hardening.sql", import.meta.url),
+  new URL("../migrations/0139_site_visit_closeout.sql", import.meta.url),
   new URL("../migrations/0140_site_extra_pricing.sql", import.meta.url),
+  new URL("../migrations/0141_site_extra_evidence.sql", import.meta.url),
+  new URL("../migrations/0142_recovery_insurer_money.sql", import.meta.url),
   new URL("../migrations/0147_final_check_prerequisites.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
