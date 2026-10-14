@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const supplierFactCorrectionV1 = z.object({
   version: z.literal("supplier-fact-correction.v1"), documentId: z.string().uuid(), commandId: z.string().uuid(),
-  documentType: z.enum(["invoice", "credit"]), quantity: z.string().regex(/^\d+(?:\.\d+)?$/),
+  documentType: z.enum(["invoice", "credit"]), quantity: z.string().regex(/^\d+(?:\.\d{1,6})?$/),
   unitPricePence: z.number().int().safe().nonnegative().max(1_000_000_000_000), netPence: z.number().int().safe().nonnegative().max(1_000_000_000_000),
   disposition: z.enum(["source_verified", "manual_transcription", "pack_resolved"]).optional(), expectedRevision: z.number().int().nonnegative(),
 }).strict();
@@ -23,4 +23,5 @@ export function parseSupplierText(text:string, page=1):SupplierFactProposal {
   return {documentType:type,quantity,unitPricePence,netPence,source:{page,start,end,region:`page-${page}:text-${start}-${end}`},issues,parserVersion:"supplier-text.v1"};
 }
 function decimalPounds(value:string){const [whole,fraction]=value.split(".");return Number(whole)*100+Number(fraction)}
-function decimalQuantityTimesPence(quantity:string,pence:number){const [w,f=""]=quantity.split(".");const scale=10n**BigInt(f.length);const numerator=BigInt(w!)*scale+BigInt(f||0);const result=numerator*BigInt(pence);return result%scale===0n?Number(result/scale):NaN}
+/** Exact supplier totals must be whole pennies; a fractional penny stays a mismatch. */
+export function decimalQuantityTimesPence(quantity:string,pence:number){const [w,f=""]=quantity.split(".");const scale=10n**BigInt(f.length);const numerator=BigInt(w!)*scale+BigInt(f||0);const result=numerator*BigInt(pence);return result%scale===0n?Number(result/scale):NaN}

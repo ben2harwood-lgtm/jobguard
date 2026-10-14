@@ -1,0 +1,104 @@
+diff --git a/apps/web/e2e/CH-7.spec.ts b/apps/web/e2e/CH-7.spec.ts
+index 6c3f0e3..439bf4e 100644
+--- a/apps/web/e2e/CH-7.spec.ts
++++ b/apps/web/e2e/CH-7.spec.ts
+@@ -29,7 +29,7 @@ for(const [name,button,movement,q,reason] of [
+    await expect(view.getByTestId("v3-outcome")).toHaveText(q==="£0.00"?"Excluded":"Eligible for review");
+    if(reason)await expect(view.getByTestId("v3-reason")).toHaveText(reason);
+    if(name==="F19")await expect(view.getByTestId("v3-line-statutory_interest")).toContainText("£0.00");
+-   if(name==="F21")await expect(view.getByTestId("v3-reason")).toHaveCount(0);
++   if(name==="F19")await expect(view.getByTestId("v3-line-statutory_interest")).toContainText("Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.");
+    await expect(view.getByText(banner,{exact:true})).toHaveCount(1);
+    expect(await view.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+   };
+diff --git a/packages/core/src/recovery-eligibility-v3.test.ts b/packages/core/src/recovery-eligibility-v3.test.ts
+index 05fee78..aeb9ef0 100644
+--- a/packages/core/src/recovery-eligibility-v3.test.ts
++++ b/packages/core/src/recovery-eligibility-v3.test.ts
+@@ -14,7 +14,7 @@ describe("CH-7 D03 v3 candidate reviews", () => {
+   ["F16-partial",0,"Credit note used against an invoice not yet paid in full",false],
+   ["F16-full",30000,null,false],["F17",45000,null,false],["F18",262000,"Fixed statutory compensation is not part of the fee base",false],
+   ["F19",250000,"Fixed statutory compensation is not part of the fee base",false],["F20",0,"Paid before you opened this case",false],
+-  ["F21",0,null,false],["F22",0,"Prevented spending is not recovered cash",true],
++  ["F21",0,"Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.",false],["F22",0,"Prevented spending is not recovered cash",true],
+  ] as const)("DW1 %s exact candidate Q and available reason",(fixture,q,reason,terminal)=>{
+   const result=evaluateRecoveryEligibilityV3(facts(fixture));
+   expect(result).toMatchObject({qualifyingPrincipal:{pence:q,currency:"GBP"},reason,terminal,productionEnabled:false});
+@@ -37,7 +37,7 @@ describe("CH-7 D03 v3 candidate reviews", () => {
+   expect(evaluateRecoveryEligibilityV3(facts("F18",{paymentTiming:"before_opening"}))).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Paid before you opened this case"});
+  });
+  it("F21 excludes an unpaid-bill reduction without substituting a held reason",()=>{
+-  expect(evaluateRecoveryEligibilityV3(facts("F21",{settlement:"pending"}))).toMatchObject({qualifyingPrincipal:{pence:0},reason:null,reasonHeld:true,lines:[{reason:null,reasonHeld:true}]});
++  expect(evaluateRecoveryEligibilityV3(facts("F21",{settlement:"pending"}))).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.",reasonHeld:false,lines:[{reason:"Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.",reasonHeld:false}]});
+  });
+  it("strict versioned boundaries refuse injected money, debtor, category and authority",()=>{
+   const command={version:"recovery-eligibility-command.v3",action:"review",commandId:id(5),caseId:id(3),expectedCaseRevision:2,expectedReviewRevision:0,fixture:"F18"};
+@@ -60,3 +60,55 @@ describe("CH-7-F17-BEFORE-OPEN timing parity",()=>{
+   expect(result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case",lines:[{netPence:45000,qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"}]});
+  });
+ });
++
++
++describe("CH-7-INSURER Part B approved wording",()=>{
++ it("B1 B2 acceptance 16: exact individual-interest words, length and UTF-8 hash",async()=>{
++  const { createHash } = await import("node:crypto");
++  const message="Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.";
++  expect(message).toHaveLength(173);
++  expect(createHash("sha256").update(message).digest("hex")).toBe("fb24c95b4190d5b342b52302d5f5e18734f6b75a06b1c943de313359fa07a72f");
++  const result=evaluateRecoveryEligibilityV3(facts("F19"));
++  expect(result.reason).toBe("Fixed statutory compensation is not part of the fee base");
++  expect(result.qualifyingPrincipal.pence).toBe(250000);
++  expect(result.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({reason:message,reasonHeld:false,qualifyingPrincipal:{pence:0}});
++ });
++ it("B1 B2 acceptance 16: exact unpaid-bill words, length and UTF-8 hash",async()=>{
++  const { createHash } = await import("node:crypto");
++  const message="Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.";
++  expect(message).toHaveLength(163);
++  expect(createHash("sha256").update(message).digest("hex")).toBe("44e291a1874a9c230b704f972df2a547fcb4d67256d1c0f69114682decaf0e21");
++  for(const settlement of ["settled","pending","unverified"]){
++   const result=evaluateRecoveryEligibilityV3(facts("F21",{settlement}));
++   expect(result).toMatchObject({reason:message,reasonHeld:false,qualifyingPrincipal:{pence:0},lines:[{reason:message,reasonHeld:false,qualifyingPrincipal:{pence:0}}]});
++  }
++ });
++ it("B2 acceptance 16: F19 pending preserves the header while explaining individual interest",()=>{
++  const result=evaluateRecoveryEligibilityV3(facts("F19",{settlement:"pending"}));
++  expect(result.reason).toBe("Pending money cannot qualify");
++  expect(result.lines.find(l=>l.kind==="statutory_interest")?.reason).toBe("Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.");
++ });
++ it("B2: paid-before reason covers every F19 line",()=>{
++  const result=evaluateRecoveryEligibilityV3(facts("F19",{paymentTiming:"before_opening"}));
++  expect(result.lines.every(l=>l.reason==="Paid before you opened this case")).toBe(true);
++  expect(result.qualifyingPrincipal.pence).toBe(0);
++ });
++ it("B2 acceptance 16: F18 business interest remains 12000p with null reason",()=>{
++  const result=evaluateRecoveryEligibilityV3(facts("F18"));
++  expect(result.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({reason:null,qualifyingPrincipal:{pence:12000}});
++ });
++ it("B2 G5 acceptance 11: every new header and line releases reasonHeld",()=>{
++  for(const fixture of ["F15","F17","F18","F19","F20","F21","F22"]){
++   const result=evaluateRecoveryEligibilityV3(facts(fixture));
++   expect(result.reasonHeld).toBe(false);
++   expect(result.lines.every(l=>l.reasonHeld===false)).toBe(true);
++  }
++ });
++ it("B2: older saved F19 and F21 reasons remain valid for readers",()=>{
++  for(const fixture of ["F19","F21"]){
++   const result=evaluateRecoveryEligibilityV3(facts(fixture));
++   const legacy={...result,reason:fixture==="F21"?null:result.reason,reasonHeld:true,lines:result.lines.map(l=>({...l,reason:fixture==="F21"||l.kind==="statutory_interest"?null:l.reason,reasonHeld:fixture==="F21"||l.kind==="statutory_interest"}))};
++   expect(recoveryEligibilityViewV3.parse(legacy)).toEqual(legacy);
++  }
++ });
++});
+diff --git a/packages/db/test/recovery-eligibility-v3.integration.test.ts b/packages/db/test/recovery-eligibility-v3.integration.test.ts
+index 59ce60c..d26e54a 100644
+--- a/packages/db/test/recovery-eligibility-v3.integration.test.ts
++++ b/packages/db/test/recovery-eligibility-v3.integration.test.ts
+@@ -96,7 +96,7 @@ async function fixture(type="withheld_customer_payment",before=false){
+  return {auth,jobId,c,cases,advance,repo:new RecoveryEligibilityV3Repository(practiceMaterialPool(runtime,auth.digest),"synthetic_demo")};
+ }
+ const review=(c:{id:string;revision:number},fixture:string,expectedReviewRevision=0)=>({version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,expectedReviewRevision,fixture});
+-it.each([["F15","merchant_overcharge",0,"Credit note below the £250 minimum"],["F17","duplicate_supplier_payment",45000,null],["F18","withheld_customer_payment",262000,"Fixed statutory compensation is not part of the fee base"],["F19","withheld_customer_payment",250000,"Fixed statutory compensation is not part of the fee base"],["F20","withheld_customer_payment",0,"Paid before you opened this case"],["F21","merchant_overcharge",0,null],["F22","prevention",0,"Prevented spending is not recovered cash"]] as const)("DW1 %s uses M4-7-S facts and persists exact Q/reason",async(name,type,q,reason)=>{
++it.each([["F15","merchant_overcharge",0,"Credit note below the £250 minimum"],["F17","duplicate_supplier_payment",45000,null],["F18","withheld_customer_payment",262000,"Fixed statutory compensation is not part of the fee base"],["F19","withheld_customer_payment",250000,"Fixed statutory compensation is not part of the fee base"],["F20","withheld_customer_payment",0,"Paid before you opened this case"],["F21","merchant_overcharge",0,"Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it."],["F22","prevention",0,"Prevented spending is not recovered cash"]] as const)("DW1 %s uses M4-7-S facts and persists exact Q/reason",async(name,type,q,reason)=>{
+  const f=await fixture(type,name==="F20");if(name!=="F20"&&name!=="F15")await f.advance(name==="F17"?"supplier-refund-540":"receipt-3000");
+  const command=review(f.c,name),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
+  expect(r.result).toMatchObject({qualifyingPrincipal:{pence:q,currency:"GBP"},reason,outcome:q>0?"eligible_for_review":"excluded",terminal:name==="F22",productionEnabled:false});

@@ -1,4 +1,6 @@
 export { recoveryCaseTermsCommandV1, recoveryCaseTermsV1 } from "@jobguard/core";
+export { recoveryPaymentPayerCommandV1 } from "@jobguard/core";
+import { recoveryPaymentPayerMarkResultV1 } from "@jobguard/core";
 import { z } from "zod";
 import { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryCaseStateFullV1, recoveryCaseTypeV1, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, money } from "@jobguard/core";
 export { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryEligibilityCommandV3 };
@@ -13,6 +15,13 @@ export { recoveryCaseCommandV1, recoveryEligibilityCommandV1, recoveryEligibilit
 // AFTER matching the exact immutable review revision. Those three refusals cannot
 // become false without invalidating the command's bound revision.
 export const recoveryCommandRefusalRulesV1 = {
+ PAYER_MARK_FORBIDDEN: { status: 403, stage: "before_replay", settlesUnknown: false },
+ PAYER_MARK_STALE_REVISION: { status: 409, stage: "after_replay", settlesUnknown: false },
+ PAYER_MARK_STATE_CONFLICT: { status: 409, stage: "after_replay", settlesUnknown: false },
+ PAYER_MARK_SOURCE_REQUIRED: { status: 400, stage: "after_replay", settlesUnknown: false },
+ PAYER_MARK_NOT_CUSTOMER_PAYMENT: { status: 400, stage: "after_replay", settlesUnknown: false },
+ PAYER_MARK_NOT_INSURER_JOB: { status: 400, stage: "after_replay", settlesUnknown: false },
+ PAYER_MARK_EVIDENCE_REQUIRED: { status: 400, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_FORBIDDEN: { status: 403, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_CASE_NOT_FOUND: { status: 404, stage: "after_replay", settlesUnknown: false },
  RECOVERY_TERMS_COMMAND_CONFLICT: { status: 409, stage: "recorded_conflict", settlesUnknown: true },
@@ -70,6 +79,6 @@ export const recoveryCaseListResponseV1=z.object(workbenchEnvelope);
  * opened, so a client may only select the case a command touched by this id. An answer without it, or naming a case that is not in the list, is not a valid answer: the client treats it
  * as unreadable (the command may or may not have been saved) and never picks a case from the list order.
  */
-export const recoveryCaseCommandResponseV1=z.object({...workbenchEnvelope,affectedCaseId:z.string().uuid(),eligibilityV3CommandResult:eligibilityRecordV3.optional()}).refine(response=>response.cases.some(item=>item.id===response.affectedCaseId),{message:"affectedCaseId must be one of the listed cases",path:["affectedCaseId"]});
+export const recoveryCaseCommandResponseV1=z.object({...workbenchEnvelope,affectedCaseId:z.string().uuid(),eligibilityV3CommandResult:eligibilityRecordV3.optional(),paymentPayerMarkCommandResult:recoveryPaymentPayerMarkResultV1.optional()}).refine(response=>response.cases.some(item=>item.id===response.affectedCaseId),{message:"affectedCaseId must be one of the listed cases",path:["affectedCaseId"]});
 export type RecoveryCaseResponse=z.infer<typeof recoveryCaseListResponseV1>;
 export type RecoveryCaseCommandResponse=z.infer<typeof recoveryCaseCommandResponseV1>;

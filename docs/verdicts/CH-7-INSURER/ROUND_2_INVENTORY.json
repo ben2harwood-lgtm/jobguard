@@ -1,0 +1,70 @@
+{
+  "base": "ee4917f70c29834ac2291220af8310a3a932bda9",
+  "files": [
+    {
+      "path": "apps/api/src/recovery-payment-payer.application.test.ts",
+      "bytes": 4473,
+      "sha256": "88ff720f0494aea8aca13edfaaa8856a8c81688c7b22f6c4f3c26a50dcdbd117"
+    },
+    {
+      "path": "apps/web/e2e/CH-7.spec.ts",
+      "bytes": 11056,
+      "sha256": "dd069ae702731f2f1d9b22ecb150800540ac0a12edf7b79d5633702298f31b52"
+    },
+    {
+      "path": "docs/contracts/recovery-eligibility-v3.md",
+      "bytes": 13101,
+      "sha256": "609b7c7c08b3f1ffb386d25137857548c9d0196b7c69623811d62d811ca7accc"
+    },
+    {
+      "path": "docs/verdicts/CH-7-INSURER/COMMANDS.md",
+      "bytes": 13825,
+      "sha256": "ac6b617335c72df09677b3734d712358446fc994f0c1eacf2829ab6b238bf052"
+    },
+    {
+      "path": "docs/verdicts/CH-7-INSURER/ROUND_2_UNCHANGED_FILES.json",
+      "bytes": 1630,
+      "sha256": "c7fba41f5e87c547dcb44a79671856f2bb622e04f2552c6b8f190a0f1a021909"
+    },
+    {
+      "path": "docs/verdicts/CH-7-INSURER/ROUND_2_guard_recovery_eligibility_v3.diff",
+      "bytes": 3849,
+      "sha256": "8184ffe43097f36a5ee14bd5fd71160af98fecca83471c7ab7401e8ad3b53526"
+    },
+    {
+      "path": "docs/verdicts/CH-7-INSURER/ROUND_2_require_recovery_eligibility_v3_effect.diff",
+      "bytes": 2344,
+      "sha256": "f1d1887f5c8135993f0ee1188ca868e315d94e96a72885ba0122c802bc864603"
+    },
+    {
+      "path": "packages/core/src/recovery-eligibility-v3.test.ts",
+      "bytes": 11077,
+      "sha256": "70a4a9caff867a2a048c4f7c85827f5f9e8924c19fc255c2bb8091d55bdbde4e"
+    },
+    {
+      "path": "packages/core/src/recovery-eligibility-v3.ts",
+      "bytes": 9349,
+      "sha256": "1294651aa45c9611bbac419dbeaec035d8f9a3ff796bd04ec7148f3bf3e1a035"
+    },
+    {
+      "path": "packages/db/MIGRATIONS.md",
+      "bytes": 108511,
+      "sha256": "d6951e33d8c007c7d936ebf47db472a00e6d2ec2aa53cd81b043be7a08a33883"
+    },
+    {
+      "path": "packages/db/migrations/0142_recovery_insurer_money.sql",
+      "bytes": 28132,
+      "sha256": "eb6067e4a73f91e198502fe1886e2498710a413c1836308b650f13243e4b3865"
+    },
+    {
+      "path": "packages/db/src/recovery-eligibility-v3-repository.ts",
+      "bytes": 10879,
+      "sha256": "5c3a22eeae8bb6f8c78f14f9c736eafd7a970be752ace24799b64cafcd1a4d18"
+    },
+    {
+      "path": "packages/db/test/recovery-insurer-money.integration.test.ts",
+      "bytes": 56439,
+      "sha256": "1beccd28f3fdcb58de0905e9439797845ae528d637e944963716d2470f3f0c33"
+    }
+  ]
+}

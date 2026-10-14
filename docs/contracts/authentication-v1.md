@@ -61,6 +61,35 @@ RLS does not protect against their compromise or against a privileged database r
 Existing synthetic business modules cannot be executed as real-user commands. No real
 user enrollment, provider send, rollout or independent acceptance is claimed by this task.
 
+### MIGFIX-1 membership authority repair (awaiting database execution and independent review)
+
+Ordinary persisted-session membership lookup excludes a tenant-qualified
+`contractor_membership_revocation` alongside membership revocation and expiry.
+SSO membership wrappers inherit that exclusion. A current identity session alone
+does not restore a revoked membership or authorize an invitation.
+
+The identity invitation routine rechecks persisted-session owner authority after
+taking the same tenant advisory transaction lock as contractor administration
+(`hashtextextended(tenant_id::text,54)`). An invitation authorized before the
+revocation remains an immutable historical grant; an invitation waiting behind a
+committed revocation is refused with PostgreSQL `42501`, without inserting an
+invitation or identity security event. Invitation verification takes that same
+lock before checking active-member reuse. A fresh valid invitation can create a
+replacement membership and repoint the locator; it never clears the previous
+membership's inactive fields or removes a contractor revocation.
+
+Dispatcher ruling r1 retains the existing membership UPDATE privilege for
+`FOR SHARE` locks. A BEFORE UPDATE trigger runs as SECURITY INVOKER with a pinned
+`pg_catalog` search path and no caller EXECUTE grants. Unless the effective
+caller is the membership table owner or a superuser, it refuses changes to
+`id`, `tenant_id`, `account_id`, `identity_user_id` or `role`, and clearing or
+later-dating an existing `revoked_at` or `expires_at` (`42501`). Unchanged values
+and earlier inactive timestamps remain allowed. Migration-owned definer writers
+keep their effective owner authority; row locks keep working. No grants change.
+This repair changes no code
+length, expiry, attempt limit, invitation role allowlist, signup-owner rule,
+SSO policy or emergency access exception. No release gate advances.
+
 ### Synthetic practice extension — SBOX-SESSION-1 (5 October 2026)
 
 M0-6L is absent at this task's baseline. The shared synthetic principal bridge is `authenticatePracticeSession` / `PracticeAccess`; it cannot initialize outside server-selected `synthetic_demo` and does not replace or extend live `AuthProvider` authority. `/api/session` issues a cryptographically random opaque UUID cookie only after durable registration of its SHA-256 digest. UUID syntax alone grants nothing. The registry checks revocation, server expiry (seven days for this synthetic extension) and current synthetic owner membership, including role, identity, expiry and revocation. Client tenant selections are checked against that authenticated principal's two fixture memberships. No registry enumeration is granted to business runtime. Treat cookies as bearer secrets: never log or export them. New sandbox run handles and audit actor references derive from the digest, and contain no bearer cookie; old unbound run rows remain inaccessible.

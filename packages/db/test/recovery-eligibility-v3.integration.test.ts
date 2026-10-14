@@ -336,7 +336,7 @@ it.each([
  expect(r.result).toMatchObject({outcome:q===0?"excluded":"eligible_for_review",qualifyingPrincipal:{pence:q,currency:"GBP"},reason});
  const stored=(await admin.query("SELECT result,source_event_id FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,r.id])).rows[0];
  expect(stored).toEqual({result:r.result,source_event_id:r.sourceEventId});
- expect(r.result).toEqual(evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",settlement:"settled",paymentTiming,sourceRef:r.sourceEventId}));
+ expect(r.result).toEqual(evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",settlement:"settled",paymentTiming,sourceRef:r.sourceEventId}));
  expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3).toEqual(r);
  expect(await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest)).toEqual(r);
 });
@@ -348,7 +348,7 @@ async function rawQualifyingF17(pool:Pool,f:{auth:{digest:string};jobId:string;c
   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
   const sourceEventId=(await db.$client.query<{id:string}>("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='supplier-refund-540' AND event_kind='settled' AND identity='identified'",[T,f.jobId])).rows[0]!.id;
   // Deliberately propose £450 irrespective of the stored timing, as a raw writer could.
-  const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+  const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
   const id=randomUUID(),commandId=randomUUID(),payloadHash=createHash("sha256").update(commandId).digest("hex");
   const inserted=await db.$client.query<{h:string}>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F17',$6,$7,$8,$9,$10) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') h",[id,T,f.jobId,f.c.id,f.c.revision,sourceEventId,M,commandId,payloadHash,JSON.stringify(result)]);
   await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'principal','business',45000)",[randomUUID(),T,f.jobId,f.c.id,id]);

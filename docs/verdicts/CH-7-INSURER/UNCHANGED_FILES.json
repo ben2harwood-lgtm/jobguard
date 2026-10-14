@@ -1,0 +1,42 @@
+[
+  {
+    "file": "apps/api/src/recovery-eligibility-v3.application.test.ts",
+    "sha256": "4864ac3aa5e670abb53e95f0de02c0f130f632b553cb5f870fc7d831ac88104d",
+    "equals_main": true
+  },
+  {
+    "file": "packages/db/test/recovery-eligibility-v3.integration.test.ts",
+    "sha256": "75817a9d3ef452fd7db87cde44a069d05ca0d2e61df2a3aa88c42030f1acf5d4",
+    "equals_main": true
+  },
+  {
+    "file": "packages/core/src/recovery-eligibility-v3.test.ts",
+    "sha256": "92036ba41eda02e5e59fff7a1c50b7a3d1293dc3217a70fb71f02432abd9ed5b",
+    "equals_main": true
+  },
+  {
+    "file": "apps/web/e2e/CH-7.spec.ts",
+    "sha256": "690df36594237cb785aadd0298a40689c6df758fd0a85eeaa1b16a6591090c3e",
+    "equals_main": true
+  },
+  {
+    "file": "packages/db/migrations/0119_recovery_eligibility_v3.sql",
+    "sha256": "15e217b0bf7926315859d92ebc708b86b3831942c82ff7627474d2b37b0028d7",
+    "equals_main": true
+  },
+  {
+    "file": "packages/db/migrations/0130_recovery_eligibility_v3_f17_timing.sql",
+    "sha256": "bd73f33d36d44f4fafe16ba7a5bf395e49da2edf982cc98fd03ed9a3420315f1",
+    "equals_main": true
+  },
+  {
+    "file": "packages/db/migrations/0134_recovery_case_terms.sql",
+    "sha256": "0f981e24c45f1e7decd69d7c872d49056b6c27d11512eebac774925cb5b88d5a",
+    "equals_main": true
+  },
+  {
+    "file": "packages/core/src/watchdog.ts",
+    "sha256": "b6212a709f77e9a9bac410b5ddf56405a67da98148fe27936a3828857785b4bf",
+    "equals_main": true
+  }
+]
