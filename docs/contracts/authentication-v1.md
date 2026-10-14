@@ -61,7 +61,7 @@ RLS does not protect against their compromise or against a privileged database r
 Existing synthetic business modules cannot be executed as real-user commands. No real
 user enrollment, provider send, rollout or independent acceptance is claimed by this task.
 
-### MIGFIX-1 contractor revocation repair (partial, awaiting independent review)
+### MIGFIX-1 membership authority repair (awaiting database execution and independent review)
 
 Ordinary persisted-session membership lookup excludes a tenant-qualified
 `contractor_membership_revocation` alongside membership revocation and expiry.
@@ -78,11 +78,15 @@ lock before checking active-member reuse. A fresh valid invitation can create a
 replacement membership and repoint the locator; it never clears the previous
 membership's inactive fields or removes a contractor revocation.
 
-The requested runtime membership UPDATE removal is **HELD**: existing runtime
-membership `FOR SHARE` queries require that privilege. Their coordinator-owned
-replacement must preserve authorization and serialization before the grant can
-be removed. Migration 0150 adds no grants and does not claim to close direct
-runtime membership authority changes. This partial repair changes no code
+Dispatcher ruling r1 retains the existing membership UPDATE privilege for
+`FOR SHARE` locks. A BEFORE UPDATE trigger runs as SECURITY INVOKER with a pinned
+`pg_catalog` search path and no caller EXECUTE grants. Unless the effective
+caller is the membership table owner or a superuser, it refuses changes to
+`id`, `tenant_id`, `account_id`, `identity_user_id` or `role`, and clearing or
+later-dating an existing `revoked_at` or `expires_at` (`42501`). Unchanged values
+and earlier inactive timestamps remain allowed. Migration-owned definer writers
+keep their effective owner authority; row locks keep working. No grants change.
+This repair changes no code
 length, expiry, attempt limit, invitation role allowlist, signup-owner rule,
 SSO policy or emergency access exception. No release gate advances.
 

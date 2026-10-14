@@ -13,6 +13,7 @@ import * as proof from "./upgrade-proof-utils.js";
 const migrationName = "0150_membership_authority_fix.sql";
 const ownUrl = new URL(`../migrations/${migrationName}`,import.meta.url);
 const replaced = ["identity.current_memberships(uuid)","identity.invite_member(character,uuid,character varying,character varying)","identity.provision_verified_challenge(uuid)"];
+const guard = "app.guard_membership_authority_update()";
 const tables = ["control_plane.tenant","identity.identity_user","identity.user_email","identity.membership_locator","identity.invitation","identity.challenge","identity.session","identity.security_event","app.account","app.membership","app.contractor_member","app.contractor_membership_revocation","app.role_grant","app.command_receipt","app.audit_event"];
 type Queryable = Pick<Pool|PoolClient,"query">;
 
@@ -41,6 +42,18 @@ async function catalog(db: Queryable) {
       (SELECT row_to_json(x)::text FROM (SELECT p.prosecdef,p.proconfig,p.provolatile,p.proargtypes::text,p.prorettype::text,p.proretset,pg_get_userbyid(p.proowner) owner,p.proacl::text acl) x) attributes
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') AND p.prokind='f' ORDER BY 1`)).rows,
   };
+}
+
+async function guardPosture(db: Queryable) {
+  expect((await db.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+    EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0) public_access,
+    has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime_access,
+    has_function_privilege('jobguard_identity',p.oid,'EXECUTE') identity_access,
+    has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure_access
+    FROM pg_proc p WHERE p.oid=$1::regprocedure`,[guard])).rows).toEqual([{owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],public_access:false,runtime_access:false,identity_access:false,infrastructure_access:false}]);
+  expect((await db.query(`SELECT t.tgname,t.tgtype::int,t.tgenabled,t.tgfoid::regprocedure::text routine
+    FROM pg_trigger t WHERE t.tgrelid='app.membership'::regclass AND t.tgname='membership_authority_update_guard'`)).rows).toEqual([{tgname:"membership_authority_update_guard",tgtype:19,tgenabled:"O",routine:guard}]);
+  expect((await db.query("SELECT has_table_privilege('jobguard_runtime','app.membership','UPDATE') retained")).rows).toEqual([{retained:true}]);
 }
 describe("MIGFIX-1 PostgreSQL own-step upgrade proof",()=>{
   let c: Cluster, before: Awaited<ReturnType<typeof proof.proofBefore>>, beforeCatalog: Awaited<ReturnType<typeof catalog>>;
@@ -71,8 +84,9 @@ describe("MIGFIX-1 PostgreSQL own-step upgrade proof",()=>{
     await c.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[migrationName]);
     expect(await proof.proofDifferences(c.admin,before)).toEqual({rows:[],types:[]});
     const after = await catalog(c.admin);
-    for(const field of ["tables","columns","policies","constraints","triggers"] as const) expect(after[field],`${field} at N alone`).toEqual(beforeCatalog[field]);
-    expect(after.functions.map(row=>row.signature)).toEqual(beforeCatalog.functions.map(row=>row.signature));
+    // Compare every pre-existing object unchanged; the one new guard/trigger is checked separately.
+    for(const field of ["tables","columns","policies","constraints","triggers"] as const) expect(field==="triggers"?after[field].filter(row=>!(row.table_name==="app.membership" && row.tgname==="membership_authority_update_guard")):after[field],`${field} at N alone`).toEqual(beforeCatalog[field]);
+    expect(after.functions.filter(row=>row.signature!==guard).map(row=>row.signature)).toEqual(beforeCatalog.functions.map(row=>row.signature));
     const changed: string[] = [];
     for (const previous of beforeCatalog.functions) {
       const current = after.functions.find(row=>row.signature===previous.signature)!;
@@ -80,6 +94,20 @@ describe("MIGFIX-1 PostgreSQL own-step upgrade proof",()=>{
       if (current.definition!==previous.definition) changed.push(previous.signature);
     }
     expect(changed.sort()).toEqual([...replaced].sort());
+    await guardPosture(c.admin);
+    const member = (await c.admin.query("SELECT tenant_id,id FROM app.membership WHERE role='owner' ORDER BY tenant_id,id LIMIT 1")).rows[0]!;
+    await proof.rolledBack(c.admin,async db=>{
+      await db.query("SET LOCAL ROLE jobguard_runtime");
+      await db.query("SELECT set_config('app.tenant_id',$1,true)",[member.tenant_id]);
+      expect((await db.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND id=$2 FOR SHARE",[member.tenant_id,member.id])).rows).toEqual([{id:member.id}]);
+      await expect(db.query("UPDATE app.membership SET role='read_only' WHERE tenant_id=$1 AND id=$2",[member.tenant_id,member.id])).rejects.toMatchObject({code:"42501"});
+    });
+    for(const role of ["jobguard_migration","postgres"]) await proof.rolledBack(c.admin,async db=>{
+      await db.query(`SET LOCAL ROLE ${role}`);
+      await db.query("SELECT set_config('app.tenant_id',$1,true)",[member.tenant_id]);
+      expect((await db.query("UPDATE app.membership SET role='read_only' WHERE tenant_id=$1 AND id=$2 RETURNING role",[member.tenant_id,member.id])).rows).toEqual([{role:"read_only"}]);
+      expect((await db.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2 RETURNING role",[member.tenant_id,member.id])).rows).toEqual([{role:"owner"}]);
+    });
     await migrate(c.admin); await migrate(c.admin);
     expect(await proof.proofDifferences(c.admin,before)).toEqual({rows:[],types:[]});
     expect((await c.admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row=>row.migration_name)).toEqual(names);
@@ -107,6 +135,7 @@ describe("MIGFIX-1 PostgreSQL own-step upgrade proof",()=>{
   },120000);
 
   it("[MIGFIX-1-U2] installed catalog preserves FORCE RLS, owner, narrow identity EXECUTE and schema restrictions",async()=>{
+    await guardPosture(c.admin);
     const rows = (await c.admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid=ANY($1::regclass[])",[["app.membership","app.contractor_membership_revocation"]])).rows;
     expect(rows).toHaveLength(2); for(const row of rows)expect(row).toEqual({relrowsecurity:true,relforcerowsecurity:true,owner:"jobguard_migration"});
     for(const routine of replaced) {
@@ -122,6 +151,7 @@ describe("MIGFIX-1 PostgreSQL own-step upgrade proof",()=>{
       await migrate(fresh);await migrate(fresh);
       expect((await fresh.query("SELECT count(*)::int n FROM public.jobguard_schema_migration")).rows[0]!.n).toBe(MIGRATION_URLS.length);
       for(const signature of replaced)expect((await fresh.query("SELECT prosrc FROM pg_proc WHERE oid=$1::regprocedure",[signature])).rows[0]!.prosrc).toContain("app.contractor_membership_revocation");
+      await guardPosture(fresh);
     } finally {await fresh.end();}
   },120000);
 });

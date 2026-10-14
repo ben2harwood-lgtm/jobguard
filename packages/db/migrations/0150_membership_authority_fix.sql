@@ -1,10 +1,29 @@
 BEGIN;
--- MIGFIX-1 partial: contractor revocation is an inactive-membership fact on every identity path.
+-- MIGFIX-1: guard direct membership authority changes and honor contractor revocation on every identity path.
 -- CREATE OR REPLACE retains the existing signatures, owners, EXECUTE ACLs and definer settings.
 -- No grants or business rows change. Membership history is never reactivated or normalized.
--- HELD [MIGFIX-1-1]: runtime UPDATE revocation needs coordinator-owned replacement of existing
--- runtime FOR SHARE membership locks; PostgreSQL requires UPDATE for those locks. Do not add
--- a direct write grant or weaken those checks to make the privilege removal possible here.
+-- Retain UPDATE for existing FOR SHARE locks. Check the effective caller, including inside
+-- migration-owned definer routines; a definer trigger would hide a direct runtime caller.
+CREATE FUNCTION app.guard_membership_authority_update() RETURNS trigger
+ LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+BEGIN
+ IF current_user <> pg_catalog.pg_get_userbyid((SELECT c.relowner FROM pg_catalog.pg_class c WHERE c.oid=TG_RELID))
+  AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname=current_user AND r.rolsuper) THEN
+  IF NEW.id IS DISTINCT FROM OLD.id OR NEW.tenant_id IS DISTINCT FROM OLD.tenant_id
+   OR NEW.account_id IS DISTINCT FROM OLD.account_id OR NEW.identity_user_id IS DISTINCT FROM OLD.identity_user_id
+   OR NEW.role IS DISTINCT FROM OLD.role
+   OR (OLD.revoked_at IS NOT NULL AND (NEW.revoked_at IS NULL OR NEW.revoked_at>OLD.revoked_at))
+   OR (OLD.expires_at IS NOT NULL AND (NEW.expires_at IS NULL OR NEW.expires_at>OLD.expires_at)) THEN
+   RAISE EXCEPTION 'membership authority update forbidden' USING ERRCODE='42501';
+  END IF;
+ END IF;
+ RETURN NEW;
+END;
+$$;
+ALTER FUNCTION app.guard_membership_authority_update() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.guard_membership_authority_update() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+CREATE TRIGGER membership_authority_update_guard BEFORE UPDATE ON app.membership
+ FOR EACH ROW EXECUTE FUNCTION app.guard_membership_authority_update();
 
 CREATE OR REPLACE FUNCTION identity.provision_verified_challenge(challenge_id uuid) RETURNS uuid
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,identity AS $$

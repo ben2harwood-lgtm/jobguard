@@ -1,3 +1,144 @@
+Built by Codex; repair r1 dispatched 14 Oct 2026 (dispatcher 5).
+
+# MIGFIX-1 repair r1 — implemented; PostgreSQL CI and independent verdict pending
+
+Repair base and unchanged checkout HEAD: **1be2de2b5ceb5c53b75af777fc613c0233ff43e8**,
+branch `codex/sandbox/migfix-1`, issued worktree `ch-7-terms`. This receipt's r1
+section supersedes the historical partial/HELD status and stale HEAD below.
+No git-writing command, commit, staging, checkout, push, PR or acceptance was
+performed. Dispatcher owns the final commit/push; the intended conventional
+commit subject and body are in `/private/tmp/jg-msg-migfix-1.txt` (overwritten).
+
+Read the complete source-only Opus REPAIR verdict bound to that base at
+`/Users/benharwood/.local/share/full-steam/jg-runs/migfix-1-opus-1be2de2.md`.
+That verdict is evidence about the preceding diff, not review of this repair.
+Read AGENTS.md, BUILD_PLAN §§2.1–2.4, §5.6, ENT-1/ENT-10 and M0-6L, the
+existing authentication contract, migration and own-step proof. The work order's
+reversible dispatcher ruling authorizes the trigger and the one-path lane widening.
+
+## r1 repairs and preservation
+
+**B1 source-addressed:** 0150 retains all existing table grants and adds one
+BEFORE UPDATE row trigger, `membership_authority_update_guard`, using
+`app.guard_membership_authority_update()`. The new function is explicitly
+SECURITY INVOKER, owned by `jobguard_migration`, with `search_path=pg_catalog`.
+ALL is revoked from PUBLIC, runtime, identity and infrastructure; no EXECUTE
+is granted. Catalog references are schema-qualified. The guard checks the
+effective caller, allowing only the membership table owner or a superuser to
+change id/tenant/account/identity/role, or clear/later-date an existing revoked
+or expiry timestamp. All other such writes raise the existing `42501` refusal
+code. Migration-owned definer writers retain their effective owner authority;
+locks do not invoke UPDATE triggers. No-ops and authority-restricting timestamps
+remain allowed. This ruling replaces the earlier grant-removal proposal.
+
+Un-skipped [MIGFIX-1-1]. It retains its refusal code, complete row preservation
+and session/invitation refusal expectations; inputs now attempt actual changes
+rather than expecting a NULL-to-NULL assignment or unchanged owner role to fail.
+It also attacks all four protected identifier columns and one-microsecond later
+inactive timestamps. New [MIGFIX-1-1b] checks retained FOR SHARE, no-ops, initial
+revocation/expiry and earlier timestamps. The integration file now has **7 active
+PostgreSQL tests, none skipped in source**; all are NOT RUN here.
+
+Extended the existing rule-9 proof at N alone: compare every pre-existing table,
+column, policy, constraint, trigger and function attribute against the captured
+catalog; check the one new guard/trigger separately. Assert invoker status,
+pinned search path, migration ownership, no PUBLIC/runtime/identity/infrastructure
+EXECUTE and retained runtime UPDATE. Prove actual runtime row locking/refusal
+and owner/superuser permitted writes inside rolled-back transactions. Recheck
+new-object posture after later migrations and on fresh installation. Existing
+row/full-type/identity/microsecond comparisons, seeded-row guards, three replaced
+routine names, expected counts and all sensitivity controls remain unchanged;
+later migrations still run twice. **3 PostgreSQL upgrade tests NOT RUN.**
+
+**B2 source-addressed:** added the 0150 register section to
+`packages/db/MIGRATIONS.md` and exactly that path to this lane's allow list.
+The register describes the completed r1 guard, the previously partial state,
+three replaced routines, unchanged grants, no backfill and forward-fix only.
+Updated the lane note and authentication contract to remove the superseded HELD
+proposal. Other lane entries are unchanged. Shared lane/register changes serialize
+with the dispatcher/integrator; no other task's migration is touched.
+
+No existing expected value, refusal code, count, pinned name, fingerprint or hash
+was changed. `context-boundary.test.ts`, merged insurer tests, all nine runtime
+membership queries and all earlier migrations are untouched. The three identity
+routine bodies in 0150 are byte-identical to the repair base. No new table,
+column, policy, business-row rewrite, grant, route, UI, provider, money behavior,
+external action or operational alert. Affected invariants: AGENTS §§5.1, 5.3,
+5.4, 5.7 and 5.13; current membership authority and immutable historical records.
+
+## r1 actual checks (installed dependencies; no downloads)
+
+Node v24.17.0; cached pinned pnpm 10.28.1, Turbo 2.10.12, Vitest 4.1.11.
+All pnpm commands use `PATH=/private/tmp/jg-migfix-1-pnpm-x00y9ou4:$PATH`;
+the pre-existing shim invokes cached pnpm 10.28.1 and also covers child processes.
+This is not clean-install evidence. The default launcher was probed once and
+produced a warning rather than version output; no install/download was requested.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; 7/7 tasks, 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 0; root purity/lane/money/commercial checks plus 7/7 package tasks, 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; real lane check against origin/main, including approved register path. |
+| `pnpm build --concurrency=2 --force` | Exit 0; 7/7 tasks, 0 cached, 31 static pages. Existing workspace-root/CSS and sandbox cache-I/O warnings. |
+| `pnpm exec tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext packages/db/test/migfix-1.integration.test.ts packages/db/test/migfix-1-upgrade.integration.test.ts` | Exit 0, including final test inputs. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/migfix-1-upgrade.integration.test.ts -t MIGFIX-1-S1` | Exit 0; 1 source test passed, 3 PostgreSQL tests filtered. This does not parse/execute SQL. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; actual generated schema comparison. Runs the OpenAPI check program without the tsx CLI's localhost IPC listener. |
+| Root non-git unit tools | Exit 0; 19 tests. Exact command and exclusion rationale below. |
+| Source package unit suites | Core: 81 files / 2,445 tests; config: 1 / 1; AI: 5 / 80; storage: 1 / 2; web: 33 / 784; DB adapters: 18 / 256. Each exit 0. API result and exact selections below. |
+| SQL/source preservation inspection | Pass: 4 dollar-quoted bodies; new nested IF/END IF and END; terminators balanced; original 3 routine bodies unchanged; zero GRANT statements. Source inspection, not PostgreSQL syntax validation. |
+| Assertion preservation inspection | Exit 0; TypeScript AST comparison confirms every prior matcher and expected argument in both lane test files is retained. No expected value/count/hash substitution. |
+| `git diff --check` | Exit 0. |
+
+Root unit command: `node --test tools/commercial-boundary.test.mjs
+tools/core-purity.test.mjs tools/decision-check-purity.test.mjs
+tools/decision-records.test.mjs tools/dependency-audit.test.mjs
+tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs`.
+The two agent-lane fixture suites are NOT RUN: they issue git init/add/commit/
+switch commands, prohibited by this order. The real `lint:lanes` did run.
+
+Source unit commands: `pnpm --filter <package> exec vitest run src
+--maxWorkers=2` for core/config/ai/storage; `pnpm --filter @jobguard/web exec
+vitest run --maxWorkers=2`; `pnpm --filter @jobguard/db exec vitest run src test
+--exclude '**/*.integration.test.ts' --exclude test/free-port.test.ts
+--maxWorkers=2`. DB adapters use doubles, not PostgreSQL.
+
+API unit selection: `pnpm --filter @jobguard/api exec vitest run src
+--maxWorkers=2 --exclude '**/*.http.test.ts' --exclude src/health.test.ts
+--exclude src/auth/identity.test.ts --exclude src/shadow-isolation.application.test.ts
+--exclude src/auth/sso/action-paths.test.ts --exclude src/auth/sso/sso-required-paths.test.ts
+--exclude src/final-account-lock.isolation.test.ts`. These exclusions require
+localhost/PostgreSQL. No test source or configured mandatory suite was changed.
+The first API selection omitted the final exclusion: **62 files / 1,536 tests
+passed**, while final-account-lock.isolation failed in its PostgreSQL harness
+setup (`no free port in 58400..58650`), before running its one test (reported
+skipped). Exit 1 was environmental and is retained in `unit-source.log`.
+The corrected API-only selection exited 0: **62 files / 1,534 tests passed**.
+The two scripted cases in the excluded isolation file had already passed in the
+initial run; its third case requires PostgreSQL.
+
+An initial core Vitest invocation without a source filter picked up emitted
+`dist` test copies after the build. Two emitted-copy source-inspection cases
+failed (C3 and DW9), then that invocation was interrupted (exit 130). The
+corrected source-only core run passed all 2,445 tests; no assertion was edited.
+The initial driver stopped there and did not run its later package commands.
+
+PostgreSQL integration, migrations, real database assertions and browser suites
+are **NOT RUN**: dispatcher states the sandbox cannot bind localhost or start
+PostgreSQL. Full `pnpm test`, `test:db`, `test:migrations` and `test:e2e` remain
+for GitHub CI after dispatcher push. Mocked unit tests are not database proof.
+No changed AI behavior, live model call or native workflow; no live evaluation
+or device test applies. Release gates, exact-commit independent re-review and
+separate acceptance remain outstanding. No self-acceptance or PASS is claimed.
+
+Logs: `/private/tmp/jg-migfix-1-r1-{typecheck,lint,lanes,build,tests-tsc-final,
+source,openapi,unit,unit-source,api-unit,lanes-final}.log`. New repair source is reviewable in the
+working tree; the historical record below retains its original observations,
+commands and hashes as prior-run evidence only.
+
+---
+
+# Historical initial build receipt (superseded where r1 above differs)
+
 Built by Codex; dispatched 13 Oct 2026.
 
 # MIGFIX-1 builder receipt — PARTIAL / RED review pending

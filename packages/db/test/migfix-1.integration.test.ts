@@ -49,13 +49,16 @@ describe("MIGFIX-1 actual PostgreSQL identity boundary", () => {
   },120000);
   afterAll(async () => { await identity?.end(); await c?.close(); });
 
-  // Explicitly HELD: removing UPDATE first requires coordinator-owned replacements for runtime membership row locks.
-  it.skip("[MIGFIX-1-1] HELD runtime cannot promote or reactivate memberships", async () => {
+  it("[MIGFIX-1-1] runtime cannot promote or reactivate memberships", async () => {
     for (const state of ["read_only","revoked","expired"] as const) {
       const f = await fixture();
       await c.admin.query(`UPDATE app.membership SET ${state==="read_only"?"role='read_only'":state==="revoked"?"revoked_at=clock_timestamp()":"expires_at=clock_timestamp()-interval '1 second'"} WHERE tenant_id=$1 AND id=$2`,[f.p.tenantId,f.p.membershipId]);
       const before = (await c.admin.query("SELECT row_to_json(m)::text bytes FROM app.membership m WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId])).rows;
-      for (const change of ["role='owner'","revoked_at=NULL","expires_at=NULL"]) {
+      // Only real authority changes are refused; NULL-to-NULL is an allowed no-op.
+      const changes = state==="read_only" ? ["role='owner'"] : state==="revoked"
+        ? ["role='read_only'","revoked_at=NULL","revoked_at=revoked_at+interval '1 microsecond'"]
+        : ["role='read_only'","expires_at=NULL","expires_at=expires_at+interval '1 microsecond'"];
+      for (const change of [...changes,...["id","tenant_id","account_id","identity_user_id"].map(column=>`${column}=gen_random_uuid()`)]) {
         await expect(withTenant(c.runtime,verifiedTenantContextFromMembership(f.p), db=>db.$client.query(`UPDATE app.membership SET ${change} WHERE tenant_id=$1 AND id=$2`,[f.p.tenantId,f.p.membershipId]))).rejects.toMatchObject({code:"42501"});
       }
       expect((await c.admin.query("SELECT row_to_json(m)::text bytes FROM app.membership m WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId])).rows).toEqual(before);
@@ -64,6 +67,17 @@ describe("MIGFIX-1 actual PostgreSQL identity boundary", () => {
         await expect(application().context(f.credentials)).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});
       } else await expect(application().invite(request(f),f.credentials)).rejects.toMatchObject({code:"42501"});
     }
+  });
+
+  it("[MIGFIX-1-1b] retained UPDATE permits row locks, no-ops and authority restriction", async () => {
+    const f = await fixture();
+    await withTenant(c.runtime,verifiedTenantContextFromMembership(f.p),async db=>{
+      expect((await db.$client.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND id=$2 FOR SHARE",[f.p.tenantId,f.p.membershipId])).rows).toEqual([{id:f.p.membershipId}]);
+      await db.$client.query("UPDATE app.membership SET role=role,revoked_at=revoked_at,expires_at=expires_at WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId]);
+      await db.$client.query("UPDATE app.membership SET revoked_at=clock_timestamp(),expires_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId]);
+      await db.$client.query("UPDATE app.membership SET revoked_at=revoked_at-interval '1 microsecond',expires_at=expires_at-interval '1 microsecond' WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId]);
+    });
+    expect((await application().session(f.sessionToken)).memberships).toEqual([]);
   });
 
   it("[MIGFIX-1-2] ordinary identity rejects contractor-command revocation", async () => {

@@ -987,3 +987,37 @@ Forward fix preferred. A confirmation object is two ordinary evidence rows, so n
 ### 0142 — recovery insurer money (CH-7-INSURER Round 2)
 
 Adds the shared current payer function and append-only, FORCE-RLS payment marks with exact evidence references, timestamp pinning, immutable history and deferred audit completeness. Standard F gives runtime SELECT only; the session-bound controlled writer and job-lock helper each check authority, check/set tenant context and fix search_path. No app.job grant or merged table/column/policy/grant change. Restates only the newest 0130 review guard and 0119 effect trigger, adding Part A's insurer exclusion after paid-before and its line reason, plus F19's individual-interest message and reasonHeld release. A6 derives a required payer fact after the exact payment and job locks and cites current insurer binding/mark IDs in audit. The insurer exclusion has its own reason; F21 remains null/held under the Round 2 ruling. 0142 never rewrites saved reviews or lines; forward-fix is the rollback strategy, retaining readers and mark history. The previous application ignores marks but its insurer review inserts now fail closed; coordinate the three coordinator-owned setup-only payer additions and CI evidence before rollout. PostgreSQL fresh, upgrade, catalog and concurrency checks are NOT RUN in the builder sandbox; rule-9 upgrade proof compares named original F19/F21 rows and full column types, with identity matching and rolled-back controls. No new external alert or provider.
+
+## 0150 — membership authority repair (MIGFIX-1, repair r1)
+
+Replaces three existing identity routines (`current_memberships(uuid)`,
+`invite_member(char,uuid,varchar,varchar)`, `provision_verified_challenge(uuid)`)
+to exclude tenant-qualified contractor revocations. Invitation authorization and
+replacement provisioning serialize with the existing contractor tenant advisory
+lock (seed 54). A fresh verified invitation creates a replacement membership and
+repoints its locator without changing historical membership or revocation rows.
+Existing routine signatures, owners, SECURITY DEFINER settings and EXECUTE ACLs
+are retained. No business rows are rewritten or backfilled.
+
+Repair r1 completes the previously partial direct-UPDATE defense under the
+dispatcher's ruling: retains all table grants, including UPDATE needed for runtime
+`FOR SHARE`, and adds `app.guard_membership_authority_update()` plus one BEFORE
+UPDATE row trigger on `app.membership`. The function is SECURITY INVOKER, owned
+by `jobguard_migration`, with `search_path=pg_catalog`; ALL is revoked from PUBLIC,
+runtime, identity and infrastructure, with no new grant. It checks the effective
+caller: only the table owner or a superuser may change membership identifiers or
+role, or clear/later-date existing revoked/expiry timestamps. Other callers receive
+`42501`. No-ops and earlier timestamps remain allowed. Migration-owned definer
+writers retain authority; locks remain usable. No table, column, constraint or
+policy changes; no grant changes on any pre-existing object.
+
+Forward-fix only: keep migration history and issue a reviewed additive correction;
+never rewrite membership, invitation or revocation history to roll back. Upgrade
+proof: `migfix-1-upgrade.integration.test.ts` installs predecessors, snapshots
+populated rows by named columns/full types/identity/canonical text, applies 0150
+alone, compares pre-existing catalog objects, checks the new guard/trigger and
+actual runtime/owner/superuser behavior, then runs later migrations twice. Existing
+rolled-back sensitivity controls remain. `migfix-1.integration.test.ts` covers
+authority refusals, retained locks, sessions, races and replacement history.
+PostgreSQL and browser execution remain pending GitHub CI after dispatcher push;
+this register records implementation, not independent acceptance or release approval.
