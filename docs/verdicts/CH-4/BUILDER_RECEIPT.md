@@ -2051,3 +2051,196 @@ protected isolation and context-boundary suites enforced. No exact-r9-commit
 independent cross-model verdict or separate acceptance is claimed. G1/production
 release gates and held scope remain unchanged. Dispatcher owns stage/commit/push.
 Intended conventional commit message: `/private/tmp/jg-msg-ch-4.txt` (overwritten).
+
+
+## Repair round r10 — 14 October 2026, dispatcher 5
+
+Request: PR #185, issued merged head `f1694ed57fcd6bf0bc2f69d67da01f311257a7cc`
+(r9 plus main `077ab63`). Reviewed the entire 2,464-line filtered CI log for
+run `38507421951`, at
+`/Users/benharwood/.local/share/full-steam/jg-runs/ch-4-ci-failed-38507421951.log`.
+This is a builder run receipt, not an independent model verdict or acceptance.
+
+### Checkout discrepancy and dispatcher handoff
+
+The supplied worktree was clean at r9 `892a541654415bb858c5ad4a7a68746cab839711`,
+not the issued merged head. `f1694ed` was already available in the local object
+store. Materialized its 11 differing files using read-only `git show` and ordinary
+filesystem writes before testing. No Git-writing command, installation, download,
+PostgreSQL start or socket bind was attempted. `.git` and HEAD remain at r9.
+The eight materialized main-only paths explain the local lane refusals below;
+their contents are exactly `f1694ed`, not r10 changes.
+
+**Dispatcher must put the r10 repair on top of f1694ed, not commit the apparent
+main catch-up as r10 on top of this sandbox's r9 HEAD.** The scoped repair patch
+is `/private/tmp/jg-ch-4-r10.patch`, generated against `f1694ed` for exactly the
+three source files, the appended own post-lock tests and this receipt. The
+intended conventional commit message is `/private/tmp/jg-msg-ch-4.txt`, overwritten.
+The working tree contains the merged baseline plus this repair. `origin/main`
+was `45de036b3f9f1cca8d51b0781f6334a03ba0a595` during local lane checks.
+
+### Every failing CI test
+
+CI reports exactly 19 failures, in two scripted SQL test files. No other test
+failure is present in the supplied log. The real purchase-order and supplier
+integration files and CH-4 database suites passed in that historical run; that
+is evidence for f1694ed, not execution of this new repair.
+
+1. `test/audit-api-file-supplier-document.test.ts` — confirms decimal quantities using exact arithmetic
+2. `test/audit-api-file-supplier-document.test.ts` — keeps supported exact quantities: 1.000001
+3. `test/audit-api-file-supplier-document.test.ts` — keeps supported exact quantities: 0.000001
+4. `test/audit-api-file-supplier-document.test.ts` — keeps supported exact quantities: 01.10
+5. `test/audit-api-file-supplier-document.test.ts` — still rejects mismatched or fractional-penny totals: 1.1
+6. `test/audit-api-file-supplier-document.test.ts` — still rejects mismatched or fractional-penny totals: 0.5
+7. `test/audit-api-file-supplier-document.test.ts` — persists exact quantities and replays without another effect: 10000000000001.000000
+8. `test/audit-api-file-supplier-document.test.ts` — persists exact quantities and replays without another effect: 99999999999999.999999
+9. `test/audit-api-file-supplier-document.test.ts` — persists exact quantities and replays without another effect: 1.000000
+10. `test/purchase-order-audit.test.ts` — defaults the agreement comparison to server UTC today regardless of required date
+11. `test/purchase-order-audit.test.ts` — normalizes box agreement before purchase-order comparison
+12. `test/purchase-order-audit.test.ts` — purchase-order comparison excludes future rate revisions
+13. `test/purchase-order-audit.test.ts` — purchase-order comparison excludes expired rate revisions
+14. `test/purchase-order-audit.test.ts` — rejects fresh placement of superseded revision
+15. `test/purchase-order-audit.test.ts` — refuses changed revision as replay of placed order
+16. `test/purchase-order-audit.test.ts` — preserves an exact receipt replay after a later revision
+17. `test/purchase-order-audit.test.ts` — reuses only the same placed revision for a fresh exact approval
+18. `test/purchase-order-audit.test.ts` — holds revise's aggregate lock before placement identity, revision checks and audit
+19. `test/purchase-order-audit.test.ts` — refuses an unknown pack size instead of recording a fabricated comparison
+
+### Repair and retained guards
+
+Both repositories now begin with their original live guard. A `JOB_NOT_LIVE`
+refusal rolls back before reading the linked-job offer in a fresh tenant
+transaction. Live/replay paths no longer issue the added lifecycle query before
+main's statements. Unlocked non-live jobs keep `JOB_NOT_LIVE`.
+
+For new PO revisions and invoice intake, the linked offer is projected into the
+existing rate-read and intake-count statements. Refusal occurs before stale
+checks, writes and audit. For placement, the existing receipt query keeps its
+original projection/prefix and adds a UNION sentinel containing the linked offer,
+even when a fresh command has no receipt. A fresh identity is refused before the
+dispatcher can reuse a prior semantic receipt; an already succeeded exact receipt
+or stored identity retains its replay. The sentinel is read-only and never stored.
+Placement's revision read also projects the offer before new placement effects.
+
+The added helper references only public job, track, lock and party bindings,
+uses source-owned bound parameter names and adds no business lock. The original
+live guard holds the job share lock until commit, and migration 0144's insertion
+triggers remain the final database boundary. Main's per-job aggregate lock,
+current-revision check, placed-revision identity, effective-date filters, pack
+normalization and exact decimal arithmetic remain intact.
+
+The error translator now preserves an already validated linked offer as well as
+valid PostgreSQL detail. Three new refusal tests initially exposed that the
+translator discarded such an offer; production code was repaired, with their
+expectations unchanged. These were the fresh-PO-identity, locked-PO-revision and
+locked-invoice cases added below. A broader API run additionally exposed
+`watchdog-registry.test.ts`'s unchanged test **purchase-order dispatcher receipt
+replay conflict is typed at the Nest boundary**: its double requires the original
+`SELECT request_hash,status,result FROM app.command_receipt` prefix. The final
+UNION form preserves it. An immediate rerun still used the previous built DB
+artifact; rebuilding DB and rerunning passes all 121 registry tests.
+
+Five appended own scripted regressions assert fresh-identity refusal before
+semantic receipt/authorization reuse, PO revision and invoice refusal before
+writes, exact linked-offer preservation, rollback before the non-live lookup,
+and unchanged unlocked `JOB_NOT_LIVE`. They prove submitted statement behavior,
+not PostgreSQL execution, RLS or trigger correctness. Existing real DB tests
+remain unchanged and mandatory in CI.
+
+### Preservation, scope and limits
+
+All prior bytes in `job-work-state-post-lock.integration.test.ts` are unchanged;
+the new describe/import are appended. Whole-tree content comparison against a
+read-only `git archive f1694ed` finds only the five scoped r10 files. All four
+merged audit test files are byte-identical to f1694ed, as are migration 0144,
+the merged main receipts/core changes, and both protected API test files:
+
+- `shadow-isolation.application.test.ts` SHA-256:
+  `8d4f2abc7b502489ac49e56e60224623d90ff901aa41892ed40ff2bf69967006`.
+- `auth/context-boundary.test.ts` SHA-256:
+  `a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35`.
+
+No existing expected value, refusal, count, pinned name, fingerprint or hash
+changed. Q-01/Q-03/Q-04/Q-05/Q-06 stay unbuilt. No registry, route, permission,
+policy, database/data migration, provider, external action, operational alert,
+production enablement, interval or money behavior is added. Relevant retained
+invariants: tenant isolation (§5.1), immutable history (§5.2), exact authorization
+(§5.3), durable replay (§5.4), append-only audit (§5.7) and shadow isolation (§5.14).
+Existing 0144 rollback/forward-fix guidance remains unchanged.
+
+### Commands actually run
+
+Used installed Node 24.17.0 and pnpm 10.28.1 with
+`PATH=/private/tmp/ch4-pnpm-bin:/Users/benharwood/Library/pnpm/bin:$PATH`.
+Logs: `/private/tmp/jg-ch-4-r10-*.log`. Dependencies were reused; no clean install
+is claimed. Root package scripts and mandatory CI discovery were not edited.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck` | PASS: seven package tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1 at lane guard: r9 index treats eight materialized main-only files as lane edits; core purity passes |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Same eight-path baseline refusal; no scope rule relaxed |
+| `pnpm turbo run lint` | PASS: seven package tasks |
+| `pnpm build` | PASS: seven package tasks; existing Next workspace/CSS and restricted-cache warnings |
+| `pnpm openapi:check` | Exit 1 before checker runs: tsx IPC `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS: same generator/check and committed artifact, without CLI IPC |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=1 src` | PASS: 82 files / 2,456 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src test/job-work-state-syntax.test.ts test/site-extra-evidence-compatibility.test.ts test/purchase-order-audit.test.ts test/audit-api-file-supplier-document.test.ts` | PASS: nine files / 133 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/purchase-order-audit.test.ts test/audit-api-file-supplier-document.test.ts` | Final PASS: two files / 29 unchanged merged tests, covering every CI failure |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/job-work-state-post-lock.integration.test.ts -t 'r10 scripted'` | Final PASS: five new scripted cases; 15 socket/DB cases excluded only for this local selection |
+| API source command below | Final PASS: 68 files / 1,571 tests, including the unchanged 145 context-boundary and 121 registry tests |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/watchdog-registry.test.ts` after DB build | PASS: all 121 tests |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/final-account-lock.isolation.test.ts -t 'DW8 application read'` | PASS: two scripted read cases; one real DB case excluded locally |
+| `pnpm --filter @jobguard/config test --maxWorkers=1` | PASS: two files / two tests |
+| `pnpm --filter @jobguard/storage test --maxWorkers=1` | PASS: two files / four tests |
+| `pnpm --filter @jobguard/ai test --maxWorkers=1` | PASS: five files / 80 synthetic fixture tests; no live-model evaluation |
+| `pnpm --filter @jobguard/web test --maxWorkers=2` | PASS: 33 files / 784 tests |
+| Money/commercial boundary scripts and seven tooling suites below | PASS: both guards and 19 tests |
+| `pnpm exec tsc -p /private/tmp/jg-ch-4-r10-tests-tsconfig.json` | Exit 2: only the pre-existing merged `watchdog-command-harness.ts:164` string-or-undefined argument error; no new test/source error and no harness edit |
+| Read-only whole-tree/protected-byte comparison; `git diff --check` | PASS |
+| `selectLane`/`matches` against exact r10 content differences from f1694ed | PASS: all five files in CH-4 scope; deterministic supplemental check, not a replacement for real lane lint |
+
+API source command:
+
+```sh
+pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src \
+  --exclude '**/shadow-isolation.application.test.ts' \
+  --exclude '**/final-account-lock.isolation.test.ts' \
+  --exclude '**/health.test.ts' \
+  --exclude '**/contractor-practice-session.http.test.ts' \
+  --exclude '**/site-extra.http.test.ts' \
+  --exclude '**/site-extra-pricing.http.test.ts' \
+  --exclude '**/site-visit.http.test.ts' \
+  --exclude '**/auth/sso/action-paths.test.ts'
+```
+
+Excluded suites require real PostgreSQL or bound sockets. The protected
+shadow-isolation file was byte-checked, not executed in this sandbox.
+Tooling command:
+
+```sh
+node tools/money-arithmetic-lint.mjs
+node tools/commercial-boundary-lint.mjs
+node --test --test-concurrency=2 \
+  tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs \
+  tools/decision-check-purity.test.mjs tools/decision-records.test.mjs \
+  tools/core-purity.test.mjs tools/shared-money-origin.test.mjs \
+  tools/commercial-boundary.test.mjs
+```
+
+The other two tooling suites invoke Git-writing fixture commands, so they and
+umbrella `pnpm test` were not run under the dispatcher's explicit prohibition.
+Database/browser suites were left to GitHub CI as instructed. No real database,
+browser or live-provider result is claimed for r10.
+
+### Still required before technical acceptance
+
+Dispatcher: use the scoped patch on f1694ed, then run the unchanged root lint/lane
+and OpenAPI commands in the correct checkout, full `pnpm test`, `pnpm test:db`,
+`pnpm test:migrations` and `pnpm test:e2e`. In particular execute the unchanged
+CH-4 post-lock/source/race/isolation suites and both merged audit integration
+files: projected SQL and UNION behavior are only source-inspected locally.
+Keep audit, lock-order and command replay suites enforced. No exact-r10-commit
+independent cross-model verdict or separate acceptance is recorded here;
+§5.13 and production release gates remain outstanding. Dispatcher owns commit,
+push and CI; founder owns merge/release.
