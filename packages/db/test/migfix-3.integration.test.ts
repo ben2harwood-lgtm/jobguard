@@ -88,7 +88,7 @@ describe("MIGFIX-3 original-stage replacement", () => {
     expect(raced.filter(r => r.status === "rejected")).toHaveLength(1);
     await expect(h.repos.proof.invalidate(h.ctx, invalidation(e, f.command.commandId))).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
     await expect(withTenant(h.runtime, h.ctx, db => db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
-      VALUES($1,$2,'fixture.command',$2::text,repeat('a',64),'processing',$3)`, [h.tenant, c.commandId, h.member]))).rejects.toThrow(/IDEMPOTENCY_CONFLICT/);
+      VALUES($1::uuid,$2::uuid,'fixture.command',$2::text,repeat('a',64),'processing',$3)`, [h.tenant, c.commandId, h.member]))).rejects.toThrow(/IDEMPOTENCY_CONFLICT/);
   });
   it("[MIGFIX-3.5] response failure rolls back effects; revoked and expired actors fail before effects", async () => {
     const f = await initial(), c = invalidation(f.evidence);
@@ -161,7 +161,7 @@ describe("MIGFIX-3 original-stage replacement", () => {
   it("[MIGFIX-3.5/7] authority precedes lifecycle and invalid proof keeps PROOF_NOT_FINAL", async () => {
     const job = await h.live(), evidence = await h.pre.evidence(job), actor = randomUUID();
     for (const jobId of [job,randomUUID()]) await expect(h.repos.proof.complete(h.ctx, { ...complete(job,evidence), jobId, actorMembershipId: actor })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await h.admin.query("UPDATE app.job SET lifecycle_point='invoiced' WHERE id=$1", [job]);
+    await h.admin.query("UPDATE app.job SET status='invoiced' WHERE id=$1", [job]);
     await expect(h.repos.proof.complete(h.ctx, { ...complete(job,evidence), actorMembershipId: actor })).rejects.toMatchObject({ code: "FORBIDDEN" });
     const live = await h.live(), valid = await h.pre.evidence(live);
     for (const change of [{ evidenceId: randomUUID() }, { requiredEvidenceType: "wrong_type" }, { scopeItemId: randomUUID() }]) {
@@ -173,7 +173,7 @@ describe("MIGFIX-3 original-stage replacement", () => {
     const upload = await h.repos.evidence.beginUpload(h.ctx, { jobId: f.job, scopeItemId: h.st(f.job).scope,
       expectedSha256: h.pngHash, contentType: "image/png", maximumBytes: 100, expiresAt: new Date("2099-01-01") });
     for (const state of ["pending","rejected"]) {
-      if(state === "rejected") await h.admin.query("UPDATE app.evidence_upload SET state='rejected' WHERE id=$1", [upload.id]);
+      if(state === "rejected") await h.admin.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='content_mismatch' WHERE id=$1", [upload.id]);
       await expect(h.repos.proof.complete(h.ctx, complete(f.job,upload.id))).rejects.toMatchObject({ code: "PROOF_NOT_FINAL" });
     }
     const otherJob = await h.live(), otherEvidence = await h.pre.evidence(otherJob);

@@ -64,6 +64,8 @@ it("[MIGFIX-3.U1] installs N alone, preserves old identities/columns/microsecond
   await migrate(fresh); await migrate(fresh);
   expect((await fresh.query("SELECT count(*)::int n FROM public.jobguard_schema_migration")).rows[0].n).toBe(MIGRATION_URLS.length);
   await rolledBack(admin, async db => {
+    // Main's 0144 FK from job_site_source_receipt pins stage_completion.completed_at; this rolled-back control only needs the changed microsecond, so FK triggers are disabled inside the rolled-back transaction.
+    await db.query("SET LOCAL session_replication_role=replica");
     await db.query("UPDATE app.stage_completion SET completed_at=completed_at+interval '1 microsecond' WHERE tenant_id=$1", [tenant]);
     expect((await proofDifferences(db, before)).rows).toHaveLength(1);
   });
@@ -74,7 +76,7 @@ it("[MIGFIX-3.U1] installs N alone, preserves old identities/columns/microsecond
   await rolledBack(admin, async db => {
     await db.query("ALTER TABLE app.stage_completion ADD COLUMN later_nullable text");
     expect(await scratchReplaceFunction(db, "app.half_even_ratio(bigint,bigint,bigint)")).toBe(true);
-    await db.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)VALUES($1,$2,'later.fixture',$1::text,repeat('b',64),'processing',$3)", [randomUUID(), tenant, actor]);
+    await db.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)VALUES($1::uuid,$2,'later.fixture',$1::text,repeat('b',64),'processing',$3)", [randomUUID(), tenant, actor]);
     expect(await proofDifferences(db, before)).toEqual({ rows: [], types: [] });
   });
 }, 120000);
