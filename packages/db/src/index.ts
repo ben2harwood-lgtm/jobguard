@@ -98,3 +98,4 @@ export * from "./job-work-state-sources.js";
 export * from "./extra-approval-repository.js";
 export * from "./extra-evidence-pack-sources.js";
 export * from "./extra-evidence-pack-repository.js";
+export * from "./extra-approval-chain-repository.js";
