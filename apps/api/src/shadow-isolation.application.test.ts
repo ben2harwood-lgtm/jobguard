@@ -355,6 +355,12 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    const selected=await success("proof select",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"select_generated",commandId:randomUUID(),scopeItemId:proofScope,fixture:"completion-photo"}));
    const verified=await success("proof finalize",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"finalize",commandId:randomUUID(),uploadId:selected.upload.id,objectVersionId:selected.upload.objectVersionId}));
    await success("proof complete",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"complete",commandId:randomUUID(),scopeItemId:proofScope,evidenceId:verified.upload.evidenceId}));
+   // Premise set-up only (coordinator ruling 2026-10-14): the lock now refuses an account that omits approved extra work, so complete this handmade fixture account with the approved GBP 120 extra before the unchanged lock call. Owner connection and trigger bypass are fixture infrastructure only.
+   await withTenant(inspect,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+    await db.$client.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) SELECT gen_random_uuid(),r.tenant_id,r.job_id,$3,'variation',r.id,r.scope_item_id,r.id,a.id,r.description,r.signed_delta_pence,2 FROM app.variation_approval a JOIN app.variation_revision r ON(r.tenant_id,r.job_id,r.id)=(a.tenant_id,a.job_id,a.revision_id) JOIN app.variation v ON(v.tenant_id,v.job_id,v.id)=(a.tenant_id,a.job_id,a.variation_id) WHERE a.tenant_id=$1 AND a.job_id=$2 AND v.state='approved' AND v.current_revision_id=a.revision_id",[DEMO_TENANT_ID,a.jobId,a.revisionId]);
+    await db.$client.query("SET LOCAL session_replication_role='replica'");
+    await db.$client.query("UPDATE app.final_account_revision SET net_pence=112000,tax_pence=22400,total_pence=134400 WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[DEMO_TENANT_ID,a.jobId,a.revisionId]);
+   });
    await success("final-account lock",()=>app.finalAccountLock.lock(a.jobId,{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"}));
    await success("final-account lock projection",()=>app.finalAccountLock.get(a.jobId));
    // Real authorized delivery exercises notification content and retry telemetry, with no external provider.
