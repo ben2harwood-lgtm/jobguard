@@ -1,3 +1,154 @@
+Built by Codex; repair r1 dispatched 14 Oct 2026, dispatcher 5.
+
+# MIGFIX-3 repair r1 — builder evidence, acceptance pending
+
+This section supersedes the historical receipt below for current status, grants, catalogue permission and HEAD. The original receipt is preserved verbatim as historical evidence, including old hashes and base/final-head statements. Current branch `codex/sandbox/migfix-3`, worktree `m4-6-s`, initial/final HEAD `fa59263ea4bddf728271958057969d5234e9383a`, observed `origin/main` `077ab6383e1d3c35e6ac37691f557e67c551011d`. The initial r1 working tree was clean. Repairs are uncommitted. No git-writing command, install, package download, database/browser start, push, merge or release was performed.
+
+Read the Opus verdict `/Users/benharwood/.local/share/full-steam/jg-runs/migfix-3-opus-fa59263.md` in full, AGENTS, applicable BUILD_PLAN §§2, 5.2, 5.3 and 5.6, issued/r1 orders, audit contract and merged 0015/0096 policy examples. Opus recorded **REPAIR**, source inspection only, bound to fa59263e. No fresh independent verdict or separate acceptance exists for this repair. Actual builder attribution remains Codex.
+
+## B1–B7 disposition
+
+- **B1 repaired:** both policy `format()` strings use `nullif(current_setting(''app.tenant_id'',true),'''')::uuid` in USING and WITH CHECK. They decode to the merged quoted-setting and empty-string form.
+- **B2/B3 repaired together:** declaration, ALTER OWNER, REVOKE, GRANT and TypeScript call use eight UUID arguments. Eight placeholders now match the existing eight bound values.
+- **B4 repaired:** invalidation's upload-lock query uses alias `proof_object`, preserving record variable `e`, the upload lock and the separate authoritative read.
+- **B5 repaired:** appended the 0152 MIGRATIONS.md entry with privileges, compatibility, forward fix, integrity alert and pending PostgreSQL evidence; added that path to this lane.
+- **B6 evidence pending:** failing-first cannot run in this sandbox. No executed red-on-base or green-on-repaired-head result exists for either PostgreSQL file. B1–B4 previously prevented installation; a failed install at fa59263e does not prove the domain regression. Mac/CI must record red on original base `bd959b01e857de0ba7cbd3588bab84add7d0f493` and green on the dispatcher-committed repaired head for `packages/db/test/migfix-3.integration.test.ts` (12 cases) and `packages/db/test/migfix-3-upgrade.integration.test.ts` (one case) before any PASS. Test authorship order and source inspection are not executed failing-first evidence.
+- **B7 repaired with r1 dispatcher approval:** inserted exactly the historical receipt's six proposed catalogue rows at its four before/after anchors (base lines 292, 369, 533, 610), in name order; added the tenancy path to this lane and corrected only this lane's stale ownership note. Removing those six rows reproduces the HEAD tenancy file byte for byte. No existing expected value, refusal, count, pinned name, fingerprint or hash was changed. No context-boundary edit.
+
+Exact B7 before/after, now applied under r1 approval:
+
+```ts
+// Before at 292:
+      { relname: "proof_application_response", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+// After:
+      { relname: "proof_application_response", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "proof_invalidation_command", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "proof_invalidation_response", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+// Before at 369:
+      { relname: "stage_completion", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+// After:
+      { relname: "stage_completion", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "stage_proof_replacement", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+// Before at 533:
+      { relname: "proof_application_response", owner: "jobguard_migration" },
+// After:
+      { relname: "proof_application_response", owner: "jobguard_migration" },
+      { relname: "proof_invalidation_command", owner: "jobguard_migration" },
+      { relname: "proof_invalidation_response", owner: "jobguard_migration" },
+// Before at 610:
+      { relname: "stage_completion", owner: "jobguard_migration" },
+// After:
+      { relname: "stage_completion", owner: "jobguard_migration" },
+      { relname: "stage_proof_replacement", owner: "jobguard_migration" },
+```
+
+## Whole-migration inspection and current runtime grants
+
+Reread all 243 lines of 0152 after repair, every `format()` string, function/block and final deferred-audit triggers/COMMIT. A one-off Python lexical check found eight matched dollar-quoted bodies (two DO, six functions), eight BEGIN/END pairs, 19 IF/END IF pairs, three LOOP/END LOOP pairs, no CASE, balanced parentheses/quoted literals in each body and all nine format strings, one outer BEGIN/COMMIT and consistent replacement signatures. Both decoded CREATE POLICY statements were inspected. This is **static/source evidence**, not PostgreSQL parsing, installation or PL/pgSQL execution.
+
+Standard F: no new direct runtime INSERT/UPDATE/DELETE grant on money, membership, authorization, receipt or audit; new history/response tables allow SELECT only and checked migration-owned writers check active owner authority. Current runtime grants (historical nine-UUID signature below is superseded), one line each:
+
+```sql
+GRANT SELECT ON app.stage_proof_replacement TO jobguard_runtime;
+GRANT SELECT ON app.proof_invalidation_command TO jobguard_runtime;
+GRANT SELECT ON app.proof_invalidation_response TO jobguard_runtime;
+GRANT SELECT ON app.current_stage_proof TO jobguard_runtime;
+GRANT EXECUTE ON FUNCTION app.invalidate_proof_command(uuid,uuid,uuid,uuid,varchar,char) TO jobguard_runtime;
+GRANT EXECUTE ON FUNCTION app.record_invalidation_response(uuid,uuid,uuid,char,jsonb) TO jobguard_runtime;
+GRANT EXECUTE ON FUNCTION app.replace_stage_proof(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid) TO jobguard_runtime;
+```
+
+No backfill, existing-row rewrite, production-policy change, external action or release-gate advance. Original completion uniqueness, closed kind/action checks, refusals and stored-artifact hashes stay intact. Install migration/readers together and retain history through a reviewed forward fix. Opus's LATER items (narrower migration-role policies, session-bound actor and replay/access ordering confirmation) remain outside r1.
+
+## Commands actually run in r1
+
+Node v24.17.0; resource samples before heavy work: 83% free memory, 37 GB free disk. Unit runs selected one existing proof file at a time with `--maxWorkers=2`; no whole package/repository test suite. Executing builds/tests did not overlap; attempted pnpm build never reached a build task. Direct checks execute installed tools; they are supplementary, not completion of the pinned pnpm/Turbo gate. No reinstall or intentional download was attempted.
+
+| Command | Exit | Result |
+|---|---:|---|
+| PATH prefixed as issued, `pnpm exec turbo run typecheck --force` | 130 | launcher stalled; interrupted; no Turbo tasks |
+| same PATH, `LANE_BASE_REF=origin/main pnpm lint -- --force` | 130 | launcher stalled; interrupted before lint |
+| same PATH, `LANE_BASE_REF=origin/main pnpm lint:lanes` | 130 | launcher stalled; interrupted before lane check |
+| same PATH, `pnpm build --concurrency=2 --force` | 130 | launcher stalled; interrupted; no build tasks |
+| same PATH, `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 130 | launcher stalled; interrupted; no Turbo tasks |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0 | core purity (158 files), lane, money and commercial boundary checks passed |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 0 | passed including working-tree paths against origin/main |
+| `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` | 0 | DB source typecheck passed |
+| `./node_modules/.bin/vitest run src/proof/proof.application.test.ts --maxWorkers=2` in apps/api | 0 | one file, 9/9 existing unit tests |
+| `./node_modules/.bin/vitest run src/proof.test.ts --maxWorkers=2` in packages/core | 0 | one file, 9/9 existing unit tests |
+| `./node_modules/.bin/tsx src/generate-openapi.ts --check` in apps/api | 1 | IPC permission refusal before verification; NOT RUN |
+| `./node_modules/.bin/tsc -p packages/config/tsconfig.json --noEmit` | 0 | source typecheck / package lint compiler passed |
+| `./node_modules/.bin/tsc -p packages/core/tsconfig.json --noEmit` | 0 | source typecheck / package lint compiler passed |
+| `./node_modules/.bin/tsc -p packages/storage/tsconfig.json --noEmit` | 0 | source typecheck / package lint compiler passed |
+| `./node_modules/.bin/tsc -p packages/ai/tsconfig.json --noEmit` | 0 | source typecheck / package lint compiler passed |
+| `./node_modules/.bin/tsc -p apps/api/tsconfig.json --noEmit` | 0 | source typecheck / package lint compiler passed |
+| `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` | 0 | source typecheck / package lint compiler passed |
+| `./node_modules/.bin/tsc -p packages/config/tsconfig.json` in . | 0 | direct build passed; log `/private/tmp/jg-migfix-3-r1-build-0.log` |
+| `./node_modules/.bin/tsc -p packages/core/tsconfig.json` in . | 0 | direct build passed; log `/private/tmp/jg-migfix-3-r1-build-1.log` |
+| `./node_modules/.bin/tsc -p packages/storage/tsconfig.json` in . | 0 | direct build passed; log `/private/tmp/jg-migfix-3-r1-build-2.log` |
+| `./node_modules/.bin/tsc -p packages/ai/tsconfig.json` in . | 0 | direct build passed; log `/private/tmp/jg-migfix-3-r1-build-3.log` |
+| `./node_modules/.bin/tsc -p packages/db/tsconfig.json` in . | 0 | direct build passed; log `/private/tmp/jg-migfix-3-r1-build-4.log` |
+| `./node_modules/.bin/nest build` in apps/api | 0 | direct build passed; log `/private/tmp/jg-migfix-3-r1-build-5.log` |
+| `./node_modules/.bin/next build` in apps/web | 0 | direct build passed; log `/private/tmp/jg-migfix-3-r1-build-6.log` |
+| one-off Python SQL/scope and migration/hash checks | 0 | structural inspection; six additive rows; protected files/other migrations/lanes unchanged |
+| Python receipt/message write | 1 then 0 | first attempt had a quoting SyntaxError before any write; corrected attempt wrote this section and message |
+| `git diff --check` (initial/final) | 0 | no whitespace errors |
+
+Pnpm launcher points to global v11, prints the ignored `pnpm.overrides` warning and stalls. No package command completed through it; exact repository package-manager pin was not verified. Each stalled command was interrupted via tool stdin Ctrl-C, exit 130; no cleanup/git write. Requested cache-off commands were attempted with `--force`, but no Turbo task ran and none is claimed green. Direct typecheck/build commands executed; source typecheck and package lint compiler are the same configured `tsc --noEmit`, run once per package. Next build passed with existing workspace-root and CSS `end`/`flex-end` warnings. Logs: `/private/tmp/jg-migfix-3-r1-typecheck.json`, `/private/tmp/jg-migfix-3-r1-build.json`, build logs 0–6.
+
+Read-only inspection ledger (zero tests): `pwd`, `git status --short`, `git rev-parse HEAD origin/main`, `git branch --show-current`, `git diff --stat/--numstat`, `git diff -- <paths>`, `git show HEAD:<path>`, `rg --files`, `rg -n`, `cat`, `head`, `tail`, `sed`, `ls -l`, `command -v pnpm`, `node --version`, memory/disk queries, package/tool/contract/order/verdict reads returned 0 except an initial optional/guessed-path group returned 1 for absent guessed migration names `0015_proof_invalidation.sql` / `0096_shadow_signal_privacy.sql`; actual `0015_proof_stage_gates.sql` / `0096_watchdog_live.sql` were found/read next. Some search groups bounded output with `head`; no failed runtime check was treated as passed. Edit Python heredoc returned 0; receipt's initial quoting error returned 1 before writing, corrected heredoc 0. All inspection evidence remains distinct from executed tests and independent verification.
+
+## NOT RUN, Mac/CI and exact STOP
+
+The sandbox cannot bind localhost or start PostgreSQL/browser. NOT RUN:
+
+- `packages/db/test/migfix-3.integration.test.ts`: all 12 acceptance/race/rollback/authority/grant/RLS cases.
+- `packages/db/test/migfix-3-upgrade.integration.test.ts`: `[MIGFIX-3.U1]` fresh/upgrade/repeat, named-column/full-type/identity/microsecond preservation and controls.
+- `packages/db/test/tenancy.integration.test.ts`: catalogue/RLS/grants including the approved new-table rows.
+- `apps/web/e2e/proof-capture.spec.ts`: including `[MIGFIX-3.1/2/3] original-stage replacements repair the final-account gate and invalidation replays its first response`.
+- Root `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, full mandatory browser suites and pinned forced checks: dispatcher/GitHub CI ownership. No mandatory suite became optional. No AI/prompt/model change; eval inapplicable to r1.
+
+Exact Mac commands after dispatcher commit (not executed here):
+
+```sh
+~/.local/bin/heavy-slot migfix-3-r1 pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/migfix-3.integration.test.ts test/migfix-3-upgrade.integration.test.ts test/tenancy.integration.test.ts
+~/.local/bin/heavy-slot migfix-3-r1-browser pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop proof-capture.spec.ts
+pnpm openapi:check
+```
+
+Additionally record B6 red-on-original-base, green-on-repaired-head for both named MIGFIX files before any PASS. The cited other-piece `proof-invalidation.integration.test.ts` remains absent here; integration is dispatcher-owned. The historical shared-harness optional extra typecheck diagnostic was not rerun or edited.
+
+**STOP — OpenAPI:** exact command `./node_modules/.bin/tsx src/generate-openapi.ts --check` in apps/api. Exact refusal: `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/66355.pipe`. Stopped that item; no alternate IPC route or escalation tried. Former catalogue permission STOP is resolved by r1 approval. PostgreSQL execution and failing-first evidence remain pending.
+
+## Scope and current hashes
+
+All other lane entries and migration files match their HEAD bytes; MIGRATIONS.md is appended only. Both MIGFIX test files, browser spec, context-boundary.test.ts, watchdog.ts, command-replay-contract test and shared harness match HEAD byte for byte. Removing exactly the six approved catalogue additions gives the original tenancy bytes. Historical receipt and existing hashes below are preserved. Current repaired-file hashes are new evidence, not changed pins:
+
+| Path | Working SHA-256 |
+|---|---|
+| `packages/db/migrations/0152_proof_replacement_commands.sql` | `2b8d187e7207077d277bcd4646904ecddc8b41dc6b7f02ae770e474da946e835` |
+| `packages/db/src/proof-repository.ts` | `6d365f478a6973d5b3dad1f5c3278da0dc6addafa578165f6c1e8a4848d68aec` |
+| `packages/db/test/tenancy.integration.test.ts` | `189e9e850101a35309e3447fb8aecc1ab1680c12f4dcf4b44c58f8357f489c63` |
+| `packages/db/MIGRATIONS.md` | `22a8d458970f192e804221d18f3e480d0c1259dc0a7c2f323111b162fe79bcf9` |
+| `config/agent-lane-assignments.json` | `906421c4698c4c8c3becdb05a51c505842bab58a5eb0faf9ab538aa5cf9b9da4` |
+
+Implementation diff against fa59263e (receipt excluded explicitly):
+
+```text
+ config/agent-lane-assignments.json                         |  2 +-
+ packages/db/MIGRATIONS.md                                  |  8 ++++++++
+ packages/db/migrations/0152_proof_replacement_commands.sql | 14 +++++++-------
+ packages/db/src/proof-repository.ts                        |  2 +-
+ packages/db/test/tenancy.integration.test.ts               |  6 ++++++
+ 5 files changed, 23 insertions(+), 9 deletions(-)
+```
+
+Final HEAD remains `fa59263ea4bddf728271958057969d5234e9383a`; repairs are uncommitted for dispatcher commit. Intended conventional commit message `/private/tmp/jg-msg-migfix-3.txt` is overwritten for r1. Changed paths: this receipt, lane registry, MIGRATIONS.md, 0152, replacement call and six catalogue rows. Fresh exact-commit independent verdict, separate acceptance, failing-first evidence, PostgreSQL/browser CI, OpenAPI and pinned checks remain required. No acceptance/release is claimed.
+
+---
+
+# Historical initial-build receipt (verbatim; superseded by r1 above)
+
 Built by Codex; dispatched 13 Oct 2026.
 
 # MIGFIX-3 builder receipt — partial, RED

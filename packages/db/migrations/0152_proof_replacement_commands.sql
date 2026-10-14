@@ -45,14 +45,14 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
-  EXECUTE format('CREATE POLICY tenant_isolation ON app.%I TO jobguard_runtime,jobguard_migration USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),)::uuid) WITH CHECK(tenant_id=nullif(current_setting(app.tenant_id,true),)::uuid)',n);
+  EXECUTE format('CREATE POLICY tenant_isolation ON app.%I TO jobguard_runtime,jobguard_migration USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
   EXECUTE format('GRANT SELECT ON app.%I TO jobguard_runtime',n);
   EXECUTE format('REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON app.%I FROM jobguard_runtime',n);
   EXECUTE format('CREATE TRIGGER proof_history_immutable BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_authorization_record()',n);
  END LOOP;
  -- Narrow, tenant-scoped owner access for the checked routines; runtime policies remain intact.
  FOREACH n IN ARRAY ARRAY['stage_completion','stage_review_event','evidence_link'] LOOP
-  EXECUTE format('CREATE POLICY proof_migration_writer ON app.%I TO jobguard_migration USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),)::uuid) WITH CHECK(tenant_id=nullif(current_setting(app.tenant_id,true),)::uuid)',n);
+  EXECUTE format('CREATE POLICY proof_migration_writer ON app.%I TO jobguard_migration USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
  END LOOP;
 END $$;
 CREATE VIEW app.current_stage_proof WITH(security_invoker=true) AS
@@ -126,8 +126,8 @@ BEGIN
  OR EXISTS(SELECT 1 FROM app.evidence_upload WHERE tenant_id=t AND id=c)
  THEN RAISE EXCEPTION 'COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
  -- Separate statement before the authoritative read: waiting must not reuse a stale snapshot.
- PERFORM 1 FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.upload_id)=(u.tenant_id,u.id)
- WHERE e.tenant_id=t AND e.id=eid FOR UPDATE OF u;
+ PERFORM 1 FROM app.evidence_upload u JOIN app.evidence_object proof_object ON(proof_object.tenant_id,proof_object.upload_id)=(u.tenant_id,u.id)
+ WHERE proof_object.tenant_id=t AND proof_object.id=eid FOR UPDATE OF u;
  SELECT * INTO e FROM app.evidence_object WHERE tenant_id=t AND id=eid;
  IF NOT FOUND THEN RAISE EXCEPTION 'PROOF_NOT_FINAL' USING ERRCODE='23514'; END IF;
  INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code)
@@ -207,9 +207,9 @@ BEGIN
  VALUES(t,replacement_id_value,p.job_id,p.scope_item_id,p.stage,p.id,iid,lid,c,a,p.generation+1,p.replacement_id,rid,aid);
  RETURN replacement_id_value;
 END $$;
-ALTER FUNCTION app.replace_stage_proof(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid) OWNER TO jobguard_migration;
-REVOKE ALL ON FUNCTION app.replace_stage_proof(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
-GRANT EXECUTE ON FUNCTION app.replace_stage_proof(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid) TO jobguard_runtime;
+ALTER FUNCTION app.replace_stage_proof(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.replace_stage_proof(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.replace_stage_proof(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid) TO jobguard_runtime;
 -- Checked writers cannot commit history under an unrelated or pre-existing audit event.
 CREATE FUNCTION app.verify_proof_history_audit() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
