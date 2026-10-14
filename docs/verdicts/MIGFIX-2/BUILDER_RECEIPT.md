@@ -1,3 +1,55 @@
+Built by Codex (GPT-6); repair round r1 dispatched 14 Oct 2026 (dispatcher 5).
+
+## Repair round r1 — current handoff
+
+Repair base / unchanged local HEAD: `ccd0d3676091fa4d6440bf749dc8fd1496b76c7f`, branch `codex/sandbox/migfix-2`. Comparison base `origin/main`: `bd959b01e857de0ba7cbd3588bab84add7d0f493`. Initial working tree was clean. The original build receipt below is preserved as historical evidence; its old HEAD, untracked-file counts, lane-check refusal and first-round restrictions are superseded by this repair record.
+
+Read AGENTS.md, BUILD_PLAN.md §2 (including inherited criteria), §§5.3–5.6, M0-10 inventory and D02/charging gates, the existing migration/tests/docs and the independent [Opus REPAIR verdict for ccd0d367](/Users/benharwood/.local/share/full-steam/jg-runs/migfix-2-opus-ccd0d36.md). That verdict is source inspection only, with no tests run. This receipt records builder checks, not an independent verdict or technical acceptance. A final-commit verdict and acceptance by a separate actor remain required after dispatcher commit.
+
+Exactly three repair files:
+
+- `packages/db/MIGRATIONS.md`: append a 0151 section describing the three replaced 0004 routine bodies, `journal_full_reversal_uq` / UNIQUE `(tenant_id, reverses_journal_id)`, unchanged grants/owners/security and RLS, historical-duplicate install failure `23505`, no historical rewrite/backfill, forward-fix rollback strategy and both proof files.
+- `config/agent-lane-assignments.json`: add only `packages/db/MIGRATIONS.md` to `migfix-2.allow`; widening explicitly approved in this repair order. All other lanes and all other fields remain identical. Registry and migration documentation are shared files; this lane's authorized edit serializes with other lanes at integration under dispatcher ownership.
+- This receipt: current repair scope, actual checks and remaining holds. No SQL, implementation, test, fixture, assertion, pin or harness changes.
+
+Migration 0151 SHA-256 before = after = `1b837fa166c586bfcf1b83784721c880e2f2762ed8110c464262ac8b695e109c`. The migration, both new proof files, migrate.ts, ledger.ts, historical 0004 and merged tenancy/ledger tests were byte-compared with HEAD. The merged API auth context-boundary test was also byte-compared with HEAD. Existing MIGRATIONS.md bytes are preserved as an exact prefix. JSON comparison proves that the one permitted allow-list item is the only registry change.
+
+### Repair validation — commands actually run
+
+Dependencies were already installed. No install/download or git-writing command executed. Node `v24.17.0`; cached pinned pnpm `10.28.1`. All pnpm commands used `PATH="/private/tmp/jg-migfix-2-bin:$PATH" npm_config_manage_package_manager_versions=false`; the pre-existing temporary wrapper invokes the cached pinned pnpm directly. Default `pnpm --version` hung and was interrupted (130); the cached command returned 10.28.1 (0). A read-only `ps` probe was denied by the sandbox; no escalation requested. Turbo emitted IO permission warnings, but all recorded successful Turbo tasks executed with force rather than cache hits. Build also emitted existing Next workspace-root and CSS autoprefixer warnings.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck --force` | 0; 7/7 tasks executed, 0 cached; 2m20.217s |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | 0; root boundary checks and 7/7 package tasks, 0 cached; 2m17.352s |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; migfix-2 comparison covers seven changed paths within the eight allowed paths, including the newly allowed migration documentation |
+| `pnpm build --concurrency=2 --force` | 0; 7/7 tasks executed, 0 cached; 2m27.789s |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; existing OpenAPI check entrypoint via Node import, avoiding tsx CLI's IPC listener |
+| `node --test tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/core-purity.test.mjs tools/shared-money-origin.test.mjs tools/commercial-boundary.test.mjs` | 0; 19 tests passed |
+| `pnpm exec turbo run test --filter=@jobguard/core --filter=@jobguard/config --filter=@jobguard/storage --filter=@jobguard/ai --filter=@jobguard/web --concurrency=2 --force` | 1; config 2 tests passed, storage 4 passed. Core collected source and emitted dist tests: 4,886 passed, 4 failed (source/dist receipt-allocation timeout plus two dist tests reading missing .ts files). Turbo stopped downstream work; no whole-run pass claimed |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1` | 0; 81 files, 2,445 source tests passed; no timeout/expectation changed |
+| `pnpm --filter @jobguard/ai exec vitest run src --maxWorkers=1` | 0; 5 files, 80 fixture tests passed; no live model/provider run |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | 0; 33 files, 784 unit tests passed; no browser journey |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude 'src/contractor/*.http.test.ts' --exclude src/auth/sso/action-paths.test.ts` | 1; 64 files passed, 1 failed; 1,557 tests passed, 1 skipped. final-account-lock.isolation.test.ts dynamically imports a real-DB fixture: port discovery failed (`no free port in 58400..58650`) before PostgreSQL startup. This is a database-suite hold, not a unit or database pass |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude test/free-port.test.ts` | 1; 16 files passed, 2 failed; 254 tests passed, 2 failed. Source/dist audit-checkpoint-handoff test exceeded its existing 5s timeout |
+| `pnpm --filter @jobguard/db exec vitest run src test --maxWorkers=1 --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.*'` | 1; same 254 passed / 2 audit-checkpoint timeouts. Vitest's substring filter `test` still collected dist; this was not a source-only run |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 --exclude '**/dist/**' --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.*'` | 0; explicit dist exclusion, 13 files, 169 source unit tests passed, including audit-checkpoint; no timeout/expectation changed. Scripted DB tests do not prove PostgreSQL guarantees |
+| `git diff --check` | 0; repeated before/after receipt update |
+| Python byte/JSON comparison | 0 on corrected probe; exact one-item widening and unchanged SQL/runtime/test bytes. Initial probe used a wrong context-boundary path and returned 1 (read-only missing-file error); actual file is apps/api/src/auth/context-boundary.test.ts |
+
+Raw logs are `/private/tmp/jg-migfix-2-r1-{typecheck,lint,lint-lanes,lint-lanes-final,build,openapi,tool-units,units,core-source-units,ai-source-units,web-source-units,api-units,db-units,db-source-units,db-source-final}.log`. Successful bounded source runs follow failed broad runs; the failed full-filter command remains failed and must not be reported as a green full suite. No existing check or assertion was weakened. Final lane lint after receipt update returned 0; final diff/path inspection returned 0 and names exactly the three authorized repair files. Final free disk space: 38 GB.
+
+### Remaining holds and handoff
+
+- `migfix-2.integration.test.ts` and `migfix-2-upgrade.integration.test.ts`: still **NOT RUN**, no baseline failure or PostgreSQL pass reproduced. The Opus merge condition requires both green on the final committed head in Mac/GitHub CI. Historical-duplicate, upgrade, catalog and concurrency guarantees remain unverified by execution here.
+- Full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, browser/e2e and real-DB/API HTTP suites require the dispatcher/GitHub environment. Root test also includes two lane-checker fixture suites that invoke git init/add/commit/switch; these were intentionally not run under the no-git-writes instruction. Existing suites stay mandatory in CI. The indirectly loaded API database fixture attempted port discovery but no PostgreSQL or browser process started.
+- AI/native release evaluation is inapplicable to this documentation/config repair. The AI unit run above is fixture-only. No provider call, real data, spending, external message, deployment or policy approval.
+- D02, production charts/accounting, recovery-fee disablement and G4-C/G4-S gates remain held. Opus LATER concerns about conservative reversal rules and role-list drift are unchanged; this order authorizes no accounting-policy or SQL alteration.
+- No new grants, migrations, backwards-compatibility impacts, operational alerts or product behavior in r1. The underlying 0151 rollout/forward-fix remains as documented above and in the original receipt.
+- Intended conventional commit message overwritten at `/private/tmp/jg-msg-migfix-2.txt`. Local HEAD stays `ccd0d3676091fa4d6440bf749dc8fd1496b76c7f`; the dispatcher owns commit/push. No acceptance, PR, push, merge or release performed by the builder.
+
+## Original build receipt — 13 Oct 2026 (historical, pre-dispatcher commit)
+
 Built by Codex (GPT-6); dispatched 13 Oct 2026.
 
 MIGFIX-2 — RED lane. Implementation written; database acceptance remains partial/pending. No acceptance or independent verdict claimed.
