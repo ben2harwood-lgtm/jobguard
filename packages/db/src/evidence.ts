@@ -97,6 +97,10 @@ export class EvidenceService {
       // The command's identity and first result are stored with the object, atomically; a replay returns this immutable row.
       await storeCommandResult(db,{tenantId:context.tenantId,commandId:this.finalizeKey(row.job_id,input).commandId,result:{evidenceId:input.uploadId}});
       if(completing) await completing(db);
+      // All business work (including the completion callback) is finished.
+      // Drain deferred source audit/integrity before returning, so the audit
+      // head is held and observable while this transaction is still open.
+      await db.$client.query("SET CONSTRAINTS ALL IMMEDIATE");
       return inserted.rows[0];
     }).catch(rethrowJobWorkState);
   }

@@ -82,9 +82,11 @@ routine is a read that rechecks the persisted practice session, membership,
 owned-job boundary (including the existing adoption semantics), track and mode.
 It receives the existing stamped context per call, not a recreated or saved one.
 
-The migration owner has an additional tenant-bound SELECT policy on the older
-`stage_completion` table, allowing source validation under FORCE RLS. Its existing
-runtime policy and grants remain intact. The lock admission trigger dispatches
+Stage receipts bind their tenant/job/source identity, original server timestamp
+and evidence-link identity through a composite foreign key; the receipt guard
+also checks the hash derived from that exact source/link. Referential integrity
+works under FORCE RLS without adding a policy or read permission to the older
+`stage_completion` table. Its existing policies and grants remain intact. The lock admission trigger dispatches
 by table before reading `status`, which exists only on `final_account_lock_check`.
 Held signal/link writes produce no CH-4 receipt, event, purpose, link or audit
 write. Source processing does not consult shadow content; otherwise-identical
@@ -99,8 +101,9 @@ Excluded billing/catch facts return before the site-source lock helper. Source
 audit is deferred to transaction end; it acquires only the audit head,
 with business locks already held. A plain-read source-authority recheck after
 audit insertion covers waits through audit append without adding a business lock.
-Source receipts, events and audit roll back
-with their source effects. Source events do not schedule work or create money.
+Evidence finalization drains deferred constraints after its last business write
+and completion callback, making the audit-head lock observable before commit.
+Source receipts, events and audit roll back with their source effects. Source events do not schedule work or create money.
 
 Links preserve exact party bindings and common customer/site/payer identities,
 require a locked predecessor, reject self-links/cycles and differing direct

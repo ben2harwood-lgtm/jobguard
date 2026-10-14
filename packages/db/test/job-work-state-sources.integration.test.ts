@@ -69,6 +69,29 @@ describe("CH-4 verified proof and stage command sources",()=>{
   const proof=new ProofCommandService(f.runtime,storage),result=await proof.complete(a.context,command),events=await workEvents(f,a);
   expect(events.map(e=>e.kind)).toEqual(["first_site_evidence","site_activity"]);expect(await proof.complete(a.context,command)).toEqual(result);expect(await workEvents(f,a)).toEqual(events);
  });
+ it("r8 stage source binding rejects a forged original time, evidence link or hash without widening source reads",async()=>{
+  const {createHash}=await import("node:crypto"),a=await seedWorkJob(f),photo=await insertPhoto(f,a),command=randomUUID(),link=randomUUID(),stage=randomUUID();
+  await workTenant(f.runtime,a.tenantId,async db=>{
+   await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::uuid::text,$3,'processing',$4)",[a.tenantId,command,CH4_HASH,a.actorId]);
+   await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'pre_cover_photo')",[link,a.tenantId,photo,a.jobId,a.scopeId]);
+   await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id,completed_at) VALUES($1,$2,$3,$4,'r8-binding',$5,$6,'2026-10-14T10:00:00.123456Z')",[stage,a.tenantId,a.jobId,a.scopeId,link,command]);
+  });
+  const before=await workEvents(f,a);
+  // The table owner cannot see this source under its unchanged FORCE RLS.
+  await workTenant(f.admin,a.tenantId,async db=>{
+   await db.query("SET LOCAL ROLE jobguard_migration");
+   expect((await db.query("SELECT id FROM app.stage_completion WHERE id=$1",[stage])).rows).toEqual([]);
+  });
+  const otherLink=randomUUID();
+  for(const patch of [
+   {received_at:"2026-10-14T10:00:00.123457Z"},
+   {stage_evidence_link_id:otherLink,source_hash:createHash("sha256").update(`${stage}:${otherLink}`).digest("hex")},
+   {source_hash:"b".repeat(64)},
+  ])await expect(workTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.job_site_source_receipt
+   SELECT (jsonb_populate_record(NULL::app.job_site_source_receipt,to_jsonb(r)||$2::jsonb)).*
+   FROM app.job_site_source_receipt r WHERE tenant_id=$1 AND stage_completion_id=$3`,[a.tenantId,JSON.stringify({...patch,id:randomUUID(),fact_key:randomUUID()}),stage]))).rejects.toThrow();
+  expect(await workEvents(f,a)).toEqual(before);
+ });
  it.each(proofEvidenceTypeSchema.options)("CH4-A13 %s original raw runtime insert is refused on a locked job with a pre-lock verified upload",async evidenceType=>{
   const a=await seedWorkJob(f),id=randomUUID(),version=randomUUID(),key=`synthetic/ch4/${id}`;
   // Persist the upload before lock so this exercises the evidence-object guard itself.
@@ -90,7 +113,7 @@ describe("CH-4 real database held-signal isolation",()=>{
  it("r7 zero/25 evidence-linked held signals leave all four new tables and source audit byte-identical before and after runtime photo/stage writes",async()=>{
   const template="ch4_r7_seed",databases=["ch4_r7_zero","ch4_r7_many"];
   await f.admin.query(`CREATE DATABASE ${template}`);
-  const seed=new Pool({...f.admin.options,database:template});
+  const seed=new Pool({...f.admin.options,password:f.admin.options.password,database:template});
   const commandId=randomUUID(),linkId=randomUUID(),completionId=randomUUID(),photoId=randomUUID();
   try{
    await migrate(seed);await installLegacySyntheticPartyFixtures(seed);
@@ -100,7 +123,7 @@ describe("CH-4 real database held-signal isolation",()=>{
    await closeTestPools(seed);
    for(const database of databases)await f.admin.query(`CREATE DATABASE ${database} TEMPLATE ${template}`);
    async function replay(database:string,signalCount:number){
-    const admin=new Pool({...f.admin.options,database}),runtime=new Pool({...f.runtime.options,database});
+    const admin=new Pool({...f.admin.options,password:f.admin.options.password,database}),runtime=new Pool({...f.runtime.options,password:f.runtime.options.password,database});
     try{
      await workTenant(admin,a.tenantId,async db=>{
       await db.query("SET LOCAL ROLE jobguard_shadow");
@@ -123,11 +146,11 @@ describe("CH-4 real database held-signal isolation",()=>{
      }
      const before=await snapshot();
      await workTenant(runtime,a.tenantId,async db=>{
-      await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$1::text,$5,'image/png',100,'standard_evidence','2099-10-01','verified','ch4-r7:v1',clock_timestamp(),clock_timestamp())",[photoId,a.tenantId,a.jobId,a.scopeId,CH4_HASH]);
+      await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$1::uuid::text,$5,'image/png',100,'standard_evidence','2099-10-01','verified','ch4-r7:v1',clock_timestamp(),clock_timestamp())",[photoId,a.tenantId,a.jobId,a.scopeId,CH4_HASH]);
       await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) SELECT id,tenant_id,id,job_id,scope_item_id,'original','completion_photo',object_key,object_version_id,expected_sha256,80,expected_content_type,retention_class,server_received_at,server_verified_at FROM app.evidence_upload WHERE id=$1",[photoId]);
       // Explicit source-command fixture through the non-owner runtime role. No
       // trigger/RLS bypass: stage receipt validation must see the completed row.
-      await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::text,$3,'processing',$4)",[a.tenantId,commandId,CH4_HASH,a.actorId]);
+      await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::uuid::text,$3,'processing',$4)",[a.tenantId,commandId,CH4_HASH,a.actorId]);
       await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'completion_photo')",[linkId,a.tenantId,photoId,a.jobId,a.scopeId]);
       await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'completion',$5,$6)",[completionId,a.tenantId,a.jobId,a.scopeId,linkId,commandId]);
      });

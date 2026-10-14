@@ -992,12 +992,19 @@ Adds the shared current payer function and append-only, FORCE-RLS payment marks 
 
 Creates `job_work_state_event`, `job_site_source_receipt`, `job_photo_purpose` and
 `job_link`, with FORCE RLS, qualified references, immutable mutation/truncate
-controls and runtime SELECT only. Adds the stage-completion job-qualified key.
+controls and runtime SELECT only. Adds the stage-completion job-qualified key
+and a source key binding tenant/job/id/completed-at/evidence-link. Stage receipts
+reference both keys and validate the source/link hash; no older table gains a
+policy or grant. Existing rows, types and primary identities remain unchanged.
 Existing photo finalization, ready delivery versions, goods receipts, builder
 origins and stage completion produce normalized facts in the source transaction.
 Original receipt timestamps retain PostgreSQL microseconds; no history is backfilled.
 The deterministic earliest qualifying candidate supplies first site evidence.
 Audit appends run as deferred constraint triggers, after source business locks.
+Evidence finalization drains them after its completion callback and last business
+write, while the transaction remains open. Exact PO placement command replays
+retain their first result; a new identity cannot use semantic deduplication to
+admit post-lock work.
 
 New-work triggers serialize with the existing final-account lock through its job
 row. A currently closed job refuses new lock and pending-check admission.

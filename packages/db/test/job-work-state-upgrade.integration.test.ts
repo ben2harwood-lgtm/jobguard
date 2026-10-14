@@ -40,7 +40,7 @@ describe("CH-4 own-migration upgrade",()=>{
   const a=await seedWorkJob(f),account=await prepareWorkAccount(f,a),repo=new FinalAccountLockRepository(f.runtime);
   const evidenceId=await insertPhoto(f,a),linkId=randomUUID(),stageId=randomUUID(),proofCommandId=randomUUID();
   await workTenant(f.runtime,a.tenantId,async db=>{
-   await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::text,$3,'processing',$4)",[a.tenantId,proofCommandId,CH4_HASH,a.actorId]);
+   await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'proof.complete',$2::uuid::text,$3,'processing',$4)",[a.tenantId,proofCommandId,CH4_HASH,a.actorId]);
    await db.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'pre_cover_photo')",[linkId,a.tenantId,evidenceId,a.jobId,a.scopeId]);
    await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id) VALUES($1,$2,$3,$4,'fixture-stage',$5,$6)",[stageId,a.tenantId,a.jobId,a.scopeId,linkId,proofCommandId]);
   });
@@ -53,14 +53,24 @@ describe("CH-4 own-migration upgrade",()=>{
   await compare(f.admin,before);const names=new Set(acl.map(r=>r.name));expect((await grants(f.admin)).filter(r=>names.has(r.name))).toEqual(acl);
   const policyNames=new Set(originalPolicies.map(r=>r.name));
   expect((await policies(f.admin)).filter(r=>policyNames.has(r.name))).toEqual(originalPolicies);
-  expect((await policies(f.admin)).find(r=>r.name==='app.stage_completion.ch4_stage_source_read')).toMatchObject({roles:['jobguard_migration'],cmd:'SELECT',with_check:null});
+  const oldPolicyTables=new Set(originalPolicies.map(r=>r.name.split('.').slice(0,2).join('.')));
+  const compareOldPolicies=async(db:Pick<PoolClient,"query">)=>expect((await policies(db)).filter(r=>oldPolicyTables.has(r.name.split('.').slice(0,2).join('.')))).toEqual(originalPolicies);
+  await compareOldPolicies(f.admin);
   const reader=await f.admin.connect();try{
    await reader.query("BEGIN");await reader.query("SET LOCAL ROLE jobguard_migration");
+   await reader.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+   expect((await reader.query("SELECT id FROM app.stage_completion")).rows).toEqual([]);
+   // Rolled-back widening control: preserve r7's positive policy/visibility
+   // checks as proof of exactly the forbidden permission delta, and prove the
+   // production comparator rejects it. The migration itself adds no policy.
+   await reader.query("CREATE POLICY ch4_stage_source_read ON app.stage_completion FOR SELECT TO jobguard_migration USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid)");
+   expect((await policies(reader)).find(r=>r.name==='app.stage_completion.ch4_stage_source_read')).toMatchObject({roles:['jobguard_migration'],cmd:'SELECT',with_check:null});
+   await expect(compareOldPolicies(reader)).rejects.toThrow();
    await reader.query("SELECT set_config('app.tenant_id','',true)");expect((await reader.query("SELECT id FROM app.stage_completion")).rows).toEqual([]);
    await reader.query("SELECT set_config('app.tenant_id',$1,true)",[randomUUID()]);expect((await reader.query("SELECT id FROM app.stage_completion")).rows).toEqual([]);
    await reader.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);expect((await reader.query("SELECT id FROM app.stage_completion")).rows).toEqual([{id:stageId}]);
   }finally{await reader.query("ROLLBACK");reader.release()}
-  await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);
+  await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin);
   for(const mutation of ["UPDATE app.evidence_object SET server_received_at=server_received_at+interval '1 microsecond'","ALTER TABLE app.job ALTER COLUMN title TYPE text"]){
    const db=await f.admin.connect();try{await db.query("BEGIN");await db.query("SET LOCAL session_replication_role='replica'");await db.query(mutation);await expect(compare(db,before)).rejects.toThrow()}finally{await db.query("ROLLBACK");db.release()}
   }

@@ -84,6 +84,15 @@ describe("CH-4 raw new-work guard matrix",()=>{
   await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.transition_scope_progress($1,$2,$3,0,'in_progress','start')",[a.tenantId,a.jobId,a.scopeId]))).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
   expect((await f.admin.query("SELECT stage FROM app.scope_progress WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].stage).toBe("not_started");
  });
+ it("r8 a successful pre-lock PO semantic no-op keeps its own replay identity after lock",async()=>{
+  const entry=sourceHarness.cases.find(c=>c.key==="purchase-order-repository.ts#place")!,jobId=await sourceHarness.live();
+  await entry.prepare(jobId);await entry.run(jobId,randomUUID(),"same");
+  const noopId=randomUUID(),first=sourceHarness.norm(await entry.noop!(jobId,noopId,"same"));
+  await boundaryLock({admin:sourceHarness.admin} as WorkFixture,{tenantId:sourceHarness.tenant,jobId,actorId:sourceHarness.member} as Awaited<ReturnType<typeof seedWorkJob>>);
+  expect(sourceHarness.norm(await entry.noop!(jobId,noopId,"same"))).toEqual(first);
+  await expect(entry.noop!(jobId,noopId,"changed")).rejects.toThrow(/CONFLICT/u);
+  await expect(entry.noop!(jobId,randomUUID(),"same")).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+ });
 });
 
 // Read-only reuse of the merged repository recipes; no registry/harness change.
