@@ -225,6 +225,51 @@ describe("SV5PRE authoritative completion", () => {
    probe.release();
   }
  });
+
+ // Decision 17 (Ben, 14 Oct): the lock WAITS (bounded) for uploads already in progress; nothing slips past it.
+ async function openUpload(a: { tenantId: string; jobId: string }) {
+  const db = await f.runtime.connect();
+  await db.query("BEGIN");
+  await db.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
+  const id = randomUUID();
+  try { await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [a.tenantId, a.jobId, id]); }
+  catch (error) { await db.query("ROLLBACK"); db.release(); throw error; }
+  return { db, id };
+ }
+ it("D17-a an upload started before the lock finishes first, then the lock completes and the upload is in the frozen check", async () => {
+  const a = await seedAccount(f.admin), repo = await prepareLock(f, a), w = await openUpload(a);
+  try {
+   const lock = repo.lock(a.context, a.input);
+   let done = false; lock.then(() => { done = true; }, () => { done = true; });
+   await new Promise(r => setTimeout(r, 300));
+   expect(done).toBe(false);
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
+   await w.db.query("COMMIT");
+   const locked = await lock;
+   const manifest = await new FinalCheckCompletionRepository(f.shadow).freeze(a.context, { version: 'final-check-manifest.v1', jobId: a.jobId, manifestId: randomUUID(), detectorVersion: 'synthetic.v1', reconciliationVersion: 'synthetic.v1' });
+   expect(manifest.sourceCount).toBe(1);
+   const src = (await f.admin.query("SELECT upload_id, source_received_at <= $3::timestamptz ok FROM app.final_check_manifest_source WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId, (await f.admin.query("SELECT locked_at::text t FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].t])).rows;
+   expect(src).toEqual([{ upload_id: w.id, ok: true }]);
+   expect(locked.id).toBeTruthy();
+  } finally { await w.db.query("ROLLBACK"); w.db.release(); }
+ });
+ it("D17-b an upload started after the lock is refused", async () => {
+  const a = await locked();
+  await expect(openUpload(a)).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.evidence_upload WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+ });
+ it("D17-c the lock is not blocked forever by an upload that never finishes", async () => {
+  const a = await seedAccount(f.admin), repo = await prepareLock(f, a), w = await openUpload(a);
+  try {
+   const bounded = new FinalAccountLockRepository(f.runtime, 400), started = Date.now();
+   await expect(bounded.lock(a.context, a.input)).rejects.toMatchObject({ code: "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS" });
+   expect(Date.now() - started).toBeLessThan(5000);
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
+   await w.db.query("COMMIT");
+   await repo.lock(a.context, a.input);
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
+  } finally { await w.db.query("ROLLBACK"); w.db.release(); }
+ });
  it("PRE-Q5-13 completion and issue serialize around authoritative publication",async()=>{
   const a=await locked(),repo=new FinalCheckCompletionRepository(f.shadow),m=await repo.freeze(a.context,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'synthetic.v1',reconciliationVersion:'synthetic.v1'}),runId=randomUUID();await repo.bindEmptyRun(a.context,{version:'final-check-empty-run.v1',jobId:a.jobId,manifestId:m.id,runId,executionId:randomUUID()});
   const results=await Promise.allSettled([repo.publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId,checkId:randomUUID()}),new FinalAccountLockRepository(f.runtime).issueInvoice(a.context,{jobId:a.jobId,actorMembershipId:a.input.actorMembershipId,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:'a'.repeat(64),invoiceKind:'final',recipient:'practice-customer@example.invalid',issuedOn:'2026-10-13'})]);expect(results[0].status).toBe('fulfilled');if(results[1].status==='rejected')expect(results[1].reason).toMatchObject({code:'FINAL_CHECK_NOT_COMPLETE'});
