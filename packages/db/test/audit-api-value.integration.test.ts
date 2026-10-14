@@ -49,7 +49,7 @@ it.each(["addition", "omission"] as const)("value preserves the approved amount 
  const initial = (await value.read(jobId))[key];
  expect(initial).toMatchObject({ pence: 12500, sources: [{ id: first.id, revision: 1 }] });
  const secondId = randomUUID();
- await variations.command(jobId, { version: "variation-command.v1", action: "revise", variationId, revisionId: secondId, description: "Fictional revised price", price: price(15000) });
+ await variations.command(jobId, { version: "variation-command.v1", action: "revise", variationId, revisionId: secondId, expectedRevisionId: first.id, description: "Fictional revised price", price: price(15000) });
  const pending = await value.read(jobId);
  expect(pending[key]).toEqual(initial);
  expect(pending.pendingExtras.map(row => ({ id: row.id, revision: row.revision, pence: row.pence }))).toEqual(direction === "addition" ? [{ id: secondId, revision: 2, pence: 15000 }] : []);
