@@ -77,4 +77,48 @@ CREATE OR REPLACE FUNCTION app.record_quote_disposition(p_tenant uuid,p_event uu
  ELSIF p_kind='acceptance_cancelled' AND j.status='accepted' AND j.accepted_quote_version_id=p_document THEN SELECT a2.id INTO a_id FROM app.quote_acceptance a2 LEFT JOIN app.quote_acceptance_sequence s ON s.tenant_id=a2.tenant_id AND s.acceptance_id=a2.id WHERE a2.tenant_id=p_tenant AND a2.job_id=p_job AND a2.document_id=p_document ORDER BY coalesce(s.acceptance_sequence,1) DESC,a2.recorded_at DESC,a2.id DESC LIMIT 1;UPDATE app.job SET status='quoting',revision=revision+1,accepted_quote_version_id=NULL,updated_at=transaction_timestamp() WHERE tenant_id=p_tenant AND id=p_job;
  ELSE RAISE EXCEPTION 'disposition is not allowed' USING ERRCODE='22023';END IF;
  INSERT INTO app.acceptance_event(id,tenant_id,job_id,document_id,document_version,document_hash,acceptance_id,kind,actor_membership_id,occurred_at) VALUES(p_event,p_tenant,p_job,p_document,p_version,p_hash,a_id,p_kind,p_actor,p_occurred) RETURNING * INTO e;RETURN e;END $$;
+-- The accepted-quote evidence source is the LATEST acceptance by sequence, never by the builder-typed accepted_at (a corrected re-acceptance may carry an earlier date).
+-- Only the ordering of app.recovery_message_sources_current changes (same signature, owner, ACL); single-acceptance jobs resolve identically.
+CREATE OR REPLACE FUNCTION app.recovery_message_sources_current(p_tenant uuid,p_job uuid,p_case uuid,p_sources jsonb)
+RETURNS boolean LANGUAGE sql STABLE AS $$
+ WITH rc AS (SELECT * FROM app.recovery_case WHERE tenant_id=p_tenant AND job_id=p_job AND id=p_case),
+ quote AS (
+  SELECT d.id,d.document_version version,to_jsonb(d) record,a.id acceptance_id,to_jsonb(a) acceptance
+  FROM app.quote_acceptance a LEFT JOIN app.quote_acceptance_sequence qs ON(qs.tenant_id,qs.acceptance_id)=(a.tenant_id,a.id) JOIN app.job j ON(j.tenant_id,j.id,j.accepted_quote_version_id)=(a.tenant_id,a.job_id,a.document_id)
+  JOIN app.quote_document_version d ON(d.tenant_id,d.job_id,d.id,d.document_version,d.content_hash)=(a.tenant_id,a.job_id,a.document_id,a.document_version,a.document_hash)
+  WHERE a.tenant_id=p_tenant AND a.job_id=p_job ORDER BY coalesce(qs.acceptance_sequence,1) DESC,a.recorded_at DESC,a.id DESC LIMIT 1
+ ), proof AS (
+  SELECT e.id,to_jsonb(e) record,o.bytes,e.sha256
+  FROM app.evidence_object e JOIN app.evidence_upload u ON(u.tenant_id,u.id,u.job_id)=(e.tenant_id,e.upload_id,e.job_id)
+  LEFT JOIN app.synthetic_evidence_original o ON(o.tenant_id,o.job_id,o.upload_id,o.object_key,o.object_version_id)=(e.tenant_id,e.job_id,e.upload_id,e.object_key,e.object_version_id)
+  WHERE e.tenant_id=p_tenant AND e.job_id=p_job AND e.kind='original' AND u.state='verified' AND u.object_version_id=e.object_version_id
+   AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)
+ ), variation AS (
+  SELECT r.id,r.revision version,to_jsonb(r) record,a.id approval_id,to_jsonb(a) approval
+  FROM app.variation_revision r JOIN app.variation_approval a ON(a.tenant_id,a.job_id,a.revision_id,a.revision,a.content_hash)=(r.tenant_id,r.job_id,r.id,r.revision,r.content_hash)
+  WHERE r.tenant_id=p_tenant AND r.job_id=p_job
+ ), records AS (
+  SELECT 'quote_document_version:'||id::text source_id,version,jsonb_build_object('recordType','quote_document_version','record',record) content FROM quote
+  UNION ALL SELECT 'quote_acceptance:'||acceptance_id::text,1,jsonb_build_object('recordType','quote_acceptance','record',acceptance) FROM quote
+  UNION ALL SELECT 'evidence_object:'||id::text,1,jsonb_build_object('recordType','evidence_object','record',record,'originalBytesBase64',replace(encode(bytes,'base64'),E'\n',''),'originalEncoding','base64') FROM proof WHERE bytes IS NOT NULL AND encode(sha256(bytes),'hex')=sha256
+  UNION ALL SELECT 'evidence_object:'||id::text||':redacted-metadata',1,jsonb_build_object('recordType','evidence_object_redacted_metadata.v1','record',
+    jsonb_build_object('id',id,'job_id',p_job,'object_version_id',record->'object_version_id','sha256',record->'sha256','evidence_type',record->'evidence_type','byte_length',record->'byte_length','content_type',record->'content_type'),
+    'omittedFields',jsonb_build_array('original bytes','object key','capture metadata','server timestamps','upload identity','tenant identity')) FROM proof
+  UNION ALL SELECT 'variation_revision:'||id::text,version,jsonb_build_object('recordType','variation_revision','record',record) FROM variation
+  UNION ALL SELECT 'variation_approval:'||approval_id::text,1,jsonb_build_object('recordType','variation_approval','record',approval) FROM variation
+  UNION ALL SELECT 'recovery_claim_revision:'||r.id::text,r.revision,jsonb_build_object('recordType','recovery_claim_revision','record',to_jsonb(r)) FROM app.recovery_claim_revision r WHERE r.tenant_id=p_tenant AND r.job_id=p_job AND r.case_id=p_case
+  UNION ALL SELECT 'recovery_case_event:'||e.id::text,e.sequence,jsonb_build_object('recordType','recovery_case_event','record',to_jsonb(e)) FROM app.recovery_case_event e WHERE e.tenant_id=p_tenant AND e.job_id=p_job AND e.case_id=p_case
+  UNION ALL SELECT 'material_rate_revision:'||r.id::text,r.version,jsonb_build_object('recordType','material_rate_revision','record',to_jsonb(r)) FROM app.material_rate_revision r,rc
+   WHERE rc.case_type='merchant_overcharge' AND r.tenant_id=p_tenant AND rc.source_refs ? r.id::text AND EXISTS(SELECT 1 FROM app.material_requirement m WHERE m.tenant_id=r.tenant_id AND m.sku_id=r.sku_id AND m.job_id=p_job)
+  UNION ALL SELECT 'supplier_document_version:'||v.id::text,v.version,jsonb_build_object('recordType','supplier_document_version','record',to_jsonb(v),'document',to_jsonb(d),'originalBytesAvailable',false)
+   FROM app.supplier_document_version v JOIN app.supplier_document d ON(d.tenant_id,d.job_id,d.id)=(v.tenant_id,v.job_id,v.document_id),rc
+   WHERE rc.case_type='merchant_overcharge' AND v.tenant_id=p_tenant AND v.job_id=p_job AND (rc.source_refs ? v.id::text OR rc.source_refs ? d.id::text) AND d.status='ready' AND d.document_type IN('invoice','delivery')
+  UNION ALL SELECT 'customer_invoice:'||i.id::text,1,jsonb_build_object('recordType','customer_invoice','record',to_jsonb(i)-'pdf_bytes','originalBytesBase64',replace(encode(i.pdf_bytes,'base64'),E'\n',''),'originalEncoding','base64')
+   FROM app.customer_invoice i,rc WHERE rc.case_type<>'merchant_overcharge' AND i.tenant_id=p_tenant AND i.job_id=p_job AND rc.source_refs ? i.id::text AND encode(sha256(i.pdf_bytes),'hex')=i.pdf_sha256
+ ), saved AS (
+  SELECT s->>'sourceId' source_id,(s->>'version')::integer version,(s->>'content')::jsonb content FROM jsonb_array_elements(p_sources) s
+ )
+ SELECT EXISTS(SELECT 1 FROM quote) AND EXISTS(SELECT 1 FROM proof) AND
+ NOT EXISTS(SELECT 1 FROM records r FULL JOIN saved s USING(source_id,version) WHERE r.content IS DISTINCT FROM s.content)
+$$;
 COMMIT;
