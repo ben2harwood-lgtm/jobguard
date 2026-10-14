@@ -54,13 +54,14 @@ export async function readSyntheticDemo(pool: Pool) {
   const empty = await withTenant(pool, emptyContext, async (database) => {
     const membership = await database.$client.query<{ name: string }>(
       `SELECT a.name FROM app.membership m JOIN app.account a ON (a.tenant_id,a.id)=(m.tenant_id,m.account_id)
-       WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3 AND m.revoked_at IS NULL`,
+       WHERE m.tenant_id=$1 AND m.id=$2 AND m.identity_user_id=$3 AND m.revoked_at IS NULL
+         AND (m.expires_at IS NULL OR m.expires_at>transaction_timestamp())`,
       [DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_MEMBERSHIP_ID, "d1500000-0000-4000-8000-000000000001"],
     );
-    if (membership.rowCount !== 1) throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
+    if (membership.rowCount !== 1) return null;
     return { id: DEMO_EMPTY_TENANT_ID, name: membership.rows[0]!.name };
   });
-  return { ...primary, tenants: [primary.tenant, empty] };
+  return { ...primary, tenants: empty ? [primary.tenant, empty] : [primary.tenant] };
 }
 
 /**

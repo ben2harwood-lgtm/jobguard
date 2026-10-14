@@ -94,5 +94,7 @@ export * from "./recovery-payment-payer-repository.js";
 export { GuardedPracticeInvoiceRepository } from "./guarded-practice-invoice-repository.js";
 export { FinalCheckPersistenceError } from "./final-check-completion-repository.js";
 export { FinalCheckCompletionRepository } from "./shadow-detection-repository.js";
+
+export * from "./commercial-integrity-application-repository.js";
 export * from "./job-work-state-repository.js";
 export * from "./job-work-state-sources.js";

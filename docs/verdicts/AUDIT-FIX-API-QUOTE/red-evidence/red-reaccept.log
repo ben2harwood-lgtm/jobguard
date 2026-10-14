@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3c/packages/db
+
+ ❯ test/quote-reacceptance.integration.test.ts (8 tests | 1 failed | 7 skipped) 1635ms
+     × reaccepts unchanged terms after explicit cancellation 158ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/quote-reacceptance.integration.test.ts > quote re-acceptance after cancellation > reaccepts unchanged terms after explicit cancellation
+AssertionError: expected 'quoting' to be 'accepted' // Object.is equality
+
+Expected: "accepted"
+Received: "quoting"
+
+ ❯ test/quote-reacceptance.integration.test.ts:52:29
+     50|     expect(cancelled).toMatchObject({ jobStatus: "quoting", activeAcce…
+     51|     const again = await accept(d);
+     52|     expect(again.jobStatus).toBe("accepted");
+       |                             ^
+     53|     expect(again.activeAcceptance).toMatchObject({ documentId: d.docum…
+     54|     expect(again.activeAcceptance!.id).not.toBe(first.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 skipped (8)
+   Start at  14:21:24
+   Duration  3.27s (transform 999ms, setup 0ms, import 1.56s, tests 1.63s, environment 0ms)
+
+exit 1

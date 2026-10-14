@@ -1,0 +1,27 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3c/packages/db
+
+ ❯ test/quote-reacceptance-evidence.integration.test.ts (2 tests | 1 failed) 1741ms
+     × evidence pack sources use the sequence-2 acceptance, not the cancelled one with the later date 24ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/quote-reacceptance-evidence.integration.test.ts > re-acceptance with an EARLIER stated date > evidence pack sources use the sequence-2 acceptance, not the cancelled one with the later date
+AssertionError: expected [ …(10) ] to include 'quote_acceptance:671144d2-1a6c-49cd-9…'
+ ❯ test/quote-reacceptance-evidence.integration.test.ts:47:17
+     45|     } catch (error) { await client.query("ROLLBACK"); throw error; } f…
+     46|     const ids = (await withTenant(runtime, testTenantContext(fixture.t…
+     47|     expect(ids).toContain(`quote_acceptance:${second}`);
+       |                 ^
+     48|     expect(ids).not.toContain(`quote_acceptance:${fixture.acceptanceId…
+     49|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  14:38:02
+   Duration  2.12s (transform 140ms, setup 0ms, import 328ms, tests 1.74s, environment 0ms)
+
+exit 1

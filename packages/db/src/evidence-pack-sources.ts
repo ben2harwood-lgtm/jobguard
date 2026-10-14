@@ -41,7 +41,7 @@ export async function loadEvidencePackSources(db: TenantTransaction, tenantId: s
     JOIN app.quote_document_version d
       ON(d.tenant_id,d.job_id,d.id,d.document_version,d.content_hash)=(a.tenant_id,a.job_id,a.document_id,a.document_version,a.document_hash)
     WHERE a.tenant_id=$1 AND a.job_id=$2
-    ORDER BY a.accepted_at DESC,a.recorded_at DESC,a.id DESC LIMIT 1`, [tenantId, jobId]);
+    ORDER BY a.recorded_at DESC,a.id DESC LIMIT 1`, [tenantId, jobId]);
   for (const quote of quotes.rows) {
     add("quote_document_version", quote, "accepted_quote", "Accepted quote immutable record");
     add("quote_acceptance", { id: quote.acceptance_id, version: 1, record: quote.acceptance }, "approval", "Accepted quote approval record");
