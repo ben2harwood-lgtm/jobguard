@@ -31,12 +31,14 @@ describe("SV-3 structural timing and runtime query logging",()=>{
  it("replays real builder applications with the same statement sequence/count and no shadow query",async()=>{
   const {createWorkspaceApplication}=await import(new URL("../../../apps/api/dist/workspace/application.js",import.meta.url).href);
   const app=createWorkspaceApplication({pool:runtime,sessionId:session});
-  async function replay(){const start=logs.length,out=[];
+  async function replay(){const start=(await logFence()).end,out=[];
    const calls=[()=>app.decisions.list({tenantId:DEMO_TENANT_ID,jobId:J}),()=>app.variation.get(J),()=>app.jobs.get({sessionId:session},J),()=>app.customerInvoice.get(J),()=>app.finalAccount.get(J),()=>app.materials.view(J),()=>app.supplierDocuments.view(J),()=>app.value.read(J)];
    for(const call of calls){try{out.push(await call())}catch(e){out.push({code:(e as {code:string}).code})}}
-   // Drain socket/log callbacks before comparing the actual PostgreSQL output.
-   await new Promise<void>(resolve=>setTimeout(resolve,25));
-   const statements=logs.slice(start).filter(s=>s.includes("SV3:sv3_log_runtime:") && /(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,""));
+   const end=(await logFence()).start;
+   const statements=logs.join("").slice(start,end)
+    .split(/(?=^SV3:[^:\r\n]+: (?!DETAIL:))/mu)
+    .filter(s=>/^SV3:sv3_log_runtime: LOG:  (?:statement|execute [^:\r\n]+):/u.test(s))
+    .map(s=>s.replace(/^SV3:sv3_log_runtime: LOG:  (?:statement|execute [^:\r\n]+):/u,""));
    expect(statements.length).toBeGreaterThan(0);expect(statements.join("\n")).not.toMatch(/\b(?:shadow_commercial_signal|shadow_signal_\w+|shadow_reconciliation_run|shadow_disclosure_event|shadow_break_glass_access|shadow_must_surface_firing|reveal_shadow_signals|record_shadow_disclosure|surface_shadow_signal_early)\b/u);
    return{out,statements};
   }
@@ -53,3 +55,14 @@ describe("SV-3 structural timing and runtime query logging",()=>{
   const many=await replay();expect(many.out).toEqual(zero.out);expect(many.statements).toEqual(zero.statements);
  });
 });
+async function logFence(){
+ const sql=`SELECT 1 /* sv3-fence:${randomUUID()} */`;
+ await runtime.query(sql);
+ const header=`SV3:sv3_log_runtime: LOG:  statement: ${sql}\n`,deadline=Date.now()+5000;
+ for(;;){
+  const raw=logs.join(""),start=raw.indexOf(header);
+  if(start>=0)return{start,end:start+header.length};
+  if(Date.now()>=deadline)throw new Error("PostgreSQL log fence timeout");
+  await new Promise<void>(resolve=>setTimeout(resolve,5));
+ }
+}

@@ -17,10 +17,10 @@ let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, identity: Pool, dire
 const origin = "https://jobguard.invalid", secret = "s".repeat(40);
 const auth = () => new PersistedAuthProvider(new IdentityRepository(identity), secret);
 const sso = () => new SsoApplication(auth(), new EnterpriseIdentityRepository(identity), origin, "synthetic_demo");
-const required = () => new SsoRequiredApplication(auth(), new SsoRequiredRepository(identity), origin, "synthetic_demo");
+const required = () => new SsoRequiredApplication(auth(), new SsoRequiredRepository(identity), origin, "synthetic_demo",60);
 
 beforeAll(async () => {
-  // This file creates its own cluster and database; no other suite can observe the lifted fixture latch.
+  // This file creates its own cluster and database for the owner route.
   directory = await mkdtemp(join(tmpdir(), "jg-ent10d-race-pg16-"));
   const port = await freePort(59500, 400);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
@@ -42,6 +42,11 @@ afterAll(async () => {
   }
 });
 
+async function requestSigninCode(provider:PersistedAuthProvider,email:string) {
+ // Fixture-only elapsed cooldown: keep attempts, expiry and consumption intact; do not move the database window clock.
+ await admin.query("UPDATE identity.challenge SET requested_at=LEAST(requested_at,clock_timestamp()-interval '61 seconds') WHERE email=$1 AND purpose='signin'",[email]);
+ return provider.requestCode({email,purpose:"signin",ip:randomUUID()});
+}
 async function fixture(configure=true,link=true) {
  const contractor=new ContractorRepository(runtime),principal=await contractor.startPractice(randomUUID()),provider=auth();
  const connectionId=randomUUID(),domain=`${connectionId}.fixture.invalid`,email=`owner@${domain}`;
@@ -102,38 +107,37 @@ async function bothWaiting(pids: number[]) {
 }
 
 describe("ENT-10d isolated emergency concurrency", () => {
-  it("[S10d/S11] five competing transactions use each fresh approval once and preserve other authority/history", async () => {
-    const f = await fixture(), rule = randomUUID();
+  it.each(["same", "different"] as const)("[E6] [S10d/S11] five competing transactions use each fresh approval once and preserve other authority/history (%s command ids)", async variant => {
+    const f = await fixture();
     for (let iteration = 0; iteration < 5; iteration++) {
       await f.service.command(f.command(true, iteration * 2), f.bound!);
-      const approval = randomUUID(), owner = await admin.connect();
-      try {
-        await owner.query("BEGIN");
-        await owner.query("SET LOCAL ROLE jobguard_migration");
-        await owner.query("SELECT set_config('app.tenant_id',$1,true)", [f.principal.tenantId]);
-        if (iteration === 0) {
-          expect((await owner.query("SELECT count(*)::int n FROM pg_constraint WHERE conname='sso_emergency_approver_rule_held'")).rows[0].n).toBe(1);
-          await owner.query("ALTER TABLE identity.sso_emergency_approver_rule DROP CONSTRAINT sso_emergency_approver_rule_held");
-          await owner.query("INSERT INTO identity.sso_emergency_approver_rule(id,version,definition) VALUES($1,'fixture.v1','{}')", [rule]);
-        }
-        await owner.query("INSERT INTO identity.sso_emergency_approval(tenant_id,id,membership_id,rule_id,approver_ref,reason_hash,approved_at,expires_at) VALUES($1,$2,$3,$4,'owner-fixture',$5,clock_timestamp(),clock_timestamp()+interval '20 minutes')", [f.principal.tenantId, approval, f.principal.membershipId, rule, "a".repeat(64)]);
-        // The approval must be committed before either independent identity transaction starts.
-        await owner.query("COMMIT");
-      } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
-
+      // Consume two independent real mailbox challenges before the locked execution stage.
+      for(let proof=0;proof<2;proof++) {
+        const challenge=await requestSigninCode(f.provider,f.email);
+        expect(await f.provider.proveEmergencyMailbox(f.email,challenge.fixtureCode!)).toBe(f.principal.identityUserId);
+      }
       const before = await snapshot(), earlierAudit = await audit(f.principal.tenantId);
+      type SnapshotRow = { value: Record<string, unknown> };
+      const createdTables = ["identity.sso_emergency_approval", "identity.sso_emergency_use", "identity.sso_emergency_window"];
+      const emergencySnapshot = async () => {
+        const rows: Record<string, SnapshotRow[]> = {};
+        for (const name of createdTables.slice(1)) rows[name] = (await admin.query<SnapshotRow>(`SELECT to_jsonb(r) value FROM ${name} r ORDER BY to_jsonb(r)::text`)).rows;
+        return rows;
+      };
+      const emergencyBefore = await emergencySnapshot();
       const allEarlierAudit = (await admin.query("SELECT * FROM app.audit_event ORDER BY tenant_id,sequence")).rows;
       const revisionsBefore = (await admin.query("SELECT * FROM identity.sso_required_event WHERE tenant_id=$1 ORDER BY revision", [f.principal.tenantId])).rows;
       const logsBefore = (await admin.query("SELECT * FROM identity.sso_emergency_event WHERE tenant_id=$1 ORDER BY created_at,id", [f.principal.tenantId])).rows;
       const first = await identity.connect(), second = await identity.connect(), blocker = await admin.connect();
-      const input = { version: "sso-emergency.v1", requested_tenant_id: f.principal.tenantId, reason: "Synthetic concurrent emergency fixture reason" };
+      const input = { version: "sso-emergency.v2", requested_tenant_id: f.principal.tenantId, commandId:randomUUID(), reason: "Synthetic concurrent emergency fixture reason" };
+      const secondInput={...input,commandId:variant==="same"?input.commandId:randomUUID()};
       let race: ReturnType<SsoRequiredRepository["emergency"]>[] = [];
       try {
         const pids = [(await first.query("SELECT pg_backend_pid() pid")).rows[0].pid, (await second.query("SELECT pg_backend_pid() pid")).rows[0].pid];
         expect(new Set(pids).size).toBe(2);
         await blocker.query("BEGIN");
         await blocker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [f.principal.tenantId]);
-        race = [repositoryFor(first).emergency(f.principal.identityUserId, input), repositoryFor(second).emergency(f.principal.identityUserId, input)];
+        race = [repositoryFor(first).emergency(f.principal.identityUserId, input,60), repositoryFor(second).emergency(f.principal.identityUserId, secondInput,60)];
         const outcomes = Promise.all(race);
         // Capture rejection immediately as well as awaiting below, including failures while waiting on the lock.
         void outcomes.catch(() => undefined);
@@ -142,18 +146,43 @@ describe("ENT-10d isolated emergency concurrency", () => {
         const results = await outcomes;
         expect(results.filter(r => r.used)).toHaveLength(1);
         expect(results.filter(r => !r.used)).toEqual([{ used: false, cause: "EMERGENCY_ALREADY_USED", connectionId: f.connectionId, actorMembershipId: f.principal.membershipId }]);
-        expect(results.find(r => r.used)).toEqual({ used: true, cause: "EMERGENCY_USED", connectionId: f.connectionId, actorMembershipId: f.principal.membershipId });
+        const winningCommand=[input.commandId,secondInput.commandId][results.findIndex(r=>r.used)]!;
+        const storedWindow=(await admin.query("SELECT event_id,window_minutes,to_char(closes_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') closes_at FROM identity.sso_emergency_window WHERE tenant_id=$1 AND command_id=$2",[f.principal.tenantId,winningCommand])).rows[0];
+        expect(results.find(r => r.used)).toEqual({ used: true, cause: "EMERGENCY_USED", connectionId: f.connectionId, actorMembershipId: f.principal.membershipId, eventId:storedWindow.event_id, windowMinutes:storedWindow.window_minutes, closesAt:storedWindow.closes_at });
       } finally {
         await blocker.query("ROLLBACK");
         await Promise.allSettled(race);
         first.release(); second.release(); blocker.release();
       }
-      expect(await snapshot()).toEqual(before);
+      const allBefore = { ...before, ...emergencyBefore };
+      const allAfter = { ...await snapshot(), ...await emergencySnapshot() };
+      const existing: Record<string, unknown> = {}, added: Record<string, SnapshotRow[]> = {};
+      for (const name of Object.keys(allBefore)) {
+        // Use the actual primary key, including every column of composite keys.
+        const primaryKey = (await admin.query<{ name: string }>("SELECT a.attname name FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum,position) JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum WHERE i.indisprimary AND i.indrelid=$1::regclass ORDER BY k.position", [name])).rows.map(r => r.name);
+        expect(primaryKey.length).toBeGreaterThan(0);
+        const key = (r: SnapshotRow) => JSON.stringify(primaryKey.map(column => r.value[column]));
+        const prior = allBefore[name] as SnapshotRow[], current = allAfter[name] as SnapshotRow[];
+        const priorKeys = new Set(prior.map(key));
+        existing[name] = current.filter(r => priorKeys.has(key(r)));
+        added[name] = current.filter(r => !priorKeys.has(key(r)));
+      }
+      // Missing or changed earlier rows fail the original full-row comparison.
+      expect(existing).toEqual(allBefore);
+      for (const name of unchangedTables.filter(name => !createdTables.includes(name))) expect(added[name]).toEqual([]);
+      for (const name of createdTables) expect(added[name]).toHaveLength(1);
+      const newApproval = added["identity.sso_emergency_approval"]![0]!.value;
+      const newUse = added["identity.sso_emergency_use"]![0]!.value;
+      const newWindow = added["identity.sso_emergency_window"]![0]!.value;
       const revisionsAfter = (await admin.query("SELECT * FROM identity.sso_required_event WHERE tenant_id=$1 ORDER BY revision", [f.principal.tenantId])).rows;
       expect(revisionsAfter.slice(0, revisionsBefore.length)).toEqual(revisionsBefore);
       expect(revisionsAfter).toHaveLength(revisionsBefore.length + 1);
       expect(revisionsAfter.at(-1)).toMatchObject({ required: false, revision: iteration * 2 + 2, actor_kind: "emergency" });
-      const uses = (await admin.query("SELECT * FROM identity.sso_emergency_use WHERE tenant_id=$1 AND approval_id=$2", [f.principal.tenantId, approval])).rows;
+      // The sole new OFF event belongs to the winner; no losing side effect may remain.
+      expect(newApproval).toMatchObject({ tenant_id: f.principal.tenantId, membership_id: f.principal.membershipId });
+      expect(newUse).toMatchObject({ tenant_id: f.principal.tenantId, approval_id: newApproval.id, event_id: revisionsAfter.at(-1).id });
+      expect(newWindow).toMatchObject({ tenant_id: f.principal.tenantId, approval_id: newApproval.id, event_id: newUse.event_id, owner_membership_id: f.principal.membershipId });
+      const uses = (await admin.query("SELECT * FROM identity.sso_emergency_use WHERE tenant_id=$1 AND approval_id=$2", [f.principal.tenantId, newApproval.id])).rows;
       expect(uses).toHaveLength(1);
       expect(uses[0].event_id).toBe(revisionsAfter.at(-1).id);
       expect((await admin.query("SELECT count(*)::int n FROM identity.sso_emergency_use WHERE tenant_id=$1", [f.principal.tenantId])).rows[0].n).toBe(iteration + 1);

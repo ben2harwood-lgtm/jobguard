@@ -984,3 +984,105 @@ Adds exactly five routines in schema `app` and their EXECUTE grants to `jobguard
 
 Forward fix preferred. A confirmation object is two ordinary evidence rows, so nothing is ever deleted: to stop the feature, stop the v3 body in the application; the five routines can be replaced by a reviewed forward migration. Upgrade proof (`site-extra-evidence.integration.test.ts`, rule 9) snapshots existing rows by named columns, full column types and primary keys before this migration, applies it alone, then applies everything after it twice. The two database files ran against embedded PostgreSQL on the builder's Mac (receipt lists counts); reviewers re-run them.
 
+### 0142 — recovery insurer money (CH-7-INSURER Round 2)
+
+Adds the shared current payer function and append-only, FORCE-RLS payment marks with exact evidence references, timestamp pinning, immutable history and deferred audit completeness. Standard F gives runtime SELECT only; the session-bound controlled writer and job-lock helper each check authority, check/set tenant context and fix search_path. No app.job grant or merged table/column/policy/grant change. Restates only the newest 0130 review guard and 0119 effect trigger, adding Part A's insurer exclusion after paid-before and its line reason, plus F19's individual-interest message and reasonHeld release. A6 derives a required payer fact after the exact payment and job locks and cites current insurer binding/mark IDs in audit. The insurer exclusion has its own reason; F21 remains null/held under the Round 2 ruling. 0142 never rewrites saved reviews or lines; forward-fix is the rollback strategy, retaining readers and mark history. The previous application ignores marks but its insurer review inserts now fail closed; coordinate the three coordinator-owned setup-only payer additions and CI evidence before rollout. PostgreSQL fresh, upgrade, catalog and concurrency checks are NOT RUN in the builder sandbox; rule-9 upgrade proof compares named original F19/F21 rows and full column types, with identity matching and rolled-back controls. No new external alert or provider.
+
+## 0143 — ENT-10e owner emergency windows
+
+Replaces the held rule with the single company-owner rule, adds immutable tenant-qualified emergency windows, derives effective SSO requirements from the database clock in the six existing gates/view, and adds the administrator detail projection. The owner command creates and consumes its approval in one transaction. No existing column, command/append primitive, 0111 or 0120 object changes. Only identity SELECT on the window and EXECUTE on the checked detail routine are granted; the state routine is private. Synthetic database name remains required.
+
+Forward fix only: never remove consumed approvals/windows or rewrite history. Deploy repository/service/transport v2 together after 0143; the previous v1 emergency requests are refused. Existing administrative switch, state and ordinary sign-in contracts remain compatible. No worker or expiry migration runs when a window closes. Upgrade and rolled-back controls: sso-emergency-owner-upgrade.integration.test.ts [U1], NOT RUN in builder sandbox.
+
+### 0144 — CH-4 immutable work facts (partial synthetic scope)
+
+Creates `job_work_state_event`, `job_site_source_receipt`, `job_photo_purpose` and
+`job_link`, with FORCE RLS, qualified references, immutable mutation/truncate
+controls and runtime SELECT only. Adds the stage-completion job-qualified key
+and a source key binding tenant/job/id/completed-at/evidence-link. Stage receipts
+reference both keys and validate the source/link hash; no older table gains a
+policy or grant. Existing rows, types and primary identities remain unchanged.
+Existing photo finalization, ready delivery versions, goods receipts, builder
+origins and stage completion produce normalized facts in the source transaction.
+Original receipt timestamps retain PostgreSQL microseconds; no history is backfilled.
+The deterministic earliest qualifying candidate supplies first site evidence.
+Audit appends run as deferred constraint triggers, after source business locks.
+Evidence finalization drains them after its completion callback and last business
+write, while the transaction remains open. Exact PO placement command replays
+retain their first result; a new identity cannot use semantic deduplication to
+admit post-lock work.
+
+New-work triggers serialize with the existing final-account lock through its job
+row. A currently closed job refuses new lock and pending-check admission.
+The authenticated read routine rechecks the persisted synthetic session and job
+ownership. No held command receives an execution grant or transport.
+Q-01/Q-03/Q-04/Q-05/Q-06 remain held; this does not complete CH-4 or unblock MON-1.
+
+Forward-fix with a reviewed additive migration. Do not delete events or links,
+rewrite documents/money/audit, or reconstruct unknown historical site times.
+Database and upgrade proofs require the dispatcher's PostgreSQL environment.
+
+## 0150 — membership authority repair (MIGFIX-1, repair r1)
+
+Replaces three existing identity routines (`current_memberships(uuid)`,
+`invite_member(char,uuid,varchar,varchar)`, `provision_verified_challenge(uuid)`)
+to exclude tenant-qualified contractor revocations. Invitation authorization and
+replacement provisioning serialize with the existing contractor tenant advisory
+lock (seed 54). A fresh verified invitation creates a replacement membership and
+repoints its locator without changing historical membership or revocation rows.
+Existing routine signatures, owners, SECURITY DEFINER settings and EXECUTE ACLs
+are retained. No business rows are rewritten or backfilled.
+
+Repair r1 completes the previously partial direct-UPDATE defense under the
+dispatcher's ruling: retains all table grants, including UPDATE needed for runtime
+`FOR SHARE`, and adds `app.guard_membership_authority_update()` plus one BEFORE
+UPDATE row trigger on `app.membership`. The function is SECURITY INVOKER, owned
+by `jobguard_migration`, with `search_path=pg_catalog`; ALL is revoked from PUBLIC,
+runtime, identity and infrastructure, with no new grant. It checks the effective
+caller: only the table owner or a superuser may change membership identifiers or
+role, or clear/later-date existing revoked/expiry timestamps. Other callers receive
+`42501`. No-ops and earlier timestamps remain allowed. Migration-owned definer
+writers retain authority; locks remain usable. No table, column, constraint or
+policy changes; no grant changes on any pre-existing object.
+
+Forward-fix only: keep migration history and issue a reviewed additive correction;
+never rewrite membership, invitation or revocation history to roll back. Upgrade
+proof: `migfix-1-upgrade.integration.test.ts` installs predecessors, snapshots
+populated rows by named columns/full types/identity/canonical text, applies 0150
+alone, compares pre-existing catalog objects, checks the new guard/trigger and
+actual runtime/owner/superuser behavior, then runs later migrations twice. Existing
+rolled-back sensitivity controls remain. `migfix-1.integration.test.ts` covers
+authority refusals, retained locks, sessions, races and replacement history.
+PostgreSQL and browser execution remain pending GitHub CI after dispatcher push;
+this register records implementation, not independent acceptance or release approval.
+
+## 0151 — ledger corrections fix (MIGFIX-2)
+
+`0151_ledger_corrections_fix.sql` replaces only the bodies of `app.post_plan_obligation`, `app.post_plan_settlement` and `app.reverse_journal` introduced by `0004_ledger.sql`; the historical migration and callable signatures stay unchanged. Adds `journal_full_reversal_uq`, UNIQUE `(tenant_id, reverses_journal_id)`, on `app.journal` so an original journal can have only one full reversal per tenant. Installation fails with SQLSTATE `23505` if historical duplicate reversals exist; the transaction rolls back without rewriting or deleting commercial history. Stop installation and report the duplicate identities for a reviewed forward fix.
+
+The replacement routines check current owner/finance approver membership and exact financial authorization, require distinct accounts with the correct classes in the same tenant/book/currency, refuse settlement of a reversed obligation, and count only unreversed settlement credits against receivable capacity. Corrections lock the parent obligation before the original settlement, refuse a second full reversal, refuse reversal of a reversal, and require active settlements to be reversed before their obligation. No new grants, policies or RLS changes; existing routine owners, ACLs, SECURITY DEFINER/search paths and deferred balance/audit triggers remain intact. These are existing synthetic ledger ports; D02 accounting-policy approval and production charging gates remain held.
+
+Rollback strategy: roll back a failed installation transaction. After successful installation, retain the unique key and immutable journal history and correct defects through a reviewed forward migration; do not restore the unsafe routine bodies. No backfill or historical row changes. Regression/catalog proof is in `packages/db/test/migfix-2.integration.test.ts`; populated upgrade, historical duplicate refusal and upgrade-comparison controls are in `packages/db/test/migfix-2-upgrade.integration.test.ts`. PostgreSQL execution is NOT RUN in the builder sandbox; both files and the mandatory database/migration suites must pass in GitHub CI on the final head before merge.
+
+## 0153 — quote supersession guard (MIGFIX-4)
+
+`0153_quote_supersession_guard.sql` replaces only the two routines installed by
+0011: `app.record_builder_attested_acceptance` and `app.record_quote_disposition`.
+Acceptance refuses any exact document with an immutable supersession event,
+including events recorded before this migration, under the existing job lock.
+Supersession advances the job revision and server update time. Both routines
+recheck the existing active-owner authority before inspecting job state; exact
+document/hash/version/total/send checks and accepted commercial history remain.
+
+No GRANT statements, new tables, columns or policies, data backfill or historical
+row changes. CREATE OR REPLACE preserves the signatures, owners, existing EXECUTE
+ACLs and pinned `search_path=pg_catalog,app`. Forward-fix only: retain immutable
+acceptance/disposition history and issue a reviewed corrective migration; do not
+restore obsolete acceptance routines. A failed application rolls back both
+replacements in the migration transaction.
+
+Regression and own-step upgrade coverage are in `migfix-4.integration.test.ts`
+and `migfix-4-upgrade.integration.test.ts`. PostgreSQL and browser checks are NOT
+RUN in the builder sandbox; GitHub CI must execute them after dispatcher push.
+The merged quote regression's decline revision (2 to 3) and expected final revision
+(3 to 4) were updated per Ben, 14 Oct, coordinator chat, decision 5.

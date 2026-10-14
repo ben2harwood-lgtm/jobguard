@@ -1,0 +1,45 @@
+{
+  "base": "ee4917f70c29834ac2291220af8310a3a932bda9",
+  "files": [
+    {
+      "path": "apps/api/src/recovery-eligibility-v3.application.test.ts",
+      "equalToRound2Base": true,
+      "sha256": "4864ac3aa5e670abb53e95f0de02c0f130f632b553cb5f870fc7d831ac88104d"
+    },
+    {
+      "path": "packages/db/test/recovery-eligibility-v3.integration.test.ts",
+      "equalToRound2Base": true,
+      "sha256": "75817a9d3ef452fd7db87cde44a069d05ca0d2e61df2a3aa88c42030f1acf5d4"
+    },
+    {
+      "path": "apps/api/openapi.json",
+      "equalToRound2Base": true,
+      "sha256": "43db5d4a988a7e66002832f26d2914058e7fbbb3feab7c1292d609da5eb40505"
+    },
+    {
+      "path": "packages/db/migrations/0119_recovery_eligibility_v3.sql",
+      "equalToRound2Base": true,
+      "sha256": "15e217b0bf7926315859d92ebc708b86b3831942c82ff7627474d2b37b0028d7"
+    },
+    {
+      "path": "packages/db/migrations/0130_recovery_eligibility_v3_f17_timing.sql",
+      "equalToRound2Base": true,
+      "sha256": "bd73f33d36d44f4fafe16ba7a5bf395e49da2edf982cc98fd03ed9a3420315f1"
+    },
+    {
+      "path": "packages/db/src/recovery-payment-payer-repository.ts",
+      "equalToRound2Base": true,
+      "sha256": "afdeb8256e30ebdd3c9bc50940c06a668392f62289c56936b3a598e9872033a0"
+    },
+    {
+      "path": "packages/db/src/migrate.ts",
+      "equalToRound2Base": true,
+      "sha256": "bc87f544eece1f4b79ca8bcc2c3c1bbdf51470827b50c1ea483b838b98827199"
+    },
+    {
+      "path": "packages/db/test/tenancy.integration.test.ts",
+      "equalToRound2Base": true,
+      "sha256": "d32418b01b6d6665ee7dda4052412ccf5cfe4349c8726b09f73103da1b85449e"
+    }
+  ]
+}
