@@ -29,3 +29,11 @@ migfix-2-upgrade.integration.test.ts: the file failed in `beforeAll` (all 4 test
 
 ## Not run
 Other suites, e2e, build/typecheck on head (unchanged; CI covers them).
+
+## Repair round: lane allow list and main merge
+
+- Merged origin/main (c884b138) keep-both: lane file via lane-union.py; migrate.ts and MIGRATIONS.md now list 0150 then 0151. Migration-count assertions are derived from MIGRATION_URLS.length, so no edits.
+- Added exactly three paths (BUILDER_RECEIPT_prefix.md, prefix-evidence/base-run.log, head-run.log) to the migfix-2 lane allow list, as its own commit.
+- Commands: agent-lane-boundary-lint (LANE_BASE_REF=origin/main) exit 0; pnpm typecheck exit 0; pnpm lint exit 0; migfix-2.integration + migfix-2-upgrade.integration via heavy-slot exit 0 (2 files, 11 tests).
+- Not run: full suite, openapi regeneration (not touched), CI.
+- Not independently verified, not accepted.
