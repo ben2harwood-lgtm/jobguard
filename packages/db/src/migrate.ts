@@ -1,8 +1,11 @@
+import { readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { Pool, PoolClient } from "pg";
 
-export const MIGRATION_URLS = [
+// The explicit list as merged before MERGE-CHURN-1 (founder decision 35). It is closed: never edit, reorder or append.
+// Later migrations are discovered from the directory below, so two pieces adding migrations never edit one shared list.
+const LISTED_MIGRATION_URLS = [
   new URL("../migrations/0000_tenancy.sql", import.meta.url),
   new URL("../migrations/0001_audit.sql", import.meta.url),
   new URL("../migrations/0002_evidence.sql", import.meta.url),
@@ -89,9 +92,57 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0154_follow_up_clock_fence.sql", import.meta.url),
   new URL("../migrations/0155_quote_reacceptance.sql", import.meta.url),
 ] as const;
-export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
+
+const MIGRATION_FILE = /^(\d{4})_[a-z0-9_]+\.sql$/u;
+// Not a string literal inside new URL(), so bundlers do not try to resolve a directory as an asset.
+const MIGRATION_DIRECTORY = "../migrations/";
+const nameOf = (url: URL) => url.pathname.split("/").at(-1)!;
+
+/**
+ * Every listed migration, then each newer `NNNN_name.sql` in the directory in name order. Fails closed: an unexpected
+ * entry, a missing listed file, a new file not numbered above the last listed one, or a repeated number throws.
+ * loadMigrationUrls keeps any such failure, and migrate() refuses to run with it, because a bundled web runtime
+ * (which never migrates) imports this module where the directory cannot be read.
+ */
+export function discoverMigrationUrls(directory: URL, listed: readonly URL[]): URL[] {
+  const listedNames = listed.map(nameOf);
+  const last = listedNames.at(-1)!;
+  const entries = readdirSync(directory, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
+  const unexpected = entries.filter((entry) => !entry.isFile() || !MIGRATION_FILE.test(entry.name)).map((entry) => entry.name);
+  if (unexpected.length) throw new Error(`Migration directory holds unexpected entries: ${JSON.stringify(unexpected)}; only NNNN_lowercase_name.sql files belong there.`);
+  const present = new Set(entries.map((entry) => entry.name));
+  const missing = listedNames.filter((name) => !present.has(name));
+  if (missing.length) throw new Error(`Merged migrations are missing from the directory: ${JSON.stringify(missing)}.`);
+  const listedSet = new Set(listedNames);
+  const newer = [...present].filter((name) => !listedSet.has(name)).sort();
+  const early = newer.filter((name) => name <= last);
+  if (early.length) throw new Error(`New migrations must be numbered above ${last}: ${JSON.stringify(early)}.`);
+  const numbers = new Map<string, string>();
+  for (const name of [...listedNames, ...newer]) {
+    const number = MIGRATION_FILE.exec(name)![1]!;
+    if (numbers.has(number)) throw new Error(`Migrations ${numbers.get(number)} and ${name} share number ${number}.`);
+    numbers.set(number, name);
+  }
+  return [...listed, ...newer.map((name) => new URL(name, directory))];
+}
+
+function loadMigrationUrls(): { urls: readonly URL[]; unavailable?: Error } {
+  try { return { urls: discoverMigrationUrls(new URL(MIGRATION_DIRECTORY, import.meta.url), LISTED_MIGRATION_URLS) }; }
+  catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { urls: LISTED_MIGRATION_URLS, unavailable: new Error(`The migration list could not be built from the migrations directory; refusing to migrate from a partial list. ${reason}`, { cause: error }) };
+  }
+}
+
+const loaded = loadMigrationUrls();
+export const MIGRATION_URLS: readonly URL[] = Object.freeze([...loaded.urls]);
+/** Why the directory-built list is unavailable here, if it is; migrate() refuses to run while this is set. */
+export const migrationListProblem = (): Error | undefined => loaded.unavailable;
+export const INITIAL_MIGRATION_URL = LISTED_MIGRATION_URLS[0];
 
 export async function migrate(pool: Pick<Pool | PoolClient, "query">): Promise<void> {
+  const problem = migrationListProblem();
+  if (problem) throw problem;
   await pool.query(`CREATE TABLE IF NOT EXISTS public.jobguard_schema_migration (
     migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
   )`);
