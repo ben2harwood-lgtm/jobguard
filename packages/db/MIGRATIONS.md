@@ -1094,3 +1094,14 @@ Adds one private SECURITY INVOKER trigger helper, `app.recovery_follow_up_run_fe
 Upgrade proof: `packages/db/test/migfix-8-upgrade.integration.test.ts` (`MIGFIX-8.UPGRADE`) installs everything before 0154, snapshots populated named columns, full types and primary-key identities, applies 0154 alone, checks preservation and privileges, then runs later migrations twice with rolled-back comparison controls. Concurrency and private-helper catalog coverage are in `packages/db/test/migfix-8.integration.test.ts`. Database tests are NOT RUN in this sandbox, which cannot bind localhost or start PostgreSQL; execution remains required in GitHub CI after the dispatcher pushes.
 
 Forward-fix rollback strategy: a failed installation rolls back its transaction. After installation, preserve all history and privileges and ship a separately reviewed later migration; do not edit an earlier migration or remove the fence without a reviewed replacement. Existing repository code remains schema compatible, while deployment of the updated repositories preserves the run-before-case lock order. No new external action, operational alert or commercial release is introduced.
+
+## 0156 — customer billing integrity (MIGFIX-5)
+
+Restates two installed routines in place with `CREATE OR REPLACE` (owner `jobguard_migration`, SECURITY DEFINER, pinned `search_path` and ACL are preserved; no GRANT, table, column, policy or row change):
+
+- `app.lock_final_account(...)` (0132): after the existing variation row locks it refuses with `STALE_OR_BLOCKED_FINAL_ACCOUNT` any account whose revision lacks a currently-approved variation revision of the job, so an account assembled before the latest approval cannot be locked. An approval that commits first is visible to the lock; one still in flight makes the lock wait; a lock that commits first makes the approval a post-lock source. No new lock edge is added.
+- `app.issue_practice_customer_credit_note(...)` (0028): cumulative credited net can never pass the original invoice net (`CREDIT_EXCEEDS_AVAILABLE_AMOUNT`, in SQL as well as the repository), and each credit's VAT keeps the merged per-credit half-up rule but is capped at the VAT still remaining on the original invoice.
+
+Held, not in this migration: the legacy `issue_practice_customer_invoice` guard (open #189 / 0147 already restates it), cumulative whole-invoice VAT rounding (changes a merged expectation), and real PDF bytes (Ben, 14 Oct, decision 7: later). `PracticeInvoiceRepository.previewCredit` applies the same VAT cap.
+
+Upgrade proof: `packages/db/test/migfix-5-upgrade.integration.test.ts` (own step on a populated pre-0156 schema, ACL/owner kept, later migrations twice). Behaviour: `packages/db/test/migfix-5.integration.test.ts`. Forward-fix rollback only; do not edit an earlier migration.
