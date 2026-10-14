@@ -494,7 +494,10 @@ export class RecoveryMessageRepository {
         await append("started", attempt.id, requestHashOf({ attemptId: attempt.id, messageId: m.id }), m.approving_membership_id!);
       }
       let kind: RecoveryMessageEventKind | undefined;
-      if (last.kind === "started") {
+      // A command's start commits before the executor claims its attempt. Until that attempt exists,
+      // retryable still describes the preceding attempt and must not close this start. Cancellation
+      // may happen before a claim (for example expired authorization), so it remains a valid block.
+      if (last.kind === "started" && (m.outbox_status === "cancelled" || attempts.length >= history.filter(event => event.kind === "started").length)) {
         const kinds: Record<string, RecoveryMessageEventKind> = { succeeded: "succeeded", outcome_unknown: "outcome_unknown", retryable: "retryable", dead_letter: "failed", cancelled: "blocked" };
         kind = kinds[m.outbox_status ?? ""];
       } else if (last.kind === "reconcile_started") {

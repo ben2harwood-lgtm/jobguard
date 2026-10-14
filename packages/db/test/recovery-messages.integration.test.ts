@@ -1753,3 +1753,40 @@ describe('an old check request replayed after a retry cycle returns current stat
     expect(settled.latest).toMatchObject({ status: 'retryable', attempts: 1 });
   });
 });
+
+// AUDIT-FIX-DBSRC-13: the gate is outside the real executor, after start commits and before claim.
+describe('night-audit unclaimed recovery retry', () => {
+  it('reading an unclaimed retry does not consume the previous attempt result', async () => {
+    const { caseId, view } = await approved();
+    const failed = await repo.command(context, caseId, advanceCommand(view, 'definite_failure'), actor);
+    const expected = ['previewed', 'approved', 'started', 'retryable', 'started'];
+    const execute = ActionExecutor.prototype.execute;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const spy = vi.spyOn(ActionExecutor.prototype, 'execute').mockImplementation(async function (this: ActionExecutor, ctx, actionId) {
+      await gate;
+      return execute.call(this, ctx, actionId);
+    });
+    const pending = repo.command(context, caseId, advanceCommand(failed.latest!), actor);
+    // Observe the rejection immediately as well, so a failed start cannot become an unhandled promise.
+    void pending.catch(() => undefined);
+    try {
+      await until(async () => spy.mock.calls.length === 1, 'the second executor before its claim');
+      expect(await attemptCount(view.approval!.outboxActionId)).toBe(1);
+      const during = await repo.read(context, caseId);
+      expect(kinds(during.latest!)).toEqual(expected);
+      release();
+      const completed = await pending;
+      expect(kinds(completed.latest!)).toEqual([...expected, 'succeeded']);
+      expect(completed.latest).toMatchObject({ status: 'simulated_delivery', attempts: 2 });
+      expect(completed.sinkCount).toBe(1);
+      const reread = await repo.read(context, caseId);
+      expect(kinds(reread.latest!)).toEqual([...expected, 'succeeded']);
+      expect((await auditTypes(view.id)).filter(type => type === 'recovery.message.succeeded')).toHaveLength(1);
+    } finally {
+      release();
+      await pending.catch(() => undefined);
+      spy.mockRestore();
+    }
+  });
+});
