@@ -1,84 +1,106 @@
-# AUDIT-FIX-API-FILE-CUSTOMER-INVOICE builder receipt
+# AUDIT-FIX-API-FILE-CUSTOMER-INVOICE builder receipt — repair r1
 
-Status: **STOPPED — migration required; no implementation acceptance claimed.**
+Status: **Findings 1–3 implemented and scripted-unit verified; real PostgreSQL verification pending. Finding 4 STOPPED. No technical acceptance or release claimed.**
 
-Issued 13 October 2026 by dispatcher 4. Source inspection and available deterministic checks only; no independent model verdict or acceptance. Check lane: RED (invoice money and commercial authorization). No real data, external action or spending.
+Issued 14 October 2026 by dispatcher 5 against `2e6f87d05091cbc103dc020d9f386aa32a368756`. RED money/authorization lane. Working-tree changes only; dispatcher owns commit/push. No real data, business network action, spending, installation, migration, or git-writing command.
 
-## Baseline and authority
+## Authority and baseline
 
-- Read repository `AGENTS.md`, `BUILD_PLAN.md` §10.2.6 and `docs/contracts/final-account-lock-v1.md`, and the issued audit at `/Users/benharwood/.local/share/full-steam/night-audit-2026-10-13/jobguard/api-file-customer-invoice.md`.
-- Branch: `codex/sandbox/audit-fix-api-file-customer-invoice`.
-- Actual initial HEAD and local `origin/main`: `c08a53784c05b54b18f7bfff87f4c7597032ca7e`; the issued base was `e9f9bc9ef4f4aa46394c414c9a3971c523fac2e4`. No branch/ref changes made.
-- Runtime: Node `v24.17.0`; repository package-manager pin `pnpm@10.28.1`. Dependencies already present; no install attempted.
+Read repository `AGENTS.md`, `BUILD_PLAN.md` §10.2.6 and `docs/contracts/final-account-lock-v1.md`; the original audit at `/Users/benharwood/.local/share/full-steam/night-audit-2026-10-13/jobguard/api-file-customer-invoice.md`; and the full Opus REPAIR verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/audit-fix-api-file-customer-invoice-opus-2e6f87d.md`. That verdict is source inspection of the previous commit, not verification of this repair.
 
-## Mandatory migration stop
+Branch: `codex/sandbox/audit-fix-api-file-customer-invoice`. Initial HEAD: `2e6f87d05091cbc103dc020d9f386aa32a368756`; local `origin/main`: `bd959b01e857de0ba7cbd3588bab84add7d0f493`. The previous receipt recorded an issued base `e9f9bc9ef4f4aa46394c414c9a3971c523fac2e4` versus its actual base `c08a53784c05b54b18f7bfff87f4c7597032ca7e`; this repair does not change refs or resolve that historical discrepancy. Runtime Node `v24.17.0`; pnpm pin `10.28.1`; installed Vitest `4.1.11`.
 
-Finding 4's active writer is `app.issue_practice_customer_invoice` in `packages/db/migrations/0095_job_parties.sql:340`. Lines 367–372 construct a PDF header followed by plain text and append a party snapshot. Lines 373–385 derive the artifact hash and bind it to the action authorization, stored invoice bytes, outbox content and command result. `PracticeInvoiceRepository.artifact` returns those stored bytes, and the application/controller deliver them as a PDF.
+The earlier DROPPED dispositions for findings 1–3 are withdrawn. Sandbox inability to start PostgreSQL is a verification limit, never evidence that a defect cannot be reproduced or repaired.
 
-A valid PDF must be created before the exact artifact is authorized and stored. Fixing that writer requires a new migration replacing the persisted routine; editing an already-applied migration would not upgrade existing databases. Transforming the download would deliver bytes different from the approved/stored/hash-bound artifact. No migration, historical-byte rewrite or download conversion was attempted. The issued rule says: **“No migration unless the finding cannot be fixed without one (then STOP and say so).”** Implementation stopped when this requirement was identified, before any production or test edit.
+## Repairs and limits
 
-## Finding disposition
+- **Finding 3:** `creditView` now selects invoice amounts and ordered credit history in one SQL statement, matching the sibling receipt projection's READ COMMITTED snapshot strategy. The response shape, amount mapping and ordering remain the same. The NEW real two-connection test **`credit history and balance share one snapshot`** intercepts the completed invoice SELECT on connection A, commits a credit on B before returning A's rows, then checks history/balance consistency and the subsequent committed view. It explicitly checks different backend PIDs. A separate scripted-response unit reproduces the same interleaving.
+- **Finding 2:** preview and issue acquire the exact transaction-scoped advisory lock used by migration 0028's issuer, then read cumulative credited net and reject when requested net plus prior credited net exceeds original invoice net. The new guard uses `bigint` arithmetic and the existing `CREDIT_EXCEEDS_AVAILABLE_AMOUNT` refusal. The existing gross ceiling, tax formula and preview-hash algorithm are unchanged. Completed commands still reach the persisted routine's replay/payload-conflict checks. The NEW real test **`split credits cannot exceed original net principal`** issues 10001 and 10002 net against 20003 net / 4001 VAT / 24004 gross, refuses the third 1p net at preview and independently at issue using the old preview's correctly computed hash, and checks unchanged effects plus original-command replays/conflict. Another NEW test holds the stored issuer's lock while a repository issue waits, proving the net total is checked after the wait.
+- **Finding 1:** `issue` serializes repository issuers by tenant/job, then refuses a new invoice on a different revision when an earlier invoice has any gross value not credited. It throws `INVOICE_CORRECTION_OR_SUPPLEMENTARY_REQUIRED` before commercial writes. Prior commands and already-issued revisions still reach the persisted routine's original replay/conflict checks. The NEW real test **`revised account cannot rebill previously invoiced scope`** uses 110000 net then 120000 net and checks refusal, unchanged authorization/outbox/command/audit counts, and aggregate billed net. Additional NEW tests cover partial versus full credit, replacement/replay, and competing issuers on the same revision. This does not implement supplementary or added-lines-only invoicing.
 
-- DROPPED #1 for this run: no failing authenticated revised-account reproduction executed; PostgreSQL is unavailable in this sandbox.
-- DROPPED #2 for this run: no failing split-credit preview/issue reproduction executed; PostgreSQL is unavailable in this sandbox.
-- DROPPED #3 for this run: no failing two-connection snapshot reproduction executed; PostgreSQL is unavailable in this sandbox.
-- DROPPED #4 for this run: no failing issued-download PDF-parser reproduction executed; mandatory migration STOP reached during source inspection.
+**Ben's money decision remains owed:** the split-credit example leaves 1p of VAT/gross outstanding after all 20003p of original net has been credited. This repair refuses another net credit and leaves that penny outstanding. No zero-net credit, residual-tax clearing, rounding change or other money rule is invented.
 
-These dispositions do not claim the reported defects are fixed or disproved. No regression test was written or shown failing, and no fix was applied.
+These are repository/API-path guards. The persisted SQL issuers remain unchanged: direct calls still have their old gross-only credit/per-revision invoice checks. This repair does not claim database-wide enforcement against callers bypassing the repository; closing those routine paths requires separately authorized migration work. Existing tenant context, membership, authorization, RLS, immutable artifacts and audit paths are retained.
 
-LATER #5: the local-state invoice journey does not exercise persisted invoice API issuance/payment/reversal/credit history; retain for separately issued work.
+## Finding 4 — mandatory STOP remains
 
-The audit's five weak-test suggestions remain unimplemented: persisted `customer-invoice.spec.ts` journey; actual PDF parsing/hash/content in UIWIRE-10; split-credit rounding boundaries in UIWIRE-11; exact competing-command/idempotent-retry assertions in UIWIRE-11; authenticated cross-job access assertions in practice transports.
+The active invoice writer in `0095_job_parties.sql` constructs a PDF header plus plain text and hashes those bytes into authorization, stored invoice, outbox and receipt. A readable PDF must be generated before authorization and storage; transforming the download would break the artifact binding. This requires a new migration and a separately issued order that addresses already-stored artifacts. The same pattern exists in the credit issuer. No persisted issuer, migration, existing artifact bytes or hashes were changed. No readable-PDF fix or parser test is claimed here.
 
-## Exact changes and preserved guarantees
+## Exact files and preserved guarantees
 
-- Added one compact lane row with an exact two-file allow list, and this receipt.
-- Catalogue before: no `audit-fix-api-file-customer-invoice` lane. After: one new row for this issued task, allowing only `config/agent-lane-assignments.json` and this receipt. All earlier rows remain unchanged.
-- No premise-establishing test setup changes; no existing expectation, refusal, count, pinned name or fingerprint changed.
-- `apps/api/src/auth/context-boundary.test.ts` and its pinned lists are untouched.
-- Standard F: no new or changed GRANT, no direct financial/authorization write privilege, no migration/schema change, backfill or rollback requirement. No new operational alert, API or backwards-compatibility change.
+The lane row is widened to exactly these six files, and its obsolete “Documentation only” note is corrected:
 
-## Checks
+- `packages/db/src/practice-invoice-repository.ts`
+- `packages/db/src/practice-invoice-repository.test.ts` — NEW scripted unit tests
+- `packages/db/test/practice-invoice-audit.integration.test.ts` — NEW real PostgreSQL suite
+- `packages/db/test/UIWIRE-12.integration.test.ts` — legacy fixture setup only
+- `config/agent-lane-assignments.json`
+- this receipt
 
-Full database/browser suites cannot run here. No clean install was performed. No changed implementation exists to validate.
+UIWIRE-12 already tests reversal binding against two historical invoices on one job. Its second-invoice fixture now calls the unchanged stored routine directly, through the same runtime role/tenant transaction, to create that deliberately historical scenario; the new repository guard forbids new commands from creating it. Every existing assertion, refusal, count, amount, pinned name, fingerprint and hash remains unchanged. No test assertion was deleted or relaxed. This is serialized work in the shared UIWIRE-12 file, not an unrelated feature.
 
-| Actually executed command/check | Result |
+Read-only comparisons against HEAD verify all other lane rows byte-identical, all UIWIRE-12 expectation lines identical, `apps/api/src/auth/context-boundary.test.ts` byte-identical, and no diff in `apps/web/e2e` or migrations. Standard F: no GRANT, schema/role/access change, new credential, boundary widening or direct financial write privilege. No data migration/backfill/rollback is needed; no historical row is rewritten. Response payloads are unchanged; newly unsafe attempts now refuse before effects. No new operational alert or provider/data-flow change. AI gateway/evaluation and browser implementation changes are inapplicable; existing mandatory CI suites remain required.
+
+## Failing-first evidence
+
+Before changing the repository, ran `node_modules/.bin/vitest run src/practice-invoice-repository.test.ts --maxWorkers=1` from `packages/db`: **exit 1, 3 failed / 1 passed**. The three named regressions fail for the reported reasons: balance 24004 versus credit-adjusted 12003 in the scripted interleaving, preview incorrectly accepts the excess penny, and revised issuance resolves instead of refusing. Log: `/private/tmp/jg-invoice-r1-red-unit.log`.
+
+Also wrote and attempted the NEW real PostgreSQL suite before the fix: `node_modules/.bin/vitest run test/practice-invoice-audit.integration.test.ts --maxWorkers=1`. **Exit 1 at fixture setup: `no free port in 59600..59900`; its then-five test bodies did not execute.** A sixth lock-wait test was added afterwards. Log: `/private/tmp/jg-invoice-r1-red-db.log`. This is not a real-database red or green proof. The dispatcher must run all six tests on PostgreSQL, and must reproduce the three named regressions with the pre-repair repository to establish the database failing-first evidence.
+
+## Checks actually run
+
+Dependencies were already installed; no clean install or downloads. The default pnpm standalone launcher stalled on initial attempts. For the final commands, a temporary PATH shim `/private/tmp/jg-pnpm-r1/bin/pnpm` invokes the already-cached pinned JS executable `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`; this keeps root scripts and nested pnpm commands on 10.28.1. No repository package/tool configuration changed. Turbo uses `--force` for fresh executions; sandbox cache-write warnings are not counted as check success.
+
+Commands below use the temporary pinned-pnpm PATH where pnpm is named. Logs are `/private/tmp/jg-invoice-r1-*.log`.
+
+| Actually executed check | Result |
 | --- | --- |
-| `pnpm typecheck`, `LANE_BASE_REF=origin/main pnpm lint`, `LANE_BASE_REF=origin/main pnpm lint:lanes`, `pnpm build`, `pnpm openapi:check` | Launcher stalled before script execution; interrupted, exit 130. No install command issued. |
-| `node_modules/.bin/turbo run typecheck` | Exit 0; all seven tasks were shared-cache hits, not fresh executions. |
-| `node_modules/.bin/turbo run build` | Exit 0; all seven tasks were shared-cache hits, not a fresh build. |
-| Direct `node_modules/.bin/tsc -p tsconfig.json --noEmit`, per package | Fresh passes for core, config, AI, storage and DB. Parallel runner interrupted (130); fresh API/web checks did not complete. Separate API/web attempts also interrupted (130). |
-| `LANE_BASE_REF=origin/main node tools/lint.mjs` | Exit 1 after core-purity pass: lane checker refuses identical HEAD and origin/main. |
-| `node tools/agent-lane-boundary-lint.mjs` | Exit 1: “Missing branch or self-comparison range; refusing a misleading pass.” No weaker comparison base substituted. |
-| Core-purity, money-arithmetic, commercial-boundary lint scripts directly | Exit 0. |
-| `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` | Exit 0; 19 tests passed. Git-writing lane fixture suites deliberately excluded. |
-| `node_modules/.bin/vitest run --maxWorkers=1` in packages/config | Exit 0; 2 tests / 2 files passed. |
-| Same command in packages/ai | Exit 0; 80 tests / 5 files passed; fixture tests, not live-model evaluation. |
-| Same command in packages/storage | Exit 0; 4 tests / 2 files passed. |
-| Same command in apps/web | Exit 0; 784 tests / 33 files passed; unit tests, not browser tests. |
-| DB `node_modules/.bin/vitest run --exclude '**/dist/**' --exclude '**/*.integration.test.*' --exclude 'test/free-port.test.ts' --maxWorkers=1` | Exit 1; 168 passed / 1 failed across 13 files. Unchanged `[C-OPS-1] all transitive request workspace sources and package entry targets cannot reach the operator` timed out at its existing 5000ms limit (`src/audit-checkpoint-handoff.test.ts:279`). No limit or assertion changed. |
-| Initial DB unit filter `vitest run src test --exclude '**/*.integration.test.ts' --exclude 'test/free-port.test.ts' --maxWorkers=1` | Interrupted (130) after selecting compiled `dist` test copies and reporting a checkpoint reachability failure; corrected the invocation to exclude all dist and integration copies. |
-| OpenAPI via `apps/api/node_modules/.bin/tsx apps/api/src/generate-openapi.ts --check` | Exit 1; sandbox denies tsx IPC listener (`listen EPERM`). |
-| `node --import tsx src/generate-openapi.ts --check` from apps/api | Exit 0; exact OpenAPI comparison passes using the installed loader, without the CLI IPC listener. A preceding root-directory loader attempt failed on missing decorator compiler settings; corrected the working directory. |
-| Exact lane registration / old-row preservation / protected-test byte comparison against HEAD | Passed; only the new compact row added; every previous row and protected test byte-identical. This is not range-lint acceptance. |
-| `git diff --check` | Exit 0. |
+| `pnpm typecheck --force` | Exit 0; all seven packages freshly executed, zero cache hits. |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | Exit 0; root boundary checks and all seven package checks freshly executed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; exact six-file lane, real origin/main comparison. |
+| `pnpm build --force` | Exit 0; all seven packages freshly executed, including Next production build. Existing CSS/workspace-root and sandbox cache-write warnings. |
+| `pnpm openapi:check` | Exit 1: tsx CLI cannot bind its IPC listener (`listen EPERM`). |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | Exit 0; same installed generator's exact OpenAPI comparison, without CLI IPC. |
+| NEW scripted unit suite, before repair | Exit 1; three named regressions failed / one replay test passed. |
+| NEW scripted unit suite, final repository | Exit 0; 4 tests / 1 file passed (both initial green and final run). |
+| NEW PostgreSQL suite, pre-repair attempt | Exit 1 at free-port setup; test bodies not executed. Six final tests require CI. |
+| `tsc -p /private/tmp/jg-invoice-r1-tests-tsconfig.json` | Exit 0; temporary strict/noEmit config typechecks the NEW integration suite and modified UIWIRE-12, which the normal package src-only config does not include. |
+| DB `vitest run src --exclude '**/dist/**' --maxWorkers=1` | Exit 1; 90 passed / 1 failed, six files. Unchanged C-OPS-1 transitive workspace operator-reachability test exceeded its existing 5000ms limit (20.2s elapsed). No limit/assertion changed. |
+| DB eight explicitly selected test-directory unit files, with dist excluded | Exit 0; 82 tests / 8 files passed. |
+| Core units, dist excluded | Exit 1; 2442 passed / 3 timed out, 81 files. Unchanged receipt-allocation tests at lines 125, 212 and 222 exceeded their existing 5000ms limits while other checks ran. |
+| Core `vitest run src/receipt-allocation.test.ts --maxWorkers=1`, after concurrent checks finished | Exit 0; all 34 tests passed with original limits/assertions. The first full-suite timeout result remains recorded. |
+| API available unit suites | Exit 0; 1551 tests / 63 files passed. Command: `vitest run src --exclude '**/*.http.test.ts' --exclude 'src/health.test.ts' --exclude 'src/shadow-isolation.application.test.ts' --exclude 'src/auth/sso/action-paths.test.ts' --exclude 'src/final-account-lock.isolation.test.ts' --maxWorkers=1`. Exclusions require HTTP listeners and/or real PostgreSQL; they remain mandatory in CI. |
+| Web units, dist excluded | Exit 0; 784 tests / 33 files passed; no browser run claimed. |
+| AI fixtures, dist excluded | Exit 0; 80 tests / 5 files passed; no live-model evaluation claimed. |
+| Config and storage units, dist excluded | Exit 0; config 1 test / 1 file; storage 2 tests / 1 file. |
+| Seven selected read-only tools suites | Exit 0; 19 tests passed. Git-writing lane fixture suites were excluded. |
+| Existing-assertion/protected-file/lane-row comparisons and `git diff --check` | Passed; no existing expected values or protected files changed. |
 
-Initial core `vitest run --maxWorkers=1` also selected compiled dist test copies restored by the shared build cache. Interrupted (130) and corrected the invocation to `vitest run --exclude '**/dist/**' --maxWorkers=1`. Before interruption, unchanged source tests in enterprise boundaries, extra origin and receipt allocation reported failures; compiled site-extra-pricing/recovery-allocation checks also failed. No assertions, timeout limits or source files were changed in response.
+One initial DB test-directory filter (`vitest run test --exclude '**/*.integration.test.ts' --exclude 'test/free-port.test.ts' --maxWorkers=1`) selected source and compiled dist copies because Vitest filters by substring. It was interrupted (130) after unchanged C-OPS-1 copies timed out, then corrected to the eight exact test-directory filenames plus dist exclusion; the corrected run above passed. Initial launcher/direct-turbo attempts were interrupted or superseded by the pinned-pnpm fresh runs; no cache-hit result is claimed as fresh validation.
 
-Corrected core unit invocation `node_modules/.bin/vitest run --exclude '**/dist/**' --maxWorkers=1`: exit 0; **2445 tests / 81 files passed**, 76.02s. This corrected invocation excludes compiled copies without modifying tests.
+C-OPS-1 isolated recheck: `vitest run src/audit-checkpoint-handoff.test.ts -t 'all transitive request workspace sources and package entry targets cannot reach the operator' --maxWorkers=1` exited 0; the one selected test passed (55 unrelated tests skipped), with the original 5000ms limit. Log: `/private/tmp/jg-invoice-r1-db-timeout-recheck.log`. Neither isolated recheck replaces the recorded initial full-suite results or the dispatcher's full `pnpm test` requirement.
 
-API command from apps/api: `node_modules/.bin/vitest run src --exclude '**/*.http.test.ts' --exclude 'src/health.test.ts' --exclude 'src/shadow-isolation.application.test.ts' --exclude 'src/auth/sso/action-paths.test.ts' --maxWorkers=1`. Exit 1; **1551 passed, 2 failed, 1 skipped**, 61 passed / 3 failed files, 387.88s. Failures:
+## Dispatcher verification and remaining gates
 
-- `src/practice-transports.test.ts:121`, “Next quote delivery GET maps missing, invented and stranger practice sessions to 401/404”: existing 5000ms timeout.
-- `src/recovery-message.controller.test.ts:69`, “Next read/list maps practice failures through the real no-store adapter”: existing 5000ms timeout.
-- `src/final-account-lock.isolation.test.ts`, “DW8 real database application isolation”: indirect database fixture attempted free-port discovery, refused with `no free port in 58400..58650` before PostgreSQL could start. This integration-dependent suite was missed by the original source scan because its setup is imported. It belongs on the dispatcher's Mac/CI alongside the excluded HTTP and shadow-isolation suites; no test was edited to bypass it.
+After committing/pushing, run:
 
-None of these failures reproduces a finding in the issued customer-invoice report; no assertion, timeout, retry policy or expected value was changed. These deterministic results do not constitute independent review or a green full-suite run.
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/practice-invoice-audit.integration.test.ts test/UIWIRE-10.integration.test.ts test/UIWIRE-11.integration.test.ts test/UIWIRE-12.integration.test.ts
+pnpm typecheck
+LANE_BASE_REF=origin/main pnpm lint
+LANE_BASE_REF=origin/main pnpm lint:lanes
+pnpm build
+pnpm openapi:check
+pnpm test
+pnpm test:db
+pnpm test:migrations
+pnpm test:e2e
+```
 
-## Dispatcher checks and remaining gates
+The NEW required regressions are named exactly **`credit history and balance share one snapshot`**, **`split credits cannot exceed original net principal`**, and **`revised account cannot rebill previously invoiced scope`**. For the PostgreSQL failing-first comparison, use the new suite with only `practice-invoice-repository.ts` from `2e6f87d` in a separate dispatcher-controlled checkout, run those three tests, then run the full six-test suite against the repair. Do not substitute mock results for PostgreSQL. GitHub CI owns the full database/migration/browser suites; the sandbox cannot bind localhost or start PostgreSQL. Full `pnpm test` also runs temporary git-writing lane fixtures and was not invoked under the no-git-write instruction.
 
-Run on the Mac/GitHub CI after the dispatcher commits/pushes: `pnpm typecheck`, `LANE_BASE_REF=origin/main pnpm lint`, `LANE_BASE_REF=origin/main pnpm lint:lanes`, `pnpm build`, `pnpm openapi:check`, `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, and `pnpm test:e2e` (including UIWIRE-10/11/12 and the customer-invoice journey). The full test command includes temporary git-writing lane-test fixtures, real PostgreSQL integration suites and HTTP listener tests; it was not invoked under this sandbox's restrictions. The reported regressions still need failing tests and fixes in a separately authorized migration-capable task. Existing tests alone do not establish those fixes.
+LATER #5 remains: the web invoice journey exercises local state, not the persisted API. The PDF parsing strengthening remains stopped with finding 4. The new suite addresses split-credit penny/replay boundaries; the existing weak UIWIRE-11 competing-command assertion and authenticated transport cross-job strengthening still need their own order. No existing expected result was changed to address them.
 
-Required before technical acceptance: a different model's recorded verdict bound to the dispatcher's exact commit, separate acceptance, and founder-owned merge/push/release. This receipt supplies no release or professional/commercial approval.
+A different model must record a verdict bound to the dispatcher's exact repair commit; separate acceptance and founder-owned merge/push/release remain owed. The previous Opus REPAIR verdict and these deterministic checks are not acceptance of this diff. Production/commercial/real-user release gates remain unchanged.
 
-Intended commit message is written to `/private/tmp/jg-msg-audit-fix-api-file-customer-invoice.txt`. No git-writing command was run.
+Intended conventional commit message: `/private/tmp/jg-msg-audit-fix-api-file-customer-invoice.txt`. No git-writing command was run.
