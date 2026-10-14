@@ -3295,6 +3295,214 @@ Basic backups, restore, privacy operations, permissions, and financial security 
 
 ---
 
+### 11.8 Least-privilege database login track (PLAN-LPL, adopted 13 October 2026)
+
+**Adoption:** Ben, 13 October 2026, about 13:45: **"yes, lock down the database login"**, relayed by the dispatcher on the coordinator's instruction. This section belongs in shared platform work (§11), not either commercial track: the business login, identity boundary, audit, worker and tenant policies serve both tracks. It adds the proposal's LP pieces, incorporating the acceptance changes from Astra's N6 written review; that review is not repository inspection or execution evidence.
+
+**Before any real customer data:** the entire track below must be complete, independently checked and separately accepted before any real customer data is loaded or any real personal data or commercial send is enabled, on either track. This is an additional G1 prerequisite (§3) and additional acceptance for M0-13a/d, not evidence that G1 has passed. It includes every LP-5/6/8 subpart and LP-10–LP-13; the proposal's partial-piece pilot minimum and later deferrals do not satisfy the dispatcher's adopted whole-track gate. LP-9 is the final, deployment-specific proof after all the other LP pieces. Synthetic product construction can continue within its existing gates.
+
+**Status of every card:** **buildable after Ben merges this plan pull request**, and only when its named dependencies are merged. Every card inherits C1–C8 (§2.4) and **check lane RED — sign-in, permissions and data; fresh Opus plus Sol**. This plan supplies no implementation, migration, professional sign-off or independent verdict on a future diff. LP-0–LP-3 are the first four small build orders; they change no intended user capability, but require compatibility tests. Approximate order counts and five weeks in the proposal are planning assumptions, not promises or acceptance evidence.
+
+**Design and inventory before cutover.** Prepare the proposal's LP-4–LP-6 design note early, with review before fixing LP-5's interface or coding LP-6a. Distinguish validated identity, resource permission, exact approval and committed result. Classify every reachable table/routine by downstream effect, including account/person mappings, invitations/revocations, approval reuse, evidence attribution, ordinary job insertion, final-account pointers, allocations/reversals, queued claims/completion and seed/restore paths. Working-data names do not establish harmlessness; newly identified paths are hypotheses until tested and must be assigned to the applicable existing LP piece. Preserve decided member/contractor permissions rather than making every operation owner-only. No fee, tax, owner-creation/removal, safety or revocation policy is silently changed; unresolved policy is a ruling hold on the affected operation, not agent-created authority.
+
+**Standing rules from adoption (R1–R5).**
+- **R1:** no new INSERT/UPDATE/DELETE grant to `jobguard_runtime` on authority or money tables, nor equivalent new bypass through callable routines. LP-1's replacement of an existing broad UPDATE privilege by a proven immutable locking-column grant is a reduction, not a new write power; absent that proof use the lock routine. Working-data SELECT/INSERT remains permitted only with downstream classification and "new runtime grants" in the receipt. The reviewed LP-0 list distinguishes temporary existing exceptions from the final allowed state; a working-data addition needs its reason, an authority/money addition goes to the coordinator and cannot override this freeze.
+- **R2:** every reachable runtime SECURITY DEFINER entry point and its helpers have a trusted fixed search path, safe temporary-object/object-reference and dynamic-SQL handling, explicit tenant/resource and actor-role checks, specific EXECUTE grants with PUBLIC/other roles revoked, and no role-assumption path to its owner. Until binding cutover, tenant comparisons use `IS DISTINCT FROM` against the existing tenant setting; no other caller-set session claim is trusted. Money/status/parties/approval operations require the same-actor, same-type processing receipt and exact approved authorization where the business rule requires it. Practice-only paths refuse outside the trusted practice database. Binding cutover replaces caller-selected identity/tenant authority; schema-owner execution is not assumed to be protected by RLS.
+- **R3:** a replacement withdraws the old executable signature's runtime grant in the same migration, or its order names the LP piece that will close it before real data.
+- **R4:** fixtures use owner-connected setup or product routes, never the runtime's broad writes or `app.transition_job`. Preserve the earlier backstop assertions under an appropriate fixture role as well as testing runtime refusal.
+- **R5:** new actor arguments use `p_actor`, from the server-selected principal, never request input, for mechanical comparison with the binding.
+
+**Compatible landing groups and reservations.** At most two LP pieces are open at once; migrations, the lane register and later scanner pins serialize, and LP work counts against the five-open-database-PR cap. LP-1 lands grants/locks/seeds together; LP-2/3 land replacements/callers/old-signature withdrawals together; LP-4 lands writers/verifier/grant withdrawal together; LP-5 converts every caller before revoke; LP-6/10/11 coordinate binding/caller/enforcement cutover; LP-8 converts finance/evidence callers and restore tooling before revoke. No partial group is described as secured. Expand-compatible rollout remains C4; a maintenance cutover cannot silently weaken that decided rule. Scanner definition and source-pin edits remain coordinator-only after Ben's typed yes for that piece; this plan adoption is not that later approval. LP migrations take the next free landing numbers under §12.2, never the proposal's already occupied 0132–0138.
+
+#### LP-0 Grant freeze guard
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** PLAN-LPL (Ben merges this plan pull request).
+**Build:** catalogue test and reviewed effective-privilege inventory after all migrations; no migration. Include table/column/sequence access, PUBLIC, inheritance/SET ROLE, ownership/role attributes, views, every executable overload, schema CREATE and TRUNCATE/TRIGGER capabilities. Inventory existing and object-creator default privileges; default-deny new capabilities without pretending defaults repair existing objects.
+**Done when:**
+- Deliberate public, inherited and dangerous column grants fail; equivalent routine capabilities cannot bypass the freeze. Existing exceptions and target state are separate, explained and reviewed.
+- Every reachable authority path is assigned to an LP card; security-relevant routine/RLS changes retain behavioural checks even if grants do not change. The early design review above is recorded before LP-5's interface is fixed.
+**Check lane:** RED — permissions/data; fresh Opus plus Sol.
+
+#### LP-1 Membership and account closed to the app login
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-0.
+**Build:** revoke runtime INSERT/UPDATE/DELETE on membership and account; preserve legitimate row locks with a demonstrably immutable column grant or narrow lock routine; demo seed's four rows use the owner connection.
+**Done when:**
+- Actual runtime-role membership/account forgery, promotion and restoration are refused; legitimate locks and their RLS update-policy checks work. Any retained column grant cannot change identity, authority or linked records or cause unwanted side effects.
+- Seeds stay outside normal service startup; affected fixtures change setup role without deleting assertions. Revocation, lock compatibility and seed conversion land together.
+**Check lane:** RED — sign-in/permissions/data; fresh Opus plus Sol.
+
+#### LP-2 Unchecked job doors closed
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-1.
+**Build:** withdraw runtime EXECUTE on transition_job; narrow start-quote replacement for draft-to-quoting; make guard_imported_job null-safe with a non-forgeable adoption boundary; restrict the named actor-less practice routes (0023, 0097, 0018, 0024) to the trusted practice database.
+**Done when:**
+- Ordinary/imported direct inserts with prohibited initial state, price, cap or policy are refused; unset/empty/false/forged context and every reachable legacy transition fail. A caller-set adoption flag or shared-owner identity alone is insufficient.
+- Start quote checks intended source state, tenant and actor permission; the existing review journey works. Owner/product fixture setup preserves all earlier lifecycle/import assertions.
+**Check lane:** RED — permissions/data; fresh Opus plus Sol.
+
+#### LP-3 Old activation and acceptance routes get the v3 checks
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-2.
+**Build:** hardened signatures for v1 switch_job_live, record_simulated_settlement, record_builder_attested_acceptance and record_quote_disposition with command/authorization IDs and the 0109 active-owner/processing-receipt/matching-unexpired-authorization checks; revoke old signatures and convert callers.
+**Done when:**
+- Exact-operation checks refuse wrong tenant/actor/job/command/terms/payload, changed price/cap, consumed/revoked/expired approval and invalid source state; races yield one permitted effect. A receipt plus owner is not a distinct approval.
+- Earlier-pricing v1 and current v3 journeys still work. Test expiry after waits and in long transactions under the applicable clock contract; do not change the merged CH-7-TERMS rule (approval time is transaction start, audit times are wall clock, ordered in one transaction) without a ruling.
+**Check lane:** RED — permissions/money/data; fresh Opus plus Sol.
+
+#### LP-4 Audit append inside the database
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-3.
+**Build:** app.append_audit and appendAuditBatch conversion; database locks head, allocates sequence, reads clock, computes hashes and advances head. Revoke runtime audit_event INSERT and EXECUTE on lock_audit_head/advance_audit_head. Keep audit the last lock.
+**Done when:**
+- Callers supply no sequence, previous/event hash or time. High-trust events come only from the checked operation establishing their facts; any remaining generic append is restricted to labelled lower-trust statements and cannot manufacture approval/payment/completion.
+- Authoritative actor/tenant/type/subject/facts are integrity-bound with no reserved-field collision or conflicting caller text; canonicalization/verifier/display agree. Historical verification is preserved, with a versioned format if needed, and legacy history is not retroactively authenticated.
+- Concurrency, rollback, retry and every owner-side writer work; earlier backstop tests remain alongside permission refusals. Structural sealing alone is not evidence authenticity; final actor stamping is LP-6e.
+**Check lane:** RED — authority/data; fresh Opus plus Sol.
+
+#### LP-5a Commands begin and finish inside the database: dispatcher
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-4.
+**Build:** app.begin_command and app.complete_command; migrate the dispatcher. Claim receipt, return permitted replay, enforce the decided per-command role rule (unknown types refused), and write exact resolution/authorization through checked routines.
+**Done when:**
+- Principal/tenant/resource/significant input are bound; authorization is single-use or explicitly scoped to its defined multi-step operation. Completion cannot certify success without the committed business mutation.
+- Same-key/different-input conflicts; replay checks current access and cannot disclose another actor's result or repeat effects. Test cancellations/errors/concurrent duplicates/stale processing/failure before completion; mutation, terminal receipt, trusted audit and required outbox commit consistently.
+**Check lane:** RED — permissions/data; fresh Opus plus Sol.
+
+#### LP-5b Commands begin and finish inside the database: other writers
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-5a, ENT-3a–3d, CH-7-TERMS, M4-8-S (same-repository serialization).
+**Build:** convert the nine receipt-writing repositories and demo seed identified in the proposal; inventory later merged writers and retain existing contractor controlled routes.
+**Done when:**
+- No runtime direct writer is left out; command-replay-contract, proof-replay and match-inbox-replay protections remain, including membership lock and watchdog/deferred contractor triggers. Earlier assertions are preserved.
+- All converted callers satisfy LP-5a creation, completion and replay checks; shared-repository overlaps are recorded before landing.
+**Check lane:** RED — permissions/data; fresh Opus plus Sol.
+
+#### LP-5c Commands begin and finish inside the database: revoke direct writes
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-5b.
+**Build:** revoke runtime INSERT on command_receipt, decision_resolution and action_authorization and receipt UPDATE; inventory remaining authority-changing column grants under LP-0.
+**Done when:**
+- Direct forged receipts/approved resolutions/authorizations and fabricated completion fail as runtime; all legitimate command paths/replays pass with catalogue proof. Any remaining authority write is closed through its checked path before gate completion.
+**Check lane:** RED — permissions/data; fresh Opus plus Sol.
+
+#### LP-6a Actor from the session: dark binding foundation
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-5c, PRACTICE-SESSION-HARDEN-1; reviewed LP-4–LP-6 design note.
+**Build:** bind_request, protected transaction store and current_actor/current_tenant, merged dark. Review table-backed versus transaction/environment-bound keyed-signature storage; neither a plain setting nor a caller-selected actor is authority. Look up the credential's real/practice kind in trusted session records and validate live membership and tenant. Use narrow no-login ownership for new sensitive chokepoints; review helpers and role-assumption paths.
+**Done when:**
+- Unbound/invalid/expired/revoked/wrong-kind requests fail; practice credentials cannot reach a real-data owner. Treat a usable session digest as a credential and keep it out of logs/receipts.
+- Pool reuse, commit/rollback/savepoints/backend reuse/concurrency/rebinding and signed-context replay/substitution are tested; lookup cannot introduce a general RLS bypass or circular dependency. Binding takes no lock that violates the existing later lock order.
+- Threat model distinguishes database-password possession, captured live session authority, API/identity-process takeover and administrator power. Narrow owner has only required grants/helpers and cannot be assumed by runtime/worker.
+**Check lane:** RED — sign-in/permissions/data; fresh Opus plus Sol.
+
+#### LP-6b Actor from the session: withTenant and bridges
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-6a, PRACTICE-WORKER-SWITCH; Ben's later typed yes and coordinator scanner/pin edits.
+**Build:** stamped context carries reviewed session reference; withTenant binds instead of assigning tenant authority. Update reviewed bridges and source-pinned boundary/scanner contracts through their authorized owner.
+**Done when:**
+- All bridge paths derive identity from validated credentials, never input; missing/malformed context and pooled reuse fail closed. Existing boundary/origin tests retain their guarantees; pin updates alone are not identity proof.
+- Dark/new callers and enforcement cut over compatibly; no running service gains owner credentials.
+**Check lane:** RED — sign-in/permissions/data; fresh Opus plus Sol.
+
+#### LP-6c Actor from the session: money and commitment routines
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-6b.
+**Build:** money, activation, acceptance and invoice routines compare p_actor/p_tenant with the protected binding; retain parameters initially for caller compatibility.
+**Done when:**
+- Every relevant old/new signature, command helper and resource path rejects forged/mismatched actor or tenant while permitted bound operations pass. Session identity, permission and exact approval remain separate checks.
+**Check lane:** RED — sign-in/permissions/money/data; fresh Opus plus Sol.
+
+#### LP-6d Actor from the session: remaining routines
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-6c.
+**Build:** apply actor/tenant binding to every remaining relevant routine, following the downstream-effect inventory.
+**Done when:**
+- Every reachable authority/evidence/commitment path, including helpers and later merged routines, is checked or unavailable; no blanket deferral of unconverted entry points. Legitimate decided contractor/member permissions continue.
+**Check lane:** RED — sign-in/permissions/data; fresh Opus plus Sol.
+
+#### LP-6e Actor from the session: trusted audit attribution
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-6d.
+**Build:** audit append stamps the bound actor; checked operations establish high-trust content under LP-4's contract.
+**Done when:**
+- A valid actor cannot seal a false approval/payment/completion; stored attribution, sealed payload and displayed/verifier claims agree. Actor substitution, payload collision, rollback and owner-side writers are covered.
+**Check lane:** RED — sign-in/authority/data; fresh Opus plus Sol.
+
+#### LP-7 Member removal and role change on the identity side
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-6e, ENT-10a2.
+**Build:** two identity-side routines and server route; reuse merged deactivation paths, no screen. Session-derived owner checks, last-owner protection and same-transaction audit; document a tested authenticated administration procedure.
+**Done when:**
+- Removal/demotion bites on the next request; stale context and concurrent mutual removal/demotion cannot bypass checks or leave no owner. Membership change and audit are atomic.
+- Already-authorized commands/invitations/queued work have an explicit disposition under existing execution-time revocation rules. Owner rights — **ANSWERED**, card `jobguard-twenty-product-decisions-2026-10-13`: **"Require a verified owner's approval and prevent accidental lockout"**.
+**Check lane:** RED — sign-in/permissions/data; fresh Opus plus Sol.
+
+#### LP-8a Money and commitment tables: customer billing
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-7, SV-4.
+**Build:** revoke customer invoice/evidence/credit/payment/reversal INSERT and the two number-sequence writes; retire legacy direct-insert service; convert restore rehearsal to checked paths; check advance_final_account_draft and reconcile job/activation/terms targets with actual grants.
+**Done when:**
+- Every supported invoice/credit/payment/reversal/allocation/final-account path enforces actor/resource/amount/state and exact approval; cross-tenant and wrong-job parent/child links fail even inside owner routines.
+- Cover lock-bound and surviving older invoice signatures; replacements withdraw old grants or name their closure in this track. Fingerprinted customer_invoice needs no column change; restore rehearsal remains executable.
+**Check lane:** RED — money/evidence/data; fresh Opus plus Sol.
+
+#### LP-8b Money and commitment tables: outbox and evidence dependencies
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-8a.
+**Build:** checked authorized action_outbox insertion; owner guard on evidence_invalidation; extras-event grant checks reusing 0122 protections; actor on prevention facts. Include equivalent lower-trust inputs from the inventory, not just obvious finance tables.
+**Done when:**
+- No direct insert substitutes authoritative evidence, invalidates another person's proof, alters trusted allocation/final pointer or changes approved outbox content. Each named subpart is completed, not dismissed as low value.
+- SQL/evidence references preserve scoped access, immutable object version and integrity of external originals under the existing evidence contract; grants alone do not prove bytes. M4-8-S's merged SELECT-only allocation grants remain closed.
+**Check lane:** RED — permissions/money/evidence/data; fresh Opus plus Sol.
+
+#### LP-10 Worker login split from the web login
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-8b, PRACTICE-WORKER-SWITCH.
+**Build:** separate jobguard_worker role/secret; move outbox claim/completion and worker-only binding to it, deriving actor/tenant from the valid authorized action rather than supplied fields.
+**Done when:**
+- Web credentials cannot bind/claim/complete worker actions; worker cannot manufacture authorization and does not inherit the runtime's broad powers. Recheck authorization under existing revocation rules; claims/retries/lease expiry/completion have duplicate-effect tests.
+- Audit separates executing worker from authorizing user. Required worker authority exists before any real-data worker relies on it; fake outbound is not proof that internal worker writes are safe.
+**Check lane:** RED — permissions/data; fresh Opus plus Sol.
+
+#### LP-11 Tenant bound for reads and remaining writes
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-10.
+**Build:** convert tenant RLS policies from caller-set setting to protected bound tenant, including visibility and proposed-row checks; review permissive alternatives, views and privileged routines.
+**Done when:**
+- Bound-context reads/inserts/updates, every policy alternative and relevant view/routine refuse wrong-tenant access; positive paths and pool reuse pass. Dedicated pilot database separation may reduce exposure but does not count as tested within-business authorization or tenant enforcement.
+**Check lane:** RED — permissions/tenant data; fresh Opus plus Sol.
+
+#### LP-12 Narrower owner for chokepoint routines
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-11.
+**Build:** move new chokepoints and then relevant money routines off the schema owner; retain the proposal's bounded migration rather than moving all routines merely because of their count.
+**Done when:**
+- New binding/command/audit/money owners have only necessary grants, helpers and sequence access; no migration-role inheritance, protected-table ownership or unrestricted helper defeats the boundary. Runtime/worker cannot assume owner or redefine objects; legitimate operations work.
+**Check lane:** RED — permissions/data; fresh Opus plus Sol.
+
+#### LP-13 Low-value rows, one checked batch
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-12.
+**Build:** proposal's five items only: invoice-number burning (0017), legacy unknown raiser (0053), scope progress actor (0003), SSO audit connection check (0120), replay branch (0095).
+**Done when:**
+- Trace each item's downstream impact: numbers cannot corrupt issued records or create unbounded service trouble; unknown raiser is not verified attribution; progress cannot alter commitments/charges; SSO cannot mix identity/tenant; replay cannot disclose results or duplicate effects.
+- Any authority/evidence/money consequence is covered by its applicable earlier LP piece and retested; cosmetic attribution and bounded operational tidying are distinguished without inventing new scope.
+**Check lane:** RED — permissions/data; fresh Opus plus Sol.
+
+#### LP-9 Direct-SQL refusal run and final gate evidence
+**Track:** shared — least-privilege login; buildable after Ben merges this plan pull request.
+**Depends on:** LP-0–LP-8b (all named subparts), LP-10, LP-11, LP-12, LP-13.
+**Build:** progressively assembled original-audit refusal suite plus new boundary attacks; final deployment-representative run as actual least-privileged roles with real pooling, catalogue suites and seed/restore/credential evidence.
+**Done when:**
+- Pair every refusal with an authorized positive case and committed-state checks: unbound/wrong actor/tenant/resource, inactive membership, expired/reused approval, alternative signatures, forged context, races/retries and rollback. Existing trigger/backstop assertions remain. Destructive attacks use a disposable equivalent database; deployed real-data checks are non-destructive.
+- Bind results to exact migration, role and application versions after all gate work. Deployment uses separate runtime/identity/worker/owner secrets, owner absent from service processes; seeds refuse unintended destinations; rotation handles existing connections. Restore reinstates grants/ownership/policies/triggers and passes catalogue/refusal tests before resumption; restored sessions/revocations/approvals/queued actions cannot silently restore access or repeat effects.
+- Record pilot isolation/topology and identity/business co-location limits. Paying an independent human reviewer — **ANSWERED**, card `jobguard-twenty-product-decisions-2026-10-13`: **"Obtain a quote; spend only after explicit approval"**. This authorises getting a quote only; spending requires Ben's explicit approval. Independent human review of role model, binding and suite remains required before real-data approval; models/green CI cannot fabricate that sign-off.
+- Completion claim is bounded: a business DB password alone cannot manufacture owners, approvals or trusted history, bypass checked money operations or the tested tenant boundary. Captured valid sessions, service takeover and administrators remain risks; audit records accepted system facts, not human intent or site truth. Existing restricted checkpoints before G1 and later external anchoring/signature work retain their gates; no retrospective authentication or tamper-proof claim.
+**Check lane:** RED — sign-in/permissions/money/data; fresh Opus plus Sol.
+
+---
+
 ## 12. Dependency graph and build order
 
 ### 12.1 How it runs
@@ -3389,6 +3597,15 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 
 **Ledger amendment — SV-3, 12 October 2026 (catch-up renumber, merge-ahead ruling).** SV-3 (shadow detection engine and evaluation) moves from **0129** (`shadow_detection`, as first allocated) to **0133**, the next number neither merged nor reserved ahead of it (merged through 0131: 0129 ENT-10d, 0130 CH-7-F17-BEFORE-OPEN and 0131 PRACTICE-FACTS-1 landed on main ahead of it; 0132 is held by SV-4, PR #152, which merges before this piece; 0134 CH-7-TERMS, 0135 ENT-3a, 0136 M4-8-S, 0137 ENT-10a2 and 0138 HARDEN-1 are reserved after it, in that order), under Ben's 5 October merge-ahead ruling. The SQL bytes are unchanged (sha256 `6d317e043790d4bb97acfb91d918b755a0e2ee9a08fdf6cbeefeb26fbdfe5aa6` before and after the rename, recorded in the builder receipt); the runner lists it last, after 0132, and its upgrade proof finds the file by name. The lane path and its upgrade test were swapped on SV-3's own line and file only. This replaces the 0129 number in SV-3's earlier allocation. A PR whose number is not above every merged number when it lands renumbers again.
 
+**Ledger amendment — PLAN-LPL, 13 October 2026 (adopted least-privilege database login track).** Ben typed **"yes, lock down the database login"** on 13 October 2026, about 13:45; the dispatcher issued PLAN-LPL on the coordinator's instruction. §11.8 records the shared track and the additional before-any-real-customer-data gate; each piece is buildable only after Ben merges this plan pull request and its dependencies are merged. This is plan adoption, not technical acceptance, scanner-pin approval, deployment authority or a real-data release. LP-0 has no migration. Other LP migrations take the next free number at landing, above every merged number and avoiding all reservations, under Ben's 5 October merge-ahead ruling; they count against the five-open-database-PR cap, with at most two LP pieces open together. The proposal reserved **0132–0138** for SV-4, SV-3, CH-7-TERMS, ENT-3a, M4-8-S, ENT-10a2 and PRACTICE-SESSION-HARDEN-1; all seven are already merged on the inspected origin/main (`ec6ad4d`), so LP must not reuse them. No LP number is allocated by this documents-only change; the coordinator records each reservation/renumber before its build order lands. R1–R5 freeze new authority/money write powers, including equivalent routine bypasses, from adoption; working-data grants remain individually justified. The receipt records Astra N6 dispositions and proposal/main mismatches; pending policy changes remain NEEDS A RULING.
+
+**Ledger amendment — PLAN-LPL, 13 October 2026 (answers to open points).** Ben answered card `jobguard-twenty-product-decisions-2026-10-13` at 20:07 on 13 October 2026: **"Accept all leans"**.
+
+- Owner rights — **ANSWERED**, card `jobguard-twenty-product-decisions-2026-10-13`: **"Require a verified owner's approval and prevent accidental lockout"**.
+- Paying an independent human reviewer — **ANSWERED**, card `jobguard-twenty-product-decisions-2026-10-13`: **"Obtain a quote; spend only after explicit approval"**. This authorises getting a quote only; no spending without Ben's explicit approval.
+
+This plan pull request remains Ben's own click to merge.
+
 **Ledger amendment — ENT-3c, 13 October 2026 (merge-ahead ruling).** ENT-3c (the order check and the server-priced first revision of a schedule-of-rates site extra, with its pricing-basis side record and two site read lists; the third part of plan leaf ENT-3 after the 11 October split) takes **0140** (`site_extra_pricing`: two new tables with SELECT only for the application login, one checked writer routine, and triggers on the two new tables only; no column, grant, policy, index or trigger on any existing table) on 13 October 2026, the next number neither merged nor reserved (merged through 0138; 0139 ENT-3b is reserved before it and 0141 ENT-3d after it), under Ben's 5 October merge-ahead ruling. The runner lists it in numeric order. A piece that lands after a higher number has merged renumbers again.
 
 **Ledger amendment — ENT-3b, 13 October 2026 (merge-ahead ruling).** ENT-3b (visit start and complete, the immutable close-out answer, two site read lists and the visit reference on `LogSiteExtra` body version 2; the second part of plan leaf ENT-3 after the 11 October split) takes **0139** (`site_visit_closeout`: one new table, `app.closeout_answer`, with SELECT only for the application login; four callable routines and two trigger functions; one deferred trigger on merged `app.site_visit`; no column, grant, policy or index on any existing table) on 13 October 2026, the next number neither merged nor reserved (merged through 0138; 0140 ENT-3c and 0141 ENT-3d are reserved after it, in that order), under Ben's 5 October merge-ahead ruling. The runner lists it last. A piece that lands after a higher number has merged renumbers again.
@@ -3458,6 +3675,29 @@ Each repair's specification is its verdict file: every finding is fixed or expli
 | 10 | ENT-11b | Full contractor demo and sales edition | contractor | ENT-11a, ENT-7, ENT-9 | 0091 | §9 |
 | 10 | M4-17-S | Money-trail reconciliation | small-builder | M4-12-S, MON-2A | 0092 | §10 |
 | 11 | DEMO-S | Whole small-builder practice journey | small-builder | SV-6, SV-7A, CH-1, CH-4, CH-5, CH-6, CH-7, CH-8, CH-9, MON-1, MON-2A, MON-3, MON-4A, MON-5, MON-7, MON-8, M4-6-S, M4-17-S | 0093 | §10 |
+
+| LP adoption | PLAN-LPL | Adopt least-privilege login plan | shared | — | none | §11.8 |
+| LP 1 | LP-0 | Effective privilege freeze | shared | PLAN-LPL | none | §11.8 |
+| LP 2 | LP-1 | Membership/account writes closed | shared | LP-0 | next free at landing | §11.8 |
+| LP 3 | LP-2 | Unchecked job paths closed | shared | LP-1 | next free at landing | §11.8 |
+| LP 4 | LP-3 | Legacy activation/acceptance checks | shared | LP-2 | next free at landing | §11.8 |
+| LP 5 | LP-4 | Protected audit append | shared | LP-3 | next free at landing | §11.8 |
+| LP 6 | LP-5a | Checked dispatcher command lifecycle | shared | LP-4 | next free at landing | §11.8 |
+| LP 7 | LP-5b | Convert remaining command writers | shared | LP-5a, ENT-3a–3d, CH-7-TERMS, M4-8-S | next free at landing | §11.8 |
+| LP 8 | LP-5c | Withdraw direct authority writes | shared | LP-5b | next free at landing | §11.8 |
+| LP 9 | LP-6a | Dark session-binding foundation | shared | LP-5c, PRACTICE-SESSION-HARDEN-1; reviewed design | next free at landing | §11.8 |
+| LP 10 | LP-6b | withTenant and bridge cutover | shared | LP-6a, PRACTICE-WORKER-SWITCH; later pin approval | next free at landing | §11.8 |
+| LP 11 | LP-6c | Bind money/commitment actors | shared | LP-6b | next free at landing | §11.8 |
+| LP 12 | LP-6d | Bind remaining routine actors | shared | LP-6c | next free at landing | §11.8 |
+| LP 13 | LP-6e | Trusted audit attribution | shared | LP-6d | next free at landing | §11.8 |
+| LP 14 | LP-7 | Identity-side removal/role change | shared | LP-6e, ENT-10a2; owner rights ANSWERED, card `jobguard-twenty-product-decisions-2026-10-13`: "Require a verified owner's approval and prevent accidental lockout" | next free at landing | §11.8 |
+| LP 15 | LP-8a | Controlled customer billing writes | shared | LP-7, SV-4 | next free at landing | §11.8 |
+| LP 16 | LP-8b | Outbox/evidence dependencies | shared | LP-8a | next free at landing | §11.8 |
+| LP 17 | LP-10 | Worker credential/authority split | shared | LP-8b, PRACTICE-WORKER-SWITCH | next free at landing | §11.8 |
+| LP 18 | LP-11 | Bound tenant RLS, reads and writes | shared | LP-10 | next free at landing | §11.8 |
+| LP 19 | LP-12 | Narrow chokepoint owners | shared | LP-11 | next free at landing | §11.8 |
+| LP 20 | LP-13 | Five low-value impact checks | shared | LP-12 | next free at landing | §11.8 |
+| LP 21 | LP-9 | Final deployed refusal/positive proof | shared | LP-0–LP-8b (all subparts), LP-10–LP-13 | none unless its gate fixes need one | §11.8 |
 
 ### 12.4 Live and later work (not dispatched automatically)
 
