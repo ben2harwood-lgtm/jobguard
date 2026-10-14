@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CommercialIntegrityApplication } from "./commercial-integrity.application.js";
+import { money } from "@jobguard/core";
+import { CommercialIntegrityApplicationRepository } from "@jobguard/db";
 import { PracticeAccess } from "./practice-access.js";
 afterEach(()=>vi.restoreAllMocks());
 describe("commercial integrity API boundary",()=>{
@@ -9,6 +11,10 @@ describe("commercial integrity API boundary",()=>{
  it("only appends feedback and exposes the frozen accepted cap",async()=>{
   // Projection test with the ownership bridge stubbed; real denials have separate regressions.
   vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue({} as never);
+  // Establish persisted-state premises before the unchanged projection assertions.
+  const feedback: Array<{jobId:string;commandId:string;findingKey:string;explanation:string;outcome:"dismissed_false_positive";version:"commercial-integrity-review.v1";recordedAt:string}> = [];
+  vi.spyOn(CommercialIntegrityApplicationRepository.prototype,"read").mockImplementation(async (_context,jobId)=>({facts:[],capBasisPence:money(80000).pence,acceptedCapPence:money(1200).pence,feedback:feedback.filter(row=>row.jobId===jobId)}));
+  vi.spyOn(CommercialIntegrityApplicationRepository.prototype,"review").mockImplementation(async (_context,_member,jobId,raw)=>{const input=raw as Omit<(typeof feedback)[number],"jobId"|"recordedAt">;const result={jobId,...input,recordedAt:"2026-04-09T10:00:00.000Z"};feedback.push(result);return result;});
   const app=new CommercialIntegrityApplication({} as never,undefined,"synthetic_demo"),before=await app.view("job");
   expect(before.acceptedCapPence).toBe(1200);
   const after=await app.review("job",{version:"commercial-integrity-review.v1",commandId:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",findingKey:"accepted_value_variance:1",explanation:"The acceptance source needs correcting",outcome:"dismissed_false_positive"});
