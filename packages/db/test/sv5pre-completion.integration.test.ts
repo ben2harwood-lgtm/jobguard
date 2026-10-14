@@ -85,9 +85,9 @@ describe("SV5PRE authoritative completion", () => {
  it("S3 non-empty fixture commits inventory before recording both stages and completion", async () => {
   const a=await seedAccount(f.admin),uploadId=randomUUID(),evidenceId=randomUUID();
   await asFixtureTenant(f.admin,a.tenantId,async db=>{
-   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]);
+   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]);
    await db.query("UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='immutable.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]);
-   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) SELECT tenant_id,job_id,$3,id,scope_item_id,'original','photo',object_key,object_version_id,expected_sha256,1,'image/png',retention_class,server_received_at,server_verified_at FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId,evidenceId]);
+   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) SELECT tenant_id,job_id,$3,id,scope_item_id,'original','photo',object_key,object_version_id,expected_sha256,1,'application/pdf',retention_class,server_received_at,server_verified_at FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId,evidenceId]);
   });
   const lock=await prepareLock(f,a);await lock.lock(a.context,a.input);
   const checkId=await publishFixtureCompletion(f.shadow,f.admin,a.tenantId,a.jobId);
@@ -99,7 +99,7 @@ describe("SV5PRE authoritative completion", () => {
  });
  async function sourceFixture(){
   const a=await seedAccount(f.admin),uploadId=randomUUID();
-  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]));
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]));
   const lock=await prepareLock(f,a);await lock.lock(a.context,a.input);const repo=new FinalCheckCompletionRepository(f.shadow);
   const manifest=await repo.freeze(a.context,{version:"final-check-manifest.v1",jobId:a.jobId,manifestId:randomUUID(),detectorVersion:"synthetic.v1",reconciliationVersion:"synthetic.v1"});
   return {a,uploadId,repo,manifest,executionId:randomUUID(),runId:randomUUID()};
@@ -114,7 +114,7 @@ describe("SV5PRE authoritative completion", () => {
  async function finalize(x:Awaited<ReturnType<typeof sourceFixture>>,receivedAt:string|null=null){
   const evidenceId=randomUUID();await asFixtureTenant(f.admin,x.a.tenantId,async db=>{
    await db.query("UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='immutable.v1' WHERE tenant_id=$1 AND id=$2",[x.a.tenantId,x.uploadId]);
-   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','photo',$6,'immutable.v1',repeat('a',64),1,'image/png','standard_evidence',coalesce($7::timestamptz,(SELECT server_received_at FROM app.evidence_upload WHERE tenant_id=$1 AND id=$4)),clock_timestamp())",[x.a.tenantId,x.a.jobId,evidenceId,x.uploadId,x.a.scopeItemId,`sv5pre/${x.uploadId}`,receivedAt]);
+   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','photo',$6,'immutable.v1',repeat('a',64),1,'application/pdf','standard_evidence',coalesce($7::timestamptz,(SELECT server_received_at FROM app.evidence_upload WHERE tenant_id=$1 AND id=$4)),clock_timestamp())",[x.a.tenantId,x.a.jobId,evidenceId,x.uploadId,x.a.scopeItemId,`sv5pre/${x.uploadId}`,receivedAt]);
   });return evidenceId;
  }
  async function attempt(x:Awaited<ReturnType<typeof sourceFixture>>,evidenceId:string,stage:"detection"|"reconciliation"){
@@ -126,8 +126,8 @@ describe("SV5PRE authoritative completion", () => {
   const a=await seedAccount(f.admin),uploadId=randomUUID(),evidenceId=randomUUID();
   const uploadTime='2026-09-30T10:00:00.000001Z',objectTime='2026-09-30T10:00:00.000002Z';
   await asFixtureTenant(f.admin,a.tenantId,async db=>{
-   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,server_received_at,state,server_verified_at,object_version_id) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day',$6::timestamptz,'verified',clock_timestamp(),'immutable.v1')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`,uploadTime]);
-   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','photo',$6,'immutable.v1',repeat('a',64),1,'image/png','standard_evidence',$7::timestamptz,clock_timestamp())",[a.tenantId,a.jobId,evidenceId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`,objectTime]);
+   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,server_received_at,state,server_verified_at,object_version_id) VALUES($1,$2,$3,$4,$5,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day',$6::timestamptz,'verified',clock_timestamp(),'immutable.v1')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`,uploadTime]);
+   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','photo',$6,'immutable.v1',repeat('a',64),1,'application/pdf','standard_evidence',$7::timestamptz,clock_timestamp())",[a.tenantId,a.jobId,evidenceId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`,objectTime]);
   });
   expect((await f.admin.query("SELECT u.server_received_at=$3::timestamptz upload_time_exact,e.server_received_at=$4::timestamptz object_time_exact FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.upload_id)=(u.tenant_id,u.id) WHERE u.tenant_id=$1 AND u.id=$2",[a.tenantId,uploadId,uploadTime,objectTime])).rows).toEqual([{upload_time_exact:true,object_time_exact:true}]);
   const lock=await prepareLock(f,a);await lock.lock(a.context,a.input);const repo=new FinalCheckCompletionRepository(f.shadow);
@@ -149,8 +149,8 @@ describe("SV5PRE authoritative completion", () => {
  it("PRE-Q5-03 r1 a pre-cutoff object outside the frozen upload inventory blocks completion",async()=>{
   const x=await sourceFixture(),laterUpload=randomUUID(),laterEvidence=randomUUID();
   await asFixtureTenant(f.admin,x.a.tenantId,async db=>{
-   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,server_verified_at,object_version_id) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',clock_timestamp(),'immutable.v1')",[x.a.tenantId,x.a.jobId,laterUpload,`sv5pre/${laterUpload}`]);
-   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','photo',$5,'immutable.v1',repeat('a',64),1,'image/png','standard_evidence','2026-09-30T10:00:00Z',clock_timestamp())",[x.a.tenantId,x.a.jobId,laterEvidence,laterUpload,`sv5pre/${laterUpload}`]);
+   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,server_verified_at,object_version_id) VALUES($1,$2,$3,$4,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',clock_timestamp(),'immutable.v1')",[x.a.tenantId,x.a.jobId,laterUpload,`sv5pre/${laterUpload}`]);
+   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','photo',$5,'immutable.v1',repeat('a',64),1,'application/pdf','standard_evidence','2026-09-30T10:00:00Z',clock_timestamp())",[x.a.tenantId,x.a.jobId,laterEvidence,laterUpload,`sv5pre/${laterUpload}`]);
   });
   const evidence=await finalize(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');await runWithZero(x);
   await expect(x.repo.publish(x.a.context,{version:"final-check-publication.v1",jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_INVENTORY_INCOMPLETE');
@@ -158,7 +158,7 @@ describe("SV5PRE authoritative completion", () => {
  });
  it("PRE-Q5-03 r1 refuses a post-lock upload backdated into the frozen inventory",async()=>{
   const x=await sourceFixture();
-  await expect(asFixtureTenant(f.admin,x.a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,server_received_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day',$5::timestamptz)",[x.a.tenantId,x.a.jobId,randomUUID(),`sv5pre/${randomUUID()}`,x.manifest.cutoff]))).rejects.toThrow('FINAL_CHECK_SOURCE_IDENTITY_CHANGED');
+  await expect(asFixtureTenant(f.admin,x.a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,server_received_at) VALUES($1,$2,$3,$4,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day',$5::timestamptz)",[x.a.tenantId,x.a.jobId,randomUUID(),`sv5pre/${randomUUID()}`,x.manifest.cutoff]))).rejects.toThrow('FINAL_CHECK_SOURCE_IDENTITY_CHANGED');
   expect((await f.admin.query("SELECT count(*)::int n FROM app.evidence_upload WHERE tenant_id=$1 AND job_id=$2",[x.a.tenantId,x.a.jobId])).rows[0].n).toBe(1);
  });
  it("PRE-Q5-03 the manifest inventories sources rather than existing signals",async()=>{
@@ -196,14 +196,23 @@ describe("SV5PRE authoritative completion", () => {
    for(const db of writers) {
     await db.query("BEGIN");
     await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
-    await db.query("SET LOCAL lock_timeout='1s'");
+    await db.query("SET LOCAL lock_timeout='10s'");
     await db.query("SELECT app.require_watchdog_live($1)",[a.jobId]);
    }
    // Both already hold the merged live guard's SHARE lock. An UPDATE upgrade cannot succeed here.
-   await Promise.all(writers.map(db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')",[a.tenantId,a.jobId,randomUUID()])));
+   // The merged recovery_message_source_write trigger (0107) also takes ONE tenant-wide exclusive advisory
+   // lock per evidence_upload write, held to commit, so two writers in one tenant serialise: the second INSERT
+   // waits for the first COMMIT. Start both, prove the second is still waiting, then commit in order.
+   const insert=(db:typeof writers[number])=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')",[a.tenantId,a.jobId,randomUUID()]);
+   await insert(writers[0]!);
+   const second=insert(writers[1]!);
+   let secondDone=false;second.then(()=>{secondDone=true;},()=>{secondDone=true;});
+   await new Promise(r=>setTimeout(r,200));
+   expect(secondDone).toBe(false);
    const exclusive=()=>probe.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE NOWAIT",[a.tenantId,a.jobId]);
    await expect(exclusive()).rejects.toMatchObject({code:'55P03'});
    await writers[0]!.query("COMMIT");
+   await second;
    await expect(exclusive()).rejects.toMatchObject({code:'55P03'});
    await writers[1]!.query("COMMIT");
    expect((await exclusive()).rowCount).toBe(1);
