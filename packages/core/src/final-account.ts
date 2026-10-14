@@ -3,7 +3,7 @@ import { addMoney, money, type Money } from "./money.js";
 import { candidateM1TaxPolicy, CANDIDATE_M1_TAX_POLICY_VERSION } from "./tax.js";
 
 const uuid=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/u);
-export const finalAccountAssemblyCommandV1=z.object({version:z.literal("final-account.assemble.v1"),commandId:uuid,actorMembershipId:uuid,jobId:uuid}).strict();
+export const finalAccountAssemblyCommandV1=z.object({version:z.literal("final-account.assemble.v1"),commandId:uuid,actorMembershipId:uuid,jobId:uuid,expectedRevision:z.number().int().nonnegative().optional()}).strict();
 export type FinalAccountSourceLine=Readonly<{kind:"baseline"|"variation";sourceId:string;scopeItemId:string;commercialRevisionId:string;description:string;netPence:number;approvalId:string|null}>;
 export type FinalAccountProof=Readonly<{evidenceId:string;objectVersionId:string;scopeItemId:string;evidenceType:string;sha256:string;mandatory:boolean}>;
 export type FinalAccountFinding=Readonly<{code:"performed_approved_variation_unbilled"|"final_account_unissued"|"mandatory_proof_missing";subjectRef:string;mandatory:boolean}>;

@@ -127,15 +127,15 @@ export class SupplierMatchRepository {
         )
       ).rows[0];
       if (!proposal) throw new Error("MATCH_PROPOSAL_NOT_FOUND");
-      const count = Number(
+      const currentRevision = Number(
         (
           await db.$client.query(
-            `SELECT count(*) n FROM app.supplier_match_revision WHERE tenant_id=$1 AND job_id=$2 AND proposal_id=$3`,
+            `SELECT coalesce(max(revision),0) n FROM app.supplier_match_revision WHERE tenant_id=$1 AND job_id=$2 AND proposal_id=$3`,
             [context.tenantId, jobId, input.proposalId],
           )
         ).rows[0].n,
       );
-      if (count !== input.expectedRevision)
+      if (currentRevision !== input.expectedRevision)
         throw new Error("MATCH_REVISION_CONFLICT");
       if (
         input.orderVersionId !== proposal.order_revision_id ||
@@ -143,7 +143,9 @@ export class SupplierMatchRepository {
         input.receiptVersionIds.some(
           (x: string) => !proposal.receipt_version_ids.includes(x),
         ) ||
-        input.allocations.some(x => !input.receiptVersionIds.includes(x.receiptVersionId))
+        input.allocations.some(
+          (allocation) => !input.receiptVersionIds.includes(allocation.receiptVersionId),
+        )
       )
         throw new Error("MATCH_SOURCE_VERSION_CONFLICT");
       for (const allocation of input.allocations) {
@@ -194,19 +196,29 @@ export class SupplierMatchRepository {
     );
   }
   private async sources(db: any, tenantId: string, jobId: string) {
-    // Receipts carry the immutable order identity. Revision numbers from different
-    // orders are not comparable. Multiple receipt orders require explicit review.
-    const receipts = (await db.query(
-      `SELECT id,order_draft_id,revision,accepted_quantity::text quantity_decimal,unit FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision,id`,
+    const receiptRows = (await db.query(
+      `SELECT id,order_draft_id,document_id,revision,accepted_quantity::text quantity_decimal,unit FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2 ORDER BY document_id,order_draft_id,revision DESC,id`,
       [tenantId, jobId],
     )).rows;
+    // Receipt revisions replace the total for a delivery. Distinct delivery documents
+    // remain additive; retain their immutable version IDs in the match snapshot.
+    const currentDeliveries = new Map<string, any>();
+    for (const receipt of receiptRows) {
+      const key = `${receipt.order_draft_id}:${receipt.document_id}`;
+      const current = currentDeliveries.get(key);
+      if (!current || Number(receipt.revision) > Number(current.revision))
+        currentDeliveries.set(key, receipt);
+    }
+    const receipts = [...currentDeliveries.values()];
     if (!receipts.length) throw new Error("CONFIRMED_MATCH_SOURCES_REQUIRED");
-    const orderIds = new Set(receipts.map((r: any) => r.order_draft_id));
-    if (orderIds.size !== 1) throw new Error("MATCH_SOURCE_VERSION_CONFLICT");
+    const draftIds = new Set(receipts.map((receipt) => receipt.order_draft_id));
+    // The retained synthetic invoice has no order reference. Multiple delivered
+    // orders therefore require an explicit mapping; never invent one by revision rank.
+    if (draftIds.size !== 1) throw new Error("MATCH_SOURCE_VERSION_CONFLICT");
     const order = (
         await db.query(
           `SELECT r.id version_id,r.revision,r.quantity_decimal,d.id FROM app.purchase_order_revision r JOIN app.purchase_order_draft d ON(d.tenant_id,d.job_id,d.id)=(r.tenant_id,r.job_id,r.draft_id) WHERE r.tenant_id=$1 AND r.job_id=$2 AND d.id=$3 ORDER BY r.revision DESC LIMIT 1`,
-          [tenantId, jobId, receipts[0].order_draft_id],
+          [tenantId, jobId, receipts[0]!.order_draft_id],
         )
       ).rows[0],
       bill = (
