@@ -45,7 +45,12 @@ export class ShadowDetectionRepository {
         }
         for (const s of candidates) {
           if (s.signalId === primaryId) {
-            const reference = g.match.references[0]?.id ?? null;
+            const matchedCapture = g.match.references
+              .map(ref => b.captures.find(c => c.id === ref.id))
+              .find(c => c && (g.match.outcome === "already_in_original_scope" ? c.kind === "baseline" : c.kind !== "baseline"));
+            const reference = matchedCapture
+              ? g.match.outcome === "already_in_original_scope" ? matchedCapture.scopeItemId : matchedCapture.id
+              : null;
             // A pre-lock match is an exclusion marker on the held proposal. Final-check transitions belong to SV-5.
             await db.$client.query(`UPDATE app.shadow_commercial_signal SET state='held_for_final_check',revision=revision+1,
               outcome=$4,matched_scope_item_id=$5,matched_variation_id=$6
