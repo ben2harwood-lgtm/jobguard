@@ -48,6 +48,6 @@ let resolutionId:string|null=null;if(decisionId){const decision=(await db.$clien
    if(completing)await completing(db);
    return row.result;
   })}catch(error){if(error instanceof Error&&["COMMAND_CONFLICT","IDEMPOTENCY_CONFLICT"].includes(error.message))throw new ProofCommandError("COMMAND_CONFLICT");
-   if(error instanceof Error&&["FORBIDDEN","PROOF_NOT_FINAL"].includes(error.message))throw new ProofCommandError(error.message as "FORBIDDEN"|"PROOF_NOT_FINAL");throw error}
+   if(error instanceof Error&&["FORBIDDEN","PROOF_NOT_FINAL"].includes(error.message))throw new ProofCommandError(error.message as "FORBIDDEN"|"PROOF_NOT_FINAL");rethrowJobWorkState(error)}
  }
 }
