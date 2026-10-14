@@ -58,12 +58,17 @@ it("completes a pending mandatory firing when final-account locking races detect
         persisted.resolve();
         await resume.promise;
       }
-      if (sql.includes("SELECT id FROM app.shadow_commercial_signal")) return { rows: signal ? [{ id: signal.id }] : [], rowCount: signal ? 1 : 0 };
+      // PostgreSQL reads its own uncommitted insert in the persistence transaction.
+      if (sql.includes("SELECT id FROM app.shadow_commercial_signal")) {
+        const visible = inserted ?? signal;
+        return { rows: visible ? [{ id: visible.id }] : [], rowCount: visible ? 1 : 0 };
+      }
       if (sql.includes("app.surface_shadow_signal_early(")) {
         // 0133_shadow_detection.sql refuses BEFORE inserting any alert effects.
         if (locked) throw Object.assign(new Error("early surface requires an unlocked job"), { code: "55000" });
         decisions.push(String(values![4])); firings.push(String(values![3])); disclosures.push(String(values![5]));
-        signal!.state = "surfaced_early"; signal!.disclosed_before_lock = true;
+        const visible = inserted ?? signal;
+        visible!.state = "surfaced_early"; visible!.disclosed_before_lock = true;
       }
       return { rows: [], rowCount: 0 };
     } };
