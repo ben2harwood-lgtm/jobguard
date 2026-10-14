@@ -137,8 +137,8 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       await c.query("GRANT lp0_ctl_b TO lp0_ctl_a WITH INHERIT TRUE, SET FALSE");
       await c.query(`GRANT lp0_ctl_a TO ${APPLICATION_ROLE} WITH INHERIT TRUE, SET FALSE`);
     });
-    const reach = transitive.diagnostics.filter(d => d.code === "ROLE_PATH_ADDED").map(d => d.object).sort();
-    expect(reach).toEqual(["lp0_ctl_a", "lp0_ctl_b"]);
+    const reach = transitive.diagnostics.filter(d => d.code === "ROLE_PATH_ADDED" && d.grantee === APPLICATION_ROLE).map(d => d.object).sort();
+    expect(reach, "the runtime login reaches both the direct and the transitive role").toEqual(["lp0_ctl_a", "lp0_ctl_b"]);
     expect(transitive.diagnostics.find(d => d.code === "EFFECTIVE_PRIVILEGE_ADDED")).toMatchObject({ privilege: "DELETE", route: "inherit:lp0_ctl_b" });
     // A membership with every flag off still changes the reviewed state, and different flags are different facts.
     const flagsOff = await control(async c => {
@@ -166,7 +166,7 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     };
     await expectRefused("jobguard_migration"); // baseline: the real role cannot assume the owner
     await expectRefused("jobguard_identity");
-    await db.admin.query("CREATE ROLE lp0_ctl_switch NOLOGIN; GRANT UPDATE ON app.job TO lp0_ctl_switch");
+    await db.admin.query("CREATE ROLE lp0_ctl_switch NOLOGIN; GRANT USAGE ON SCHEMA app TO lp0_ctl_switch; GRANT UPDATE ON app.job TO lp0_ctl_switch");
     try {
       await db.admin.query(`GRANT lp0_ctl_switch TO ${APPLICATION_ROLE} WITH INHERIT FALSE, SET TRUE`);
       const noAutomatic = (await db.admin.query(`SELECT has_table_privilege('${APPLICATION_ROLE}','app.job','UPDATE') AS allowed`)).rows[0]!.allowed;
@@ -181,7 +181,7 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(result.diagnostics.find(d => d.code === "ROLE_SET_PATH_ADDED")).toMatchObject({ grantee: APPLICATION_ROLE, object: "lp0_ctl_switch", route: "set" });
       expect(result.diagnostics.some(d => d.code === "EFFECTIVE_PRIVILEGE_ADDED")).toBe(false);
     } finally {
-      await db.admin.query(`REVOKE lp0_ctl_switch FROM ${APPLICATION_ROLE}; REVOKE UPDATE ON app.job FROM lp0_ctl_switch; DROP ROLE lp0_ctl_switch`);
+      await db.admin.query(`REVOKE lp0_ctl_switch FROM ${APPLICATION_ROLE}; REVOKE UPDATE ON app.job FROM lp0_ctl_switch; REVOKE USAGE ON SCHEMA app FROM lp0_ctl_switch; DROP ROLE lp0_ctl_switch`);
     }
     // Owner and migration authority: assuming either is a reported path, with the number of objects it would hand over.
     for (const owner of ["jobguard_migration", "jobguard_identity", "jobguard_infrastructure"]) {

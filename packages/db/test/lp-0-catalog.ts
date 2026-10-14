@@ -116,7 +116,7 @@ const tf = (b: boolean) => (b ? "t" : "f");
 const ACL_JSON = (aclExpr: string, defaultType: string, ownerExpr: string) => `(SELECT coalesce(json_agg(json_build_object(
   'grantee', CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END, 'privilege', a.privilege_type, 'grantable', a.is_grantable)
   ORDER BY (CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END), a.privilege_type), '[]'::json)
-  FROM aclexplode(coalesce(${aclExpr}, acldefault('${defaultType}', ${ownerExpr}))) a)`;
+  FROM aclexplode(coalesce(${aclExpr}, acldefault(${defaultType}, ${ownerExpr}))) a)`;
 
 const digest = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 const RELKIND: Record<string, RelationRow["kind"]> = { r: "table", p: "partitioned", v: "view", m: "matview", f: "foreign", S: "sequence" };
@@ -137,17 +137,17 @@ export async function readCatalogue(db: Queryable, subject: string = APPLICATION
     FROM pg_roles r WHERE r.rolname !~ '^pg_' ORDER BY r.rolname`)) as RoleRow[];
 
   const memberships = (await q(`SELECT pg_get_userbyid(m.roleid) AS role,pg_get_userbyid(m.member) AS member,m.admin_option AS admin,m.inherit_option AS inherit,m.set_option AS "set"
-    FROM pg_auth_members m ORDER BY 1,2`)) as MembershipRow[];
+    FROM pg_auth_members m WHERE NOT (pg_get_userbyid(m.roleid) ~ '^pg_' AND pg_get_userbyid(m.member) ~ '^pg_') ORDER BY 1,2`)) as MembershipRow[];
 
   const reach = (await q(`SELECT s.rolname AS "from",t.rolname AS "to",pg_has_role(s.oid,t.oid,'USAGE') AS inherit,pg_has_role(s.oid,t.oid,'SET') AS "set"
     FROM pg_roles s CROSS JOIN pg_roles t WHERE s.oid<>t.oid AND s.rolname !~ '^pg_' AND NOT s.rolsuper
       AND (pg_has_role(s.oid,t.oid,'USAGE') OR pg_has_role(s.oid,t.oid,'SET')) ORDER BY 1,2`)) as ReachRow[];
 
-  const schemas = (await q(`SELECT n.nspname AS name,pg_get_userbyid(n.nspowner) AS owner,${ACL_JSON("n.nspacl", "n", "n.nspowner")} AS acl
+  const schemas = (await q(`SELECT n.nspname AS name,pg_get_userbyid(n.nspowner) AS owner,${ACL_JSON("n.nspacl", "'n'", "n.nspowner")} AS acl
     FROM pg_namespace n WHERE ${scope} ORDER BY 1`)) as SchemaRow[];
 
   const relRows = await q(`SELECT n.nspname AS schema,c.relname AS name,c.relkind AS kind,pg_get_userbyid(c.relowner) AS owner,c.relacl IS NOT NULL AS "explicitAcl",
-      ${ACL_JSON("c.relacl", "CASE WHEN c.relkind='S' THEN 's' ELSE 'r' END", "c.relowner")} AS acl,
+      ${ACL_JSON("c.relacl", "(CASE WHEN c.relkind='S' THEN 's' ELSE 'r' END)::\"char\"", "c.relowner")} AS acl,
       coalesce(c.reloptions,ARRAY[]::text[]) AS options,c.relrowsecurity AS "rlsEnabled",c.relforcerowsecurity AS "rlsForced",
       CASE WHEN c.relkind IN ('v','m') THEN encode(sha256(convert_to(pg_get_viewdef(c.oid,true),'UTF8')),'hex') END AS "definitionDigest",
       coalesce((SELECT array_agg(DISTINCT rn.nspname||'.'||rc.relname ORDER BY rn.nspname||'.'||rc.relname) FROM pg_rewrite rw
@@ -168,7 +168,7 @@ export async function readCatalogue(db: Queryable, subject: string = APPLICATION
   const routineRows = await q(`SELECT n.nspname AS schema,p.proname AS name,p.prokind AS kind,
       array_to_string(ARRAY(SELECT format_type(t,NULL) FROM unnest(p.proargtypes::oid[]) WITH ORDINALITY u(t,o) ORDER BY o),',') AS args,
       pg_get_userbyid(p.proowner) AS owner,p.prosecdef AS "securityDefiner",coalesce(p.proconfig,ARRAY[]::text[]) AS config,
-      p.proacl IS NOT NULL AS "explicitAcl",${ACL_JSON("p.proacl", "f", "p.proowner")} AS acl,
+      p.proacl IS NOT NULL AS "explicitAcl",${ACL_JSON("p.proacl", "'f'", "p.proowner")} AS acl,
       (p.prorettype='trigger'::regtype) AS "returnsTrigger",
       (SELECT e.extname FROM pg_depend d JOIN pg_extension e ON e.oid=d.refobjid WHERE d.classid='pg_proc'::regclass AND d.objid=p.oid AND d.deptype='e' LIMIT 1) AS extension,
       CASE WHEN p.prokind IN ('f','p','w') AND l.lanname IN ('plpgsql','sql') THEN encode(sha256(convert_to(pg_get_functiondef(p.oid),'UTF8')),'hex') END AS "definitionDigest",
@@ -177,8 +177,8 @@ export async function readCatalogue(db: Queryable, subject: string = APPLICATION
     WHERE ${scope} ORDER BY 1,2,4`);
   const routines: RoutineRow[] = routineRows.map(r => ({ ...r, kind: ROUTINEKIND[r.kind as string]! }));
 
-  const databases = (await q(`SELECT d.datname AS name,pg_get_userbyid(d.datdba) AS owner,${ACL_JSON("d.datacl", "d", "d.datdba")} AS acl FROM pg_database d WHERE d.datname=current_database()`)) as DatabaseRow[];
-  const languages = (await q(`SELECT l.lanname AS name,pg_get_userbyid(l.lanowner) AS owner,${ACL_JSON("l.lanacl", "l", "l.lanowner")} AS acl FROM pg_language l ORDER BY 1`)) as LanguageRow[];
+  const databases = (await q(`SELECT d.datname AS name,pg_get_userbyid(d.datdba) AS owner,${ACL_JSON("d.datacl", "'d'", "d.datdba")} AS acl FROM pg_database d WHERE d.datname=current_database()`)) as DatabaseRow[];
+  const languages = (await q(`SELECT l.lanname AS name,pg_get_userbyid(l.lanowner) AS owner,${ACL_JSON("l.lanacl", "'l'", "l.lanowner")} AS acl FROM pg_language l ORDER BY 1`)) as LanguageRow[];
 
   const OBJECT_TYPES: Record<string, string> = { r: "table", S: "sequence", f: "function", T: "type", n: "schema" };
   const defaults = (await q(`SELECT pg_get_userbyid(d.defaclrole) AS creator,(SELECT nspname FROM pg_namespace WHERE oid=d.defaclnamespace) AS schema,d.defaclobjtype AS "objectType",
@@ -353,7 +353,7 @@ export const BUILTIN_DEFAULTS: Record<string, [string, string][]> = {
 
 export type RoutineProtectionRecord = {
   identity: string; owner: string; securityDefiner: boolean; searchPath: string | null; returnsTrigger: boolean; extension: string | null;
-  runtimeExecute: boolean; publicExecute: boolean; otherExecute: string[]; definitionSha256: string | null; staticWrites: string[]; staticCalls: string[];
+  reachable: boolean; runtimeExecute: boolean; publicExecute: boolean; otherExecute: string[]; definitionSha256: string | null; staticWrites: string[]; staticCalls: string[];
 };
 
 const WRITE_RE = /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+((?:[a-z_]+)\.(?:[a-z_0-9]+))/gi;
@@ -376,12 +376,11 @@ export function readProtectionRecord(cat: Catalogue): { routines: RoutineProtect
   for (const r of cat.routines) {
     const others = r.acl.filter(a => a.grantee !== r.owner && a.grantee !== "PUBLIC" && a.grantee !== cat.subject && a.privilege === "EXECUTE").map(a => a.grantee);
     const reachable = r.acl.some(a => a.grantee !== r.owner);
-    if (!reachable) continue;
     const scan = staticScan(r.source, known, rels);
     const searchPath = r.config.find(c => c.startsWith("search_path=")) ?? null;
     routines.push({
       identity: routineIdentity(r), owner: r.owner, securityDefiner: r.securityDefiner, searchPath, returnsTrigger: r.returnsTrigger, extension: r.extension,
-      runtimeExecute: r.acl.some(a => a.grantee === cat.subject && a.privilege === "EXECUTE"), publicExecute: r.acl.some(a => a.grantee === "PUBLIC" && a.privilege === "EXECUTE"),
+      reachable, runtimeExecute: r.acl.some(a => a.grantee === cat.subject && a.privilege === "EXECUTE"), publicExecute: r.acl.some(a => a.grantee === "PUBLIC" && a.privilege === "EXECUTE"),
       otherExecute: others.sort(), definitionSha256: r.definitionDigest, staticWrites: scan.staticWrites, staticCalls: scan.staticCalls.filter(c => c !== `${r.schema}.${r.name}`),
     });
   }
@@ -419,6 +418,7 @@ const groupSchema = z.object({
   responsibilities: z.record(cardId, z.string().min(8)),
   downstream: z.string().min(8),
   path: z.string().optional(),
+  alsoPaths: z.array(z.string()).optional(),
   sources: z.array(z.string().min(3)),
   tests: z.array(z.string().min(3)),
   gaps: z.array(z.string()),
@@ -437,7 +437,7 @@ const authorityPathSchema = z.object({
 
 const routineRecordSchema = z.object({
   identity: z.string().min(3), owner: z.string(), securityDefiner: z.boolean(), searchPath: z.string().nullable(), returnsTrigger: z.boolean(), extension: z.string().nullable(),
-  runtimeExecute: z.boolean(), publicExecute: z.boolean(), otherExecute: z.array(z.string()), definitionSha256: z.string().nullable(),
+  reachable: z.boolean(), runtimeExecute: z.boolean(), publicExecute: z.boolean(), otherExecute: z.array(z.string()), definitionSha256: z.string().nullable(),
   staticWrites: z.array(z.string()), staticCalls: z.array(z.string()),
 }).strict();
 
@@ -498,6 +498,7 @@ export function parseInventory(raw: unknown): Inventory {
       if (!g.sources.length) problems.push(`group ${g.id}: ${g.kind} group has no source reference`);
       if (!g.tests.length) problems.push(`group ${g.id}: ${g.kind} group has no behavioural test reference`);
     } else if (g.path && !paths.has(g.path)) problems.push(`group ${g.id}: unknown authority path ${g.path}`);
+    for (const extra of g.alsoPaths ?? []) if (!paths.has(extra)) problems.push(`group ${g.id}: unknown additional authority path ${extra}`);
   }
   for (const p of inv.authorityPaths) {
     if (p.cards.length > 1) for (const c of p.cards) if (!p.responsibilities[c]) problems.push(`path ${p.id}: card ${c} has no distinct responsibility`);
@@ -608,7 +609,7 @@ export function pathCompleteness(inv: Inventory, fileExists: (path: string) => b
   for (const p of inv.authorityPaths) {
     for (const t of p.tests) if (!fileExists(t)) problems.push(`path ${p.id}: test file not found: ${t}`);
     for (const s of p.sources) { const file = s.split(":")[0]!; if (!fileExists(file)) problems.push(`path ${p.id}: source file not found: ${file}`); }
-    if (!inv.groups.some(g => g.path === p.id)) problems.push(`path ${p.id} is not used by any group`);
+    if (!inv.groups.some(g => g.path === p.id || (g.alsoPaths ?? []).includes(p.id))) problems.push(`path ${p.id} is not used by any group`);
   }
   // A reachable routine that statically writes into a table of an authority-bearing group must itself belong to such a group.
   const tableGroup = new Map<string, InventoryGroup>();
