@@ -29,7 +29,8 @@ async function compare(db:Pick<PoolClient,"query">,before:Record<string,Snapshot
 async function grants(db:Pick<PoolClient,"query">){return (await db.query(`SELECT 'table:'||n.nspname||'.'||c.relname name,c.relacl::text acl FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('app','identity','control_plane')
  UNION ALL SELECT 'function:'||p.oid::regprocedure::text,p.proacl::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane')
  UNION ALL SELECT 'column:'||n.nspname||'.'||c.relname||'.'||a.attname,a.attacl::text FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('app','identity','control_plane') AND a.attnum>0 AND NOT a.attisdropped ORDER BY 1`)).rows;}
-async function policies(db:Pick<PoolClient,"query">){return (await db.query("SELECT schemaname||'.'||tablename||'.'||policyname name,permissive,roles,cmd,qual,with_check FROM pg_policies WHERE schemaname='app' ORDER BY 1")).rows;}
+// Cast catalog name[] to text[] so pg returns the roles as an array in every comparator.
+async function policies(db:Pick<PoolClient,"query">){return (await db.query("SELECT schemaname||'.'||tablename||'.'||policyname name,permissive,roles::text[] roles,cmd,qual,with_check FROM pg_policies WHERE schemaname='app' ORDER BY 1")).rows;}
 describe("CH-4 own-migration upgrade",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(false)},60000);afterAll(async()=>closeWorkFixture(f));
  it("CH4-A24 own migration preserves original rows/types/PK identities/grants; later migrations twice; comparator controls",async()=>{

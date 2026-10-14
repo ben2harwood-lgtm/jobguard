@@ -71,6 +71,9 @@ describe("CH-4 held-close admission boundary through the existing lock command",
 });
 
 describe("CH-4 raw new-work guard matrix",()=>{
+ // This suite has its own harness so the r8 recipe is booted before use.
+ const sourceHarness=createWatchdogHarness("ch4-po-noop",59600);
+ beforeAll(()=>sourceHarness.boot(),120000);afterAll(()=>sourceHarness.stop());
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},60000);afterAll(async()=>closeWorkFixture(f));
  it("CH4-A13 every raw new-work family is refused before its row constraints or effects",async()=>{
   const a=await seedWorkJob(f);
