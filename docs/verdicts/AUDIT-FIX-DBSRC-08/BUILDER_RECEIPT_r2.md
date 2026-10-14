@@ -33,3 +33,12 @@ Not independently verified, not accepted.
 - packages/db/src/migrate.ts: BEGIN guard now `/^(?:\s*(?:--[^\n]*)?\n)*\s*BEGIN;/u` (tolerates leading blank and `--` comment lines). Own commit, with unit test "accepts a migration whose BEGIN follows leading comment and blank lines" in src/audit-fix-dbsrc-08.test.ts.
 - heavy-slot runs: (src/audit-fix-dbsrc-08.test.ts, test/audit-fix-dbsrc-08.integration.test.ts, test/job-work-state-syntax.test.ts) = 18 passed, 1 failed (item A, unchanged, not mine). test/scim-deactivation-access.integration.test.ts = 15/15 passed (decision-18 change exercised).
 - Items A and C left for the dispatcher/coordinator. Not independently verified, not accepted.
+
+## Update r3 - decision 28 (Ben, 14 Oct) and lane files
+- Lane file: added BUILDER_RECEIPT_r2.md, scim-deactivation-access.integration.test.ts, job-work-state-syntax.test.ts to the audit-fix-dbsrc-08 allow list (Edit tool, own commit). Lane lint now run below.
+- Decision 28, packages/db/test/job-work-state-syntax.test.ts line ~132 (own commit), expectation only:
+  before: `expect(queries.filter(sql => sql === file)).toHaveLength(1);`
+  after:  `const combined = file.replace(/COMMIT;\s*$/u, <bookkeeping INSERT for 0144_job_work_state.sql>\nCOMMIT;\n);`
+          `expect(queries.filter(sql => sql === combined)).toHaveLength(1);`
+  (compares with the COMBINED change + bookkeeping text migrate now sends.)
+- Decision 18 verified present: scim-deactivation-access.integration.test.ts line 121 `expect(calls).toBe(0);` with owner-only outbox.ts.
