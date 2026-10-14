@@ -28,3 +28,17 @@ at execution so 0133 can install alone; absence refuses execution. No shadow
 login gains business-table SELECT. Existing completed alert replay returns its
 immutable result; new alerts require accepted terms. Startup checks the actual
 relation before registering either worker task, including shared outbox work.
+
+## Post-lock completion of a persisted mandatory firing (migration 0158, MIGFIX-7)
+
+`surface_shadow_signal_early` is unchanged and still refuses a locked job. `app.complete_shadow_firing_post_lock`
+(same arguments, same replay identity, same structured-predicate checks) is the separate controlled
+routine for a mandatory signal that was **persisted before** the final-account lock and whose firing
+had not yet been created. It requires accepted terms, a locked job, a surviving (non-coalesced)
+mandatory signal created before the lock, and the exact source/version evidence link. It creates the
+one Decision, finding, firing and disclosure with `before_lock=false` and the real server time, never
+sets `disclosed_before_lock`, and records the permanent no-fee exclusion `evidence_after_lock` on the
+whole group (Ben, 14 Oct, coordinator chat, decision 8: a late safety signal is shown at once with no
+fee). Detection made after the lock stays refused. EXECUTE is not yet granted to `jobguard_shadow`:
+that needs the shadow-catalog and LP-0 pins updated first (see the MIGFIX-7 receipt), so the detection
+worker still rolls back a batch whose surface call meets a lock.

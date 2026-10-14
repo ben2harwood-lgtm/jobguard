@@ -143,3 +143,15 @@ SV-1's pre-lock duplicate marker is intentionally `reconciled/duplicate_signal`
 with a coalesced target: it records coalescing, not a completed final-check run.
 A duplicate whose provenance was disclosed stays `surfaced_early`. SV-3 must
 preserve those semantics without exposing hidden counts or content.
+
+## Group disclosure (migration 0158, MIGFIX-7)
+
+`app.record_shadow_disclosure` resolves the survivor of the signal it is given, locks the whole
+coalesced group (survivor and duplicates, in id order) and applies monotonic disclosure and the
+permanent `disclosed_before_lock`/`surfaced_early` exclusions to every member, so disclosing a
+duplicate can no longer leave its survivor hidden and fee-eligible. It takes the detection
+advisory key first (the key the detection repository already holds), then the job row, so a
+disclosure is wholly before or wholly after any coalescing transaction. A duplicate coalesced
+later into an already-disclosed survivor inherits its exclusions and first-visible time through
+the migration-owned trigger `shadow_group_disclosure`. A disclosure replay (same event id) returns
+the original event and adds no effect; history written before 0158 is never rewritten.
