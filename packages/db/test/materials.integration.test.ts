@@ -32,3 +32,41 @@ describe("AUDIT-FIX-API-FILE-MATERIAL", () => {
   expect(rows[0]).toMatchObject({ rateId: v1.id, rateVersion: 1, status: "applicable", packEachQuantity: "5", eachPence: 2000, netPence: 20000 });
  });
 });
+
+// Hold inserts so both real transactions reach the race before either can commit.
+// With the repository lock, one waits at INSERT and the other at the advisory lock;
+// without it both pass the empty lookup and wait at INSERT, then create duplicates.
+it("concurrent_first_rate_has_one_catalogue_effect", async () => {
+ const repo = new MaterialRepository(runtime);
+ const merchantName = "Fictional concurrent audit merchant", sku = "CONCURRENT-AUDIT";
+ const input = { merchantName, sku, description: "Synthetic material", pricePence: 2000, priceUnit: "each" as const, taxBasis: "net" as const, effectiveFrom: "2026-10-01", sourceLabel: "synthetic audit", expectedVersion: 0 };
+ const blocker = await admin.connect();
+ try {
+  await blocker.query("BEGIN");
+  await blocker.query("LOCK TABLE app.merchant IN SHARE MODE");
+  const pending = Promise.allSettled([
+   repo.addRate(ctx, input),
+   repo.addRate(ctx, { ...input, merchantName: merchantName.toUpperCase() }),
+  ]);
+  try {
+   await expect.poll(async () => Number((await admin.query(`SELECT count(*) n FROM pg_stat_activity WHERE usename='materials_login' AND state='active' AND wait_event_type='Lock'`)).rows[0].n), { timeout: 3000, interval: 10 }).toBe(2);
+  } finally {
+   await blocker.query("ROLLBACK");
+   await pending;
+  }
+  const results = await pending;
+  expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+  const refused = results.filter(result => result.status === "rejected");
+  expect(refused).toHaveLength(1);
+  expect(refused[0]).toMatchObject({ reason: { message: "STALE_MATERIAL_RATE_REVISION" } });
+  const merchants = await admin.query(`SELECT id FROM app.merchant WHERE tenant_id=$1 AND lower(name)=lower($2)`, [tenant, merchantName]);
+  expect(merchants.rows).toHaveLength(1);
+  const skus = await admin.query(`SELECT s.id FROM app.merchant_sku s JOIN app.merchant m ON (m.tenant_id,m.id)=(s.tenant_id,s.merchant_id) WHERE s.tenant_id=$1 AND lower(m.name)=lower($2) AND s.sku=$3`, [tenant, merchantName, sku]);
+  expect(skus.rows).toHaveLength(1);
+  const rates = await admin.query(`SELECT r.version FROM app.material_rate_revision r JOIN app.merchant_sku s ON (s.tenant_id,s.id)=(r.tenant_id,r.sku_id) JOIN app.merchant m ON (m.tenant_id,m.id)=(s.tenant_id,s.merchant_id) WHERE r.tenant_id=$1 AND lower(m.name)=lower($2) AND s.sku=$3`, [tenant, merchantName, sku]);
+  expect(rates.rows).toEqual([{ version: 1 }]);
+ } finally {
+  await blocker.query("ROLLBACK");
+  blocker.release();
+ }
+});

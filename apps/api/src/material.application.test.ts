@@ -25,7 +25,7 @@ function fixture() {
  const query = vi.fn(async (sql: string, values: unknown[] = []): Promise<{ rows: object[] }> => {
   if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: tenantId, membership_id: scopeItemId, identity_user_id: session }] };
   if (sql.includes("WITH RECURSIVE practice_owned_job")) return { rows: [{ id: jobId }] };
-  if (/^(BEGIN|COMMIT|ROLLBACK)$/u.test(sql) || sql.includes("set_config")) return { rows: [] };
+  if (/^(BEGIN|COMMIT|ROLLBACK)$/u.test(sql) || sql.includes("set_config") || sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
   const v = values as string[];
   if (sql.startsWith("SELECT m.id")) {
    const merchant = merchants.find(m => m.name.toLowerCase() === v[1]!.toLowerCase());
