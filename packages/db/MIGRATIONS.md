@@ -987,3 +987,26 @@ Forward fix preferred. A confirmation object is two ordinary evidence rows, so n
 ### 0142 — recovery insurer money (CH-7-INSURER Round 2)
 
 Adds the shared current payer function and append-only, FORCE-RLS payment marks with exact evidence references, timestamp pinning, immutable history and deferred audit completeness. Standard F gives runtime SELECT only; the session-bound controlled writer and job-lock helper each check authority, check/set tenant context and fix search_path. No app.job grant or merged table/column/policy/grant change. Restates only the newest 0130 review guard and 0119 effect trigger, adding Part A's insurer exclusion after paid-before and its line reason, plus F19's individual-interest message and reasonHeld release. A6 derives a required payer fact after the exact payment and job locks and cites current insurer binding/mark IDs in audit. The insurer exclusion has its own reason; F21 remains null/held under the Round 2 ruling. 0142 never rewrites saved reviews or lines; forward-fix is the rollback strategy, retaining readers and mark history. The previous application ignores marks but its insurer review inserts now fail closed; coordinate the three coordinator-owned setup-only payer additions and CI evidence before rollout. PostgreSQL fresh, upgrade, catalog and concurrency checks are NOT RUN in the builder sandbox; rule-9 upgrade proof compares named original F19/F21 rows and full column types, with identity matching and rolled-back controls. No new external alert or provider.
+
+## 0153 — quote supersession guard (MIGFIX-4)
+
+`0153_quote_supersession_guard.sql` replaces only the two routines installed by
+0011: `app.record_builder_attested_acceptance` and `app.record_quote_disposition`.
+Acceptance refuses any exact document with an immutable supersession event,
+including events recorded before this migration, under the existing job lock.
+Supersession advances the job revision and server update time. Both routines
+recheck the existing active-owner authority before inspecting job state; exact
+document/hash/version/total/send checks and accepted commercial history remain.
+
+No GRANT statements, new tables, columns or policies, data backfill or historical
+row changes. CREATE OR REPLACE preserves the signatures, owners, existing EXECUTE
+ACLs and pinned `search_path=pg_catalog,app`. Forward-fix only: retain immutable
+acceptance/disposition history and issue a reviewed corrective migration; do not
+restore obsolete acceptance routines. A failed application rolls back both
+replacements in the migration transaction.
+
+Regression and own-step upgrade coverage are in `migfix-4.integration.test.ts`
+and `migfix-4-upgrade.integration.test.ts`. PostgreSQL and browser checks are NOT
+RUN in the builder sandbox; GitHub CI must execute them after dispatcher push.
+The merged quote regression's decline revision and expected final revision need
+the separately held coordinator/Ben edit before technical acceptance.

@@ -1,12 +1,12 @@
 Built by Codex; dispatched 13 Oct 2026.
 
-MIGFIX-4 — RED lane. Builder handoff only; technical acceptance is partial/pending. No independent verdict or acceptance is claimed. No commit, push or PR was made.
+MIGFIX-4 — RED lane. Original build handoff; technical acceptance remains pending. No independent verdict or acceptance was available at that handoff. No commit, push or PR was made by the builder. See the repair-round r1 addendum below for the subsequent dispatcher commit and independent verdict.
 
 The addendum's requested first line attributes the work to Claude Sonnet 5.5 and says Codex is unavailable. That is not the builder used in this session, so the first line records actual provenance.
 
 ## Base and scope
 
-- Issued base, actual `origin/main`, and final Git HEAD: `bd959b01e857de0ba7cbd3588bab84add7d0f493`.
+- Original build: issued base, actual `origin/main`, and pre-commit Git HEAD were `bd959b01e857de0ba7cbd3588bab84add7d0f493`.
 - Actual branch: `codex/sandbox/migfix-4`; reused checkout: `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/m4-8-s-pre`. Working tree was clean at entry.
 - Main matches the issued base exactly. The draft cites a finding rather than numeric source lines; verified actual routines against main in `packages/db/migrations/0011_quote_acceptance.sql`: acceptance lines 9–17 have no supersession check; disposition line 23 has `THEN NULL` for supersession.
 - Applicable plan contracts read: BUILD_PLAN §2 working/check loop and §5.1–5.3 exact acceptance, immutable revisions, authorization, command/audit/replay boundaries. This is a fix-forward repair of existing quote acceptance, with no production gate advanced.
@@ -173,3 +173,111 @@ Task artifact SHA-256 values before dispatcher commit (receipt excluded to avoid
 | `config/agent-lane-assignments.json` | `e7d1376e5cc4b2fb98a2c25282bb22ba8debbb0df40a12dba298ba2b70fecbc3` |
 
 Final receipt update and read-only `git diff --check`, `git status --short`, `git diff --stat`, `git rev-parse HEAD`, disk/memory/log summary commands: exit 0; no Git writes. Receipt and intended message are present.
+
+
+## Repair round r1 — 14 October 2026, dispatcher 5
+
+Built by Codex against dispatcher-committed HEAD
+`efe3e1c1f24afd06c74809535ada8791e019e86d`, branch
+`codex/sandbox/migfix-4`; `origin/main` remains
+`bd959b01e857de0ba7cbd3588bab84add7d0f493`. The working tree was clean at
+repair entry. The historical commands/results above describe the original build.
+
+Independent source-inspection verdict: Claude Opus **REPAIR**, bound to that HEAD,
+`/Users/benharwood/.local/share/full-steam/jg-runs/migfix-4-opus-efe3e1c.md`.
+It executed no tests. This addendum records the requested repair, not a new PASS,
+independent verification of the repaired diff, or technical acceptance.
+
+- Added the 0153 section to `packages/db/MIGRATIONS.md`: the two replaced 0011
+  routines, supersession/revision behavior, preserved authority/exact-document
+  checks, zero GRANT statements, unchanged history and forward-fix-only recovery.
+- Added only `packages/db/MIGRATIONS.md` to this lane's allow list. Widening was
+  explicitly approved in the dispatcher repair order. Parsed registry comparison
+  confirms every other lane and field is unchanged.
+- No SQL or test edits in r1. Migration 0153 and the merged quote integration test
+  are byte-identical to repair-entry HEAD. SHA-256 respectively:
+  `19addf9b01e673db7b6af4eab818c225af05da395c12ad55dd8a2a60cf5ba853` and
+  `b221003e9134226f99537049e422fb96ae68abf19f90d75cfdbd3fb31544314c`.
+- **Still held for coordinator/Ben:** the exact decline-at-3 / final-revision-4
+  edits documented in STOP above. The source-predicted regression remains a
+  prerequisite for green CI and acceptance; this builder has not changed it.
+- Shared migration documentation and lane registry edits require serialized
+  integration. No additional migration, compatibility impact, operational alert,
+  provider, money policy or production gate change in this repair.
+
+Repair checks reuse installed dependencies and cached pnpm 10.28.1 through
+`/private/tmp/jg-migfix-4-tools/pnpm`; Node is v24.17.0 (CI pin v24.15.0).
+No install or package download, Git write, commit, push or PR command was run.
+Database/migration/concurrency and browser suites remain NOT RUN here because
+this sandbox cannot bind localhost or start PostgreSQL; the dispatcher runs them
+in GitHub CI after push. No clean pinned-install claim is made.
+
+
+### r1 verification results
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck --force` | PASS, exit 0; all 7 tasks executed, 0 cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS, exit 0; root checks pass, 7 package tasks successful (4 cached, 3 executed) |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0; exact MIGFIX-4 branch/base and working-tree paths accepted |
+| `pnpm build --concurrency=2 --force` | PASS, exit 0; all 7 tasks executed, 0 cached; production Next build completed with existing workspace-root/CSS warnings |
+| `pnpm openapi:check` | BLOCKED, exit 1; tsx IPC listen EPERM, generation did not run |
+| `node --test` over the 7 tools test files other than `agent-lane-boundary*.test.mjs` | PASS, 19 tests; the 2 omitted suites create/write temporary Git repositories, excluded to respect the no-Git-write instruction |
+| `pnpm --filter @jobguard/config exec vitest run --maxWorkers=2` | PASS, 2 files / 2 tests |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2` | FAIL, 3 failed / 4,887 passed tests across 162 files; details below |
+| `pnpm --filter @jobguard/storage exec vitest run --maxWorkers=2` | PASS, 2 files / 4 tests |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2` | PASS, 5 files / 80 tests; synthetic fixtures only, no live-model claim |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | PASS, 33 files / 784 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts'` | FAIL, 2 failed / 254 passed tests across 18 files; details below |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2` plus 11 explicit `--exclude` arguments (listed below) | PASS, 61 files / 1,422 tests |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/contractor.projection.test.ts src/watchdog-registry.test.ts src/proof/proof.application.test.ts` | PASS, 3 files / 133 tests |
+
+The core command discovers both source and generated `dist` tests. Two failures
+are generated copies attempting to read absent `dist/recovery-allocation.ts` and
+`dist/site-extra-pricing.ts` (ENOENT). The source receipt-allocation test
+"the working size is bounded: more distinct denominators than the documented
+limit fail closed" exceeded Vitest's unchanged 5,000 ms limit (6,240 ms).
+These are executed failures in unchanged files, not migration behavioral proof;
+no assertion, timeout or test configuration was changed to make them pass.
+
+OpenAPI refusal: `Error: listen EPERM: operation not permitted
+/var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/38259.pipe`.
+That item stopped after the refusal; no alternative execution path was attempted.
+Turbo emitted cache-metadata IO `Operation not permitted` warnings, but
+successful task results above are the actual process results.
+
+Full root `pnpm test` was not invoked because it includes the Git-writing tools
+fixtures and unavailable PostgreSQL/HTTP suites. The filtered unit commands are
+partial-suite evidence and do not replace mandatory CI. All repair logs use
+`/private/tmp/jg-migfix-4-r1-*.log`; no prior-build log was overwritten.
+Memory/disk observed before and during checks: 82% memory free, 37 GiB available,
+above the original stop thresholds. Intended conventional commit subject/body
+is overwritten at `/private/tmp/jg-msg-migfix-4.txt`; dispatcher owns the commit.
+
+API unit subset exclusions (each passed as `--exclude src/<path>`):
+`auth/sso/action-paths.test.ts`, `contractor/contractor-practice-session.http.test.ts`,
+`contractor/contractor.projection.test.ts`, `contractor/site-extra-pricing.http.test.ts`,
+`contractor/site-extra.http.test.ts`, `contractor/site-visit.http.test.ts`,
+`final-account-lock.isolation.test.ts`, `health.test.ts`,
+`proof/proof.application.test.ts`, `shadow-isolation.application.test.ts`, and
+`watchdog-registry.test.ts`. The 3 source-only files mentioning integration tests
+(`contractor.projection`, `proof.application`, `watchdog-registry`) were then
+executed explicitly, as recorded above. The remaining 8 require PostgreSQL
+and/or HTTP socket binding and remain CI work. These filters were command-line
+only; no suite, script or CI configuration was changed.
+
+The database unit subset also discovers generated `dist` tests. Its source and
+generated copies of `audit-checkpoint-handoff.test` both exceeded the unchanged
+5,000 ms timeout in `[C-OPS-1] all transitive request workspace sources and package
+entry targets cannot reach the operator`. No timeout or assertion changed.
+This is not a PostgreSQL integration run. In total the partial unit runs report
+7,585 passed and 5 failed tests, including generated duplicates; no all-tests-pass
+claim is made. Failures are held for dispatcher/CI assessment outside this docs
+repair. No tests were rerun to discard failures.
+
+Final r1 scope: exactly `packages/db/MIGRATIONS.md`,
+`config/agent-lane-assignments.json`, and this receipt. `git diff --check` and
+`LANE_BASE_REF=origin/main pnpm lint:lanes` pass after the receipt update.
+The migration and merged quote regression remain unchanged against entry HEAD.
+The repair still requires a verdict rebound to the dispatcher-created commit,
+separate technical acceptance, coordinator/Ben's held test edit and green CI.
