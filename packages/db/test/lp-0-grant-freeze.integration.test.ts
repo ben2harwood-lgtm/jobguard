@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PoolClient } from "pg";
 import { MIGRATION_URLS, migrate } from "../src/index.js";
 import {
-  APPLICATION_ROLE, brief, compareInventory, deriveFacts, dispositions, existingExceptionKeys, finalAllowedKeys, keys, loadReviewedInventory, parseInventory,
+  APPLICATION_ROLE, brief, compareInventory, deriveFacts, dispositions, existingExceptionKeys, finalAllowedKeys, keys, loadReviewedInventory, parseInventory, staleEntries,
   readCatalogue, startLp0Database, type Comparison, type Fact, type Inventory, type Lp0Database,
 } from "./lp-0-catalog.js";
 import { rolledBack } from "./upgrade-proof-utils.js";
@@ -71,6 +71,16 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(brief(result)).toEqual([]);
       expect(result.matched).toBe(profile.length);
     }
+    // No stale entries: the only inventory keys absent from a live profile are the OTHER profile's role-login key.
+    // A closing LP card must therefore remove its inventory entries in the same change; a closed exception left
+    // in the file (which a later migration could silently re-grant) makes the base fail.
+    const roleKeys = (facts: Fact[]) => facts.filter(f => f.category === "role" && f.object === APPLICATION_ROLE).map(f => f.key).sort();
+    expect(roleKeys(baselineMigrationOnly).length).toBe(1);
+    expect(roleKeys(baselineBootstrapLogin).length).toBe(1);
+    expect(compareInventory(inventory, baselineMigrationOnly).reductions).toEqual(roleKeys(baselineBootstrapLogin));
+    expect(compareInventory(inventory, baselineBootstrapLogin).reductions).toEqual(roleKeys(baselineMigrationOnly));
+    expect(staleEntries(compareInventory(inventory, baselineMigrationOnly), roleKeys(baselineBootstrapLogin))).toEqual([]);
+    expect(staleEntries(compareInventory(inventory, baselineBootstrapLogin), roleKeys(baselineMigrationOnly))).toEqual([]);
     // The expected value is the committed file, never the live read: a missing, malformed or wrong-version file is refused.
     expect(() => parseInventory(undefined)).toThrow();
     expect(() => parseInventory({ ...rawInventory, version: 2 })).toThrow(/version/);

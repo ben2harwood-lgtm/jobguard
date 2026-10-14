@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type AclEntry, type Catalogue, type Inventory, type RelationRow, type RoutineRow, type RoleRow,
-  compareInventory, deriveFacts, dispositions, existingExceptionKeys, explainRoutes, finalAllowedKeys, keys, parseInventory, pathCompleteness,
+  compareInventory, deriveFacts, dispositions, existingExceptionKeys, explainRoutes, finalAllowedKeys, keys, parseInventory, pathCompleteness, staleEntries,
   routineIdentity, staticScan, InventoryError,
 } from "./lp-0-catalog.js";
 
@@ -285,6 +285,19 @@ describe("[LP0-16] reductions pass and additions default-deny", () => {
     expect(r.ok).toBe(false);
     expect(r.diagnostics.filter(d => d.privilege).map(d => `${d.object}:${d.privilege}`).sort()).toEqual(["app.site_note:INSERT", "app.site_note:SELECT"]);
     expect(r.diagnostics.every(d => d.disposition === "unreviewed_addition" && d.cards.length === 0)).toBe(true);
+  });
+});
+
+describe("[LP0-02] stale inventory entries fail the base", () => {
+  it("a closed exception still listed in the inventory is reported as stale, so the base guard fails", () => {
+    const cat = base();
+    const inv = reviewed(cat);
+    expect(staleEntries(failures(inv, cat), [])).toEqual([]);
+    const closed = base({ relations: [table("job", [acl(RT, "SELECT")]), ...cat.relations.slice(1)] });
+    const r = failures(inv, closed);
+    expect(r.ok).toBe(true); // a reduction never widens anything ...
+    expect(staleEntries(r, [])).toEqual(["acl|rel|table|app.job|jobguard_runtime|INSERT|-"]); // ... but the base guard must not accept it
+    expect(staleEntries(r, ["acl|rel|table|app.job|jobguard_runtime|INSERT|-"])).toEqual([]); // only an explicitly expected key is tolerated
   });
 });
 

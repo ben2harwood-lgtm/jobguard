@@ -55,3 +55,12 @@ Exceptions are real today (demonstrated as the real role: membership insert; `tr
 
 ## Remaining gates
 Fresh Opus and Sol review of the exact commit; independent review of the design note before LP-5/LP-6a; Q2 ruling and LP0-13; separate acceptance; CI aggregate suites. Customer-data release remains blocked.
+
+## Repair round 2 (Opus REPAIR at 1d411f94: B1, B2)
+
+- B2: lane allow list entry `docs/verdicts/LP-0/**` replaced by the exact `docs/verdicts/LP-0/BUILDER_RECEIPT.md` (order section 4 JSON; no wildcard). No other lane value changed.
+- B1: new test-only helper `staleEntries` in `packages/db/test/lp-0-catalog.ts`. LP0-02 now asserts, for each profile, `reductions` equal exactly the other profile's role-login key for jobguard_runtime, and no stale entries remain. A closing LP card must prune its inventory entries in the same change. Unit fixture `[LP0-02] stale inventory entries fail the base` in `lp-0-catalog.test.ts`.
+- Failing-first: unit test run before the helper existed: 1 failed / 25 passed (`staleEntries` not a function). After: 26 passed.
+- origin/main: `git merge origin/main` = already up to date (nothing newer than 0151 / 82 migrations); inventory unchanged, nothing regenerated.
+- Commands (heavy-slot, --maxWorkers=2, 3 files per run), all passed on the 82-migration base: lp-0 unit 26; lp-0 freeze + authority-paths 19; api context-boundary 145; db tenant-context/contractor-session x3 41; tenancy/commands/audit 21; command-replay/proof-replay/match-inbox 64; fingerprint/audit-export/demo-bootstrap 28; site-extra/authority/extra-origin 104; extra-links/unlink/owner-grant 60. db typecheck and lint clean (tsc); `node tools/lint.mjs` and `pnpm lint:lanes` pass. Full turbo typecheck/lint and full CI not run locally.
+- Not independently verified, not accepted.

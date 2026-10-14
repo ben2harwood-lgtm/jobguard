@@ -589,6 +589,15 @@ export function compareInventory(inv: Inventory, live: Fact[]): Comparison {
   return { ok: diagnostics.length === 0, diagnostics, reductions, matched, liveCount: live.length, inventoryCount: reviewed.size };
 }
 
+/**
+ * Inventory keys that are no longer live and are not explicitly expected to be absent. A closed exception left in the
+ * inventory is stale: a later migration could silently re-grant it and the guard would stay green. The base guard fails on any.
+ */
+export function staleEntries(c: Comparison, expectedAbsent: string[]): string[] {
+  const allowed = new Set(expectedAbsent);
+  return c.reductions.filter(k => !allowed.has(k));
+}
+
 /** Per-fact disposition for reviewers: is each live capability an existing exception or an approved current capability. */
 export function dispositions(inv: Inventory, live: Fact[]) {
   const groups = new Map(inv.groups.map(g => [g.id, g]));
