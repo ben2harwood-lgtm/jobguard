@@ -103,3 +103,83 @@ pnpm openapi:check
 - Finding 4: adopted-job inherited ownership can pass PracticeAccess but fail the synthetic storage check during proof finalization.
 - Finding 5: Nest does not translate proof application typed client errors to the Next transport's 400/422 responses.
 - The audit's five suggested test strengthenings remain outside this repair. The new B1/B3a tests supply evidence only for the two issued code defects.
+
+
+## CI repair round r1 — 14 October 2026 — PR #200
+
+Builder implementation/run receipt; no independent verdict or technical acceptance. Starting and final local HEAD: `b54ee2c17ba6a3635a0128a23ff5199492bce8b4`, branch `codex/sandbox/audit-fix-api-proof`, clean before this repair. Read-only Git inspection confirmed its parents are remote piece head `ea5ad607c5301da4b42d00663522f31e1752380d` and catch-up main `2df37c1af5a35b0d5654d57cf2c735770f1d7e67`. Worktree alias `/Users/benharwood/Claude/Projects/my-new-project/.worktrees/audit-fix-api-proof` resolves to `.worktrees/sv-3-barrier`. The sandbox executor initially refused to start because the writable root is symlinked (no process/exit code); automatic review allowed the authorized commands outside that executor sandbox. No Git write, install, package download, PostgreSQL start or browser server was performed.
+
+Read AGENTS, BUILD_PLAN §§2.4, 5.3, 5.6 and CH-2, the existing receipt and supplied filtered CI failure log for run `38528120095`. The first broad instruction search returned exit **2** because optional `.agents`/`.codex` paths were absent; narrowed repository reads succeeded. Repository/runtime/script inspection returned exit **0**: Node `v24.17.0`, installed pnpm `10.28.1`. These checks use supplied dependencies and do not prove a clean install.
+
+**The two reported failures are repaired without editing any merged test or pin.** In `proof-repository.ts`, the separate upload-lock statement now starts with the existing tenant-scoped evidence lookup (`SELECT id FROM app.evidence_object`) and obtains `FOR UPDATE OF u` in its correlated `EXISTS` subquery. It still locks the exact upload belonging to that evidence, in both completion and invalidation, before completion's separate READ COMMITTED eligibility snapshot. There is no moved eligibility predicate, combined lock/eligibility snapshot, removed lock, catch-and-ignore path or runtime privilege change. This query shape is accepted by the unmodified merged final-account SQL double; its application can invalidate the proof and persist the blocked revision again.
+
+The only test edit is three fixture lines in this piece's `proof-invalidation.test.ts`: explicitly answer the merged lifecycle/locked-source queries with no locked final account for this live-job fixture. The real guards still run. Its race schedule, upload-lock behavior and all existing assertions are unchanged. No change to `audit-api-file-final-account.test.ts` is needed.
+
+**Genuine mutation red → restored green:** with the corrected piece-owned double in place, temporarily remove only `invalidate`'s call to `lockProofUpload`, leaving completion's locks and all assertions intact. The race test returns exit **1** at `proof-invalidation.test.ts:94`: `reviews` is empty while one persisted invalidation is expected. It fails the business invariant, not an unexpected SQL or timeout. A `finally` block restores the product file byte-for-byte; the two complete regression files then return exit **0**, five passing tests and no unhandled errors. The mutation is absent from the final diff. This is application orchestration evidence, not proof of PostgreSQL snapshots or contention.
+
+### Commands and results for this round
+
+Logs are `/private/tmp/jg-api-proof-ci-r1-*.log`; exact command/exit manifests are `jg-api-proof-ci-r1-checks.json` and `jg-api-proof-ci-r1-units.json` in that directory.
+
+| Command/check | Exit | Evidence |
+| --- | --- | --- |
+| `git rev-parse HEAD`, `git status --short`, `git branch --show-current`, read-only parent/base inspection | 0 | Correct head/branch, initial clean tree; no Git mutation. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/proof-invalidation.test.ts test/audit-api-file-final-account.test.ts` before repair | 1 | Both CI failures reproduced: `PROOF_INVALID` and lifecycle-query rejection causing a timeout/unhandled rejection; 3 passed / 2 failed (`before.log`). |
+| Same two-file command after repair | 0 | 5/5 passed (`green.log`). |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/proof-invalidation.test.ts -t 'completion cannot clear a concurrent evidence invalidation'` with invalidation-lock mutation | 1 | Intended review-event assertion fails; other test unselected (`mutation.log`). Mutation/restoration Python wrapper exit 0. |
+| Same two-file command after mutation restoration | 0 | 5/5 passed (`restored.log`). |
+| `pnpm typecheck` | 0 | 7 workspace tasks passed; 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | Root boundary/purity/money checks and 7 workspace lint tasks passed; 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Existing proof lane passed. `origin/main` resolved to `cef7538c2361450fd7847e8548970a122e5b42ee`; merge-base with HEAD is `2df37c1af5a35b0d5654d57cf2c735770f1d7e67`. |
+| `pnpm build` | 0 | 7 workspace tasks passed; 4 cached, production Next build included. |
+| `pnpm openapi:check` | 0 | Standard unmodified checker passed; no generated diff. |
+| DB unit command below | 0 | 20 files / 226 tests, including unmodified merged scripted regressions. |
+| API unit command below | 0 | 70 files / 1,574 tests, including proof, lifecycle, watchdog-registry and context-boundary tests. |
+| Core unit command below | 0 | 82 files / 2,456 tests. |
+| Config/AI/storage unit command below | 0 | Config 2, AI 80, storage 1 tests; fixtures only, no live model/provider call. |
+| Web unit command below | 0 | 33 files / 784 tests. |
+| Tool unit command below | 0 | 19 tests; Git-writing fixture suites excluded. |
+| Read-only protected-file byte/hash comparison against HEAD and authorized-diff allowlist | 0 | Merged final-account test, PostgreSQL proof tests, context-boundary pin, lockfile, lane registry and OpenAPI unchanged. |
+| `git diff --check` | 0 | Passed before receipt; final receipt-inclusive check recorded below. |
+
+Exact unit commands (all Vitest runs use one worker):
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src test/audit-api-capture.test.ts test/audit-api-file-final-account.test.ts test/audit-api-file-supplier-document.test.ts test/audit-api-variation.test.ts test/contractor-session-context.test.ts test/job-work-state-syntax.test.ts test/proof-invalidation.test.ts test/purchase-order-audit.test.ts test/recovery-case-join.test.ts test/recovery-case-outcome.test.ts test/recovery-message-repository.test.ts test/site-extra-evidence-compatibility.test.ts test/verify-audit-export-cli.test.ts test/verify-evidence-pack-cli.test.ts
+```
+
+```sh
+pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/final-account-lock.isolation.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude src/contractor/site-visit.http.test.ts --exclude src/contractor/site-extra-pricing.http.test.ts --exclude src/contractor/site-extra.http.test.ts --exclude src/contractor/contractor-practice-session.http.test.ts
+```
+
+```sh
+pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1
+```
+
+```sh
+pnpm --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage exec vitest run src --maxWorkers=1
+```
+
+```sh
+pnpm --filter @jobguard/web exec vitest run --maxWorkers=1
+```
+
+```sh
+node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs
+```
+
+Unit/tool total: **5,142 passing**, excluding the separately repeated targeted runs. Warnings: installed pnpm reports the existing package.json overrides placement, and Next reports existing workspace-root/autoprefixer/webpack-cache warnings. No package/config/pin was changed to suppress them.
+
+`pnpm test`, `pnpm test:db`, `pnpm test:migrations` and browser suites were **NOT RUN** locally: the dispatcher reserves PostgreSQL/browser execution for CI, and the root tool test glob includes Git-writing fixture suites. DB `free-port.test.ts` and API health, shadow isolation, final-account-lock isolation, SSO action paths and four contractor HTTP suites require PostgreSQL or a local listener and are excluded from these local unit commands. Root `pnpm test` and every earlier mandatory CI suite remain mandatory and unchanged; no exclusion was added to repository scripts/configuration.
+
+### Preservation, scope and remaining gates
+
+Merged final-account test SHA-256 (equal to HEAD): `0f565afe7d3384bbedd5b6cab31423a3e37f2dc2032536b90a2ad11ecd89b342`. Existing proof PostgreSQL test SHA-256: `abf6e29e82fe6942b3f903810e51443c4be50989e673c65de3cec204d768c31e`. Context-boundary pin SHA-256: `a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35`. Read-only diff inspection limits this round to the product lock query, this piece's fixture and this receipt. Every merged test, migration, assertion, pin, grant, lockfile, lane and generated artifact is preserved.
+
+Affected invariants remain AGENTS §§5.4, 5.7, 5.8 and BUILD_PLAN C4/C5: serialize proof eligibility/invalidation, retain append-only rework history and keep no-op retries from creating false business audit events. No schema/data migration or rollback step is introduced; no response/request hash/command identity/UI/provider/environment/alert contract changed. Revert needs no schema rollback but can reintroduce the scripted-query incompatibility. Actual correlated-subquery lock acquisition still requires PostgreSQL evidence.
+
+Dispatcher must run the existing `test/proof-invalidation.integration.test.ts` (all three cases, both contention directions and audit retry), unchanged `test/audit-api-file-final-account.integration.test.ts`, proof/evidence/replay/application-records/lock-order suites listed above, full `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and the mandatory browser projects on the exact dispatched commit. Local scripted green does not replace these checks. B2 and B3b remain **OPEN BLOCKING**, with their exact future migration scope in the earlier section; this CI repair neither builds nor closes them. A fresh independent verdict and separate technical acceptance remain pending. No merge/release approval is inferred.
+
+Intended conventional commit message is `/private/tmp/jg-msg-audit-fix-api-proof.txt` (overwritten for this round). The dispatcher owns commit/re-parent/push and subsequent CI. No commit was made here.
+
+Final receipt-inclusive verification: `LANE_BASE_REF=origin/main pnpm lint:lanes` exit **0** (`lanes-final.log`); protected-file byte comparison / three-path diff allowlist / unchanged HEAD inspection exit **0**; `git diff --check` exit **0**.

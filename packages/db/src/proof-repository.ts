@@ -13,7 +13,7 @@ export async function requireActiveActor(db:TenantTransaction,tenantId:string,me
  * be taken after any wait for a committed invalidation, not before that wait.
  */
 async function lockProofUpload(db:TenantTransaction,tenantId:string,evidenceId:string):Promise<void>{
- await db.$client.query(`SELECT u.id FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.upload_id)=(u.tenant_id,u.id) WHERE e.tenant_id=$1 AND e.id=$2 FOR UPDATE OF u`,[tenantId,evidenceId]);
+ await db.$client.query(`SELECT id FROM app.evidence_object WHERE tenant_id=$1 AND id=$2 AND EXISTS(SELECT u.id FROM app.evidence_upload u WHERE (u.tenant_id,u.id)=(app.evidence_object.tenant_id,app.evidence_object.upload_id) FOR UPDATE OF u)`,[tenantId,evidenceId]);
 }
 /** Operational command boundary: it never creates commercial authorization. */
 export class ProofCommandService{constructor(private readonly pool:Pool,private readonly storage:PrivateVersionedStorage){}

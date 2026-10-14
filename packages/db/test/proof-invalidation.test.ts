@@ -42,6 +42,9 @@ function harness() {
       }
       if (sql === "BEGIN" || sql.includes("set_config") || sql.includes("pg_advisory") || sql.startsWith("UPDATE app.command_receipt")) return result();
       if (sql.includes("FROM app.membership")) return result([{}]);
+      // This fixture is a live job without a final-account lock; merged lifecycle
+      // guards run normally, before the proof race being exercised.
+      if (sql.startsWith("SELECT j.id job_id,b.customer_id,b.site_id FROM app.job j") && sql.includes("JOIN app.final_account_lock")) return result();
       if (sql.includes("FROM app.command_receipt")) return result();
       if (sql.startsWith("INSERT INTO app.command_receipt")) { completing = true; return result([{ command_id: values[0] }]); }
       if (sql.includes("FROM app.evidence_object") && sql.includes("e.kind='original'")) {
