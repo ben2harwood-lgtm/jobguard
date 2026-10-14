@@ -1063,3 +1063,26 @@ this register records implementation, not independent acceptance or release appr
 The replacement routines check current owner/finance approver membership and exact financial authorization, require distinct accounts with the correct classes in the same tenant/book/currency, refuse settlement of a reversed obligation, and count only unreversed settlement credits against receivable capacity. Corrections lock the parent obligation before the original settlement, refuse a second full reversal, refuse reversal of a reversal, and require active settlements to be reversed before their obligation. No new grants, policies or RLS changes; existing routine owners, ACLs, SECURITY DEFINER/search paths and deferred balance/audit triggers remain intact. These are existing synthetic ledger ports; D02 accounting-policy approval and production charging gates remain held.
 
 Rollback strategy: roll back a failed installation transaction. After successful installation, retain the unique key and immutable journal history and correct defects through a reviewed forward migration; do not restore the unsafe routine bodies. No backfill or historical row changes. Regression/catalog proof is in `packages/db/test/migfix-2.integration.test.ts`; populated upgrade, historical duplicate refusal and upgrade-comparison controls are in `packages/db/test/migfix-2-upgrade.integration.test.ts`. PostgreSQL execution is NOT RUN in the builder sandbox; both files and the mandatory database/migration suites must pass in GitHub CI on the final head before merge.
+
+## 0153 — quote supersession guard (MIGFIX-4)
+
+`0153_quote_supersession_guard.sql` replaces only the two routines installed by
+0011: `app.record_builder_attested_acceptance` and `app.record_quote_disposition`.
+Acceptance refuses any exact document with an immutable supersession event,
+including events recorded before this migration, under the existing job lock.
+Supersession advances the job revision and server update time. Both routines
+recheck the existing active-owner authority before inspecting job state; exact
+document/hash/version/total/send checks and accepted commercial history remain.
+
+No GRANT statements, new tables, columns or policies, data backfill or historical
+row changes. CREATE OR REPLACE preserves the signatures, owners, existing EXECUTE
+ACLs and pinned `search_path=pg_catalog,app`. Forward-fix only: retain immutable
+acceptance/disposition history and issue a reviewed corrective migration; do not
+restore obsolete acceptance routines. A failed application rolls back both
+replacements in the migration transaction.
+
+Regression and own-step upgrade coverage are in `migfix-4.integration.test.ts`
+and `migfix-4-upgrade.integration.test.ts`. PostgreSQL and browser checks are NOT
+RUN in the builder sandbox; GitHub CI must execute them after dispatcher push.
+The merged quote regression's decline revision (2 to 3) and expected final revision
+(3 to 4) were updated per Ben, 14 Oct, coordinator chat, decision 5.
