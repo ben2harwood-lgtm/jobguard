@@ -4,6 +4,7 @@ import { encodeWorkOrderCsv, referenceApprovalRulesV1, type WorkOrderSampleId } 
 import { ContractorPartyRepository } from "./contractor-party-repository.js";
 import { ContractorRepository } from "./contractor-repository.js";
 import { SorRepository } from "./sor-repository.js";
+import { assertContractorGate } from "./work-order-repository.js";
 import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "./tenant-context.js";
 
 /**
@@ -33,23 +34,31 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
     const contractors = new ContractorRepository(pool), parties = new ContractorPartyRepository(pool), rates = new SorRepository(pool);
     const view = () => contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "organisation" });
     const command = async (fields: Record<string, unknown>) => contractors.command(principal, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view()).revision, ...fields });
-    const organisation = await view();
-    const team = organisation.teams[0]!;
-    const existing = organisation.clients.find(client => client.name === demoClientName);
+    // Reusing fictional import inputs needs import/contract authority, not organisation.read.
+    await withTenant(pool, verifiedTenantContextFromMembership(principal), db => assertContractorGate(db, principal, "import"));
+    const contracts = await contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "contracts" });
+    const existing = contracts.clients.find(client => client.name === demoClientName);
     const siteCount = options.siteCount ?? 5;
     if (existing) {
-      const contracts = await contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "contracts" });
       const version = contracts.contracts.filter(c => c.client_id === existing.id).at(-1)!;
       const document = version.document as ReturnType<typeof contractDocument>;
-      const stored = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => ({
-        sites: (await db.$client.query<{ id: string }>("SELECT id FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street' ORDER BY created_at,id")).rows.map(r => r.id),
-        operative: (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.contractor_member WHERE email='demo.operative@fictional.invalid'")).rows[0]?.membership_id,
-        sor: (await db.$client.query<{ schedule_id: string }>("SELECT schedule_id FROM app.sor_version WHERE id=$1", [document.sorVersionIds[0]])).rows[0]?.schedule_id,
-      }));
+      const stored = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => {
+        await assertContractorGate(db, principal, "import");
+        const team = (await db.$client.query<{ id: string; branch_id: string }>("SELECT t.id,t.branch_id FROM app.team t WHERE t.branch_id=$1 AND app.work_order_client_permitted($2,$3) AND EXISTS(SELECT 1 FROM app.role_grant g JOIN app.contractor_member m ON(m.tenant_id,m.membership_id)=(g.tenant_id,g.membership_id) WHERE g.scope_kind='team' AND g.scope_id=t.id AND g.role='operative' AND m.email='demo.operative@fictional.invalid' AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE r.tenant_id=g.tenant_id AND r.grant_id=g.id)) ORDER BY t.id LIMIT 1", [existing.branch_id, principal.membershipId, existing.id])).rows[0];
+        if (!team) throw new Error("NOT_FOUND");
+        return {
+          team,
+          sites: (await db.$client.query<{ id: string }>("SELECT id FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street' ORDER BY id")).rows.map(r => r.id),
+          operative: (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.contractor_member WHERE email='demo.operative@fictional.invalid'")).rows[0]?.membership_id,
+          sor: (await db.$client.query<{ schedule_id: string }>("SELECT schedule_id FROM app.sor_version WHERE id=$1", [document.sorVersionIds[0]])).rows[0]?.schedule_id,
+        };
+      });
       // A half-prepared organisation is never guessed at: the caller sees the generic retryable failure.
       if (stored.sites.length === 0 || !stored.operative || !stored.sor) throw new Error("The generated demo organisation is incomplete");
-      return { clientId: existing.id, contractId: version.contract_id, contractVersionId: version.id, scheduleId: stored.sor!, sorVersionId: document.sorVersionIds[0]!, siteRevisionIds: stored.sites, teamId: team.id, branchId: team.branch_id, operativeMembershipId: stored.operative!, adjustment: document.tenderedAdjustment, issuedOn: "2026-10-08" };
+      return { clientId: existing.id, contractId: version.contract_id, contractVersionId: version.id, scheduleId: stored.sor!, sorVersionId: document.sorVersionIds[0]!, siteRevisionIds: stored.sites, teamId: stored.team.id, branchId: stored.team.branch_id, operativeMembershipId: stored.operative!, adjustment: document.tenderedAdjustment, issuedOn: "2026-10-08" };
     }
+    const organisation = await view();
+    const team = organisation.teams[0]!;
     const scheduleId = randomUUID();
     const sor = await rates.importVersion(principal, { version: "sor-version-import.v1", environment: "synthetic_demo", commandId: randomUUID(), scheduleId, reference: "Fictional schedule of rates 2026", effectiveFrom: "2026-01-01",
       items: demoSorItems.map(item => ({ code: item.code, description: item.description, unit: item.unit, rate: { pence: item.ratePence, currency: "GBP" } })) });
@@ -69,6 +78,8 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
         siteRevisionIds.push(revisionId);
       }
     });
+    // Match the persisted UUID ordering used on every subsequent preparation.
+    siteRevisionIds.sort();
     await parties.linkCustomer(principal, clientId, { version: "contractor-customer-link.v1", environment: "synthetic_demo", commandId: randomUUID(), customerRevisionId });
     const operativeMembershipId = (await command({ kind: "member.invite", role: "operative", email: "demo.operative@fictional.invalid", scope: { kind: "team", id: team.id }, clientId: null, contractId: null })).id;
     return { clientId, contractId, contractVersionId, scheduleId, sorVersionId: sor.versionId, siteRevisionIds, teamId: team.id, branchId: team.branch_id, operativeMembershipId, adjustment: { numerator: "-35", denominator: "1000" }, issuedOn: "2026-10-08" };
