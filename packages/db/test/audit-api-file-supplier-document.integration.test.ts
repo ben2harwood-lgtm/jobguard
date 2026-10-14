@@ -91,3 +91,61 @@ describe("night audit supplier document regressions (real PostgreSQL, dispatcher
     expect(await counts(tenant, job)).toEqual(before);
   });
 });
+
+// Repair r1 uses the same disposable PostgreSQL harness and actual runtime role.
+describe("supplier receipt exact decimals (repair r1, real PostgreSQL)", () => {
+  it.each([
+    ["10000000000001.000000", "10000000000000.000001", "0.000001", "10000000000000.000002", "0.999999"],
+    ["99999999999999.999999", "0.000001", "99999999999999.999998", "99999999999999.999999", "99999999999999.999998"],
+    ["1.000000", "0.000001", "0.000002", "0.000003", "0.999999"],
+  ])("stores and reads six-place quantities exactly, with effect-free replay: %s", async (ordered, accepted, rejected, delivered, missing) => {
+    const { repo, tenant, job, context } = await fixture();
+    // Add a synthetic prior receipt without changing an immutable receipt or overflowing order-money calculations.
+    // The runtime's existing SELECT/INSERT grants and tenant/job-qualified links are exercised here.
+    const client = await runtime.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenant]);
+      await client.query(`INSERT INTO app.goods_receipt(id,tenant_id,job_id,order_draft_id,document_id,revision,
+        ordered_quantity,delivered_quantity,accepted_quantity,rejected_quantity,missing_quantity,unit)
+        SELECT $1,tenant_id,job_id,order_draft_id,document_id,2,$4::numeric,0,0,0,$4::numeric,unit
+        FROM app.goods_receipt WHERE tenant_id=$2 AND job_id=$3 AND revision=1`, [randomUUID(), tenant, job, ordered]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK"); throw error;
+    } finally { client.release(); }
+    const input = { commandId: randomUUID(), accepted, rejected, expectedRevision: 2 };
+    const before = await counts(tenant, job);
+    await expect(repo.appendReceipt(context, job, input)).resolves.toEqual({ revision: 3 });
+    const after = await counts(tenant, job);
+    for (const table of ["goods_receipt", "audit_event", "watchdog_command_identity", "watchdog_command_result"])
+      expect(after[table]).toBe(before[table]! + 1);
+    expect(after.supplier_fact_revision).toBe(before.supplier_fact_revision);
+    const stored = async () => (await admin.query(`SELECT revision,ordered_quantity::text ordered,
+      delivered_quantity::text delivered,accepted_quantity::text accepted,rejected_quantity::text rejected,
+      missing_quantity::text missing FROM app.goods_receipt WHERE tenant_id=$1 AND job_id=$2 AND revision=3`, [tenant, job])).rows;
+    const expectedStored = [{ revision: 3, ordered, delivered, accepted, rejected, missing }];
+    // numeric(20,6) always returns six fractional places; the smallest vector's delivered value already has six.
+    expect(await stored()).toEqual(expectedStored);
+    const expectedView = { revision: 3, ordered: ordered.replace(/\.000000$/, ""), delivered, accepted, rejected, missing };
+    await expect(repo.view(context, job)).resolves.toMatchObject({ receipt: expectedView });
+    await expect(repo.appendReceipt(context, job, input)).resolves.toEqual({ revision: 3 });
+    expect(await counts(tenant, job)).toEqual(after);
+    expect(await stored()).toEqual(expectedStored);
+    await expect(repo.view(context, job)).resolves.toMatchObject({ receipt: expectedView });
+  });
+
+  it("rejects numeric(20,6) operand and delivered-sum overflow with no database effects", async () => {
+    const { repo, tenant, job, context } = await fixture(), before = await counts(tenant, job);
+    for (const [accepted, rejected] of [
+      ["100000000000000", "0"], ["0", "100000000000000.000000"],
+      ["99999999999999.999999", "0.000001"], ["50000000000000", "50000000000000"],
+    ] as const) {
+      const input = { version: "goods-receipt.v1" as const, commandId: randomUUID(), accepted, rejected, expectedRevision: 1 };
+      expect(() => goodsReceiptV1.parse(input)).toThrowError(expect.objectContaining({ name: "ZodError" }));
+      const { version: _version, ...receipt } = input;
+      await expect(repo.appendReceipt(context, job, receipt)).rejects.toMatchObject({ name: "ZodError" });
+      expect(await counts(tenant, job)).toEqual(before);
+    }
+  });
+});

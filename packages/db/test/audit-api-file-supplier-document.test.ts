@@ -76,3 +76,70 @@ describe("night audit supplier document regressions (scripted SQL)", () => {
     expect(db.inserts("audit_event")).toHaveLength(0);
   });
 });
+
+// Repair r1: additional regressions only; the original assertions above remain unchanged.
+function receiptSql(ordered: string) {
+  const db = new RecordedSql(), query = db.query;
+  let identity: { job_id: unknown; command_type: unknown; request_hash: unknown } | undefined;
+  let result: unknown;
+  db.query = async (sql, values = []) => {
+    if (sql.includes("INSERT INTO app.watchdog_command_identity")) {
+      db.calls.push({ sql, values });
+      if (identity) return { rows: [], rowCount: 0 };
+      identity = { job_id: values[2], command_type: values[3], request_hash: values[4] };
+      return { rows: [{ command_id: values[1] }], rowCount: 1 };
+    }
+    if (sql.includes("SELECT job_id,command_type,request_hash") || sql.includes("SELECT result FROM app.watchdog_command_result")) {
+      db.calls.push({ sql, values });
+      return { rows: sql.includes("SELECT result") ? [{ result }] : [identity], rowCount: 1 };
+    }
+    if (sql.includes("FROM app.goods_receipt")) {
+      db.calls.push({ sql, values });
+      return { rows: [{ revision: 1, ordered_quantity: ordered, order_draft_id: job, document_id: documentId }], rowCount: 1 };
+    }
+    if (sql.includes("INSERT INTO app.watchdog_command_result")) result = JSON.parse(values[2] as string);
+    return query(sql, values);
+  };
+  return db;
+}
+
+describe("supplier receipt exact decimals (repair r1)", () => {
+  it.each([
+    ["10000000000001.000000", "10000000000000.000001", "0.000001", "10000000000000.000002", "0.999999"],
+    ["99999999999999.999999", "0.000001", "99999999999999.999998", "99999999999999.999999", "99999999999999.999998"],
+    ["1.000000", "0.000001", "0.000002", "0.000003", "0.999999"],
+  ])("persists exact quantities and replays without another effect: %s", async (ordered, accepted, rejected, delivered, missing) => {
+    const db = receiptSql(ordered), app = application(db);
+    const input = { version: "goods-receipt.v1", commandId: randomUUID(), accepted, rejected, expectedRevision: 1 };
+    await expect(app.receipt(job, input)).resolves.toEqual({ revision: 2 });
+    expect(db.inserts("goods_receipt")[0]!.values.slice(6, 11)).toEqual([ordered, delivered, accepted, rejected, missing]);
+    await expect(app.receipt(job, input)).resolves.toEqual({ revision: 2 });
+    for (const table of ["goods_receipt", "audit_event", "watchdog_command_result"]) expect(db.inserts(table)).toHaveLength(1);
+  });
+
+  it("reads every receipt quantity without a floating-point conversion, retaining the established display format", async () => {
+    const db = new RecordedSql(), query = db.query;
+    db.query = async (sql, values = []) => {
+      if (sql.includes("FROM app.goods_receipt")) return { rows: [{ revision: 2,
+        ordered_quantity: "10000000000001.000000", delivered_quantity: "10000000000000.000002",
+        accepted_quantity: "10000000000000.000001", rejected_quantity: "0.000001", missing_quantity: "0.999999" }], rowCount: 1 };
+      if (sql.includes("SELECT count(*) n FROM app.supplier_document_intake")) return { rows: [{ n: "0" }], rowCount: 1 };
+      if (sql.includes("FROM app.supplier_document") || sql.includes("FROM app.supplier_fact_proposal")) return { rows: [], rowCount: 0 };
+      return query(sql, values);
+    };
+    await expect(new SupplierDocumentRepository(db.pool()).view(context, job)).resolves.toMatchObject({ receipt: {
+      revision: 2, ordered: "10000000000001", delivered: "10000000000000.000002",
+      accepted: "10000000000000.000001", rejected: "0.000001", missing: "0.999999",
+    } });
+  });
+
+  it.each([
+    ["100000000000000", "0"], ["0", "100000000000000.000000"],
+    ["99999999999999.999999", "0.000001"], ["50000000000000", "50000000000000"],
+  ])("rejects numeric(20,6) operand or sum overflow before connecting: %s + %s", async (accepted, rejected) => {
+    const db = new RecordedSql();
+    await expect(new SupplierDocumentRepository(db.pool()).appendReceipt(context, job, { accepted, rejected, expectedRevision: 1 }))
+      .rejects.toMatchObject({ name: "ZodError" });
+    expect(db.calls).toHaveLength(0);
+  });
+});
