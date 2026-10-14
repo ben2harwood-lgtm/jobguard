@@ -179,7 +179,14 @@ describe("MIGFIX-4 exact quote acceptance", () => {
       await expect(db.query("SELECT * FROM app.record_builder_attested_acceptance($1,$2,$3,$4,$5,1,$6,12000,0,$7,'Fictional customer','email',clock_timestamp(),NULL)", [f.tenant, randomUUID(), randomUUID(), f.job, f.document, f.hash, f.member])).rejects.toMatchObject({ code: "22023" });
     });
     await execute(f, a);
-    await c.admin.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [f.tenant, f.job]);
+    // The live-entry parties guard reads a FORCE-RLS table, so the admin session must carry the tenant setting.
+    const admin = await c.admin.connect();
+    try {
+      await admin.query("BEGIN");
+      await admin.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenant]);
+      await admin.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [f.tenant, f.job]);
+      await admin.query("COMMIT");
+    } catch (error) { await admin.query("ROLLBACK"); throw error; } finally { admin.release(); }
     await expect(execute(f, disposition(f, 1))).rejects.toMatchObject({ code: "22023" });
     await expect(execute(f, disposition(f, 1, "acceptance_cancelled"))).rejects.toMatchObject({ code: "22023" });
     expect(await state(f)).toMatchObject({ status: "live", accepted_quote_version_id: f.document, acceptances: 1 });
