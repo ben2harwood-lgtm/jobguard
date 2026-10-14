@@ -191,4 +191,47 @@ describe("MIGFIX-3 original-stage replacement", () => {
       await expect(withTenant(h.runtime, h.ctx, db => db.$client.query(`DELETE FROM app.${table}`))).rejects.toThrow(/permission denied/);
     }
   });
+  const receipt = (id: string) => ({ text: `INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
+    VALUES($1::uuid,$2::uuid,'fixture.command',$2::text,repeat('a',64),'processing',$3)`, values: [h.tenant, id, h.member] });
+  it("[MIGFIX-3.4] an unlocked command_receipt insert racing an invalidation with the same id never commits in both namespaces", async () => {
+    // Receipt first (uncommitted, no per-id lock of its own: 'fixture.command' has no 0096 reservation): the invalidation must fail, not miss it.
+    const f = await initial(), id = randomUUID(), holder = await h.admin.connect();
+    await holder.query("BEGIN");
+    try {
+      await holder.query(receipt(id));
+      await expect(h.repos.proof.invalidate(h.ctx, invalidation(f.evidence, id))).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+      await holder.query("COMMIT");
+    } finally { await holder.query("ROLLBACK"); holder.release(); }
+    expect((await h.admin.query("SELECT * FROM app.proof_invalidation_command WHERE command_id=$1", [id])).rows).toHaveLength(0);
+    expect((await h.admin.query("SELECT * FROM app.evidence_invalidation WHERE evidence_id=$1", [f.evidence])).rows).toHaveLength(0);
+    // Invalidation first (suspended before commit): the unlocked receipt insert must fail rather than slip in beside it.
+    const id2 = randomUUID();
+    let resume!: () => void, reached!: () => void;
+    const suspended = new Promise<void>(resolve => { resume = resolve; }), ready = new Promise<void>(resolve => { reached = resolve; });
+    const invalidating = h.repos.proof.invalidate(h.ctx, invalidation(f.evidence, id2), async () => { reached(); await suspended; });
+    await ready;
+    try { await expect(h.admin.query(receipt(id2))).rejects.toThrow(/IDEMPOTENCY_CONFLICT/); } finally { resume(); }
+    await invalidating;
+    expect((await h.admin.query("SELECT * FROM app.command_receipt WHERE command_id=$1", [id2])).rows).toHaveLength(0);
+    expect((await h.admin.query("SELECT * FROM app.proof_invalidation_command WHERE command_id=$1", [id2])).rows).toHaveLength(1);
+    // Concurrent same-command inserts into an old store do not conflict with each other (shared key): replays are unchanged.
+    const same = randomUUID(), a = await h.admin.connect(), b = await h.admin.connect();
+    await a.query("BEGIN"); await b.query("BEGIN");
+    try { await a.query(receipt(same)); await a.query("ROLLBACK"); await b.query(receipt(same)); await b.query("ROLLBACK"); }
+    finally { a.release(); b.release(); }
+  });
+  it("[MIGFIX-3.7] every 0152 routine is migration-owned, SECURITY DEFINER, search_path pinned and has exact EXECUTE grantees; nothing in app is runtime-owned", async () => {
+    const routines = (await h.admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+      has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure,
+      has_function_privilege('public',p.oid,'EXECUTE') public_
+      FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname = ANY($1) ORDER BY p.proname`,
+      [["require_proof_writer","guard_proof_command_namespace","invalidate_proof_command","record_invalidation_response","replace_stage_proof","verify_proof_history_audit"]])).rows;
+    expect(routines.map(r => r.proname)).toEqual(["guard_proof_command_namespace","invalidate_proof_command","record_invalidation_response","replace_stage_proof","require_proof_writer","verify_proof_history_audit"]);
+    const runtimeCallable = new Set(["invalidate_proof_command","record_invalidation_response","replace_stage_proof"]);
+    for (const r of routines)
+      expect(r, r.proname).toMatchObject({ owner: "jobguard_migration", prosecdef: true, proconfig: ["search_path=pg_catalog, app"],
+        runtime: runtimeCallable.has(r.proname), infrastructure: false, public_: false });
+    expect((await h.admin.query("SELECT proname FROM pg_proc WHERE pronamespace='app'::regnamespace AND pg_get_userbyid(proowner)='jobguard_runtime'")).rows).toEqual([]);
+    expect((await h.admin.query("SELECT relname FROM pg_class WHERE relnamespace='app'::regnamespace AND pg_get_userbyid(relowner)='jobguard_runtime'")).rows).toEqual([]);
+  });
 });
