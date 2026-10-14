@@ -92,7 +92,7 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   "packages/db/src/work-order-repository.ts": "4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3",
   "packages/db/src/sor-repository.ts": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",
   "packages/db/src/job-scheduling-repository.ts": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
-  "packages/db/src/work-order-fixtures.ts": "cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386",
+  "packages/db/src/work-order-fixtures.ts": "6a759b3f449cb6e341ed5d317c37f69cc18169705d9c7b65e80913153ea7ae59",
   "packages/db/src/contractor-session-context.ts": "a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c",
 };
 const reviewedPracticeSource = (file: SourceFile) => REVIEWED_PRACTICE_SOURCES[file.path] === createHash("sha256").update(file.text).digest("hex");
