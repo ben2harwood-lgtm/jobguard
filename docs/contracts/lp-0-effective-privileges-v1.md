@@ -8,11 +8,11 @@ This is a list of what the application database login (`jobguard_runtime`) can r
 
 ## Base inspected
 
-- Landing base: `a778d64c4439c4cf3e149962e67ef49ae969bfbe` (merged PLAN-LPL, on `origin/main`). PostgreSQL 16.10 (embedded, disposable). Registry applied in full: 80 migrations, highest `0150_membership_authority_fix.sql`; numbers 0139 to 0143 reservations untouched.
+- Landing base: `27d1ad6b976ec3ef48d92e4fd2c7e5b1ece738c3` (merged PLAN-LPL, on `origin/main`). PostgreSQL 16.10 (embedded, disposable). Registry applied in full: 82 migrations, highest `0151_ledger_corrections_fix.sql`; LP-0 allocates no migration number.
 - Profiles: migration-only NOLOGIN, and synthetic-bootstrap LOGIN (both recorded; neither grants superuser, BYPASSRLS, CREATEROLE, CREATEDB or replication).
-- Measured from the actual catalogue: 241 tables, 4 views, 0 PostgreSQL sequences (none), 271 routines of which 177 are reachable by some non-owner and 85 of those are SECURITY DEFINER; 242 RLS policies and 339 non-internal triggers (recorded, not compared).
+- Measured from the actual catalogue: 242 tables, 4 views, 0 PostgreSQL sequences (none), 273 routines of which 178 are reachable by some non-owner and 86 of those are SECURITY DEFINER; 243 RLS policies and 340 non-internal triggers (recorded, not compared).
 - Runtime login today: SELECT on 201 tables and 4 views; INSERT on 130 tables; UPDATE on 6 tables and 28 columns; DELETE on 6 tables; EXECUTE on 99 routines (plus 53 routines PUBLIC can execute, 36 of them pgcrypto). No TRUNCATE, TRIGGER, REFERENCES, schema CREATE, database CREATE, sequence access, role membership or explicit default privilege exists.
-- 1078 capability facts compared at the base (1079 reviewed entries, the extra entry being the second role profile). These totals are measurements of this base, not acceptance totals.
+- 1082 capability facts compared at the base (1083 reviewed entries, the extra entry being the second role profile). These totals are measurements of this base, not acceptance totals.
 
 ## How the guard uses this file
 
@@ -95,15 +95,15 @@ Downstream effect of each exception (why none is called harmless):
 | `a-exec-trigger-functions-runtime` | Runtime EXECUTE on trigger function app.require_prevention_subject | 1 | retain: retained; a trigger function cannot be invoked except as a trigger |
 | `a-public-trigger-and-pure-functions` | PUBLIC EXECUTE (PostgreSQL default) on invoker trigger functions and pure helpers | 15 | retain: retained: invoker trigger functions and pure arithmetic with no table access |
 | `a-extension-pgcrypto-public` | PUBLIC EXECUTE (PostgreSQL default) on pgcrypto functions in schema public | 36 | retain: retained: pure cryptographic helpers (digest, gen_random_uuid, hmac, crypt, pgp_*) with no table access |
-| `a-identity-role-routines` | EXECUTE for jobguard_identity on identity-schema routines | 22 | rebind_at_card (LP-7, LP-13, LP-6e): kept for the identity login; LP-7 adds removal and role change, LP-13 the SSO audit check |
-| `a-identity-role-table-grants` | Table and column grants for jobguard_identity | 27 | review_at_card (LP-7): kept for the identity login; reviewed at LP-7 |
+| `a-identity-role-routines` | EXECUTE for jobguard_identity on identity-schema routines | 23 | rebind_at_card (LP-7, LP-13, LP-6e): kept for the identity login; LP-7 adds removal and role change, LP-13 the SSO audit check |
+| `a-identity-role-table-grants` | Table and column grants for jobguard_identity | 28 | review_at_card (LP-7): kept for the identity login; reviewed at LP-7 |
 | `a-infrastructure-role-grants` | Grants for jobguard_infrastructure | 2 | review_at_card (LP-10): kept; reviewed with the worker split at LP-10 |
 | `a-shadow-role-grants` | Table and column grants for jobguard_shadow | 23 | review_at_card (LP-6d, LP-10): kept; reviewed at LP-6d and with the worker split at LP-10 |
 | `a-runtime-reads` | Runtime SELECT on application tables, views and permitted columns | 209 | rebind_at_card (LP-11): kept, bounded by RLS; tenant comparison rebound at LP-11 |
 | `a-owner-schemas-database` | Owners of schemas and database and PUBLIC default privileges on the database, languages and types | 14 | retain: retained as PostgreSQL defaults and schema owners; no CREATE for any login |
 | `a-schema-usage-grants` | USAGE on application schemas for the application roles | 5 | retain: retained; USAGE only, never CREATE |
-| `a-owner-tables-views` | Ownership of application tables and views by jobguard_migration | 235 | review_at_card (LP-12): kept; LP-12 reviews protected-table ownership and migration-role inheritance |
-| `a-owner-routines` | Ownership of application routines by jobguard_migration | 140 | review_at_card (LP-12): kept; LP-12 moves new chokepoints and then relevant money routines off the schema owner |
+| `a-owner-tables-views` | Ownership of application tables and views by jobguard_migration | 236 | review_at_card (LP-12): kept; LP-12 reviews protected-table ownership and migration-role inheritance |
+| `a-owner-routines` | Ownership of application routines by jobguard_migration | 141 | review_at_card (LP-12): kept; LP-12 moves new chokepoints and then relevant money routines off the schema owner |
 | `a-owner-extension-bootstrap` | Ownership of pgcrypto routines and the migration registry by the bootstrap superuser | 38 | retain: retained: extension objects and the registry table belong to the bootstrap role |
 | `a-role-runtime-profiles` | Role attributes of jobguard_runtime in its two tested profiles | 2 | retain: retained: NOLOGIN as migrated and LOGIN as synthetic bootstrap; never superuser, BYPASSRLS, CREATEROLE, CREATEDB or replication |
 | `a-role-other-application` | Role attributes of the migration, infrastructure, identity and shadow roles and the bootstrap superuser | 6 | retain: retained: all NOLOGIN NOINHERIT with no elevated attributes, except the bootstrap superuser of the disposable cluster |
