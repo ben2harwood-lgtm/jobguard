@@ -104,11 +104,15 @@ END $$;
 CREATE TRIGGER a_final_check_inventory BEFORE INSERT OR UPDATE ON app.evidence_upload FOR EACH ROW EXECUTE FUNCTION app.serialize_final_check_evidence();
 CREATE TRIGGER a_final_check_inventory BEFORE INSERT ON app.evidence_object FOR EACH ROW EXECUTE FUNCTION app.serialize_final_check_evidence();
 CREATE FUNCTION app.serialize_final_check_invalidation() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE source_job uuid;
+DECLARE source_job uuid;prior text:=current_setting('app.tenant_id',true);
 BEGIN
- IF NEW.tenant_id IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- Preserve the existing privileged maintenance/fixture write path, as for evidence registration.
+ -- Ordinary sessions still require their own tenant context before any lookup or lock.
+ IF NEW.tenant_id IS DISTINCT FROM nullif(prior,'')::uuid AND NOT pg_has_role(session_user,'jobguard_migration','USAGE') AND NOT (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true);
  SELECT job_id INTO source_job FROM app.evidence_object WHERE tenant_id=NEW.tenant_id AND id=NEW.evidence_id;
  PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=source_job FOR UPDATE;
+ PERFORM set_config('app.tenant_id',coalesce(prior,''),true);
  RETURN NEW;
 END $$;
 CREATE TRIGGER a_final_check_invalidation BEFORE INSERT ON app.evidence_invalidation FOR EACH ROW EXECUTE FUNCTION app.serialize_final_check_invalidation();

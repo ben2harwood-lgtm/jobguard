@@ -58,16 +58,35 @@ beforeAll(async () => {
     await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);
     await admin.query(`ALTER ROLE ${login} PASSWORD '${credential}'`); await admin.query(`GRANT ${group} TO ${login}`);
   }
-  utilities = await makeWorkerUtils({ connectionString: connection("postgres"), maxPoolSize: 2 }); await utilities.migrate();
-  // Queue credentials have Graphile infrastructure access, never business write privileges.
-  await admin.query(`GRANT USAGE ON SCHEMA graphile_worker TO sv5pre_worker_graphile;
-    GRANT ALL ON ALL TABLES IN SCHEMA graphile_worker TO sv5pre_worker_graphile;
-    GRANT ALL ON ALL SEQUENCES IN SCHEMA graphile_worker TO sv5pre_worker_graphile;
-    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA graphile_worker TO sv5pre_worker_graphile`);
+  // Graphile enables RLS without caller policies on its private queue tables.
+  // Install as the queue login so it owns those tables; table grants alone cannot satisfy RLS.
+  // CREATE is temporary and confined to this disposable test database.
+  await admin.query("GRANT CREATE ON DATABASE postgres TO sv5pre_worker_graphile");
+  try {
+    utilities = await makeWorkerUtils({ connectionString: connection("sv5pre_worker_graphile"), maxPoolSize: 2 });
+    await utilities.migrate();
+  } finally {
+    await admin.query("REVOKE CREATE ON DATABASE postgres FROM sv5pre_worker_graphile");
+  }
 }, 90_000);
 afterAll(async () => { await stopEntrypoint(); await runner?.stop(); await utilities?.release(); await closeTestPools(admin); await postgres?.stop(); });
 
 describe("SV5PRE actual Graphile execution", () => {
+  it("PRE-Q6 r10 the queue login owns Graphile tables without business privileges or RLS bypass", async () => {
+    const tables = await admin.query<{ owner: string; relforcerowsecurity: boolean }>(`SELECT pg_get_userbyid(c.relowner) AS owner,c.relforcerowsecurity
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='graphile_worker' AND c.relkind='r'`);
+    expect(tables.rows.length).toBeGreaterThan(0);
+    for (const table of tables.rows) expect(table).toEqual({ owner: "sv5pre_worker_graphile", relforcerowsecurity: false });
+    expect((await admin.query(`SELECT rolsuper,rolbypassrls,rolcreatedb,rolcreaterole,
+      has_database_privilege(rolname,'postgres','CREATE') AS database_create,
+      has_table_privilege(rolname,'app.job','INSERT') AS business_insert,
+      pg_has_role(rolname,'jobguard_runtime','MEMBER') AS business_role
+      FROM pg_roles WHERE rolname='sv5pre_worker_graphile'`)).rows).toEqual([{
+      rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false,
+      database_create: false, business_insert: false, business_role: false,
+    }]);
+  });
+
   it("PRE-Q6-03 PRE-Q6-06 a durable registered task reaches its handler after worker restart", async () => {
     runner = await run({ connectionString: connection("sv5pre_worker_graphile"), taskList: { unused_fixture_task: async () => undefined }, concurrency: 1, pollInterval: 100 });
     await runner.stop(); runner = undefined;

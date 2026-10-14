@@ -264,6 +264,37 @@ describe("SV5PRE authoritative completion", () => {
   expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1",[x.a.tenantId])).rows[0].n).toBe(0);
  });
 
+ it.each(['', randomUUID()])("r10 privileged invalidation preserves prior context %s while runtime isolation and invoice refusal hold", async prior => {
+  const x = await sourceFixture(), evidence = await finalize(x);
+  await runWithZero(x); await attempt(x, evidence, 'detection'); await attempt(x, evidence, 'reconciliation');
+  await x.repo.publish(x.a.context, { version: 'final-check-publication.v1', jobId: x.a.jobId, runId: x.runId, checkId: randomUUID() });
+  const insert = "INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'object_revoked')";
+  const args = [randomUUID(), x.a.tenantId, evidence, x.a.input.actorMembershipId];
+  const certificate = await rows(x.a.tenantId, 'app.shadow_final_check_completion');
+  const originals = await rows(x.a.tenantId, 'app.evidence_object');
+  await expect(f.runtime.query(insert, args)).rejects.toThrow('FORBIDDEN');
+  await expect(asFixtureTenant(f.runtime, randomUUID(), db => db.query(insert, args))).rejects.toThrow('FORBIDDEN');
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.evidence_invalidation WHERE tenant_id=$1", [x.a.tenantId])).rows[0].n).toBe(0);
+  const admin = await f.admin.connect();
+  try {
+   await admin.query('BEGIN');
+   await admin.query("SELECT set_config('app.tenant_id',$1,true)", [prior]);
+   await admin.query(insert, args);
+   expect((await admin.query("SELECT current_setting('app.tenant_id',true) AS tenant")).rows).toEqual([{ tenant: prior }]);
+   await admin.query('COMMIT');
+  } finally { await admin.query('ROLLBACK'); admin.release(); }
+  expect(await rows(x.a.tenantId, 'app.evidence_object')).toBe(originals);
+  expect(await rows(x.a.tenantId, 'app.shadow_final_check_completion')).toBe(certificate);
+  await expect(x.repo.publish(x.a.context, { version: 'final-check-publication.v1', jobId: x.a.jobId, runId: x.runId, checkId: randomUUID() })).rejects.toThrow('FINAL_CHECK_INPUT_UNAVAILABLE');
+  for (const kind of ['final', 'supplementary']) await expect(asFixtureTenant(f.runtime, x.a.tenantId, db => db.query(
+   "SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,$6,'practice-customer@example.invalid','2026-10-13'::date,$7)",
+   [x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID(),kind,'a'.repeat(64)]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  await expect(asFixtureTenant(f.runtime, x.a.tenantId, db => db.query(
+   "SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,'practice-customer@example.invalid','2026-10-13'::date)",
+   [x.a.tenantId,x.a.jobId,x.a.revisionId,x.a.input.actorMembershipId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1", [x.a.tenantId])).rows[0].n).toBe(0);
+ });
+
  it("PRE-Q5-09 a pre-lock signal missing its classification prevents a zero result",async()=>{
   const x=await sourceFixture(),evidence=await finalize(x);await runWithZero(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');
   const signal=randomUUID();await asFixtureTenant(f.shadow,x.a.tenantId,async db=>{
