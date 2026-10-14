@@ -44,6 +44,12 @@ export class RecoveryEligibilityV3Repository {
     FROM app.practice_feed_event e WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.movement_key=$3 AND e.identity='identified' AND e.event_kind IN('settled','pending')
     ORDER BY (e.event_kind='settled') DESC,e.created_at,e.id LIMIT 1`,[context.tenantId,job,definition.movement,input.caseId])).rows[0];
    if(!event&&!["F15","F21","F22"].includes(input.fixture))throw new RecoveryEligibilityV3Error("ELIGIBILITY_SOURCE_REQUIRED");
+   // F18 statutory interest is its own claim component with its own receipt (receipt-interest-120). It counts only when THAT receipt settled;
+   // the database guard derives the same fact from the same event and the audit entry binds the event it used.
+   const interest=input.fixture!=="F18"?undefined:(await db.$client.query<{id:string;settled:boolean}>(`SELECT e.id,(e.state='settled' AND NOT EXISTS(SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=e.tenant_id AND u.account_id=e.account_id AND u.movement_key=e.movement_key AND u.identity='unidentified'
+     AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate'))) settled
+    FROM app.practice_feed_event e WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.movement_key='receipt-interest-120' AND e.identity='identified' AND e.event_kind IN('settled','pending')
+    ORDER BY (e.event_kind='settled') DESC,e.created_at,e.id LIMIT 1`,[context.tenantId,job])).rows[0];
    const before=event?.settled_before_opening===true;
    if(input.fixture==="F20"&&!before)throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
    // Lock before deriving the fact, not only later in the INSERT trigger: a concurrent
@@ -68,14 +74,14 @@ export class RecoveryEligibilityV3Repository {
     }
    }
    const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
-    payer:payer.payer,settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});
+    payer:payer.payer,settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",...(input.fixture==="F18"?{interestSettlement:interest?.settled===true?"settled" as const:"pending" as const}:{}),paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});
    if(definition.lines[0]!.netPence>Number(c.claim_pence))throw new RecoveryEligibilityV3Error("ELIGIBILITY_FIXTURE_MISMATCH");
    const id=randomUUID(),revision=(latest?.revision??0)+1;
    const inserted=await db.$client.query<{result_hash:string}>(`INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') result_hash`,[id,context.tenantId,job,input.caseId,revision,c.revision,input.fixture,event?.id??null,actor.membershipId,input.commandId,payloadHash,JSON.stringify(result)]);
    for(const line of result.lines)await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),context.tenantId,job,input.caseId,id,line.kind,line.debtorType,line.netPence]);
    await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.membershipId}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:input.caseId,
-    payload:{references:{jobId:job,reviewId:id,commandId:input.commandId,...(event?{sourceEventId:event.id}:{}),...(payer.paying_party_binding_id?{payingPartyBindingId:payer.paying_party_binding_id}:{}),...(payer.payer_mark_id?{payerMarkId:payer.payer_mark_id}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.result_hash},classifications:{recovery:"financial"}}}]);
+    payload:{references:{jobId:job,reviewId:id,commandId:input.commandId,...(event?{sourceEventId:event.id}:{}),...(interest?{interestSourceEventId:interest.id}:{}),...(payer.paying_party_binding_id?{payingPartyBindingId:payer.paying_party_binding_id}:{}),...(payer.payer_mark_id?{payerMarkId:payer.payer_mark_id}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.result_hash},classifications:{recovery:"financial"}}}]);
    return {id,revision,caseRevision:c.revision,sourceEventId:event?.id??null,result};
   }).catch((error: unknown) => {
    // Known database pre-commit guards use the same typed refusal contract as the service.

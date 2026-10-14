@@ -131,7 +131,9 @@ export class RecoveryAllocationRepository {
         JOIN app.customer_invoice i ON(i.tenant_id,i.job_id,i.id)=(pay.tenant_id,pay.job_id,pay.invoice_id)
         WHERE pay.tenant_id=$1 AND pay.job_id=$2 AND e.state='settled' AND e.identity='identified')p),'[]'::jsonb) receipts,
       coalesce((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.created_at,c.id) FROM (SELECT c.*,er.status eligibility_status,er.eligible_net_pence evidenced_net_pence,er.policy_version,
-        er.id eligibility_id FROM app.recovery_case_current c LEFT JOIN LATERAL(SELECT * FROM app.recovery_eligibility_revision er
+        er.id eligibility_id,er.case_revision eligibility_case_revision,
+        (SELECT coalesce(max(ev.sequence),0) FROM app.recovery_case_event ev WHERE ev.tenant_id=c.tenant_id AND ev.case_id=c.id AND ev.event_type='claim_amended') amended_sequence
+        FROM app.recovery_case_current c LEFT JOIN LATERAL(SELECT * FROM app.recovery_eligibility_revision er
         WHERE er.tenant_id=c.tenant_id AND er.case_id=c.id ORDER BY er.revision DESC LIMIT 1)er ON true
         WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.claim_revision IS NOT NULL)c),'[]'::jsonb) cases,
       coalesce((SELECT jsonb_agg(to_jsonb(e) ORDER BY e.server_received_at,e.id) FROM (SELECT e.*,EXISTS(SELECT 1 FROM app.evidence_invalidation x WHERE x.tenant_id=e.tenant_id AND x.evidence_id=e.id) invalidated
@@ -272,6 +274,8 @@ export class RecoveryAllocationRepository {
     const evidence = snapshot.evidence.find(row => row.id === evidenceId);
     if (!evidence || (!reverse && evidence.invalidated)) fail("ALLOCATION_EVIDENCE_HELD");
     if (!reverse && (current.eligibility_status !== "approved" || current.evidenced_net_pence === null)) fail("ALLOCATION_EVIDENCE_HELD");
+    // Eligibility approved before a claim amendment is stale: its case revision must reach the revision the latest amendment created.
+    if (!reverse && Number(current.eligibility_case_revision) < Number(current.claim_revision) + Number(current.amended_sequence)) fail("ALLOCATION_EVIDENCE_HELD");
     const invoiceNet = Number(receipt.invoice_net_pence), invoiceGross = Number(receipt.invoice_gross_pence);
     const net = integral(multiplyExactPence(exactPence(BigInt(input.grossPence)), exactPence(BigInt(reverse ? original!.eligible_net_pence : invoiceNet), BigInt(reverse ? original!.gross_pence : invoiceGross))));
     const tax = subtract(input.grossPence, net);
@@ -312,6 +316,12 @@ export class RecoveryAllocationRepository {
   }
 
   private async lineFacts(db: TenantTransaction, context: VerifiedTenantContext, jobId: string, receipt: Row, input: RecoveryAllocationCommand, snapshot: Snapshot, original: Row | null | undefined, reversalSourceId: string | null): Promise<{ lines: Array<RecoveryDeemedLineAllocation & { reversesId: string | null }>; bindings: Row[]; remittanceContent: string | null; remittanceEvidenceId: string | null; remittanceBytes: string | null }> {
+    // Composition is what the invoice actually billed: its issued-line facts when it has them (a lock-bound final or supplementary
+    // invoice), otherwise the account revision's positive lines. Never every line of a cumulative account revision.
+    const issued = (await db.$client.query<{ line_id: string; net_pence: string; gross_pence: string; invoice_kind: string }>(`SELECT l.final_account_line_id line_id,l.net_pence,l.gross_pence,b.invoice_kind
+      FROM app.final_account_invoiced_line l JOIN app.final_account_invoice_binding b ON(b.tenant_id,b.job_id,b.invoice_id)=(l.tenant_id,l.job_id,l.invoice_id)
+      WHERE l.tenant_id=$1 AND l.job_id=$2 AND l.invoice_id=$3 AND l.net_pence>0`, [context.tenantId, jobId, receipt.invoice_id])).rows;
+    const issuedGross = new Map(issued.map(row => [row.line_id, Number(row.gross_pence)] as const));
     const rows = (await db.$client.query<Row>(`SELECT l.*,to_char((SELECT min(history.created_at) FROM app.final_account_line earlier
       JOIN app.final_account_revision history ON(history.tenant_id,history.job_id,history.id)=(earlier.tenant_id,earlier.job_id,earlier.final_account_revision_id)
       WHERE earlier.tenant_id=l.tenant_id AND earlier.job_id=l.job_id AND earlier.line_kind=l.line_kind AND earlier.source_id=l.source_id)
@@ -319,8 +329,23 @@ export class RecoveryAllocationRepository {
       i.net_pence invoice_net_pence,i.total_pence invoice_gross_pence FROM app.customer_invoice i
       JOIN app.final_account_revision r ON(r.tenant_id,r.job_id,r.id)=(i.tenant_id,i.job_id,i.final_account_revision_id)
       JOIN app.final_account_line l ON(l.tenant_id,l.job_id,l.final_account_revision_id)=(r.tenant_id,r.job_id,r.id)
-      WHERE i.tenant_id=$1 AND i.job_id=$2 AND i.id=$3 AND l.net_pence>0 ORDER BY l.ordinal,l.id`, [context.tenantId, jobId, receipt.invoice_id])).rows;
-    if (!rows.length || sum(rows.map(row => Number(row.net_pence))) !== Number(receipt.invoice_net_pence)) fail("ALLOCATION_SOURCE_REQUIRED");
+      WHERE i.tenant_id=$1 AND i.job_id=$2 AND i.id=$3 AND l.net_pence>0 AND ($4::uuid[] IS NULL OR l.id=ANY($4::uuid[])) ORDER BY l.ordinal,l.id`,
+    [context.tenantId, jobId, receipt.invoice_id, issued.length ? issued.map(row => row.line_id) : null])).rows;
+    if (!rows.length || sum(rows.map(row => Number(row.net_pence))) !== Number(receipt.invoice_net_pence)
+      || (issued.length && (rows.length !== issued.length || rows.some(row => issuedGross.get(row.id) === undefined)))) fail("ALLOCATION_SOURCE_REQUIRED");
+    // Legacy invoices carry no per-line gross: share the one group tax by largest remainder over line net (ties by line id), exactly as
+    // the lock-bound issuer displays it, so every line gross is a whole number of pence. Saved issued-line gross is used when present.
+    const legacyGross = new Map<string, number>();
+    if (!issued.length) {
+      const invoiceNet = BigInt(receipt.invoice_net_pence), tax = BigInt(receipt.invoice_gross_pence) - invoiceNet;
+      const parts = rows.map(row => ({ id: row.id as string, net: BigInt(row.net_pence), base: (tax * BigInt(row.net_pence)) / invoiceNet, remainder: (tax * BigInt(row.net_pence)) % invoiceNet }));
+      let leftover = tax - parts.reduce((total, part) => total + part.base, 0n);
+      for (const part of [...parts].sort((a, b) => (a.remainder === b.remainder ? (a.id < b.id ? -1 : 1) : a.remainder > b.remainder ? -1 : 1))) {
+        const extra = leftover > 0n ? 1n : 0n; leftover -= extra;
+        legacyGross.set(part.id, Number(part.net + part.base + extra));
+      }
+    }
+    const separate = issued.some(row => row.invoice_kind === "supplementary");
     if (!original) {
       const later = await db.$client.query(`SELECT 1 FROM app.recovery_case_allocation a JOIN app.practice_feed_event e
         ON(e.tenant_id,e.id)=(a.tenant_id,a.movement_id) JOIN app.practice_feed_event candidate ON(candidate.tenant_id,candidate.id)=(e.tenant_id,$4)
@@ -328,14 +353,20 @@ export class RecoveryAllocationRepository {
       if (later.rowCount) fail("ALLOCATION_REVISION_CONFLICT");
     }
     const prior = snapshot.lines.filter(row => row.invoice_id === receipt.invoice_id);
+    // A new receipt is allocated against the balances that stood when IT settled: a later credit or payment reversal is its own fact.
+    const effective = original ? null : new Set((await db.$client.query<{ id: string }>(`SELECT a.id FROM app.receipt_line_allocation a WHERE a.tenant_id=$1 AND a.job_id=$2 AND a.invoice_id=$3
+      AND(a.reversal_id IS NULL OR EXISTS(SELECT 1 FROM app.recovery_case_allocation_reversal rv WHERE rv.tenant_id=a.tenant_id AND rv.id=a.reversal_id
+      AND(CASE rv.source_kind WHEN 'payment_reversal' THEN(SELECT x.created_at FROM app.customer_payment_reversal x WHERE x.tenant_id=rv.tenant_id AND x.id=rv.source_id)
+       ELSE(SELECT x.created_at FROM app.customer_credit_note x WHERE x.tenant_id=rv.tenant_id AND x.id=rv.source_id) END)<=(SELECT c.created_at FROM app.practice_feed_event c WHERE c.tenant_id=a.tenant_id AND c.id=$4)))`,
+    [context.tenantId, jobId, receipt.invoice_id, receipt.movement_id])).rows.map(row => row.id));
     const facts: RecoveryReceiptFacts = {
       version: "recovery-receipt-facts.v1", environment: "synthetic_demo", compositionComplete: true, direction: original ? "reversal" : "receipt",
       receipt: { id: receipt.id, invoiceId: receipt.invoice_id, gross: serializeExactPence(exactPence(BigInt(input.grossPence))),
         effectiveAt: typeof receipt.movement_at === "string" ? receipt.movement_at : new Date(receipt.movement_at).toISOString(), sourceRef: reversalSourceId ?? receipt.movement_id },
-      explicit: null, separateInvoice: null,
+      explicit: null, separateInvoice: separate ? { invoiceId: receipt.invoice_id, sourceRef: receipt.invoice_id } : null,
       lines: rows.map(row => {
-        const net = Number(row.net_pence), gross = integral(multiplyExactPence(exactPence(BigInt(net)), exactPence(BigInt(row.invoice_gross_pence), BigInt(row.invoice_net_pence))));
-        const settled = sumExactPence(prior.filter(line => line.line_id === row.id && (!original || line.allocation_id === original.id)).map(line => rowFraction(line, "gross")));
+        const net = Number(row.net_pence), gross = issued.length ? issuedGross.get(row.id)! : legacyGross.get(row.id)!;
+        const settled = sumExactPence(prior.filter(line => line.line_id === row.id && (original ? line.allocation_id === original.id : effective!.has(line.id))).map(line => rowFraction(line, "gross")));
         const outstanding = original ? settled : sumExactPence([exactPence(BigInt(gross)), exactPence(-settled.numerator, settled.denominator)]);
         return { id: row.id, invoiceId: receipt.invoice_id, existedAt: row.existed_at, netPence: net, grossPence: gross, outstandingGross: serializeExactPence(outstanding) };
       }),
@@ -353,7 +384,7 @@ export class RecoveryAllocationRepository {
         JOIN app.evidence_upload u ON(u.tenant_id,u.id)=(e.tenant_id,e.upload_id)
         JOIN app.synthetic_evidence_original o ON(o.tenant_id,o.upload_id,o.object_version_id)=(e.tenant_id,e.upload_id,e.object_version_id)
         WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.id=$3 AND e.kind='original' AND u.state='verified'
-        AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation x WHERE x.tenant_id=e.tenant_id AND x.evidence_id=e.id)`, [context.tenantId, jobId, remittanceEvidenceId])).rows[0];
+        AND($4::boolean OR NOT EXISTS(SELECT 1 FROM app.evidence_invalidation x WHERE x.tenant_id=e.tenant_id AND x.evidence_id=e.id))`, [context.tenantId, jobId, remittanceEvidenceId, inheritedRemittance])).rows[0];
       if (!source || source.bytes.length > 100_000) fail("ALLOCATION_SOURCE_REQUIRED");
       remittanceContent = pngRemittance(source.bytes);
       remittanceBytes = source.bytes.toString("base64");

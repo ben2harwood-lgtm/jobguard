@@ -414,6 +414,11 @@ describe("MIGFIX-6 component settlement", () => {
     const cases = new RecoveryCaseRepository(practiceMaterialPool(runtime, auth.digest)), feed = new PracticeFeedRepository(runtime, "synthetic_demo");
     let revision = 0;
     const advance = async (movement: string, step = "settled") => {
+      // The F18 interest and compensation receipts are PRACTICE-FACTS-1 movements, advanced through the facts command.
+      if (movement === "receipt-interest-120" || movement === "receipt-compensation-70") {
+        const reply = await feed.factsCommand(context, actor, auth.digest, jobId, { version: "practice-facts-command.v1", commandId: randomUUID(), expectedRevision: revision, action: "advance", movement, step });
+        revision = reply.revision; return;
+      }
       const reply = await feed.command(context, actor, auth.digest, jobId, { version: "practice-feed-command.v1", commandId: randomUUID(), expectedRevision: revision, action: revision === 0 ? "connect" : "advance", ...(revision === 0 ? {} : { movement, step }) });
       revision = reply.revision;
     };
@@ -471,9 +476,10 @@ describe("MIGFIX-6 component settlement", () => {
     await expect(withTenant(practiceMaterialPool(runtime, h.auth.digest), context, async db => {
       await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
       const id = randomUUID(), commandId = randomUUID(), bytes = JSON.stringify(wrong);
-      const payloadHash = hash("raw-" + commandId), resultHash = hash(bytes);
-      await db.$client.query("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,2,$5,'F18',$6,$7,$8,$9,$10)",
+      const payloadHash = hash("raw-" + commandId);
+      const inserted = await db.$client.query<{ result_hash: string }>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,2,$5,'F18',$6,$7,$8,$9,$10) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') result_hash",
         [id, DEMO_TENANT_ID, h.jobId, h.c.id, h.c.revision, hFirst.sourceEventId, DEMO_MEMBERSHIP_ID, commandId, payloadHash, bytes]);
+      const resultHash = inserted.rows[0]!.result_hash;
       for (const [kind, net] of [["principal", 250_000], ["statutory_interest", 12_000], ["fixed_compensation", 7000]] as const)
         await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,'business',$7)", [randomUUID(), DEMO_TENANT_ID, h.jobId, h.c.id, id, kind, net]);
       await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${DEMO_MEMBERSHIP_ID}`, eventType: "recovery.eligibility.v3_reviewed", subjectType: "recovery_case", subjectRef: h.c.id,

@@ -51,3 +51,7 @@ Both approved constants and their UTF-8 hashes remain documented in the precedin
 
 
 The unused unpaid-bill reference constant remains exactly: “Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.” Length 163; UTF-8 SHA-256 `44e291a1874a9c230b704f972df2a547fcb4d67256d1c0f69114682decaf0e21`. This does not populate any F21 reason.
+
+## MIGFIX-6 (migration 0157) component settlement
+
+F18 statutory interest is its own claim component with its own receipt (`receipt-interest-120`). The qualifying principal for F18 is the principal receipt's figure plus the £120 interest only when THAT receipt is settled and not an unresolved duplicate: £2,500.00 principal alone gives 250,000p with the interest line at 0p and reason `Pending money cannot qualify`; once the interest receipt settles the next review gives 262,000p. Earlier reviews are immutable and unchanged. The repository passes `interestSettlement`, the SQL guard and the deferred line check derive the same fact from the same feed event, and the audit entry records `interestSourceEventId`. F19 (private individual) still counts no interest, and compensation is never part of the fee base.
