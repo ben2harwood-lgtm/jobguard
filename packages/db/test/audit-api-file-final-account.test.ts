@@ -91,6 +91,8 @@ class FinalAccountSql {
     // Set-up only (MIGFIX-3): invalidation is now a checked SQL routine whose answer is recorded in the same transaction. These
     // stand-ins give the same effect the scripted INSERT above gave; nothing the test expects changes.
     if (sql.includes("FROM app.proof_invalidation_response")) return rows([]);
+    // Set-up only (MIGFIX-3 r4): the application now checks the older command stores itself after the invalidation routine; none holds this id.
+    if (sql.includes("AS taken")) return rows([{ taken: false }]);
     if (sql.startsWith("SELECT app.invalidate_proof_command")) {
       const id = randomUUID(); this.invalidations.push({ id, evidence_id: values[3] });
       return rows([{ outcome: { replay: false, result: { evidenceId: values[3], reviewRequired: true }, invalidationId: id, auditEventId: randomUUID() } }]);
