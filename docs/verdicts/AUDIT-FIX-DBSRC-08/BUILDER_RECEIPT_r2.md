@@ -28,3 +28,8 @@ C. Lane lint: `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs
 - vitest (heavy-slot, 3 files): job-work-state-syntax 1 failed/9 passed (item A); scim + audit-fix-dbsrc-08 integration: fail at migrate (item B), so the decision-18 change is NOT yet exercised by a run.
 - pnpm typecheck / lint: not run.
 Not independently verified, not accepted.
+
+## Update (dispatcher ruling: fix item B)
+- packages/db/src/migrate.ts: BEGIN guard now `/^(?:\s*(?:--[^\n]*)?\n)*\s*BEGIN;/u` (tolerates leading blank and `--` comment lines). Own commit, with unit test "accepts a migration whose BEGIN follows leading comment and blank lines" in src/audit-fix-dbsrc-08.test.ts.
+- heavy-slot runs: (src/audit-fix-dbsrc-08.test.ts, test/audit-fix-dbsrc-08.integration.test.ts, test/job-work-state-syntax.test.ts) = 18 passed, 1 failed (item A, unchanged, not mine). test/scim-deactivation-access.integration.test.ts = 15/15 passed (decision-18 change exercised).
+- Items A and C left for the dispatcher/coordinator. Not independently verified, not accepted.
