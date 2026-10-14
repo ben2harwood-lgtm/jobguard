@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PurchaseOrderRepository } from "../src/purchase-order-repository.js";
 import type { ConsequentialCommand } from "../src/commands.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 // Executable repository regressions without sockets. This SQL double is not
 // PostgreSQL evidence; purchase-order-audit.integration.test.ts checks real SQL.
+const asOf = "2030-02-15";
+const day = (offset: number) => new Date(Date.parse(`${asOf}T00:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10);
+
 function fixture() {
   const tenant = randomUUID(), job = randomUUID(), requirement = randomUUID(), member = randomUUID();
   const rates = [{ version: 1, price_pence: 2000, price_unit: "each", pack_each_quantity: undefined as string | undefined,
-    effective_from: "2026-10-01", effective_to: "2026-10-31" }];
+    effective_from: day(0), effective_to: day(30) }];
   let state = { draft: "", revisions: [] as any[], placements: [] as any[], effects: [] as unknown[],
     authorizations: [] as unknown[], audits: [] as unknown[], receipts: [] as any[] };
   let before = structuredClone(state);
@@ -82,52 +85,61 @@ function fixture() {
 }
 
 describe("purchase-order blocking audit regressions", () => {
+  it("defaults the agreement comparison to server UTC today regardless of required date", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(`${asOf}T23:30:00Z`));
+    try {
+      const f = fixture();
+      await f.repo.revise(f.ctx, f.job, f.input);
+      expect(await f.repo.view(f.ctx, f.job)).toMatchObject({ orderNetPence: 20000, agreedNetPence: 20000, differencePence: 0 });
+    } finally { vi.useRealTimers(); }
+  });
   it("normalizes box agreement before purchase-order comparison", async () => {
     const f = fixture(); Object.assign(f.rates[0]!, { price_pence: 20000, price_unit: "box", pack_each_quantity: "10" });
-    await f.repo.revise(f.ctx, f.job, f.input);
+    await f.repo.revise(f.ctx, f.job, f.input, asOf);
     expect(await f.repo.view(f.ctx, f.job)).toMatchObject({ orderNetPence: 20000, agreedNetPence: 20000, differencePence: 0 });
   });
   it.each(["future", "expired"])("purchase-order comparison excludes %s rate revisions", async period => {
     const f = fixture();
     f.rates.push({ ...f.rates[0]!, version: 2, price_pence: 2500,
-      effective_from: period === "future" ? "2026-11-01" : "2026-09-01",
-      effective_to: period === "future" ? "2026-11-30" : "2026-09-30" });
-    await f.repo.revise(f.ctx, f.job, f.input);
+      effective_from: period === "future" ? day(31) : day(-30),
+      effective_to: period === "future" ? day(60) : day(-1) });
+    await f.repo.revise(f.ctx, f.job, f.input, asOf);
     expect(await f.repo.view(f.ctx, f.job)).toMatchObject({ agreedNetPence: 20000, differencePence: 0 });
   });
   it("rejects fresh placement of superseded revision", async () => {
-    const f = fixture(), first = await f.repo.revise(f.ctx, f.job, f.input), command = f.command(first);
-    await f.repo.revise(f.ctx, f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11", recipient: "other@fictional.invalid" });
+    const f = fixture(), first = await f.repo.revise(f.ctx, f.job, f.input, asOf), command = f.command(first);
+    await f.repo.revise(f.ctx, f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11", recipient: "other@fictional.invalid" }, asOf);
     const before = structuredClone(f.state());
     await expect(f.repo.place(f.ctx, f.job, command)).rejects.toThrow("PURCHASE_ORDER_AUTHORITY_STALE");
     expect(f.state()).toEqual(before);
   });
   it("refuses changed revision as replay of placed order", async () => {
-    const f = fixture(), first = await f.repo.revise(f.ctx, f.job, f.input);
+    const f = fixture(), first = await f.repo.revise(f.ctx, f.job, f.input, asOf);
     await f.repo.place(f.ctx, f.job, f.command(first));
-    const second = await f.repo.revise(f.ctx, f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11", recipient: "other@fictional.invalid" });
+    const second = await f.repo.revise(f.ctx, f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11", recipient: "other@fictional.invalid" }, asOf);
     const before = structuredClone(f.state());
     await expect(f.repo.place(f.ctx, f.job, f.command(second))).rejects.toThrow("PURCHASE_ORDER_AUTHORITY_STALE");
     expect(f.state()).toEqual(before);
     expect(f.state().placements[0].revision_id).toBe(first.id);
   });
   it("preserves an exact receipt replay after a later revision", async () => {
-    const f = fixture(), first = await f.repo.revise(f.ctx, f.job, f.input), command = f.command(first);
+    const f = fixture(), first = await f.repo.revise(f.ctx, f.job, f.input, asOf), command = f.command(first);
     const placed = await f.repo.place(f.ctx, f.job, command);
-    await f.repo.revise(f.ctx, f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11" });
+    await f.repo.revise(f.ctx, f.job, { ...f.input, commandId: randomUUID(), expectedRevision: 1, quantity: "11" }, asOf);
     const before = structuredClone(f.state());
     expect(await f.repo.place(f.ctx, f.job, command)).toEqual(placed);
     expect(f.state()).toEqual(before);
   });
   it("reuses only the same placed revision for a fresh exact approval", async () => {
-    const f = fixture(), order = await f.repo.revise(f.ctx, f.job, f.input);
+    const f = fixture(), order = await f.repo.revise(f.ctx, f.job, f.input, asOf);
     const placed = await f.repo.place(f.ctx, f.job, f.command(order));
     expect(await f.repo.place(f.ctx, f.job, f.command(order))).toEqual({ ...placed, reused: true });
     expect(f.state().placements).toHaveLength(1);
     expect(f.state().effects).toHaveLength(1);
   });
   it("holds revise's aggregate lock before placement identity, revision checks and audit", async () => {
-    const f = fixture(), order = await f.repo.revise(f.ctx, f.job, f.input);
+    const f = fixture(), order = await f.repo.revise(f.ctx, f.job, f.input, asOf);
     const reviseLock = f.statements.find(q => q.sql.includes("pg_advisory_xact_lock"))!.values[0];
     f.statements.length = 0;
     await f.repo.place(f.ctx, f.job, f.command(order));
@@ -140,7 +152,7 @@ describe("purchase-order blocking audit regressions", () => {
   });
   it("refuses an unknown pack size instead of recording a fabricated comparison", async () => {
     const f = fixture(); Object.assign(f.rates[0]!, { price_pence: 20000, price_unit: "box" });
-    await expect(f.repo.revise(f.ctx, f.job, f.input)).rejects.toThrow("MATERIAL_RATE_NOT_COMPARABLE");
+    await expect(f.repo.revise(f.ctx, f.job, f.input, asOf)).rejects.toThrow("MATERIAL_RATE_NOT_COMPARABLE");
     expect(f.state().revisions).toHaveLength(0);
   });
 });

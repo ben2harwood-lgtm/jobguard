@@ -14,7 +14,7 @@ All five initial cases were written before changing production code and run toge
 | Finding | Initial failure observed | Change and coverage |
 | --- | --- | --- |
 | BLOCKING 1 — pack agreement | Order 20,000p; agreed **200,000p**; difference **−180,000p**, instead of 20,000p/zero | Read the date-applicable pack conversion and reuse `normalizePackRate` before exact quantity multiplication. Unknown or inexact pack normalization fails closed. Unit and authenticated PostgreSQL regressions assert 20,000p/20,000p/zero. |
-| BLOCKING 2 — rate validity | Both future and expired version-2 cases returned agreed **25,000p**, difference **−5,000p**, instead of 20,000p/zero | Bind `requiredDate` as the comparison date. Filter rates by inclusive `effective_from`/`effective_to`; filter pack conversions by effective date. Two unit and two PostgreSQL cases cover future and expired higher versions. |
+| BLOCKING 2 — rate validity | Both future and expired version-2 cases returned agreed **25,000p**, difference **−5,000p**, instead of 20,000p/zero | Bind server UTC today as the comparison date (corrected in repair r1 below). Filter rates by inclusive `effective_from`/`effective_to`; filter pack conversions by effective date. Two unit and two PostgreSQL cases cover future and expired higher versions. |
 | BLOCKING 3 — superseded placement | Promise **resolved**, creating a placement/outbox, instead of rejecting | Placement takes revise's existing per-tenant/job `watchdog-command` advisory lock before command identity. Under that lock, require the requested revision to be the draft's latest revision. Assert `PURCHASE_ORDER_AUTHORITY_STALE` and unchanged effects after rollback. |
 | BLOCKING 4 — changed-content reuse | Promise **resolved with `reused: true`**, returning revision 1's effect for revision 2 | Existing placement must also have the requested `revision_id`. Reject a fresh changed revision; preserve original placement revision/hash, authorization/audit/outbox counts, and successful receipt replay after later edits. |
 
@@ -84,3 +84,46 @@ The dispatcher owns the actual commit, push, independent cross-model verdict and
 - **LATER 5:** ordinary `STALE_PURCHASE_ORDER_REVISION` propagates as a plain error and becomes HTTP 500 instead of typed 409. Not changed.
 - Report's five test-strengthening suggestions retained only: fractional/half-even/overflow core money cases; date/revision authority-field coverage; pack/future/expired agreement comparisons in the existing materials integration test; explicit successful second-click replay identity in `M2-1B-S`; genuine PostgreSQL replay-conflict cases instead of SQL doubles in the API registry. Existing tests unchanged; the new PostgreSQL file separately covers the issued blocking scenarios.
 
+
+
+## Repair round r1 — 14 October 2026, dispatcher 5
+
+Read the full independent Opus verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/audit-fix-api-file-purchase-order-opus-14f5eb8.md`: **REPAIR**, source inspection only, bound to `14f5eb8a8268356d1087c43ab007e166870ba065`. B1 is repaired in this working tree; this is not a fresh independent verdict or technical acceptance. Observed `origin/main`: `bd959b01e857de0ba7cbd3588bab84add7d0f493`. Earlier command results above describe the original build, not this repair.
+
+`PurchaseOrderRepository.revise` now defaults its optional server-side `asOf` argument to `new Date().toISOString().slice(0,10)`, matching `MaterialApplication.view`. The same date parameter still filters rate validity inclusively and pack-conversion effective dates. The delivery date remains part of the approved order artifact and is no longer used to choose the comparison rate. The optional argument is internal; no HTTP contract or client-controlled pricing date was added.
+
+The two new audit test files now derive rate windows from their comparison date: a fixed future UTC date with an explicit repository argument for unit tests, and server UTC today for the authenticated application/PostgreSQL cases. Delivery dates and every existing assertion, refusal, expected money/count/hash and test name are unchanged. One additional unit test fakes only Date at 23:30 UTC and proves the default uses UTC today despite a delivery date years earlier. The updated ten-case unit file failed against the reviewed head before the repository change, then passed 10/10 after it. SQL doubles do not prove PostgreSQL behavior.
+
+Scope remains the existing lane; this repair changes only the repository, its two new audit test files and this receipt. No lane registration edit, schema/migration, grant, tax/fee policy, provider, UI, release gate or operational alert change. `apps/api/src/auth/context-boundary.test.ts` remains untouched. Invariants affected: agreed-price date consistency and exact pack money (AGENTS §5.5); prior current-authority, replay, audit and lock guarantees are preserved (§§5.3, 5.4, 5.7). Existing revisions are not rewritten; rollback/forward-fix remains code-only. Opus later items L1–L6 are outside this authorized blocking repair.
+
+Dependencies were supplied; no installation or download command was run. The global pnpm version probe hung and was stopped (exit 130); all substantive checks use the existing cached pnpm 10.28.1 wrapper with `COREPACK_ENABLE_NETWORK=0`. Node remains 24.17.0 versus the unchanged 24.15.0 repository pin. No Git write command, commit, push, merge or PR was performed.
+
+Repair check results are recorded below. PostgreSQL, migration and browser suites remain mandatory in GitHub CI after dispatcher push because this sandbox cannot bind localhost or start PostgreSQL. The root `pnpm test` is not invoked here because it includes those suites; available source/unit checks run explicitly. No skip or timeout setting was changed. The dispatcher owns commit/push, a fresh independent verdict bound to the repair commit, and separate acceptance. The intended conventional commit message is written to `/private/tmp/jg-msg-audit-fix-api-file-purchase-order.txt`.
+
+
+### Repair r1 executed checks
+
+All substantive pnpm commands used the cached 10.28.1 wrapper and `COREPACK_ENABLE_NETWORK=0`. Logs: `/private/tmp/jg-po-r1-*.log`; check-status files: `/private/tmp/jg-po-r1-*.exit` where captured. No live provider or database/browser execution is claimed.
+
+| Command | Repair result |
+| --- | --- |
+| `pnpm --filter @jobguard/db exec vitest run test/purchase-order-audit.test.ts --maxWorkers=1` | Before repository repair: exit 1, all ten fail on delivery-date lookup. After repair: exit 0, 10/10 pass. Existing nine assertions are preserved; the tenth case covers the UTC-today default. |
+| `pnpm --filter @jobguard/db exec vitest list test/purchase-order-audit.integration.test.ts` | Exit 0; all five cases listed. Collection only, no hooks/database execution. |
+| `pnpm typecheck` | Exit 0; all seven package checks pass. |
+| `pnpm --filter @jobguard/db exec tsc -p /private/tmp/jg-po-r1-tests-tsconfig.json` | Exit 0; separately compiles both modified audit test files with the repository's strict settings, no emit. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 0; root guards, actual lane check and all seven package lint checks pass. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; registered task branch, exact five-path lane and merge-base comparison against observed `origin/main`. |
+| `node tools/core-purity-lint.mjs && node tools/money-arithmetic-lint.mjs && node tools/commercial-boundary-lint.mjs` | Exit 0. |
+| `node --test tools/*.test.mjs` | Exit 0; 85/85 pass. These tests write only their scratch Git fixtures, not this repository's Git state. |
+| `pnpm build` | Completed successfully: Turbo reports seven successful tasks; production Next build generated 31 pages. Existing CSS, inferred workspace-root and sandbox cache/telemetry IO warnings remain. A redundant second invocation to capture status was stopped with Ctrl-C, exit 130, after it began rebuilding rather than using cache; it is not counted as a second pass. |
+| `pnpm openapi:check` | Exit 1: tsx CLI IPC listener gets `listen EPERM` in this sandbox. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0: the same OpenAPI check without tsx CLI IPC. OpenAPI unchanged. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1` | Exit 0; 81 files, 2,445/2,445 pass. Source selection avoids generated dist test duplication. |
+| `pnpm turbo run test --filter=@jobguard/config --filter=@jobguard/storage --filter=@jobguard/ai` | Exit 0; config 2, storage 4, AI fixture 80 pass (Turbo includes cached tasks). No live-model evaluation. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=1` | Exit 0; 33 files, 784/784 pass. |
+| `pnpm --filter @jobguard/api exec vitest run src --exclude src/shadow-isolation.application.test.ts --exclude src/final-account-lock.isolation.test.ts --exclude '**/*.http.test.ts' --exclude src/health.test.ts --exclude src/auth/sso/action-paths.test.ts --maxWorkers=1` | Exit 0; 63 files, 1,551/1,551 pass, including the unchanged protected context-boundary test. Listener/database files remain required in CI. |
+| `pnpm --filter @jobguard/db exec vitest run src test/purchase-order-audit.test.ts test/contractor-session-context.test.ts test/recovery-case-join.test.ts test/recovery-case-outcome.test.ts test/recovery-message-repository.test.ts test/site-extra-evidence-compatibility.test.ts test/audit-api-capture.test.ts test/verify-audit-export-cli.test.ts test/verify-evidence-pack-cli.test.ts --maxWorkers=1` | Exit 1: 178/179 pass. Sole failure is unchanged `audit-checkpoint-handoff.test.ts` `[C-OPS-1]` transitive source-scan test exceeding its 5,000 ms timeout. Purchase-order cases pass. |
+| `pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1` | Two unchanged retries both exit 1: 55/56 pass each; same source-scan timeout. Final retry after other checks finished still takes about seven seconds. This remains an unresolved local check, not a pass. No assertion or timeout was changed. |
+| `git diff --check`; read-only HEAD comparisons and assertion/filter preservation checks | Exit 0. Exactly four repair paths changed. Both protected context test and existing `M2-1B-S` browser spec are byte-identical to reviewed HEAD. All earlier audit-test assertions remain; SQL validity and pack filters are byte-identical. |
+
+**Remaining hold:** full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, standard `pnpm openapi:check`, the four PostgreSQL regression files and `M2-1B-S` in both browser projects listed above must pass in GitHub CI after dispatcher push. The unchanged audit source-scan timeout must also pass or receive a separately authorized repair; this lane does not weaken or bypass it. The repaired commit needs a fresh independent recorded verdict and separate acceptance. No acceptance is claimed here.

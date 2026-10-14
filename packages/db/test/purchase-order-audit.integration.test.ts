@@ -40,6 +40,9 @@ afterAll(async () => {
 });
 
 async function fixture(pack = false) {
+  // Match the applications' server UTC date; delivery date remains independent.
+  const asOf = new Date().toISOString().slice(0, 10);
+  const day = (offset: number) => new Date(Date.parse(`${asOf}T00:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10);
   const token = await issuePracticeSession(runtime), auth = await authenticatePracticeSession(runtime, token);
   const job = (await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",
     [DEMO_TENANT_ID, auth.digest])).rows[0].id as string;
@@ -49,7 +52,7 @@ async function fixture(pack = false) {
   const materials = new MaterialApplication(runtime, token), orders = new PurchaseOrderApplication(runtime, token);
   const rate = { version: "material-rate-command.v1", merchantName: `Fictional supplier ${randomUUID()}`, sku: "AUDIT-1",
     description: "Synthetic item", pricePence: pack ? 20000 : 2000, priceUnit: pack ? "box" : "each", taxBasis: "net",
-    effectiveFrom: "2026-10-01", effectiveTo: "2026-10-31", sourceLabel: "synthetic audit fixture", expectedVersion: 0,
+    effectiveFrom: day(0), effectiveTo: day(30), sourceLabel: "synthetic audit fixture", expectedVersion: 0,
     ...(pack ? { packEachQuantity: "10" } : {}) };
   const saved = await materials.addRate(rate);
   const requirement = await materials.addRequirement(job, { version: "material-requirement-command.v1", scopeItemId: scope,
@@ -62,7 +65,7 @@ async function fixture(pack = false) {
       subjectType: "purchase_order", subjectRef: order.id, action: { actionType: "purchase_order.simulate", recipient,
         contentHash: order.authorityHash, aggregateRevision: order.revision, amountPence: order.orderNetPence,
         currency: "GBP", policyVersion: "synthetic-po.v1", expiresAt: "2099-01-01T00:00:00Z" } } });
-  return { job, materials, orders, input, rate, command };
+  return { job, materials, orders, input, rate, command, day };
 }
 
 async function effects() {
@@ -83,8 +86,8 @@ describe("purchase-order audit with authenticated applications and PostgreSQL", 
   it.each(["future", "expired"])("purchase-order comparison excludes %s rate revisions", async period => {
     const f = await fixture();
     await f.materials.addRate({ ...f.rate, expectedVersion: 1, pricePence: 2500,
-      effectiveFrom: period === "future" ? "2026-11-01" : "2026-09-01",
-      effectiveTo: period === "future" ? "2026-11-30" : "2026-09-30" });
+      effectiveFrom: period === "future" ? f.day(31) : f.day(-30),
+      effectiveTo: period === "future" ? f.day(60) : f.day(-1) });
     await f.orders.revise(f.job, f.input);
     expect((await f.orders.view(f.job)).order).toMatchObject({ agreedNetPence: 20000, differencePence: 0 });
   });
