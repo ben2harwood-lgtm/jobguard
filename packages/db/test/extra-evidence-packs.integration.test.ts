@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { buildExtraSourcePack, inspectExtraSourcePack, residentConfirmationStatementV1 } from "@jobguard/core";
-import { contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { loadExtraEvidenceSources } from "../src/extra-evidence-pack-sources.js";
 import { assembleExtraSourcePack } from "../src/extra-evidence-pack-repository.js";
 import { approvalFixture, cluster, storage, ownerTx, type Cluster } from "./extra-approval-fixtures.js";
@@ -10,7 +10,7 @@ beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await 
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 it("E5-18 extra sources and shared verifier — issued sources only", async () => {
   const f = await approvalFixture(c);
-  const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, f.session);
+  const context: VerifiedTenantContext = await f.ctx;
   const loaded = await withTenant(c.runtime, context, db => loadExtraEvidenceSources(db, { version: "extra-source-query.v1", jobId: f.jobId, extraId: f.captured.variationId }));
   const captured = await assembleExtraSourcePack(loaded, storage);
   await expect(assembleExtraSourcePack(loaded, { ...storage, readExactVersion: async () => { throw new Error("exact version unavailable"); }, createUploadUrl: storage.createUploadUrl, createDownloadUrl: storage.createDownloadUrl, deleteExactVersion: storage.deleteExactVersion })).rejects.toMatchObject({ code: "EXTRA_SOURCE_INVALID" });
@@ -32,8 +32,8 @@ it("E5-18 extra sources and shared verifier — issued sources only", async () =
 });
 it("E5-19 pending rejected foreign and wrong-version source controls refuse", async () => {
   const f = await approvalFixture(c);
-  const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, f.session);
-  for (const sql of ["UPDATE app.evidence_upload SET state='pending' WHERE tenant_id=$1 AND id=$2", "UPDATE app.evidence_upload SET state='rejected' WHERE tenant_id=$1 AND id=$2", "UPDATE app.evidence_object SET job_id=$3 WHERE tenant_id=$1 AND id=$2", "UPDATE app.evidence_object SET object_version_id='wrong-version' WHERE tenant_id=$1 AND id=$2"]) {
+  const context: VerifiedTenantContext = await f.ctx;
+  for (const sql of ["UPDATE app.evidence_upload SET state='pending', server_verified_at=NULL WHERE tenant_id=$1 AND id=$2", "UPDATE app.evidence_upload SET state='rejected', rejection_code='SYNTHETIC' WHERE tenant_id=$1 AND id=$2", "UPDATE app.evidence_object SET job_id=$3 WHERE tenant_id=$1 AND id=$2", "UPDATE app.evidence_object SET object_version_id='wrong-version' WHERE tenant_id=$1 AND id=$2"]) {
     await expect(withTenant(c.admin, context, async db => {
       await db.$client.query("SET LOCAL session_replication_role=replica");
       // Specimen rolled back when the source check refuses; never visible to a runtime success path.
@@ -44,7 +44,7 @@ it("E5-19 pending rejected foreign and wrong-version source controls refuse", as
 });
 it("E5-19 evidence lifecycle and confirmation limits — issued sources only", async () => {
   const f = await approvalFixture(c);
-  const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, f.session);
+  const context: VerifiedTenantContext = await f.ctx;
   const query = { version: "extra-source-query.v1", jobId: f.jobId, extraId: f.captured.variationId };
   await expect(withTenant(c.runtime, context, db => loadExtraEvidenceSources(db, { ...query, jobId: f.otherJob }))).rejects.toMatchObject({ code: "EXTRA_SOURCE_NOT_FOUND" });
   const priced = await withTenant(c.runtime, context, db => loadExtraEvidenceSources(db, { ...query, extraId: f.priced.variationId }));
@@ -54,7 +54,7 @@ it("E5-19 evidence lifecycle and confirmation limits — issued sources only", a
 });
 it("E5-18 tampered stored sources are detected through persisted hashes", async () => {
   const f = await approvalFixture(c);
-  const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, f.session);
+  const context: VerifiedTenantContext = await f.ctx;
   const db = await c.admin.connect();
   try {
     await db.query("BEGIN"); await db.query("SET LOCAL session_replication_role=replica");

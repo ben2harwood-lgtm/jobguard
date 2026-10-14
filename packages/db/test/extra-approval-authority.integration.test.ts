@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { approvalWorld, cluster, insertBinding, insertPack, ownerTx, bindingCount, type Cluster } from "./extra-approval-fixtures.js";
 import { loadExtraApprovalBinding } from "../src/extra-approval-repository.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
@@ -18,7 +18,7 @@ it("E5-24 partial catalog RLS and absent business writer boundary", async () => 
     const policy = (await c.admin.query("SELECT cmd,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1", [table])).rows;
     expect(policy).toHaveLength(1); expect(policy[0]!.cmd).toBe("ALL"); expect(policy[0]!.qual).toContain("tenant_id"); expect(policy[0]!.with_check).toContain("tenant_id");
     for (const operation of [`INSERT INTO app.${table}(tenant_id,id,job_id,variation_id) VALUES($1,$2,$3,$4)`, `UPDATE app.${table} SET id=id WHERE tenant_id=$1`, `DELETE FROM app.${table} WHERE tenant_id=$1`, `TRUNCATE app.${table}`, `ALTER TABLE app.${table} DISABLE TRIGGER ALL`]) {
-      const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, world.a.session);
+      const context: VerifiedTenantContext = await world.a.ctx;
       await expect(withTenant(c.runtime, context, async db => db.$client.query(operation, operation.includes("$4") ? [world.a.p.tenantId, randomUUID(), world.a.jobId, world.a.priced.variationId] : operation.includes("$1") ? [world.a.p.tenantId] : []))).rejects.toMatchObject({ code: "42501" });
     }
   }
@@ -32,16 +32,16 @@ it("E5-09 partial source binding preserves the origin-bound SoR row and basis", 
   const sourceProof = await proofBefore(c.admin, ["app.extra_origin", "app.extra_sor_revision", "app.extra_pricing_basis", "app.variation"]);
   const binding = await insertBinding(c, f); await insertBinding(c, world.b); await insertPack(c, f);
   expect(await proofDifferences(c.admin, sourceProof)).toEqual({ rows: [], types: [] });
-  const fresh = new Pool({ ...c.runtime.options, max: 1 });
+  const fresh = new Pool({ ...c.config, database: "jobguard_synthetic_demo", user: "ent4b_login", max: 1 });
   try {
-    const freshContext: VerifiedTenantContext = await contractorSessionContext(fresh, f.session);
+    const freshContext: VerifiedTenantContext = await f.ctx;
     const stored = await withTenant(fresh, freshContext, db => loadExtraApprovalBinding(db, { version: "extra-binding-query.v1", jobId: f.jobId, extraId: f.priced.variationId, bindingId: binding.id }));
     expect(JSON.parse(stored).source_revision_id).toBe(f.source.id);
     expect(JSON.parse(stored).source_hash).toBe(f.source.content_hash);
   } finally { await fresh.end(); }
   expect(await bindingCount(c, f)).toBe(1); expect(await bindingCount(c, world.b)).toBe(1);
   expect((await c.admin.query("SELECT row_to_json(t)::text bytes FROM app.extra_sor_revision t WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, f.priced.variationId])).rows).toEqual(before);
-  const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, f.session);
+  const context: VerifiedTenantContext = await f.ctx;
   await withTenant(c.runtime, context, async db => { expect((await db.$client.query("SELECT id FROM app.extra_approval_revision_binding WHERE tenant_id=$1", [world.b.p.tenantId])).rows).toEqual([]); });
   const client = await c.runtime.connect();
   try {

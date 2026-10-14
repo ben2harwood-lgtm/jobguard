@@ -1,6 +1,6 @@
 // ENT-5 owner specimens are structural checks only; there is no issued approval writer.
 import { randomUUID } from "node:crypto";
-import { SiteExtraRepository, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { SiteExtraRepository, withTenant, type VerifiedTenantContext } from "../src/index.js";
 import { cluster, siteFixture, ownerTx, smallTrack } from "./site-extra-fixtures.js";
 import type { Cluster } from "./extra-fixtures.js";
 import { photo, shownFor, v3, storage } from "./site-extra-evidence-fixtures.js";
@@ -8,14 +8,13 @@ export { cluster, ownerTx, storage };
 export type { Cluster };
 export async function approvalFixture(c: Cluster) {
   const f = await siteFixture(c);
-  const session = (await c.admin.query("SELECT session_id FROM control_plane.contractor_practice_session WHERE tenant_id=$1", [f.p.tenantId])).rows[0]!.session_id as string;
-  const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, session);
+  const context: VerifiedTenantContext = await f.ctx;
   const repo = new SiteExtraRepository(c.runtime);
   const priced = await repo.logSorSiteExtra(context, f.members.supervisor.member, { commandId: randomUUID(), jobId: f.jobId, sorCode: "CLEAR-GUTTER", quantity: "100", note: "Fictional ENT5 SoR" });
   const original = await photo(c, { ctx: f.ctx, jobId: f.jobId });
   const captured = await repo.logSiteExtra(context, f.members.supervisor.member, v3(f, { photoEvidenceId: original.id, shownContentSha256: shownFor(f, original.sha256) }));
   const source = (await c.admin.query("SELECT id,content_hash,command_id,raising_membership_id,net_pence FROM app.extra_sor_revision WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, priced.variationId])).rows[0]!;
-  return { ...f, session, priced, captured, source, original };
+  return { ...f, priced, captured, source, original };
 }
 export type ApprovalFixture = Awaited<ReturnType<typeof approvalFixture>>;
 export async function approvalWorld(c: Cluster) {
@@ -36,6 +35,6 @@ export async function insertPack(c: Cluster, f: ApprovalFixture) {
 }
 /** Fresh connection from the real pool, existing persisted session bridge passed whole. No new context maker. */
 export async function bindingCount(c: Cluster, f: ApprovalFixture) {
-  const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, f.session);
+  const context: VerifiedTenantContext = await f.ctx;
   return withTenant(c.runtime, context, async db => (await db.$client.query("SELECT count(*)::int n FROM app.extra_approval_revision_binding")).rows[0]!.n as number);
 }
