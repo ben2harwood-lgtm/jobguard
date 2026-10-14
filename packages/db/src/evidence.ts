@@ -1,6 +1,7 @@
 import { claimCommandIdentity, commandIdFor, findStoredResult, readCommandIdentity, requestHashFor, requireLiveJob, storeCommandResult } from "./watchdog.js";
 import { randomUUID } from "node:crypto";
 import { inflateSync } from "node:zlib";
+import sharp from "sharp";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { sha256, type PrivateVersionedStorage, type StoredObject } from "@jobguard/storage";
@@ -25,16 +26,26 @@ export class EvidenceError extends Error {
   }
 }
 
-/** Rejects signatures/header-only files and structurally corrupt synthetic images. */
-export function hasCompleteImage(bytes: Uint8Array, contentType: string): boolean {
+/** JPEG/WebP require pixel decoding: signatures alone cannot establish image evidence. */
+export async function hasCompleteImage(bytes: Uint8Array, contentType: string): Promise<boolean> {
   if (contentType === "image/png") {
     const b=Buffer.from(bytes); if(b.length<57||!b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return false;
     let offset=8,ihdr=false,iend=false;const compressed:Buffer[]=[];
     try{while(offset+12<=b.length){const length=b.readUInt32BE(offset);const type=b.toString("ascii",offset+4,offset+8);const end=offset+12+length;if(end>b.length)return false;const data=b.subarray(offset+8,offset+8+length);if(type==="IHDR")ihdr=length===13&&data.readUInt32BE(0)>0&&data.readUInt32BE(4)>0;if(type==="IDAT")compressed.push(data);if(type==="IEND"){iend=length===0&&end===b.length;break;}offset=end;}if(!ihdr||!iend||!compressed.length)return false;inflateSync(Buffer.concat(compressed));return true;}catch{return false;}
   }
-  if(contentType==="image/jpeg")return bytes.length>4&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes.at(-2)===0xff&&bytes.at(-1)===0xd9;
-  if(contentType==="image/webp")return bytes.length>12&&Buffer.from(bytes).toString("ascii",0,4)==="RIFF"&&Buffer.from(bytes).toString("ascii",8,12)==="WEBP";
-  return false;
+  const formats: Readonly<Record<string, string>> = { "image/jpeg": "jpeg", "image/webp": "webp" };
+  const expectedFormat = formats[contentType];
+  if (!expectedFormat) return false;
+  try {
+    // Bound decompressed work independently of the upload byte limit. Never return decoded
+    // pixels to callers or replace the immutable original with a re-encoded derivative.
+    const image = sharp(Buffer.from(bytes), { failOn: "warning", limitInputPixels: 40_000_000 });
+    if ((await image.metadata()).format !== expectedFormat) return false;
+    await image.raw().toBuffer();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 type UploadRow = { id:string; tenant_id:string; job_id:string; scope_item_id:string|null; object_key:string;
@@ -83,7 +94,7 @@ export class EvidenceService {
     try { object=await this.storage.readExactVersion(prepared.upload.object_key,input.objectVersionId); }
     catch { await this.reject(context,input.uploadId,"missing_version"); throw new EvidenceError("OBJECT_INVALID","missing_version"); }
     const rejection=object.versionId!==input.objectVersionId ? "missing_version" : object.byteLength>Number(prepared.upload.maximum_bytes) ? "size_exceeded" :
-      object.contentType!==prepared.upload.expected_content_type ? "wrong_type" : sha256(object.bytes)!==prepared.upload.expected_sha256.trim() ? "wrong_hash" : !hasCompleteImage(object.bytes,object.contentType)?"corrupt_image":null;
+      object.contentType!==prepared.upload.expected_content_type ? "wrong_type" : sha256(object.bytes)!==prepared.upload.expected_sha256.trim() ? "wrong_hash" : !(await hasCompleteImage(object.bytes,object.contentType))?"corrupt_image":null;
     if(rejection){await this.reject(context,input.uploadId,rejection);throw new EvidenceError("OBJECT_INVALID",rejection);}
     return withTenant(this.pool,context,async db=>{
       const target=(await db.$client.query<{job_id:string}>("SELECT job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[context.tenantId,input.uploadId])).rows[0]; if(!target)throw new EvidenceError("UPLOAD_NOT_FOUND"); await requireLiveJob(db,target.job_id);
