@@ -94,7 +94,8 @@ class BillingSql {
           const invoice = { id: this.fixture.invoiceId, total_pence: 12000, net_pence: 10000, tax_pence: 2000,
             invoice_number: "SYN-2026-000001", issued_on: "2026-10-13", tax_policy_version: "candidate_m1_standard_v1",
             source_hash: "b".repeat(64), pdf_sha256: "c".repeat(64), credited, credited_pence: credited,
-            credit_pence: credited, receipt_pence: this.payments.reduce((n, p) => n + p.amount_pence, 0), reversed_pence: 0 };
+            credit_pence: credited, receipt_pence: this.payments.reduce((n, p) => n + p.amount_pence, 0), reversed_pence: 0,
+            credits: this.credits.map(c => ({ id: c.id, credit_number: c.credit_number, net_pence: c.net_pence, tax_pence: c.tax_pence, total_pence: c.total_pence, reason: c.reason, pdf_sha256: c.pdf_sha256, approved_at: c.approved_at, source_invoice_hash: c.source_invoice_hash })) };
           if (this.pause && sql.includes(" credited ")) {
             if (connection === 1) { this.firstRead.resolve(); await this.releaseFirst.promise; }
             if (connection === 2) this.secondArrived.resolve();

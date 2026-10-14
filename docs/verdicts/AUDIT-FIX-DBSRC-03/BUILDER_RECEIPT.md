@@ -127,3 +127,6 @@ pnpm --filter @jobguard/web test:e2e --project=mobile-360 --project=desktop cust
 Full API coverage must restore the excluded HTTP/database suites. C-OPS-1 still needs an unchanged successful run or a separately issued repair; this task does not alter its limit or assertion. No new live-model evaluation is applicable because the repair changes no AI behavior/schema. G1/provider/commercial/tax approvals and production capabilities remain under their existing gates.
 
 Intended conventional commit subject/body: `/private/tmp/jg-msg-audit-fix-dbsrc-03.txt`. Builder work is ready for dispatcher review, but technical acceptance remains HOLD until the required runtime evidence and two independent RED checks plus separate acceptance are recorded against the final commit.
+
+- Post-merge repair: updated only the SQL double in `packages/db/test/audit-dbsrc-03.test.ts` so its `FROM app.customer_invoice` branch returns the `credits` column main commit 2c0b279c now reads in `creditView`; assertions and test names unchanged.
+- Evidence: audit-dbsrc-03.test.ts 8/8 passed; turbo typecheck --force exit 0; turbo lint --force exit 0; agent-lane-boundary-lint (LANE_BASE_REF=origin/main) exit 0.
