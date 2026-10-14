@@ -189,6 +189,33 @@ describe("SV5PRE authoritative completion", () => {
   await asFixtureTenant(f.shadow,x.a.tenantId,async db=>{await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4)",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.cutoff]);await db.query("INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic.v1','synthetic.v1')",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.id,x.manifest.lockId,x.manifest.cutoff,x.executionId]);});
   await expect(x.repo.publish(x.a.context,{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_RESULT_UNAVAILABLE');
  });
+ it("r11 concurrent evidence writers keep compatible live locks and exclude final locking until both commit", async () => {
+  const a=await seedAccount(f.admin),repo=await prepareLock(f,a);
+  const writers=await Promise.all([f.runtime.connect(),f.runtime.connect()]),probe=await f.admin.connect();
+  try {
+   for(const db of writers) {
+    await db.query("BEGIN");
+    await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+    await db.query("SET LOCAL lock_timeout='1s'");
+    await db.query("SELECT app.require_watchdog_live($1)",[a.jobId]);
+   }
+   // Both already hold the merged live guard's SHARE lock. An UPDATE upgrade cannot succeed here.
+   await Promise.all(writers.map(db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')",[a.tenantId,a.jobId,randomUUID()])));
+   const exclusive=()=>probe.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE NOWAIT",[a.tenantId,a.jobId]);
+   await expect(exclusive()).rejects.toMatchObject({code:'55P03'});
+   await writers[0]!.query("COMMIT");
+   await expect(exclusive()).rejects.toMatchObject({code:'55P03'});
+   await writers[1]!.query("COMMIT");
+   expect((await exclusive()).rowCount).toBe(1);
+   await repo.lock(a.context,a.input);
+   const manifest=await new FinalCheckCompletionRepository(f.shadow).freeze(a.context,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'synthetic.v1',reconciliationVersion:'synthetic.v1'});
+   expect(manifest.sourceCount).toBe(2);
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
+  } finally {
+   for(const db of writers) { await db.query("ROLLBACK"); db.release(); }
+   probe.release();
+  }
+ });
  it("PRE-Q5-13 completion and issue serialize around authoritative publication",async()=>{
   const a=await locked(),repo=new FinalCheckCompletionRepository(f.shadow),m=await repo.freeze(a.context,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'synthetic.v1',reconciliationVersion:'synthetic.v1'}),runId=randomUUID();await repo.bindEmptyRun(a.context,{version:'final-check-empty-run.v1',jobId:a.jobId,manifestId:m.id,runId,executionId:randomUUID()});
   const results=await Promise.allSettled([repo.publish(a.context,{version:'final-check-publication.v1',jobId:a.jobId,runId,checkId:randomUUID()}),new FinalAccountLockRepository(f.runtime).issueInvoice(a.context,{jobId:a.jobId,actorMembershipId:a.input.actorMembershipId,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:'a'.repeat(64),invoiceKind:'final',recipient:'practice-customer@example.invalid',issuedOn:'2026-10-13'})]);expect(results[0].status).toBe('fulfilled');if(results[1].status==='rejected')expect(results[1].reason).toMatchObject({code:'FINAL_CHECK_NOT_COMPLETE'});

@@ -1,3 +1,175 @@
+## Repair r11 — PostgreSQL replay and fixture prerequisites (14 October 2026, dispatcher 5)
+
+PR #189; task SV5PRE; unchanged HEAD `889f3c50ed4a3dea079eeed2b06ffe00c1645081`, branch `codex/sandbox/sv5pre`. Working-tree repair only. No Git-writing command, dependency installation/download, commit, push, self-acceptance or independent verdict. Dispatcher owns commit/push and the exact-commit CI/verdict/acceptance loop. This section supersedes earlier round status; historical receipts remain below.
+
+Read the supplied CI log in full, including failure bodies and duplicate annotations, using full-file and chunked/structured extraction: `/Users/benharwood/.local/share/full-steam/jg-runs/sv5pre-ci-failed-38504871752.log`, **3,085 lines / 436,731 bytes**, SHA-256 `81d982665429a2771ed0d875fac3cca3ea7ec8ef3d689211a09b5f964389a99d`. Run **38504871752 is RED**: DB **11 failed / 132 passed files; 53 failed / 1,937 passed / 2 skipped tests**, plus UIWIRE-11's setup failure. Root Turbo: 12/13 successful, `@jobguard/db#test` and pnpm exit 1. API 76 files / 1,721 tests pass, including all 22 shadow-isolation tests and three actual Graphile execution tests. Those are evidence for 889f3c5, not an r11 database rerun.
+
+Re-read AGENTS, the receipt's current/historical orders, BUILD_PLAN SV-4/SV-5 and both final-account/completion contracts. SV5PRE explicitly closes the old final-issue path for new effects. The accepted completion guard remains on both invoice routines, including supplementary issue; no production legacy exception is introduced. No change to tenant checks, session authentication, invoice approval/revalidation, private proof names, schemas, manifest hashes or signal isolation.
+
+### First actual failure in every file, and repair
+
+| File | First error / location | Cause and repair |
+| --- | --- | --- |
+| UIWIRE-10 | First issue: 3D000, `publishFixtureCompletion` via `prepareInvoicePrerequisites` | `admin.options` omits database when its original caller relies on pg's default. Changing user to the temporary shadow login makes pg default database to that login name. No teardown caused these 22 missing-database failures. The piece-owned helper reads `current_database()` and specifies it on its new pool. |
+| UIWIRE-11 | beforeAll: same 3D000 helper path | Same helper repair. Both unchanged test bodies were skipped after setup failed. |
+| UIWIRE-12 | `projects partial, full and reversed receipts exactly without destroying history`: same 3D000 | Same helper repair; all 20 failures happened before receipt assertions. |
+| command-replay-contract | `evidence.ts#beginUpload: parallel duplicates…`: deadlock at identity claim; finalize duplicate also deadlocks | Merged `requireLiveJob` holds SHARE on the job. 0147 upgraded to UPDATE at evidence insertion/update: one caller can hold the command lock and await another caller's SHARE, while that caller awaits the command lock. The piece trigger now takes compatible SHARE, held to commit. SHARE still excludes lock/freeze/publication's UPDATE. Merged repository and replay tests untouched. |
+| practice-facts | `old-only job keeps all ordinary £120, £70 and £384 receipts…`: FORBIDDEN at `lock_final_account` line 10 | Direct legacy `transition_job` setup omits `job_activation`, so SH-1 never inserts a commercial track. Piece helper establishes the missing synthetic small-builder track with fixture provenance and ON CONFLICT DO NOTHING. It does not rewrite existing tracks, jobs, prices or snapshots. |
+| practice-feed | `qualifies a builder-attested £384 receipt…`: same FORBIDDEN | Same setup repair, before the unchanged call. |
+| recovery-case-terms-upgrade | T8: FORBIDDEN at `final_check_require_invoice_actor` line 11 | This fixture already owns a persisted practice session, but its unchanged invoice call receives an unscoped pool. Three setup-only additions import the existing scoped adapter and reassign the local seed parameter to that adapter with the already-issued digest. All original source lines/calls/assertions are retained. No no-digest production exception. |
+| recovery-line-allocation | DW2/DW8/DW9 saved F4: FORBIDDEN at `lock_final_account` line 10 | Same missing track setup; helper carries the fixture's already-persisted digest into its lock setup. Existing invoice construction/call and all money/fraction expectations remain unchanged. |
+| sv5pre-completion-isolation | first migrate in template DB: empty password, 28P01 | Installed pg deliberately makes `Pool.options.password` non-enumerable. Object spread lost it. Own clone setup explicitly supplies the existing fixture credential; no grant change. |
+| sv5pre-legacy-invoice | PRE-Q4-02: permission denied for `final_account_lock` at shadow INSERT…SELECT | Shadow has INSERT on check facts but no SELECT on lock. Own setup reads the exact lock/cutoff with admin, then inserts those values as shadow. All refusal expectations retain their values. Its second failure requires the existing synthetic environment, now installed/restored in own suite setup. |
+| watchdog | `rejects forged cross-job source links…`: 55000 instead of expected 42501 | The new alphabetically earlier trigger intercepted a real upload-ID mutation ahead of the merged immutable guard. 0147 now uses the merged 42501 for UPDATE identity mutations; the post-lock backdating INSERT refusal stays 55000. Merged test remains byte-identical. |
+
+The 25 FORBIDDEN failures are **24 missing-track lock refusals plus one missing-session invoice refusal**. They are not tenant mismatch errors from `require_authoritative_final_check`, nor caused by private-table renaming. The two additional own legacy-test errors, watchdog error-code regression and UIWIRE-10 downstream TypeError are separately recorded. Diagnostic annotations duplicate the same failures, not extra tests.
+
+### Every failure in the supplied run
+
+**`packages/db/test/UIWIRE-11.integration.test.ts`** — 3D000 — nonexistent temporary-login-named database.
+
+- suite setup (both test bodies skipped)
+
+Skipped bodies: `approves one immutable signed credit and preserves its invoice`; `serializes available amount and rejects stale, wrong-job requests`.
+
+**`packages/db/test/UIWIRE-10.integration.test.ts`** — first: 3D000; second: undefined invoice `parties_snapshot` after failed first test.
+
+- UIWIRE-10 invoice issuance > issues once through the definer routine and keeps runtime mutation denied
+- CH-3a corrections preserve issued invoice bytes, hashes and party revisions
+
+**`packages/db/test/UIWIRE-12.integration.test.ts`** — 3D000 in new completion fixture setup for every listed test.
+
+- UIWIRE-12 customer receipts > projects partial, full and reversed receipts exactly without destroying history
+- UIWIRE-12 customer receipts > shows overpayment as customer credit, never negative debt or recovery eligibility
+- UIWIRE-12 customer receipts > eight simultaneous retries return one payment, command and audit event
+- UIWIRE-12 customer receipts > concurrent changed-payload reuse conflicts and cannot record two payments
+- UIWIRE-12 customer receipts > concurrent reversal retries return one reversal and one audit event
+- UIWIRE-12 customer receipts > rechecks membership before replay, rather than trusting an old successful command
+- UIWIRE-12 customer receipts > does not let a different authorised owner claim another actor's idempotency key
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"amountPence":null}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"amountPence":0}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"amountPence":1000000000001}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"method":null}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"method":"bank_confirmed"}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"reference":null}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"reference":" "}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"reference":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"paidOn":"infinity"}
+- UIWIRE-12 customer receipts > rejects malformed direct SQL inputs {"paidOn":"-infinity"}
+- UIWIRE-12 customer receipts > bounds cumulative active amounts instead of converting an overflowing numeric total
+- UIWIRE-12 customer receipts > reads balances and history from the same snapshot during concurrent writes
+- UIWIRE-12 customer receipts > keeps old invoice-unbound SQL unavailable and never expands runtime table grants
+
+**`packages/db/test/command-replay-contract.integration.test.ts`** — deadlock detected (both tests).
+
+- CH-2 replay contract for each watchdog_live_only command > evidence.ts#beginUpload: parallel duplicates of one command replay one result
+- CH-2 replay contract for each watchdog_live_only command > evidence.ts#finalize: parallel duplicates of one command replay one result
+
+**`packages/db/test/practice-facts.integration.test.ts`** — 42501 FORBIDDEN at `lock_final_account` line 10 (all ten).
+
+- PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox) > old-only job keeps all ordinary £120, £70 and £384 receipts in the merged view
+- PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox) > old-only job keeps every new example amount at once with main's receipt count and total
+- PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox) > ordinary £120 receipt stays merged beside the separate matched F18 £120 interest receipt
+- PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox) > new facts and their matched receipts leave every merged total and count unchanged
+- PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox) > receipt 1200000 matches only its exact settled unheld receipt fact and appears only in the new view
+- PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox) > receipt 1464000 matches only its exact settled unheld receipt fact and appears only in the new view
+- PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox) > receipt 12000 matches only its exact settled unheld receipt fact and appears only in the new view
+- PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sandbox) > receipt 7000 matches only its exact settled unheld receipt fact and appears only in the new view
+- raw SQL refuses wrong amount, hash, missing command, supplier match, and a non-synthetic environment; each transaction leaves zero new rows
+- same-tenant wrong-job account, command and payment links fail composite foreign keys (23503)
+
+**`packages/db/test/practice-feed.integration.test.ts`** — 42501 FORBIDDEN at `lock_final_account` line 10 (all six).
+
+- M4-7-S real PostgreSQL practice feed > qualifies a builder-attested £384 receipt only once matched to a settled movement, never allocating anything
+- M4-7-S real PostgreSQL practice feed > a duplicate that arrives after a match holds the receipt (history kept) until it is reconciled, then it qualifies again
+- M4-7-S real PostgreSQL practice feed > refuses to match receipts of the wrong amount, a reversed receipt, a held duplicate, another job's receipt and a supplier refund
+- M4-7-S real PostgreSQL practice feed > disconnect is durable, revokes consent, preserves every fact and refuses new ingestion, matches and a second disconnect
+- M4-7-S real PostgreSQL practice feed > actual runtime SQL cannot forge facts > refuses a raw receipt match for a pending movement, a wrong amount, a reversed or foreign receipt and a duplicate
+- M4-7-S real PostgreSQL practice feed > session ownership of a job is persisted before any connection > only the creation-time owner can register the feed: another session is refused before connection
+
+**`packages/db/test/recovery-case-terms-upgrade.integration.test.ts`** — 42501 FORBIDDEN at `final_check_require_invoice_actor` line 11.
+
+- [T8] private audit failure rolls back approval and dispatcher records, then the same command succeeds
+
+**`packages/db/test/recovery-line-allocation.integration.test.ts`** — 42501 FORBIDDEN at `lock_final_account` line 10 (all eight).
+
+- DW2/DW8/DW9: saved F4 stays 2000000/43; F4b becomes 80000/1 and API strings preserve the exact denominator
+- DW8: split receipts and one combined receipt save equal exact summed net for each line
+- DW7: persisted receipt time excludes a later line and refuses explicit attribution to it
+- DW2/DW6: saved F6 uses explicit verified source even when pro-rata would give the catches value
+- DW7: reliable explicit remittance naming a later line is refused before any saved allocation
+- DW8: an unallocated partial refund reverses exact pro-rata amounts across the lines that receipt settled
+- DW8: an item-specific refund reverses the named catch first with selected explicit source identity
+- DW8: an item-specific credit reverses the named catch first with selected explicit source identity
+
+**`packages/db/test/sv5pre-completion-isolation.integration.test.ts`** — 28P01 — empty password returned by client.
+
+- r8 zero and 25 hidden signals leave every non-shadow table byte-identical after authoritative completion
+
+**`packages/db/test/sv5pre-legacy-invoice.integration.test.ts`** — first: 42501 permission denied for `final_account_lock`; second: SYNTHETIC_MODE_REQUIRED.
+
+- SV5PRE legacy final invoice gate > [PRE-Q4-02] both invoice paths enforce pending failed and uncertified completion
+- SV5PRE legacy final invoice gate > [PRE-Q4-05] legacy replay rechecks persisted session expiry and session job access
+
+**`packages/db/test/watchdog.integration.test.ts`** — expected unchanged 42501, received 55000 FINAL_CHECK_SOURCE_IDENTITY_CHANGED.
+
+- CH-2 actual PostgreSQL enforcement > rejects forged cross-job source links, recovery exceptions, and direct finalisation
+
+### Setup authority, preservation and regression coverage
+
+The only merged test changed in r11 is `recovery-case-terms-upgrade.integration.test.ts`: exactly **three added setup lines**, removable to reconstruct HEAD byte-for-byte. Its established session is a required premise for current issuance; without carrying that digest the intentional no-digest refusal fires before the test reaches the audit rollback it exercises. This is the active order's allowed setup-only addition before an unchanged call, not a weakened authorization check. The reusable piece-owned helper additionally supplies missing track/digest/connection setup for unchanged earlier tests; no old migration is edited. UIWIRE-10/11/12, practice facts/feed, recovery-line-allocation and command replay bodies receive no r11 edits.
+
+The whole `shadow-isolation.application.test.ts` is byte-identical to 889f3c5; origin/main's original line 393 (the public-table query, now line 400) is byte-for-byte intact with the previously accepted seven setup lines. `auth/context-boundary.test.ts` is untouched. No existing expected value, refusal, count, pinned name, fingerprint or hash changes. Read-only comparisons confirm every existing expectation line in changed own suites is retained, except equivalent PRE-Q4-02 fixture INSERT parameters replacing its unauthorized SELECT. Removing the one new race case reconstructs the entire existing completion suite. All 0147 GRANT/REVOKE lines are byte-identical to HEAD. Final preservation scan: **343 other tracked test files** byte-identical to HEAD; `/private/tmp/sv5pre-r11-preservation.log`.
+
+One added piece-owned real-PostgreSQL race test places two runtime writers behind the actual merged live SHARE guard, inserts concurrently (the previous UPDATE upgrade cannot pass), and probes exclusive job locking with NOWAIT. Exclusive locking is refused while both writers hold and after only one commits; after both commit, locking and manifest freeze succeed and inventory contains both pending uploads. This preserves the exclusion needed for the frozen cutoff while proving compatible concurrent writers. The existing merged evidence duplicate tests and 23 completion cases retain all prior assertions. New race is TypeScript-checked, **not PostgreSQL-executed** locally.
+
+A socket-free probe against the installed `pg` package confirms both connection bugs with actual `Pool`/`Client` options: omitted database resolves to the replaced login name; pool password is non-enumerable and disappears from spread; explicitly supplying database/password retains both. No connection was opened. This is client configuration evidence, not a PostgreSQL integration pass.
+
+### Commands actually executed
+
+Preinstalled dependencies; Node **v24.17.0**, pnpm **10.28.1** via existing `/private/tmp/sv5pre-r8-bin/pnpm` on PATH. No clean-install claim.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `pnpm build` | 0; 7 tasks successful, 2 cached | `/private/tmp/sv5pre-r11-build.log` |
+| `pnpm typecheck` | 0; 7 tasks successful, 2 cached | `/private/tmp/sv5pre-r11-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; 7 tasks successful, 2 cached | `/private/tmp/sv5pre-r11-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` (initial and final) | 0; SV5PRE scope passed | `/private/tmp/sv5pre-r11-lanes.log`, `/private/tmp/sv5pre-r11-lanes-final.log` |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1` | 0; 2,456 tests / 82 files | `/private/tmp/sv5pre-r11-unit-core.log` |
+| `pnpm --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage exec vitest run src --maxWorkers=1` | 0; 83 tests / 7 files | `/private/tmp/sv5pre-r11-unit-support.log` |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 --exclude '**/*.http.test.ts' --exclude src/final-account-lock.isolation.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/sv5pre-worker-execution.integration.test.ts --exclude src/health.test.ts --exclude src/auth/sso/action-paths.test.ts` | 0; 1,565 tests / 66 files | `/private/tmp/sv5pre-r11-unit-api.log` |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=1` | 0; 814 tests / 34 files | `/private/tmp/sv5pre-r11-unit-web.log` |
+| `pnpm --filter @jobguard/db exec vitest run test/recovery-case-join.test.ts test/site-extra-evidence-compatibility.test.ts test/recovery-message-repository.test.ts test/recovery-case-outcome.test.ts test/audit-api-capture.test.ts test/verify-audit-export-cli.test.ts test/contractor-session-context.test.ts test/verify-evidence-pack-cli.test.ts src --maxWorkers=1` | Initial 1; isolated same-command rerun 0, 169 tests / 13 files | `/private/tmp/sv5pre-r11-unit-db.log`, `/private/tmp/sv5pre-r11-unit-db-serial.log` |
+| `node --test tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/core-purity.test.mjs tools/shared-money-origin.test.mjs tools/commercial-boundary.test.mjs` | 0; 19 tests | `/private/tmp/sv5pre-r11-unit-tools.log` |
+| `pnpm openapi:check` | 1; sandbox refuses tsx CLI IPC listen EPERM | `/private/tmp/sv5pre-r11-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; same actual OpenAPI comparison without CLI IPC | `/private/tmp/sv5pre-r11-openapi-node.log` |
+| TypeScript program with db strict options/noEmit, all five changed test/helper paths plus imports | 0; zero diagnostics | `/private/tmp/sv5pre-r11-db-test-typecheck.log` |
+| Installed pg option probe; read-only source/grant/expectation comparisons; `git diff --check` | 0 | Session output; preservation facts above |
+
+The initial DB unit run had one existing scanner timeout: `src/audit-checkpoint-handoff.test.ts` — `[C-OPS-1] all transitive request workspace sources and package entry targets cannot reach the operator`, 5,972 ms versus its unchanged 5-second limit; 168 tests passed / one failed. Isolated rerun of the **same whole command** passes all 169 (13 files). No test, timeout or scanner source was changed. All other local tests passed on their first invocation. Existing sandbox Turbo cache IO warnings and build CSS/autoprefixer warnings remain; no warning waived a check.
+
+NOT RUN: full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, PostgreSQL integration/worker races and browser suites. Dispatcher states this sandbox cannot bind localhost or start PostgreSQL. Root lane/train fixture tests write Git repositories and are excluded locally under the explicit no-Git-writes order; actual read-only lane lint ran. No repository script, test, skip or CI requirement is weakened. No prompt/model/schema extraction change or live provider/model/native check applies.
+
+### Migration, review and dispatch hold
+
+Only unmerged 0147 changes, in place as authorized. Its evidence writer lock mode and UPDATE identity refusal are repaired; all six private/public proof tables, owner roles, grants, trigger names, version values and existing invoice routines retain their contracts. No backfill or stored-history change. Future deployed repairs remain additive forward fixes, with issuance kept fail-closed. Shared overlap is limited to the piece-owned 0147 evidence trigger and explicit fixture setup; do not parallelize another edit to those files.
+
+Affected invariants: AGENTS §§5.1, 5.3–5.4, 5.8, 5.13–5.14. No fee entitlement, commercial-policy approval, provider action, new operational alert or UI release. Source inspection and local socket-free execution do not prove actual PostgreSQL races/privileges or independent verification. All mandatory CI, migration, actual worker, isolation/upgrade and browser checks remain owed at the dispatcher's resulting commit, followed by a different-model exact-commit verdict and separate acceptance. SV-5 orchestration/reveal/disposition/catches and D12/D13/real-data/production gates remain held. No task acceptance is claimed.
+
+Intended conventional commit subject/body overwritten at `/private/tmp/jg-msg-sv5pre.txt`. Dispatcher commits the work after this turn; HEAD has not changed.
+
+Changed non-receipt SHA-256 values:
+
+- `docs/contracts/sv5pre-completion-v1.md`: `86a7dd77d6858b3981a4fd32055deb1d12b6bc0abefa615c2ea27474242c21b2`
+- `packages/db/migrations/0147_final_check_prerequisites.sql`: `7288421289036e015b99cca45c51ed0844348d7f847b47ff62abbfcebabc9c0e`
+- `packages/db/test/recovery-case-terms-upgrade.integration.test.ts`: `c0085502f1e6ee1409dcfeb1b035ff4d8e2d6b6cabbe5cfc7d6479d544fe53d7`
+- `packages/db/test/sv5pre-completion-isolation.integration.test.ts`: `d895d724492e93a1e59919024840e1d765567917d048965babd0f2c463201fb8`
+- `packages/db/test/sv5pre-completion.integration.test.ts`: `893f6f3b1e594ab486355abd144fabf5f5ec3a2e65fbbb6bd09c3d0cf1f04ff1`
+- `packages/db/test/sv5pre-fixtures.ts`: `5f0ac8bb917bd4df3f421fdc4f7bcc1c61c0a047a4b8a954e946f01ed49a837a`
+- `packages/db/test/sv5pre-legacy-invoice.integration.test.ts`: `6a9faff4a0c4258117ef00aa2accf9dba14288ef81769701cc4e1b56caed2c60`
+
+---
+
 ## Repair r9 — migration parser repair (14 October 2026, dispatcher 5)
 
 PR #189; dispatch head `c335f3c`; local HEAD is `b70cd18cc58d62eb71091ad7433d449f882eac5c` on `codex/sandbox/sv5pre`. Git state was not changed. Read-only comparison confirms migration 0147 is byte-identical at those two commits before this repair. Local checks below cover the existing worktree, not the merged dispatch head. No independent verdict or acceptance is claimed.

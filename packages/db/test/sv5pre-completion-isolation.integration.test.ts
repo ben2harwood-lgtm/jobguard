@@ -12,7 +12,7 @@ afterAll(async () => { if (f) await closeLockFixture(f); });
 it("r8 zero and 25 hidden signals leave every non-shadow table byte-identical after authoritative completion", async () => {
  const suffix = randomUUID().replaceAll("-", ""), template = `sv5pre_template_${suffix}`;
  const databases = [`sv5pre_zero_${suffix}`, `sv5pre_many_${suffix}`], created: string[] = [];
- const pool = (database: string, role: "admin" | "runtime" | "shadow" = "admin") => new Pool({ ...f[role].options, database, max: 2 });
+ const pool = (database: string, role: "admin" | "runtime" | "shadow" = "admin") => new Pool({ ...f[role].options, password: f.credential, database, max: 2 });
  try {
   await f.admin.query(`CREATE DATABASE ${template}`); created.push(template);
   const admin = pool(template), runtime = pool(template, "runtime");

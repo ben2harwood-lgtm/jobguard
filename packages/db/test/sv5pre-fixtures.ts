@@ -6,6 +6,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
@@ -105,7 +106,11 @@ export async function publishEmptyCompletion(f: Pick<LockFixture,'shadow'|'admin
 /** A fixture established before 0147 remains historical; it deliberately uses the old issue path. */
 export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, tenantId: string, jobId: string, actorMembershipId: string, revisionId: string) {
  if(!(await admin.query("SELECT to_regclass('app.shadow_final_check_completion') installed")).rows[0].installed) return;
- const context=testTenantContext(tenantId),repo=new FinalAccountLockRepository(runtime);
+ // Legacy fixtures transition a draft directly, without inserting job_activation (SH-1's track binding).
+ // Establish the synthetic small-builder premise explicitly; never rewrite an existing track.
+ await asFixtureTenant(admin,tenantId,db=>db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) SELECT tenant_id,id,'small_builder','synthetic_demo','legacy_synthetic_live_fixture' FROM app.job WHERE tenant_id=$1 AND id=$2 AND status IN ('live','invoiced','paid') ON CONFLICT(tenant_id,job_id) DO NOTHING",[tenantId,jobId]));
+ const digest=(await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0].practice_session_digest;
+ const context=testTenantContext(tenantId),repo=new FinalAccountLockRepository(digest?practiceMaterialPool(runtime,digest):runtime);
  await repo.acceptTerms(context,{actorMembershipId,commandId:randomUUID(),termsVersion:'synthetic_final_check_terms.v1'});
  const scope=(await admin.query("SELECT DISTINCT scope_item_id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'",[tenantId,jobId,revisionId])).rows;
  for(const item of scope) await repo.disposition(context,{jobId,actorMembershipId,commandId:randomUUID(),scopeItemId:item.scope_item_id,disposition:'done'});
@@ -113,7 +118,9 @@ export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, te
  await repo.lock(context,{jobId,actorMembershipId,commandId:randomUUID(),finalAccountRevisionId:revisionId,expectedRevision:revision,declarationVersion:'final_account_declaration.v1'});
  const connection=admin.options,login=`sv5pre_fixture_${randomUUID().replaceAll('-','')}`,material=randomUUID();
  await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${material}'; GRANT jobguard_shadow TO ${login}`);
- const shadow=new Pool({...connection,user:login,password:material,max:1});
+ // pg defaults database to user when absent; a fixture login is not a database.
+ const database=(await admin.query("SELECT current_database() name")).rows[0].name;
+ const shadow=new Pool({...connection,database,user:login,password:material,max:1});
  try { await publishFixtureCompletion(shadow,admin,tenantId,jobId); } finally { await shadow.end(); }
 }
 
