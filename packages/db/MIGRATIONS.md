@@ -1063,3 +1063,34 @@ this register records implementation, not independent acceptance or release appr
 The replacement routines check current owner/finance approver membership and exact financial authorization, require distinct accounts with the correct classes in the same tenant/book/currency, refuse settlement of a reversed obligation, and count only unreversed settlement credits against receivable capacity. Corrections lock the parent obligation before the original settlement, refuse a second full reversal, refuse reversal of a reversal, and require active settlements to be reversed before their obligation. No new grants, policies or RLS changes; existing routine owners, ACLs, SECURITY DEFINER/search paths and deferred balance/audit triggers remain intact. These are existing synthetic ledger ports; D02 accounting-policy approval and production charging gates remain held.
 
 Rollback strategy: roll back a failed installation transaction. After successful installation, retain the unique key and immutable journal history and correct defects through a reviewed forward migration; do not restore the unsafe routine bodies. No backfill or historical row changes. Regression/catalog proof is in `packages/db/test/migfix-2.integration.test.ts`; populated upgrade, historical duplicate refusal and upgrade-comparison controls are in `packages/db/test/migfix-2-upgrade.integration.test.ts`. PostgreSQL execution is NOT RUN in the builder sandbox; both files and the mandatory database/migration suites must pass in GitHub CI on the final head before merge.
+
+## 0153 — quote supersession guard (MIGFIX-4)
+
+`0153_quote_supersession_guard.sql` replaces only the two routines installed by
+0011: `app.record_builder_attested_acceptance` and `app.record_quote_disposition`.
+Acceptance refuses any exact document with an immutable supersession event,
+including events recorded before this migration, under the existing job lock.
+Supersession advances the job revision and server update time. Both routines
+recheck the existing active-owner authority before inspecting job state; exact
+document/hash/version/total/send checks and accepted commercial history remain.
+
+No GRANT statements, new tables, columns or policies, data backfill or historical
+row changes. CREATE OR REPLACE preserves the signatures, owners, existing EXECUTE
+ACLs and pinned `search_path=pg_catalog,app`. Forward-fix only: retain immutable
+acceptance/disposition history and issue a reviewed corrective migration; do not
+restore obsolete acceptance routines. A failed application rolls back both
+replacements in the migration transaction.
+
+Regression and own-step upgrade coverage are in `migfix-4.integration.test.ts`
+and `migfix-4-upgrade.integration.test.ts`. PostgreSQL and browser checks are NOT
+RUN in the builder sandbox; GitHub CI must execute them after dispatcher push.
+The merged quote regression's decline revision (2 to 3) and expected final revision
+(3 to 4) were updated per Ben, 14 Oct, coordinator chat, decision 5.
+
+## 0154 — recovery follow-up clock fence (MIGFIX-8)
+
+Adds one private SECURITY INVOKER trigger helper, `app.recovery_follow_up_run_fence()`, owned by `jobguard_migration` with a pinned search path and EXECUTE revoked from PUBLIC, runtime and infrastructure. Two BEFORE INSERT triggers fence `app.sandbox_run_event` and `app.sandbox_adapter_receipt` on the same tenant/run advisory key. Restates `app.guard_recovery_follow_up()` and `app.evaluate_recovery_follow_ups(uuid,uuid)` from 0115 with one run-lock statement added to each, preserving their existing checks and effects. No table, column, policy or grant change; no row backfill. Lock order is run fence before case/intent locks, with catch-up serialization and audit head last. The three-step synthetic clock and exact reminder approval remain unchanged.
+
+Upgrade proof: `packages/db/test/migfix-8-upgrade.integration.test.ts` (`MIGFIX-8.UPGRADE`) installs everything before 0154, snapshots populated named columns, full types and primary-key identities, applies 0154 alone, checks preservation and privileges, then runs later migrations twice with rolled-back comparison controls. Concurrency and private-helper catalog coverage are in `packages/db/test/migfix-8.integration.test.ts`. Database tests are NOT RUN in this sandbox, which cannot bind localhost or start PostgreSQL; execution remains required in GitHub CI after the dispatcher pushes.
+
+Forward-fix rollback strategy: a failed installation rolls back its transaction. After installation, preserve all history and privileges and ship a separately reviewed later migration; do not edit an earlier migration or remove the fence without a reviewed replacement. Existing repository code remains schema compatible, while deployment of the updated repositories preserves the run-before-case lock order. No new external action, operational alert or commercial release is introduced.
