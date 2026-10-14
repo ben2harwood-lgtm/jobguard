@@ -156,6 +156,8 @@ it("E5B-06 client approval refusals: forged, expired, revoked, replaced, other e
   const k = await atClientStep(), live = await issue(k); await live.run();
   await command(c, w, { kind: "grant.revoke", grantId: w.members.client_approver.grant });
   expect(await code(decide(k, live.token, live.recipient))).toBe("PERMISSION_DENIED");
+  // A revoked client can no longer read the description, price or approval history through the still-open link.
+  expect(await code(repo.clientApprovalView(ctx, client(), { version: "client-approval-view.v1", jobId: k.jobId, requestId: k.requestId, linkToken: live.token, email: live.recipient }))).toBe("PERMISSION_DENIED");
   expect(await sql("SELECT 1 FROM app.extra_approval_outcome WHERE request_id=$1", [k.requestId])).toEqual([]);
 });
 

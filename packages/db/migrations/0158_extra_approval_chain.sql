@@ -491,6 +491,25 @@ BEGIN
  RETURN jsonb_build_object('requestId',p_request,'state',CASE WHEN v_final THEN 'approved' ELSE 'awaiting_approval' END,'stepIndex',v_n);
 END $$;
 
+-- Read-side authority for the client approval page: the same current-authority test the decision applies (active member, client_approver membership, an unrevoked
+-- grant on this client that still covers this job's contract). It changes nothing; a revoked or removed client is refused before any data is returned.
+CREATE FUNCTION app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text) RETURNS void
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE v_tenant uuid; v_wo app.work_order; v_client uuid; v_grant uuid;
+BEGIN
+ IF pg_catalog.current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN v_tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN v_tenant:=NULL; END;
+ IF v_tenant IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ SELECT w.* INTO v_wo FROM app.work_order w WHERE w.tenant_id=v_tenant AND w.job_id=p_job;
+ SELECT q.client_id INTO v_client FROM app.extra_approval_request q WHERE(q.tenant_id,q.job_id,q.id)=(v_tenant,p_job,p_request);
+ IF v_wo.id IS NULL OR v_client IS NULL OR v_wo.client_id IS DISTINCT FROM v_client THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ SELECT g.id INTO v_grant FROM app.contractor_member cm JOIN app.membership m ON(m.tenant_id,m.id)=(cm.tenant_id,cm.membership_id) JOIN app.role_grant g ON(g.tenant_id,g.membership_id)=(cm.tenant_id,cm.membership_id)
+  WHERE cm.tenant_id=v_tenant AND cm.membership_id=p_actor AND cm.client_id=v_client AND lower(cm.email)=lower(p_email) AND m.role='client_approver' AND coalesce(app.contractor_member_active(p_actor),false)
+   AND g.role='client_approver' AND g.scope_kind='client' AND g.scope_id=v_client AND(g.contract_id IS NULL OR g.contract_id=v_wo.contract_id)
+   AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE(r.tenant_id,r.grant_id)=(g.tenant_id,g.id)) ORDER BY g.id LIMIT 1;
+ IF v_grant IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+END $$;
+
 -- ---- scheduled escalation and the queue ----
 -- No time argument: the clock is the server's. Idempotent: the unique key makes a repeat run (or a restarted worker) a no-op.
 CREATE FUNCTION app.xa_escalate() RETURNS TABLE(request_id uuid, job_id uuid, variation_id uuid, step_index integer, eligible_roles text[])
@@ -549,14 +568,14 @@ DO $$ DECLARE f text; BEGIN FOREACH f IN ARRAY ARRAY[
  'app.xa_open_request(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,bigint)','app.xa_submit(uuid,uuid,uuid,uuid)','app.xa_price(uuid,uuid,uuid,uuid,bigint,boolean)',
  'app.xa_approve(uuid,uuid,uuid,uuid,integer,text,bigint,boolean,text)','app.xa_withdraw(uuid,uuid,uuid,uuid,text)','app.xa_mark_duplicate(uuid,uuid,uuid,uuid,uuid,uuid)',
  'app.xa_issue_link(uuid,uuid,uuid,uuid,uuid,uuid,text,text,timestamptz,uuid,uuid)','app.xa_revoke_link(uuid,uuid,uuid,uuid)',
- 'app.xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)','app.xa_escalate()','app.xa_queue(uuid)'] LOOP
+ 'app.xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)','app.xa_client_view_authority(uuid,uuid,uuid,text)','app.xa_escalate()','app.xa_queue(uuid)'] LOOP
  EXECUTE format('ALTER FUNCTION %s OWNER TO jobguard_migration',f);
  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,jobguard_runtime,jobguard_infrastructure',f);
 END LOOP;
 FOREACH f IN ARRAY ARRAY['app.xa_covers(uuid,text[],uuid,text)','app.xa_decision_id(uuid,integer)','app.xa_submit(uuid,uuid,uuid,uuid)','app.xa_price(uuid,uuid,uuid,uuid,bigint,boolean)',
  'app.xa_approve(uuid,uuid,uuid,uuid,integer,text,bigint,boolean,text)','app.xa_withdraw(uuid,uuid,uuid,uuid,text)','app.xa_mark_duplicate(uuid,uuid,uuid,uuid,uuid,uuid)',
  'app.xa_issue_link(uuid,uuid,uuid,uuid,uuid,uuid,text,text,timestamptz,uuid,uuid)','app.xa_revoke_link(uuid,uuid,uuid,uuid)',
- 'app.xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)','app.xa_escalate()','app.xa_queue(uuid)'] LOOP
+ 'app.xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)','app.xa_client_view_authority(uuid,uuid,uuid,text)','app.xa_escalate()','app.xa_queue(uuid)'] LOOP
  EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO jobguard_runtime',f);
 END LOOP; END $$;
 COMMIT;
