@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ContractorRepository, MIGRATION_URLS, migrate } from "../src/index.js";
-import { startBeforeMigration, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { startBeforeMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
 import * as proof from "./upgrade-proof-utils.js";
 
 // An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare;
@@ -59,15 +59,16 @@ describe("MIGFIX-1 PostgreSQL own-step upgrade proof",()=>{
   let c: Cluster, before: Awaited<ReturnType<typeof proof.proofBefore>>, beforeCatalog: Awaited<ReturnType<typeof catalog>>;
   beforeAll(async()=>{
     c = await startBeforeMigration(migrationName);
-    const f = await startSession(c), invitation = randomUUID(), address = `${randomUUID()}@fixture.invalid`;
-    const account = (await c.admin.query("SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId])).rows[0]!.account_id;
-    await c.admin.query("INSERT INTO identity.user_email VALUES($1,$2)",[address,f.p.identityUserId]);
-    await c.admin.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)",[f.p.identityUserId,f.p.tenantId,f.p.membershipId]);
-    await c.admin.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) VALUES($1,$2,$3,$4,'finance','2027-01-01 00:00:00.123456+00',$5)",[invitation,address,f.p.tenantId,account,f.p.identityUserId]);
+    // Only a persisted practice principal is needed; no session-context bridge is used by this proof.
+    const p = await new ContractorRepository(c.runtime).startPractice(randomUUID()), invitation = randomUUID(), address = `${randomUUID()}@fixture.invalid`;
+    const account = (await c.admin.query("SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[p.tenantId,p.membershipId])).rows[0]!.account_id;
+    await c.admin.query("INSERT INTO identity.user_email VALUES($1,$2)",[address,p.identityUserId]);
+    await c.admin.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)",[p.identityUserId,p.tenantId,p.membershipId]);
+    await c.admin.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) VALUES($1,$2,$3,$4,'finance','2027-01-01 00:00:00.123456+00',$5)",[invitation,address,p.tenantId,account,p.identityUserId]);
     await c.admin.query("INSERT INTO identity.challenge(id,email,purpose,digest,requested_at,expires_at) VALUES($1,$2,'signup',$3,'2026-10-01 00:00:00.123456+00','2026-10-01 00:10:00.123456+00')",[randomUUID(),address,"a".repeat(64)]);
-    await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,'2027-01-01 00:00:00.123456+00')",[randomUUID(),f.p.identityUserId,"b".repeat(64),randomUUID()]);
+    await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,'2027-01-01 00:00:00.123456+00')",[randomUUID(),p.identityUserId,"b".repeat(64),randomUUID()]);
     await c.admin.query("INSERT INTO identity.security_event(id,event_type,subject_id,created_at) VALUES($1,'invitation.created',$2,'2026-10-01 00:00:00.123456+00')",[randomUUID(),invitation]);
-    await new ContractorRepository(c.runtime).command(f.p,{version:"contractor-command.v1",environment:"synthetic_demo",kind:"membership.revoke",commandId:randomUUID(),id:randomUUID(),membershipId:f.p.membershipId,expectedRevision:0});
+    await new ContractorRepository(c.runtime).command(p,{version:"contractor-command.v1",environment:"synthetic_demo",kind:"membership.revoke",commandId:randomUUID(),id:randomUUID(),membershipId:p.membershipId,expectedRevision:0});
     before = await proof.proofBefore(c.admin,tables);
     for (const table of tables) expect(Object.keys(before[table]!.rows),`${table}: at least one pre-existing row`).not.toHaveLength(0);
     beforeCatalog = await catalog(c.admin);

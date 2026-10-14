@@ -1,3 +1,115 @@
+# MIGFIX-1 CI repair r2 — setup repaired; real PostgreSQL CI pending
+
+14 October 2026, dispatcher 6. PR #198. Repair base and unchanged checkout HEAD:
+`5062dfd91d20957b30fae53b3c505a347b98cf6a`, branch `codex/sandbox/migfix-1`,
+worktree `ch-7-terms`. This r2 section supersedes r1's check evidence for the
+working-tree repair; historical receipts below remain historical. No git writes,
+staging, commit, checkout, push, merge, package install or download performed.
+Dispatcher commits and pushes; intended message overwritten at
+`/private/tmp/jg-msg-migfix-1.txt`.
+
+Read AGENTS.md, BUILD_PLAN §§2.1–2.4, §5.6, ENT-10 and M0-6L, authentication
+contract, own tests and the merged practice-session fixture/bridge. This is the
+issued repair of the piece's own CI failure, under §2.1 routine repair authority.
+Read the dispatcher's filtered log for run `38523865081` at
+`/Users/benharwood/.local/share/full-steam/jg-runs/migfix-1-ci-failed-38523865081.log`.
+That preceding-head log reports 148 database files passing and the own upgrade
+suite failing in setup with MODE_FORBIDDEN; it is supplied evidence, not a new
+builder-run database result.
+
+## r2 change and preserved proof
+
+Only implementation edit: `packages/db/test/migfix-1-upgrade.integration.test.ts`
+imports only the pre-migration cluster starter, creates its persisted principal
+through `ContractorRepository(c.runtime).startPractice(randomUUID())`, and uses
+that principal for the existing seed inserts and membership-revoke command.
+This is the same setup path as this piece's passing `migfix-1.integration.test.ts`.
+The fixture's extra `contractorSessionContext` call required JOBGUARD_ENV to be
+synthetic_demo; this upgrade proof consumes no tenant context. The repository
+continues to create rows through the existing synthetic runtime routine and
+resolve the persisted principal. No fabricated principal, environment override,
+fixture alteration or exception-catching fallback.
+
+Rule 9: pre-N population, every nonempty-table assertion, snapshot, N alone as
+migration role, complete own-step catalog checks, later migrations twice, named
+pre-existing columns/full types/primary-key identities/canonical microseconds,
+rolled-back sensitivity controls, role/permission probes and fresh-install proof
+are unchanged. Every byte from `before = await proof.proofBefore` to EOF is
+unchanged from repair base; the own source assertion is unchanged. This is a
+one-off builder diff inspection, not an added source pin or independent review.
+
+Merged fixtures/tests/pins, all migrations (including 0150), migration registry,
+lane registry, contracts and product code are untouched in r2. No database
+backfill, rollback change, compatibility impact, operational alert, new external
+action, money/UI/AI change or policy approval. The existing migration's forward-fix
+strategy remains as documented. Invariants: preserve earlier guarantees,
+synthetic-only setup and truthful independent-review/CI evidence (AGENTS §§1,
+5.10, 5.13). Rule 11: no credential-shaped literal added; new session input is
+runtime-generated with randomUUID. Rule 12: no standing hash/byte freeze added,
+no merged fingerprint or list changed. No adjacent work discovered.
+
+## r2 actual checks and exit codes
+
+Installed dependencies only, Node v24.17.0. All pnpm commands below use the
+pre-existing local shim via
+`export PATH="/private/tmp/jg-migfix-1-pnpm-x00y9ou4:$PATH"`; the shim invokes
+cached pnpm 10.28.1 without downloads. This is not clean-install evidence.
+Detailed logs: `/private/tmp/jg-migfix-1-r2-<name>.log`.
+
+| Command/check | Exit | Evidence |
+| --- | --- | --- |
+| `git rev-parse HEAD`; `git merge-base --is-ancestor 5062dfd9 HEAD` | 0 each | Exact requested head; ancestry check succeeds. |
+| `pnpm typecheck` | 0 | 7/7 tasks, 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | Root checks and 7/7 package tasks, 4 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Actual registered MIGFIX-1 lane, origin/main base and working tree. |
+| `pnpm exec tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext packages/db/test/migfix-1-upgrade.integration.test.ts` | 0 | Explicitly checks own test, which package tsconfig otherwise excludes. |
+| `pnpm build --concurrency=2 --force` | 0 | 7/7 tasks, 0 cached; production Next build. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | Actual OpenAPI generator comparison, avoiding tsx CLI localhost IPC. |
+| Initial one-off Python setup-only delta inspection | 1 (enclosing shell 0) | Inspection script's unbounded string replace also matched `proof.proofBefore`; assertion failed. Corrected the inspection script only. No test assertion failure. |
+| Corrected one-off Python setup-only delta inspection | 0 | Word-bounded principal replacement; exact permitted setup delta; every byte after snapshot unchanged; sole implementation path changed. |
+| `git diff --check` (initial, interim and final) | 0 each | No whitespace errors. |
+| Final `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Includes updated receipt. |
+| Final one-off Python scope/message/assertion preservation inspection | 0 | Only own upgrade test and receipt modified; setup-only delta; intended message exists. |
+
+Turbo emitted sandbox cache-I/O warnings. Build retained existing workspace-root
+and CSS warnings; checks exited successfully. No test or check configuration changed.
+
+Exact unit/source selections and each exit (driver exited 0):
+
+- `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` — exit 0; ℹ tests 19.
+- `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` — exit 0; Test Files  82 passed (82); Tests  2456 passed (2456).
+- `pnpm --filter @jobguard/config exec vitest run src --maxWorkers=2` — exit 0; Test Files  1 passed (1); Tests  1 passed (1).
+- `pnpm --filter @jobguard/ai exec vitest run src --maxWorkers=2` — exit 0; Test Files  5 passed (5); Tests  80 passed (80).
+- `pnpm --filter @jobguard/storage exec vitest run src --maxWorkers=2` — exit 0; Test Files  1 passed (1); Tests  2 passed (2).
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` — exit 0; Test Files  33 passed (33); Tests  784 passed (784).
+- `pnpm --filter @jobguard/db exec vitest run src test --exclude '**/*.integration.test.ts' --exclude test/free-port.test.ts --maxWorkers=2` — exit 0; Test Files  24 passed (24); Tests  310 passed (310).
+- `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude '**/*.http.test.ts' --exclude src/health.test.ts --exclude src/auth/identity.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/auth/sso/action-paths.test.ts --exclude src/auth/sso/sso-required-paths.test.ts --exclude src/final-account-lock.isolation.test.ts` — exit 0; Test Files  66 passed (66); Tests  1549 passed (1549).
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/migfix-1-upgrade.integration.test.ts -t MIGFIX-1-S1` — exit 0; Test Files  1 passed (1); Tests  1 passed | 3 skipped (4).
+
+The own-source selection ran only MIGFIX-1-S1; 3 database tests were filtered,
+not executed. DB adapter/unit suites use doubles and do not establish PostgreSQL
+behavior. API selections omit HTTP/server and PostgreSQL tests because this
+sandbox cannot bind localhost or start PostgreSQL. Root agent-lane unit suites
+were not run: their fixtures run prohibited git-writing commands. The actual
+lane linter did run twice. These are local selections, not changes to mandatory
+suite configuration or claims that full `pnpm test` passed.
+
+`pnpm test`, `pnpm test:db`, `pnpm test:migrations`, full database/integration,
+browser/e2e, regression/deployment and restore suites were NOT RUN here; the
+sandbox cannot start PostgreSQL or bind localhost, as the dispatcher stated.
+Real PostgreSQL own-step proof is NOT VERIFIED after r2. AI unit fixtures ran;
+no model/prompt/parser changed, so no live eval was performed. No native change.
+
+## r2 remaining gates
+
+Dispatcher commits and pushes this working-tree repair. GitHub must run the full
+real-PostgreSQL and browser suites against that exact new head. A different model
+must record its independent verdict bound to that commit, followed by separate
+acceptance. No builder acceptance, independent verification, database pass or
+ready-to-merge assertion. No merged-file change is required by this repair.
+
+---
+
 Built by Codex; repair r1 dispatched 14 Oct 2026 (dispatcher 5).
 
 # MIGFIX-1 repair r1 — implemented; PostgreSQL CI and independent verdict pending
