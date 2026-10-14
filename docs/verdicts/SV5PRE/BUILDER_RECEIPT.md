@@ -1,3 +1,53 @@
+## Repair r12 — explicit fixture UUID casts (14 October 2026, dispatcher 5)
+
+PR #189; task SV5PRE; branch `codex/sandbox/sv5pre`. First command `git rev-parse HEAD` returned the required head `4f4017ca1bf43d779c2c11dc560be37fcab92c9b`; initial working tree was clean. Working-tree repair only: no Git-writing command, commit, push, dependency install, database start, self-acceptance or independent verdict. Dispatcher owns the resulting commit and CI/verdict/acceptance loop. This section supersedes prior round status; historical receipts remain below.
+
+Read AGENTS.md, BUILD_PLAN.md SV-4/SV-5 and §10.2.2–10.2.6, and `docs/contracts/sv5pre-completion-v1.md`. Read the supplied filtered CI log, including both failure bodies and duplicate GitHub annotations: `/Users/benharwood/.local/share/full-steam/jg-runs/sv5pre-ci-failed-38509757313.log`, **1,537 lines / 249,556 bytes**, SHA-256 `a88066f62ae88ac754adffa061fea94ba8e9df9f4684061253486978482768a6`. Run **38509757313 is RED**. DB: **2 failed / 141 passed files; 2 failed / 1,994 passed tests**. API: 77 files / 1,723 tests passed in that supplied run; this is evidence for 4f4017ca, not an r12 PostgreSQL rerun.
+
+### Every failure in the supplied CI run
+
+| File and failed test | Error and location | Repair |
+| --- | --- | --- |
+| `packages/db/test/sv5pre-completion-isolation.integration.test.ts` — `r8 zero and 25 hidden signals leave every non-shadow table byte-identical after authoritative completion` | PostgreSQL **42P08**, inconsistent types deduced for parameter `$3`, **text versus uuid**, statement position **219**; fixture INSERT at :26 via `asFixtureTenant` | Cast the upload ID occurrence to `$3::uuid`, retaining `$3::text` for the object key. |
+| `packages/db/test/sv5pre-completion.integration.test.ts` — `SV5PRE authoritative completion > r11 concurrent evidence writers keep compatible live locks and exclude final locking until both commit` | Same **42P08** / `$3` / **text versus uuid**, position **157**; fixture INSERT at :203 | Same explicit upload ID cast. |
+
+The duplicate error annotations repeat these same two failures. Root Turbo reports 12/13 successful tasks, failed `@jobguard/db#test`, and pnpm/process exit 1; those are consequences, not additional failed tests. A source extraction confirmed positions 219 and 157 point exactly to the uncast `$3` in those INSERTs.
+
+The isolation fixture's immediately following evidence-object INSERT also reused `$4` as UUID `upload_id` and text `object_key`; it now uses `$4::uuid` for the former and retains `$4::text` for the latter. This companion cast prevents the same parse ambiguity after the first repaired statement executes. Only **three explicit casts across two piece-owned fixture tests** change. No repository SQL, production behavior, migration, grant, expected value, refusal, assertion, amount, hash, name or commercial policy changes. No merged test is edited.
+
+Read-only preservation comparison reconstructs both original test files byte-for-byte by removing only the three casts. **411 other tracked test/spec files are byte-identical to HEAD.** The entire `apps/api/src/shadow-isolation.application.test.ts` is unchanged, including origin/main's original line 393 byte-for-byte; `apps/api/src/auth/context-boundary.test.ts` is byte-identical to HEAD and origin/main. Log: `/private/tmp/sv5pre-r12-preservation.log`.
+
+### Commands actually executed
+
+Preinstalled dependencies; Node **v24.17.0**, pinned pnpm **10.28.1** via existing `/private/tmp/sv5pre-r8-bin/pnpm` on PATH. No clean-install claim. The initial system `pnpm --version` hung after a package-manager warning and was interrupted (exit 130); the existing pinned launcher then returned 10.28.1. No package installation command was issued.
+
+| Command | Exit / result | Log |
+| --- | --- | --- |
+| `pnpm typecheck` | 0; 7 successful tasks, 2 cached | `/private/tmp/sv5pre-r12-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; 7 successful tasks, 2 cached | `/private/tmp/sv5pre-r12-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; SV5PRE scope passed | `/private/tmp/sv5pre-r12-lanes.log` |
+| `pnpm build` | 0; 7 successful tasks, 2 cached | `/private/tmp/sv5pre-r12-build.log` |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1` | 0; 2,456 tests / 82 files | `/private/tmp/sv5pre-r12-unit-core.log` |
+| `pnpm --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage exec vitest run src --maxWorkers=1` | 0; 83 tests / 7 files | `/private/tmp/sv5pre-r12-unit-support.log` |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 --exclude '**/*.http.test.ts' --exclude src/final-account-lock.isolation.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/sv5pre-worker-execution.integration.test.ts --exclude src/health.test.ts --exclude src/auth/sso/action-paths.test.ts` | 0; 1,565 tests / 66 files | `/private/tmp/sv5pre-r12-unit-api.log` |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=1` | 0; 814 tests / 34 files | `/private/tmp/sv5pre-r12-unit-web.log` |
+| `pnpm --filter @jobguard/db exec vitest run test/recovery-case-join.test.ts test/site-extra-evidence-compatibility.test.ts test/recovery-message-repository.test.ts test/recovery-case-outcome.test.ts test/audit-api-capture.test.ts test/verify-audit-export-cli.test.ts test/contractor-session-context.test.ts test/verify-evidence-pack-cli.test.ts src --maxWorkers=1` | 0; 169 tests / 13 files | `/private/tmp/sv5pre-r12-unit-db.log` |
+| `node --test tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/core-purity.test.mjs tools/shared-money-origin.test.mjs tools/commercial-boundary.test.mjs` | 0; 19 tests | `/private/tmp/sv5pre-r12-unit-tools.log` |
+| `pnpm openapi:check` | 1; sandbox denies tsx CLI IPC `listen EPERM` | `/private/tmp/sv5pre-r12-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; same OpenAPI comparison without CLI IPC | `/private/tmp/sv5pre-r12-openapi-node.log` |
+| TypeScript program with db strict options/noEmit, both changed integration tests and imports | 0; zero diagnostics | `/private/tmp/sv5pre-r12-db-test-typecheck.log` |
+| Read-only cast-only/protected-source comparison; `git diff --check`; final lane lint | 0; preservation, whitespace and final SV5PRE scope checks passed | `/private/tmp/sv5pre-r12-preservation.log`, `/private/tmp/sv5pre-r12-lanes-final.log` |
+
+The OpenAPI wrapper's EPERM is the sandbox restriction, retained as a failed invocation; the actual comparison passes through the IPC-free entry point. Existing Turbo cache IO warnings and CSS/autoprefixer warnings remain. No test timeout, skip, expectation or CI requirement was changed.
+
+NOT RUN: full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, PostgreSQL integration/worker/migration suites and browser suites because the dispatcher states this sandbox cannot bind localhost or start PostgreSQL. Root lane/train fixture unit tests write Git repositories and remain unexecuted under the no-Git-writes instruction; actual read-only lane lint ran. No model/prompt/parser or provider behavior changes, so no live-model/provider evaluation or native suite applies. GitHub CI after dispatcher commit/push must execute the mandatory full checks, both repaired PostgreSQL cases, previous isolation/upgrade/worker suites and applicable browser journeys. The cast repair is source-inspected and its fixtures typechecked; PostgreSQL success is not claimed locally.
+
+Affected guarantees: preserve tenant-qualified evidence identities, concurrent-writer exclusion of final locking and authoritative-completion isolation (AGENTS §§5.1, 5.8, 5.13–5.14). No migration/backfill, backwards-compatibility change, new operational alert or external action. All independent exact-commit verdict, separate acceptance, SV-5 orchestration/reveal/disposition/catch, D12/D13 and real-data/production/release gates remain held. No task acceptance is claimed.
+
+Intended conventional commit subject/body overwritten at `/private/tmp/jg-msg-sv5pre.txt`. Dispatcher commits after this turn; HEAD remains unchanged.
+
+---
+
 ## Repair r11 — PostgreSQL replay and fixture prerequisites (14 October 2026, dispatcher 5)
 
 PR #189; task SV5PRE; unchanged HEAD `889f3c50ed4a3dea079eeed2b06ffe00c1645081`, branch `codex/sandbox/sv5pre`. Working-tree repair only. No Git-writing command, dependency installation/download, commit, push, self-acceptance or independent verdict. Dispatcher owns commit/push and the exact-commit CI/verdict/acceptance loop. This section supersedes earlier round status; historical receipts remain below.

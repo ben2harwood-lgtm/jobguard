@@ -200,7 +200,7 @@ describe("SV5PRE authoritative completion", () => {
     await db.query("SELECT app.require_watchdog_live($1)",[a.jobId]);
    }
    // Both already hold the merged live guard's SHARE lock. An UPDATE upgrade cannot succeed here.
-   await Promise.all(writers.map(db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')",[a.tenantId,a.jobId,randomUUID()])));
+   await Promise.all(writers.map(db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')",[a.tenantId,a.jobId,randomUUID()])));
    const exclusive=()=>probe.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE NOWAIT",[a.tenantId,a.jobId]);
    await expect(exclusive()).rejects.toMatchObject({code:'55P03'});
    await writers[0]!.query("COMMIT");
