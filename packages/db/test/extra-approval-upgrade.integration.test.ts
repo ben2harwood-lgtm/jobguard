@@ -12,7 +12,7 @@ import { clusterBefore } from "./site-extra-pricing-fixtures.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 
-const own = "0147_extra_approval.sql", name = (u: URL) => fileURLToPath(u).split("/").at(-1)!;
+const own = "0157_extra_approval.sql", name = (u: URL) => fileURLToPath(u).split("/").at(-1)!;
 const compared = ["app.variation", "app.variation_revision", "app.variation_approval", "app.extra_origin", "app.extra_event", "app.extra_sor_revision", "app.extra_pricing_basis", "app.work_order_revision", "app.work_order_line", "app.sor_item", "app.command_receipt", "app.audit_event", "app.evidence_object", "app.evidence_upload", "app.evidence_pack", "app.evidence_pack_revision", "app.quote_document_version", "app.quote_acceptance", "app.customer_invoice", "app.material_rate_revision", "app.supplier_document", "app.supplier_document_version", "app.recovery_claim_revision"];
 let c: Awaited<ReturnType<typeof clusterBefore>>, f: ApprovalFixture, before: Awaited<ReturnType<typeof proofBefore>>;
 let artifact: string, digest: string, recoveryCount: number;

@@ -6,7 +6,7 @@ ENT-5 — issued foundation and settled constraints only; RED lane. This is a bu
 
 - `origin/main`: `6659fb58791ec22588948f005b2bd4f6b299fa48`, verified without fetching or changing refs.
 - Original build-ahead dependency HEAD: `82f05c2af245255a84921108e554ecab4e065054` (ENT-3d #170 stack). Dispatcher-committed incoming/pre-commit HEAD for repair r1: `dfcc97ca76fe5a45f7ea594686334f7fad019e6b`. No builder Git write, push, PR or checkout. Intended repair commit message: `/private/tmp/jg-msg-ent-5.txt`.
-- Migration: `0147_extra_approval.sql`; one additive runner registration. No renumbering of predecessors.
+- Migration: `0157_extra_approval.sql`; one additive runner registration. No renumbering of predecessors.
 - Main already contains 0139 ENT-3b and 0140 ENT-3c; it ends at 0140, not the draft's old 0138. The issued ENT-3d dependency supplies 0141 and is still a landing prerequisite. Main wins over the draft's older readiness/head descriptions. Catch-up and exact-commit review are required after #170 merges.
 - BUILD_PLAN §9.1.2–§9.1.7 (lines 551–627), ENT-5 (890–921), §§2.4, 9.1.12/13, ledger ENT-4a-ALIGN (3376), FEE-BOTH-1 (3382), and graph (3436) were inspected. Against main, the only plan delta in this dependency stack is the two-line ENT-3d ledger amendment at 3396; all cited existing contracts are unchanged. AGENTS.md is unchanged. No plan amendment was written by this builder.
 - Founder evidence actually read: `~/.local/share/full-steam/jg-orders/next-wave/BEN-ANSWERS-20261013.md`, card `jobguard-twenty-product-decisions-2026-10-13`. The three contracts quote every adopted ENT-5 answer verbatim and state its limited mapping.
@@ -29,8 +29,8 @@ Lock order: this foundation's runtime code only reads; it takes no business lock
 
 ## New GRANT inventory — Standard F
 
-1. `GRANT SELECT ON app.extra_approval_revision_binding TO jobguard_runtime;` (0147:52).
-2. `GRANT SELECT ON app.extra_evidence_pack TO jobguard_runtime;` (0147:53).
+1. `GRANT SELECT ON app.extra_approval_revision_binding TO jobguard_runtime;` (0157:52).
+2. `GRANT SELECT ON app.extra_evidence_pack TO jobguard_runtime;` (0157:53).
 
 Standard F statement: zero new direct INSERT/UPDATE/DELETE grants to the application login; no new business EXECUTE grant. PUBLIC/runtime/infrastructure execution of both new trigger functions is revoked. Runtime DDL/TRUNCATE/trigger denial and actual role/RLS/catalog behavior are written as PostgreSQL tests, **NOT RUN**, not asserted from SQL inspection as verified database behavior.
 
@@ -232,7 +232,7 @@ Original handoff delta SHA-256 (receipt excluded to avoid hashing its own text; 
 | `packages/core/src/extra-evidence-pack.ts` | new | 3f35a99b953751a884df52976cfd0689ec0c8380e5245291e9ce5a7cfbd32faa |
 | `packages/core/src/index.ts` | 626429cce51c620e254db160138fbab68ba7a0c7ce176b86bd7a526be079a95e | 8f6d6462d44bb67f3a016ae8e73d2b2c5abde05396a1a56f9620c0d58dc6253b |
 | `packages/db/MIGRATIONS.md` | 84541cfdbbaa0971f3736357eb17dc18eb5689624974a5214248e46e4de40ea9 | 5a7eb478316d7e88c4251b43282f5342b7cdcfc6914d2a429bb8769b0679ffab |
-| `packages/db/migrations/0147_extra_approval.sql` | new | 0e10ed73dd26a83b661ef6e14e218ab1f0676e647c45096794f5de47092a534f |
+| `packages/db/migrations/0157_extra_approval.sql` | new | 0e10ed73dd26a83b661ef6e14e218ab1f0676e647c45096794f5de47092a534f |
 | `packages/db/src/extra-approval-repository.ts` | new | 61e6c49d3d6511425f7154932babb5fe58542d14dd853c270ae729aa4d64a2af |
 | `packages/db/src/extra-evidence-pack-repository.ts` | new | 04e866c5f085740396fc8bcc81f4fa6691df28a3c855345cb08190f67dc67af4 |
 | `packages/db/src/extra-evidence-pack-sources.ts` | new | 683e079d541a0e5c3d00218cb45f2834bb3b2efbd6ac494c169c6382cb4b5ae9 |
@@ -389,7 +389,7 @@ Read AGENTS.md, BUILD_PLAN §§9.1.2–9.1.7, §§9.1.12–13 and ENT-5, the thr
 
 The read-only two-endpoint working-tree comparison `git diff --no-renames --name-only -z origin/main --` has **25 files**, every one covered by ENT-5's unchanged allow list. The earlier ENT-3d feature files have dropped out. One inherited r2 type-import repair still differs from main: `packages/db/test/site-extra-evidence-fixtures.ts` imports `Cluster` from `extra-fixtures.js` rather than `site-extra-fixtures.js`. It is already allowed, unchanged from incoming HEAD and passes strict compilation. The four already-authorized tenancy catalogue additions are likewise unchanged from incoming HEAD.
 
-Migration `0147_extra_approval.sql` and its runner registration remain unchanged; there is no renumbering, backfill, provider, schema, prompt, alert or production capability change in r4. 0142–0146 remain allocated to other pieces per the dispatcher. All ENT-5 product-question holds and real-data/fee gates remain in force.
+Migration `0157_extra_approval.sql` and its runner registration remain unchanged; there is no renumbering, backfill, provider, schema, prompt, alert or production capability change in r4. 0142–0146 remain allocated to other pieces per the dispatcher. All ENT-5 product-question holds and real-data/fee gates remain in force.
 
 The standard lane checker computes the committed merge-base diff and then unions staged changes against old HEAD. During this unfinished merge it therefore refuses exactly these **main-owned**, byte-identical-to-main files:
 

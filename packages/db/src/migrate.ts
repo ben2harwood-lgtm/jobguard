@@ -80,7 +80,15 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0139_site_visit_closeout.sql", import.meta.url),
   new URL("../migrations/0140_site_extra_pricing.sql", import.meta.url),
   new URL("../migrations/0141_site_extra_evidence.sql", import.meta.url),
-  new URL("../migrations/0147_extra_approval.sql", import.meta.url),
+  new URL("../migrations/0142_recovery_insurer_money.sql", import.meta.url),
+  new URL("../migrations/0143_sso_emergency_owner_window.sql", import.meta.url),
+  new URL("../migrations/0144_job_work_state.sql", import.meta.url),
+  new URL("../migrations/0150_membership_authority_fix.sql", import.meta.url),
+  new URL("../migrations/0151_ledger_corrections_fix.sql", import.meta.url),
+  new URL("../migrations/0153_quote_supersession_guard.sql", import.meta.url),
+  new URL("../migrations/0154_follow_up_clock_fence.sql", import.meta.url),
+  new URL("../migrations/0155_quote_reacceptance.sql", import.meta.url),
+  new URL("../migrations/0157_extra_approval.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 

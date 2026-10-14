@@ -90,7 +90,11 @@ export * from "./site-extra-repository.js";
 export * from "./scim-repository.js";
 export * from "./recovery-allocation-repository.js";
 export * from "./site-visit-repository.js";
+export * from "./recovery-payment-payer-repository.js";
 
+export * from "./commercial-integrity-application-repository.js";
+export * from "./job-work-state-repository.js";
+export * from "./job-work-state-sources.js";
 export * from "./extra-approval-repository.js";
 export * from "./extra-evidence-pack-sources.js";
 export * from "./extra-evidence-pack-repository.js";

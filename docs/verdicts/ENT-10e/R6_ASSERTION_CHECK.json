@@ -1,0 +1,30 @@
+{
+  "baseline": "51986a49fd9b891b752e8c808409ab01d6a4120a",
+  "kind": "deterministic source comparison; not execution or model review",
+  "checks": [
+    {
+      "path": "packages/db/test/sso-emergency.integration.test.ts",
+      "assertions": 96,
+      "unchangedBytesAndOrder": true,
+      "beforeSha256": "30e5160ed54dbb8e93a86ae004d39d44801ad6a0f746bd1c7f717f3ff76268c8",
+      "afterSha256": "94062039297562e55c3436b906158600fc297011261274141de08d58a72f812b",
+      "assertionsSha256": "68ca4261d0590250541496919a26518a89ffe4bb9cc1198740506ece592274d9"
+    },
+    {
+      "path": "packages/db/test/sso-emergency-concurrency.integration.test.ts",
+      "assertions": 25,
+      "unchangedBytesAndOrder": true,
+      "beforeSha256": "7d4351362bae0cb7bc0cf393b6d2229a50f58f551d38fa0cc04aefb38bd6368f",
+      "afterSha256": "7d4351362bae0cb7bc0cf393b6d2229a50f58f551d38fa0cc04aefb38bd6368f",
+      "assertionsSha256": "18d19eb3ebc8f260cd73ab645091e1279ee01ffc0e8fa74ae0020134861d6d9e"
+    },
+    {
+      "path": "packages/db/test/sso-emergency-window.integration.test.ts",
+      "assertions": 76,
+      "unchangedBytesAndOrder": true,
+      "beforeSha256": "a7b906eacc17a7302f7ed63dbcdea123e8fced5a6980c87ec8b46ff78e37a014",
+      "afterSha256": "a7b906eacc17a7302f7ed63dbcdea123e8fced5a6980c87ec8b46ff78e37a014",
+      "assertionsSha256": "2a27749001c23333efe9e842c29cb7b76d5898d4438a3c0d48edc233907e9070"
+    }
+  ]
+}
