@@ -5,7 +5,7 @@ import { PersistedAuthProvider } from "../persisted-auth-provider.js";
 import { SsoRequiredApplication } from "./sso-required.application.js";
 import { SsoRequiredController } from "./sso-required.controller.js";
 const tenant="10000000-0000-4000-8000-000000000001",user="30000000-0000-4000-8000-000000000003",origin="https://jobguard.invalid";
-const input={version:"sso-emergency.v1",requested_tenant_id:tenant,email:"owner@fixture.invalid",code:"12345678",reason:"Synthetic IdP unavailable for administrator"};
+const input={version:"sso-emergency.v2",commandId:"90000000-0000-4000-8000-000000000009",requested_tenant_id:tenant,email:"owner@fixture.invalid",code:"12345678",reason:"Synthetic IdP unavailable for administrator"};
 describe("ENT-10d emergency access",()=>{
  it.each(["no code","invalid code","unknown address","non-member","no permission","switch off","valid administrator"])("[S10a] %s has identical public refusal and issues no session",async kind=>{
   const auth=new PersistedAuthProvider(new IdentityRepository({} as Pool),"fixture-secret-longer-than-thirty-two");

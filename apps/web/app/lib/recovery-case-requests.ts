@@ -109,7 +109,8 @@ const practiceCustomerSources = ["Generated customer invoice INV-18800"];
  * generated fixture, not a rule for real supplier records. The selectable materials-B delivery is a different fixture and must never be attached to this case.
  */
 export function merchantSourceRefs(sources: SupplierSources): string[] {
-  const rates = sources.materials.filter(item => item.quantity === "40" && item.eachPence === 2000 && item.rateId);
+  // Strip only a valid all-zero fractional suffix; compare exactly without floating-point coercion.
+  const rates = sources.materials.filter(item => item.quantity.replace(/\.0{1,6}$/u, "") === "40" && item.eachPence === 2000 && item.rateId);
   const invoice = sources.facts.filter(item => item.document_number === "INV-M320-001").at(-1);
   return invoice && rates.length === 1 ? [rates[0]!.rateId!, invoice.version_id] : practiceMerchantSources;
 }

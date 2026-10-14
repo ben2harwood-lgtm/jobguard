@@ -1,0 +1,10 @@
+chore(sso): record ENT-10e r2 exact-result assertion stop
+
+Record the clean worktree and required main catch-up, and the newly
+authorized fixture changes without modifying any test or source.
+Report concurrency line 152's exact result mismatch and a coordinator
+proposal retaining equality and checking the three added v2 fields.
+Keep all coordinator commits and integration line 168 unchanged.
+No implementation checks executed; independent RED reviews remain pending.
+
+Built-by: Codex, dispatched 13 October 2026
