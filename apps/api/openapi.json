@@ -798,6 +798,42 @@
         ]
       }
     },
+    "/auth/sso-required/detail": {
+      "get": {
+        "operationId": "SsoRequiredController_detail",
+        "parameters": [
+          {
+            "name": "requested_tenant_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "sso-required-detail-view.v1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "sso-required-detail.v1; administrator, origin and CSRF required; no-store"
+          }
+        },
+        "summary": "Read the company administrator's not-yet-linked members and emergency window",
+        "tags": [
+          "sso-required"
+        ]
+      }
+    },
     "/auth/sso-required/emergency": {
       "post": {
         "operationId": "SsoRequiredController_emergency",
@@ -811,6 +847,7 @@
                 "required": [
                   "version",
                   "requested_tenant_id",
+                  "commandId",
                   "email",
                   "code",
                   "reason"
@@ -820,10 +857,14 @@
                   "version": {
                     "type": "string",
                     "enum": [
-                      "sso-emergency.v1"
+                      "sso-emergency.v2"
                     ]
                   },
                   "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "commandId": {
                     "type": "string",
                     "format": "uuid"
                   },
@@ -847,11 +888,14 @@
           }
         },
         "responses": {
+          "201": {
+            "description": "sso-emergency-response.v2; requiredAgainAt and windowMinutes; no session"
+          },
           "403": {
             "description": "SSO_EMERGENCY_REFUSED; identical for every cause; no session"
           }
         },
-        "summary": "Mailbox-proven emergency access; approver rule held, every request refused",
+        "summary": "Mailbox-proven company-owner emergency access with an immutable time limit",
         "tags": [
           "sso-required"
         ]
@@ -1577,6 +1621,9 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "422": {
+            "description": "Start a linked job for this customer and site"
           }
         },
         "summary": "Propose, revise, approve or reject a synthetic variation",
@@ -1662,6 +1709,34 @@
                       "enum": [
                         "JOB_NOT_LIVE",
                         "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
                       ]
                     }
                   }
@@ -1970,6 +2045,34 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append a synthetic purchase-order draft revision",
@@ -2001,6 +2104,34 @@
                       "enum": [
                         "JOB_NOT_LIVE",
                         "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
                       ]
                     }
                   }
@@ -2053,6 +2184,34 @@
                       "enum": [
                         "JOB_NOT_LIVE",
                         "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "POST_LOCK_WORK_REQUIRES_LINKED_JOB"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "Start a linked job for this customer and site"
                       ]
                     }
                   }
@@ -4293,6 +4452,21 @@
         "summary": "Review or approve allocation reversal against a recorded refund, credit or receipt reversal",
         "tags": [
           "recovery-allocations"
+        ]
+      }
+    },
+    "/jobs/{id}/work-state": {
+      "get": {
+        "operationId": "JobWorkStateController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Persisted synthetic history with exact UTC microsecond timestamps and zero external actions"
+          }
+        },
+        "summary": "Read immutable synthetic work facts; interval and command policies held",
+        "tags": [
+          "JobWorkState"
         ]
       }
     }
