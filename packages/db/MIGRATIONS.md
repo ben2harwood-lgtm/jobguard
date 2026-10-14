@@ -1095,6 +1095,38 @@ Upgrade proof: `packages/db/test/migfix-8-upgrade.integration.test.ts` (`MIGFIX-
 
 Forward-fix rollback strategy: a failed installation rolls back its transaction. After installation, preserve all history and privileges and ship a separately reviewed later migration; do not edit an earlier migration or remove the fence without a reviewed replacement. Existing repository code remains schema compatible, while deployment of the updated repositories preserves the run-before-case lock order. No new external action, operational alert or commercial release is introduced.
 
+## 0155 — quote re-acceptance after cancellation (AUDIT-FIX-API-QUOTE, finding 5)
+
+Founder decisions 21-23 (Ben, 14 Oct, coordinator chat): the same unchanged quote may be accepted again after its acceptance was
+cancelled; the re-acceptance records fresh customer details (who, how, when), nothing copied; it is refused once any customer invoice,
+credit note or payment (receipt) exists on the job.
+
+`0155_quote_reacceptance.sql` never edits 0011 or 0153. It drops the `UNIQUE(tenant_id,job_id,document_id)` key on
+`app.quote_acceptance` and adds the new immutable, RLS-forced table `app.quote_acceptance_sequence` (owner `jobguard_migration`,
+`SELECT` only to `jobguard_runtime`, immutability trigger) holding `acceptance_sequence` (>0) and `replaces_acceptance_id` per
+acceptance, with UNIQUE `(tenant_id,job_id,document_id,acceptance_sequence)` and UNIQUE `(tenant_id,replaces_acceptance_id)`.
+`app.quote_acceptance` keeps its exact column list on purpose: its whole rows are fingerprinted into evidence packs and
+recovery-message sources (`fingerprinted-row-shape.integration.test.ts`). Existing acceptances have no side row and count as
+sequence 1; no backfill, no historical row changes.
+
+`CREATE OR REPLACE` (same signatures, owners, ACLs, `search_path`) of `app.record_builder_attested_acceptance` and
+`app.record_quote_disposition`. Under the existing job `FOR UPDATE` lock and `quoting` status, a document with an earlier acceptance
+may be accepted again only when that latest acceptance has an `acceptance_cancelled` event bound to its id and no
+`customer_invoice`, `customer_credit_note` or `customer_payment` row exists for the job; `app.quote_version` is inserted only when
+absent; the new acceptance gets sequence = previous + 1 and `replaces_acceptance_id`. The cancel branch binds `acceptance_id` to the
+latest acceptance. The 0153 supersession refusal, exact-document checks and owner check are unchanged. `switch_job_live` is not
+replaced: it already requires job status `accepted` with the pointer on the document, which only an uncancelled acceptance can set.
+
+Repository (`acceptance-repository.ts`): the semantic key keeps its old form for the first acceptance/cancellation and gains
+`:<n>` for later ones; a retry with a known command id reuses that command's recorded key so it still replays. The active-acceptance
+view reads the latest row.
+
+Rollback strategy: roll back a failed install transaction. After install keep the side table and history and fix forward; do not
+restore the one-per-document key. Known, not in scope: `app.quote_version.status` stays `accepted` after a cancel (immutable table;
+the job pointer is the truth); `0107` `recovery_message_sources_current` picks the latest acceptance by `accepted_at`, which could
+prefer an earlier-stated time of a re-acceptance. Proof: `quote-reacceptance.integration.test.ts` and
+`quote-reacceptance-upgrade.integration.test.ts`.
+
 ## 0156 — customer billing integrity (MIGFIX-5)
 
 Restates two installed routines in place with `CREATE OR REPLACE` (owner `jobguard_migration`, SECURITY DEFINER, pinned `search_path` and ACL are preserved; no GRANT, table, column, policy or row change):
