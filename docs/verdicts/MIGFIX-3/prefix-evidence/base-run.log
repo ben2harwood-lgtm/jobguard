@@ -1,0 +1,227 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-3-base/packages/db
+
+ ❯ test/migfix-3-upgrade.integration.test.ts (1 test | 1 skipped) 4202ms
+ ❯ test/migfix-3.integration.test.ts (12 tests | 11 failed) 6736ms
+     × [MIGFIX-3.1] replacement proof resolves rework for the original stage 75ms
+     × [MIGFIX-3.2] replacement proof can itself be invalidated and repaired 35ms
+     × [MIGFIX-3.3] invalidation replays once and rejects changed payloads 26ms
+     × [MIGFIX-3.4] identical and conflicting command IDs have one durable result and old identities collide 65ms
+     × [MIGFIX-3.5] response failure rolls back effects; revoked and expired actors fail before effects 22ms
+     × [MIGFIX-3.6 B1/B3a] invalidation upload lock prevents completion using a stale eligibility snapshot 31ms
+     × [MIGFIX-3.6 B1/B3a] completion holding the upload commits before invalidation records original-stage rework 1251ms
+     × [MIGFIX-3.4/5] replacement retries are unique and response failures leave rework outstanding 46ms
+     × [MIGFIX-3.5] a missing audit event refuses commit and rolls back the checked invalidation 20ms
+     × [MIGFIX-3.7] pending, rejected, wrong-job and foreign-tenant evidence cannot repair a stage 43ms
+     × [MIGFIX-3.7] new history is tenant-isolated, append-only and has no runtime write grants 1ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/migfix-3-upgrade.integration.test.ts [ test/migfix-3-upgrade.integration.test.ts ]
+AssertionError: expected -1 to be greater than 0
+ ❯ test/migfix-3-upgrade.integration.test.ts:24:15
+     22|   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", passwo…
+     23|   await admin.query("CREATE TABLE public.jobguard_schema_migration(mig…
+     24|   expect(own).toBeGreaterThan(0);
+       |               ^
+     25|   for (const url of MIGRATION_URLS.slice(0, own)) {
+     26|     await admin.query(await readFile(url, "utf8"));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.1] replacement proof resolves rework for the original stage
+ProofCommandError: COMMAND_CONFLICT
+ ❯ src/proof-repository.ts:23:1537
+
+ ❯ withTenant src/tenant-context.ts:88:20
+ ❯ test/migfix-3.integration.test.ts:41:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.2] replacement proof can itself be invalidated and repaired
+ProofCommandError: COMMAND_CONFLICT
+ ❯ src/proof-repository.ts:23:1537
+
+ ❯ withTenant src/tenant-context.ts:88:20
+ ❯ test/migfix-3.integration.test.ts:51:48
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.3] invalidation replays once and rejects changed payloads
+AssertionError: expected null to deeply equal { response: { …(2) } }
+
+- Expected:
+{
+  "response": {
+    "reviewRequired": true,
+    "version": "fixture.v1",
+  },
+}
+
++ Received:
+null
+
+ ❯ test/migfix-3.integration.test.ts:69:83
+     67|     const run = () => h.repos.proof.invalidate(h.ctx, command, async d…
+     68|     const first = await run(); expect(await run()).toEqual(first);
+     69|     expect(await records.replay(h.ctx, { ...spec, actorMembershipId: h…
+       |                                                                                   ^
+     70|     for (const change of [{ evidenceId: randomUUID() }, { reasonCode: …
+     71|       await expect(h.repos.proof.invalidate(h.ctx, { ...command, ...ch…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.4] identical and conflicting command IDs have one durable result and old identities collide
+AssertionError: expected [ { status: 'fulfilled', …(1) }, …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ test/migfix-3.integration.test.ts:87:57
+     85|     const raced = await Promise.allSettled([h.repos.proof.invalidate(h…
+     86|       h.repos.proof.invalidate(h.ctx, { ...invalidation(e, id), reason…
+     87|     expect(raced.filter(r => r.status === "fulfilled")).toHaveLength(1…
+       |                                                         ^
+     88|     expect(raced.filter(r => r.status === "rejected")).toHaveLength(1);
+     89|     await expect(h.repos.proof.invalidate(h.ctx, invalidation(e, f.com…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.5] response failure rolls back effects; revoked and expired actors fail before effects
+AssertionError: promise resolved "{ …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "evidenceId": "79e08d47-5759-45db-89b9-ab507b081d2e",
++   "reviewRequired": true,
+  }
+
+ ❯ test/migfix-3.integration.test.ts:95:105
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.6 B1/B3a] invalidation upload lock prevents completion using a stale eligibility snapshot
+AssertionError: promise resolved "{ …(4) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "completionId": "067addae-9684-4108-bb41-2bca4eb75c25",
++   "decisionId": null,
++   "evidenceId": "8f2682f0-2618-4ea4-b57f-2ce3c9749573",
++   "state": "complete",
+  }
+
+ ❯ test/migfix-3.integration.test.ts:120:27
+    118|       await upload.query("INSERT INTO app.evidence_invalidation(id,ten…
+    119|       await upload.query("COMMIT");
+    120|       await expect(pending).rejects.toMatchObject({ code: "PROOF_NOT_F…
+       |                           ^
+    121|       expect((await h.admin.query("SELECT * FROM app.stage_completion …
+    122|     } finally { await upload.query("ROLLBACK"); upload.release(); }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.6 B1/B3a] completion holding the upload commits before invalidation records original-stage rework
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/migfix-3.integration.test.ts:138:23
+    136|         if (!waiting) await new Promise(resolve => setTimeout(resolve,…
+    137|       }
+    138|       expect(waiting).toBe(true);
+       |                       ^
+    139|     } finally { resume(); }
+    140|     await Promise.all([completion, invalidating]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.4/5] replacement retries are unique and response failures leave rework outstanding
+AssertionError: expected [Function] to throw error including 'replacement_response_failed' but got 'COMMAND_CONFLICT'
+
+Expected: "replacement_response_failed"
+Received: "COMMAND_CONFLICT"
+
+ ❯ test/migfix-3.integration.test.ts:147:115
+    145|     const f = await initial(); await h.repos.proof.invalidate(h.ctx, i…
+    146|     const evidence = await replacement(f.job, "replacement-retry"), c …
+    147|     await expect(h.repos.proof.complete(h.ctx, c, async () => { throw …
+       |                                                                                                                   ^
+    148|     expect(await current(f.job)).toEqual([expect.objectContaining({ ev…
+    149|     expect((await h.admin.query("SELECT * FROM app.stage_proof_replace…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.5] a missing audit event refuses commit and rolls back the checked invalidation
+AssertionError: expected [Function] to throw error matching /PROOF_AUDIT_REQUIRED|foreign key/ but got 'function app.invalidate_proof_command…'
+
+- Expected:
+/PROOF_AUDIT_REQUIRED|foreign key/
+
++ Received:
+"function app.invalidate_proof_command(unknown, unknown, unknown, unknown, unknown, unknown) does not exist"
+
+ ❯ test/migfix-3.integration.test.ts:157:62
+    155|     const f = await initial(), command = randomUUID();
+    156|     await expect(withTenant(h.runtime, h.ctx, db => db.$client.query("…
+    157|       [h.tenant,command,h.member,f.evidence,"a".repeat(64)]))).rejects…
+       |                                                              ^
+    158|     expect((await h.admin.query("SELECT * FROM app.proof_invalidation_…
+    159|     expect((await h.admin.query("SELECT * FROM app.evidence_invalidati…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.7] pending, rejected, wrong-job and foreign-tenant evidence cannot repair a stage
+error: relation "app.stage_proof_replacement" does not exist
+ ❯ ../../node_modules/.pnpm/pg@8.16.3/node_modules/pg/lib/client.js:545:17
+ ❯ test/migfix-3.integration.test.ts:183:62
+    181|     const foreign = testTenantContext(randomUUID());
+    182|     for (const table of ["stage_proof_replacement","proof_invalidation…
+    183|       expect(await withTenant(h.runtime,foreign,async db => (await db.…
+       |                                                              ^
+    184|     await expect(h.repos.proof.complete(foreign,complete(f.job,f.evide…
+    185|   });
+ ❯ withTenant src/tenant-context.ts:88:20
+ ❯ test/migfix-3.integration.test.ts:183:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/12]⎯
+
+ FAIL  test/migfix-3.integration.test.ts > MIGFIX-3 original-stage replacement > [MIGFIX-3.7] new history is tenant-isolated, append-only and has no runtime write grants
+error: relation "app.stage_proof_replacement" does not exist
+ ❯ ../../node_modules/.pnpm/pg-pool@3.14.0_pg@8.16.3/node_modules/pg-pool/index.js:45:11
+ ❯ test/migfix-3.integration.test.ts:188:22
+    186|   it("[MIGFIX-3.7] new history is tenant-isolated, append-only and has…
+    187|     for (const table of ["stage_proof_replacement", "proof_invalidatio…
+    188|       const flags = (await h.admin.query(`SELECT relrowsecurity,relfor…
+       |                      ^
+    189|         has_table_privilege('jobguard_runtime',oid,'INSERT,UPDATE,DELE…
+    190|       expect(flags).toEqual({ relrowsecurity: true, relforcerowsecurit…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  11 failed | 1 passed | 1 skipped (13)
+   Start at  10:36:02
+   Duration  7.69s (transform 936ms, setup 0ms, import 1.76s, tests 10.94s, environment 0ms)
+
