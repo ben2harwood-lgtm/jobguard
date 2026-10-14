@@ -8,7 +8,7 @@ describe("CH-4 immutable source concurrency",()=>{
   const first=[...events].sort((x,y)=>x.fact_at.localeCompare(y.fact_at)||x.id.localeCompare(y.id))[0];expect(first.fact_at).toBe("2026-10-13T10:00:00.000001Z");
  });
  it("CH4-A06 source activity cancels an outstanding marker without editing it",async()=>{
-  const a=await seedWorkJob(f),marker=await fixtureLifecycle(f,a,"finished_on_site"),before=(await workEvents(f,a))[0];await insertPhoto(f,a,"2026-10-14T10:00:00.000001Z");
+  const a=await seedWorkJob(f),marker=await fixtureLifecycle(f,a,"finished_on_site"),before=(await workEvents(f,a))[0];const photoAt=new Date(Date.parse(before.fact_at)+60000).toISOString();await insertPhoto(f,a,photoAt);
   const rows=await workEvents(f,a);expect(rows[0]).toEqual(before);expect(rows.map(r=>r.kind)).toEqual(["finished_on_site","finished_cancelled","first_site_evidence"]);
   expect((await f.admin.query("SELECT predecessor_id FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2 AND kind='finished_cancelled'",[a.tenantId,a.jobId])).rows[0].predecessor_id).toBe(marker);
  });
