@@ -178,7 +178,12 @@ it("paid-invoice credit remains readable and reversible", async () => {
   const preview = await f.invoices.previewCredit(context, creditInput);
   const credit = await f.invoices.issueCredit(context, { ...creditInput, actorMembershipId: actor.membershipId,
     commandId: randomUUID(), previewHash: preview.previewHash });
-  expect(credit.totalPence).toBe(38400);
+  // Credit document totals are signed corrections; allocation sources use the
+  // separately stored positive amount, as established by UIWIRE-11.
+  expect(credit.totalPence).toBe(-38400);
+  const storedCredit = (await admin.query("SELECT amount_pence,total_pence FROM app.customer_credit_note WHERE tenant_id=$1 AND job_id=$2 AND id=$3",
+    [DEMO_TENANT_ID, f.jobId, credit.creditNoteId])).rows[0]!;
+  expect(storedCredit).toMatchObject({ amount_pence: "38400", total_pence: "-38400" });
 
   // No application, authentication or repository doubles: the issued session,
   // PostgreSQL routines and controller response parser drive this journey.

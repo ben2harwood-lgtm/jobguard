@@ -80,3 +80,48 @@ Affected invariants: versioned strict response boundaries, exact bounded money, 
 ## Audit later / advisory items (receipt only)
 
 The report explicitly says 0 LATER. Its five weakest-test observations remain advisory/unmodified: real unissued versus foreign issued sessions (401/404); independent sessions and crossed jobs; malformed responses through both application methods; altered exact approval hash with no writes; actual Nest routing and persisted replay. Only the valid credit/reversal response state belonging to the blocking finding was covered here.
+
+## CI repair r1 — 14 October 2026, dispatcher 6
+
+PR #197; inspected starting HEAD `5bf55b978ac1159e72cbd57a28e3b895fc4c7ab4`, exactly the dispatched head. `git merge-base --is-ancestor 5bf55b97 HEAD` succeeded. Branch is `codex/sandbox/audit-fix-api-file-recovery-allocation`; local `origin/main` is `774cc81b097ab223dcf7d463ec433c62736ac6ca`. No Git write commands used. Read AGENTS.md, BUILD_PLAN.md §10.3.2 / M4-8-S, the allocation contract, original audit, CHECK-LANES and standing rules 11/12.
+
+### Every reported CI failure and disposition
+
+Exactly one test failure in the supplied filtered log for GitHub run **38515417941**: `@jobguard/db`, `test/recovery-allocation.integration.test.ts`, **paid-invoice credit remains readable and reversible**, line 181: `AssertionError: expected -38400 to be 38400`. This occurs at `expect(credit.totalPence).toBe(38400)`, before controller GET or reversal execution. CI execution confirms the actual signed total is negative; it does not yet prove the assertions after that line.
+
+**The piece's own new test was wrong; product code is right.** This test was added in this PR's `d8aab77d` commit and is absent from `origin/main`. Proof of the existing representation:
+
+- Merged migration `0028_uiwire11_credit_notes.sql:26–27` constrains `net_pence < 0`, `tax_pence <= 0`, `total_pence = net_pence + tax_pence`, and `amount_pence = -total_pence`.
+- Its issuance routine at lines 82–86 stores positive `amount_pence = gross`, signed `total_pence = -gross`, and returns/persists `totalPence = -gross`, including replay. This deliberately distinguishes correction-document totals from available credit magnitude.
+- `PracticeInvoiceRepository.previewCredit` returns signed totals at line 46; `issueCredit` reads the routine's signed `total_pence` at line 54 without flipping it.
+- Merged `UIWIRE-11.integration.test.ts:5`, **approves one immutable signed credit and preserves its invoice**, requires negative preview and credit-view totals. That test is unchanged.
+- `RecoveryAllocationRepository.project` reads the positive `credit.amount_pence` for reversal-source availability and subtracts positive credits from the customer balance. Its reversal artifact and migration 0136 also verify against positive `amount_pence`. Neither reads the signed document total as the available amount.
+
+Changed only the new test's signed-document assertion to `-38400`, with a comment explaining the existing convention. Added a tenant/job/id-scoped database assertion for the same persisted credit: `amount_pence: "38400"`, `total_pence: "-38400"`. All existing positive source availability, positive reversal review/execution amounts, negative customer-balance, original-allocation preservation and replay assertions remain intact. The resulting test asserts the stated positive readable/reversible credit magnitude while respecting the signed correction document; execution of this repaired journey remains pending in CI. No product code, money policy, rounding or persistence change is necessary. No conflict with merged tests; no stop condition arose.
+
+### Preservation and self-review
+
+Read-only comparison against `origin/main` removed only this PR's added test, controller import and fixture return of the existing session; every remaining byte of the merged integration suite matched. Separate comparisons confirmed `apps/api/src/auth/context-boundary.test.ts`, `packages/db/test/UIWIRE-11.integration.test.ts`, migration 0028 and both invoice/allocation repositories match HEAD exactly. No merged test, pinned list, lane registration, grant, migration, OpenAPI artifact, AGENTS.md or BUILD_PLAN.md changed in r1. Rules 11/12: no credential-shaped values or permanent file/hash pins added. The added assertion checks persisted domain amounts, not source text. Self-reviewed the complete r1 diff; builder evidence is not an independent verdict or acceptance.
+
+### Local verification and environment
+
+Existing supplied dependencies only; no install/download. Host Node `v24.17.0` differs from repository/CI pin `24.15.0`; installed pnpm `10.28.1` used through `/private/tmp/jg-r1-pnpm-bin/pnpm` (cached executable). The default pnpm launcher stalled during version lookup and was interrupted; no package download was requested.
+
+- `pnpm typecheck`: PASS, 7/7 tasks; 4 cached, database/API/web executed. Log `/private/tmp/jg-r1-typecheck.log`.
+- `LANE_BASE_REF=origin/main pnpm lint`: PASS, root guards and 7/7 package tasks; 4 cached. Log `/private/tmp/jg-r1-lint.log`.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: PASS, including the repaired integration file and this receipt. Log `/private/tmp/jg-r1-lint-lanes.log`.
+- `pnpm build`: PASS, 7/7 tasks; 4 cached, database/API/web executed. Existing Next workspace-root, CSS/autoprefixer, webpack-cache and Turbo cache-I/O warnings; no build failure. Log `/private/tmp/jg-r1-build.log`.
+- OpenAPI check via `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: PASS. This executes the same generator/check flag without the tsx CLI's socket requirement; the root wrapper itself was not run. Log `/private/tmp/jg-r1-openapi.log`.
+- `pnpm --filter @jobguard/api exec vitest run src/recovery-allocation.credit.test.ts src/recovery-allocation.application.test.ts src/recovery-allocation.controller.test.ts --maxWorkers=1`: PASS, 3 files / 55 tests. Log `/private/tmp/jg-r1-allocation-unit.log`.
+- Seven non-Git-write tool test files via `node --test`: PASS, 19 tests. Files: commercial-boundary, core-purity, decision-check-purity, decision-records, dependency-audit, policy-gate-sites and shared-money-origin. Log `/private/tmp/jg-r1-tool-unit.log`.
+- `pnpm --filter @jobguard/db exec vitest list test/recovery-allocation.integration.test.ts`: PASS, collection of all 17 tests; **not PostgreSQL execution**. Log `/private/tmp/jg-r1-allocation-collection.log`.
+
+`pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1` with explicit local exclusions: **PASS, 66 files / 1,574 tests**. It excludes eight database/listener files: health, shadow-isolation.application, final-account-lock.isolation, auth/sso/action-paths, contractor/site-visit.http, contractor/site-extra-pricing.http, contractor/contractor-practice-session.http and contractor/site-extra.http. These exclusions affect only this local invocation; no suite/configuration changed. Log `/private/tmp/jg-r1-api-unit.log`.
+
+At the subsequent disk check, `df -g /` reported **37 GB available**, below COMMON.md's standing 45 GB floor. No additional heavy core/web/database unit sweep was launched after that finding; ongoing runs were allowed to finish. Diagnostic `ps -axo pid,etime,pcpu,pmem,command` was refused with `zsh:1: operation not permitted: ps`; no alternative process inspection or escalation attempted. This is a diagnostic restriction, not a test failure. **No local acceptance check failed in r1.** The sole supplied CI failure is the one listed above. `git diff --check` and the final lane check after receipt update passed.
+
+### Dispatcher completion requirements
+
+Real PostgreSQL, `pnpm test:db`, `pnpm test:migrations`, browser/e2e suites, full root `pnpm test` and remaining broad unit sweeps: **NOT RUN here**. The sandbox cannot bind localhost or start PostgreSQL; root tests also include Git-writing tool fixtures prohibited by this dispatch. No database/browser was started. Run the corrected paid-invoice test first on the dispatcher commit, then the full allocation suite, unchanged UIWIRE-11 suite and all mandatory CI checks on that exact head. Collection and doubled API tests do not prove the database reversal journey.
+
+No new migrations, data changes, backwards-compatibility impact, rollback procedure or operational alert: r1 is a correction to this PR's own test. The original signed response-validator product fix remains. Independent exact-commit verdict, separate acceptance, green real-PostgreSQL CI and existing release/commercial gates remain outstanding. Dispatcher commits/pushes; intended conventional commit message is overwritten at `/private/tmp/jg-msg-audit-fix-api-file-recovery-allocation.txt`.
