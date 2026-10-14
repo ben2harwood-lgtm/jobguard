@@ -13,7 +13,7 @@ const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), H 
 const context = testTenantContext(T);
 let pg: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool, writer: Pool, dir: string;
 let repo: PracticeInvoiceRepository;
-type Fixture = { jobId: string; invoiceId: string; draftId: string; revisionId: string; quoteId: string };
+type Fixture = { jobId: string; invoiceId: string; draftId: string; revisionId: string; quoteId: string; command: ReturnType<typeof issue> };
 const issue = (jobId: string, finalAccountRevisionId: string) => ({ jobId, finalAccountRevisionId,
   actorMembershipId: M, commandId: randomUUID(), recipient: "practice-customer@example.invalid", issuedOn: "2026-10-14" });
 async function freshInvoice(net = 20003, tax = 4001): Promise<Fixture> {
@@ -24,8 +24,9 @@ async function freshInvoice(net = 20003, tax = 4001): Promise<Fixture> {
   await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
     VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',$7,$8,$9,false,'[]')`, [revisionId,T,jobId,draftId,H,quoteId,net,tax,net+tax]);
   await admin.query(`UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`, [T,draftId,revisionId]);
-  const invoice = await repo.issue(context,issue(jobId,revisionId));
-  return { jobId,invoiceId:invoice.id,draftId,revisionId,quoteId };
+  const command = issue(jobId,revisionId);
+  const invoice = await repo.issue(context,command);
+  return { jobId,invoiceId:invoice.id,draftId,revisionId,quoteId,command };
 }
 async function nextRevision(f: Fixture, net: number, tax: number) {
   const id = randomUUID();
@@ -159,7 +160,7 @@ describe("practice invoice audit regressions (real PostgreSQL)", () => {
 
   it("requires full credit before replacing an invoice and preserves earlier command replays", async () => {
     const f = await freshInvoice(10000,2000);
-    const original = issue(f.jobId,f.revisionId);
+    const original = f.command;
     const originalInvoice = await repo.issue(context,original);
     await credit(f,5000);
     const next = await nextRevision(f,12000,2400);

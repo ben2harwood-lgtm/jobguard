@@ -1,4 +1,34 @@
-# AUDIT-FIX-API-FILE-CUSTOMER-INVOICE builder receipt — repair r1
+# AUDIT-FIX-API-FILE-CUSTOMER-INVOICE builder receipt — repair r2
+
+## Repair r2 — test only, 14 October 2026
+
+Dispatcher 5 issued this repair against HEAD `2c0b279c20d3fd74f3b53ad48cde69aebe670b3e`. Read the independent Opus REPAIR verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/audit-fix-api-file-customer-invoice-opus-2c0b279.md`, repository `AGENTS.md`, `BUILD_PLAN.md` §§2.4, 5.3–5.4 and 10.2.6, and `docs/contracts/final-account-lock-v1.md`.
+
+The NEW replacement/replay test previously generated a fresh command for an already-issued revision. Migration 0095 returns that existing invoice without creating a receipt for the fresh command; after revision replacement, replaying it therefore fails the current-revision check. `freshInvoice` now returns the command that actually created the invoice. Only **`requires full credit before replacing an invoice and preserves earlier command replays`** uses that retained command for its replay and changed-payload assertions. All assertions are preserved. The only changed files in r2 are the NEW integration-test file and this receipt; production code, migrations, existing tests and lane policy are untouched.
+
+**PostgreSQL is still unrun.** No database or browser suite was attempted in r2: this sandbox cannot bind localhost or start PostgreSQL. No real-PostgreSQL pass, failing-first proof, independent verification, technical acceptance or release is claimed. GitHub CI must run the new six-test suite, UIWIRE-10/11/12, full database/migration/browser checks and the previously requested PostgreSQL failing-first comparison after the dispatcher commits/pushes. The r1 release holds and finding 4 STOP remain unchanged; a verdict bound to the dispatcher's new commit and separate acceptance remain owed.
+
+### R2 checks actually run
+
+Dependencies were already installed; no install/download or git-writing command was run. Node is `v24.17.0`. The default standalone `pnpm --version` stalled and was interrupted (130); all pnpm checks below used the existing temporary PATH shim `/private/tmp/jg-pnpm-r1/bin/pnpm`, which invokes cached pinned pnpm `10.28.1`. Logs are `/private/tmp/jg-invoice-r2-*.log`.
+
+| Actually executed check | Result |
+| --- | --- |
+| `pnpm typecheck --force` | Exit 0; all seven packages freshly executed, zero cache hits. |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | Exit 0; root checks and all seven package checks freshly executed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; registered six-file task lane. |
+| `pnpm build --force` | Exit 0; all seven packages freshly executed, including Next production build. Existing CSS/workspace-root and sandbox cache-write warnings. |
+| `pnpm openapi:check` | Exit 1; tsx CLI IPC listener refused with `listen EPERM`. |
+| `node --import tsx src/generate-openapi.ts --check` from apps/api | Exit 0; same installed generator and exact OpenAPI comparison, without CLI IPC. |
+| `node_modules/.bin/tsc -p /private/tmp/jg-invoice-r1-tests-tsconfig.json` | Exit 0; retained strict/noEmit config includes the NEW integration test and unchanged UIWIRE-12, beyond the package's src-only typecheck. |
+| Selected sandbox-compatible unit suites | Exit 0 throughout; tools 19, DB source 91 (including four invoice-repository units), DB test-directory units 82, core 2445, API 1551, web 784, AI fixtures 80, config 1, storage 2: **5055 tests passed**. No live-model or browser result claimed. |
+| Exact-diff inspection and `git diff --check` | Passed; only fixture command retention and the one test's command selection changed, with every assertion unchanged. |
+
+The unit commands and exit codes are recorded in `/private/tmp/jg-invoice-r2-unit-results.json`, with per-suite logs. From each package, Vitest used `run --exclude '**/dist/**' --maxWorkers=1`; DB source selected `src`, and DB test-directory units explicitly selected its eight non-integration/non-free-port test files. API selected `src` and excluded `**/*.http.test.ts`, `src/health.test.ts`, `src/shadow-isolation.application.test.ts`, `src/auth/sso/action-paths.test.ts` and `src/final-account-lock.isolation.test.ts` because those suites require listeners and/or PostgreSQL. Tools ran the seven read-only suites via `node --test`; the two agent-lane fixture suites execute git-writing commands and were excluded. Full `pnpm test` remains mandatory in CI and was not invoked under the no-git-write instruction.
+
+Intended conventional commit message overwritten at `/private/tmp/jg-msg-audit-fix-api-file-customer-invoice.txt`. Working-tree handoff only; dispatcher owns commit/push. No migration, compatibility, authorization, money-policy, operational-alert or provider-route change in r2.
+
+## Repair r1 — historical receipt
 
 Status: **Findings 1–3 implemented and scripted-unit verified; real PostgreSQL verification pending. Finding 4 STOPPED. No technical acceptance or release claimed.**
 
