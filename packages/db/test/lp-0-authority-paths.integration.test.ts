@@ -195,7 +195,7 @@ describe("LP-0 authority paths", () => {
     expect(record.routines.filter(r => r.reachable).length).toBeGreaterThan(100);
     // Identity completeness only. The recorded definition digests, search paths, policies and triggers are NOT compared with the live
     // database here: that comparison is the held LP0-13 mechanism (Q2) and is deliberately not built.
-    expect(inventory.recorded.routines.map(r => r.identity)).toEqual(record.routines.map(r => r.identity));
+    expect(inventory.recorded.routines.map(r => r.identity).sort()).toEqual(record.routines.map(r => r.identity).sort()); // order-insensitive: database collation differs by host
     expect(inventory.recorded.policies.length).toBeGreaterThan(200);
     expect(inventory.recorded.triggers.length).toBeGreaterThan(300);
     expect(inventory.held.map(h => h.id)).toEqual(["LP0-13", "LP0-22"]);
