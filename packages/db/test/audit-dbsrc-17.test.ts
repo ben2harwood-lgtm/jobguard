@@ -27,6 +27,30 @@ const principal = { tenantId, membershipId: randomUUID(), identityUserId: random
 const poolOf = (query: (sql: string, values?: unknown[]) => Promise<unknown>) => ({ connect: async () => ({ query, release() {} }) }) as unknown as Pool;
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
+describe("AUDIT-FIX-DBSRC-17 r1 variation workspace parent", () => {
+  it("reads a baseline parent after approval confirms a new extra", async () => {
+    const sql = new VariationSql(); await sql.approved();
+    expect(sql.scopeState).toBe("confirmed");
+    const baselineId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const query = async (statement: string, values: unknown[] = []) => {
+      if (statement.includes("FROM app.scope_identity")) {
+        // SQL contract coverage only; the companion PostgreSQL case proves selection.
+        expect(values).toEqual([tenantId, sql.jobId]);
+        expect(statement).toContain("s.tenant_id=$1 AND s.job_id=$2 AND s.state='confirmed'");
+        expect(statement).toMatch(/NOT EXISTS\s*\(SELECT 1 FROM app\.variation v/u);
+        expect(statement).toContain("v.tenant_id=s.tenant_id AND v.job_id=s.job_id AND v.scope_item_id=s.id");
+        expect(statement).toContain("v.existing_scope_item_id IS NULL");
+        expect(statement).toContain("ORDER BY s.created_at,s.id LIMIT 1");
+        return rows([{ id: baselineId }]);
+      }
+      if (statement.includes("accepted_net_value_pence")) return rows([{ accepted_net_pence: 100000, recovery_cap_pence: 10000 }]);
+      if (statement.includes("FROM app.variation v LEFT JOIN")) return rows([]);
+      return sql.query(statement, values);
+    };
+    expect((await new VariationRepository(poolOf(query)).read(context, sql.jobId)).parentScopeItemId).toBe(baselineId);
+  });
+});
+
 class VariationSql {
   state = "draft";
   scopeState = "reserved";

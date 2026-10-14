@@ -82,6 +82,25 @@ async function approvedExtra() {
 }
 
 describe("AUDIT-FIX-DBSRC-17 PostgreSQL regressions", () => {
+  it("keeps the earliest baseline parent despite confirmed extras and existing-scope changes", async () => {
+    const { proposal, jobId } = await approvedExtra(), repo = new VariationRepository(runtime);
+    const baselineId = (await admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND id<>$3", [DEMO_TENANT_ID, jobId, proposal.scopeItemId])).rows[0].id as string;
+    expect((await admin.query("SELECT state FROM app.scope_identity WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, proposal.scopeItemId])).rows).toEqual([{ state: "confirmed" }]);
+    // Deliberately earlier timestamps and smaller UUIDs prevent either from accidentally hiding the defect.
+    expect(proposal.scopeItemId < baselineId).toBe(true);
+    await admin.query("UPDATE app.scope_identity SET created_at=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, proposal.scopeItemId, "2000-01-01T00:00:00Z"]);
+    await admin.query("UPDATE app.scope_identity SET created_at=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, baselineId, "2001-01-01T00:00:00Z"]);
+    const laterBaselineId = randomUUID();
+    await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state,created_at) VALUES($1,$2,$3,'confirmed',$4)", [laterBaselineId, DEMO_TENANT_ID, jobId, "2002-01-01T00:00:00Z"]);
+    expect(laterBaselineId < baselineId).toBe(true);
+    expect((await repo.read(context, jobId)).parentScopeItemId).toBe(baselineId);
+    // A variation changing an existing identity must not disqualify that baseline identity.
+    await repo.logBuilderExtra(context, { version: "log-builder-extra.v1", proposal: { ...proposal, id: randomUUID(), scopeItemId: baselineId, existingScopeItemId: baselineId }, actorMembershipId: DEMO_MEMBERSHIP_ID, price: null, deviceId: null, deviceCapturedAt: null });
+    expect((await repo.read(context, jobId)).parentScopeItemId).toBe(baselineId);
+    // Equal creation times use UUID ordering within the baseline set, still excluding the older extra.
+    await admin.query("UPDATE app.scope_identity SET created_at=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, laterBaselineId, "2001-01-01T00:00:00Z"]);
+    expect((await repo.read(context, jobId)).parentScopeItemId).toBe(laterBaselineId);
+  }, 30000);
   it("reject cannot revoke an approved variation", async () => {
     const { proposal, revision, jobId } = await approvedExtra(), accounts = new FinalAccountCommandService(runtime);
     const assemble = () => accounts.assemble(context, { version: "final-account.assemble.v1", commandId: randomUUID(), actorMembershipId: DEMO_MEMBERSHIP_ID, jobId });

@@ -1,5 +1,7 @@
 # AUDIT-FIX-DBSRC-17 builder receipt
 
+> **Repair r1, 14 October 2026 (dispatcher 5):** variation-only repair completed in the working tree from `0b1afd4f33c84ae72e89759c783feb744b8d830c`. Findings 2 and 3 remain HELD for Ben’s re-pin. The original receipt below is historical; the appended r1 evidence supersedes its STOP only for the newly authorized repair and checks.
+
 Issued 13 October 2026 by dispatcher 4. Branch `codex/sandbox/audit-fix-dbsrc-17`; initial HEAD `bd959b01e857de0ba7cbd3588bab84add7d0f493` equals `origin/main`. Working-tree changes only. Dispatcher owns commit/push. Intended commit message: `/private/tmp/jg-msg-audit-fix-dbsrc-17.txt`.
 
 Read repository `AGENTS.md`, `BUILD_PLAN.md` C5, §§5.1–5.3, CH-3b and ENT-2, and the issued report `/Users/benharwood/.local/share/full-steam/night-audit-2026-10-13/jobguard/dbsrc-17.md`. No real data, network provider call, spending or external send. Dependencies were supplied; no clean install or package download performed.
@@ -105,3 +107,44 @@ python3 /Users/benharwood/.local/share/full-steam/lane-floor.py jobguard "$PWD" 
 ```
 
 Database, migrations, MinIO/browser and listener-dependent HTTP/security journeys require the Mac outside this sandbox or GitHub CI after the dispatcher pushes. Obtain the independent recorded RED verdict on the exact resulting commit, then separate technical acceptance. No merge/push/release, founder acceptance or security/commercial approval is inferred here.
+
+
+## Repair round r1 — 14 October 2026, dispatcher 5
+
+Read `/Users/benharwood/.local/share/full-steam/jg-runs/audit-fix-dbsrc-17-opus-0b1afd4.md`: independent **HOLD**, source inspection only, bound to the incoming head. This repair responds only to its variation-parent side effect. It is not a new independent verdict or acceptance. No writing git command, package installation/download, push or commit was performed. The dispatcher owns the new commit, whose intended message is overwritten at `/private/tmp/jg-msg-audit-fix-dbsrc-17.txt`.
+
+**Variation parent repair:** `VariationRepository.read` excludes identities belonging to a variation with `existing_scope_item_id IS NULL`, correlated on tenant, job and scope identity. Remaining confirmed baseline identities are ordered by `created_at,id`. Variations changing an existing scope identity do not exclude that baseline identity. Thus approval can confirm a new extra for proof without allowing its arbitrary UUID (or earlier timestamp) to select it as the existing-scope parent. Scope state, approval, rejection, money and progress writes from the original fix are unchanged. No migrations, grants, backfills, provider actions, boundary-schema changes or new operational alerts.
+
+Added one NEW case to each task-owned regression file; no earlier test assertion, expected value, refusal, count, pinned name, fingerprint or hash was edited. The scripted-SQL unit case performs the existing new-extra approval first, then checks tenant/job correlation, new-identity exclusion, stable ordering and the returned workspace parent. **Before the repair:** exit 1, the new case failed and all 12 original cases passed (`/private/tmp/jg-dbsrc-17-r1-before.log`). **After:** exit 0, all 13 cases passed (`/private/tmp/jg-dbsrc-17-r1-after.log`). This is SQL contract coverage, not PostgreSQL execution proof.
+
+The NEW PostgreSQL case uses real capture/approval and a runtime repository read. Descending generated UUIDs force the approved extra below the baseline; test-only admin setup gives the extra an earlier timestamp than every baseline identity. A second baseline with a smaller UUID but later timestamp verifies chronological selection; an existing-scope variation verifies that the original baseline remains eligible; equal baseline timestamps verify the UUID tie-breaker. This case was typechecked but **not run** in the listener/PostgreSQL-prohibited sandbox. It must run in GitHub CI after the dispatcher pushes. No timeout or expectation in any existing case was changed.
+
+**Held fixture piece remains exactly as received:** `packages/db/src/work-order-fixtures.ts` is byte-identical to incoming HEAD, still SHA-256 `fb53f5431f07cb80b9e1b5d11bf25100e50c9f1184e0a658c36e8c0549cf62c3`. Findings 2 and 3 remain HELD for Ben's reviewed-source re-pin; this builder neither edits nor re-pins that file. `apps/api/src/auth/context-boundary.test.ts` is byte-identical to HEAD and `origin/main`, SHA-256 `a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35`. Its pinned fixture hash and count remain untouched. The complete available API unit run below still fails exactly those two protected tests. The original LATER findings remain unchanged.
+
+### r1 commands and actual results
+
+Runtime Node 24.17.0, installed pnpm 11.8.0; repository pins Node 24.15.0 and pnpm 10.28.1. No clean pinned install was performed. All standard wrappers were attempted with `pnpm_config_pm_on_fail=ignore` and `pnpm_config_verify_deps_before_run=false` to prevent implicit downloads/installation: `pnpm typecheck`, `LANE_BASE_REF=origin/main pnpm lint`, `LANE_BASE_REF=origin/main pnpm lint:lanes`, `pnpm test`, `pnpm build`, `pnpm openapi:check`. Each exits 1 before its checks with `ERR_PNPM_UNSUPPORTED_ENGINE` (pnpm 11.8.0 versus 10.28.1). Logs: `/private/tmp/jg-dbsrc-17-r1-pnpm-{typecheck,lint,lint-lanes,test,build,openapi-check}.log`. The lane base was also set on the typecheck/build/OpenAPI attempts.
+
+Direct installed-tool results (not a claim of passing the pinned wrappers):
+
+| Command / scope | Result |
+| --- | --- |
+| `node_modules/.bin/tsc -p <package>/tsconfig.json --noEmit` for core/config/storage/db/ai/web, plus API from its own directory | Exit 0 for all seven packages. API log `/private/tmp/jg-dbsrc-17-r1-api-typecheck.log`. |
+| `node_modules/.bin/tsc -p /private/tmp/jg-dbsrc-17-r1-test-tsconfig.json` | Exit 0 for both task regression files and imports; `/private/tmp/jg-dbsrc-17-r1-tests-typecheck.log`. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | Exit 0: purity, lane, money and commercial boundary checks; `/private/tmp/jg-dbsrc-17-r1-direct-lint-corrected.log`. Package TypeScript lint checks use the passing no-emit commands above. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | Exit 0; `/private/tmp/jg-dbsrc-17-r1-direct-lanes-corrected.log`. No lane-registry edit needed. |
+| Selected non-git-writing tool tests: `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` | Exit 0, 19 passed; `/private/tmp/jg-dbsrc-17-r1-tools-tests.log`. Git-writing lane-tool fixtures omitted under the explicit no-writing-git instruction. |
+| Core `vitest run src --maxWorkers=1` | Exit 0, 81 files / 2445 tests; `/private/tmp/jg-dbsrc-17-r1-core-tests.log`. |
+| DB `vitest run --maxWorkers=1 --exclude 'test/**/*.integration.test.ts' --exclude 'test/free-port.test.ts' --exclude 'dist/**'` | Exit 0, 14 files / 182 tests, including the 13 task cases; `/private/tmp/jg-dbsrc-17-r1-db-tests.log`. Database and socket-dependent cases excluded explicitly. |
+| API `vitest run src --maxWorkers=1 --exclude 'src/**/*.http.test.ts' --exclude 'src/health.test.ts' --exclude 'src/auth/sso/action-paths.test.ts' --exclude 'src/shadow-isolation.application.test.ts' --exclude 'src/final-account-lock.isolation.test.ts'` | Exit 1, 1553 passed / 2 failed, 63 passed / 1 failed files. Both failures are the held fixture hash/count checks in unchanged `context-boundary.test.ts`; `/private/tmp/jg-dbsrc-17-r1-api-tests.log`. Listener/database journeys excluded. |
+| Web `vitest run --maxWorkers=1` | Exit 0, 33 files / 784 tests; `/private/tmp/jg-dbsrc-17-r1-web-tests.log`. |
+| AI/config/storage `vitest run src --maxWorkers=1` (each package directory) | Exit 0 each: AI 80, config 1, storage 2 synthetic tests; `/private/tmp/jg-dbsrc-17-r1-{ai,config,storage}-tests.log`. No live model call. |
+| `node_modules/.bin/tsc -p <package>/tsconfig.json` for core/config/storage/db/ai; API `node_modules/.bin/nest build` from `apps/api`; web `node_modules/.bin/next build` from `apps/web` | Exit 0 for all packages. API log `/private/tmp/jg-dbsrc-17-r1-api-build-corrected.log`; web `/private/tmp/jg-dbsrc-17-r1-web-build.log`. Existing CSS/autoprefixer warnings remain. |
+| API `node --import tsx src/generate-openapi.ts --check` | Exit 0; `/private/tmp/jg-dbsrc-17-r1-direct-openapi-no-ipc.log`. Initial `tsx` CLI attempt exits 1 because its IPC listener is prohibited; the Node import form avoids that listener. OpenAPI file unchanged. |
+| Read-only `git diff --check`, protected-file comparisons, SHA-256 checks and untracked-file inspection | Exit 0, protected files unchanged and no generated files left in the review diff. |
+
+One direct API build was mistakenly invoked from the repository root: exit 1, 3809 compiler errors and untracked emitted files (`/private/tmp/jg-dbsrc-17-r1-api-build.log`). Its 2798 untracked compiler outputs were removed using filesystem operations after confirming the initial tree had no untracked files; no tracked file was removed. Concurrent lane checks first failed on those generated paths, then passed after cleanup. The correct API-directory build and all package typechecks subsequently passed. This tooling mistake did not change the repair scope or protected files.
+
+### r1 remaining gates
+
+Run the existing dispatcher/CI commands above with pinned dependencies, including the added PostgreSQL case, full DB/migrations and mobile/desktop browser suites. Local direct checks do not replace those mandatory gates. The fixture piece (findings 2 and 3) remains HELD for Ben's renewed caller review and re-pin; two API test failures are unresolved by design under this repair authorization. Obtain a fresh independent RED verdict bound to the dispatcher-created repair commit and separate acceptance. No technical acceptance, merge or release readiness is asserted.
