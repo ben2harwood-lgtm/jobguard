@@ -3,6 +3,7 @@ import { jobWorkStateFailure } from "../job-work-state.errors.js";
 import { ScimApplication } from "../auth/sso/scim.application.js";
 import { scimSeed } from "../auth/sso/scim.contracts.js";
 import { ScimRepository } from "@jobguard/db";
+import { ssoEmergencyWindowMinutes } from "../auth/sso/sso-required.contracts.js";
 import { SsoRequiredApplication } from "../auth/sso/sso-required.application.js";
 import { SsoRequiredRepository } from "@jobguard/db";
 import { FinalAccountLockApplication } from "../final-account-lock.application.js";
@@ -50,7 +51,7 @@ import { RecoveryFollowUpApplication, recoveryFollowUpFailure } from "../recover
 /** The sole server-composition seam shared by Nest and deployed Next route adapters. */
 export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId?: string | undefined; identity?: IdentityApplication }) {
   const sso = dependencies.identity ? new SsoApplication(dependencies.identity.provider, new EnterpriseIdentityRepository(dependencies.identity.provider.repository.pool), dependencies.identity.allowedOrigin, ssoDeploymentMode(process.env.JOBGUARD_ENV)) : undefined;
-  const ssoRequired = dependencies.identity ? new SsoRequiredApplication(dependencies.identity.provider, new SsoRequiredRepository(dependencies.identity.provider.repository.pool), dependencies.identity.allowedOrigin, ssoDeploymentMode(process.env.JOBGUARD_ENV)) : undefined;
+  const ssoRequired = dependencies.identity ? new SsoRequiredApplication(dependencies.identity.provider, new SsoRequiredRepository(dependencies.identity.provider.repository.pool), dependencies.identity.allowedOrigin, ssoDeploymentMode(process.env.JOBGUARD_ENV), ssoEmergencyWindowMinutes(process.env.JOBGUARD_SSO_EMERGENCY_WINDOW_MINUTES)) : undefined;
   const scim = dependencies.identity ? new ScimApplication(new ScimRepository(dependencies.identity.provider.repository.pool), ssoDeploymentMode(process.env.JOBGUARD_ENV), scimSeed(process.env.JOBGUARD_SCIM_SYNTHETIC_SEED)) : undefined;
   const auditExports = new AuditExportApplication(dependencies.pool);
   const preventionChecks = new PreventionCheckApplication(dependencies.pool, dependencies.sessionId);

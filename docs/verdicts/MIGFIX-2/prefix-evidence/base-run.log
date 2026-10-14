@@ -1,0 +1,426 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-2-base/packages/db
+
+stdout | test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-1] allows only one full reversal of a journal
+2026-10-14 10:12:10.418 BST [36252] WARNING:  there is no transaction in progress
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+The files belonging to this database system will be owned by user "benharwood".
+This user must also own the server process.
+
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+The database cluster will be initialized with locale "C".
+The default database encoding has accordingly been set to "SQL_ASCII".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+fixing permissions on existing directory /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/jg-migfix-2-upgrade-ijtle5 ... ok
+creating subdirectories ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+ok
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+selecting dynamic shared memory implementation ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+posix
+selecting default max_connections ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+100
+selecting default shared_buffers ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+128MB
+selecting default time zone ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+Europe/London
+creating configuration files ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+ok
+running bootstrap script ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+ok
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+performing post-bootstrap initialization ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+ok
+syncing data to disk ... 
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+ok
+
+Success. You can now start the database server using:
+
+    '/Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-2-base/node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64/native/bin/pg_ctl' -D /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/jg-migfix-2-upgrade-ijtle5 -l logfile start
+
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:09.499 BST [36245] LOG:  starting PostgreSQL 16.10 on x86_64-apple-darwin23.6.0, compiled by Apple clang version 16.0.0 (clang-1600.0.26.6), 64-bit
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:09.500 BST [36245] LOG:  listening on IPv6 address "::1", port 57576
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:09.500 BST [36245] LOG:  listening on IPv4 address "127.0.0.1", port 57576
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:09.500 BST [36245] LOG:  listening on Unix socket "/tmp/.s.PGSQL.57576"
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:09.502 BST [36255] LOG:  database system was shut down at 2026-10-14 10:12:09 BST
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:09.504 BST [36245] LOG:  database system is ready to accept connections
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:10.396 BST [36245] LOG:  received fast shutdown request
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:10.396 BST [36245] LOG:  aborting any active transactions
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:10.397 BST [36245] LOG:  background worker "logical replication launcher" (PID 36258) exited with exit code 1
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:10.398 BST [36253] LOG:  shutting down
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:10.398 BST [36253] LOG:  checkpoint starting: shutdown immediate
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:10.443 BST [36253] LOG:  checkpoint complete: wrote 1265 buffers (7.7%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.009 s, sync=0.037 s, total=0.046 s; sync files=1179, longest=0.001 s, average=0.001 s; distance=13597 kB, estimate=13597 kB; lsn=0/2254A78, redo lsn=0/2254A78
+
+
+stdout | test/migfix-2-upgrade.integration.test.ts
+2026-10-14 10:12:10.446 BST [36245] LOG:  database system is shut down
+
+
+ ❯ test/migfix-2-upgrade.integration.test.ts (4 tests | 4 skipped) 4509ms
+stdout | test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-2] accepts replacement payment after settlement reversal
+2026-10-14 10:12:10.437 BST [36266] ERROR:  settlement exceeds outstanding receivable
+2026-10-14 10:12:10.437 BST [36266] CONTEXT:  PL/pgSQL function post_plan_settlement(uuid,uuid,uuid,uuid,uuid,bigint,character,character varying,character varying,character,uuid,uuid) line 1 at RAISE
+2026-10-14 10:12:10.437 BST [36266] STATEMENT:  SELECT app.post_plan_settlement($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+
+
+stdout | test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-AUTH] preserves exact authorization, tenant isolation and classified same-book accounts
+2026-10-14 10:12:10.510 BST [36262] ERROR:  insert or update on table "journal_line" violates foreign key constraint "journal_line_tenant_id_book_id_account_id_currency_fkey"
+2026-10-14 10:12:10.510 BST [36262] DETAIL:  Key is not present in table "ledger_account".
+2026-10-14 10:12:10.510 BST [36262] CONTEXT:  SQL statement "INSERT INTO app.journal_line(id,tenant_id,book_id,journal_id,account_id,currency,side,amount_pence)VALUES(gen_random_uuid(),t,b,j,r,c,'debit',n),(gen_random_uuid(),t,b,j,i,c,'credit',n)"
+	PL/pgSQL function post_plan_obligation(uuid,uuid,uuid,uuid,bigint,character,character varying,character varying,character varying,character,uuid,uuid) line 1 at SQL statement
+2026-10-14 10:12:10.510 BST [36262] STATEMENT:  SELECT app.post_plan_obligation($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+
+
+stdout | test/migfix-2.integration.test.ts
+The files belonging to this database system will be owned by user "benharwood".
+This user must also own the server process.
+
+
+
+stdout | test/migfix-2.integration.test.ts
+The database cluster will be initialized with locale "C".
+The default database encoding has accordingly been set to "SQL_ASCII".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+fixing permissions on existing directory /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/jg-migfix-2-km6QQH ... ok
+creating subdirectories ... 
+
+stdout | test/migfix-2.integration.test.ts
+ok
+
+
+stdout | test/migfix-2.integration.test.ts
+selecting dynamic shared memory implementation ... posix
+selecting default max_connections ... 
+
+stdout | test/migfix-2.integration.test.ts
+100
+selecting default shared_buffers ... 
+
+stdout | test/migfix-2.integration.test.ts
+128MB
+selecting default time zone ... 
+
+stdout | test/migfix-2.integration.test.ts
+Europe/London
+creating configuration files ... 
+
+stdout | test/migfix-2.integration.test.ts
+ok
+running bootstrap script ... 
+
+stdout | test/migfix-2.integration.test.ts
+ok
+
+
+stdout | test/migfix-2.integration.test.ts
+performing post-bootstrap initialization ... 
+
+stdout | test/migfix-2.integration.test.ts
+ok
+syncing data to disk ... 
+
+stdout | test/migfix-2.integration.test.ts
+ok
+
+Success. You can now start the database server using:
+
+    '/Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-2-base/node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64/native/bin/pg_ctl' -D /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/jg-migfix-2-km6QQH -l logfile start
+
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:09.477 BST [36244] LOG:  starting PostgreSQL 16.10 on x86_64-apple-darwin23.6.0, compiled by Apple clang version 16.0.0 (clang-1600.0.26.6), 64-bit
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:09.477 BST [36244] LOG:  listening on IPv6 address "::1", port 57043
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:09.477 BST [36244] LOG:  listening on IPv4 address "127.0.0.1", port 57043
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:09.477 BST [36244] LOG:  listening on Unix socket "/tmp/.s.PGSQL.57043"
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:09.479 BST [36248] LOG:  database system was shut down at 2026-10-14 10:12:09 BST
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:09.481 BST [36244] LOG:  database system is ready to accept connections
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:10.546 BST [36244] LOG:  received fast shutdown request
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:10.546 BST [36244] LOG:  aborting any active transactions
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:10.547 BST [36244] LOG:  background worker "logical replication launcher" (PID 36251) exited with exit code 1
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:10.547 BST [36246] LOG:  shutting down
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:10.547 BST [36246] LOG:  checkpoint starting: shutdown immediate
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:10.590 BST [36246] LOG:  checkpoint complete: wrote 1266 buffers (7.7%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.008 s, sync=0.034 s, total=0.043 s; sync files=1180, longest=0.001 s, average=0.001 s; distance=13655 kB, estimate=13655 kB; lsn=0/2263270, redo lsn=0/2263270
+
+
+stdout | test/migfix-2.integration.test.ts
+2026-10-14 10:12:10.592 BST [36244] LOG:  database system is shut down
+
+
+ ❯ test/migfix-2.integration.test.ts (7 tests | 7 failed) 4658ms
+     × [MIGFIX-2-1] allows only one full reversal of a journal 87ms
+     × [MIGFIX-2-2] accepts replacement payment after settlement reversal 15ms
+     × [MIGFIX-2-3] refuses settlement of a fully reversed obligation 15ms
+     × [MIGFIX-2-4] rejects identical obligation accounts 11ms
+     × [MIGFIX-2-5] races settlement and reversal under the obligation lock without overpayment or deadlock 32ms
+     × [MIGFIX-2-AUTH] preserves exact authorization, tenant isolation and classified same-book accounts 16ms
+     × [MIGFIX-2-CATALOG] preserves controlled grants, FORCE RLS, owners, search paths and deferred balance/audit constraints 7ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/migfix-2-upgrade.integration.test.ts [ test/migfix-2-upgrade.integration.test.ts ]
+Error: ENOENT: no such file or directory, open '/Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-2-base/packages/db/migrations/0151_ledger_corrections_fix.sql'
+ ❯ test/migfix-2-upgrade.integration.test.ts:111:9
+    109|   await admin.query("UPDATE app.account SET created_at='2026-10-13 10:…
+    110|   before = await snapshot();
+    111|   sql = await readFile(new URL(`../migrations/${migrationName}`, impor…
+       |         ^
+    112| }, 120_000);
+    113| afterAll(async () => { await closeTestPools(runtime, admin); await pos…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-1] allows only one full reversal of a journal
+AssertionError: expected [ { status: 'fulfilled', …(1) }, …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ test/migfix-2.integration.test.ts:113:59
+    111|     const f = await fixture(), obligation = await post(f, "plan_obliga…
+    112|     const results = await race(f, obligation, [() => post(f, "correcti…
+    113|     expect(results.filter(r => r.status === "fulfilled")).toHaveLength…
+       |                                                           ^
+    114|     expect(results.filter(r => r.status === "rejected")).toEqual([expe…
+    115|     expect(await balances(f)).toEqual({ [f.receivable]: 0, [f.income]:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-2] accepts replacement payment after settlement reversal
+error: settlement exceeds outstanding receivable
+ ❯ ../../node_modules/.pnpm/pg@8.16.3/node_modules/pg/lib/client.js:545:17
+ ❯ test/migfix-2.integration.test.ts:62:7
+     60|         [journal, options.book ?? f.book, options.receivable ?? f.rece…
+     61|     } else if (action === "plan_settlement") {
+     62|       await d.$client.query("SELECT app.post_plan_settlement($1,$2,$3,…
+       |       ^
+     63|         [journal, options.book ?? f.book, original, options.clearing ?…
+     64|     } else {
+ ❯ withTenant src/tenant-context.ts:88:20
+ ❯ test/migfix-2.integration.test.ts:129:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-3] refuses settlement of a fully reversed obligation
+AssertionError: promise resolved "'4fcd262e-eeb7-4a6e-b365-f31f46a9b04c'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"4fcd262e-eeb7-4a6e-b365-f31f46a9b04c"
+
+ ❯ test/migfix-2.integration.test.ts:140:62
+    138|     await post(f, "correction", 1000, obligation);
+    139|     const before = await effects(f);
+    140|     await expect(post(f, "plan_settlement", 1000, obligation)).rejects…
+       |                                                              ^
+    141|     expect(await balances(f)).toEqual({ [f.receivable]: 0, [f.income]:…
+    142|     expect(await effects(f)).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-4] rejects identical obligation accounts
+AssertionError: promise resolved "'c8753f27-ba24-4fe5-982c-edd6978d7c3a'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"c8753f27-ba24-4fe5-982c-edd6978d7c3a"
+
+ ❯ test/migfix-2.integration.test.ts:147:87
+    145|   it("[MIGFIX-2-4] rejects identical obligation accounts", async () =>…
+    146|     const f = await fixture(), before = await effects(f);
+    147|     await expect(post(f, "plan_obligation", 1000, undefined, { income:…
+       |                                                                                       ^
+    148|     expect(await effects(f)).toEqual(before);
+    149|     await expect(post(f, "plan_obligation", 1000, undefined, { income:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-5] races settlement and reversal under the obligation lock without overpayment or deadlock
+AssertionError: expected [ { status: 'fulfilled', …(1) } ] to deeply equal [ ObjectContaining{…} ]
+
+- Expected
++ Received
+
+  [
+    {
+-     "reason": ObjectContaining {
+-       "code": "23514",
+-     },
+-     "status": "rejected",
++     "status": "fulfilled",
++     "value": "b45e2423-f5b4-4eb0-8b6b-40de56ef3ece",
+    },
+  ]
+
+ ❯ test/migfix-2.integration.test.ts:174:34
+    172|       } finally { release(); await firstResult; }
+    173|       expect((await firstResult)[0]!.status).toBe("fulfilled");
+    174|       expect(await secondResult).toEqual([expect.objectContaining({ st…
+       |                                  ^
+    175|       expect(await balances(f)).toEqual(firstAction === "correction" ?…
+    176|         : { [f.receivable]: 0, [f.income]: -1000, [f.clearing]: 1000 }…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-AUTH] preserves exact authorization, tenant isolation and classified same-book accounts
+AssertionError: expected error: insert or update on table "journal… { …(15) } to match object { code: '23514' }
+(17 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "code": "23514",
++ DatabaseError {
++   "code": "23503",
+  }
+
+ ❯ test/migfix-2.integration.test.ts:192:89
+    190|   it("[MIGFIX-2-AUTH] preserves exact authorization, tenant isolation …
+    191|     const f = await fixture(), foreign = await fixture(), before = awa…
+    192|     await expect(post(f, "plan_obligation", 1000, undefined, { income:…
+       |                                                                                         ^
+    193|     await expect(post(f, "plan_obligation", 1000, undefined, { book: f…
+    194|     for (const mutation of ["status='revoked'", "status='expired'", "e…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  test/migfix-2.integration.test.ts > MIGFIX-2 controlled ledger corrections > [MIGFIX-2-CATALOG] preserves controlled grants, FORCE RLS, owners, search paths and deferred balance/audit constraints
+AssertionError: expected [] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "definition": "UNIQUE (tenant_id, reverses_journal_id)",
+-   },
+- ]
++ []
+
+ ❯ test/migfix-2.integration.test.ts:221:25
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  7 failed | 4 skipped (11)
+   Start at  10:12:05
+   Duration  5.61s (transform 970ms, setup 0ms, import 1.76s, tests 9.17s, environment 0ms)
+
