@@ -379,7 +379,7 @@ export class RecoveryFollowUpRepository {
     await this.claimAfterChecks(db, tenantId, commandId, action, requestHash, actor);
     await this.refuseEvidencePackCommand(db, tenantId, commandId);
     // A scheduler must not hold the case while waiting on the clock: clock evaluation takes intent locks.
-    const run = action === "schedule" ? await this.activeRun(db, tenantId, found.job_id) : undefined;
+    const run = action === "schedule" ? await this.activeRun(db, tenantId, found.job_id) : null;
     await lockRecoveryCase(db, tenantId, caseId);
     return { replayed: false, jobId: found.job_id, run };
   }
