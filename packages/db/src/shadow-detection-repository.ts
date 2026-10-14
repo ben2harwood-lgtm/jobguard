@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Pool } from "pg";
 import { groupShadowProposals, observationV1, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 const batchV1 = z.object({ version: z.literal("shadow-detection-batch.v1"), jobId: z.string().uuid(),
   proposals: z.array(z.unknown()).max(1000), observations: z.array(z.unknown()).max(500), captures: z.array(z.unknown()).max(1000) }).strict();
 export class ShadowDetectionError extends Error {
@@ -57,21 +57,23 @@ export class ShadowDetectionRepository {
             WHERE tenant_id=$1 AND job_id=$2 AND id=$3 AND state IN('candidate','held_for_final_check') AND coalesced_into_signal_id IS NULL`, [context.tenantId,b.jobId,s.signalId,primaryId]);
         }
       }
+      // Persist every group before any firing acquires the audit head. The first
+      // firing holds the job row until commit, fencing later same-job disclosure
+      // and final-account locks; later firings reuse our already-held signal locks.
+      for (const group of groups) await this.surface(db, context, group);
     });
-    // Every firing is its own atomic controlled transaction; no business lock after an audit-head lock.
-    for (const group of groups) await this.surface(context, group);
     return groups;
   }
-  private async surface(context: VerifiedTenantContext, g: DetectionGroup): Promise<void> {
+  private async surface(db: TenantTransaction, context: VerifiedTenantContext, g: DetectionGroup): Promise<void> {
     for (const o of g.observations) {
       const firings = g.firings.filter(f => f.sourceRef === o.evidence.id);
-      for (const f of firings) await withTenant(this.pool, context, async db => {
+      for (const f of firings) {
         const primary = (await db.$client.query<{ id: string }>("SELECT id FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND work_id=$3 AND coalesced_into_signal_id IS NULL", [context.tenantId,o.jobId,g.primary.workId])).rows[0];
         if (!primary) throw new ShadowDetectionError("DETECTION_BINDING_MISMATCH");
         const firingId = shadowDetectionId([primary.id,f.rule,f.version,o.evidence.id]);
         await db.$client.query("SELECT app.surface_shadow_signal_early($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)",
           [context.tenantId,o.jobId,primary.id,firingId,shadowDetectionId([firingId,"decision"]),shadowDetectionId([firingId,"disclosure"]),f.rule,f.version,o.evidence.id,o.evidence.objectVersionId,JSON.stringify(o.facts)]);
-      });
+      }
     }
   }
 }
