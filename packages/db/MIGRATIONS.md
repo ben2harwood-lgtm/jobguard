@@ -988,6 +988,34 @@ Forward fix preferred. A confirmation object is two ordinary evidence rows, so n
 
 Adds the shared current payer function and append-only, FORCE-RLS payment marks with exact evidence references, timestamp pinning, immutable history and deferred audit completeness. Standard F gives runtime SELECT only; the session-bound controlled writer and job-lock helper each check authority, check/set tenant context and fix search_path. No app.job grant or merged table/column/policy/grant change. Restates only the newest 0130 review guard and 0119 effect trigger, adding Part A's insurer exclusion after paid-before and its line reason, plus F19's individual-interest message and reasonHeld release. A6 derives a required payer fact after the exact payment and job locks and cites current insurer binding/mark IDs in audit. The insurer exclusion has its own reason; F21 remains null/held under the Round 2 ruling. 0142 never rewrites saved reviews or lines; forward-fix is the rollback strategy, retaining readers and mark history. The previous application ignores marks but its insurer review inserts now fail closed; coordinate the three coordinator-owned setup-only payer additions and CI evidence before rollout. PostgreSQL fresh, upgrade, catalog and concurrency checks are NOT RUN in the builder sandbox; rule-9 upgrade proof compares named original F19/F21 rows and full column types, with identity matching and rolled-back controls. No new external alert or provider.
 
+### 0144 — CH-4 immutable work facts (partial synthetic scope)
+
+Creates `job_work_state_event`, `job_site_source_receipt`, `job_photo_purpose` and
+`job_link`, with FORCE RLS, qualified references, immutable mutation/truncate
+controls and runtime SELECT only. Adds the stage-completion job-qualified key
+and a source key binding tenant/job/id/completed-at/evidence-link. Stage receipts
+reference both keys and validate the source/link hash; no older table gains a
+policy or grant. Existing rows, types and primary identities remain unchanged.
+Existing photo finalization, ready delivery versions, goods receipts, builder
+origins and stage completion produce normalized facts in the source transaction.
+Original receipt timestamps retain PostgreSQL microseconds; no history is backfilled.
+The deterministic earliest qualifying candidate supplies first site evidence.
+Audit appends run as deferred constraint triggers, after source business locks.
+Evidence finalization drains them after its completion callback and last business
+write, while the transaction remains open. Exact PO placement command replays
+retain their first result; a new identity cannot use semantic deduplication to
+admit post-lock work.
+
+New-work triggers serialize with the existing final-account lock through its job
+row. A currently closed job refuses new lock and pending-check admission.
+The authenticated read routine rechecks the persisted synthetic session and job
+ownership. No held command receives an execution grant or transport.
+Q-01/Q-03/Q-04/Q-05/Q-06 remain held; this does not complete CH-4 or unblock MON-1.
+
+Forward-fix with a reviewed additive migration. Do not delete events or links,
+rewrite documents/money/audit, or reconstruct unknown historical site times.
+Database and upgrade proofs require the dispatcher's PostgreSQL environment.
+
 ## 0150 — membership authority repair (MIGFIX-1, repair r1)
 
 Replaces three existing identity routines (`current_memberships(uuid)`,
