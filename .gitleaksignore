@@ -4,3 +4,4 @@
 # Both values are made-up practice-feed names in test set-up, not secrets. Never add a pattern or a path here.
 3a82b3e6c542c0965243fb1f46fec6f4f3b0a073:packages/db/test/recovery-eligibility-v3.integration.test.ts:generic-api-key:239
 90a1534b23a5a421c72de4bda6af163c4c12689c:packages/db/test/practice-facts.integration.test.ts:generic-api-key:255
+749e693364e00f23f0026aa4c677b773e9c5400f:docs/verdicts/ENT-10e/R3_FINAL_SCOPE.md:generic-api-key:68
