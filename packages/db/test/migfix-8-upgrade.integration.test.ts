@@ -38,7 +38,7 @@ async function snapshot(db: Pool | PoolClient, table: string, previous?: Snapsho
   expect(keys.length).toBeGreaterThan(0);
   const named = (previous?.columns ?? columns).map(column => quote(column.name)).join(",");
   const identity = `jsonb_build_array(${keys.map(quote).join(",")})::text`;
-  const rows = (await db.query(`SELECT ${identity} AS identity,row_to_json(t)::text AS bytes FROM (SELECT ${named} FROM ${table}) t ORDER BY identity COLLATE "C"`)).rows;
+  const rows = (await db.query(`SELECT ${identity} AS identity,row_to_json(t)::text AS bytes FROM (SELECT ${named} FROM ${table}) t ORDER BY ${identity} COLLATE "C"`)).rows;
   // Only the rows that existed before N; later inserts are outside the preservation assertion.
   const selected = previous ? rows.filter(row => previous.rows.some(old => old.identity === row.identity)) : rows;
   return { table, columns: previous ? columns.filter(column => previous.columns.some(old => old.name === column.name)) : columns, keys, rows: selected };
@@ -149,7 +149,7 @@ describe("MIGFIX-8 upgrade", () => {
       await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Clock upgrade fixture')", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
       await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
       await db.query(`CREATE ROLE migfix_8_upgrade_runtime LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO migfix_8_upgrade_runtime`);
-      runtime = new Pool({ host: "127.0.0.1", port: clusterPort, user: "migfix_8_upgrade_runtime", password: credential });
+      runtime = new Pool({ host: "127.0.0.1", port: clusterPort, user: "migfix_8_upgrade_runtime", password: credential, database: "postgres" });
       await installLegacySyntheticPartyFixtures(admin);
       const { tenantId, runId } = await historicalFixture();
       const tables = await populatedTables(db);
