@@ -129,7 +129,9 @@ describe("CH-4 migration syntax without PostgreSQL", () => {
       return { rows: [], rowCount: values?.[0] === migrationName ? 0 : 1 };
     } } as Parameters<typeof migrate>[0]);
     const file = await readFile(migrationUrl, "utf8");
-    expect(queries.filter(sql => sql === file)).toHaveLength(1);
+    const combined = file.replace(/COMMIT;\s*$/u,
+      `INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('${migrationName}') ON CONFLICT DO NOTHING;\nCOMMIT;\n`);
+    expect(queries.filter(sql => sql === combined)).toHaveLength(1);
     const checked = checkMigration(file);
     expect(checked.bodies).toBe(13); // ten functions, three DO blocks
     expect(checked.conditions).toBeGreaterThan(50);
