@@ -18,6 +18,18 @@ const snapshot = {
 
 describe("MON-1 independent synthetic foundations; full acceptance held", () => {
   it.each([
+    ["2026-02-27T12:00:00.000001Z", "2026-03-29", "2026-03-29T00:00:00.000000Z"],
+    ["2026-09-25T12:00:00.000001Z", "2026-10-25", "2026-10-24T23:00:00.000000Z"],
+    ["1840-01-01T12:00:00.000001Z", "1840-01-31", "1840-01-31T00:01:15.000000Z"],
+  ])("MON1-A02 partial: day-31 midnight retains the exact London offset from %s", (activatedAt, date, at) => {
+    expect(meterDay31Candidate(activatedAt)).toEqual({ version: "meter-day31-candidate.v1", activatedAt, date, at });
+    expect(londonMeterDate(at)).toBe(date);
+  });
+  it("MON1-A02/A33 partial: year zero cannot become a different London charge-counting year", () => {
+    expect(() => londonMeterDate("0000-06-01T12:00:00.000001Z")).toThrow(MeterFoundationError);
+    expect(() => meterDay31Candidate("0000-06-01T12:00:00.000001Z")).toThrow(MeterFoundationError);
+  });
+  it.each([
     ["2026-01-02T14:00:00.000001Z", "2026-02-01T00:00:00.000000Z"],
     ["2024-02-01T23:59:00.000001Z", "2024-03-02T00:00:00.000000Z"],
     ["2026-12-15T10:00:00.000001Z", "2027-01-14T00:00:00.000000Z"],

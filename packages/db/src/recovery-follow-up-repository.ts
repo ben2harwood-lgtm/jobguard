@@ -105,7 +105,7 @@ export class RecoveryFollowUpRepository {
       const began = await this.begin(db, ctx.tenantId, caseId, input.commandId, actor, "schedule", requestHash);
       if (began.replayed) return;
       const jobId = began.jobId;
-      const run = await this.activeRun(db, ctx.tenantId, jobId);
+      const run = began.run;
       if (!run) fail("RECOVERY_FOLLOW_UP_RUN_REQUIRED");
       let dueTick: number;
       try { dueTick = followUpDueTick(run!.tick); } catch (error) { if (error instanceof RecoveryFollowUpClockExhausted) return fail("RECOVERY_FOLLOW_UP_CLOCK_EXHAUSTED"); throw error; }
@@ -367,10 +367,10 @@ export class RecoveryFollowUpRepository {
     return true;
   }
   /**
-   * Lock order matches the M4-5-S commands: command identity, owner, shared receipt, pack command identity, then the case; rows after; audit last.
+   * Lock order matches the M4-5-S commands: command identity, owner, shared receipt, pack command identity, then (scheduling only) run fence, case; rows after; audit last.
    * Returns the case's job, and whether this command id had already been recorded (an exact replay).
    */
-  private async begin(db: TenantTransaction, tenantId: string, caseId: string, commandId: string, actor: RecoveryMessageActor, action: string, requestHash: string): Promise<{ replayed: boolean; jobId: string }> {
+  private async begin(db: TenantTransaction, tenantId: string, caseId: string, commandId: string, actor: RecoveryMessageActor, action: string, requestHash: string): Promise<{ replayed: boolean; jobId: string; run?: { id: string; tick: number } | null }> {
     await this.lockCommand(db, tenantId, commandId);
     const found = (await db.$client.query<{ job_id: string }>("SELECT job_id FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [tenantId, caseId])).rows[0];
     if (!found) fail("RECOVERY_FOLLOW_UP_NOT_FOUND");
@@ -378,8 +378,10 @@ export class RecoveryFollowUpRepository {
     if (await this.isReplay(db, tenantId, commandId, action, requestHash)) return { replayed: true, jobId: found.job_id };
     await this.claimAfterChecks(db, tenantId, commandId, action, requestHash, actor);
     await this.refuseEvidencePackCommand(db, tenantId, commandId);
+    // A scheduler must not hold the case while waiting on the clock: clock evaluation takes intent locks.
+    const run = action === "schedule" ? await this.activeRun(db, tenantId, found.job_id) : null;
     await lockRecoveryCase(db, tenantId, caseId);
-    return { replayed: false, jobId: found.job_id };
+    return { replayed: false, jobId: found.job_id, run };
   }
   private async claimAfterChecks(db: TenantTransaction, tenantId: string, commandId: string, action: string, requestHash: string, actor: RecoveryMessageActor) {
     if (!(await this.claim(db, tenantId, commandId, action, requestHash, actor))) fail("RECOVERY_FOLLOW_UP_COMMAND_CONFLICT");
@@ -441,13 +443,20 @@ export class RecoveryFollowUpRepository {
   }
 
   private async activeRun(db: TenantTransaction, tenantId: string, jobId: string) {
-    const row = (await db.$client.query<{ id: string; tick: number }>(
-      `SELECT r.id,app.recovery_follow_up_run_tick(r.tenant_id,r.id) AS tick FROM app.sandbox_run r
+    const row = (await db.$client.query<{ id: string }>(
+      `SELECT r.id FROM app.sandbox_run r
        JOIN app.job rj ON rj.tenant_id=r.tenant_id AND rj.id=r.job_id JOIN app.job cj ON cj.tenant_id=r.tenant_id AND cj.id=$2
        WHERE r.tenant_id=$1 AND rj.practice_session_digest IS NOT NULL AND rj.practice_session_digest=cj.practice_session_digest
         AND NOT EXISTS (SELECT 1 FROM app.sandbox_run_event e WHERE e.tenant_id=r.tenant_id AND e.run_id=r.id AND e.kind='archived')
        ORDER BY r.created_at DESC,r.id LIMIT 1`, [tenantId, jobId])).rows[0];
-    return row ? { id: row.id, tick: Number(row.tick) } : null;
+    if (!row) return null;
+    await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [tenantId, `recovery-follow-up-run:${row.id}`]);
+    // Re-read after waiting: the advance/archive transaction may have won. Never use a pre-fence tick.
+    const current = (await db.$client.query<{ tick: number }>(
+      `SELECT app.recovery_follow_up_run_tick(r.tenant_id,r.id) AS tick FROM app.sandbox_run r
+       WHERE r.tenant_id=$1 AND r.id=$2 AND r.status='active' AND r.environment='synthetic_demo'
+        AND NOT EXISTS (SELECT 1 FROM app.sandbox_run_event e WHERE e.tenant_id=r.tenant_id AND e.run_id=r.id AND e.kind='archived')`, [tenantId, row.id])).rows[0];
+    return current ? { id: row.id, tick: Number(current.tick) } : null;
   }
   /** The newest delivered message is eligible only when every later approved attempt is definitively cancelled; unapproved previews are ignored. */
   private async sourceMessage(db: TenantTransaction, tenantId: string, caseId: string) {

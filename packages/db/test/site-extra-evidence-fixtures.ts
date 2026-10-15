@@ -4,7 +4,7 @@ import { deflateSync } from "node:zlib";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import { siteExtraContentSha256V1, residentConfirmationDocumentV1 } from "@jobguard/core";
 import { EvidenceService, derivedUuid, sha256Hex, withTenant, type VerifiedTenantContext } from "../src/index.js";
-import { ownerTx, note, description, counts, type Cluster } from "./site-extra-fixtures.js";
+import { ownerTx, note, description, counts } from "./site-extra-fixtures.js"; import type { Cluster } from "./extra-fixtures.js";
 import type { Fixture } from "./extra-fixtures.js";
 export * from "./site-extra-fixtures.js";
 

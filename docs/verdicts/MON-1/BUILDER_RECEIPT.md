@@ -1,3 +1,153 @@
+Built by Codex; dispatched 13 Oct 2026; continuation and main catch-up 15 Oct 2026.
+
+## Current continuation — authoritative over the historical receipt below
+
+This remains the **pure-foundation sub-part**, including precisely settled policy
+portions. It is not complete server-slice acceptance or complete MON-1. Check
+lane RED; MON1-A02–A36 remain uncompleted as full criteria. No independent verdict
+or separate acceptance is claimed. The requested Sonnet/unavailable first-line
+template would misidentify the builder; this receipt records the actual builder.
+
+### Current baseline and merge resolution
+
+- Observed `origin/main`: `6671538c8d69936c162368c760dd6ce0f7f10493`, matching the header.
+- Starting HEAD: `281a49281bd72512014c9758929b0cf7fa42906d`, the older MON-1 commit.
+- Merged CH-4: `c203bb27893342ca2569272ff4dc908b614267d6`, PR #185. Read-only
+  ancestry inspection confirms it is in current main. The earlier build-ahead
+  authorization and receipt below are historical evidence, not current readiness.
+- The only incoming conflict was `config/agent-lane-assignments.json`. Resolved
+  its working-tree text using the editing tool (`apply_patch`), retaining main's
+  lines exactly, followed by this piece's addition within the conflict region.
+  JSON parses with unique keys. Removing only the MON-1 line reproduces main's
+  registry **byte for byte**. No other lane changed.
+- Git still records the path as unmerged: clearing the index conflict requires
+  staging. The user expressly forbids Git writes, so the dispatcher must stage
+  the resolved file and complete the merge. No `git add`, commit or push ran.
+- The six-file foundation lane is retained, with its stale note corrected to
+  current main and **0163 allocated but held**. No migration exists or is
+  registered. The old receipt's 0148 reservation is superseded by this order.
+- Main's migration runner now ends at **0158**, including CH-4 at 0144, rather
+  than the draft's 0138. The runner and SQL bytes match main; registrations
+  remain in numeric order. No ENT branch interfaces were introduced.
+- Main's AGENTS and BUILD_PLAN match the working tree exactly. Inspected current
+  §10.1.2–10.1.9, the entire MON-1 card, §10.5 and §12 dependency/graph rows;
+  the quoted card/formula/source rules remain unchanged. Current main wins over
+  historical migration endpoints and the old receipt's baseline assumptions.
+- Node available here is **24.17.0**; `.nvmrc` and CI pin **24.15.0**. Installed
+  pnpm **10.28.1**, TypeScript **5.8.3**, Vitest **4.1.11**, Turbo **2.10.12** were
+  used without installing/downloading anything. A clean pinned install is NOT RUN.
+
+### Re-inspected CH-4 interfaces and extension limits (MON1-A01)
+
+`packages/core/src/job-work-state.ts` supplies the consumed `workFactTimeV1`,
+`siteSourceV1` and `classifySiteSource`. Canonical original `factAt` is separate
+from `recordedAt`. The schema has seven fact kinds and source classification
+excludes orders, supplier invoices, quotes, messages, readiness and commercial
+review actions. No event projection or deadline behavior is consumed here.
+
+`packages/db/src/job-work-state-repository.ts` calls the existing checked
+`app.ch4_read_work_facts(uuid,uuid,text)` using the existing verified context.
+The SQL routine rechecks the persisted session/owned-job boundary. The 0144
+source triggers record photo, delivery, receipt, builder-extra and stage facts;
+source receipt identities and original server times are persisted independently
+of processing. Deferred `ch4_append_fact_audit` runs after business locks.
+`job-work-state-sources.ts` preserves the existing source commands' receipt/replay
+paths, translates typed refusals, and offers an ordinary linked job for new
+post-lock work. These database/server paths were source-inspected only.
+
+Actual candidate caller paths remain `activation-repository.ts` (v3
+`SwitchJobLiveV3Mutation.lock` and `app.switch_job_live_v3`), `evidence.ts`,
+`proof-repository.ts`, `variation-repository.ts`, `purchase-order-repository.ts`
+and `supplier-document-repository.ts`. Their existing authority/replay/audit
+seams remain untouched. CH-4's contract still holds finish/cancel/close/reopen/
+resume/link command permissions and execution; no such new writer or route is
+invented. The existing source triggers take job locks, so adding a late capacity
+trigger would violate MON-1's required tenant-capacity-first order. Future caller
+integration needs its own explicit lane and lifted holds. Current pure work
+requires no caller expansion.
+
+### Continuation changes and tests-first evidence
+
+The older commit already contains the authorized supplied-input grouping,
+allowance, history preservation, prospective identity correction, qualifying
+approval-date handling and exact aggregate period/correction formula. These were
+retained. No duplicate meter, full event replay, admission stub, DDL or route was
+added.
+
+Added own-file cases for day 31 landing on each DST-change date, exact London
+offsets, and year-zero refusal. A first fixture incorrectly used 1850 for the
+historical seconds offset; local Intl output showed that year already uses GMT.
+The fixture was corrected to 1840 **before implementation** and rerun red. This
+was a fixture correction in MON-1's own unmerged test, not a weakened main test.
+
+- First new-test run: **exit 1**, 2 failed / 45 passed; one incorrect 1850 fixture
+  and genuine year-zero refusal failure.
+- Corrected pre-implementation run: **exit 1**, 2 failed / 45 passed. The 1840
+  midnight candidate was almost a day early, and year zero was relabelled.
+- Implementation now reads Intl's full signed London offset (minutes/seconds
+  included) and refuses year zero consistently with the existing 0001–9999 date
+  contract. It continues using supplied timestamps and no current clock.
+- Final own-file run: **exit 0**, **2 files / 47 tests passed**. Every new case
+  carries its partial acceptance ID; full criteria remain held.
+
+The precisely mapped adopted answers are unchanged, and were re-read from
+`~/.local/share/full-steam/jg-orders/next-wave/BEN-ANSWERS-20261013.md`:
+
+> Use London dates; preserve past stops and charges.
+
+> Avoid double charging; identity corrections affect future bills only.
+
+> Use the original qualifying approval date; exclude proposed prices.
+
+Source: `BEN-ANSWERS-20261013.md`, card
+`jobguard-twenty-product-decisions-2026-10-13`, mapped portions Q6/Q7/Q9 only.
+Supplied synthetic identities, snapshots, qualifying facts and complete daily
+plan/trial schedules remain fixture inputs, never authoritative tenant facts.
+
+### Current holds and coordinator-owned lines
+
+- **Q2 / STOP on migration construction:** the preserved complete catalogue
+  assertions remain at `packages/db/test/tenancy.integration.test.ts:190`
+  (`expect(result.rows).toEqual([`) and **:444**
+  (`expect(ownership.rows).toEqual([`). Before = those unchanged lines and
+  main's complete lists; after in this piece = **identical**. A future separately
+  issued prerequisite must approve adding rows for `job_small_trip_event`,
+  `meter_computation`, `meter_correction`, `meter_day_ledger`. No assertion,
+  catalogue row, fingerprint or merged test was changed here.
+- **Q5:** tenant-summary access and the entire new server read remain held.
+- **Q6 remainder:** exact stop/quiet/trial endpoints, quiet origin, equal-time
+  ordering, cancellation restarts and conversion-day charging remain held.
+- **Q7 remainder:** named allowance/paid-extra/grace attribution and job/penny
+  weights remain held. Static grouping chooses no beneficiaries.
+- **Q9 remainder:** qualifying persisted transitions, source bindings and all
+  trip-latch hooks remain held; numeric comparisons do not latch a trip.
+- **Q10:** D09 remains proposed (`docs/decisions/d09-plan-tiers-metering.md:3`);
+  D02/D05/G4-S remain gates. No production execution, subscription obligation,
+  collection, provider request, success-fee offset or retrospective pilot charge.
+- **Q4/Q12:** actual v3 import routes belong to CH-5; original UI/drill-down and
+  exact `V(...)` assertions remain parked. No browser run or UI change.
+- **Q1/Q3/Q8/Q11:** current merged CH-4 is inspected; supporting hypothetical
+  persistence ownership does not release Q2; local test runs are own-file,
+  sequential, at most three files and `--maxWorkers=2`; no ENT branch dependency.
+- Real customer information remains **OFF**, no spending is authorized, and
+  ENT-10e remains held. MON1-A37 records handoff only; independent exact-commit
+  verdict and separate acceptance are outstanding.
+
+No new GRANT statements: **none**. Standard F remains satisfied: no new direct
+runtime INSERT/UPDATE/DELETE grant, table, checked routine, role, receipt or audit
+writer. PostgreSQL ownership/RLS/effective-role/audit-order/persistence proofs and
+rule-9 upgrade/forward-fix evidence remain **HELD**, not mocked passes. The
+verbatim upgrade rule remains in the historical receipt below for future work.
+
+### Current verification results
+
+The current run details, preservation hashes and final head are appended at the
+end of this file under “Continuation verification and final handoff”. Earlier
+green results below describe the older execution only and do not override a
+current failure. Forced checks use `--force`; no cache hit is claimed as a run.
+
+## Historical receipt — retained unchanged from the older implementation
+
 Built by Codex; dispatched 13 Oct 2026.
 
 This is the MON-1 pure-foundation sub-part, including only the precisely settled
@@ -493,3 +643,525 @@ the failed root-lint status or bypassing the lane checker:
 Receipt append commands used Python on this builder-created file (exit 0).
 No source/test changes followed final verification. No independent verdict or
 acceptance is claimed.
+
+## Continuation verification and final handoff
+
+The results in this section describe the **15 October continuation**, overriding
+the historical result tables above. Dependencies were already installed. Every
+pnpm command used these existing wrappers, unchanged:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+```
+
+The latter wrapper invokes the already-installed Corepack pnpm 10.28.1 through
+Node. No install, download, Git write, dependency/configuration edit, external
+action or provider spend occurred. Memory/disk reads preceded every heavy run:
+so far free memory was 53–58% and available disk 61–63 GB, above 35% and 45 GB.
+Build and tests never ran together. No database/browser run was launched and no
+shared heavy slot was acquired.
+
+| Current command | Exit and evidence |
+| --- | --- |
+| `pnpm --version` | 0; 10.28.1 |
+| Own two-file Vitest command, first new cases | 1; 2 failed / 45 passed; includes the fixture mistake described above |
+| Own two-file Vitest command, corrected fixture, before implementation | 1; 2 failed / 45 passed; year-zero and exact-offset failures |
+| Own two-file Vitest command, after implementation | 0; 2 files / 47 tests passed, no skipped tests |
+| `pnpm exec turbo run typecheck --force` | 0; 7 successful tasks, 0 cached; 27.59s |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1; core purity passed for 170 TypeScript files; lane boundary refused incoming main paths; no root-lint pass claimed |
+| `pnpm exec turbo run lint --force` | 0; 7 successful tasks, 0 cached; 38.199s; package lint only, does not override root failure |
+| Working-tree preservation/JSON/ancestry inspections | 0; valid unique-key JSON, main bytes retained, six authorized changed paths, CH-4 merge present |
+
+The exact own Vitest invocation was:
+
+```sh
+pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts
+```
+
+Turbo emitted `WARNING IO error: Operation not permitted (os error 1)` on
+background cache I/O while its original forced checks continued. No retry,
+permission change or alternate cache route was attempted. Actual successful
+compiler task exits and zero cached tasks are distinguished from these warnings.
+
+### Root lane STOP — unchanged checker, unresolved Git index
+
+`tools/agent-lane-boundary-lint.mjs:228` includes `git diff --cached HEAD` when
+checking locally. Because the user supplied a merge in progress, this includes
+incoming main changes even though their working-tree bytes match main.
+Line 233 refuses them with `Lane boundary FAILED: Lane mon-1 cannot edit:`,
+starting with `.gitleaksignore`, `BUILD_PLAN.md`, `apps/api/openapi.json` and
+main's SSO tests. The checkout-to-main comparison has just six authorized files.
+
+Before and after in this piece, checker line 228 is identical:
+
+```js
+    for (const args of [["diff", "--no-renames", "--name-only", "-z", "--cached", "HEAD", "--"], ["diff", "--no-renames", "--name-only", "-z", "--"], ["ls-files", "--others", "--exclude-standard", "-z"]]) {
+```
+
+No widening/filtering, replacement comparison base, shared-harness change or
+checker edit was made. The resolved registry text is at
+`config/agent-lane-assignments.json:5`; the dispatcher must stage it and complete
+the merge before binding CI/review to a final implementation SHA. Git still
+records `UU` until that authorized dispatcher action occurs.
+
+### Current NOT RUN inventory
+
+The following **new files are not constructed**, and hence NOT RUN. Database
+work is held by Q2 and relevant remaining Q5/Q6/Q7/Q9 rulings; server work is
+held as a whole. The sandbox also cannot start PostgreSQL or a browser:
+
+```text
+packages/db/test/jobs-on-the-go.integration.test.ts
+packages/db/test/jobs-on-the-go-capacity.integration.test.ts
+packages/db/test/jobs-on-the-go-trip.integration.test.ts
+packages/db/test/jobs-on-the-go-corrections.integration.test.ts
+packages/db/test/jobs-on-the-go-catalog.integration.test.ts
+packages/db/test/jobs-on-the-go-isolation.integration.test.ts
+packages/db/test/jobs-on-the-go-upgrade.integration.test.ts
+packages/db/test/jobs-on-the-go-lock-order.integration.test.ts
+apps/api/src/jobs-on-the-go.application.test.ts
+apps/api/src/jobs-on-the-go.controller.test.ts
+apps/api/src/jobs-on-the-go.http.test.ts
+apps/api/src/jobs-on-the-go.isolation.test.ts
+```
+
+The following preserved regression files are also **NOT RUN in this
+continuation**. The addendum restricts local runs to this piece's own files;
+all PostgreSQL files additionally require dispatcher/CI infrastructure:
+
+```text
+packages/core/src/activation-v3.test.ts
+packages/core/src/money.test.ts
+packages/core/src/allocation.test.ts
+packages/db/test/job-activation-terms.integration.test.ts
+packages/db/test/job-parties.integration.test.ts
+packages/db/test/activation.integration.test.ts
+packages/db/test/final-account-lock.integration.test.ts
+packages/db/test/final-account-lock-invoice.integration.test.ts
+packages/db/test/variation.integration.test.ts
+packages/db/test/final-account.integration.test.ts
+packages/db/test/command-replay-contract.integration.test.ts
+packages/db/test/watchdog-lock-order.integration.test.ts
+packages/db/test/fingerprinted-row-shape.integration.test.ts
+packages/db/test/tenancy.integration.test.ts
+packages/db/test/demo-bootstrap.integration.test.ts
+packages/db/test/shadow-catalog.integration.test.ts
+packages/db/test/shadow-persistence.integration.test.ts
+packages/db/test/site-extra.integration.test.ts
+packages/db/test/job-work-state.integration.test.ts
+packages/db/test/job-work-state-sources.integration.test.ts
+packages/db/test/job-work-state-post-lock.integration.test.ts
+packages/db/test/job-work-state-races.integration.test.ts
+packages/db/test/job-work-state-catalog.integration.test.ts
+packages/db/test/job-work-state-upgrade.integration.test.ts
+packages/db/test/job-work-state-syntax.test.ts
+apps/api/src/auth/context-boundary.test.ts
+apps/api/src/watchdog-registry.test.ts
+apps/api/src/job-work-state.application.test.ts
+apps/api/src/job-work-state.controller.test.ts
+apps/api/src/job-work-state.http.test.ts
+apps/api/src/job-work-state.isolation.test.ts
+```
+
+Whole-suite wrappers `pnpm test`, `pnpm test:db`, `pnpm test:migrations`,
+`pnpm eval`, `pnpm test:e2e`, the remaining actual repository tests and
+`node --test tools/*.test.mjs` are **NOT RUN** under the dispatcher's local
+limits; full mandatory CI remains outstanding. No browser/Playwright command
+was launched. No AI prompt, model or gateway changed, and no live evaluation
+is claimed. No clean frozen install or pinned-Node-24.15.0 run is claimed.
+
+### Continuation self-review — builder inspection only
+
+The only product change since the older commit is a pure date-conversion fix.
+Inputs stay strict and versioned, money stays exact/bounded and hypothetical,
+historical supplied stops/charges remain immutable, proposed prices remain
+excluded, and identity corrections remain future-only. No allowance beneficiary,
+job-line weight, interval endpoint, trial eligibility, authority boundary or
+trip transition was selected. The new tests were written before that fix and
+were red before implementation. No main test, protected source, SQL, provider
+adapter or command path changed. This inspection is not an independent verdict.
+
+Current build/OpenAPI/lane results, preservation hashes and command inventory
+follow below. All original commands have completed. MON-1 remains HOLD.
+
+### Completed continuation checks and refusal evidence
+
+| Current command | Exit / actual result |
+| --- | --- |
+| `pnpm build --concurrency=2 --force` | **0**; 7 successful tasks, 0 cached, **2m26.326s**, 32 static pages generated |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **1**; **229 incoming main paths** refused while merge index remains unfinished; no allow-list/checker workaround |
+| `pnpm openapi:check` | **1**; generator did not run: tsx IPC socket refused with `listen EPERM`; no alternate invocation attempted |
+| `pnpm exec tsc --version` | **0**; TypeScript 5.8.3 |
+| `node tools/money-arithmetic-lint.mjs` | **0**; boundary check passed |
+| `node tools/commercial-boundary-lint.mjs` | **0**; no violations/output |
+| Final Git/permission/resource inspections and intended-message presence | **0**; head unchanged, no conflict markers, Git index still unmerged, available disk 60 GB and memory 55% |
+
+The exact refused command was `pnpm openapi:check`, with the PATH prefixes above.
+Refusal text:
+
+```text
+Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/61267.pipe
+```
+
+This item stopped there. No escalation, IPC bypass, alternate loader or
+OpenAPI rewrite was attempted. `apps/api/openapi.json` matches main exactly.
+The build completed despite existing workspace-root/CSS/Nest `file-type` export
+and dynamic-dependency warnings; build success is not browser journey evidence.
+
+### Current preservation evidence
+
+A one-time read-only comparison checked **461 merged test files** against their
+actual main Git blob identities, using `blob <length> NUL <bytes>`. All matched.
+SHA-256 of sorted `path + space + file-sha256 + newline` records:
+
+```text
+ed7da91571df462cda44f1fd3b38d8fe75edcda05ac8834ee735d5d691fc6162
+```
+
+Current own/protected file SHA-256 values (receipt excluded to avoid a recursive
+hash; no source/test/registry changes followed these checks):
+
+```text
+1b25fbd4353a9251fddbfe580f584123c6b7faf01ee2e4c6f2b5470b724faf8a packages/core/src/jobs-on-the-go.ts
+a7cd290076b1012cf75eb79d0aca387e0099ef78bd42c76b18b3a3a607cddda5 packages/core/src/jobs-on-the-go.test.ts
+bcaca66d7e466df0bd647be0004ec4c559eaee6b0a18bbfdae52f48fcd3e1d23 packages/core/src/jobs-on-the-go-pricing.test.ts
+474b4b8905939e2ac0072a9401551d9dba34bf77a2f21f06d40326182a2aa1e8 packages/core/src/index.ts
+24e81a51ef0c9fe8e12e2472310f806dba437ecabb68d0cfbb3acda366de2d52 config/agent-lane-assignments.json
+a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35 apps/api/src/auth/context-boundary.test.ts
+3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6 packages/db/test/watchdog-command-harness.ts
+db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f packages/db/test/command-replay-contract.integration.test.ts
+8d392724e3796dcb6ba656928d54836ff934f1017860cae6f7de623ebb2e7448 packages/db/test/tenancy.integration.test.ts
+be34095677e52d4e63c771799c99a11e0e52a73fdf2d85808550b17a583ab3a8 packages/db/test/fingerprinted-row-shape.integration.test.ts
+4911b23648506a4bb585e4a4d1b50cd92c96345209ee2ae8097ef51c6cf3e94b packages/db/migrations/0144_job_work_state.sql
+6880dd1191e0372e99f43e14c7b029f56ad97a25bf0ec47ffdb51e7125a50401 packages/db/src/migrate.ts
+216343758d5f089ad8d73f100632428e67a0cd547e23ef3218db53e11880de40 apps/api/openapi.json
+```
+
+Actual `git diff origin/main --stat`, before appending this evidence/inventory
+(subsequent growth is confined to this already-listed receipt):
+
+```text
+ config/agent-lane-assignments.json               |   1 +
+ docs/verdicts/MON-1/BUILDER_RECEIPT.md           | 786 +++++++++++++++++++++++
+ packages/core/src/index.ts                       |   1 +
+ packages/core/src/jobs-on-the-go-pricing.test.ts | 106 +++
+ packages/core/src/jobs-on-the-go.test.ts         | 139 ++++
+ packages/core/src/jobs-on-the-go.ts              | 243 +++++++
+ 6 files changed, 1276 insertions(+)
+```
+
+The much larger `git diff HEAD --stat` (234 files) records incoming main changes
+from the supplied merge, not MON-1 edits. `git diff origin/main --name-only`
+and the unique-key registry comparison establish the actual six-file lane.
+`git diff --check` exited 0. Main AGENTS SHA-256 is
+`ae66c7ba5465ec9cd34d69af2085ab3f4c2a882f7580c7cae4a1ed68061ffba1`;
+main BUILD_PLAN SHA-256 is
+`d8793fa7c3112ca2d07d8976d5823546fcbf681c1f152cd2cc2a04e128aae2d5`;
+working copies match. No permanent test pins these merged bytes.
+
+### Current command inventory
+
+These are all current continuation shell command groups, in execution order,
+with actual exit codes. Read groups have no test count. Each Python inspection
+was a one-time receipt/preservation check, not a new permanent regression test.
+One tool-orchestration syntax error launched no shell command; it was corrected
+before the affected read group ran. All editing-tool calls succeeded. Polls
+resumed their original sessions and never relaunched a command.
+
+1. Exit **0**:
+
+```sh
+pwd; git status --short; git rev-parse HEAD origin/main; rg --files -g 'AGENTS.md' -g '*jobs-on-the-go*' -g '*work-state*' -g '*ch-4*' -g 'package.json' -g '*MON-1*' -g '*BEN-ANSWERS*'; cat AGENTS.md
+```
+
+2. Exit **0**:
+
+```sh
+git diff -- config/agent-lane-assignments.json; git log -6 --oneline; git log origin/main --oneline --all --grep='CH-4' -8; cat packages/core/src/jobs-on-the-go.ts; cat docs/verdicts/MON-1/BUILDER_RECEIPT.md
+```
+
+3. Exit **0**:
+
+```sh
+rg -n 'MON-1|10\\.1\\.[2-9]|CH-4|job_work_state' BUILD_PLAN.md; cat package.json; cat packages/core/package.json; cat .nvmrc; memory_pressure | tail -1; df -g /System/Volumes/Data; git diff --name-only --diff-filter=U
+```
+
+4. Exit **0**:
+
+```sh
+sed -n '1,18p' config/agent-lane-assignments.json; cat packages/core/src/jobs-on-the-go.ts; cat packages/core/src/jobs-on-the-go.test.ts; cat packages/core/src/jobs-on-the-go-pricing.test.ts
+```
+
+5. Exit **0**:
+
+```sh
+git log -4 --oneline; git log origin/main --format='%H %s' --grep='CH-4' -6; sed -n '1,125p' docs/verdicts/MON-1/BUILDER_RECEIPT.md; sed -n '130,260p' packages/core/src/jobs-on-the-go.ts; cat docs/contracts/job-work-state-v1.md
+```
+
+6. Exit **0**:
+
+```sh
+git diff origin/main --stat; git diff origin/main -- packages/core/src/index.ts; git show origin/main:config/agent-lane-assignments.json | head -5; rg -n 'ch4_|CREATE.*FUNCTION|FOR UPDATE|append_audit|fact_at|receipt|guard' packages/db/migrations/0144_job_work_state.sql; cat packages/core/src/job-work-state.ts
+```
+
+7. Exit **0**:
+
+```sh
+sed -n '1286,1402p' BUILD_PLAN.md; sed -n '2095,2133p' BUILD_PLAN.md; sed -n '1,50p' docs/decisions/d09-plan-tiers-metering.md; sed -n '1,210p' packages/db/src/job-work-state-sources.ts; cat packages/db/src/job-work-state-repository.ts
+```
+
+8. Exit **0**:
+
+```sh
+cat packages/core/src/job-work-state.ts; cat packages/core/src/money.ts; cat packages/core/src/activation-v3.ts; sed -n '2095,2135p' BUILD_PLAN.md; sed -n '1,150p' tools/lint.mjs; sed -n '165,245p' tools/agent-lane-boundary-lint.mjs
+```
+
+9. Exit **0**:
+
+```sh
+git log origin/main --format='%H %s' --merges --grep='CH-4' -3; rg -n 'checkPostLock|refuseLocked|appendAudit|class .*Mutation|async lock|replay|receipt' packages/db/src/evidence.ts packages/db/src/proof-repository.ts packages/db/src/variation-repository.ts packages/db/src/purchase-order-repository.ts packages/db/src/supplier-document-repository.ts packages/db/src/activation-repository.ts; tail -32 packages/db/src/migrate.ts; ls -l /private/tmp/jg-msg-mon-1.txt; command -v pnpm; node --version; sed -n '1,110p' "$HOME/Library/pnpm/bin/pnpm"
+```
+
+10. Exit **0**:
+
+```sh
+sed -n '125,240p' docs/verdicts/MON-1/BUILDER_RECEIPT.md; rg -n '24\.15|24\.17|pnpm|pinned' docs/repo-baseline.md .github/workflows/ci.yml; cat /private/tmp/jg-msg-mon-1.txt; cat tools/core-purity-lint.mjs; nl -ba packages/db/test/tenancy.integration.test.ts | sed -n '15,50p'; sed -n '72,132p' "$HOME/.local/share/full-steam/jg-orders/next-wave/BEN-ANSWERS-20261013.md"; cat "$HOME/.local/share/full-steam/handoffs/jobguard-task.md"
+```
+
+11. Exit **0**:
+
+```sh
+ls -l /private/tmp/ch4-pnpm-bin; cat /private/tmp/ch4-pnpm-bin/pnpm; git show origin/main:BUILD_PLAN.md | shasum -a 256; shasum -a 256 BUILD_PLAN.md AGENTS.md; git show origin/main:AGENTS.md | shasum -a 256; rg -n 'expect\(.*(tables|map|rows)|toEqual\(' packages/db/test/tenancy.integration.test.ts | tail -12; rg -n 'Use London|Avoid double|Use the original' "$HOME/.local/share/full-steam/jg-orders/next-wave/BEN-ANSWERS-20261013.md"; git diff --check
+```
+
+12. Exit **1**; original session 54107, polled to completion without relaunch:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm --version
+pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts
+```
+
+13. Exit **0**:
+
+```sh
+node -e 'const f = new Intl.DateTimeFormat("en-GB", {timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}); for (const y of [1840,1850]) console.log(y, f.format(new Date(`${y}-01-31T00:00:00Z`)))'
+```
+
+14. Exit **1**:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts
+```
+
+15. Exit **0**:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts
+```
+
+16. Exit **0**; original session 61350, polled to completion without relaunch:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm exec turbo run typecheck --force
+```
+
+17. Exit **0**:
+
+```sh
+python3 - <<'PY'
+import json, subprocess
+from pathlib import Path
+p=Path('config/agent-lane-assignments.json')
+def unique(pairs):
+    result={}
+    for key,value in pairs:
+        assert key not in result,key
+        result[key]=value
+    return result
+current=json.loads(p.read_text(),object_pairs_hook=unique)
+main=subprocess.check_output(['git','show','origin/main:config/agent-lane-assignments.json'],text=True)
+without_mon=''.join(line for line in p.read_text().splitlines(keepends=True) if not line.startswith('"mon-1":'))
+assert without_mon == main
+print('Valid unique-key JSON; removing only mon-1 gives byte-identical main registry')
+files=subprocess.check_output(['git','diff','--name-only','origin/main','--'],text=True).splitlines()
+allow=current['lanes']['mon-1']['allow']
+assert all(f in allow for f in files)
+print('Changed relative to main:',len(files),'files; all in MON-1 lane')
+print('\n'.join(files))
+assert subprocess.run(['git','merge-base','--is-ancestor','c203bb27893342ca2569272ff4dc908b614267d6','origin/main']).returncode==0
+print('CH-4 merge c203bb27893342ca2569272ff4dc908b614267d6 is an ancestor of origin/main')
+PY
+nl -ba packages/db/test/tenancy.integration.test.ts | sed -n '183,200p'
+nl -ba packages/db/test/tenancy.integration.test.ts | sed -n '436,452p'
+nl -ba tools/agent-lane-boundary-lint.mjs | sed -n '225,238p'
+```
+
+18. Exit **1**:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+LANE_BASE_REF=origin/main pnpm lint
+```
+
+19. Exit **0**; original session 78048, polled to completion without relaunch:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm exec turbo run lint --force
+```
+
+20. Exit **0**; original session 84325, polled to completion without relaunch:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm build --concurrency=2 --force
+```
+
+21. Exit **0**:
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+import hashlib, json, subprocess
+entries=subprocess.check_output(['git','ls-tree','-r','origin/main'],text=True).splitlines()
+records=[]
+for entry in entries:
+    metadata,name=entry.split('\t',1)
+    if not name.endswith(('.test.ts','.spec.ts','.test.mjs')): continue
+    data=Path(name).read_bytes()
+    original=metadata.split()[2]
+    actual=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+    assert actual == original, name
+    records.append(name+' '+hashlib.sha256(data).hexdigest()+'\n')
+print('Merged test preservation:',len(records),'files; aggregate SHA-256',hashlib.sha256(''.join(sorted(records)).encode()).hexdigest())
+for name in ['packages/core/src/jobs-on-the-go.ts','packages/core/src/jobs-on-the-go.test.ts','packages/core/src/jobs-on-the-go-pricing.test.ts','packages/core/src/index.ts','config/agent-lane-assignments.json','apps/api/src/auth/context-boundary.test.ts','packages/db/test/watchdog-command-harness.ts','packages/db/test/command-replay-contract.integration.test.ts','packages/db/test/tenancy.integration.test.ts','packages/db/test/fingerprinted-row-shape.integration.test.ts','packages/db/migrations/0144_job_work_state.sql','packages/db/src/migrate.ts','apps/api/openapi.json']:
+    print(hashlib.sha256(Path(name).read_bytes()).hexdigest(),name)
+PY
+git diff origin/main --stat
+git diff HEAD --stat
+git diff --check
+git rev-parse HEAD origin/main
+git status --short | tail -8
+```
+
+22. Exit **0**:
+
+```sh
+git diff HEAD -- packages/core/src/jobs-on-the-go.ts packages/core/src/jobs-on-the-go.test.ts; nl -ba config/agent-lane-assignments.json | head -7; git diff --numstat origin/main -- . ':!docs/verdicts/MON-1/BUILDER_RECEIPT.md'; memory_pressure | tail -1; df -g /System/Volumes/Data
+```
+
+23. Exit **1**:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+LANE_BASE_REF=origin/main pnpm lint:lanes
+```
+
+24. Exit **1**; original session 63715, polled to completion without relaunch:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm openapi:check
+```
+
+25. Exit **0**:
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/ch4-pnpm-bin:$PATH"
+pnpm exec tsc --version
+node tools/money-arithmetic-lint.mjs
+node tools/commercial-boundary-lint.mjs
+```
+
+26. Exit **0**:
+
+```sh
+git diff origin/main --stat; git diff --check; git rev-parse HEAD origin/main; git diff --name-only --diff-filter=U; memory_pressure | tail -1; df -g /System/Volumes/Data; wc -l docs/verdicts/MON-1/BUILDER_RECEIPT.md; test -s /private/tmp/jg-msg-mon-1.txt
+```
+
+
+### Dispatcher handoff
+
+Final HEAD: **`281a49281bd72512014c9758929b0cf7fa42906d`**. It is the older
+implementation commit; this continuation remains uncommitted as instructed.
+Current main is **`6671538c8d69936c162368c760dd6ce0f7f10493`**. No new final
+implementation SHA or independent verdict can be claimed before the dispatcher
+finishes the Git merge and commits the working tree.
+
+The intended conventional commit message is updated at
+**`/private/tmp/jg-msg-mon-1.txt`**. The dispatcher must finish the Git index/merge,
+run full pinned CI including OpenAPI/PostgreSQL/browser regressions, and obtain
+the RED independent exact-commit verdict and separate acceptance. Existing Q2,
+Q5/Q6/Q7/Q9 remainders, Q10, CH-5 route ownership and parked UI remain as recorded
+above. No action here releases real customer data, spending, production billing
+or ENT-10e. Aggregate MON-1 status remains **HOLD**.
+
+### Final read-only confirmation
+
+Command group 27, exit **0**, after the inventory above:
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+import hashlib,json,subprocess
+root=Path.cwd()
+registry=Path('config/agent-lane-assignments.json').read_text()
+assert not any(marker in registry for marker in ('<<<<<<<','=======','>>>>>>>'))
+parsed=json.loads(registry)
+assert ''.join(line for line in registry.splitlines(keepends=True) if not line.startswith('"mon-1":')) == subprocess.check_output(['git','show','origin/main:config/agent-lane-assignments.json'],text=True)
+changed=subprocess.check_output(['git','diff','--name-only','origin/main','--'],text=True).splitlines()
+assert len(changed)==6 and all(path in parsed['lanes']['mon-1']['allow'] for path in changed)
+for name,expected in [('packages/core/src/jobs-on-the-go.ts','1b25fbd4353a9251fddbfe580f584123c6b7faf01ee2e4c6f2b5470b724faf8a'),('packages/core/src/jobs-on-the-go.test.ts','a7cd290076b1012cf75eb79d0aca387e0099ef78bd42c76b18b3a3a607cddda5'),('packages/core/src/jobs-on-the-go-pricing.test.ts','bcaca66d7e466df0bd647be0004ec4c559eaee6b0a18bbfdae52f48fcd3e1d23')]:
+    assert hashlib.sha256(Path(name).read_bytes()).hexdigest()==expected,name
+message=Path('/private/tmp/jg-msg-mon-1.txt').read_text()
+assert message.startswith('feat(meter):') and '0163' in message and '0148' not in message
+print('Final inspection: six authorized files; source/test hashes unchanged; conflict markers absent; main registry bytes retained; intended commit message current.')
+PY
+git diff --check
+git diff origin/main --stat
+git rev-parse HEAD
+nl -ba docs/verdicts/MON-1/BUILDER_RECEIPT.md | sed -n '97,125p'
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+```
+
+Result: six authorized changed files; all three own source/test hashes still
+match the recorded values; main registry bytes retained; no conflict markers;
+`git diff --check` passed. Final stat before this confirmation append was
+6 files changed, 1618 insertions, with 1128 receipt lines. Only this receipt grew
+after that read. Available disk was 59 GB, free memory 56%, and HEAD remained
+`281a49281bd72512014c9758929b0cf7fa42906d`. No source, test, registry or operational
+change followed the completed checks. The Git index remains for the dispatcher
+to resolve by staging; no commit or acceptance was performed.
+

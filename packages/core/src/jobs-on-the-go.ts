@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isSmallJobV3 } from "./activation-v3.js";
-import { classifySiteSource, siteSourceV1, workFactTimeV1 } from "./job-work-state.js";
+import { classifySiteSource, siteSourceV1, workFactTimeV1 as sourceTimeV1 } from "./job-work-state.js";
 import { MAX_MONEY_PENCE, money, moneyFromBigInt } from "./money.js";
 import { divideRounded } from "./rational.js";
 
@@ -20,6 +20,8 @@ function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T 
 
 const count = z.number().int().nonnegative().safe();
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
+// Meter dates use years 0001–9999; Intl formats year zero as a year in another era.
+const workFactTimeV1 = sourceTimeV1.refine(value => !value.startsWith("0000-"));
 export const meterMoneyV1 = z.object({
   pence: z.number().int().safe().min(-MAX_MONEY_PENCE).max(MAX_MONEY_PENCE), currency: z.literal("GBP"),
 }).strict().readonly();
@@ -30,7 +32,7 @@ export const londonMeterDateV1 = z.string().regex(/^(?!0000)\d{4}-\d{2}-\d{2}$/u
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 });
 const dateFormatter = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
+  timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", timeZoneName: "longOffset",
 });
 
 /** Date construction always has an explicit validated input; never consults the current time. */
@@ -55,9 +57,12 @@ export function meterDay31Candidate(raw: unknown) {
   const activatedAt = parse(workFactTimeV1, raw);
   const date = addCalendarDays(londonMeterDate(activatedAt), 30);
   const utcMidnight = new Date(`${date}T00:00:00.000Z`);
-  // UK offset at UTC midnight is also the offset at that day's London midnight.
-  const hour = Number(dateFormatter.formatToParts(utcMidnight).find(part => part.type === "hour")!.value);
-  utcMidnight.setUTCHours(utcMidnight.getUTCHours() - hour);
+  // Retain the full offset, including historical minutes/seconds, rather than a clock hour.
+  const offsetName = dateFormatter.formatToParts(utcMidnight).find(part => part.type === "timeZoneName")!.value;
+  const offset = /^GMT(?:([+-])(\d{2}):(\d{2})(?::(\d{2}))?)?$/u.exec(offsetName);
+  if (!offset) throw new MeterFoundationError("INVALID_METER_FOUNDATION_INPUT");
+  const seconds = (Number(offset[2] ?? 0) * 3600 + Number(offset[3] ?? 0) * 60 + Number(offset[4] ?? 0)) * (offset[1] === "-" ? -1 : 1);
+  utcMidnight.setUTCSeconds(utcMidnight.getUTCSeconds() - seconds);
   return parse(meterDay31CandidateV1, {
     version: "meter-day31-candidate.v1", activatedAt, date, at: utcMidnight.toISOString().replace(".000Z", ".000000Z"),
   });
