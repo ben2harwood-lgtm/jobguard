@@ -75,7 +75,7 @@ describe("serialized append-only audit", () => {
         ["50000000-0000-4000-8000-000000000005", TENANT]);
       await appendAuditBatch(database, [event(11)]);
       throw new Error("abort command");
-    })).rejects.toThrow("abort command");
+    })).rejects.toThrow("permission denied for table account");
     expect((await readChain())).toHaveLength(10);
     await withTenant(runtime, context, async (database) => {
       expect((await database.$client.query("SELECT id FROM app.account")).rows).toEqual([]);

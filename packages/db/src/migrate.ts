@@ -89,6 +89,10 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0154_follow_up_clock_fence.sql", import.meta.url),
   new URL("../migrations/0155_quote_reacceptance.sql", import.meta.url),
   new URL("../migrations/0156_customer_billing_integrity.sql", import.meta.url),
+  new URL("../migrations/0157_extra_approval.sql", import.meta.url),
+  new URL("../migrations/0158_extra_approval_chain.sql", import.meta.url),
+  new URL("../migrations/0162_membership_account_closed.sql", import.meta.url),
+  new URL("../migrations/0164_job_sources.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 
@@ -103,7 +107,16 @@ export async function migrate(pool: Pick<Pool | PoolClient, "query">): Promise<v
     const sql = await readFile(fileURLToPath(migrationUrl), "utf8");
     // Select backfill mode within this migration's transaction, even with a pooled connection.
     const mode = process.env.JOBGUARD_ENV === "synthetic_demo" ? "synthetic_demo" : "details_needed";
-    await pool.query(migrationName === "0095_job_parties.sql" ? sql.replace("BEGIN;", `BEGIN; SELECT set_config('app.deployment_mode','${mode}',true);`) : sql);
-    await pool.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1) ON CONFLICT DO NOTHING", [migrationName]);
+    // Submit schema and bookkeeping as one transaction on one connection, even
+    // for Pool.query. A lost COMMIT acknowledgement can then safely be retried.
+    // Refuse scripts outside the repository's explicit transaction convention.
+    // Leading blank lines and `--` comment lines (e.g. a migration header) may precede BEGIN.
+    if (!/^(?:\s*(?:--[^\n]*)?\n)*\s*BEGIN;/u.test(sql) || !/COMMIT;\s*$/u.test(sql)) {
+      throw new Error(`MIGRATION_TRANSACTION_REQUIRED: ${migrationName}`);
+    }
+    const migrationLiteral = migrationName.replaceAll("'", "''");
+    const atomicSql = sql.replace(/COMMIT;\s*$/u,
+      `INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('${migrationLiteral}') ON CONFLICT DO NOTHING;\nCOMMIT;\n`);
+    await pool.query(migrationName === "0095_job_parties.sql" ? atomicSql.replace("BEGIN;", `BEGIN; SELECT set_config('app.deployment_mode','${mode}',true);`) : atomicSql);
   }
 }
