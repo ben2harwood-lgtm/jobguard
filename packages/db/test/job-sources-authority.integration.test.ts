@@ -56,7 +56,15 @@ describe("SV-7A source storage/read authority",()=>{
     await db.query(`INSERT INTO app.job_diary_entry(${names.join(",")}) SELECT ${selected} FROM app.job_diary_entry WHERE id=$1`,[source.id]);
    })).rejects.toMatchObject({code});
   }
-  for(const table of ["job_diary_entry","customer_message_source","job_source_original"])for(const sql of [`UPDATE app.${table} SET tenant_id=tenant_id`,`DELETE FROM app.${table}`,`TRUNCATE app.${table}`])await expect(workTenant(f.admin,context.tenantId,db=>db.query(sql))).rejects.toMatchObject({code:"55000"});
+  for(const table of ["job_diary_entry","customer_message_source","job_source_original"]){
+   // Include both referencing tables so PostgreSQL reaches the original's BEFORE TRUNCATE guard (0164).
+   const truncate=table==="job_source_original"?"TRUNCATE app.job_source_original, app.job_diary_entry, app.customer_message_source":`TRUNCATE app.${table}`;
+   for(const sql of [`UPDATE app.${table} SET tenant_id=tenant_id`,`DELETE FROM app.${table}`,truncate])await expect(rolledBack(f.admin,async db=>{
+    await db.query("SELECT set_config('app.tenant_id',$1,true)",[context.tenantId]);
+    await db.query("SET LOCAL ROLE jobguard_migration");
+    await db.query(sql);
+   })).rejects.toMatchObject({code:"55000"});
+  }
  });
  it("SV7A-07 revoked session cannot read existing records",async()=>{
   await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[f.practice.auth.digest]);

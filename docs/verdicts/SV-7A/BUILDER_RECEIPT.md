@@ -1100,3 +1100,87 @@ No Git write commands were run. Changes remain in the working tree for the
 dispatcher. Intended conventional commit subject/body is overwritten at
 `/private/tmp/jg-msg-sv-7a.txt`; commit, push, merge and release remain dispatcher/
 founder-owned.
+
+
+## Repair r4 — dispatcher 11, 15 October 2026
+
+Repair against PR #222 head `5ebca4248a399edcdc87b82e8c1ff2d7f041ecb8`,
+branch `codex/sandbox/sv-7a`. Read repository AGENTS, BUILD_PLAN §2.4/SV-7,
+`docs/contracts/job-sources-v1.md`, migration 0164 and the source fixture/transaction
+helpers. Only `job-sources-authority.integration.test.ts` and this receipt change.
+
+### TRUNCATE repair and mutation audit
+
+The original `TRUNCATE app.job_source_original` was rejected by PostgreSQL's
+foreign-key check (`0A000`) before the intended immutable trigger (`55000`).
+The replacement is one explicit statement:
+
+```sql
+TRUNCATE app.job_source_original, app.job_diary_entry, app.customer_message_source
+```
+
+Migration `0164_job_sources.sql:36–37` and `49–50` define the two referencing
+foreign keys. Searching all migration SQL found no additional tables referencing
+these three source tables. The loop at lines 53–59 covers **every table in the
+statement**, assigns `jobguard_migration` ownership and installs
+`job_source_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ... FOR EACH STATEMENT`.
+The shared rejection function at `0003_job_spine.sql:60–61` raises `55000`.
+No migration edit is needed or made. The original is first in the combined
+statement; separate diary/message truncate attempts still exercise their guards.
+No CASCADE, disabled trigger, changed grant or weaker expected code is used.
+
+All nine immutable UPDATE/DELETE/TRUNCATE attempts now use the existing
+`rolledBack` helper with transaction-local tenant context and explicit
+`SET LOCAL ROLE jobguard_migration`. The owner has mutation/TRUNCATE authority,
+so privilege denial cannot replace the intended trigger assertion. The helper
+always rolls back and releases the client, including if an attempted mutation
+unexpectedly succeeds. Statement-level BEFORE UPDATE/DELETE guards run before
+row changes and referential checks, even for the empty message table; the no-op
+UPDATE uses valid existing column types. All nine expectations remain `55000`.
+
+Also source-inspected the same test's substitution statements: the receipt uses
+explicit UUID/text parameter casts and a fresh command identity; wrong-job setup
+reuses its trigger-created track; wrong-job/version inserts retain valid receipt,
+actor and source-kind fields and reach the immediate exact-tuple FK (`23503`).
+Tenant substitution reaches the BEFORE INSERT tenant guard (`42501`). The
+separate runtime SQL attacks still have only SELECT authority and expect `42501`.
+No further pre-emption was found. These are source-inspection conclusions;
+PostgreSQL execution is still CI-only.
+
+### Commands actually run
+
+Installed Node `v24.17.0`, cached pinned pnpm `10.28.1`, Vitest `4.1.11`.
+No install/download, PostgreSQL start, browser or git write command was attempted.
+Commands used `PATH=/private/tmp/jg-sv7a-bin:$PATH`; `heavy-slot` below means
+`~/.local/bin/heavy-slot`. Logs are under `/private/tmp/`.
+
+| Command | Exit / actual result | Log |
+| --- | --- | --- |
+| `heavy-slot sv-7a-r4-typecheck pnpm typecheck` | 0; 7 successful tasks, 2 cached | `sv7a-r4-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; root lint and 7 package tasks, 2 cached | `sv7a-r4-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; SV-7A boundary passed | `sv7a-r4-lint-lanes.log` |
+| Same lint and lint:lanes after appending r4 receipt | 0 for both | `sv7a-r4-lint-final.log`, `sv7a-r4-lint-lanes-final.log` |
+| `heavy-slot sv-7a-r4-test-typecheck node /private/tmp/jg-sv7a-check-tests.mjs packages/db/test/job-sources-authority.integration.test.ts` | 0; changed integration source typechecked, no DB execution | `sv7a-r4-test-typecheck.log` |
+| `heavy-slot sv-7a-r4-build pnpm build` | 0; 7 successful tasks, 2 cached | `sv7a-r4-build.log` |
+| `heavy-slot sv-7a-r4-core pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-sources.test.ts src/shadow-detection.test.ts` | 0; 14 tests passed | `sv7a-r4-core-unit.log` |
+| `heavy-slot sv-7a-r4-api pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-source.application.test.ts src/job-source.controller.test.ts` | 0; 7 tests passed | `sv7a-r4-api-unit.log` |
+| `heavy-slot sv-7a-r4-worker pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/shadow-detection.worker.test.ts src/shadow-detection-lock-race.test.ts` | 0; 8 tests passed | `sv7a-r4-worker-unit.log` |
+| `heavy-slot sv-7a-r4-web pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/jobs/[id]/diary/route.test.ts' 'app/api/jobs/[id]/customer-messages/route.test.ts'` | 0; 8 route tests passed, no browser | `sv7a-r4-web-unit.log` |
+| `heavy-slot sv-7a-r4-db-unit pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts` | 0; 26 tests passed, no DB execution | `sv7a-r4-db-unit.log` |
+| `pnpm openapi:check` | 1; tsx CLI IPC listener blocked by sandbox EPERM | `sv7a-r4-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; same generator/check without IPC listener; artifact unchanged | `sv7a-r4-openapi-node.log` |
+| `git diff --check` | 0 | terminal output |
+
+63 focused unit/worker/route/catalog tests passed. Successful heavy-slot runs
+also emitted sandbox sysctl/sysmon/pgrep warnings; Turbo emitted sandbox IO
+warnings. No real PostgreSQL, migration, browser or full `pnpm test` run is claimed:
+the dispatcher environment cannot bind localhost or start PostgreSQL. CI after
+push must execute SV7A-16 and the existing mandatory DB/migration/regression suites.
+
+There are no application, schema, migration, AI/prompt/model/parser/policy,
+backwards-compatibility or alert changes. All prior intake/UI/CH-4 integration,
+real-data and release holds remain. This receipt is builder evidence, not an
+independent verdict or technical acceptance. A fresh exact-commit independent
+review and separate acceptance are still required. The dispatcher owns commit,
+push, merge and release. Intended conventional commit subject/body is overwritten
+at `/private/tmp/jg-msg-sv-7a.txt`.
