@@ -785,3 +785,150 @@ Final `git diff origin/main --stat` (tracked comparison; the untracked new migra
 Final read-only path inventory: **34 paths, all in the issued lane**. No task edit to main tests, pins, auth bridges, CH-4, plan, worker composition or UI. No Git writes.
 
 Final HEAD remains `12072ab3e6e8d494b3d8c2c978737968f0f9df59`; origin/main remains `6671538c8d69936c162368c760dd6ce0f7f10493`. Dispatcher must stage the five working-file conflict resolutions, finish the merge and commit this partial slice before any different-model verdict can bind the exact commit. Intended message: `/private/tmp/jg-msg-sv-7a.txt`. Independent verdict and separate acceptance remain absent.
+
+## Repair r1 — 15 October 2026, dispatcher 11
+
+Repair base: PR #222, branch `codex/sandbox/sv-7a`, exact HEAD
+`ff8fa3c39920a30731c2d1b07c74f1b91247cd7a`. The working tree was clean at
+entry. This section supersedes earlier receipt claims that catalogue additions
+were outstanding/coordinator-only: dispatcher 11 explicitly authorizes NEW ROWS
+ONLY in the two inventories below. It does not close the remaining SV-7A product
+holds or supply independent review/acceptance.
+
+The supplied CI excerpt at
+`/Users/benharwood/.local/share/full-steam/jg-runs/d11/sv7a-ci-fail-excerpt.txt`
+was read. It reports missing source ownership/SELECT/routine capability entries.
+`gh run view --branch ... --log-failed` exited 1 (unsupported flag); the corrected
+read-only `gh run list --repo ben2harwood-lgtm/jobguard --branch codex/sandbox/sv-7a --limit 1 --json databaseId,headSha,status,conclusion`
+also exited 1 because api.github.com was unreachable. No full-log or real-DB
+execution is claimed; the tenancy failure detail absent from the excerpt was
+resolved by inspecting its existing ordered catalogues against migration 0164.
+
+### Changes and additions-only inventory
+
+- `packages/db/test/job-sources-fixture.ts`: explicitly cast command-receipt
+  UUID arguments (`$1`, `$2`, `$4`) and text arguments (`$2`, `$3`). The reused
+  `$2` now has explicit UUID and text uses rather than conflicting inferred
+  assignment types. `job-work-state-fixtures.ts` is unchanged.
+- `config/agent-lane-assignments.json`: edited with `apply_patch` only; add
+  `packages/db/test/tenancy.integration.test.ts` and
+  `docs/contracts/lp-0-effective-privileges-v1.json` to this lane, plus its r1
+  authorization note. Other lane entries remain unchanged.
+- No production code, SQL migration, grant, external action, commercial policy,
+  API schema or OpenAPI artifact changed. No migration/backfill/rollback is
+  introduced by this repair. Existing synthetic-only/intake/release holds remain.
+
+Every row added to the two merged files is listed here:
+
+| Merged file / collection | Before → after | Exact additions |
+| --- | --- | --- |
+| `packages/db/test/tenancy.integration.test.ts`, RLS/guard catalogue | 220 → 223 | `customer_message_source`, `job_diary_entry`, `job_source_original`; each `relrowsecurity=true`, `relforcerowsecurity=true`, `guarded=true`, in existing name order |
+| Same file, ownership catalogue | 220 → 223 | The same three names, each `owner=jobguard_migration`, in existing name order |
+| `docs/contracts/lp-0-effective-privileges-v1.json`, groups | 54 → 55 | `a-sv7a-read-only-authority`: new read-only authority disposition, synthetic read scope, LP-6d/LP-11/LP-12 responsibilities and retained real-data holds |
+| Same file, authorityPaths | 32 → 33 | `ap-sv7a-read-only`: new read-only authority path, source/test references and the same responsibilities/holds |
+| Same file, entries | 1,127 → 1,135 | The eight keys listed below, all assigned to the new disposition group |
+| Same file, recorded.routines | 297 → 300 | `function:app.job_source_insert_guard()`, `function:app.job_source_original_binding()`, `function:app.read_job_sources(uuid,uuid,text,text)` |
+
+Exact eight new capability keys:
+
+```text
+acl|rel|table|app.customer_message_source|jobguard_runtime|SELECT|-
+acl|rel|table|app.job_diary_entry|jobguard_runtime|SELECT|-
+acl|rel|table|app.job_source_original|jobguard_runtime|SELECT|-
+acl|routine|function:app.read_job_sources(uuid,uuid,text,text)|jobguard_runtime|EXECUTE|-
+owner|rel:table|app.customer_message_source|jobguard_migration
+owner|rel:table|app.job_diary_entry|jobguard_migration
+owner|rel:table|app.job_source_original|jobguard_migration
+owner|routine|function:app.read_job_sources(uuid,uuid,text,text)|jobguard_migration
+```
+
+The routine owner is the eighth capability required by `deriveFacts`, alongside
+the seven table-owner/table-grant/routine-grant entries named in the order.
+The three additional routine protection records are needed by LP0-17's existing
+routine-identity completeness assertion, including owner-only trigger functions.
+No earlier routine record is changed. New definitionSha256 values:
+
+| New routine | Source-derived SHA-256 |
+| --- | --- |
+| `app.job_source_insert_guard()` | `52e0a17f9338b210abee374670bc5c2cf6bef47498330e8e44f605cee1e1f3d9` |
+| `app.job_source_original_binding()` | `67a6b9a2f532b14f08c85b52f78e54727714e7e3e69d187788ff0fc9483821f9` |
+| `app.read_job_sources(uuid,uuid,text,text)` | `db5d1d4963d5033e0a0027559619a60001bbeaef5b0c39dac4c8f3f4d1d2e3e7` |
+
+These new hashes were computed from migration 0164's exact function bodies and
+PostgreSQL's `pg_get_functiondef` header format (CREATE OR REPLACE, typed/spaced
+arguments, RETURNS, LANGUAGE, SECURITY DEFINER, quoted search_path, `$function$`
+body delimiter and trailing newline). As a source-level control, the identical
+method reproduced the existing hashes for `ch4_storage_integrity()` and
+`ch4_read_work_facts(uuid,uuid,text)` exactly. This is not a PostgreSQL run.
+The two trigger helpers have no runtime/PUBLIC EXECUTE and are unreachable;
+`read_job_sources` is runtime-executable only, with no static writes and its
+existing practice-authentication call recorded. Protection hashes remain
+recorded facts, not an implemented LP0-13 comparator.
+
+Preservation command `python3 /private/tmp/sv7a-r1-preservation.py`: exit 0.
+It compared the working files to `git show HEAD:<path>`, checked every original
+line remains byte-for-byte in order, checked zero removed diff lines, and checked
+all original parsed records remain equal. Tenancy: 667 → 673 lines (+6/-0).
+LP-0: 2,397 → 2,410 lines (+13/-0). Existing base, target state, holds, gaps,
+recorded note, RLS (240), policies (252), triggers (354), entries, groups,
+authority paths and all 297 earlier routine records/hashes remain unchanged.
+`job-work-state-fixtures.ts` and `apps/api/openapi.json` have no repair diff.
+No existing pin/hash/row adjustment was required.
+
+### Commands actually run and results
+
+Existing dependencies only: Node `v24.17.0`, cached pinned pnpm `10.28.1`, Vitest
+`4.1.11`. All successful pnpm commands below used
+`PATH=/private/tmp/jg-sv7a-bin:$PATH`; its launcher runs the existing cached
+`/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs` through Node.
+No install/download was completed or needed. No browser or PostgreSQL start was
+attempted. Every Vitest run used `~/.local/bin/heavy-slot`, `--maxWorkers=2`, and
+at most two explicitly named files.
+
+| Command (with pinned PATH above) | Exit / actual result | Log under `/private/tmp/` |
+| --- | --- | --- |
+| `pnpm typecheck` | 0; 7 successful tasks, 2 cached | `sv7a-r1-typecheck-pinned.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; root lint and 7 package tasks, 2 cached | `sv7a-r1-lint-pinned.log` |
+| Same lint after adding the three routine records | 0 | `sv7a-r1-lint-final.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; sv-7a boundary passed | `sv7a-r1-lint-lanes-pinned.log` |
+| `~/.local/bin/heavy-slot sv-7a-r1-build pnpm build` | 0; 7 successful tasks, 2 cached | `sv7a-r1-build-pinned.log` |
+| `~/.local/bin/heavy-slot sv-7a-r1-db-unit pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts` | 0; 26 tests passed | `sv7a-r1-db-unit-pinned.log` |
+| `~/.local/bin/heavy-slot sv-7a-r1-core-unit pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-sources.test.ts` | 0; 6 tests passed | `sv7a-r1-core-unit.log` |
+| `~/.local/bin/heavy-slot sv-7a-r1-api-unit pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-source.application.test.ts src/job-source.controller.test.ts` | 0 on retry; 7 tests passed | `sv7a-r1-api-unit-retry.log` |
+| `~/.local/bin/heavy-slot sv-7a-r1-web-unit pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/jobs/[id]/diary/route.test.ts' 'app/api/jobs/[id]/customer-messages/route.test.ts'` | 0; 8 tests passed, no browser | `sv7a-r1-web-unit.log` |
+| `pnpm openapi:check` | 1; tsx CLI IPC listener refused with EPERM before generation check | `sv7a-r1-openapi-pinned.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; same generator/check, no IPC listener; committed artifact unchanged | `sv7a-r1-openapi-node.log` |
+| `node /private/tmp/jg-sv7a-check-tests.mjs packages/db/test/job-sources-fixture.ts packages/db/test/tenancy.integration.test.ts` | 0; both test sources typechecked, no database execution | `sv7a-r1-fixture-typecheck.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx --input-type=module -e '<loadReviewedInventory + pathCompleteness + repoFileExists validation>'` | 0; actual committed inventory parsed; zero path-completeness problems; 1,135 entries / 55 groups / 33 paths / 300 routine records / 8 new capability entries | `sv7a-r1-inventory-final.log` |
+| `python3 /private/tmp/sv7a-r1-preservation.py` | 0; additions only as above | `sv7a-r1-preservation.log` |
+| `git diff --check` | 0 | terminal output |
+
+Initial global-shim attempts (`pnpm --version`, typecheck, lint, lint:lanes,
+openapi:check, heavy-slot DB unit/build) stalled before check output and were
+stopped with exit 130. Cached native-binary version probes eventually returned
+10.28.1/exit 0; the Node launcher was used for all useful checks. One pinned
+heavy-slot API invocation exited 2 before Vitest started; its retry above passed.
+A first inventory validation invoked from the DB workspace exited 1 because
+`tsx` is not a dependency there; rerunning from the API workspace passed, both
+before and after the routine additions. These attempts establish no test pass.
+The slot wrapper printed sandbox sysctl/sysmon/pgrep errors; successful runs
+acquired its slots and executed the named commands. Turbo emitted sandbox IO
+warnings; task exit codes/results above are the actual reported outcomes.
+
+### CI and review still owed
+
+47 targeted unit tests passed. Real PostgreSQL evidence remains **CI-only**:
+`job-sources-evidence.integration.test.ts`, `job-sources-isolation.integration.test.ts`
+(including SV7A-17), `tenancy.integration.test.ts`,
+`lp-0-grant-freeze.integration.test.ts`, `lp-0-authority-paths.integration.test.ts`,
+and mandatory migration/regression coverage must run after dispatcher push.
+No assertion of a green database repair run, full-suite pass, browser pass,
+independent model verdict or technical acceptance is made here. There is no
+AI/prompt/parser/model change requiring a new model evaluation. No new alerts,
+release permission or operational authority is introduced. All prior unbuilt
+intake/UI/CH-4 integration and real-data release gates remain held.
+
+All changes are left in the working tree. No git write command was run.
+The conventional commit subject/body was overwritten at
+`/private/tmp/jg-msg-sv-7a.txt`; the dispatcher owns commit/push and exact-commit
+independent review/acceptance remains separate.
