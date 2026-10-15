@@ -1,4 +1,4 @@
-// Baseline execution cannot establish post-withdrawal compatibility while Q3 remains HELD.
+// The unchanged lock SQL must retain transaction lifetime and RLS update checks.
 import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,7 +13,7 @@ import { RecoveryFollowUpRepository } from "../src/recovery-follow-up-repository
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
-describe("LP-1 row-lock compatibility preparation", () => {
+describe("LP-1 row-lock compatibility", () => {
   const phrase = randomUUID(), tenant = randomUUID(), foreign = randomUUID();
   const person = randomUUID(), account = randomUUID(), membership = randomUUID(), foreignAccount = randomUUID(), foreignMember = randomUUID(), job = randomUUID();
   const actor = { membershipId: membership, identityUserId: person, actorRef: `membership:${membership}` }, ctx = testTenantContext(tenant);
@@ -124,6 +124,8 @@ describe("LP-1 row-lock compatibility preparation", () => {
 
   it("[LP1-08] existing callers retain membership locks and revocation ordering", async () => {
     const cases = new RecoveryCaseRepository(runtime), messages = new RecoveryMessageRepository(runtime), followUps = new RecoveryFollowUpRepository(runtime);
+    expect((await owner.query("SELECT has_function_privilege('lp1_lock_login','identity.scim_deactivate(uuid,jsonb)','EXECUTE') AS allowed")).rows)
+      .toEqual([{ allowed: false }]);
     expect(await cases.listForMember(ctx, job, actor)).toEqual([]);
     // Exercise real entry points through their authority lock before the missing-resource refusal.
     const missing = randomUUID();

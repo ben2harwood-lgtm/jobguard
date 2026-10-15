@@ -128,6 +128,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:AcceptFinalCheckTerms": "post_live_billing",
   "command:AddFinalReviewExtra": "post_live_billing",
   "command:IssueLockBoundInvoice": "post_live_billing",
+  "command:IssueClientApproval": "post_live_billing",
   "nest:/jobs/:id/final-account": "post_live_billing",
   "nest:/jobs/:id/materials": "pre_live_allowed",
   "nest:/jobs/:id/parties": "pre_live_allowed",

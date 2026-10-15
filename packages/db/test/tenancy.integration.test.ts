@@ -43,6 +43,13 @@ beforeAll(async () => {
   await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic-test-only" });
   await migrate(admin);
+  // LP-1 Q1, Ben decision 40: TEST-ONLY writer for the original RLS backstops.
+  // It is a non-owner without bypass rights; the application login never gets these grants.
+  await admin.query(`
+    CREATE ROLE lp1_tenancy_fixture NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+    GRANT jobguard_runtime TO lp1_tenancy_fixture;
+    GRANT INSERT, UPDATE, DELETE ON app.account, app.membership TO lp1_tenancy_fixture;
+  `);
   await admin.query(`
     INSERT INTO control_plane.tenant (id) VALUES ('${TENANT_A}'), ('${TENANT_B}');
     INSERT INTO identity.identity_user (id) VALUES ('${USER_A}'), ('${USER_B}');
@@ -94,7 +101,8 @@ describe("tenant context and PostgreSQL RLS", () => {
       ),
     ).rejects.toMatchObject({ code: "42501" });
 
-    await withTenant(runtime, context(TENANT_A), async (database) => {
+    await withTenant(admin, context(TENANT_A), async (database) => {
+      await database.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
       const hiddenUpdate = await database.$client.query(
         "UPDATE app.account SET name = 'changed' WHERE id = $1",
         [ACCOUNT_B],
@@ -111,7 +119,8 @@ describe("tenant context and PostgreSQL RLS", () => {
 
   it("allows same-tenant insert, update, and delete operations", async () => {
     const id = "a3000000-0000-4000-8000-000000000003";
-    await withTenant(runtime, context(TENANT_A), async (database) => {
+    await withTenant(admin, context(TENANT_A), async (database) => {
+      await database.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
       await database.$client.query(
         "INSERT INTO app.account (id, tenant_id, name) VALUES ($1, $2, 'temporary')",
         [id, TENANT_A],
@@ -124,7 +133,8 @@ describe("tenant context and PostgreSQL RLS", () => {
   });
 
   it("limits deletes and rejects cross-tenant composite references without disclosure", async () => {
-    await withTenant(runtime, context(TENANT_A), async (database) => {
+    await withTenant(admin, context(TENANT_A), async (database) => {
+      await database.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
       const deletion = await database.$client.query("DELETE FROM app.account WHERE id = $1", [ACCOUNT_B]);
       expect(deletion.rowCount).toBe(0);
       await expect(
@@ -156,7 +166,8 @@ describe("tenant context and PostgreSQL RLS", () => {
   it("rolls back domain writes when work fails", async () => {
     const id = "a2000000-0000-4000-8000-000000000002";
     await expect(
-      withTenant(runtime, context(TENANT_A), async (database) => {
+      withTenant(admin, context(TENANT_A), async (database) => {
+        await database.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
         await database.$client.query(
           "INSERT INTO app.account (id, tenant_id, name) VALUES ($1, $2, 'rollback')",
           [id, TENANT_A],
@@ -233,8 +244,14 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_pack_attachment_approval", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_pack_revision", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "evidence_upload", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_approval_outcome", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_approval_request", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "extra_approval_revision_binding", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_approval_step_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_client_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_client_link_closure", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "extra_duplicate_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
+      { relname: "extra_escalation_fact", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "extra_event", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "extra_evidence_pack", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
       { relname: "extra_order_line_link", relrowsecurity: true, relforcerowsecurity: true, guarded: true },
@@ -481,8 +498,14 @@ describe("migration and privilege catalog", () => {
       { relname: "evidence_pack_attachment_approval", owner: "jobguard_migration" },
       { relname: "evidence_pack_revision", owner: "jobguard_migration" },
       { relname: "evidence_upload", owner: "jobguard_migration" },
+      { relname: "extra_approval_outcome", owner: "jobguard_migration" },
+      { relname: "extra_approval_request", owner: "jobguard_migration" },
       { relname: "extra_approval_revision_binding", owner: "jobguard_migration" },
+      { relname: "extra_approval_step_fact", owner: "jobguard_migration" },
+      { relname: "extra_client_link", owner: "jobguard_migration" },
+      { relname: "extra_client_link_closure", owner: "jobguard_migration" },
       { relname: "extra_duplicate_link", owner: "jobguard_migration" },
+      { relname: "extra_escalation_fact", owner: "jobguard_migration" },
       { relname: "extra_event", owner: "jobguard_migration" },
       { relname: "extra_evidence_pack", owner: "jobguard_migration" },
       { relname: "extra_order_line_link", owner: "jobguard_migration" },

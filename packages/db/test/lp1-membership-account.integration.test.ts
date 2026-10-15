@@ -1,4 +1,4 @@
-// Preparatory requirements: intentionally fail on the preceding schema. Q1/Q3 remain HELD.
+// Actual-role proofs for the integrated grant, lock and bootstrap cutover.
 import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,9 +7,12 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../src/migrate.js";
+import { appendAuditBatch } from "../src/audit.js";
+import { withTenant } from "../src/tenant-context.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
-describe("LP-1 actual-role refusal requirements (implementation HELD)", () => {
+describe("LP-1 actual-role refusal requirements", () => {
   const phrase = randomUUID(), tenant = randomUUID(), foreign = randomUUID();
   const account = randomUUID(), otherAccount = randomUUID(), person = randomUUID(), otherPerson = randomUUID();
   const active = randomUUID(), revoked = randomUUID(), expired = randomUUID();
@@ -25,16 +28,24 @@ describe("LP-1 actual-role refusal requirements (implementation HELD)", () => {
     await postgres.initialise(); await postgres.start();
     owner = new Pool({ ...options, user: "postgres" });
     await migrate(owner);
+    await migrate(owner);
     // Separately authenticated owner setup, never a runtime connection elevated to migration.
     await owner.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [tenant, foreign]);
     await owner.query("INSERT INTO identity.identity_user(id) VALUES($1),($2)", [person, otherPerson]);
     await owner.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'LP1 generated account'),($3,$4,'LP1 foreign account')",
       [account, tenant, otherAccount, foreign]);
+    await owner.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'LP1 second account')", [randomUUID(), tenant]);
     for (const [id, state] of [[active, "active"], [revoked, "revoked"], [expired, "expired"]] as const) {
       await owner.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,revoked_at,expires_at)
         VALUES($1,$2,$3,$4,'member',CASE WHEN $5='revoked' THEN transaction_timestamp()-interval '1 day' END,
         CASE WHEN $5='expired' THEN transaction_timestamp()-interval '1 day' END)`, [id, tenant, account, person, state]);
     }
+    await withTenant(owner, testTenantContext(tenant), async db => {
+      await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
+        VALUES($1,$2,'lp1.fixture','lp1.fixture',$3,'succeeded','{}',$4,clock_timestamp())`, [randomUUID(), tenant, "a".repeat(64), active]);
+      await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${active}`, eventType: "lp1.fixture",
+        subjectType: "membership", subjectRef: active, payload: { references: { membership: active } } }]);
+    });
     // Existing-role LOGIN is fixture configuration, with no new object privilege.
     await owner.query(`ALTER ROLE jobguard_runtime LOGIN PASSWORD '${phrase}'`);
     await owner.query(`CREATE ROLE lp1_inherited_login LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${phrase}'`);
@@ -137,6 +148,18 @@ describe("LP-1 actual-role refusal requirements (implementation HELD)", () => {
   });
 
   it("[LP1-04] effective privileges expose only reads and immutable locking columns", async () => {
+    const routine = (await owner.query(`SELECT p.proowner::regrole::text AS owner,p.prosecdef,p.proconfig,
+      has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') AS callable
+      FROM pg_proc p WHERE p.oid='app.lp1_reject_lock_column_update()'::regprocedure`)).rows;
+    expect(routine).toEqual([{ owner: "jobguard_migration", prosecdef: false, proconfig: ["search_path=pg_catalog"], callable: false }]);
+    expect((await owner.query(`SELECT t.tgrelid::regclass::text AS table_name,t.tgname,t.tgtype::int AS type,t.tgenabled,
+      t.tgfoid='app.lp1_reject_lock_column_update()'::regprocedure AS helper,a.attname::text AS column_name
+      FROM pg_trigger t JOIN pg_attribute a ON a.attrelid=t.tgrelid AND a.attnum=ANY(t.tgattr)
+      WHERE t.tgname IN('lp1_account_lock_column_immutable','lp1_membership_lock_column_immutable') ORDER BY t.tgname`)).rows)
+      .toEqual([
+        { table_name: "app.account", tgname: "lp1_account_lock_column_immutable", type: 18, tgenabled: "O", helper: true, column_name: "created_at" },
+        { table_name: "app.membership", tgname: "lp1_membership_lock_column_immutable", type: 18, tgenabled: "O", helper: true, column_name: "created_at" },
+      ]);
     for (const role of ["jobguard_runtime", "lp1_inherited_login"]) {
       const posture = (await owner.query("SELECT rolsuper,rolbypassrls,rolcreaterole,rolcreatedb FROM pg_roles WHERE rolname=$1", [role])).rows;
       expect(posture).toEqual([{ rolsuper: false, rolbypassrls: false, rolcreaterole: false, rolcreatedb: false }]);
@@ -173,24 +196,36 @@ describe("LP-1 actual-role refusal requirements (implementation HELD)", () => {
         }
         await refused(pool, `ALTER TABLE ${table} DISABLE TRIGGER USER`);
         await refused(pool, `ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY`);
+        await refused(pool, `UPDATE ${table} SET created_at=created_at WHERE false`);
+        await refused(pool, `DROP TRIGGER ${table === "app.account" ? "lp1_account_lock_column_immutable" : "lp1_membership_lock_column_immutable"} ON ${table}`);
       }
       await refused(pool, "SELECT app.lp1_reject_lock_column_update()");
+      await refused(pool, "SET LOCAL session_replication_role=replica");
+      await refused(pool, `CREATE OR REPLACE FUNCTION app.lp1_reject_lock_column_update() RETURNS trigger
+        LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$`);
     }
-    // Install a rolled-back AFTER trigger as an owner-side control. No grants or fixture role added.
+    // A BEFORE ROW control must not run either: rejection happens at statement entry.
     const setup: PoolClient = await owner.connect();
     try {
       await setup.query("BEGIN");
       await setup.query("CREATE TABLE public.lp1_update_effect(id uuid)");
+      await setup.query("CREATE SEQUENCE public.lp1_update_effect_counter");
       await setup.query(`CREATE FUNCTION public.lp1_update_effect() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-        SET search_path=pg_catalog AS $$ BEGIN INSERT INTO public.lp1_update_effect VALUES(NEW.id); RETURN NEW; END $$`);
+        SET search_path=pg_catalog AS $$ BEGIN PERFORM nextval('public.lp1_update_effect_counter');
+        INSERT INTO public.lp1_update_effect VALUES(NEW.id); RETURN NEW; END $$`);
       await setup.query("REVOKE ALL ON FUNCTION public.lp1_update_effect() FROM PUBLIC");
-      await setup.query(`CREATE TRIGGER zzz_lp1_update_effect AFTER UPDATE ON app.account FOR EACH ROW EXECUTE FUNCTION public.lp1_update_effect()`);
+      await setup.query(`CREATE TRIGGER aaa_lp1_update_effect BEFORE UPDATE ON app.account FOR EACH ROW EXECUTE FUNCTION public.lp1_update_effect()`);
       await setup.query("SAVEPOINT refusal");
       await setup.query("SET LOCAL ROLE jobguard_runtime");
       await setup.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
       await expect(setup.query("UPDATE app.account SET created_at=created_at WHERE tenant_id=$1", [tenant])).rejects.toMatchObject({ code: "42501" });
       await setup.query("ROLLBACK TO SAVEPOINT refusal");
       expect((await setup.query("SELECT count(*)::int AS count FROM public.lp1_update_effect")).rows).toEqual([{ count: 0 }]);
+      // Sequence advancement survives a statement rollback, so this detects a row trigger
+      // that ran and then had its table effects rolled back by the refusal.
+      expect((await setup.query("SELECT is_called FROM public.lp1_update_effect_counter")).rows).toEqual([{ is_called: false }]);
+      await setup.query("UPDATE app.account SET name=name WHERE id=$1", [account]);
+      expect((await setup.query("SELECT is_called FROM public.lp1_update_effect_counter")).rows).toEqual([{ is_called: true }]);
     } finally { await setup.query("ROLLBACK"); setup.release(); }
   });
 });

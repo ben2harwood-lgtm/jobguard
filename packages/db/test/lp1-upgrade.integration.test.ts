@@ -10,6 +10,10 @@ import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { withTenant } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
+import { loadEvidencePackSources } from "../src/evidence-pack-sources.js";
+import { buildEvidenceManifest, canonicalManifest, manifestDigest, renderStandalonePack, sha256, verifyStandalonePack } from "@jobguard/core";
 
 type Column = { name: string; type: string };
 type TableSnapshot = { columns: Column[]; primaryKey: string[]; rows: Array<{ identity: string; bytes: string }> };
@@ -90,7 +94,7 @@ async function unrelatedSecurity(db: Pool) {
   return Object.fromEntries(await Promise.all(Object.entries(queries).map(async ([name, sql]) => [name, (await db.query(sql)).rows])));
 }
 
-describe("LP-1 PostgreSQL upgrade preparation", () => {
+describe("LP-1 PostgreSQL upgrade", () => {
   let postgres: EmbeddedPostgres, owner: Pool;
   const phrase = randomUUID();
   beforeAll(async () => {
@@ -142,10 +146,9 @@ describe("LP-1 PostgreSQL upgrade preparation", () => {
   });
 
   it("[LP1-11] LP-1 preserves populated history at its own migration step and through later migrations", async () => {
-    // Intentionally requires the future integrated implementation. No skip, substitute migration or relaxed assertion.
     const ownName = "0162_membership_account_closed.sql";
     const own = MIGRATION_URLS.find(url => url.pathname.endsWith(`/${ownName}`));
-    expect(own, "Q3 HELD: migration 0162 and its registration must arrive together with the seed conversion").toBeDefined();
+    expect(own, "migration 0162 and its registration must arrive together with the seed conversion").toBeDefined();
     const names = MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!);
     const index = names.indexOf(ownName);
     await owner.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
@@ -153,6 +156,18 @@ describe("LP-1 PostgreSQL upgrade preparation", () => {
       await owner.query(await readFile(url, "utf8"));
       await owner.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
     }
+    await installLegacySyntheticPartyFixtures(owner);
+    const commercial = await seedEvidencePackFixture(owner);
+    let artifact = "", digest = "";
+    await withTenant(owner, testTenantContext(commercial.tenantId), async db => {
+      const loaded = await loadEvidencePackSources(db, commercial.tenantId, commercial.caseId);
+      const manifest = buildEvidenceManifest(commercial.caseId, commercial.jobId, loaded.sources, loaded.omissions);
+      artifact = renderStandalonePack(manifest, loaded.sources); digest = manifestDigest(manifest);
+      const pack = randomUUID();
+      await db.$client.query("INSERT INTO app.evidence_pack(tenant_id,id,job_id,case_id) VALUES($1,$2,$3,$4)", [commercial.tenantId, pack, commercial.jobId, commercial.caseId]);
+      await db.$client.query(`INSERT INTO app.evidence_pack_revision(tenant_id,id,job_id,case_id,pack_id,revision,command_id,canonical_manifest,manifest_hash,content_hash,sources,format,actor_ref,subject_hash,artifact_text)
+        VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,'TEXT','fixture-owner',$11,$12)`, [commercial.tenantId, randomUUID(), commercial.jobId, commercial.caseId, pack, randomUUID(), canonicalManifest(manifest), digest, sha256(artifact), JSON.stringify(loaded.sources), sha256("lp1 synthetic subject"), artifact]);
+    });
     const tenant = randomUUID(), person = randomUUID(), account = randomUUID();
     await owner.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
     await owner.query("INSERT INTO identity.identity_user(id) VALUES($1)", [person]);
@@ -170,7 +185,10 @@ describe("LP-1 PostgreSQL upgrade preparation", () => {
       await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${member}`, eventType: "lp1.synthetic_history",
         subjectType: "membership", subjectRef: member, payload: { references: { membership: member } } }]);
     });
-    const tables = ["control_plane.tenant", "identity.identity_user", "app.account", "app.membership", "app.command_receipt", "app.audit_event", "audit_control.audit_head"];
+    const tables = ["control_plane.tenant", "identity.identity_user", "app.account", "app.membership", "app.command_receipt", "app.audit_event", "audit_control.audit_head",
+      "app.job", "app.quote_document_version", "app.quote_acceptance", "app.evidence_object", "app.variation_revision", "app.variation_approval",
+      "app.material_rate_revision", "app.supplier_document", "app.supplier_document_version", "app.customer_invoice", "app.recovery_claim_revision",
+      "app.evidence_pack", "app.evidence_pack_revision"];
     const before = await snapshot(owner, tables);
     for (const was of Object.values(before)) expect(was.rows.length).toBeGreaterThan(0);
     const security = await unrelatedSecurity(owner);
@@ -192,7 +210,10 @@ describe("LP-1 PostgreSQL upgrade preparation", () => {
       await migrate(owner);
       expect(compareSnapshots(before, await snapshot(owner, tables, before))).toEqual([]);
     }
-    // Representative commercial documents/fingerprints and the exact trigger/helper catalogue delta
-    // remain post-change proof work under Q3; this preparatory test does not claim complete AC-11.
+    const pack = (await owner.query("SELECT artifact_text,manifest_hash,content_hash FROM app.evidence_pack_revision WHERE manifest_hash=$1", [digest])).rows;
+    expect(pack).toEqual([{ artifact_text: artifact, manifest_hash: digest, content_hash: sha256(artifact) }]);
+    expect(verifyStandalonePack(pack[0]!.artifact_text)).toEqual(verifyStandalonePack(artifact));
+    expect((await owner.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name))
+      .toEqual(names.sort());
   }, 120_000);
 });

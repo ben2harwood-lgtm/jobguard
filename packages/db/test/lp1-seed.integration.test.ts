@@ -18,7 +18,7 @@ const address = (port: number, user: string, phrase: string, database = SYNTHETI
   return url.href;
 };
 
-describe("LP-1 explicit bootstrap preparation (conversion HELD)", () => {
+describe("LP-1 explicit owner bootstrap", () => {
   const phrase = randomUUID(), runtimePhrase = randomUUID();
   let postgres: EmbeddedPostgres, control: Pool, owner: Pool, runtime: Pool, port: number;
   let ownerUrl: string, runtimeUrl: string;

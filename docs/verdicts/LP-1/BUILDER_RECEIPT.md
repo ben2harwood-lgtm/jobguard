@@ -1,3 +1,727 @@
+Built by Codex; dispatched 13 Oct 2026; continued 15 Oct 2026.
+
+# LP-1 continuation receipt — integrated implementation, evidence PARTIAL
+
+The grant/lock/seed group is written. Q1/Q3 are implemented under Ben decisions 40/41 as a separately enumerated commit-sized set below. **NOT ACCEPTED.** Q2 and the additional merged LP-0 checks remain coordinator-owned holds; PostgreSQL/browser execution and independent exact-commit verdicts remain pending. No commit, staging, push, deployment or release was performed.
+
+The requested attribution to Claude Sonnet 5.5 would be false. This receipt names the actual builder. The prior preparatory receipt is preserved verbatim at the end as historical evidence; its Q1/Q3 holds and “no migration” status are superseded by this continuation only.
+
+## Base, catch-up and bounded scope
+
+Initial/final HEAD: 0f0e93e24566f168a877783afd72ff63a7898fdf. Issued and final observed origin/main: 6671538c8d69936c162368c760dd6ce0f7f10493. The worktree was already inside a merge. The only conflict was packages/db/MIGRATIONS.md: main's complete content is preserved byte-for-byte as the prefix, followed by LP-1's existing reservation note and its implementation continuation, with 0158 before 0162 and no conflict markers. The index still reports UU because staging/merge completion writes to .git are forbidden here; the dispatcher must record the resolved file. No attempt to write .git was made.
+
+All eight incoming ENT-5b paths rejected by lane lint match main byte-for-byte. Other lane entries also match main. This continuation does not claim those changes as LP-1. Main has 0158 registered; the draft's end-at-0138 statement is stale. Reservation 0162 remains the issued number. No existing migration URL or SQL file was changed. New migration 0162 is registered once, in numeric order.
+
+The draft citations were checked against exact main. 0000 grant remains at 82; bootstrap inserts at 93/94/96/97, runtime job continuation at 99; recovery list lock 56 and command lock 77; message owner query begins 366 (lock at 367), follow-up function begins 348 (lock at 351); practice-feed locks 139/157; eligibility locks 0119:81 and 0130:32; SCIM locks/revocation/grant 0137:71/78/98 survive. Main's LP-0 removal lines are **115,116,118,270,271,273**, rather than the earlier draft locations. Main wins. PLAN-LPL/LP-0 prerequisite merges remain as recorded in the historical receipt; no new acceptance is inferred from them.
+
+Node v24.17.0; existing cached pnpm 10.28.1 wrapper at /private/tmp/jg-lp1-bin/pnpm; TypeScript 5.8.3; Vitest 4.1.11. PostgreSQL package is installed but **no PostgreSQL server was executed**. No package install/download. Every pnpm command prepended the requested PATH and then the task-owned cached pinned wrapper. Heavy commands ran serially, with 56–58% free memory and 58–61 GB free disk observed before them. Build never overlapped tests. Filtered non-DB controls executed no database hooks; no database or browser run bypassed the shared gate.
+
+## Separate commit-sized set A — ONLY the authorised Q1/Q3 edits
+
+Complete line-by-line before/after against main follows; '-' is before, '+' is after. No other merged assertion, security pin, fingerprint or setup was changed. Task-owned preparation tests are absent from main and are developed in set B. The patch is also ready for dispatcher inspection at /private/tmp/jg-lp1-q1-q3.patch. It is review separation, not authorisation to deploy a partial group.
+
+Q1: the four owner-connected callbacks immediately SET LOCAL ROLE lp1_tenancy_fixture before their original SQL. The disposable role is non-owner, NOLOGIN, INHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOBYPASSRLS. Runtime membership supplies identical existing tenant RLS policies/SELECT. Scoped fixture writes exist only in the test database. The app login receives none of them. A read-only preservation script undoes precisely these setup/callback edits and proves the entire tenancy file then equals main. In particular hidden UPDATE/DELETE still require zero, same-tenant UPDATE/DELETE one, the FK assertion 23503 and rollback “synthetic failure” are unchanged.
+
+Q3: bootstrap 92 selects migration; runtime is restored immediately after the fourth row, before the existing tenant reset/job work. All insert values and conflict handling stay unchanged. Inventory removes exactly six account/membership table-write entries and adds exactly two contingent immutable-column keys in the existing LP-1 group. Every other key/group remains byte-for-byte semantically equal; no additional inventory disposition is edited. LP-0's explicit ACL parser requires those two column entries; they describe subsets of previous broad UPDATE, not new write powers.
+
+```diff
+diff --git a/docs/contracts/lp-0-effective-privileges-v1.json b/docs/contracts/lp-0-effective-privileges-v1.json
+index 128677dd..aa65e407 100644
+--- a/docs/contracts/lp-0-effective-privileges-v1.json
++++ b/docs/contracts/lp-0-effective-privileges-v1.json
+@@ -61,0 +62 @@
++{"key":"acl|col|app.account.created_at|jobguard_runtime|UPDATE|-","group":"x-membership-account-writes"},
+@@ -85,0 +87 @@
++{"key":"acl|col|app.membership.created_at|jobguard_runtime|UPDATE|-","group":"x-membership-account-writes"},
+@@ -115,2 +116,0 @@
+-{"key":"acl|rel|table|app.account|jobguard_runtime|DELETE|-","group":"x-membership-account-writes"},
+-{"key":"acl|rel|table|app.account|jobguard_runtime|INSERT|-","group":"x-membership-account-writes"},
+@@ -118 +117,0 @@
+-{"key":"acl|rel|table|app.account|jobguard_runtime|UPDATE|-","group":"x-membership-account-writes"},
+@@ -270,2 +268,0 @@
+-{"key":"acl|rel|table|app.membership|jobguard_runtime|DELETE|-","group":"x-membership-account-writes"},
+-{"key":"acl|rel|table|app.membership|jobguard_runtime|INSERT|-","group":"x-membership-account-writes"},
+@@ -273 +269,0 @@
+-{"key":"acl|rel|table|app.membership|jobguard_runtime|UPDATE|-","group":"x-membership-account-writes"},
+diff --git a/packages/db/src/demo-bootstrap.ts b/packages/db/src/demo-bootstrap.ts
+index 56818ad7..284168d9 100644
+--- a/packages/db/src/demo-bootstrap.ts
++++ b/packages/db/src/demo-bootstrap.ts
+@@ -92 +92 @@ async function seedDatabase(client: PoolClient) {
+-    await client.query("SET LOCAL ROLE jobguard_runtime");
++    await client.query("SET LOCAL ROLE jobguard_migration");
+@@ -97,0 +98 @@ async function seedDatabase(client: PoolClient) {
++    await client.query("SET LOCAL ROLE jobguard_runtime");
+diff --git a/packages/db/test/tenancy.integration.test.ts b/packages/db/test/tenancy.integration.test.ts
+index 54534277..67f32549 100644
+--- a/packages/db/test/tenancy.integration.test.ts
++++ b/packages/db/test/tenancy.integration.test.ts
+@@ -45,0 +46,7 @@ beforeAll(async () => {
++  // LP-1 Q1, Ben decision 40: TEST-ONLY writer for the original RLS backstops.
++  // It is a non-owner without bypass rights; the application login never gets these grants.
++  await admin.query(`
++    CREATE ROLE lp1_tenancy_fixture NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
++    GRANT jobguard_runtime TO lp1_tenancy_fixture;
++    GRANT INSERT, UPDATE, DELETE ON app.account, app.membership TO lp1_tenancy_fixture;
++  `);
+@@ -97 +104,2 @@ describe("tenant context and PostgreSQL RLS", () => {
+-    await withTenant(runtime, context(TENANT_A), async (database) => {
++    await withTenant(admin, context(TENANT_A), async (database) => {
++      await database.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
+@@ -114 +122,2 @@ describe("tenant context and PostgreSQL RLS", () => {
+-    await withTenant(runtime, context(TENANT_A), async (database) => {
++    await withTenant(admin, context(TENANT_A), async (database) => {
++      await database.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
+@@ -127 +136,2 @@ describe("tenant context and PostgreSQL RLS", () => {
+-    await withTenant(runtime, context(TENANT_A), async (database) => {
++    await withTenant(admin, context(TENANT_A), async (database) => {
++      await database.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
+@@ -159 +169,2 @@ describe("tenant context and PostgreSQL RLS", () => {
+-      withTenant(runtime, context(TENANT_A), async (database) => {
++      withTenant(admin, context(TENANT_A), async (database) => {
++        await database.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
+```
+
+## Integrated set B — implementation and proofs
+
+0162 revokes runtime table INSERT/UPDATE/DELETE and independent write-column ACLs on both tables. SELECT, owners, policies, FORCE RLS, values, identity routes and every existing lock query remain unchanged. No new table, column, index, data backfill, network action, caller mutation, API route or UI change. Only a migration-owned SECURITY INVOKER trigger helper with fixed pg_catalog search path and two BEFORE UPDATE OF created_at statement triggers are added. The helper unconditionally raises 42501; no business writes, role lookup/elevation, dynamic SQL or configurable bypass. PUBLIC/runtime/identity/infrastructure have no EXECUTE. Statement scope rejects no-op/empty-set UPDATE before row triggers and is a reversible engineering choice within the issued design.
+
+**Every new migration GRANT, one line each:**
+
+- GRANT UPDATE (created_at) ON app.account TO jobguard_runtime;
+- GRANT UPDATE (created_at) ON app.membership TO jobguard_runtime;
+
+**Standard F:** these are the expressly authorised R1/decision-41 reductions of existing table UPDATE, contingent on real immutability proofs; no new net direct write power, table-level DML grant, callable writer or protected-table grant is introduced. Do not describe the ACL as completely SELECT-only. No new money, membership, authorization, receipt or audit table exists.
+
+Disposable test grants, separately from migration grants: GRANT jobguard_runtime TO lp1_tenancy_fixture; GRANT INSERT, UPDATE, DELETE ON app.account, app.membership TO lp1_tenancy_fixture; existing preparatory GRANT jobguard_runtime TO lp1_inherited_login and TO lp1_lock_login. None grant a fixture privilege to runtime. The rolled-back trigger-effect helper is test-only, PUBLIC EXECUTE revoked, and grants no application entry point. Test account/member/receipt/audit setup uses separately authenticated owner pools.
+
+Forward fix: a failed install transaction rolls back. After install retain the withdrawal and repair forward; never restore broad runtime authority writes. Grant protection, seed conversion, authorised fixtures/inventory and coordinator comparator/test corrections must be integrated before acceptance. Updated explicit bootstrap prepares synthetic data; ordinary services receive no owner credentials. No new operational alert or environment variable is introduced. Whole-track LP/G1, real-data and deployment holds remain closed.
+
+## Tests first and acceptance evidence
+
+The four prepared tests existed before this continuation's production code. Their database first-failing run is **NOT RUN (cannot start PostgreSQL here)**, never a claimed red/pass. This continuation added populated receipt/audit/head and commercial source/pack coverage, exact helper/trigger catalogue checks, repeat fresh migration, empty-set/no-op/drop/replace refusals, and a rolled-back sequence control that detects a row-trigger side effect even if its table writes were rolled back. The sequence positive control proves the test helper can fire. No skip-if-unavailable path or mock substitutes for PostgreSQL.
+
+| Criteria | Proof / current evidence |
+|---|---|
+| AC-01–05 | lp1-membership-account.integration.test.ts, exact LP1-01…05 titles; named runtime and ordinary inherited login, all write forms, nonempty persisted receipt/audit/head snapshots, privilege/role/trigger posture, no-op/multi-row/empty-set and side-effect controls. NOT RUN. |
+| AC-06–08 | lp1-lock-compatibility.integration.test.ts, exact LP1-06…08 titles; all four strengths/both tables, observed pg_blocking_pids waits, commit/rollback release, RLS UPDATE-policy control and repository/revocation waits. Identity-only SCIM EXECUTE remains refused. NOT RUN. Full positive practice-feed/eligibility/message/follow-up/audit-order coverage still requires the unchanged mandatory regressions. |
+| AC-09 | lp1-seed.integration.test.ts observes real current_user/session_user immediately before real SQL, all four exact rows/roles, runtime job continuation, repeat bootstrap, non-superuser owner/FORCE RLS. No SQL result is mocked. NOT RUN. |
+| AC-10 | Same file, explicit preparation/target/import/startup control. Non-DB test PASSED; unchanged demo-bootstrap deployment safety suite NOT RUN. |
+| AC-11 | lp1-upgrade.integration.test.ts: install all predecessors, populate active/revoked/expired authority and commercial quote/acceptance/evidence/variation/rate/supplier/invoice/recovery/pack plus receipt/audit/head history; snapshot nonempty named columns/full types/PKs; apply 0162 alone; compare unrelated security and exact ACL reduction; later runner twice, original rows and persisted standalone-pack content/hash unchanged. NOT RUN. |
+| AC-12 | Same comparator used by fixture and rolled-back PostgreSQL controls: one microsecond/retype/missing original fail; later nullable scratch column/function replacement/insert pass. Non-DB fixture PASSED; PostgreSQL controls NOT RUN. |
+| AC-13–16 | Fingerprint/identity/SCIM/replay/lock-order suites remain unchanged; real execution NOT RUN. The six contractor properties retain their original titles/suite. |
+| AC-17 | Main-preservation and bounded-diff checks PASSED; lane command FAILED because incoming-main staged files appear in the unfinished merge. Only the expressly approved Q1/Q3 merged-file exceptions changed. |
+| AC-18 | Forced compiler/package lint/build and own non-DB controls passed. Full root lint/lane, OpenAPI, PostgreSQL/browser/CI, exact-commit independent RED verdicts and separate acceptance remain pending. No technical acceptance claimed. |
+
+An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
+
+Comparisons select canonical row_to_json(t)::text over captured named columns, format_type(atttypid,atttypmod), and primary-key identities. Later-added rows are ignored; missing originals fail. Pre-existing-row guards exist per compared table. Whole security catalogue/function definitions are compared only at 0162's own step, not after later migrations. No permanent whole-file pin was added.
+
+## Executed results and environment refusals
+
+| Command | Exit / count |
+|---|---|
+| pnpm exec turbo run typecheck --force | 0; 7 successful, 0 cached; 45.964s |
+| LANE_BASE_REF=origin/main pnpm exec turbo run lint --force | 0; 7 successful, 0 cached; 22.042s |
+| pnpm build --concurrency=2 --force | 0; 7 successful, 0 cached; 1m30.013s |
+| Own test-source tsc, then final four files plus tenancy | 0, 0 |
+| Two filtered own non-DB Vitest runs, --maxWorkers=2 | 0, 0; each 2 passed / 3 PostgreSQL tests filtered out (5 selected-file tests) |
+| LANE_BASE_REF=origin/main pnpm lint:lanes | 1; eight incoming-main paths rejected |
+| LANE_BASE_REF=origin/main node tools/lint.mjs | 1; core purity passed 167 TS files, same lane refusal |
+| node tools/money-arithmetic-lint.mjs | 0 |
+| node tools/commercial-boundary-lint.mjs | 0 |
+| pnpm openapi:check | 1; IPC refused before generation |
+| Protected-main / entire-tenancy / exact-inventory / conflict checks | 0; 22 protected paths and eight incoming-main files equal main |
+| git diff --check | 0 before final receipt; final repeat recorded below |
+
+Cache OFF was enforced with --force; no FULL TURBO cache result is counted. Turbo emitted existing IO warning “Operation not permitted (os error 1)”; all task compilers/builds executed. No cache relocation/retry. Existing Next warnings cover workspace root, CSS support/cache serialization and Nest dependency resolution; no unrelated source was edited.
+
+OpenAPI STOP, exact command pnpm openapi:check, exit 1:
+
+```text
+Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/27353.pipe
+```
+
+No alternate command or socket route was attempted. No automatic approval review was requested or rejected.
+
+A receipt-stat inspection Python command exited 1 because check_output treated git diff --no-index's documented difference status 1 as an error. The preceding preservation checks succeeded. Final statistics use subprocess.run and explicitly accept that difference result. A separate inspection batch exited 1 because rg found no conflict markers, which was the expected absence. Neither is a product test failure.
+
+## STOP — exact coordinator-owned lines, unchanged
+
+These are source-inspected incompatibilities, not claimed PostgreSQL execution results. Each after below is a proposal for the coordinator, not an edit in this working tree.
+
+1. packages/db/test/audit-export.integration.test.ts:106 (assertion 277). Before:
+
+```ts
+      && !was.columnGrants.some(old => old.column === grant.column && old.fact === grant.fact)) {
+```
+
+After proposal, generic effective reduction recognition; preserve S4/new-column widening control and add a reduction control:
+
+```ts
+      && !was.columnGrants.some(old => old.column === grant.column && old.fact === grant.fact)
+      && !was.facts.includes(grant.fact)) {
+```
+
+2. packages/db/test/lp-0-grant-freeze.integration.test.ts:336–337. Before:
+
+```ts
+      ["acl|rel|table|app.membership|jobguard_runtime|DELETE|-", ["LP-1"]],
+      ["acl|rel|table|app.account|jobguard_runtime|UPDATE|-", ["LP-1"]],
+```
+
+After proposal: use the actually retained immutable-column exception examples and separately assert obsolete table keys absent; preserve every other example/control:
+
+```ts
+      ["acl|col|app.membership.created_at|jobguard_runtime|UPDATE|-", ["LP-1"]],
+      ["acl|col|app.account.created_at|jobguard_runtime|UPDATE|-", ["LP-1"]],
+```
+
+3. Same file:364 and 367. Before:
+
+```ts
+    const reduction = await control(async c => { await c.query(`REVOKE INSERT ON app.job FROM ${APPLICATION_ROLE}`); await c.query(`REVOKE UPDATE ON app.membership FROM ${APPLICATION_ROLE}`); });
+      `acl|rel|table|app.job|${APPLICATION_ROLE}|INSERT|-`, `acl|rel|table|app.membership|${APPLICATION_ROLE}|UPDATE|-`,
+```
+
+After proposal, keep the reduction positive control meaningful with the surviving column ACL:
+
+```ts
+    const reduction = await control(async c => { await c.query(`REVOKE INSERT ON app.job FROM ${APPLICATION_ROLE}`); await c.query(`REVOKE UPDATE(created_at) ON app.membership FROM ${APPLICATION_ROLE}`); });
+      `acl|rel|table|app.job|${APPLICATION_ROLE}|INSERT|-`, `acl|col|app.membership.created_at|${APPLICATION_ROLE}|UPDATE|-`,
+```
+
+4. packages/db/test/lp-0-authority-paths.integration.test.ts:236–237. Before:
+
+```ts
+      const inserted = await runtime.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES (gen_random_uuid(),$1,$2,$3,'owner') RETURNING role", [tenant, account, user]);
+      expect(inserted.rows[0].role).toBe("owner");
+```
+
+After proposal:
+
+```ts
+      const inserted = runtime.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES (gen_random_uuid(),$1,$2,$3,'owner') RETURNING role", [tenant, account, user]);
+      await expect(inserted).rejects.toMatchObject({ code: "42501" });
+```
+
+The owner-connected fixture positive control remains. Coordinator should also correct the now-stale test/comment wording. No LP-0 test line was edited here.
+
+5. config/agent-lane-assignments.json:75, plus tools/agent-lane-boundary-lint.mjs:228. Before/after in this worktree: lane allow contains only the authorised LP-1 files; it does NOT add incoming ENT-5b files. The lane checker includes staged/unstaged paths during local mode and therefore sees main's eight files in the unfinished merge. After required state: dispatcher records the already-resolved merge in the index/commit, then reruns the unchanged lane check. No source, allow-list or checker workaround is proposed. .git remains read-only here.
+
+## Files and suites NOT RUN
+
+All PostgreSQL portions of lp1-membership-account.integration.test.ts, lp1-lock-compatibility.integration.test.ts, lp1-seed.integration.test.ts and lp1-upgrade.integration.test.ts: **NOT RUN (cannot start PostgreSQL here)**. There are 11 PostgreSQL tests across the four own files. Only the two explicit non-DB controls ran. No real PostgreSQL release/version/grant/RLS/concurrency/upgrade result is inferred from compilation.
+
+All unchanged PostgreSQL regression files listed in the historical receipt remain NOT RUN for the same environment and own-file-only dispatcher rule, including tenancy, audit-export, LP-0 grant-freeze and authority-path suites, fingerprint, identity/SCIM, demo-bootstrap, recovery/practice-feed, contractor/replay and lock-order suites. Aggregate pnpm test/test:db/test:migrations and earlier mandatory browser suites remain CI/dispatcher work, not silently optional. Browser/e2e/Playwright **NOT RUN (CI-only, cannot start a browser here)**. No new browser workflow, native, prompt/model or provider change; no changed-model live evaluation applies. Install NOT RUN (dependencies already installed; downloads forbidden).
+
+## Builder self-inspection — not an independent verdict
+
+Source inspected: only the declared grant/trigger delta, one runner URL, bounded seed role conversion, approved fixture/inventory disposition and own proofs/docs. No new business authority, callable mutation, role elevation, commercial policy, fingerprint column or caller/lock rewrite. Statement rejection is stronger than a row-only no-op guard; the sequence control is necessary because transactional table effects alone could hide a trigger that ran. Actual PostgreSQL execution is still required to validate SQL semantics, bootstrap on the non-superuser connection, lock behavior, RLS and all regression outcomes.
+
+Remaining: coordinator comparator/LP-0 updates and merge-index completion; CI on the integrated implementation commit; fresh/populated PostgreSQL upgrade and regressions; OpenAPI and mandatory browser checks; fresh Opus plus Sol verdicts bound to the exact resulting commit; separate actor acceptance; entire LP track/G1 and real-data gate. The builder never accepts this piece. LATER: member-management UI stays parked. No deployment or real-data safety claim is made.
+
+Intended conventional commit subject/body: /private/tmp/jg-msg-lp-1.txt. Final HEAD remains 0f0e93e24566f168a877783afd72ff63a7898fdf; the working-tree implementation has no commit SHA yet.
+
+## Main-preservation hashes
+
+| Path | SHA-256 (main = working tree) |
+|---|---|
+| apps/api/src/auth/context-boundary.test.ts | a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35 |
+| apps/api/src/auth/principal-bridge.ts | a0dafefa440ee16dbcca0d52f354ea6377f478c5bdaede47a956b9e27cf4ec54 |
+| apps/api/src/worker.ts | 372532c1aa575ad775df66c50a32fecd5881d703fd00d80136608bea4bccbd8f |
+| packages/db/src/tenant-context.ts | 9237013c368deeec3d14098b030264dbd6cc3e57534e4cbc237cad06aa2b4b0f |
+| packages/db/tools/synthetic-restore.mjs | b95e18b6e8794b2ca75e28990dfef38e8d77d98bb922ce185c55a128c85e11bd |
+| packages/db/src/demo-seed.ts | 6c4672e75c0af70accee37c05fbd95e2922ac00c9dc74bfa156721788b224da0 |
+| packages/db/src/practice-session.ts | 9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14 |
+| packages/db/src/contractor-repository.ts | 56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c |
+| packages/db/src/contractor-party-repository.ts | e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0 |
+| packages/db/src/work-order-repository.ts | 4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3 |
+| packages/db/src/sor-repository.ts | 45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5 |
+| packages/db/src/job-scheduling-repository.ts | ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d |
+| packages/db/src/work-order-fixtures.ts | cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386 |
+| packages/db/src/contractor-session-context.ts | a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c |
+| packages/core/src/watchdog.ts | a07e5784fd37ee475227caf58705b75c587ee344c39f1001e9df82c944e2c5ca |
+| packages/db/test/watchdog-command-harness.ts | 3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6 |
+| packages/db/test/command-replay-contract.integration.test.ts | db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f |
+| packages/db/test/audit-export.integration.test.ts | dadb5e37870aa5178b023b52c385731cb40403b6d8d73163e9270281b4d018ee |
+| packages/db/test/extra-origin.integration.test.ts | 119f5049f3c00e20c11220c44b915ce3ac52f0490d46c6401905bbf2c142836a |
+| packages/db/test/fingerprinted-row-shape.integration.test.ts | be34095677e52d4e63c771799c99a11e0e52a73fdf2d85808550b17a583ab3a8 |
+| packages/db/test/lp-0-grant-freeze.integration.test.ts | a73ac807718653f39e5a541762a08f64eebf3fcf0fe27a840180f31a985e83fa |
+| packages/db/test/lp-0-authority-paths.integration.test.ts | 5bee8dc97b439ea261105a1a8bcf9e6301968e2e88c8f92dd6f60d090217cb56 |
+
+The eight lane-rejected incoming-main files also match main, verified separately. Full stat and post-receipt whitespace/head checks are appended below. No permanent test pins were added. Receipt self-hash is omitted.
+
+## Current continuation command ledger
+
+Initial and interleaved inspection batches below exited 0; they executed no tests. Some output was capped for display. Shell conjunctions and line breaks preserve their actual grouping. Later commands are in the numbered ledger. Read-only final git status/head/diff inspection also exited 0. apply_patch mutations are accounted for by the complete bounded diff and file/hash list rather than presented as shell runs.
+
+```sh
+pwd && git status --short && git rev-parse HEAD && git rev-parse origin/main
+```
+
+```sh
+cat /Users/benharwood/.local/share/full-steam/jg-orders/LP-1-issued.txt
+```
+
+```sh
+cat docs/verdicts/LP-1/BUILDER_RECEIPT.md
+```
+
+```sh
+rg -n '<<<<<<<|=======|>>>>>>>|0162|LP-1' packages/db/MIGRATIONS.md BUILD_PLAN.md docs/contracts/least-privilege-membership-account-v1.md && cat AGENTS.md
+```
+
+```sh
+cat docs/contracts/least-privilege-membership-account-v1.md && cat packages/db/test/lp1-membership-account.integration.test.ts && cat packages/db/test/lp1-lock-compatibility.integration.test.ts
+```
+
+```sh
+sed -n '1,200p' docs/verdicts/LP-1/BUILDER_RECEIPT.md && cat /Users/benharwood/.local/share/full-steam/handoffs/jobguard-task.md
+```
+
+```sh
+sed -n '1122,1160p' packages/db/MIGRATIONS.md && sed -n '3290,3340p' BUILD_PLAN.md && cat docs/contracts/least-privilege-membership-account-v1.md
+```
+
+```sh
+cat packages/db/test/lp1-membership-account.integration.test.ts
+```
+
+```sh
+cat packages/db/test/lp1-lock-compatibility.integration.test.ts
+```
+
+```sh
+cat packages/db/test/lp1-seed.integration.test.ts && cat packages/db/test/lp1-upgrade.integration.test.ts
+```
+
+```sh
+sed -n '1,190p' packages/db/test/tenancy.integration.test.ts && sed -n '65,125p' packages/db/src/demo-bootstrap.ts && cat packages/db/test/lp-0-grant-freeze.integration.test.ts
+```
+
+```sh
+sed -n '1,185p' packages/db/test/tenancy.integration.test.ts && sed -n '85,105p' packages/db/src/demo-bootstrap.ts && sed -n '170,280p' packages/db/test/lp1-upgrade.integration.test.ts
+```
+
+```sh
+sed -n '65,122p' docs/verdicts/LP-1/BUILDER_RECEIPT.md && sed -n '1,78p' packages/db/test/lp1-membership-account.integration.test.ts && tail -90 packages/db/src/migrate.ts && cat package.json && rg -n 'lp-1' config/agent-lane-assignments.json
+```
+
+```sh
+sed -n '1,155p' packages/db/test/audit-export.integration.test.ts && sed -n '1,110p' packages/db/migrations/0000_tenancy.sql && cat packages/db/migrations/0150_membership_authority_fix.sql
+```
+
+```sh
+cat docs/contracts/least-privilege-membership-account-v1.md && sed -n '150,205p' packages/db/test/lp1-upgrade.integration.test.ts && rg -n 'acl\|col|x-membership-account-writes|routine.*lp1|definitionDigest|new.*routine' docs/contracts/lp-0-effective-privileges-v1.json packages/db/test/lp-0-catalog.ts && sed -n '1,145p' packages/db/test/extra-approval-upgrade.integration.test.ts
+```
+
+```sh
+cat packages/db/test/extra-approval-chain-fixtures.ts && cat packages/db/test/fingerprinted-row-shape.integration.test.ts | head -45 && cat packages/db/package.json && cat tools/lint.mjs | head -55
+```
+
+```sh
+cat packages/db/test/evidence-pack-fixture.ts
+```
+
+```sh
+sed -n '20,40p' docs/contracts/lp-0-effective-privileges-v1.json && sed -n '328,365p' packages/db/test/lp-0-catalog.ts && sed -n '264,283p' packages/db/test/audit-export.integration.test.ts && sed -n '405,465p' packages/db/test/lp-0-grant-freeze.integration.test.ts && rg -n 'CREATE TRIGGER.*account|CREATE TRIGGER.*membership|BEFORE.*UPDATE.*account|UPDATE.*created_at' packages/db/migrations
+```
+
+```sh
+sed -n '285,326p' packages/db/test/lp-0-catalog.ts && rg -n 'installLegacySyntheticPartyFixtures' packages/db/test/pool-test-utils.ts && sed -n '80,128p' packages/db/test/pool-test-utils.ts && cat apps/api/package.json | tail -30 && sed -n '68,80p' config/agent-lane-assignments.json
+```
+
+```sh
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+node --version
+ls -l /private/tmp/jg-lp1-bin/pnpm /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs
+git show origin/main:packages/db/src/demo-bootstrap.ts | sed -n '90,100p'
+git show origin/main:packages/db/test/tenancy.integration.test.ts | sed -n '95,104p'
+```
+
+```sh
+sed -n '65,75p' docs/contracts/lp-0-effective-privileges-v1.json && sed -n '110,119p' docs/contracts/lp-0-effective-privileges-v1.json && sed -n '259,269p' docs/contracts/lp-0-effective-privileges-v1.json && rg -n 'lp-0-effective|inventory.*sort|entries.*sort' packages/db/test/lp-0-catalog.ts
+```
+
+```sh
+sed -n '45,100p' packages/db/src/recovery-case-repository.ts && sed -n '35,85p' packages/db/test/pool-test-utils.ts && sed -n '60,82p' docs/contracts/lp-0-effective-privileges-v1.json && rg -n 'membership\|jobguard_runtime\|(DELETE|UPDATE)|LP0-16|LP0-15' packages/db/test/lp-0-grant-freeze.integration.test.ts && rg -n 'membership|account' packages/db/test/lp-0-authority-paths.integration.test.ts
+```
+
+```sh
+git diff origin/main -- packages/db/test/tenancy.integration.test.ts docs/contracts/lp-0-effective-privileges-v1.json packages/db/src/demo-bootstrap.ts && cat tools/agent-lane-boundary-lint.mjs | head -75 && rg -n 'openapi:check' apps/api/package.json
+```
+
+```sh
+sed -n '225,247p' packages/db/test/lp-0-authority-paths.integration.test.ts && sed -n '328,374p' packages/db/test/lp-0-grant-freeze.integration.test.ts && rg -n 'FOR SHARE|FOR UPDATE' packages/db/test/lp1-lock-compatibility.integration.test.ts && git diff origin/main --name-only
+```
+
+```sh
+git diff --check
+git rev-parse HEAD
+git rev-parse origin/main
+git status --short
+```
+
+Session polling via write_stdin completed own-source tsc sessions 3206/48586 with exit 0, filtered test sessions 66607/47069 with exit 0 and 2 passed each, forced typecheck 69239 with exit 0 (7/7, zero cache), lint 67190 with exit 0 (7/7, zero cache), build 56654 with exit 0 (7/7, zero cache). No interrupt or alternate route was used. The first receipt-generation command python3 /private/tmp/jg-lp1-finalize.py exited 1 because its generated blank completion labels left trailing spaces; its internal git diff --check exited 2. Only task-owned receipt generation was corrected and rerun. No product/test source changed.
+
+
+### Continuation command 1 — exit 0; 2 passed, 3 PostgreSQL tests filtered out; 1.39 s
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp1-upgrade.integration.test.ts test/lp1-seed.integration.test.ts --testNamePattern="comparator fixtures|owner seed preparation"
+```
+
+### Continuation command 2 — exit 0;
+
+```sh
+rg --files /Users/benharwood/.local/share/full-steam/jg-orders | rg 'LP-1|lp-1'
+ sed -n '320,356p' packages/db/test/lp-0-catalog.ts
+ git diff --check
+```
+
+### Continuation command 3 — exit 0;
+
+```sh
+cat /Users/benharwood/.local/share/full-steam/jg-orders/draft-briefs/FINISH-LP-1.brief.txt
+ cat /Users/benharwood/.local/share/full-steam/jg-orders/LP-1-r1-continue-draft.txt
+```
+
+### Continuation command 4 — exit 0;
+
+```sh
+sed -n '198,300p' /Users/benharwood/.local/share/full-steam/jg-orders/draft-briefs/FINISH-LP-1.brief.txt
+ cat packages/db/test/upgrade-proof-utils.ts | head -115
+```
+
+### Continuation command 5 — exit 0; Own four test files compile
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm exec tsc -p /private/tmp/jg-lp1-tests.tsconfig.json
+```
+
+### Continuation command 6 — exit 0;
+
+```sh
+sed -n '1,150p' packages/db/test/practice-feed.integration.test.ts
+ sed -n '1,125p' packages/db/test/recovery-eligibility-v3.integration.test.ts
+ sed -n '1,80p' packages/db/src/demo-bootstrap.ts
+ git status --short
+```
+
+### Continuation command 7 — exit 0;
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+p=Path('BUILD_PLAN.md')
+s=p.read_text()
+marker='### 12.3 The graph (synthetic work, buildable after adoption)'
+assert s.count(marker)==1
+s=s.replace(marker,'''**Ledger amendment — LP-1 continuation, 15 October 2026 (Ben decisions 40 and 41).** On main `6671538c8d69936c162368c760dd6ce0f7f10493`, the integrated working-tree change reserves and registers **0162_membership_account_closed.sql**: withdraw runtime account/membership table writes, retain only immutable `created_at` locking-column UPDATE, and convert the four demo rows to the owner connection together. Decision 40 permits the four named tenancy fixture callbacks to use a named TEST-ONLY non-owner role, every assertion unchanged. Decision 41 permits the bootstrap role switch and six obsolete LP-0 table-write inventory removals plus the two contingent column entries. These bounded Q1/Q3 changes are a separately enumerated commit-sized set in the receipt. Q2's merged audit comparator and additional LP-0 assertions remain coordinator-owned and unchanged; they block integration acceptance. Database/browser checks are NOT RUN in the sandbox; exact-commit RED verdicts, separate acceptance, whole-track/G1 and real-data gates remain pending. No commit, push, deployment or release is authorised by this entry.\n\n'''+marker)
+p.write_text(s)
+p=Path('packages/db/MIGRATIONS.md')
+with p.open('a') as f:
+ f.write('''\n### 0162 continuation — integrated implementation, 15 October 2026\n\nBen decisions 40/41 release the bounded fixture/bootstrap/inventory changes recorded in the LP-1 receipt. `0162_membership_account_closed.sql` is now registered after 0158. It revokes table INSERT/UPDATE/DELETE and independent write-column privileges on account/membership, then retains UPDATE(created_at) only. A migration-owned SECURITY INVOKER trigger helper (fixed pg_catalog search path; no application/PUBLIC EXECUTE) unconditionally raises 42501 in two BEFORE UPDATE OF created_at statement triggers, including no-op/empty-set UPDATE. Existing SELECT, FORCE RLS, policies, row locks, owners, values, identity routes and timestamps remain unchanged. No new table, column, backfill or callable writer. Under §11.8 R1 and decision 41, the column ACL is a proven-only reduction of broad UPDATE; acceptance still requires the real-role tests.\n\nThe four bootstrap rows now use jobguard_migration on the separate owner connection; runtime is restored before job seeding. The four authorised tenancy callbacks select a disposable non-owner fixture role; all merged assertions are preserved. LP-0 inventory withdraws six table-write entries and records two retained column ACLs. Grant protection, seeds and these reviewed dispositions must land together. Q2's audit comparator and other LP-0 tests expecting withdrawn capabilities need coordinator changes before integration acceptance; this builder does not change them.\n\nUpgrade proof: lp1-upgrade.integration.test.ts installs predecessors, snapshots populated authority/receipt/audit and commercial source/pack rows as canonical named-column text/full types with original PK identities, applies 0162 alone, compares declared security changes, then runs later migrations twice. Rolled-back microsecond/type controls fail comparison; later scratch columns/functions/rows pass. Real-role refusal, all four lock strengths, RLS UPDATE-policy, nontransactional trigger-effect and bootstrap proofs are separate. PostgreSQL/browser execution is NOT RUN in the builder sandbox. No source inspection or non-DB check establishes acceptance.\n\nRollout remains gated by coordinator repairs, real PostgreSQL fresh/populated upgrade/regression checks, exact-head RED verdicts and separate acceptance. On install failure, the migration transaction rolls back. After installation fix forward while retaining the withdrawal; do not restore broad runtime authority writes. Previous service binaries retain their unchanged lock SQL; run the updated explicit bootstrap for synthetic setup. No real-data or deployment authority follows.\n''')
+PY
+```
+
+### Continuation command 8 — exit 0; 7 successful, 0 cached; 45.964 s
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+p=Path('docs/contracts/least-privilege-membership-account-v1.md')
+s=p.read_text()
+end=s.index('## Preparatory coverage')
+s='''# LP-1 membership/account boundary v1
+
+Status: implemented in the working tree; **NOT independently verified or accepted**.
+Authority: issued LP-1 header/addendum and 15 October continuation, Ben decisions
+40/41, BUILD_PLAN.md §§2.4, 11.8 and 12.2, and AGENTS.md §5.13.
+Integrated main: `6671538c8d69936c162368c760dd6ce0f7f10493`.
+Migration: `0162_membership_account_closed.sql`, registered after 0158.
+
+## Boundary
+
+The application login loses direct creation, identity alteration, promotion,
+restoration and deletion on app.account and app.membership. Existing SELECT,
+identity operations and permission-check row locks are preserved. Account and
+membership values, linked records, receipts, audit history and commercial source
+fingerprints must survive refused writes and upgrade.
+
+The whole LP track, exact-commit independent checks, separate technical acceptance
+and all other G1 requirements still precede real customer data and commercial sends.
+The builder sandbox cannot execute PostgreSQL or browser proofs.
+
+## Integrated mechanism
+
+- Withdraw table INSERT/UPDATE/DELETE and all write-column ACLs on both tables.
+  Preserve SELECT and retain only UPDATE(created_at), without grant option.
+  This syntactic locking privilege replaces broad UPDATE under §11.8 R1 and
+  decision 41. It authorises no mutable business value.
+- app.lp1_reject_lock_column_update() is migration-owned SECURITY INVOKER,
+  fixed search_path=pg_catalog. It raises SQLSTATE 42501 unconditionally, without
+  queries, business writes, configurable bypasses, dynamic SQL or role elevation.
+  PUBLIC/runtime/identity/infrastructure have no EXECUTE grant.
+- lp1_account_lock_column_immutable and lp1_membership_lock_column_immutable
+  are BEFORE UPDATE OF created_at statement triggers. No-op, multi-row and
+  empty-set statements fail before row triggers; SELECT FOR UPDATE/SHARE does
+  not execute UPDATE triggers. The statement scope is a reversible engineering
+  choice within the authorised immutable-column design.
+- No table, column, index, backfill, owner, policy, existing lock query, identity
+  routine or authority policy changes.
+- The four existing synthetic account/member inserts remain on the separate
+  owner connection, as jobguard_migration with the appropriate tenant per pair.
+  Restore jobguard_runtime before job/receipt seed work. Values, conflict handling,
+  target/environment checks and transaction boundaries stay unchanged.
+
+## Separately enumerated Q1/Q3 change set
+
+Decision 40 permits four tenancy callbacks to select a named TEST-ONLY role,
+lp1_tenancy_fixture: NOLOGIN, INHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+NOBYPASSRLS; runtime membership supplies the existing tenant RLS policies and
+SELECT. Its scoped account/membership INSERT/UPDATE/DELETE grants exist only in
+the disposable test database. No fixture power is granted to the application
+login. The callbacks use an owner-connected pool solely to SET LOCAL ROLE before
+all original SQL and assertions; every assertion stays unchanged.
+
+Decision 41 permits the bootstrap switch above and removal of the six obsolete
+LP-0 table-write entries. Two contingent column entries record the actually retained
+UPDATE(created_at) ACLs, in the existing LP-1 exception group. No other inventory
+key or group changes. The receipt lists these bounded changes line by line, as an
+independent commit-sized set; grant/lock/seed deployment stays integrated.
+
+## Coordinator holds
+
+Q2: the merged audit-export comparator treats the narrower explicit column ACL
+as a new permission. Only the coordinator may make the generic prior-table-coverage
+correction and preserve/add its controls. This file/test stays unchanged.
+
+The merged LP-0 exception and reduction controls explicitly expect table privileges
+that LP-1 withdraws, and its authority-path example expects a runtime owner insert
+to succeed. Those require coordinator dispositions; neither their assertions nor
+their setup is changed here. Exact before/after proposals and lines are in the
+receipt. Integration acceptance is held; nothing works around these checks.
+
+''' + s[end:]
+s=s.replace('## Preparatory coverage','## Coverage and execution limits')
+s=s.replace('Intended refusal assertions fail against preceding grants; Q3 post-change proof pending. Linked receipt/audit snapshots include empty sets in this fixture.','Refusal and canonical persisted-state proofs include nonempty linked receipt/audit/head fixtures; database execution pending.')
+s=s.replace('Database execution pending; Q1 inherited backstop conversion pending.','Database execution pending; authorised Q1 backstop conversion is included.')
+s=s.replace('Conversion HELD; no SQL results are mocked, but local database execution is unavailable.','Conversion included; no SQL results are mocked. Local database execution is unavailable.')
+s=s.replace('explicit missing-migration assertion; populated account/member/identity, receipt/audit history; named-column/type/identity snapshots; own-step unrelated security; later runner twice','registered own migration; populated account/member/identity, receipt/audit and commercial source/pack history; named-column/type/identity snapshots; own-step unrelated security; later runner twice')
+s=s.replace('Own migration absent/HELD. Representative commercial-document fingerprints and exact helper/trigger delta proof remain incomplete.','Representative commercial sources and persisted pack fingerprints included; exact helper/trigger catalogue assertions are in AC-04. Database execution pending.')
+s=s.replace('No tests are skipped in source to hide a held requirement. A filtered local run\nexcludes PostgreSQL tests explicitly and is recorded that way. The future own-step\ntest requires the real registered migration and does not manufacture a replacement.','No tests are skipped in source to hide a requirement. Filtered local runs exclude\nPostgreSQL tests explicitly and are recorded that way. The own-step proof requires\nthe real registered migration and does not manufacture a replacement.')
+s=s.replace('Implementation and rollout remain pending. The released grant/lock/seed group\nmust land together with the authorized fixture/comparator/inventory dispositions\nand real execution evidence.','The integrated implementation is written; rollout remains pending. The grant/lock/seed\ngroup must land together with the authorised fixture/comparator/inventory dispositions\nand real execution evidence.')
+p.write_text(s)
+PY
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm exec turbo run typecheck --force
+```
+
+### Continuation command 9 — exit 1;
+
+```sh
+rg -n 'diff|merge-base|comparison|untracked|cached' tools/agent-lane-boundary-lint.mjs | tail -30
+ nl -ba packages/db/test/lp-0-grant-freeze.integration.test.ts | sed -n '330,373p'
+ nl -ba packages/db/test/lp-0-authority-paths.integration.test.ts | sed -n '231,241p'
+ rg -n '<<<<<<<|=======|>>>>>>>' packages/db/MIGRATIONS.md config/agent-lane-assignments.json
+```
+
+### Continuation command 10 — exit 1;
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+LANE_BASE_REF=origin/main pnpm lint:lanes
+```
+
+### Continuation command 11 — exit 0;
+
+```sh
+sed -n '76,98p' packages/db/test/lp1-membership-account.integration.test.ts
+ sed -n '174,198p' /Users/benharwood/.local/share/full-steam/jg-orders/draft-briefs/FINISH-LP-1.brief.txt
+ cat /private/tmp/jg-lp1-tests.tsconfig.json
+```
+
+### Continuation command 12 — exit 0; 7 successful, 0 cached; 22.042 s
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+LANE_BASE_REF=origin/main pnpm exec turbo run lint --force
+```
+
+### Continuation command 13 — exit 0;
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+import subprocess,hashlib,json,difflib
+base='6671538c8d69936c162368c760dd6ce0f7f10493'
+paths=['apps/api/src/auth/context-boundary.test.ts','apps/api/src/auth/principal-bridge.ts','apps/api/src/worker.ts','packages/db/src/tenant-context.ts','packages/db/tools/synthetic-restore.mjs','packages/db/src/demo-seed.ts','packages/db/src/practice-session.ts','packages/db/src/contractor-repository.ts','packages/db/src/contractor-party-repository.ts','packages/db/src/work-order-repository.ts','packages/db/src/sor-repository.ts','packages/db/src/job-scheduling-repository.ts','packages/db/src/work-order-fixtures.ts','packages/db/src/contractor-session-context.ts','packages/core/src/watchdog.ts','packages/db/test/watchdog-command-harness.ts','packages/db/test/command-replay-contract.integration.test.ts','packages/db/test/audit-export.integration.test.ts','packages/db/test/extra-origin.integration.test.ts','packages/db/test/fingerprinted-row-shape.integration.test.ts','packages/db/test/lp-0-grant-freeze.integration.test.ts','packages/db/test/lp-0-authority-paths.integration.test.ts']
+rows=[]
+for p in paths:
+ before=subprocess.check_output(['git','show',base+':'+p]); after=Path(p).read_bytes()
+ assert before==after,p
+ rows.append({'path':p,'sha256':hashlib.sha256(after).hexdigest()})
+prior=json.loads(subprocess.check_output(['git','show',base+':config/agent-lane-assignments.json']))
+now=json.loads(Path('config/agent-lane-assignments.json').read_text())
+assert {k:v for k,v in prior['lanes'].items() if k!='lp-1'}=={k:v for k,v in now['lanes'].items() if k!='lp-1'}
+p='packages/db/test/tenancy.integration.test.ts'
+before=subprocess.check_output(['git','show',base+':'+p],text=True)
+after=Path(p).read_text()
+for name in ['expect(hiddenUpdate.rowCount).toBe(0);','expect(update.rowCount).toBe(1);','expect(deletion.rowCount).toBe(1);','expect(deletion.rowCount).toBe(0);',').rejects.toThrow("synthetic failure");']:
+ assert before.count(name)==after.count(name)==1,name
+# Remove only the explicitly authorised setup/callback edits, then compare the entire main file.
+start=after.index('  // LP-1 Q1, Ben decision 40:')
+end=after.index('  await admin.query(`',start+after[start:].index('  await admin.query(`')+1)
+restored=after[:start]+after[end:]
+restored=restored.replace('withTenant(admin, context(TENANT_A)', 'withTenant(runtime, context(TENANT_A)')
+restored='\n'.join(l for l in restored.split('\n') if 'SET LOCAL ROLE lp1_tenancy_fixture' not in l)
+assert restored==before,'tenancy changes exceed Q1 bounds'
+prior_inv=json.loads(subprocess.check_output(['git','show',base+':docs/contracts/lp-0-effective-privileges-v1.json']))
+new_inv=json.loads(Path('docs/contracts/lp-0-effective-privileges-v1.json').read_text())
+removed=[e for e in prior_inv['entries'] if e not in new_inv['entries']]
+added=[e for e in new_inv['entries'] if e not in prior_inv['entries']]
+assert len(removed)==6 and len(added)==2
+for key in prior_inv:
+ if key!='entries':assert prior_inv[key]==new_inv[key],key
+assert all(e['key'].startswith(('acl|rel|table|app.account|','acl|rel|table|app.membership|')) for e in removed)
+assert {e['key'] for e in added}=={'acl|col|app.account.created_at|jobguard_runtime|UPDATE|-','acl|col|app.membership.created_at|jobguard_runtime|UPDATE|-'}
+# Conflict note resolution preserves main's complete file as its exact prefix.
+main_notes=subprocess.check_output(['git','show',base+':packages/db/MIGRATIONS.md'],text=True)
+assert Path('packages/db/MIGRATIONS.md').read_text().startswith(main_notes)
+for p in ['packages/db/MIGRATIONS.md','config/agent-lane-assignments.json']:
+ assert not any(l.startswith(('<<<<<<<','=======','>>>>>>>')) for l in Path(p).read_text().splitlines()),p
+Path('/private/tmp/jg-lp1-continuation-preservation.json').write_text(json.dumps({'base':base,'preserved':rows,'removed':removed,'added':added},indent=2)+'\n')
+print('22 protected paths match main; all other lanes unchanged; complete tenancy file matches main after undoing Q1 edits; inventory delta exactly six removals/two columns; main migration notes preserved exactly; no conflict markers.')
+PY
+```
+
+### Continuation command 14 — exit 0; 7 successful, 0 cached; 1m30.013 s
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm build --concurrency=2 --force
+```
+
+### Continuation command 15 — exit 1;
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+import json,subprocess,hashlib
+base='6671538c8d69936c162368c760dd6ce0f7f10493'
+paths=['docs/contracts/extra-approval-chain-v1.md','docs/verdicts/ENT-5b/BUILDER_RECEIPT.md','packages/core/src/watchdog.ts','packages/db/migrations/0158_extra_approval_chain.sql','packages/db/src/extra-approval-chain-repository.ts','packages/db/src/index.ts','packages/db/test/extra-approval-chain-fixtures.ts','packages/db/test/extra-approval-chain.integration.test.ts']
+for p in paths:
+ assert subprocess.check_output(['git','show',base+':'+p])==Path(p).read_bytes(),p
+print('All eight lane-rejected incoming-main paths match main byte-for-byte.')
+print(subprocess.check_output(['git','diff','origin/main','--stat'],text=True))
+print(subprocess.check_output(['git','diff','--no-index','--stat','/dev/null','packages/db/migrations/0162_membership_account_closed.sql'],text=True))
+PY
+```
+
+### Continuation command 16 — exit 0;
+
+```sh
+python3 - <<'PY'
+import subprocess
+base='6671538c8d69936c162368c760dd6ce0f7f10493'
+paths={'packages/db/migrations/0000_tenancy.sql':['GRANT SELECT, INSERT, UPDATE, DELETE'], 'packages/db/src/demo-bootstrap.ts':['async function seedDatabase','INSERT INTO app.account','INSERT INTO app.membership','INSERT INTO app.job(id'], 'packages/db/src/recovery-case-repository.ts':['async listForMember','FOR SHARE`'], 'packages/db/src/recovery-message-repository.ts':['const owner = await'], 'packages/db/src/recovery-follow-up-repository.ts':['private async requireOwner'], 'packages/db/migrations/0106_practice_feed.sql':['FOR SHARE;'], 'packages/db/migrations/0119_recovery_eligibility_v3.sql':['FOR SHARE;'], 'packages/db/migrations/0130_recovery_eligibility_v3_f17_timing.sql':['FOR SHARE;'], 'packages/db/migrations/0137_scim_deactivation.sql':['FOR UPDATE LOOP','UPDATE app.membership','GRANT EXECUTE'], 'packages/db/test/audit-export.integration.test.ts':['!was.columnGrants.some','expect(upgrade.afterAllDifferences'], 'docs/contracts/lp-0-effective-privileges-v1.json':['app.account|jobguard_runtime|','app.membership|jobguard_runtime|']}
+for path,needles in paths.items():
+ source=subprocess.check_output(['git','show',base+':'+path],text=True)
+ for i,line in enumerate(source.splitlines(),1):
+  if any(needle in line for needle in needles):print(f'{path}:{i}: {line[:180]}')
+PY
+```
+
+### Continuation command 17 — exit 0;
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+import json
+p=Path('/private/tmp/jg-lp1-tests.tsconfig.json')
+s=json.loads(p.read_text())
+name=str(Path.cwd()/'packages/db/test/tenancy.integration.test.ts')
+if name not in s['include']:s['include'].append(name)
+p.write_text(json.dumps(s)+'\n')
+print('Task-owned TypeScript config includes four LP-1 files and the authorised tenancy fixture file.')
+PY
+```
+
+### Continuation command 18 — exit 0; All four LP-1 test sources plus authorised tenancy fixture compile
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm exec tsc -p /private/tmp/jg-lp1-tests.tsconfig.json
+```
+
+### Continuation command 19 — exit 1;
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+LANE_BASE_REF=origin/main node tools/lint.mjs
+```
+
+### Continuation command 20 — exit 0; 2 passed; 3 PostgreSQL tests filtered out
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+memory_pressure | tail -1
+df -g /System/Volumes/Data
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp1-upgrade.integration.test.ts test/lp1-seed.integration.test.ts --testNamePattern="comparator fixtures|owner seed preparation"
+```
+
+### Continuation command 21 — exit 1;
+
+```sh
+export PATH="$HOME/Library/pnpm/bin:$PATH"
+export PATH="/private/tmp/jg-lp1-bin:$PATH"
+pnpm openapi:check
+```
+
+### Continuation command 22 — exit 0;
+
+```sh
+node tools/money-arithmetic-lint.mjs
+```
+
+### Continuation command 23 — exit 0;
+
+```sh
+node tools/commercial-boundary-lint.mjs
+```
+
+
+## Historical preparatory receipt — verbatim, superseded status
+
+<details>
+<summary>Earlier preparation and its original command ledger</summary>
+
 Built by Codex; dispatched 13 Oct 2026; prepared 15 Oct 2026.
 
 # LP-1 builder receipt — preparatory work only
@@ -855,3 +1579,32 @@ The final read-only verification command is recorded in the appendix below, incl
 First finalization: new-file whitespace check rejected trailing spaces copied into the receipt's shell-command ledger (Python exit 1; enclosing read-only batch exit 0). Displayed trailing spaces were normalized; no test/product source changed. Tracked `git diff --check` passed in that batch.
 
 Final command: task-owned Python receipt finalization, with `git diff --check`, `git diff --name-only HEAD`, `git ls-files --others --exclude-standard`, and `git rev-parse HEAD` executed through checked subprocesses. New-file whitespace checked on all six new files. Finalization exit 0; 3 tracked additive edits, 6 allowed new files, no migration. HEAD `9865e4b32b71c75b763240bcdf27bd6a75b42f34`; last observed main `6671538c8d69936c162368c760dd6ce0f7f10493`. Last memory/disk readings: 58% free, 63 GB available. Receipt self-hash omitted. No independent verdict or acceptance is asserted.
+
+</details>
+
+## Final continuation stat and verification
+
+Compared against exact main (receipt included); untracked migration stat is separate.
+
+```text
+ BUILD_PLAN.md                                      |    4 +
+ config/agent-lane-assignments.json                 |    1 +
+ .../least-privilege-membership-account-v1.md       |  119 ++
+ docs/contracts/lp-0-effective-privileges-v1.json   |    8 +-
+ docs/verdicts/LP-1/BUILDER_RECEIPT.md              | 1583 ++++++++++++++++++++
+ packages/db/MIGRATIONS.md                          |   18 +
+ packages/db/src/demo-bootstrap.ts                  |    3 +-
+ packages/db/src/migrate.ts                         |    1 +
+ .../lp1-lock-compatibility.integration.test.ts     |  164 ++
+ .../lp1-membership-account.integration.test.ts     |  231 +++
+ packages/db/test/lp1-seed.integration.test.ts      |  133 ++
+ packages/db/test/lp1-upgrade.integration.test.ts   |  219 +++
+ packages/db/test/tenancy.integration.test.ts       |   19 +-
+ 13 files changed, 2492 insertions(+), 11 deletions(-)
+ .../migrations/0162_membership_account_closed.sql  | 41 ++++++++++++++++++++++
+ 1 file changed, 41 insertions(+)
+```
+
+Receipt generation and tracked git diff --check: exit 0. Final read-only whitespace/head/hash validation follows; no product or test source changes follow the successful checks.
+
+Final verification commands: python3 /private/tmp/jg-lp1-finalize.py exited 0; the first following read-only Python audit exited 1 because it checked pre-existing whitespace in the whole BUILD_PLAN.md. Those main lines were preserved. Corrected audit uses git diff --check for tracked changes and whole-file checks only for untracked files; exit 0. No product or test changes were made. 22 protected hashes still equal main; all 14 changed/new source paths are in the exact LP-1 lane; no conflict markers; tracked changed lines/new migration whitespace pass; exactly one ordered 0162 registration and two declared migration GRANT lines. Final HEAD 0f0e93e24566f168a877783afd72ff63a7898fdf. Receipt, intended commit message and separate Q1/Q3 patch exist. The index remains unmerged under the read-only .git restriction.

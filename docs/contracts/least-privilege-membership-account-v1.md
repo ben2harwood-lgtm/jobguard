@@ -1,75 +1,74 @@
-# LP-1 membership/account boundary v1 — preparatory contract
+# LP-1 membership/account boundary v1
 
-Status: **PARTIAL; implementation HELD, not independently verified or accepted.**
-Authority: issued LP-1 header/addendum (13 October, updated 15 October 2026),
-`BUILD_PLAN.md` §§2.4, 11.8 and 12.2, and `AGENTS.md` §5.13.
-Inspected base: `9865e4b32b71c75b763240bcdf27bd6a75b42f34`.
-Reservation: `0162_membership_account_closed.sql`; **that file does not exist**.
-During verification `origin/main` advanced to `6671538c8d69936c162368c760dd6ce0f7f10493`
-(ENT-5b / 0158). Its membership readers and grants were source-inspected; no
-account/membership grant or seed change appeared in that landing. The dispatcher
-must integrate and rerun against that newer main before landing this branch.
+Status: implemented in the working tree; **NOT independently verified or accepted**.
+Authority: issued LP-1 header/addendum and 15 October continuation, Ben decisions
+40/41, BUILD_PLAN.md §§2.4, 11.8 and 12.2, and AGENTS.md §5.13.
+Integrated main: `6671538c8d69936c162368c760dd6ce0f7f10493`.
+Migration: `0162_membership_account_closed.sql`, registered after 0158.
 
-## Adopted result and current state
+## Boundary
 
-The application login must lose direct creation, identity alteration, promotion,
-restoration and deletion on `app.account` and `app.membership`. Existing identity
-operations and permission-check row locks must continue working. Account and
-membership state, linked records, receipts and audit history must survive refused
-writes and the upgrade. Synthetic bootstrap preparation must use separate owner
-credentials for its existing four rows, explicitly outside service startup.
-
-These are requirements, not implemented guarantees. Main still has the broad
-grant in migration 0000, and bootstrap still selects runtime before the four
-inserts. Migration 0150 already refuses several membership authority changes;
-that narrower guarantee does not implement LP-1's account/grant closure.
+The application login loses direct creation, identity alteration, promotion,
+restoration and deletion on app.account and app.membership. Existing SELECT,
+identity operations and permission-check row locks are preserved. Account and
+membership values, linked records, receipts, audit history and commercial source
+fingerprints must survive refused writes and upgrade.
 
 The whole LP track, exact-commit independent checks, separate technical acceptance
-and all other G1 requirements precede any real customer data or commercial send.
-Green preparatory checks cannot open that gate.
+and all other G1 requirements still precede real customer data and commercial sends.
+The builder sandbox cannot execute PostgreSQL or browser proofs.
 
-## Held design and authorization
+## Integrated mechanism
 
-**Q1 remains HELD:** choosing a non-owner fixture role and its powers for merged
-tenancy assertions needs Ben's ruling and an exact revised lane. This piece does
-not create that role, change assertions, or substitute superuser execution for
-RLS assertions.
+- Withdraw table INSERT/UPDATE/DELETE and all write-column ACLs on both tables.
+  Preserve SELECT and retain only UPDATE(created_at), without grant option.
+  This syntactic locking privilege replaces broad UPDATE under §11.8 R1 and
+  decision 41. It authorises no mutable business value.
+- app.lp1_reject_lock_column_update() is migration-owned SECURITY INVOKER,
+  fixed search_path=pg_catalog. It raises SQLSTATE 42501 unconditionally, without
+  queries, business writes, configurable bypasses, dynamic SQL or role elevation.
+  PUBLIC/runtime/identity/infrastructure have no EXECUTE grant.
+- lp1_account_lock_column_immutable and lp1_membership_lock_column_immutable
+  are BEFORE UPDATE OF created_at statement triggers. No-op, multi-row and
+  empty-set statements fail before row triggers; SELECT FOR UPDATE/SHARE does
+  not execute UPDATE triggers. The statement scope is a reversible engineering
+  choice within the authorised immutable-column design.
+- No table, column, index, backfill, owner, policy, existing lock query, identity
+  routine or authority policy changes.
+- The four existing synthetic account/member inserts remain on the separate
+  owner connection, as jobguard_migration with the appropriate tenant per pair.
+  Restore jobguard_runtime before job/receipt seed work. Values, conflict handling,
+  target/environment checks and transaction boundaries stay unchanged.
 
-**Q3 access treatment remains HELD:** the addendum identifies standard F but does
-not confirm the immutable-column reduction. Migration, runner registration and
-four-row seed conversion form one integrated group; none is implemented here.
-No alternative narrow lock routine or caller conversion is authorized here.
+## Separately enumerated Q1/Q3 change set
 
-If released separately, the proposed mechanism is:
+Decision 40 permits four tenancy callbacks to select a named TEST-ONLY role,
+lp1_tenancy_fixture: NOLOGIN, INHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+NOBYPASSRLS; runtime membership supplies the existing tenant RLS policies and
+SELECT. Its scoped account/membership INSERT/UPDATE/DELETE grants exist only in
+the disposable test database. No fixture power is granted to the application
+login. The callbacks use an owner-connected pool solely to SET LOCAL ROLE before
+all original SQL and assertions; every assertion stays unchanged.
 
-- Preserve SELECT. Withdraw table INSERT/UPDATE/DELETE and any other write-column
-  ACL on both tables. Retain only `UPDATE(created_at)`, without grant option,
-  contingent on the R1 immutability proof and Q3 ruling. This is a syntactic
-  locking privilege, not a completely SELECT-only ACL.
-- Add `app.lp1_reject_lock_column_update()` as a migration-owned SECURITY INVOKER
-  trigger routine with fixed `search_path=pg_catalog`; no business writes, dynamic
-  SQL, owner assumption or bypass. Raise stable SQLSTATE `42501` on every selected
-  column update, including `created_at=created_at` and multi-row updates.
-- Add `lp1_account_lock_column_immutable` and
-  `lp1_membership_lock_column_immutable` as BEFORE UPDATE OF created_at triggers.
-  Revoke helper EXECUTE from PUBLIC, runtime, identity and infrastructure; grant
-  no application entry point.
-- Preserve owners, policies, FORCE RLS, row values, tenant-qualified references,
-  existing identity routes and all current lock SQL. Add no table, column, index
-  or backfill. No direct write power is introduced under standard F.
-- Bootstrap's separately authenticated owner client remains migration for the
-  two account/member pairs, with the correct transaction-local tenant per pair;
-  restore runtime before existing job/receipt seed work. Preserve all values,
-  conflict handling, target checks and transaction boundaries.
+Decision 41 permits the bootstrap switch above and removal of the six obsolete
+LP-0 table-write entries. Two contingent column entries record the actually retained
+UPDATE(created_at) ACLs, in the existing LP-1 exception group. No other inventory
+key or group changes. The receipt lists these bounded changes line by line, as an
+independent commit-sized set; grant/lock/seed deployment stays integrated.
 
-Q2 has a technical disposition only: an explicit column ACL previously covered
-by an equivalent table ACL is a reduction. The coordinator must correct the
-merged audit-export comparator generically while retaining its widening controls.
-This lane does not edit that comparator. LP-0 also enforces removal of stale
-inventory entries; coordinator-owned inventory changes are a future integration
-prerequisite. This piece does not update its pinned entries.
+## Coordinator holds
 
-## Preparatory coverage
+Q2: the merged audit-export comparator treats the narrower explicit column ACL
+as a new permission. Only the coordinator may make the generic prior-table-coverage
+correction and preserve/add its controls. This file/test stays unchanged.
+
+The merged LP-0 exception and reduction controls explicitly expect table privileges
+that LP-1 withdraws, and its authority-path example expects a runtime owner insert
+to succeed. Those require coordinator dispositions; neither their assertions nor
+their setup is changed here. Exact before/after proposals and lines are in the
+receipt. Integration acceptance is held; nothing works around these checks.
+
+## Coverage and execution limits
 
 All database tests use generated fixtures and real embedded PostgreSQL 16 with
 separately authenticated owner/runtime pools. Runtime SQL is exercised as the
@@ -78,18 +77,18 @@ runtime's object grants. RLS assertions execute as runtime.
 
 | IDs | New file and coverage | Limit |
 |---|---|---|
-| AC-01–05 | `lp1-membership-account.integration.test.ts`: direct insert/select/conflict forms; authority-column updates; expired/revoked restoration; delete/truncate; canonical persisted rows; effective grants/role assumption; no-op/multi-row updates and rolled-back side-effect control | Intended refusal assertions fail against preceding grants; Q3 post-change proof pending. Linked receipt/audit snapshots include empty sets in this fixture. |
-| AC-06–07 | `lp1-lock-compatibility.integration.test.ts`: all four strengths, both tables, commit/rollback release observed through `pg_blocking_pids`; tenant/context/pool checks; rolled-back restrictive UPDATE policy with SELECT positive control | Database execution pending; Q1 inherited backstop conversion pending. |
+| AC-01–05 | `lp1-membership-account.integration.test.ts`: direct insert/select/conflict forms; authority-column updates; expired/revoked restoration; delete/truncate; canonical persisted rows; effective grants/role assumption; no-op/multi-row updates and rolled-back side-effect control | Refusal and canonical persisted-state proofs include nonempty linked receipt/audit/head fixtures; database execution pending. |
+| AC-06–07 | `lp1-lock-compatibility.integration.test.ts`: all four strengths, both tables, commit/rollback release observed through `pg_blocking_pids`; tenant/context/pool checks; rolled-back restrictive UPDATE policy with SELECT positive control | Database execution pending; authorised Q1 backstop conversion is included. |
 | AC-08 | Same file: real member read plus eligibility/message/follow-up entry-point waits behind owner revocation | Full successful commercial/trigger paths and audit ordering still require unchanged regression suites. |
-| AC-09 | `lp1-seed.integration.test.ts`: real bootstrap, effective role/session observed before actual SQL, exact four rows, rerun IDs, runtime job continuation, non-superuser owner and FORCE RLS | Conversion HELD; no SQL results are mocked, but local database execution is unavailable. |
+| AC-09 | `lp1-seed.integration.test.ts`: real bootstrap, effective role/session observed before actual SQL, exact four rows, rerun IDs, runtime job continuation, non-superuser owner and FORCE RLS | Conversion included; no SQL results are mocked. Local database execution is unavailable. |
 | AC-10 | Same file: invalid environment/target refuses before connection; import has no preparation side effect; focused startup source checks | These checks are limited boundary evidence; not a deployed credential proof. |
-| AC-11 | `lp1-upgrade.integration.test.ts`: explicit missing-migration assertion; populated account/member/identity, receipt/audit history; named-column/type/identity snapshots; own-step unrelated security; later runner twice | Own migration absent/HELD. Representative commercial-document fingerprints and exact helper/trigger delta proof remain incomplete. |
+| AC-11 | `lp1-upgrade.integration.test.ts`: registered own migration; populated account/member/identity, receipt/audit and commercial source/pack history; named-column/type/identity snapshots; own-step unrelated security; later runner twice | Representative commercial sources and persisted pack fingerprints included; exact helper/trigger catalogue assertions are in AC-04. Database execution pending. |
 | AC-12 | Same file: comparator fixtures plus rolled-back PostgreSQL precision/type/add-column/function/later-insert controls using the same comparator | Fixture execution and real PostgreSQL execution are distinct; receipt records each. |
 | AC-13–18 | Unchanged named suites, lane/diff evidence, full CI, RED verdicts and separate acceptance | Not completed by new preparatory tests. |
 
-No tests are skipped in source to hide a held requirement. A filtered local run
-excludes PostgreSQL tests explicitly and is recorded that way. The future own-step
-test requires the real registered migration and does not manufacture a replacement.
+No tests are skipped in source to hide a requirement. Filtered local runs exclude
+PostgreSQL tests explicitly and are recorded that way. The own-step proof requires
+the real registered migration and does not manufacture a replacement.
 
 ## Upgrade rule
 
@@ -106,8 +105,8 @@ fingerprinted business table.
 
 ## Rollout, forward fix and limits
 
-Implementation and rollout remain pending. The released grant/lock/seed group
-must land together with the authorized fixture/comparator/inventory dispositions
+The integrated implementation is written; rollout remains pending. The grant/lock/seed
+group must land together with the authorised fixture/comparator/inventory dispositions
 and real execution evidence. Preceding service callers must work without owner
 credentials. Forward fixes retain withdrawn powers; restoring broad runtime
 writes is not a rollback strategy. A different lock design requires an amended
