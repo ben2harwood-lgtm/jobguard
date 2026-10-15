@@ -5,14 +5,15 @@
  *
  * Run on the piece's branch after catching up with main. It finds the migrations this branch added (against the merge
  * base with --base) and, only if one is not numbered above the highest migration on --base or two share a number,
- * renames them to the next free numbers in their current order. SQL bytes never change (git mv). Every reference to an
+ * renames them to the next free numbers in their current order. SQL bytes never change (filesystem moves). Every reference to an
  * old file stem (for example 0156_quote_fix) in files this branch added or changed is rewritten, and files whose name
  * carries the stem (a migration note) are renamed. Merged files are never touched. Without --write it only reports and
  * exits 1 when a renumber is needed. With --write it stages the result for the caller to review and commit.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import fs, { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MIGRATION_PATH } from "./agent-lane-boundary-lint.mjs";
 
@@ -47,27 +48,52 @@ export function renumber({ cwd = process.cwd(), base = "origin/main", write = fa
   const stems = plan.map(({ from, to }) => [stemOf(from), stemOf(to)]);
   const touched = split(git(["diff", "--no-renames", "--diff-filter=AM", "--name-only", "-z", fork, "HEAD", "--"]))
     .filter((file) => !MIGRATION_PATH.test(file));
-  const renamed = [];
-  for (const { from, to } of plan) { git(["mv", "--", from, to]); renamed.push([from, to]); }
-  const rewritten = [];
-  for (let file of touched) {
-    for (const [oldStem, newStem] of stems) {
-      if (file.split("/").at(-1).includes(oldStem)) {
-        const moved = file.replace(new RegExp(`${oldStem}(?![0-9a-z_])`, "u"), newStem);
-        git(["mv", "--", file, moved]); renamed.push([file, moved]); file = moved;
-      }
+  const replaceStems = (input) => {
+    let text = input;
+    // Placeholders prevent a chain such as 0002_fix -> 0003_fix -> 0004_fix from double-rewriting.
+    stems.forEach(([oldStem], i) => { text = text.replace(new RegExp(`(?<![0-9a-z_])${oldStem}(?![0-9a-z_])`, "gu"), `\u0000${i}\u0000`); });
+    stems.forEach(([, newStem], i) => { text = text.split(`\u0000${i}\u0000`).join(newStem); });
+    return text;
+  };
+  const files = touched.map((from) => ({ from, to: join(dirname(from), replaceStems(basename(from))) }));
+  const renamed = [...plan, ...files.filter(({ from, to }) => from !== to)].map(({ from, to }) => [from, to]);
+  const sources = new Set(renamed.map(([from]) => from));
+  const destinations = new Set();
+  const moves = renamed.map(([from, to]) => {
+    if (destinations.has(to) || (existsSync(resolve(cwd, to)) && !sources.has(to))) {
+      throw new Error(`Renumber destination exists: ${to}`);
     }
+    destinations.add(to);
+    let temporary;
+    do { temporary = join(dirname(from), `.migration-renumber-${randomUUID()}.tmp`); }
+    while (existsSync(resolve(cwd, temporary)));
+    return { from, to, temporary, location: from };
+  });
+  const move = (entry, to) => {
+    fs.renameSync(resolve(cwd, entry.location), resolve(cwd, to));
+    entry.location = to;
+  };
+  try {
+    // Vacate every source before placing any final file, including migration notes.
+    for (const entry of moves) move(entry, entry.temporary);
+    for (const entry of moves) move(entry, entry.to);
+  } catch (error) {
+    // Vacate completed destinations before restoring sources that overlap them.
+    for (const entry of moves) if (entry.location === entry.to) move(entry, entry.temporary);
+    for (const entry of moves) if (entry.location === entry.temporary) move(entry, entry.from);
+    throw error;
+  }
+  const rewritten = [];
+  for (const { to: file } of files) {
     const path = resolve(cwd, file);
     if (!existsSync(path)) continue;
     const bytes = readFileSync(path);
     if (bytes.includes(0)) continue; // binary
-    let text = bytes.toString("utf8");
-    const before = text;
-    // Two passes through placeholders, so a chain such as 0156->0157 and 0157->0158 cannot double-rewrite.
-    stems.forEach(([oldStem], i) => { text = text.replace(new RegExp(`(?<![0-9a-z_])${oldStem}(?![0-9a-z_])`, "gu"), `\u0000${i}\u0000`); });
-    stems.forEach(([, newStem], i) => { text = text.split(`\u0000${i}\u0000`).join(newStem); });
-    if (text !== before) { writeFileSync(path, text); git(["add", "--", file]); rewritten.push(file); }
+    const before = bytes.toString("utf8");
+    const text = replaceStems(before);
+    if (text !== before) { writeFileSync(path, text); rewritten.push(file); }
   }
+  git(["add", "-A", "--", ...new Set([...renamed.flat(), ...rewritten])]);
   return { plan, rewritten, renamed };
 }
 

@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -190,4 +191,79 @@ test("MC-8 train: a piece lane read from its lane file is honoured, and it canno
   assert.deepEqual(result.files, ["config/lanes/piece-a.json", "tools/piece-a/item.mjs"]);
   r.git("merge", "--no-ff", "--no-edit", heads["piece-b"]);
   assert.throws(() => r.inspect(event()), /piece codex\/sandbox\/piece-b, lane piece-b cannot edit: "config\/lanes\/piece-z.json"/u);
+});
+
+function renumberFixture(t, numbers) {
+  const r = repo(t);
+  r.write("packages/db/migrations/0002_merged.sql", "SELECT 'merged';\n"); r.commit();
+  r.git("switch", "-c", "codex/sandbox/repair", r.base);
+  const stems = numbers.map((number) => `${String(number).padStart(4, "0")}_fix`);
+  for (const stem of stems) {
+    r.write(`packages/db/migrations/${stem}.sql`, `SELECT '${stem}';\n`);
+    r.write(`packages/db/migration-notes/${stem}.md`, `Note for ${stem}\n`);
+  }
+  const references = `${stems.join(" ")}\n`;
+  r.write("packages/db/migration-index.txt", references);
+  r.write("docs/ledger/REPAIR.md", references);
+  r.commit();
+  assert.equal(r.tryMerge("main"), true);
+  return { ...r, stems };
+}
+
+for (const numbers of [[2, 3], [2, 3, 4], [1, 5]]) {
+  test(`Repair r1 renumbers ${numbers.join(" + ")} with SQL, notes, index and ledger intact`, (t) => {
+    const r = renumberFixture(t, numbers);
+    const expected = r.stems.map((stem, i) => ({
+      from: `packages/db/migrations/${stem}.sql`,
+      to: `packages/db/migrations/${String(3 + i).padStart(4, "0")}_fix.sql`,
+    }));
+    const dryRun = renumber({ cwd: r.cwd, base: "main" });
+    assert.deepEqual(dryRun.plan, expected);
+    assert.equal(r.git("status", "--porcelain"), "");
+    const result = renumber({ cwd: r.cwd, base: "main", write: true });
+    assert.deepEqual(result.plan, dryRun.plan);
+    for (const [i, { from, to }] of expected.entries()) {
+      assert.equal(readFileSync(join(r.cwd, to), "utf8"), `SELECT '${r.stems[i]}';\n`, from);
+      assert.equal(readFileSync(join(r.cwd, `packages/db/migration-notes/${String(3 + i).padStart(4, "0")}_fix.md`), "utf8"), `Note for ${String(3 + i).padStart(4, "0")}_fix\n`);
+    }
+    const references = `${expected.map(({ to }) => to.split("/").at(-1).slice(0, -4)).join(" ")}\n`;
+    for (const path of ["packages/db/migration-index.txt", "docs/ledger/REPAIR.md"]) {
+      assert.equal(readFileSync(join(r.cwd, path), "utf8"), references);
+    }
+    assert.deepEqual(readdirSync(join(r.cwd, "packages/db/migrations")).sort(), ["0001_base.sql", "0002_merged.sql", ...expected.map(({ to }) => to.split("/").at(-1))]);
+    assert.deepEqual(readdirSync(join(r.cwd, "packages/db/migration-notes")).sort(), expected.map(({ to }) => to.split("/").at(-1).replace(".sql", ".md")));
+    assert.equal(r.git("diff", "--name-only"), "", "all final changes are staged");
+  });
+}
+
+test("Repair r1 already valid numbers leave files and index unchanged", (t) => {
+  const r = renumberFixture(t, [3, 4]);
+  assert.deepEqual(renumber({ cwd: r.cwd, base: "main" }), { plan: [], rewritten: [], renamed: [] });
+  assert.deepEqual(renumber({ cwd: r.cwd, base: "main", write: true }), { plan: [], rewritten: [], renamed: [] });
+  assert.equal(r.git("status", "--porcelain", "--untracked-files=all"), "");
+});
+
+test("Repair r1 failed writes restore original names without temporary files", async (t) => {
+  // Fail after a partial first phase and after a partial second phase, including notes.
+  for (const failAt of [2, 6]) {
+    await t.test(`rename failure ${failAt}`, (t) => {
+      const r = renumberFixture(t, [2, 3]);
+      const original = r.git("ls-files", "-z").split("\0").filter(Boolean);
+      const bytes = original.map((file) => readFileSync(join(r.cwd, file)));
+      const move = fs.renameSync;
+      let calls = 0;
+      const mock = t.mock.method(fs, "renameSync", (...args) => {
+        if (++calls === failAt) throw new Error("injected move failure");
+        return move(...args);
+      });
+      try {
+        assert.throws(() => renumber({ cwd: r.cwd, base: "main", write: true }), /injected move failure/u);
+      } finally { mock.mock.restore(); }
+      assert.ok(calls >= failAt, "failure occurred during a filesystem move");
+      assert.equal(r.git("status", "--porcelain", "--untracked-files=all"), "", "no temporary or partial changes remain");
+      original.forEach((file, i) => assert.deepEqual(readFileSync(join(r.cwd, file)), bytes[i], file));
+      assert.deepEqual(readdirSync(join(r.cwd, "packages/db/migrations")).sort(), ["0001_base.sql", "0002_fix.sql", "0002_merged.sql", "0003_fix.sql"]);
+      assert.deepEqual(readdirSync(join(r.cwd, "packages/db/migration-notes")).sort(), ["0002_fix.md", "0003_fix.md"]);
+    });
+  }
 });

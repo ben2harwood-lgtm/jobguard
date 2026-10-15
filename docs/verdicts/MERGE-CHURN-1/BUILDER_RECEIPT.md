@@ -91,3 +91,32 @@ the existing merge-ahead ruling, now enforced.
   `packages/db/migration-notes/NNNN_name.md`. Do not edit `migrate.ts` or `MIGRATIONS.md`. Ledger line: `docs/ledger/<PIECE>.md`.
 - At catch-up: merge main, then `node tools/migration-renumber.mjs` (exit 1 means a renumber is needed) and
   `node tools/migration-renumber.mjs --write`; review the staged rename, commit it, rerun the lane check and tests.
+
+
+## Repair r1
+
+Codex, 15 October 2026; PR #216, starting head `2a034f49`, branch `codex/sandbox/merge-churn-1`.
+Before: with main highest 0002, branch `0002_fix.sql` + `0003_fix.sql` failed with "destination exists";
+the added pair/three-file regressions reproduced this before the implementation change.
+After: SQL and note renames are planned together, moved to unique temporary names in their own directories,
+then moved to final names using filesystem moves. Failed moves restore original names before rethrowing.
+Stem replacements use placeholders for filenames and note/index/ledger text, preventing chained rewrites;
+SQL bytes and the dry-run migration mapping are preserved. Only final paths are staged by the tool.
+Added pair, three-file, non-overlapping, already-valid/no-op and injected failure regressions (both rename phases).
+Existing test expectations are unchanged. The test path was already allowed, so the lane file is unchanged.
+
+Commands and results:
+
+- `node --test --test-concurrency=1 --test-name-pattern='Repair r1' tools/merge-churn.test.mjs` before the fix: exit 1 (expected regression failures).
+- `node --test --test-concurrency=1 tools/merge-churn.test.mjs`: exit 0; initially 14/14, final 15/15 after adding the explicit no-op case. Only this tool test file ran; synthetic temporary repositories only.
+- `COREPACK_ENABLE_NETWORK=0 corepack pnpm typecheck`: exit 0 (7/7 Turbo cache hits).
+- `LANE_BASE_REF=origin/main COREPACK_ENABLE_NETWORK=0 corepack pnpm lint`: exit 0 (boundary checks executed; 7/7 package lint cache hits).
+- `LANE_BASE_REF=origin/main COREPACK_ENABLE_NETWORK=0 corepack pnpm lint:lanes`: exit 0.
+- `COREPACK_ENABLE_NETWORK=0 PATH=/usr/local/lib/node_modules/corepack/shims:$PATH pnpm build`: exit 0 (7/7 tasks; 4 cached; compiler/cache warnings emitted).
+- `COREPACK_ENABLE_NETWORK=0 corepack pnpm openapi:check`: exit 1 (nested command selected global pnpm 11.8.0 instead of pinned 10.28.1). Retried with the Corepack shim PATH above: exit 1 (tsx CLI IPC listen denied by sandbox). Equivalent generator from `apps/api`, `node --import tsx src/generate-openapi.ts --check`: exit 0.
+- `git diff --check`: exit 0.
+
+Node 24.17.0; checks used cached pnpm 10.28.1 through Corepack with network disabled.
+No application/schema/migration or commercial-policy changes. No browser, Playwright, PostgreSQL, broader unit or provider suites ran, as instructed; CI remains responsible for those checks.
+No git writes were run against this worktree; synthetic fixture repositories exercise the tool's staging behavior.
+Dispatcher must commit/push; the changed commit still needs CI, an independent recorded verdict and separate acceptance.
