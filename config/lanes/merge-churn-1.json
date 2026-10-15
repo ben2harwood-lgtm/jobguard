@@ -13,6 +13,8 @@
         "packages/db/src/migrate-discovery.test.ts",
         "packages/db/MIGRATIONS.md",
         "BUILD_PLAN.md",
+        "packages/db/migration-notes/0157_extra_approval.md",
+        "packages/db/migration-notes/0158_extra_approval_chain.md",
         "docs/verdicts/MERGE-CHURN-1/**"
       ]
     }
