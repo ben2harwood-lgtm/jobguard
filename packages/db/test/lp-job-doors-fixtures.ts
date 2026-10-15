@@ -1,15 +1,15 @@
 // LP-2 tests-first preparation. Enforcement is stopped on coordinator-owned fixtures.
 import { randomUUID } from "node:crypto";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
-import { migrate } from "../src/migrate.js";
+import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import type { ConsequentialCommand } from "../src/commands.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
-export async function jobDoorsDatabase(practice = false) {
+export async function jobDoorsDatabase(practice = false, stopBefore?: string) {
   const phrase = randomUUID(), directory = await mkdtemp(join(tmpdir(), "jg-lp2-"));
   const port = await freePort(62700, 100);
   const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: phrase,
@@ -26,7 +26,17 @@ export async function jobDoorsDatabase(practice = false) {
       finally { await control.end(); }
     }
     owner = new Pool({ ...options, user: "postgres", database, max: 2 });
-    await migrate(owner);
+    if (stopBefore === undefined) await migrate(owner);
+    else {
+      await owner.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
+      for (const url of MIGRATION_URLS) {
+        const name = url.pathname.split("/").at(-1)!;
+        if (name >= stopBefore) continue;
+        const sql = await readFile(url, "utf8");
+        await owner.query(name === "0095_job_parties.sql" ? sql.replace("BEGIN;", "BEGIN; SELECT set_config('app.deployment_mode','details_needed',true);") : sql);
+        await owner.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
+      }
+    }
     // Disposable test login inherits runtime only; it never receives fixture writes.
     await owner.query(`CREATE ROLE lp2_login LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${phrase}'`);
     await owner.query("GRANT jobguard_runtime TO lp2_login");
@@ -104,4 +114,59 @@ export async function adoptionFixture(db: JobDoorsDatabase) {
     action: { actionType: "job.adopt_in_flight", recipient: null, contentHash: input.baselineHash, aggregateRevision: 0,
       amountPence: input.acceptedNetValuePence, currency: "GBP", policyVersion: input.importTermsVersion, expiresAt: new Date("2099-01-01T00:00:00Z") } };
   return { actor, input, command };
+}
+
+/** Owner setup only. The runtime subsequently invokes SQL directly, bypassing service prechecks. */
+export async function adoptionAuthority(db: JobDoorsDatabase, change: {
+  member?: "worker" | "revoked" | "expired";
+  receipt?: "missing" | "actor" | "type" | "subject" | "succeeded";
+  approval?: "missing" | "actor" | "resolution_actor" | "subject_type" | "subject" | "action" |
+    "recipient" | "hash" | "value" | "terms" | "revision" | "revoked" | "expired" | "rejected";
+} = {}) {
+  const f = await adoptionFixture(db), other = await jobDoorsActor(db.owner, f.actor.tenant);
+  const decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
+  await transaction(db.owner, f.actor.tenant, async client => {
+    if (change.member === "worker") await client.query("UPDATE app.membership SET role='worker' WHERE tenant_id=$1 AND id=$2", [f.actor.tenant, f.actor.member]);
+    if (change.member === "revoked") await client.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.actor.tenant, f.actor.member]);
+    if (change.member === "expired") await client.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2", [f.actor.tenant, f.actor.member]);
+    if (change.receipt !== "missing") await client.query(`INSERT INTO app.command_receipt
+      (tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $6='succeeded' THEN clock_timestamp() ELSE NULL END)`,
+    [f.actor.tenant, f.command.commandId, change.receipt === "type" ? "quote.send" : f.command.commandType,
+      change.receipt === "subject" ? `import:${randomUUID()}` : f.command.semanticKey, "c".repeat(64),
+      change.receipt === "succeeded" ? "succeeded" : "processing", change.receipt === "actor" ? other.member : f.actor.member,
+      change.receipt === "succeeded" ? {} : null]);
+    const action = change.approval === "action" ? "quote.send" : "job.adopt_in_flight";
+    await client.query("INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type) VALUES($1,$2,$3,$4,$5)",
+      [f.actor.tenant, decision, change.approval === "subject_type" ? "quote_document" : "job",
+        change.approval === "subject" ? randomUUID() : f.input.jobId, action]);
+    await client.query("INSERT INTO app.decision_resolution(tenant_id,id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,$4,$5)",
+      [f.actor.tenant, resolution, decision, change.approval === "rejected" ? "rejected" : "approved",
+        change.approval === "resolution_actor" ? other.member : f.actor.member]);
+    // A rejected resolution cannot acquire an authorization even in owner setup.
+    if (change.approval !== "missing" && change.approval !== "rejected") await client.query(`INSERT INTO app.action_authorization
+      (tenant_id,id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,
+       amount_pence,currency,policy_version,expires_at,revoked_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'GBP',$11,$12,$13)`,
+    [f.actor.tenant, authorization, decision, resolution, change.approval === "actor" ? other.member : f.actor.member, action,
+      change.approval === "recipient" ? "customer@example.invalid" : null,
+      change.approval === "hash" ? "b".repeat(64) : f.input.baselineHash, change.approval === "revision" ? 1 : 0,
+      change.approval === "value" ? 100101 : f.input.acceptedNetValuePence,
+      change.approval === "terms" ? "different_import_terms.v1" : f.input.importTermsVersion,
+      change.approval === "expired" ? new Date(0) : new Date("2099-01-01T00:00:00Z"),
+      change.approval === "revoked" ? new Date(0) : null]);
+  });
+  return { ...f, authorization };
+}
+
+export async function callAdoption(client: PoolClient, f: Awaited<ReturnType<typeof adoptionAuthority>>, change: {
+  tenant?: string; actor?: string; customer?: string; site?: string; payer?: string;
+} = {}) {
+  return client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,$4::varchar,$5::varchar,$6::char(64),$7::varchar,
+    $8::bigint,$9::bigint,$10::varchar,$11::varchar,$12,$13::timestamptz,$14,$15,$16,$17,$18)`,
+  [change.tenant ?? f.actor.tenant, f.input.jobId, f.input.baselineId, f.input.title, f.input.lifecyclePoint,
+    f.input.baselineHash, f.input.baselineDescription, f.input.acceptedNetValuePence, f.input.recoveryCapPence,
+    f.input.feePolicyVersion, f.input.importTermsVersion, change.actor ?? f.actor.member, f.input.attestedAt,
+    change.customer ?? f.input.parties.customerRevisionId, change.site ?? f.input.parties.siteRevisionId,
+    change.payer ?? null, f.command.commandId, f.authorization]);
 }

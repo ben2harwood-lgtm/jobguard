@@ -3,13 +3,39 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { adoptionFixture, importedShape, insertJob, jobDoorCounts, jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { adoptionAuthority, adoptionFixture, callAdoption, importedShape, insertJob, jobDoorCounts, jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
 afterAll(async () => { await db?.close(); });
 
 describe("LP-2 imported insertion boundary (tests first; implementation stopped)", () => {
+  const invalidAuthority: Array<[string, NonNullable<Parameters<typeof adoptionAuthority>[1]>]> = [
+    ...(["worker", "revoked", "expired"] as const).map(member => [`${member} member`, { member }] as [string, { member: typeof member }]),
+    ...(["missing", "actor", "type", "subject", "succeeded"] as const).map(receipt => [`${receipt} receipt`, { receipt }] as [string, { receipt: typeof receipt }]),
+    ...(["missing", "actor", "resolution_actor", "subject_type", "subject", "action", "recipient", "hash", "value", "terms", "revision", "revoked", "expired", "rejected"] as const)
+      .map(approval => [`${approval} approval`, { approval }] as [string, { approval: typeof approval }]),
+  ];
+  it.each(invalidAuthority)("[LP2-A05] SQL itself refuses %s and preserves every pre-call effect count", async (_name, change) => {
+    const f = await adoptionAuthority(db, change), before = await jobDoorCounts(db.owner, f.actor.tenant);
+    await expect(transaction(db.runtime, f.actor.tenant, client => callAdoption(client, f))).rejects.toMatchObject({ code: "42501" });
+    expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
+  });
+
+  it("[LP2-A05] a valid actor and approval do not authorize a foreign tenant", async () => {
+    const f = await adoptionAuthority(db), other = await jobDoorsActor(db.owner);
+    const before = await jobDoorCounts(db.owner, f.actor.tenant), otherBefore = await jobDoorCounts(db.owner, other.tenant);
+    await expect(transaction(db.runtime, f.actor.tenant, client => callAdoption(client, f, { tenant: other.tenant }))).rejects.toMatchObject({ code: "42501" });
+    expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
+    expect(await jobDoorCounts(db.owner, other.tenant)).toEqual(otherBefore);
+  });
+
+  it.each(["customer", "site", "payer"] as const)("[LP2-A05] missing %s refuses before a job or party effect", async name => {
+    const f = await adoptionAuthority(db), before = await jobDoorCounts(db.owner, f.actor.tenant);
+    await expect(transaction(db.runtime, f.actor.tenant, client => callAdoption(client, f, { [name]: randomUUID() }))).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
+    expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
+  });
+
   const flags = [undefined, "", "false", "malformed", "enabled"];
   it.each(flags)("[LP2-A03] a valid tenant plus adoption setting %s cannot insert an imported job", async flag => {
     const actor = await jobDoorsActor(db.owner), before = await jobDoorCounts(db.owner, actor.tenant);

@@ -45,13 +45,16 @@ describe("LP-1 row-lock compatibility", () => {
     await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [context]);
   }
   async function waitBlocked(pid: number, blocker: number) {
-    const deadline = Date.now() + 2500;
+    const deadline = performance.now() + 5000;
+    let observed: unknown;
     do {
-      const row = (await owner.query("SELECT $2::int=ANY(pg_blocking_pids($1)) AS blocked", [pid, blocker])).rows[0];
-      if (row?.blocked) return;
+      const row = (await owner.query(`SELECT state,wait_event_type,wait_event,pg_blocking_pids(pid) AS blockers,
+        $2::int=ANY(pg_blocking_pids(pid)) AS blocked FROM pg_stat_activity WHERE pid=$1::int`, [pid, blocker])).rows[0];
+      observed = row;
+      if (row?.wait_event_type === "Lock" && row.blocked) return;
       await new Promise(resolve => setTimeout(resolve, 10));
-    } while (Date.now() < deadline);
-    throw new Error(`Expected PostgreSQL wait for backend ${pid} behind ${blocker}`);
+    } while (performance.now() < deadline);
+    throw new Error(`Expected PostgreSQL wait for backend ${pid} behind ${blocker}; last activity: ${JSON.stringify(observed)}`);
   }
   const backend = async (db: PoolClient) => Number((await db.query("SELECT pg_backend_pid() AS id")).rows[0]!.id);
   async function values() {
@@ -65,20 +68,22 @@ describe("LP-1 row-lock compatibility", () => {
     for (const table of ["app.account", "app.membership"]) for (const strength of ["UPDATE", "NO KEY UPDATE", "SHARE", "KEY SHARE"]) {
       for (const end of ["COMMIT", "ROLLBACK"]) {
         const reader = await runtime.connect(), writer = await owner.connect();
-        let mutation: Promise<unknown> | undefined;
+        let contender: Promise<unknown> | undefined;
         try {
-          await begin(reader); await writer.query("BEGIN"); await writer.query("SET LOCAL statement_timeout='5s'");
+          await begin(reader); await writer.query("BEGIN"); await writer.query("SET LOCAL statement_timeout='10s'");
           const readerPid = await backend(reader), writerPid = await backend(writer);
+          // Await the runtime's row lock before starting the conflicting owner-side probe.
           expect((await reader.query(`SELECT id FROM ${table} WHERE tenant_id=$1 FOR ${strength}`, [tenant])).rowCount).toBe(1);
-          // Naming a key column requests the conflicting owner-side update lock even for KEY SHARE.
-          mutation = writer.query(`UPDATE ${table} SET id=id WHERE tenant_id=$1`, [tenant]);
+          // Explicit FOR UPDATE conflicts with every mode, including KEY SHARE. A no-op
+          // key UPDATE can take NO KEY UPDATE, which is compatible with KEY SHARE.
+          contender = writer.query(`SELECT id FROM ${table} WHERE tenant_id=$1 FOR UPDATE`, [tenant]);
           // Attach a handler immediately so a timed-out control never becomes an unhandled rejection.
-          void mutation.catch(() => undefined);
+          void contender.catch(() => undefined);
           await waitBlocked(writerPid, readerPid);
           await reader.query(end);
-          await expect(mutation).resolves.toMatchObject({ rowCount: 1 });
+          await expect(contender).resolves.toMatchObject({ rowCount: 1 });
         } finally {
-          await reader.query("ROLLBACK"); await mutation?.catch(() => undefined);
+          await reader.query("ROLLBACK"); await contender?.catch(() => undefined);
           await writer.query("ROLLBACK"); reader.release(); writer.release();
         }
       }

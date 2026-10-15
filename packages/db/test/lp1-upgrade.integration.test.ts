@@ -66,10 +66,10 @@ async function snapshot(db: Pool | PoolClient, tables: string[], before?: Snapsh
       WHERE i.indrelid=$1::regclass AND i.indisprimary ORDER BY array_position(i.indkey::int2[],a.attnum)`, [table])).rows.map(row => row.name as string);
     if (!primaryKey.length) throw new Error(`${table}: no primary key`);
     const names = (before?.[table]?.columns ?? columns).map(column => column.name);
-    const rows = names.every(name => columns.some(column => column.name === name)) ? (await db.query(`SELECT
+    const rows = names.every(name => columns.some(column => column.name === name)) ? (await db.query(`SELECT * FROM (SELECT
       (SELECT row_to_json(k)::text FROM (SELECT ${primaryKey.map(name => `t.${ident(name)}`).join(",")}) k) AS identity,
-      row_to_json(t)::text AS bytes FROM (SELECT ${names.map(ident).join(",")} FROM ${relation(table)}) t
-      ORDER BY identity COLLATE "C"`)).rows as TableSnapshot["rows"] : [];
+      row_to_json(t)::text AS bytes FROM (SELECT ${names.map(ident).join(",")} FROM ${relation(table)}) t) snapshot_rows
+      ORDER BY snapshot_rows.identity COLLATE "C"`)).rows as TableSnapshot["rows"] : [];
     result[table] = { columns, primaryKey, rows };
   }
   return result;
