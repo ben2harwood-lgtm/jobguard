@@ -90,6 +90,7 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0155_quote_reacceptance.sql", import.meta.url),
   new URL("../migrations/0157_extra_approval.sql", import.meta.url),
   new URL("../migrations/0158_extra_approval_chain.sql", import.meta.url),
+  new URL("../migrations/0162_membership_account_closed.sql", import.meta.url),
   new URL("../migrations/0165_practice_worker_switch.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
