@@ -71,3 +71,4 @@ export * from "./extra-approval.js";
 export * from "./extra-client-approval.js";
 export * from "./extra-evidence-pack.js";
 export * from "./contractor-billing.js";
+export * from "./enterprise-fee-statement.js";
