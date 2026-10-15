@@ -146,7 +146,7 @@ describe("MIGFIX-2 populated migration upgrade", () => {
   });
 
   it("[MIGFIX-2-UPGRADE-CONTROLS] fails a one-microsecond mutation and a retype using the same comparison", async () => {
-    await control("UPDATE app.account SET created_at=created_at+interval '1 microsecond'", true);
+    await control("UPDATE app.account SET updated_at=updated_at+interval '1 microsecond'", true);
     await control("ALTER TABLE app.account ALTER COLUMN name TYPE varchar(201)", true);
   });
 
