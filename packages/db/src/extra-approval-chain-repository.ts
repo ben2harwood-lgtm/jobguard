@@ -198,6 +198,8 @@ export class ExtraApprovalRepository {
         if (link.expired) throw new ExtraApprovalError("LINK_EXPIRED");
         if (lc(i.email) !== lc(link.recipient)) throw new ExtraApprovalError("EMAIL_MISMATCH");
         if (link.job_id !== i.jobId || link.request_id !== i.requestId) throw new ExtraApprovalError("NOT_FOUND");
+        // Current authority, exactly as the decision applies it: a client whose membership or grant has since been revoked sees nothing, even with an open link.
+        await db.$client.query("SELECT app.xa_client_view_authority($1,$2,$3,$4)", [i.jobId, i.requestId, member, i.email]);
         const req = (await db.$client.query<{ variation_id: string; request_revision: number; net_pence: string; revision_hash: string; description: string; steps: unknown; outcome: string | null }>(
           `SELECT q.variation_id,q.request_revision,q.net_pence::text,q.revision_hash,v.description,q.requirement->'steps' steps,o.kind outcome FROM app.extra_approval_request q JOIN app.variation v ON(v.tenant_id,v.job_id,v.id)=(q.tenant_id,q.job_id,q.variation_id)
            LEFT JOIN app.extra_approval_outcome o ON(o.tenant_id,o.request_id)=(q.tenant_id,q.id) WHERE q.tenant_id=$1 AND q.job_id=$2 AND q.id=$3`, [tenant, i.jobId, i.requestId])).rows[0];

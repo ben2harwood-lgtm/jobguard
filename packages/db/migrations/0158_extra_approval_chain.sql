@@ -260,7 +260,7 @@ END $$;
 
 CREATE FUNCTION app.xa_price(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_net bigint, p_revise boolean) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE v_tenant uuid; v_origin app.extra_origin; v_var app.variation; v_prev app.extra_approval_revision_binding; v_req app.extra_approval_request; v_outcome text; v_latest text; v_rev_id uuid:=pg_catalog.gen_random_uuid(); v_rev_no integer; v_prev_rev uuid; v_hash text; v_bid uuid:=pg_catalog.gen_random_uuid(); v_ref text;
+DECLARE v_tenant uuid; v_origin app.extra_origin; v_var app.variation; v_prev app.extra_approval_revision_binding; v_req app.extra_approval_request; v_outcome text; v_latest text; v_rev_id uuid:=pg_catalog.gen_random_uuid(); v_rev_no integer; v_prev_rev uuid; v_hash text; v_bid uuid:=pg_catalog.gen_random_uuid(); v_ref text; v_late boolean:=false; v_old_n integer;
 BEGIN
  v_tenant:=app.xa_begin(p_job,p_command,ARRAY[CASE WHEN p_revise THEN 'ReviseExtra' ELSE 'PriceExtra' END],p_actor);
  SELECT x.* INTO v_origin FROM app.extra_origin x WHERE(x.tenant_id,x.job_id,x.variation_id)=(v_tenant,p_job,p_variation);
@@ -272,7 +272,10 @@ BEGIN
  SELECT b.* INTO v_prev FROM app.extra_approval_revision_binding b WHERE(b.tenant_id,b.job_id,b.variation_id)=(v_tenant,p_job,p_variation) ORDER BY b.logical_revision DESC LIMIT 1;
  SELECT q.* INTO v_req FROM app.extra_approval_request q WHERE q.tenant_id=v_tenant AND q.variation_id=p_variation ORDER BY q.request_revision DESC LIMIT 1;
  IF NOT p_revise THEN
-  IF v_latest IS DISTINCT FROM 'logged' OR v_req.id IS NOT NULL OR v_prev.id IS NOT NULL OR EXISTS(SELECT 1 FROM app.extra_sor_revision s WHERE(s.tenant_id,s.variation_id)=(v_tenant,p_variation)) THEN
+  -- Two legal starting points: never submitted (logged, no request), or submitted UNPRICED and not yet decided (the latest request has no net and no outcome). The second supersedes that request.
+  v_late:=v_latest='awaiting_approval' AND v_req.id IS NOT NULL AND v_req.net_pence IS NULL AND v_req.binding_id IS NULL AND v_prev.id IS NULL
+   AND NOT EXISTS(SELECT 1 FROM app.extra_approval_outcome o WHERE(o.tenant_id,o.request_id)=(v_tenant,v_req.id));
+  IF NOT v_late AND (v_latest IS DISTINCT FROM 'logged' OR v_req.id IS NOT NULL OR v_prev.id IS NOT NULL) OR EXISTS(SELECT 1 FROM app.extra_sor_revision s WHERE(s.tenant_id,s.variation_id)=(v_tenant,p_variation)) THEN
    RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='23514';
   END IF;
  ELSE
@@ -289,6 +292,12 @@ BEGIN
  INSERT INTO app.extra_approval_revision_binding(tenant_id,id,job_id,variation_id,logical_revision,source_kind,source_revision_id,variation_revision_id,source_hash,predecessor_binding_id,command_id,actor_membership_id)
  VALUES(v_tenant,v_bid,p_job,p_variation,coalesce(v_prev.logical_revision,0)+1,'ordinary',v_rev_id,v_rev_id,v_hash,v_prev.id,p_command,p_actor);
  IF p_revise THEN RETURN app.xa_open_request(v_tenant,p_job,p_variation,p_command,p_actor,v_bid,v_rev_id,v_hash,p_net); END IF;
+ IF v_late THEN
+  -- The unpriced snapshot is superseded by the new request revision (older revisions are refused as stale); its open Decision is dismissed.
+  SELECT count(*) INTO v_old_n FROM app.extra_approval_step_fact f WHERE(f.tenant_id,f.request_id)=(v_tenant,v_req.id);
+  PERFORM app.xa_resolve_decision(v_tenant,v_req.id,v_old_n,'dismissed',p_actor);
+  RETURN app.xa_open_request(v_tenant,p_job,p_variation,p_command,p_actor,v_bid,v_rev_id,v_hash,p_net)||jsonb_build_object('bindingId',v_bid,'revisionId',v_rev_id,'supersededRequestId',v_req.id);
+ END IF;
  RETURN jsonb_build_object('bindingId',v_bid,'revisionId',v_rev_id,'revisionHash',v_hash,'netPence',p_net);
 END $$;
 
@@ -491,6 +500,25 @@ BEGIN
  RETURN jsonb_build_object('requestId',p_request,'state',CASE WHEN v_final THEN 'approved' ELSE 'awaiting_approval' END,'stepIndex',v_n);
 END $$;
 
+-- Read-side authority for the client approval page: the same current-authority test the decision applies (active member, client_approver membership, an unrevoked
+-- grant on this client that still covers this job's contract). It changes nothing; a revoked or removed client is refused before any data is returned.
+CREATE FUNCTION app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text) RETURNS void
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE v_tenant uuid; v_wo app.work_order; v_client uuid; v_grant uuid;
+BEGIN
+ IF pg_catalog.current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN v_tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN v_tenant:=NULL; END;
+ IF v_tenant IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ SELECT w.* INTO v_wo FROM app.work_order w WHERE w.tenant_id=v_tenant AND w.job_id=p_job;
+ SELECT q.client_id INTO v_client FROM app.extra_approval_request q WHERE(q.tenant_id,q.job_id,q.id)=(v_tenant,p_job,p_request);
+ IF v_wo.id IS NULL OR v_client IS NULL OR v_wo.client_id IS DISTINCT FROM v_client THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ SELECT g.id INTO v_grant FROM app.contractor_member cm JOIN app.membership m ON(m.tenant_id,m.id)=(cm.tenant_id,cm.membership_id) JOIN app.role_grant g ON(g.tenant_id,g.membership_id)=(cm.tenant_id,cm.membership_id)
+  WHERE cm.tenant_id=v_tenant AND cm.membership_id=p_actor AND cm.client_id=v_client AND lower(cm.email)=lower(p_email) AND m.role='client_approver' AND coalesce(app.contractor_member_active(p_actor),false)
+   AND g.role='client_approver' AND g.scope_kind='client' AND g.scope_id=v_client AND(g.contract_id IS NULL OR g.contract_id=v_wo.contract_id)
+   AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE(r.tenant_id,r.grant_id)=(g.tenant_id,g.id)) ORDER BY g.id LIMIT 1;
+ IF v_grant IS NULL THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+END $$;
+
 -- ---- scheduled escalation and the queue ----
 -- No time argument: the clock is the server's. Idempotent: the unique key makes a repeat run (or a restarted worker) a no-op.
 CREATE FUNCTION app.xa_escalate() RETURNS TABLE(request_id uuid, job_id uuid, variation_id uuid, step_index integer, eligible_roles text[])
@@ -549,14 +577,14 @@ DO $$ DECLARE f text; BEGIN FOREACH f IN ARRAY ARRAY[
  'app.xa_open_request(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,bigint)','app.xa_submit(uuid,uuid,uuid,uuid)','app.xa_price(uuid,uuid,uuid,uuid,bigint,boolean)',
  'app.xa_approve(uuid,uuid,uuid,uuid,integer,text,bigint,boolean,text)','app.xa_withdraw(uuid,uuid,uuid,uuid,text)','app.xa_mark_duplicate(uuid,uuid,uuid,uuid,uuid,uuid)',
  'app.xa_issue_link(uuid,uuid,uuid,uuid,uuid,uuid,text,text,timestamptz,uuid,uuid)','app.xa_revoke_link(uuid,uuid,uuid,uuid)',
- 'app.xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)','app.xa_escalate()','app.xa_queue(uuid)'] LOOP
+ 'app.xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)','app.xa_client_view_authority(uuid,uuid,uuid,text)','app.xa_escalate()','app.xa_queue(uuid)'] LOOP
  EXECUTE format('ALTER FUNCTION %s OWNER TO jobguard_migration',f);
  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,jobguard_runtime,jobguard_infrastructure',f);
 END LOOP;
 FOREACH f IN ARRAY ARRAY['app.xa_covers(uuid,text[],uuid,text)','app.xa_decision_id(uuid,integer)','app.xa_submit(uuid,uuid,uuid,uuid)','app.xa_price(uuid,uuid,uuid,uuid,bigint,boolean)',
  'app.xa_approve(uuid,uuid,uuid,uuid,integer,text,bigint,boolean,text)','app.xa_withdraw(uuid,uuid,uuid,uuid,text)','app.xa_mark_duplicate(uuid,uuid,uuid,uuid,uuid,uuid)',
  'app.xa_issue_link(uuid,uuid,uuid,uuid,uuid,uuid,text,text,timestamptz,uuid,uuid)','app.xa_revoke_link(uuid,uuid,uuid,uuid)',
- 'app.xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)','app.xa_escalate()','app.xa_queue(uuid)'] LOOP
+ 'app.xa_client_decide(uuid,uuid,uuid,uuid,text,text,text,bigint,boolean,text,text,text)','app.xa_client_view_authority(uuid,uuid,uuid,text)','app.xa_escalate()','app.xa_queue(uuid)'] LOOP
  EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO jobguard_runtime',f);
 END LOOP; END $$;
 COMMIT;

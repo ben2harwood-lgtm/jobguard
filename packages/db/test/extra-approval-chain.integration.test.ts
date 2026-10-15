@@ -156,6 +156,8 @@ it("E5B-06 client approval refusals: forged, expired, revoked, replaced, other e
   const k = await atClientStep(), live = await issue(k); await live.run();
   await command(c, w, { kind: "grant.revoke", grantId: w.members.client_approver.grant });
   expect(await code(decide(k, live.token, live.recipient))).toBe("PERMISSION_DENIED");
+  // A revoked client can no longer read the description, price or approval history through the still-open link.
+  expect(await code(repo.clientApprovalView(ctx, client(), { version: "client-approval-view.v1", jobId: k.jobId, requestId: k.requestId, linkToken: live.token, email: live.recipient }))).toBe("PERMISSION_DENIED");
   expect(await sql("SELECT 1 FROM app.extra_approval_outcome WHERE request_id=$1", [k.requestId])).toEqual([]);
 });
 
@@ -243,3 +245,31 @@ it("E5B-11 escalation fires once, only listed alternates gain authority, origina
   expect(await code(repo.approveExtraStep(ctx, surveyor(), approveInput(slow, 0)))).toBe("ok"); // an agreed backup, after the wait
   expect(await chain(c, w)).toBeTruthy();
 }, 180_000);
+
+it("E5B-11 an unpriced submitted extra can be priced once, by a surveyor, and then approved", async () => {
+  await reviseRules(c, w, demoRules); // an earlier test leaves a single surveyor step in force; this one needs the demo bands
+  const u = await submitted(c, w, null);
+  const price = (by: ReturnType<typeof surveyor>, net: number, commandId = randomUUID()) => repo.priceExtra(ctx, by, { version: "price-extra.v1", commandId, jobId: u.jobId, extraId: u.extraId, netPence: net });
+  expect(await code(price(sup(), 60000))).toBe("PERMISSION_DENIED"); // only surveyors price
+  expect(await code(price(surveyor(), 0))).toBe("INVALID_COMMAND");
+  expect(await code(price(surveyor(), 600.5))).toBe("INVALID_COMMAND"); // whole pence only
+  expect(await sql("SELECT 1 FROM app.extra_approval_request WHERE variation_id=$1 AND request_revision=2", [u.extraId])).toEqual([]);
+  const cmd = randomUUID(), priced = await price(surveyor(), 60000, cmd);
+  expect(priced).toMatchObject({ state: "awaiting_approval", requestRevision: 2, netPence: 60000, stepCount: 2, supersededRequestId: u.requestId });
+  expect(await price(surveyor(), 60000, cmd)).toEqual(priced); // replay returns the first answer
+  expect(await code(price(surveyor(), 70000))).toBe("INVALID_TRANSITION"); // already priced: a price change after that is a revision
+  const req = (await sql("SELECT net_pence::int net,binding_id,requirement->'steps' steps FROM app.extra_approval_request WHERE id=$1", [priced.requestId]))[0];
+  expect(req.net).toBe(60000); expect(req.binding_id).not.toBeNull(); expect(req.steps).toHaveLength(2); // the priced requirement replaces the unpriced one (which assumed every step)
+  expect(await sql("SELECT 1 FROM app.extra_approval_outcome WHERE request_id=$1", [u.requestId])).toEqual([]); // superseded, not decided
+  expect(await sql("SELECT d.id FROM app.decision d LEFT JOIN app.decision_resolution r ON(r.tenant_id,r.decision_id)=(d.tenant_id,d.id) WHERE d.subject_ref LIKE $1 AND r.id IS NULL", [`${u.requestId}:%`])).toEqual([]);
+  expect(await code(repo.approveExtraStep(ctx, sup(), { ...approveInput({ ...u, net: 60000 }, 0) }))).toBe("STALE_REVISION"); // the unpriced snapshot is no longer approvable
+  const p = { ...u, requestId: priced.requestId as string, hash: priced.revisionHash as string, net: 60000 };
+  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(p, 0, { revisionHash: u.hash })))).toBe("HASH_MISMATCH");
+  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(p, 0, { netPence: 60001 })))).toBe("HASH_MISMATCH");
+  expect(await code(repo.approveExtraStep(ctx, sup(), approveInput(p, 0)))).toBe("ok");
+  expect(await code(repo.approveExtraStep(ctx, sup2(), approveInput(p, 1)))).toBe("ok");
+  expect((await outcome(p.requestId))[0]).toMatchObject({ kind: "approved" });
+  expect(await lastEvent(u.extraId)).toBe("approved");
+  expect(await code(price(surveyor(), 80000))).toBe("INVALID_TRANSITION"); // decided: only ReviseExtra
+  expect(await chain(c, w)).toBeTruthy();
+}, 120_000);
