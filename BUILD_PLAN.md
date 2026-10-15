@@ -3612,6 +3612,8 @@ This plan pull request remains Ben's own click to merge.
 
 **Ledger amendment — ENT-3d, 13 October 2026 (merge-ahead ruling).** ENT-3d (a verified photo and a server-written resident confirmation on `LogSiteExtra` body version 3; the fourth part of plan leaf ENT-3 after the 11 October split) takes **0141** (`site_extra_evidence`: five routines and their EXECUTE grants only; no table, column, trigger, policy, index or table grant) on 13 October 2026, the next number neither merged nor reserved (merged through 0138; 0139 ENT-3b and 0140 ENT-3c are reserved before it), under Ben's 5 October merge-ahead ruling. The runner lists it last. A piece that lands after a higher number has merged renumbers again.
 
+**Ledger amendment — MON-2A, 15 October 2026 (build-ahead, partial).** The dispatcher allocated **0166** (`subscription_billing`) for the catalogue-only sub-part and authorized building on unmerged MON-1 head `2514049c`; no migration is created or registered while the coordinator-owned LP-0 catalogue SELECT inventory extension is pending. The working tree adds proposed reference schemas, supplied-period previews and explicit-period review/onboarding detectors only. A new architecture proof reports MON-1's transitive activation-to-fee schema dependency; parent isolation needs owner repair. Q3–Q9, business persistence/execution, statements, simulated payments and UI remain held. This is not acceptance of MON-2A; no PR opens before MON-1 merges. Recheck migration order and parent repairs before landing.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
