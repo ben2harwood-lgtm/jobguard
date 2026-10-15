@@ -9,7 +9,7 @@ describe("SV-7A labelled storage/read fixtures (both intake routines held)",()=>
   const diary=await seedSource(f,"diary","  Fictional café 🛠\n",null,"dictated_text"),message=await seedSource(f,"customer_message");
   const repo=new JobSourceRepository(f.runtime),{auth,jobId}=f.practice;
   const first=await repo.read(auth.context,jobId,auth.digest,"diary");
-  const restarted=new Pool({...f.runtime.options,max:1});try{
+  const restarted=new Pool({...f.runtime.options,password:f.runtime.options.password,max:1});try{
    const originalPid=(await f.runtime.query("SELECT pg_backend_pid() id")).rows[0].id;
    expect((await restarted.query("SELECT pg_backend_pid() id")).rows[0].id).not.toBe(originalPid);
    expect(await new JobSourceRepository(restarted).read(auth.context,jobId,auth.digest,"diary")).toEqual(first);

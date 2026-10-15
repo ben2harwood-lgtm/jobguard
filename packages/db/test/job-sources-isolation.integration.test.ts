@@ -14,7 +14,7 @@ function observed(pool:Pool,sequences:string[][]){return new Proxy(pool,{get(tar
 }})}
 describe("SV-7A fixture source isolation (intake Test O remains held)",()=>{
  let f:SourceFixture,shadow:Pool;
- beforeAll(async()=>{f=await sourcesFixture();await seedSource(f);const login=`sv7a_shadow_${randomUUID().replaceAll("-","")}`,credential=randomUUID();await f.admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_shadow TO ${login}`);shadow=new Pool({...f.admin.options,user:login,password:credential,max:2})},60000);
+ beforeAll(async()=>{f=await sourcesFixture();for(let n=0;n<5;n++)await seedSource(f);const login=`sv7a_shadow_${randomUUID().replaceAll("-","")}`,credential=randomUUID();await f.admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_shadow TO ${login}`);shadow=new Pool({...f.admin.options,user:login,password:credential,max:2})},60000);
  afterAll(async()=>{await shadow?.end();await closeWorkFixture(f)});
  it("SV7A-17 runtime cannot query shadow or assume its role",async()=>{
   await expect(f.runtime.query("SELECT * FROM app.shadow_commercial_signal")).rejects.toMatchObject({code:"42501"});await expect(f.runtime.query("SET ROLE jobguard_shadow")).rejects.toMatchObject({code:"42501"});
@@ -28,9 +28,11 @@ describe("SV-7A fixture source isolation (intake Test O remains held)",()=>{
   const {withTenant}=await import("../src/tenant-context.js");await withTenant(f.runtime,auth.context,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[auth.context.tenantId,auth.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
   await worker.execute(auth.context,task);await worker.execute(auth.context,task);
   expect((await f.admin.query("SELECT state FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[auth.context.tenantId,jobId])).rows).toEqual([{state:"held_for_final_check"}]);
-  // Labelled isolation-only shadow-state fixtures, not decoded/accepted new work facts.
-  const original=(await reader.read(auth.context,{version:"shadow-observation-read.v1",jobId})).observations[0]!;
-  const noise=Array.from({length:4},(_,n)=>parseObservation({...original,facts:{...original.facts,workReference:`synthetic:isolation-only:${n}`}}));
+  // Labelled isolation-only work facts, each bound to a distinct persisted original.
+  // Seed before the read snapshot so only shadow state changes across the comparison.
+  const originals=(await reader.read(auth.context,{version:"shadow-observation-read.v1",jobId})).observations;
+  expect(originals).toHaveLength(5);expect(new Set(originals.map(o=>o.evidence.id)).size).toBe(5);
+  const noise=originals.slice(1).map((original,n)=>parseObservation({...original,facts:{...original.facts,workReference:`synthetic:isolation-only:${n}`}}));
   await sink.persist(auth.context,{version:"shadow-detection-batch.v1",jobId,observations:noise,captures:[],proposals:noise.map(o=>proposalFromObservation(o,"deterministic","synthetic:isolation-fixture.v1","2026-10-13T12:00:00Z",{lock:"before_lock",adoption:"after_adoption"}))});
   expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[auth.context.tenantId,jobId])).rows[0].n).toBe(5);
   expect(await repo.read(auth.context,jobId,auth.digest,"diary")).toEqual(before);expect(await repo.read(auth.context,jobId,auth.digest,"customer_message")).toEqual(messagesBefore);expect(sequences).toEqual(initial);

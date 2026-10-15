@@ -932,3 +932,96 @@ All changes are left in the working tree. No git write command was run.
 The conventional commit subject/body was overwritten at
 `/private/tmp/jg-msg-sv-7a.txt`; the dispatcher owns commit/push and exact-commit
 independent review/acceptance remains separate.
+
+## Repair r2 — dispatcher 11, 15 October 2026
+
+Repair against PR #222 head `f1706d229726f6ae2fb053515b1461e864be10a0` on
+`codex/sandbox/sv-7a`. Read the dispatcher excerpt at
+`/Users/benharwood/.local/share/full-steam/jg-runs/d11/sv7a-ci-fail2.txt`,
+repository AGENTS, BUILD_PLAN §2.4/SV-7/§12 and the source contract before edits.
+Only the three SV-7A integration test files and this receipt change in r2.
+Merged tests, production readers, domain binding checks and migrations are unchanged.
+
+### Three failures: before and after
+
+1. **SV7A-16, authority fixture:** the fresh same-tenant wrong-job insert already
+   invokes migration 0053's `job_legacy_live_track` trigger. The test then inserted
+   the identical commercial-track key explicitly, producing SQLSTATE 23505 before
+   the substitution assertions. Keep the distinct job and reuse its trigger-created
+   track; remove only the duplicate track INSERT. All wrong-job, version, tenant
+   and immutable-mutation assertions remain.
+2. **SV7A-18/19, isolation fixture:** four observations reused one evidence ID but
+   changed `facts.workReference`. `groupShadowProposals` first finds the observation
+   by tenant/job/evidence ID, then checks the derived work ID (tenant/job/scope
+   area/work reference), and every evidence tuple's tenant/job/ID/version/SHA-256/
+   exact receive time. The second work reference therefore failed at line 53.
+   The reader was emitting the correct persisted tuple; no reader change is needed.
+   Seed five distinct persisted originals before taking either public-read snapshot.
+   They initially describe the same work and coalesce to one survivor. Reuse four
+   separate reader-emitted originals for the labelled isolation-only work references,
+   keeping each evidence tuple intact. Assert five observations with five unique
+   evidence IDs. The existing five-survivor, unchanged diary/message response,
+   identical transaction-query-path and no-shadow-query assertions all remain.
+3. **SV7A-03/04, restart fixture:** pg 8.16.3 stores `Pool.options.password` as a
+   non-enumerable property, so object spread omits it. Explicitly pass
+   `password:f.runtime.options.password`, following the existing restart/clone
+   pattern in `job-work-state-sources.integration.test.ts:126`. Keep the distinct
+   backend PID and fresh repository/application persistence assertions.
+
+### Commands actually run and results
+
+Installed dependencies only: Node `v24.17.0`, pinned cached pnpm `10.28.1`, Vitest
+`4.1.11`. No install or download. All pnpm commands below used
+`PATH=/private/tmp/jg-sv7a-bin:$PATH`, the existing cached Node launcher from r1.
+Vitest invocations used `~/.local/bin/heavy-slot` and two explicitly named files
+with `--maxWorkers=2`. Logs are under `/private/tmp/`.
+
+| Command | Exit / actual result | Log |
+| --- | --- | --- |
+| `pnpm typecheck` | 0; 7 successful tasks, 2 cached | `sv7a-r2-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; root lint and 7 package tasks, 2 cached | `sv7a-r2-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; SV-7A boundary passed | `sv7a-r2-lint-lanes.log` |
+| `node /private/tmp/jg-sv7a-check-tests.mjs packages/db/test/job-sources-authority.integration.test.ts packages/db/test/job-sources-isolation.integration.test.ts packages/db/test/job-sources.integration.test.ts` | 0; all three integration test sources typechecked, no database execution | `sv7a-r2-test-typecheck.log` |
+| `~/.local/bin/heavy-slot sv-7a-r2-build pnpm build` | 0; 7 successful tasks, 2 cached | `sv7a-r2-build.log` |
+| `~/.local/bin/heavy-slot sv-7a-r2-core pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-sources.test.ts src/shadow-detection.test.ts` | 0; 14 tests passed | `sv7a-r2-core-unit.log` |
+| `~/.local/bin/heavy-slot sv-7a-r2-api pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-source.application.test.ts src/job-source.controller.test.ts` | 0; 7 tests passed | `sv7a-r2-api-unit.log` |
+| `~/.local/bin/heavy-slot sv-7a-r2-worker pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/shadow-detection.worker.test.ts src/shadow-detection-lock-race.test.ts` | 0; 8 tests passed | `sv7a-r2-worker-unit.log` |
+| `~/.local/bin/heavy-slot sv-7a-r2-web-final pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/jobs/[id]/diary/route.test.ts' 'app/api/jobs/[id]/customer-messages/route.test.ts'` | 0; 8 route tests passed, no browser | `sv7a-r2-web-unit-final.log` |
+| `node --test tools/*.test.mjs` | 0; 85 tests passed | `sv7a-r2-tools-unit.log` |
+| `pnpm openapi:check` | 1; tsx CLI IPC listener rejected with EPERM | `sv7a-r2-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; same OpenAPI generator/check without IPC listener; committed artifact unchanged | `sv7a-r2-openapi-node.log` |
+| `node --input-type=module` (inline deterministic binding/pool controls) | 0; reproduced both original faults and validated repaired inputs, without a database connection | `sv7a-r2-binding-controls.log` |
+| `git diff --check` | 0 | terminal output |
+
+The deterministic controls use the built production fixture decoder, observation
+parser, proposal factory and unchanged grouping function: the old shared-ID batch
+throws `OBSERVATION_BINDING_MISMATCH`; five separate originals coalesce to one
+signal with five evidence links; the repaired four-original batch yields four
+separate groups; a substituted SHA-256 remains rejected. A separate pool-constructor
+control proves the password descriptor is non-enumerable, spread loses it and an
+explicit password preserves it. No connection was opened or password logged.
+These are deterministic controls, not PostgreSQL or independent-model verification.
+
+The first two web heavy-slot attempts exited 2 before Vitest started
+(`sv7a-r2-web-unit.log`, `sv7a-r2-web-unit-retry.log`); the final invocation above
+passed. The wrapper emitted sandbox sysctl/sysmon/pgrep errors on successful runs
+as well. Turbo emitted sandbox IO warnings; its seven tasks completed successfully.
+The tooling suite's existing lane tests create disposable Git repositories in
+temporary directories; no Git write command was issued against this worktree.
+
+### Remaining evidence and delivery
+
+122 automated tests passed across the targeted unit/route/worker and tooling runs.
+No PostgreSQL, migration, browser or full `pnpm test` execution was attempted:
+this sandbox cannot bind localhost or start PostgreSQL. CI after dispatcher push
+must run the repaired three integration suites and the existing mandatory database,
+migration and regression suites. Local source typechecking and grouping controls
+do not establish a database pass. No AI/model/prompt/parser/matching-policy change,
+schema migration, application behavior, new alert or release authority is introduced.
+All existing intake/UI/CH-4 integration, real-data and release holds remain.
+A fresh exact-commit independent verdict and separate technical acceptance are still
+required; this receipt grants neither.
+
+Working tree changes are ready for the dispatcher. No add, commit, checkout,
+push or other Git write command was issued against the worktree. Intended
+conventional commit subject/body is overwritten at `/private/tmp/jg-msg-sv-7a.txt`.

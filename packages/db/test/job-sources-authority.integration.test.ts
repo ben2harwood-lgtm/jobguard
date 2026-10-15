@@ -44,8 +44,8 @@ describe("SV-7A source storage/read authority",()=>{
  it("SV7A-16 cross-tenant/wrong-job/exact-tuple fixture substitutions and immutable mutations fail",async()=>{
   const source=await seedSource(f),{context}=f.practice.auth;
   const other={jobId:randomUUID()};
-  // Labelled same-tenant wrong-job storage fixture; no new intake/principal policy.
-  await workTenant(f.admin,context.tenantId,async db=>{await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional wrong-job fixture','live')",[other.jobId,context.tenantId]);await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')",[context.tenantId,other.jobId])});
+  // Labelled same-tenant wrong-job storage fixture; the live-job trigger binds its track once.
+  await workTenant(f.admin,context.tenantId,db=>db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional wrong-job fixture','live')",[other.jobId,context.tenantId]));
   const names=["tenant_id","job_id","id","command_id","actor_membership_id","source_kind","entry_mode","on_site","evidence_id","object_version_id","sha256","source_received_at","notice_version","environment"];
   for(const [field,expression,code] of [["job_id",`'${other.jobId}'::uuid`,"23503"],["object_version_id","'substituted'","23503"],["tenant_id","gen_random_uuid()","42501"]]){
    const command=randomUUID();
