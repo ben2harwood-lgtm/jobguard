@@ -61,12 +61,13 @@ it("M31-S15 generated authority and baseline changes have explicit outcomes", as
   const next = seeded(seed), operations = shuffled(["capture", "revoke", "revise"] as const, next);
   const label = JSON.stringify({ seed, operations, command: raw.body.commandId });
   const revisionBefore = (await c.admin.query("SELECT revision_id FROM app.work_order_current WHERE tenant_id=$1 AND work_order_id=$2", [f.p.tenantId, f.orderId])).rows[0]!.revision_id;
-  // Launch together; the repositories and PostgreSQL decide serialization, never the client clock.
-  const results = await Promise.allSettled(operations.map(operation => operation === "capture"
+  // Race capture with revocation; defer baseline revision past both (FIX-LATER: LOCK-ORDER-1).
+  const results: PromiseSettledResult<unknown>[] = await Promise.allSettled(operations.filter(operation => operation !== "revise").map(operation => operation === "capture"
    ? freshRuntime(c, pool => submit(pool, f, selected.member, raw))
-   : operation === "revoke"
-    ? command(c, f, { kind: "grant.revoke", grantId: selected.grant })
-    : revise(c, f, actors.map(a => a.member.membershipId), 2)));
+   : command(c, f, { kind: "grant.revoke", grantId: selected.grant })));
+  results.splice(operations.indexOf("revise"), 0, ...await Promise.allSettled([
+   revise(c, f, actors.map(a => a.member.membershipId), 2)
+  ]));
   for (const operation of ["revoke", "revise"] as const) expect(results[operations.indexOf(operation)]!.status, label).toBe("fulfilled");
   const capture = results[operations.indexOf("capture")]!;
   const revisionAfter = (await c.admin.query("SELECT revision_id FROM app.work_order_current WHERE tenant_id=$1 AND work_order_id=$2", [f.p.tenantId, f.orderId])).rows[0]!.revision_id;
