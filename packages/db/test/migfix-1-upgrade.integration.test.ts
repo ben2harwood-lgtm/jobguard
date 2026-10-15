@@ -44,7 +44,7 @@ async function catalog(db: Queryable) {
   };
 }
 
-async function guardPosture(db: Queryable) {
+async function guardPosture(db: Queryable, afterLockdown = true) {
   expect((await db.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
     EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0) public_access,
     has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime_access,
@@ -53,7 +53,14 @@ async function guardPosture(db: Queryable) {
     FROM pg_proc p WHERE p.oid=$1::regprocedure`,[guard])).rows).toEqual([{owner:"jobguard_migration",prosecdef:false,proconfig:["search_path=pg_catalog"],public_access:false,runtime_access:false,identity_access:false,infrastructure_access:false}]);
   expect((await db.query(`SELECT t.tgname,t.tgtype::int,t.tgenabled,t.tgfoid::regprocedure::text routine
     FROM pg_trigger t WHERE t.tgrelid='app.membership'::regclass AND t.tgname='membership_authority_update_guard'`)).rows).toEqual([{tgname:"membership_authority_update_guard",tgtype:19,tgenabled:"O",routine:guard}]);
-  expect((await db.query("SELECT has_table_privilege('jobguard_runtime','app.membership','UPDATE') retained")).rows).toEqual([{retained:true}]);
+  // At 0150 alone the old table grant remains; after 0162 exactly created_at is retained for locks.
+  expect((await db.query(`SELECT has_table_privilege('jobguard_runtime','app.membership','UPDATE') table_update,
+    has_column_privilege('jobguard_runtime','app.membership','created_at','UPDATE WITH GRANT OPTION') update_grant_option,
+    ARRAY(SELECT a.attname::text FROM pg_attribute a WHERE a.attrelid='app.membership'::regclass
+      AND a.attnum>0 AND NOT a.attisdropped
+      AND has_column_privilege('jobguard_runtime',a.attrelid,a.attnum,'UPDATE') ORDER BY a.attname) update_columns`)).rows)
+    .toEqual([{table_update:!afterLockdown,update_grant_option:false,update_columns:afterLockdown?["created_at"]:
+      ["account_id","created_at","expires_at","id","identity_user_id","revoked_at","role","tenant_id"]}]);
 }
 describe("MIGFIX-1 PostgreSQL own-step upgrade proof",()=>{
   let c: Cluster, before: Awaited<ReturnType<typeof proof.proofBefore>>, beforeCatalog: Awaited<ReturnType<typeof catalog>>;
@@ -95,7 +102,7 @@ describe("MIGFIX-1 PostgreSQL own-step upgrade proof",()=>{
       if (current.definition!==previous.definition) changed.push(previous.signature);
     }
     expect(changed.sort()).toEqual([...replaced].sort());
-    await guardPosture(c.admin);
+    await guardPosture(c.admin, false);
     const member = (await c.admin.query("SELECT tenant_id,id FROM app.membership WHERE role='owner' ORDER BY tenant_id,id LIMIT 1")).rows[0]!;
     await proof.rolledBack(c.admin,async db=>{
       await db.query("SET LOCAL ROLE jobguard_runtime");
