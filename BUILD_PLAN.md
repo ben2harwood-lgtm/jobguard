@@ -3612,6 +3612,8 @@ This plan pull request remains Ben's own click to merge.
 
 **Ledger amendment — ENT-3d, 13 October 2026 (merge-ahead ruling).** ENT-3d (a verified photo and a server-written resident confirmation on `LogSiteExtra` body version 3; the fourth part of plan leaf ENT-3 after the 11 October split) takes **0141** (`site_extra_evidence`: five routines and their EXECUTE grants only; no table, column, trigger, policy, index or table grant) on 13 October 2026, the next number neither merged nor reserved (merged through 0138; 0139 ENT-3b and 0140 ENT-3c are reserved before it), under Ben's 5 October merge-ahead ruling. The runner lists it last. A piece that lands after a higher number has merged renumbers again.
 
+**Ledger amendment — LP-1, 15 October 2026 (dispatcher reservation; preparatory work only).** The issued header reserves **0162** (`membership_account_closed`) on `codex/sandbox/lp-1`, base `9865e4b32b71c75b763240bcdf27bd6a75b42f34`. Q1 fixture-role/access disposition and Q3 access-treatment confirmation remain HELD. No migration, registration, grants or seed conversion is implemented by this preparatory piece. The compatible grant/lock/seed group and its post-change acceptance remain pending; the dispatcher serializes the lane, inventory, runner and ledger at integration and renumbers if needed. Whole-track and G1 real-data gates remain closed.
+
 ### 12.3 The graph (synthetic work, buildable after adoption)
 
 | Phase | Task | Title | Track | Depends on | Migration | Card |
