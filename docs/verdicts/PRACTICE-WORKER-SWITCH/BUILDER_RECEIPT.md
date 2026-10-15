@@ -686,3 +686,99 @@ explicit issued-base correction; `git diff --check` exited 0. The final advisory
 search against the issued SHA exited 0, 146 lines and the eleven listed seeds;
 output is CONTINUATION_ADVISORY_LOCKS.txt. The intended commit message is written
 to /private/tmp/jg-msg-practice-worker-switch.txt. No git write was made.
+
+## Repair r2
+
+15 October 2026; dispatcher 11; PR #225; repair base/head `8c916ae2fcc0e661f1d85e6222ad267030d2d36d`. Built by Codex. This addendum supersedes earlier check status only where a new result is recorded below; it is builder evidence, not an independent verdict or acceptance. No Git write command, dependency installation, browser or PostgreSQL start was performed. Dispatcher owns commit/push and the real-database CI run.
+
+### Failure coverage and scope
+
+Read the entire supplied `pws-ci-fail.txt`. All listed failures trace to the same six unreviewed routine facts: LP0-10/11/12, LP0-17, “reports existing exceptions truthfully”, and LP0-01/02/03/04/05. The log ends during LP0-05; no unshown CI result is inferred. LP0-17 also compares every routine identity, including owner-only routines, so all ten new routine records are added. The existing guard, assertions and scanner remain unchanged.
+
+Inventory changes are add-only: 28 added rows, zero removed or changed rows. Every existing parsed record, serialized line, hash, pin, base, target state, recorded note, RLS/policy list, gap and hold remains unchanged. No existing entry needed an amendment. Migration 0165, product source, OpenAPI and all existing tests are unchanged by this repair. No migration or runtime grant is introduced by this repair.
+
+The only runtime powers inventoried for this feature are EXECUTE on the three checked session-authorized entry points, not table writes. They validate the hardened live practice session, compare tenant context and refuse outside the synthetic database; start checks the owner, company and worker. The private marker and switch tables revoke all runtime/PUBLIC/infrastructure access. The seven helper/trigger routines revoke runtime/PUBLIC/infrastructure EXECUTE. These source observations are not a real-database proof.
+
+Both new tables are in `control_plane`; the RLS and ownership catalogs in `tenancy.integration.test.ts` explicitly select `n.nspname = 'app'`. No tenancy rows are required, so that file is unchanged. Their owner is also their schema owner and they have no non-owner grants, so the LP-0 fact derivation emits no table-owner/ACL capability facts for them. Adding those capability keys would create stale entries.
+
+### Every added row
+
+Group row: `a-exec-practice-worker-switch` (`identity`, `approved_current`, `rebind_at_card`). Authority-path row: `ap-practice-worker-switch`. Both assign LP-6a trusted practice identity, LP-6d actor/tenant binding and LP-12 ownership review, cite migration/repository sources and the four feature integration proofs, and retain the synthetic-only/real-data hold. Ownership entries use the existing `a-owner-routines` group.
+
+Six capability rows (exact keys and groups):
+
+```text
+acl|routine|function:app.practice_worker_switch_off(uuid,uuid)|jobguard_runtime|EXECUTE|- -> a-exec-practice-worker-switch
+acl|routine|function:app.practice_worker_switch_on(uuid,uuid,uuid)|jobguard_runtime|EXECUTE|- -> a-exec-practice-worker-switch
+acl|routine|function:app.practice_worker_switch_state(uuid)|jobguard_runtime|EXECUTE|- -> a-exec-practice-worker-switch
+owner|routine|function:app.practice_worker_switch_off(uuid,uuid)|jobguard_migration -> a-owner-routines
+owner|routine|function:app.practice_worker_switch_on(uuid,uuid,uuid)|jobguard_migration -> a-owner-routines
+owner|routine|function:app.practice_worker_switch_state(uuid)|jobguard_migration -> a-owner-routines
+```
+
+Ten recorded routine rows (all owner `jobguard_migration`, `search_path=pg_catalog`, no PUBLIC or other-role EXECUTE; only the three entry points have reachable/runtimeExecute true):
+
+| Routine identity | SECURITY DEFINER | Trigger | New definition SHA-256 |
+| --- | --- | --- | --- |
+| `function:app.practice_company_made_up(uuid)` | false | false | `04f88a6a248d2392fd4087f48295d9060bd5a18be3fc5de35b74d525a7dde39b` |
+| `function:app.practice_company_marker_guard()` | false | true | `2ab3a32eeee5d4e6936806b1b1711e108ef00c9fe96c8d01675d7fde35de6b8d` |
+| `function:app.practice_company_refuse_sign_in()` | true | true | `c50330496f669a508b5cada8d8e82e4816ad26bb9097826a1a60bbf21de83b2c` |
+| `function:app.practice_worker_refuse_wider_grant()` | true | true | `9b49b32e1306c45baae8733f0fbf3a1b3d6508d5ff8aa559266d596a4fdeb285` |
+| `function:app.practice_worker_switch_decision(uuid,uuid)` | false | false | `a3bf1beefc0ba0c281318b0c4ced35d92a375dead4fc56ea114e9aefad5e5f93` |
+| `function:app.practice_worker_switch_guard()` | false | true | `90931a157a954d2571c060e88f6d5bd7e8053f3e0bd7efa59f5ca2c5d0247553` |
+| `function:app.practice_worker_switch_off(uuid,uuid)` | true | false | `2d67e7aed83a90695917064e19dda9fd101ed5d187e86ee86719dd7917756a67` |
+| `function:app.practice_worker_switch_on(uuid,uuid,uuid)` | true | false | `a4b0c97c1a4058332a9f9d0b62ac7bd531161673407a09aa68e0ee56bad2e637` |
+| `function:app.practice_worker_switch_require_audit()` | false | true | `b92f86bf465cc3400be9a464a881d2ec367474541119bfeb2bbc8d354c32156a` |
+| `function:app.practice_worker_switch_state(uuid)` | true | false | `df0c6794c77b6e053da68838133191941e7a9c7a23f2aa7b4ee931a3bc447a8d` |
+
+Hashes follow the existing source-derived recording method used by SV-7A: exact migration bodies with PostgreSQL `pg_get_functiondef` header formatting, SHA-256 over UTF-8. The same method reproduces the unchanged `contractor_session(uuid)` and `contractor_practice_session_guard()` hashes from migration 0138 exactly. This is a source-level control, not PostgreSQL execution. The actual unchanged static scanner also matches all ten new staticWrites/staticCalls records. LP0-13 hash comparison remains held; no existing contractor_session hash or scanner pin is updated.
+
+Ten recorded trigger rows (exact facts; recorded, not a new protection comparator):
+
+```text
+app.role_grant|made_up_worker_no_wider_grant|app.practice_worker_refuse_wider_grant|BEFORE INSERT|O
+control_plane.practice_company_marker|practice_company_marker_guard|app.practice_company_marker_guard|BEFORE INSERT/DELETE/UPDATE|O
+control_plane.practice_company_marker|practice_company_marker_no_truncate|app.practice_company_marker_guard|BEFORE TRUNCATE|O
+control_plane.practice_worker_switch|practice_worker_switch_guard|app.practice_worker_switch_guard|BEFORE INSERT/DELETE/UPDATE|O
+control_plane.practice_worker_switch|practice_worker_switch_no_truncate|app.practice_worker_switch_guard|BEFORE TRUNCATE|O
+control_plane.practice_worker_switch|practice_worker_switch_require_audit|app.practice_worker_switch_require_audit|AFTER INSERT/UPDATE|O
+identity.invitation|made_up_company_no_sign_in|app.practice_company_refuse_sign_in|BEFORE INSERT|O
+identity.membership_locator|made_up_company_no_sign_in|app.practice_company_refuse_sign_in|BEFORE INSERT/UPDATE|O
+identity.sso_connection|made_up_company_no_sign_in|app.practice_company_refuse_sign_in|BEFORE INSERT|O
+identity.user_email|made_up_company_no_sign_in|app.practice_company_refuse_sign_in|BEFORE INSERT/UPDATE|O
+```
+
+Two lane allow-list paths added with the Edit/apply_patch tool; every prior lane field and allowed path is preserved:
+
+- `docs/contracts/lp-0-effective-privileges-v1.json`
+- `packages/db/test/tenancy.integration.test.ts`
+
+### Repair validation
+
+Existing dependencies only: Node `v24.17.0`, cached pinned pnpm `10.28.1`. Commands use `PATH=/private/tmp/jg-pws-bin:$PATH`; that existing temporary launcher executes the installed cached pnpm through Node. Heavy typecheck/lint/build/unit checks run serially through `~/.local/bin/heavy-slot`. Logs are under `/private/tmp/pws-r2-*.log`. Final command results are appended below.
+
+| Command (pinned PATH above; heavy-slot labels `pws-r2-*`) | Exit / observed result | Log suffix |
+| --- | --- | --- |
+| `~/.local/bin/heavy-slot pws-r2-typecheck pnpm typecheck --force` | 0; 7 tasks successful, 0 cached | `typecheck.log` |
+| `LANE_BASE_REF=origin/main ~/.local/bin/heavy-slot pws-r2-lint pnpm lint --force` | 0; root checks and 7 tasks successful, 0 cached | `lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; practice-worker-switch lane passed | `lint-lanes.log` |
+| `node --input-type=module` working-tree check using unchanged `selectLane`/`matches` and `git diff --name-only` | 0; all three edited paths allowed | `working-lane.log` |
+| `~/.local/bin/heavy-slot pws-r2-build pnpm build --concurrency=2 --force` | 0; 7 tasks successful, 0 cached | `build.log` |
+| `~/.local/bin/heavy-slot pws-r2-db-unit pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts` | 0; 26 passed | `db-unit.log` |
+| `~/.local/bin/heavy-slot pws-r2-core-unit pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/practice-worker-switch.test.ts` | 0; 69 passed | `core-unit.log` |
+| `~/.local/bin/heavy-slot pws-r2-api-unit pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/practice-worker-switch.application.test.ts src/auth/context-boundary.test.ts` | 0; 162 passed | `api-unit.log` |
+| `~/.local/bin/heavy-slot pws-r2-web-unit pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/api/contractor/practice/acting-as/route.test.ts app/api/contractor/practice/acting-as/end/route.test.ts 'app/api/contractor/practice/workers/[workerId]/acting-as/route.test.ts'` | 0; 32 passed; no browser | `web-unit.log` |
+| `pnpm openapi:check` | 1; TSX CLI IPC listener refused with `listen EPERM` before checking the artifact | `openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; same generator/check through the Node loader, artifact unchanged | `openapi-node.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx /private/tmp/pws-r2-inventory-check.mts` | 0; strict inventory and path completeness, six repaired facts/dispositions, removal control, PUBLIC EXECUTE rejection controls, ten exact static scanner records and ten trigger records | `inventory-check.log` |
+| Python source-hash check using the source-derived prefix of `/private/tmp/pws-r2-inventory.py` | 0; two existing control hashes reproduced, all ten new routine records/hashes match | `hashes.log` |
+| `python3 /private/tmp/pws-r2-preservation.py` | 0; +28/-0 inventory lines; all original rows/hashes/pins preserved; exactly two lane paths added; tenancy unchanged | `preservation.log` |
+| `git diff --check` | 0; no whitespace errors | terminal output |
+
+Total: **289 targeted unit tests passed**, seven test files. Inventory after the repair: 1,133 capability entries, 55 groups, 33 paths, 307 routine records, 364 trigger records. The preservation check compares against read-only `git show HEAD:<path>` and proves every pre-existing inventory line and parsed record is unchanged, including historical measured hashes. It also checks all unrelated lanes/fields and every previous allowed path are unchanged.
+
+The slot wrapper printed sandbox sysctl/sysmon/pgrep restrictions; successful commands still acquired slots and executed. Turbo printed existing cache IO warnings; all seven tasks executed for typecheck/lint/build and exited successfully. Next printed existing stylesheet, dynamic-dependency and workspace-root warnings. The standard OpenAPI failure is a sandbox socket restriction, not an automatic approval-review rejection; the successful Node-loader invocation checks the same committed generator/artifact without an IPC listener. The repair does not claim that the standard CLI command passed.
+
+**Still owed:** dispatcher commit/push, real PostgreSQL CI for both LP-0 integration suites, tenancy and mandatory migration/regression/feature proofs, plus independent exact-commit RED verdicts and separate acceptance. The root `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and browser suites are not run here because their database/browser execution is unavailable or explicitly excluded. No new model/prompt/parser behavior requires an evaluation. No clean dependency reinstall, new external action, data migration, new alert, production rollout or release approval is claimed. Existing commercial/security/real-data gates and the earlier PW19 limitation remain.
+
+Intended conventional commit message written to `/private/tmp/jg-msg-practice-worker-switch.txt` for the dispatcher. No staging, commit, checkout, push or other Git write command was run.
