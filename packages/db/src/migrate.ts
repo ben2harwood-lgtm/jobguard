@@ -91,6 +91,10 @@ const LISTED_MIGRATION_URLS = [
   new URL("../migrations/0153_quote_supersession_guard.sql", import.meta.url),
   new URL("../migrations/0154_follow_up_clock_fence.sql", import.meta.url),
   new URL("../migrations/0155_quote_reacceptance.sql", import.meta.url),
+  new URL("../migrations/0157_extra_approval.sql", import.meta.url),
+  new URL("../migrations/0158_extra_approval_chain.sql", import.meta.url),
+  new URL("../migrations/0162_membership_account_closed.sql", import.meta.url),
+  new URL("../migrations/0164_job_sources.sql", import.meta.url),
 ] as const;
 
 const MIGRATION_FILE = /^(\d{4})_[a-z0-9_]+\.sql$/u;
