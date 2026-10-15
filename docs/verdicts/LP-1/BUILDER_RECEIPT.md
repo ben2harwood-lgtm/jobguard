@@ -6,6 +6,75 @@ The grant/lock/seed group is written. Q1/Q3 are implemented under Ben decisions 
 
 The requested attribution to Claude Sonnet 5.5 would be false. This receipt names the actual builder. The prior preparatory receipt is preserved verbatim at the end as historical evidence; its Q1/Q3 holds and “no migration” status are superseded by this continuation only.
 
+## Repair r3 — 15 October 2026, dispatcher 11, decisions 43–44
+
+This section supersedes the five coordinator-owned “further merged tests” holds in Repair r2 and the corresponding older receipt/contract status statements, for this repair only. Builder: Codex. Authority: Ben decisions 43–44 as relayed in the dispatcher's 15 October repair order; no approval is inferred from tests. PR #223; LP-1; branch `codex/sandbox/lp-1`; initially clean at issued HEAD `6f40a2b9db91b346da3e392213e016fa9b49d50b`. Local `origin/main` is `2a230bb522c2c1146c0d0741ed374237176ff02c`, not fetched or claimed to be latest main. HEAD remains unchanged. No git-writing command, package install/download, PostgreSQL server, browser, commit, staging, push, deployment or release ran.
+
+**One separate commit-sized change set: eight files, covering exactly the five approved merged-test repairs and their comparator proof, lane registration and receipt. NOT ACCEPTED.** Real PostgreSQL/browser CI, fresh exact-commit RED model verdicts (Opus plus Sol), separate technical acceptance, the whole LP track and G1/real-data gates remain outstanding. Existing migration 0162, its registry, grants, triggers, seeds, scanner, fingerprints, all existing record pins and production code are unchanged by r3.
+
+### Exact before/after against issued HEAD
+
+Before line numbers refer to `6f40a2b9`; after numbers refer to this repaired tree. Each item below is part of the same repair set.
+
+| Approved item / file:line before → after | Before | After |
+|---|---|---|
+| (a) `packages/db/test/lp-0-grant-freeze.integration.test.ts:336–337,346–349` → `:349–369` (LP0-15) | Membership DELETE and account table UPDATE are required positive `existing_exception` rows. | Both exact keys must be absent from live dispositions, exception keys and reviewed entries. Actual runtime `DELETE FROM app.membership WHERE false` and `UPDATE app.account SET name=name WHERE false` must both refuse with 42501. Separately, the LP-1 group must contain exactly the two account/membership `created_at` column UPDATE keys, without grant option; both retain `existing_exception`, `revoke` and LP-1 responsibility. All six unrelated exception rows and their original assertion loop remain byte-for-byte unchanged. |
+| (b) `packages/db/test/lp-0-grant-freeze.integration.test.ts:364,366–368` → `:383,385–387` (LP0-16) | Revoke the already absent table membership UPDATE; expect its table key as a reduction. | Revoke the actually retained `UPDATE(created_at)`; require `acl\|col\|app.membership.created_at\|jobguard_runtime\|UPDATE\|-` in reductions. The app.job INSERT reduction, inventory-length assertion and all default-deny controls are unchanged. |
+| (c) `packages/db/test/lp-0-authority-paths.integration.test.ts:198` (unchanged) and `docs/contracts/lp-0-effective-privileges-v1.json:1353` (new) | Exact recorded/live routine identity equality has no entry for the new LP-1 helper. | ADD ONLY one recorded `function:app.lp1_reject_lock_column_update()` entry. Source-inspected metadata: migration owner, invoker, `search_path=pg_catalog`, trigger return, unreachable, no runtime/PUBLIC/other EXECUTE, no static business writes/calls. `definitionSha256` is explicitly null: PostgreSQL's `pg_get_functiondef` digest was not executed and is not invented. Every older record and all other inventory bytes are unchanged. The exact identity equality at :198 remains byte-for-byte; no scanner, digest comparator, fingerprint or existing record pin changes. This is the authorised record addition, not independent review or catalogue execution evidence. |
+| (d) `packages/db/test/lp-0-authority-paths.integration.test.ts:233–238` → `:233–244` | Runtime owner-membership INSERT succeeds and returns role `owner`, then rolls back. | The same SQL/arguments must refuse with 42501. An independent admin connection captures canonical committed membership/account/identity-user/tenant rows before the attempt and requires exact equality after rollback. The separate LP-2 legacy-transition demonstration, unconditional cleanup and final empty-state/inventory checks remain byte-for-byte unchanged. |
+| (e) `packages/db/test/audit-export.integration.test.ts:105–108,277` → `packages/db/test/audit-export-privilege-comparator.ts:15–19` and integration `:249` | A new explicit column ACL alarms even when the old table ACL covered precisely the same grantee, privilege and grant-option semantics. | Add only `&& !was.facts.includes(grant.fact)` to the column-addition condition. The old :277 zero-widening expectation remains byte-for-byte at :249. Move the original `Subject` type (:34–38) and comparator (:97–120) into the new helper (:1–31), export them, and import them at integration :16 so pure unit proof can execute without any PostgreSQL setup hook. Apart from the one condition, the moved comparator is byte-for-byte identical. Every existing alarm/control definition, catalogue query and test assertion is unchanged. |
+
+Comparator lines, before (`packages/db/test/audit-export.integration.test.ts:105–108`):
+
+```ts
+    for (const grant of now.columnGrants) if (was.columns.includes(grant.column)
+      && !was.columnGrants.some(old => old.column === grant.column && old.fact === grant.fact)) {
+      differences.push(`table ${now.name}: + column ${grant.column} ${grant.fact}`);
+    }
+```
+
+After (`packages/db/test/audit-export-privilege-comparator.ts:15–19`):
+
+```ts
+    for (const grant of now.columnGrants) if (was.columns.includes(grant.column)
+      && !was.facts.includes(grant.fact)
+      && !was.columnGrants.some(old => old.column === grant.column && old.fact === grant.fact)) {
+      differences.push(`table ${now.name}: + column ${grant.column} ${grant.fact}`);
+    }
+```
+
+`privilegeFacts` already expands WITH GRANT OPTION into a plain fact plus a grantable fact; that SQL is unchanged. Exact fact equality therefore preserves grantee, privilege and grant-option distinctions. Coverage is taken only from the matched older table, never from another object. There is no name-specific branch or allowlist.
+
+**Ben's extra proof:** new `packages/db/test/audit-export-privilege-comparator.test.ts:1–57` adds 18 pure tests exercising the exact comparator imported by the integration suite. Six covered-right cases must return no addition: table-to-column reduction, redundant column alongside retained table grant, grantable table-to-plain/grantable-column reductions, unchanged column and grantable-to-plain column reduction. Twelve widening cases must return the exact alarm: absent column/table rights, a different grantee, a different privilege, column/table grant-option escalation, column-to-table expansion, a different column and attempted coverage borrowed from another table. These are comparator fixtures, not database privilege proof. All existing S1–S16, N1, P1–P10 controls and the full remaining integration test body are byte-for-byte preserved; their real PostgreSQL execution remains required in CI.
+
+`config/agent-lane-assignments.json:75` was edited only through the patch/edit tool. It adds exactly these five paths to the existing lp-1 allowlist, each once: `packages/db/test/lp-0-grant-freeze.integration.test.ts`, `packages/db/test/lp-0-authority-paths.integration.test.ts`, `packages/db/test/audit-export.integration.test.ts`, `packages/db/test/audit-export-privilege-comparator.ts`, `packages/db/test/audit-export-privilege-comparator.test.ts`. Inventory and receipt paths were already present. The note records decisions 43–44; all other lane entries remain unchanged. Shared lane/inventory integration serializes with the dispatcher.
+
+### Repair r3 checks and exit codes
+
+Node v24.17.0; installed/cached pinned pnpm 10.28.1; no clean install claimed. Every pnpm command prepends `PATH="/private/tmp/jg-lp1-bin:$PATH"`, whose wrapper calls the existing cached pinned pnpm. Every heavy check below uses `~/.local/bin/heavy-slot <label> <command>`; all Vitest runs use `--maxWorkers=2` and select at most three files. Build did not overlap Vitest. No source skip, lowered expectation, new timeout or checker bypass was added.
+
+| Command (after heavy-slot label where applicable) | Exit / observed result |
+|---|---|
+| `pnpm exec turbo run typecheck --force` | 0; all 7 packages executed, none cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; purity, lane and money boundaries passed; 7 package lint tasks passed, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; exact lp-1 paths passed against the locally available ref. |
+| `pnpm exec tsc -p /private/tmp/jg-lp1-r3-tests.tsconfig.json` | 0; strict noEmit config explicitly includes all three edited integrations and both new comparator files, which normal package typecheck does not include. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-export-privilege-comparator.test.ts test/lp-0-catalog.test.ts` | 0; preliminary run, 2 files / 43 tests, before the final absent-table-right case was added. Superseded by the final run below. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-export-privilege-comparator.test.ts test/lp-0-catalog.test.ts test/verify-audit-export-cli.test.ts` | 0; final run, 3 files / 58 tests passed, including all 18 new comparator cases. No database hooks. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp1-upgrade.integration.test.ts test/lp1-seed.integration.test.ts --testNamePattern='comparator fixtures\|owner seed preparation'` | 0; 2 non-DB cases passed; 3 PostgreSQL cases explicitly filtered out by name. No DB hooks ran. Source tests were not skipped/altered. |
+| `pnpm build --concurrency=2 --force` | 0; all 7 packages rebuilt, none cached; 1m23.222s; Next generated 32 static pages. |
+| `pnpm openapi:check` | 1; tsx CLI fails before generation on sandbox-denied `listen EPERM .../tsx-501/25010.pipe`. Requires the normal CI script. |
+| `pnpm --filter @jobguard/api exec node dist/generate-openapi.js --check` | 1; supplementary compiled-generator attempt reports `openapi.json is stale`. This is not the source/tsx generation path used by the official script; no OpenAPI artifact was regenerated or edited. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; socket-free execution of the same source generator and tsx transformation as the official command, including the actual committed-OpenAPI equality assertion. Does not supersede the official CI-script requirement or turn the compiled-generator attempt into a pass. |
+| `python3 /private/tmp/jg-lp1-r3-preservation.py` | 0; reconstructs the three original integration files by reversing only the authorised edits; proves all old audit-export controls/queries/assertions byte-for-byte unchanged, the comparator has exactly one added condition, inventory is strictly one ADD ONLY row, only the five exact lane paths were added and all other lanes are unchanged. Also verifies unchanged HEAD, bounded changed-file set and whitespace. |
+| `git diff --check` | 0; final check repeated after receipt/message writing. |
+
+The installed heavy-slot wrapper emitted sandbox-denied `sysctl`/`sysmon`/`pgrep` probes but proceeded through its existing gate; it was not edited or bypassed. Turbo cache I/O warnings, Next workspace-root/CSS cache warnings and Nest file-type export/dynamic dependency warnings did not fail the build. Source OpenAPI check passed; the official tsx CLI socket failure and compiled-generator difference are distinct observed results and are both reported above.
+
+No full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, PostgreSQL integration, browser/e2e or live provider suite was run: this dispatcher sandbox cannot bind localhost or start PostgreSQL and explicitly forbids browser execution. CI must prove LP0-15/16/17, the membership refusal, MO5-d/e/f, LP-1 upgrade/lock/seed coverage and unchanged regressions. No AI/model/prompt/parser changed, so no new live-model evaluation was applicable. No migration/backfill/rollback change, new runtime grant, operational alert or environment variable arises from this test-only repair. Existing rollout and whole-track release holds remain.
+
+This is builder source inspection and executed local evidence, not a model verdict or acceptance. The intended conventional commit message is overwritten at `/private/tmp/jg-msg-lp-1.txt`. The dispatcher owns the single commit, CI and subsequent exact-commit review/acceptance.
+
 ## Repair r2 — 15 October 2026, dispatcher 11, decision 42
 
 This section supersedes earlier current-status and environment statements below for this repair only. Builder: Codex. PR #223; task LP-1; branch `codex/sandbox/lp-1`; inspected HEAD `cbd336611aa21c1a9a54f72df0863c172080c0e4`. Local `origin/main` is `8a6bde1c12fb48f4cccb4b18e60fb6614e8b5849`; it was not fetched and is not claimed to be latest main. The tree was initially clean. No git-writing command, browser, PostgreSQL server, install, push or release was run. The dispatcher must commit this working-tree change and obtain CI and fresh exact-commit review. **HOLD: DB evidence, coordinator changes, independent verdicts and separate acceptance remain outstanding.**

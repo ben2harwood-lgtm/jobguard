@@ -333,8 +333,6 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
     const find = (key: string) => rows.find(r => r.key === key);
     // Existing powers are reported as what they are, not as SELECT/INSERT-only and not as the final state.
     for (const [key, cards] of [
-      ["acl|rel|table|app.membership|jobguard_runtime|DELETE|-", ["LP-1"]],
-      ["acl|rel|table|app.account|jobguard_runtime|UPDATE|-", ["LP-1"]],
       ["acl|rel|table|app.audit_event|jobguard_runtime|INSERT|-", ["LP-4", "LP-6e"]],
       ["acl|rel|table|app.command_receipt|jobguard_runtime|INSERT|-", ["LP-5a", "LP-5b", "LP-5c"]],
       ["acl|col|app.command_receipt.status|jobguard_runtime|UPDATE|-", ["LP-5c"]],
@@ -347,6 +345,27 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
       expect(row).toMatchObject({ disposition: "existing_exception" });
       expect(row!.cards, key).toEqual(expect.arrayContaining([...cards]));
       expect(row!.target).not.toBe("retain");
+    }
+    // LP-1 closed these broad powers; neither live facts nor the reviewed exceptions may retain them.
+    for (const key of [
+      "acl|rel|table|app.membership|jobguard_runtime|DELETE|-",
+      "acl|rel|table|app.account|jobguard_runtime|UPDATE|-",
+    ]) {
+      expect(find(key), key).toBeUndefined();
+      expect(exceptions.has(key), key).toBe(false);
+      expect(inventory.entries.some(entry => entry.key === key), key).toBe(false);
+    }
+    const runtime = await db.runtimeClient();
+    try {
+      await expect(runtime.query("DELETE FROM app.membership WHERE false")).rejects.toMatchObject({ code: "42501" });
+      await expect(runtime.query("UPDATE app.account SET name=name WHERE false")).rejects.toMatchObject({ code: "42501" });
+    } finally { await runtime.end(); }
+    // Only these exact immutable locking-column dispositions survive, still assigned to LP-1.
+    const lockingKeys = ["account", "membership"].map(table => `acl|col|app.${table}.created_at|jobguard_runtime|UPDATE|-`);
+    expect(rows.filter(row => row.group === "x-membership-account-writes").map(row => row.key).sort()).toEqual(lockingKeys);
+    for (const key of lockingKeys) {
+      expect(find(key), key).toMatchObject({ disposition: "existing_exception", target: "revoke" });
+      expect(find(key)!.cards, key).toContain("LP-1");
     }
     expect(find(keys.aclRoutine("function:app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)", APPLICATION_ROLE, "EXECUTE", false))).toMatchObject({ disposition: "existing_exception", cards: ["LP-2"] });
     // Reads are approved current capability, rebound at LP-11; they are not an exception.
@@ -361,10 +380,10 @@ describe("LP-0 grant freeze guard against the fully migrated database", () => {
   });
 
   it("[LP0-16] reductions pass and additions default-deny", async () => {
-    const reduction = await control(async c => { await c.query(`REVOKE INSERT ON app.job FROM ${APPLICATION_ROLE}`); await c.query(`REVOKE UPDATE ON app.membership FROM ${APPLICATION_ROLE}`); });
+    const reduction = await control(async c => { await c.query(`REVOKE INSERT ON app.job FROM ${APPLICATION_ROLE}`); await c.query(`REVOKE UPDATE(created_at) ON app.membership FROM ${APPLICATION_ROLE}`); });
     expect(reduction.ok).toBe(true);
     expect(reduction.reductions).toEqual(expect.arrayContaining([
-      `acl|rel|table|app.job|${APPLICATION_ROLE}|INSERT|-`, `acl|rel|table|app.membership|${APPLICATION_ROLE}|UPDATE|-`,
+      `acl|rel|table|app.job|${APPLICATION_ROLE}|INSERT|-`, `acl|col|app.membership.created_at|${APPLICATION_ROLE}|UPDATE|-`,
     ]));
     expect(inventory.entries.length, "a reduction never widens or rewrites the reviewed inventory").toBe(rawInventory.entries.length);
     const addition = await control(async c => {
