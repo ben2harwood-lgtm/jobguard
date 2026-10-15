@@ -1155,3 +1155,17 @@ The four bootstrap rows now use jobguard_migration on the separate owner connect
 Upgrade proof: lp1-upgrade.integration.test.ts installs predecessors, snapshots populated authority/receipt/audit and commercial source/pack rows as canonical named-column text/full types with original PK identities, applies 0162 alone, compares declared security changes, then runs later migrations twice. Rolled-back microsecond/type controls fail comparison; later scratch columns/functions/rows pass. Real-role refusal, all four lock strengths, RLS UPDATE-policy, nontransactional trigger-effect and bootstrap proofs are separate. PostgreSQL/browser execution is NOT RUN in the builder sandbox. No source inspection or non-DB check establishes acceptance.
 
 Rollout remains gated by coordinator repairs, real PostgreSQL fresh/populated upgrade/regression checks, exact-head RED verdicts and separate acceptance. On install failure, the migration transaction rolls back. After installation fix forward while retaining the withdrawal; do not restore broad runtime authority writes. Previous service binaries retain their unchanged lock SQL; run the updated explicit bootstrap for synthetic setup. No real-data or deployment authority follows.
+
+## 0164 — SV-7A synthetic job source storage and reads
+
+Installs three migration-owned, FORCE-RLS immutable tenant/job side tables, exact
+evidence/original relationships, private integrity triggers and one persisted-session
+authorized read routine. Runtime gains SELECT only and read EXECUTE. No earlier
+rows, grants, routines or fingerprinted table columns change; no backfill.
+Both executable source-intake routines remain held (Q3/Q4). No CH-4 event adapter
+is installed. The catch-up base includes merged CH-4/0144; its diary key/adapter
+and coordinator catalogue coverage remain prerequisites. Disable the new read entrypoints
+on deployment failure and use a reviewed forward fix; preserve originals/history.
+Own-step upgrade proof: `test/job-sources-upgrade.integration.test.ts`; PostgreSQL
+execution remains required, with later migrations applied twice and rolled-back
+canonical-row/type/identity comparator controls.
