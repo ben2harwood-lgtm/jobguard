@@ -596,3 +596,56 @@ git diff --check && git status --short && rg -c '^it\(' packages/db/test/offline
 
 
 
+
+## Repair r2 — 15 October 2026, dispatcher 11
+
+PR #224, inspected head `619e05373c9fc4bbcf02c627ce62fedd79eb3423`, branch `codex/sandbox/m3-1`. **STOP: no expectation repair justified by the inspected merged behavior.** Only this receipt is changed in r2. All own and merged tests, implementation, migrations, dependencies and pins remain unchanged. No Git write, package download, browser, PostgreSQL instance, provider action or release was performed. Dispatcher owns commit/push and CI. This is source inspection and local check evidence, not an independent verdict or technical acceptance.
+
+### What the failing assertion actually checks
+
+`offline-risk.properties.integration.test.ts:65–70` launches capture, grant revocation and **work-order baseline revision concurrently** through `Promise.allSettled`. The generated operation list is launch order, not committed execution order. Line 70 requires the revoke and revise promises to be fulfilled; capture already has its own success/refusal branch at lines 74–82. Thus the supplied `expected 'rejected' to be 'fulfilled'` is an administration/baseline operation failure, not the assertion that capture succeeded. The abbreviated failure does not identify which operation rejected or expose its reason.
+
+`offline-risk-test-utils.ts:57–63` revises the work order as the owner via `WorkOrderRepository.importCsv`; it does not call `reviseExtra` or revise a captured extra. No inspected merged rule refuses this owner baseline revision merely because a site user's raising grant was revoked. `0054_contractor_organisation.sql:83–88` keeps membership activity distinct from grant revocation, and `0110_work_orders.sql:413–417` validates assignment membership/team activity. The merged authority rule for a revoked **site capture** is instead `NOT_FOUND`: `0135_site_extra_authority.sql:48–64,82–84`, translated by `site-extra-repository.ts:177–181` after a transaction-time authority refusal. `SITE_EXTRA_UNAVAILABLE` at `site-extra-repository.ts:193–195` is the fallback for other errors; its existence does not document a baseline-revision business refusal. The r1 table must not be amended to claim such a rule.
+
+### Merged lock-order defect found by source inspection
+
+There is a concrete lock-order inversion in these unchanged merged paths:
+
+1. Capture inserts `extra_origin` at `packages/db/src/extra-repository.ts:99–100`, then calls the authority seam at line 102. The immediate foreign key `extra_origin_order_fk` (`packages/db/migrations/0122_extra_origin_persistence.sql:17`) references the work-order row, acquiring PostgreSQL's referenced-row key-share lock until transaction end. The seam (`site-extra-repository.ts:31–35`) then requests the **shared tenant administration lock** in `packages/db/migrations/0135_site_extra_authority.sql:77`.
+2. Baseline revision takes that tenant lock **exclusively first** at `packages/db/src/work-order-repository.ts:120`, then calls `app.work_order_commit`, whose revision branch locks the referenced work-order row `FOR UPDATE` at `packages/db/migrations/0110_work_orders.sql:378`.
+3. If capture has inserted its origin before revision takes the tenant lock, revision can wait for capture's work-order key-share lock while capture waits for revision's tenant lock. This cycle can deadlock. It requires no policy refusal caused by grant revocation.
+4. PostgreSQL deadlock SQLSTATE `40P01` maps to `STALE_REVISION` on the capture path (`extra-repository.ts:35`), but `workOrderFailure` handles only `40001` as stale (`work-order-repository.ts:42`) and falls back to `DATABASE_UNAVAILABLE` at line 44 for `40P01`. A revision chosen as victim therefore rejects its promise instead of reporting a documented domain refusal. Changing the property to accept arbitrary rejection or `SITE_EXTRA_UNAVAILABLE` would hide this distinction.
+
+**Before / after, as required by the stop instruction:**
+
+| Merged file / line | Before | After this repair |
+| --- | --- | --- |
+| `packages/db/src/extra-repository.ts:99–102` | Insert origin (referenced work-order lock), then call authority seam (tenant lock). | Identical; not edited. |
+| `packages/db/src/work-order-repository.ts:120` and `packages/db/migrations/0110_work_orders.sql:378` | Exclusive tenant lock, then work-order `FOR UPDATE`. | Identical; not edited. |
+| `packages/db/src/work-order-repository.ts:42–44` | Only `40001` maps to `STALE_REVISION`; `40P01` falls through to `DATABASE_UNAVAILABLE`. | Identical; not edited. |
+| `packages/db/test/offline-risk.properties.integration.test.ts:70,73,80` | Revoke/revise must fulfill; baseline must change; capture refusal set is `NOT_FOUND`, `EXTRA_FORBIDDEN`, `STALE_REVISION`. | Identical; no expectation broadened and all baseline/authority/rollback/audit assertions retained. |
+
+A separately authorized merged fix needs consistent tenant/work-order lock acquisition before foreign-key writes, deliberate conflict translation and a barrier-controlled real-PostgreSQL regression. No such fix is attempted in this lane. **The lock inversion is source-inspected; its responsibility for this particular CI failure is not established without the rejected promise's operation/reason or a real database reproduction.** The exact r2 stack/reason was requested. A read-only `gh run list --repo ben2harwood-lgtm/jobguard --branch codex/sandbox/m3-1 --limit 4 --json databaseId,headSha,status,conclusion` failed to connect to `api.github.com` (exit 1); the existing local `m31-ci-fail.txt` contains r1 failures only. No browser or alternate network route was used.
+
+### Local validation
+
+Node v24.17.0; existing cached pnpm 10.28.1 via `/private/tmp/jg-m3-1-bin/pnpm`; Vitest 4.1.11. Dependencies were already installed; this is not a clean install or pinned-Node execution. Commands ran serially with `PATH=/private/tmp/jg-m3-1-bin:$PATH`, through `~/.local/bin/heavy-slot`; lane commands also set `LANE_BASE_REF=origin/main`. The wrapper emitted sandbox-denied sysctl/sysmond/pgrep diagnostics, then executed the checks without modification. Turbo cache IO permission warnings were present; forced completed checks had zero cache hits.
+
+| Command (after environment prefix) | Actual result |
+| --- | --- |
+| `~/.local/bin/heavy-slot m31-r2-typecheck pnpm typecheck --force --concurrency=2` | PASS, 7/7 package tasks, exit 0. |
+| `~/.local/bin/heavy-slot m31-r2-lint pnpm lint --force --concurrency=2` | PASS, root boundary checks and 7/7 package tasks, exit 0. |
+| `~/.local/bin/heavy-slot m31-r2-lanes pnpm lint:lanes` | PASS, m3-1 lane, exit 0. Checks the committed range; receipt working-tree diff inspected separately. |
+| `~/.local/bin/heavy-slot m31-r2-unit pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage --workspace-concurrency=1 test --maxWorkers=2` | FAIL, exit 1 in core: 176 files / 5,012 tests passed, 2 compiled `dist` tests failed with ENOENT for `dist/recovery-allocation.ts` and `dist/site-extra-pricing.ts`. Source-reading tests are duplicated by existing emitted build artifacts. The command aborted; no passing aggregate result is claimed for the other packages. No artifact deletion or merged test/config edit was attempted. |
+| `~/.local/bin/heavy-slot m31-r2-core pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, all 90 source files / 2,517 tests, exit 0. This explicit source run excludes emitted duplicates; it does not replace the failed aggregate command result. |
+| `~/.local/bin/heavy-slot m31-r2-api pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/offline-risk.application.test.ts` | PASS, 1 file / 3 tests, exit 0; session/repository doubles, no live database/network claim. |
+
+Root `pnpm test` is not run: it includes forbidden PostgreSQL/socket work and tools lane tests that themselves execute Git writes in temporary repositories. Database/migration/browser/device suites remain unexecuted in this sandbox. No model/prompt/parser change requires a new evaluation run. Aggregate M3-1 and the reported failing database property remain held; r2 does not claim to repair or pass that property.
+
+| Additional command | Actual result |
+| --- | --- |
+| `~/.local/bin/heavy-slot m31-r2-build pnpm build --force --concurrency=2` | PASS, 7/7 package tasks, exit 0. Existing workspace-root, CSS compatibility, file-type export and dynamic dependency warnings; no adjacent fixes. |
+| `~/.local/bin/heavy-slot m31-r2-openapi pnpm openapi:check` | BLOCKED, exit 1 before generation: tsx IPC `listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/78161.pipe`. No alternate execution route attempted. |
+| `node --input-type=module` importing built `workOrderFailure`, with `node:assert/strict` assertions for synthetic errors with SQLSTATE `40P01` and `40001` | PASS, exit 0: respectively `DATABASE_UNAVAILABLE` and `STALE_REVISION`. Pure error-mapping execution only; does not reproduce a PostgreSQL deadlock or identify the rejected CI promise. |
+
+Read-only `git diff --quiet origin/main --` the three merged repositories and migrations `0110`, `0122`, `0135` exited 0. `git diff --check` passed; final working-tree scope is this receipt alone. Intended conventional commit message (documentation-only STOP report) is overwritten at `/private/tmp/jg-msg-m3-1.txt`. No acceptance, migration, backwards-compatibility change or new operational alert is introduced. The failed aggregate unit command, blocked OpenAPI check and unresolved database property are explicitly not passes.
