@@ -1,0 +1,41 @@
+{
+  "version": "enterprise-completion-labels.v1",
+  "cases": [
+    {
+      "id": "held-1",
+      "expectedObservationIds": [
+        "00000000-0000-4000-8000-000000000016"
+      ]
+    },
+    {
+      "id": "held-2",
+      "expectedObservationIds": []
+    },
+    {
+      "id": "held-3",
+      "expectedObservationIds": []
+    },
+    {
+      "id": "held-4",
+      "expectedObservationIds": []
+    },
+    {
+      "id": "held-5",
+      "expectedObservationIds": []
+    },
+    {
+      "id": "held-6",
+      "expectedObservationIds": []
+    },
+    {
+      "id": "held-7",
+      "expectedObservationIds": [
+        "00000000-0000-4000-8000-000000000076"
+      ]
+    },
+    {
+      "id": "held-8",
+      "expectedObservationIds": []
+    }
+  ]
+}
