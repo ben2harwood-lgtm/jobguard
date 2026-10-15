@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  MeterFoundationError, londonMeterDate, meterDay31Candidate, classifyMeterSiteSource,
+  MeterFoundationError, londonMeterDate, meterDay31Candidate,
   groupSuppliedMeterPlaces, computeSmallPlaceAllowance, classifyMeterActivation,
-  exceedsSmallJobTripThreshold, qualifyingApprovalMeterDate,
+  exceedsSmallJobTripThreshold, qualifyingApprovalMeterDate, suppliedMeterApprovalV1,
   preserveMeterHistory, applyProspectiveMeterIdentityCorrection,
 } from "./jobs-on-the-go.js";
+import { classifySiteSource, JobWorkStateError } from "./job-work-state.js";
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const job = (n: number, customer = 1, site = 1, small = true, tenant = 1) => ({
@@ -49,22 +50,27 @@ describe("MON-1 independent synthetic foundations; full acceptance held", () => 
     ["2026-12-31T23:59:59.999999Z", "2026-12-31"],
   ])("MON1-A02 partial: London date for %s", (at, date) => expect(londonMeterDate(at)).toBe(date));
 
-  it("MON1-A03 partial: first evidence classification includes verified proof, progress, ready delivery, goods and on-site diary", () => {
+  it("MON1-A03 partial: CH-4 first evidence classification includes verified proof, progress, ready delivery and goods", () => {
     for (const purpose of ["proof", "progress"] as const) {
-      expect(classifyMeterSiteSource({ version: "job-site-source.v1", kind: "photo", original: true, verified: true, invalidated: false, purpose, objectVersionId: "v1", sha256: "a".repeat(64), byteLength: 10 })).toEqual({ firstEvidence: true, activity: true });
+      expect(classifySiteSource({ version: "job-site-source.v1", kind: "photo", original: true, verified: true, invalidated: false, purpose, objectVersionId: "v1", sha256: "a".repeat(64), byteLength: 10 })).toEqual({ firstEvidence: true, activity: true });
     }
     for (const source of [
       { kind: "delivery_note", ready: true, sourceVersionId: uuid(1) },
-      { kind: "goods_receipt" }, { kind: "on_site_diary" },
-    ]) expect(classifyMeterSiteSource({ version: "job-site-source.v1", ...source }).firstEvidence).toBe(true);
+      { kind: "goods_receipt" },
+    ]) expect(classifySiteSource({ version: "job-site-source.v1", ...source }).firstEvidence).toBe(true);
+  });
+  it("MON1-A03 partial: diary evidence remains held until SV-7A extends CH-4", () => {
+    for (const kind of ["diary", "on_site_diary"]) {
+      expect(() => classifySiteSource({ version: "job-site-source.v1", kind })).toThrow(JobWorkStateError);
+    }
   });
   it("MON1-A03 partial: excluded sources never start; activity alone is not first evidence", () => {
     for (const kind of ["order", "supplier_invoice", "quote", "message", "readiness", "billing", "final_review", "jobguard_catch", "builder_extra", "stage_completion"]) {
-      expect(classifyMeterSiteSource({ version: "job-site-source.v1", kind }).firstEvidence).toBe(false);
+      expect(classifySiteSource({ version: "job-site-source.v1", kind }).firstEvidence).toBe(false);
     }
     const photo = { version: "job-site-source.v1", kind: "photo", original: true, verified: true, invalidated: false, purpose: "progress", objectVersionId: "v1", sha256: "a".repeat(64), byteLength: 10 };
-    for (const changes of [{ verified: false }, { original: false }, { invalidated: true }, { purpose: "snagging" }]) expect(classifyMeterSiteSource({ ...photo, ...changes }).firstEvidence).toBe(false);
-    expect(classifyMeterSiteSource({ version: "job-site-source.v1", kind: "delivery_note", ready: false, sourceVersionId: uuid(1) }).firstEvidence).toBe(false);
+    for (const changes of [{ verified: false }, { original: false }, { invalidated: true }, { purpose: "snagging" }]) expect(classifySiteSource({ ...photo, ...changes }).firstEvidence).toBe(false);
+    expect(classifySiteSource({ version: "job-site-source.v1", kind: "delivery_note", ready: false, sourceVersionId: uuid(1) }).firstEvidence).toBe(false);
   });
   it("MON1-A04 partial: later cancellation preserves supplied past stops and charges without selecting a restart", () => {
     const raw = { version: "meter-history-preservation.v1", history: [snapshot], laterCancellation: { markerId: uuid(91), factAt: "2026-10-02T09:00:00.000001Z" } };
@@ -105,6 +111,16 @@ describe("MON-1 independent synthetic foundations; full acceptance held", () => 
     expect(result.places[0]?.small).toBe(false);
     expect(computeSmallPlaceAllowance({ version: "meter-small-allowance.v1", plan: "Solo", rawPlaces: 1, smallPlaces: 0 }).countedPlaces).toBe(1);
   });
+  it("MON1-A08 partial: a partly-small group uses allowance only for wholly small places", () => {
+    const { places } = groupSuppliedMeterPlaces({
+      version: "meter-fixed-places.v1", date: "2026-10-01",
+      jobs: [job(10), job(11, 1, 1, false), job(12, 2), job(13, 3), job(14, 4, 1, false)],
+    });
+    expect(computeSmallPlaceAllowance({
+      version: "meter-small-allowance.v1", plan: "Solo",
+      rawPlaces: places.length, smallPlaces: places.filter(place => place.small).length,
+    })).toEqual({ version: "meter-small-allowance-result.v1", rawPlaces: 4, freeSmallPlaces: 2, countedPlaces: 2 });
+  });
   it("MON1-A09 partial: activation uses frozen accepted and highest-sent nets at the strict boundary", () => {
     expect(classifyMeterActivation({ version: "meter-activation-classification.v1", acceptedNet: gbp(199999), highestSentNet: gbp(199999) })).toBe(true);
     for (const [accepted, sent] of [[200000, 0], [10000, 200000]]) expect(classifyMeterActivation({ version: "meter-activation-classification.v1", acceptedNet: gbp(accepted!), highestSentNet: gbp(sent!) })).toBe(false);
@@ -119,6 +135,21 @@ describe("MON-1 independent synthetic foundations; full acceptance held", () => 
     expect(qualifyingApprovalMeterDate(fact)).toEqual({ sourceId: uuid(1), originalApprovedAt: fact.approvedAt, date: "2026-06-02", net: gbp(400001) });
     expect(qualifyingApprovalMeterDate({ version: fact.version, sourceId: fact.sourceId, status: "proposed", processedAt: fact.processedAt, net: fact.net })).toBeNull();
   });
+  it.each(["2026-10-01T10:00:00.000000Z", "2026-10-01T10:00:00.000001Z"])("MON1-A11 partial: approval at %s is valid before or at processing", approvedAt => {
+    expect(qualifyingApprovalMeterDate({
+      version: "meter-supplied-approval.v1", sourceId: uuid(1), status: "qualifying_approved",
+      approvedAt, processedAt: "2026-10-01T10:00:00.000001Z", net: gbp(400001),
+    })).toEqual({ sourceId: uuid(1), originalApprovedAt: approvedAt, date: "2026-10-01", net: gbp(400001) });
+  });
+  it("MON1-A11 partial: approval after processing fails with a typed error at microsecond precision", () => {
+    const fact = {
+      version: "meter-supplied-approval.v1", sourceId: uuid(1), status: "qualifying_approved",
+      approvedAt: "2026-10-01T10:00:00.000002Z", processedAt: "2026-10-01T10:00:00.000001Z", net: gbp(400001),
+    };
+    expect(suppliedMeterApprovalV1.safeParse(fact).success).toBe(false);
+    expect(() => qualifyingApprovalMeterDate(fact)).toThrow(MeterFoundationError);
+    expect(() => qualifyingApprovalMeterDate(fact)).toThrow(new MeterFoundationError("INVALID_METER_FOUNDATION_INPUT"));
+  });
   it("MON1-A27 partial: own foundation source has only domain imports and no environment, network or wall clock", async () => {
     const fileModule = "node:fs";
     const { readFileSync } = await import(fileModule) as { readFileSync(path: URL, encoding: "utf8"): string };
@@ -129,7 +160,7 @@ describe("MON-1 independent synthetic foundations; full acceptance held", () => 
   });
   it("MON1-A33 partial: malformed foundation inputs fail with typed errors", () => {
     for (const at of ["2026-02-30T00:00:00.000001Z", "2026-10-01", "bad"]) expect(() => londonMeterDate(at)).toThrow(MeterFoundationError);
-    expect(() => classifyMeterSiteSource({ version: "job-site-source.v2", kind: "goods_receipt" })).toThrow(MeterFoundationError);
+    expect(() => classifySiteSource({ version: "job-site-source.v2", kind: "goods_receipt" })).toThrow(JobWorkStateError);
     expect(() => groupSuppliedMeterPlaces({ version: "meter-fixed-places.v1", date: "2026-02-30", jobs: [job(10)] })).toThrow(MeterFoundationError);
     expect(() => groupSuppliedMeterPlaces({ version: "meter-fixed-places.v1", date: "2026-10-01", jobs: [job(10), job(10, 2)] })).toThrow(MeterFoundationError);
     expect(() => computeSmallPlaceAllowance({ version: "meter-small-allowance.v1", plan: "Solo", rawPlaces: 1, smallPlaces: 2 })).toThrow(MeterFoundationError);

@@ -1165,3 +1165,71 @@ after that read. Available disk was 59 GB, free memory 56%, and HEAD remained
 change followed the completed checks. The Git index remains for the dispatcher
 to resolve by staging; no commit or acceptance was performed.
 
+## Repair r1
+
+15 October 2026; dispatcher 11; PR #221; supplied and unchanged HEAD
+`5c35b87088a80108eee5513c515b9498310df36c`; branch `codex/sandbox/mon-1`.
+This section supersedes earlier diary-support claims and handoff HEAD/index
+descriptions for this repair. The working tree was clean at entry. No Git write,
+dependency download, browser, localhost listener or PostgreSQL startup ran.
+
+### Changes
+
+- Removed MON-1's `meterSiteSourceV1` extension and `classifyMeterSiteSource`
+  wrapper. Own MON-1 tests import core's existing CH-4 `classifySiteSource`
+  directly from `job-work-state.ts`, unchanged. Malformed source errors remain
+  CH-4's `JobWorkStateError`; no parallel source tag or classification exists.
+- **Diary evidence is HELD until SV-7A merges.** Both `diary` and `on_site_diary`
+  are refused by the existing CH-4 contract. Only MON-1's own tests were adjusted;
+  no merged test or CH-4 implementation was edited. This follows BUILD_PLAN
+  CH-4's conditional diary rule and SV-7A's ownership of diary evidence events.
+- `suppliedMeterApprovalV1` now requires an approval timestamp on or before its
+  processing timestamp. Invalid chronology produces the existing typed
+  `MeterFoundationError` with code `INVALID_METER_FOUNDATION_INPUT`. Tests cover
+  earlier, equal and one-microsecond-later approval times, schema rejection and
+  the thrown error's class/message. Original approval dates still govern valid
+  late-processed facts; proposed prices remain excluded.
+- Moved only MON-1's index export after `job-work-state`, in alphabetical order
+  for the adjacent job exports. Added one partly-small allowance test: four
+  places, including a mixed small/non-small place, yield two free small places
+  and two counted places. No allowance-beneficiary policy was introduced.
+
+### Executed checks
+
+The round-specific instruction to run only core typecheck and MON-1 test files
+controls over the generic environment checklist. Each suite ran through the
+required `~/.local/bin/heavy-slot`. The existing cached-pnpm launcher avoids any
+download. Available Node is 24.17.0 versus repository pin 24.15.0; this is not
+clean pinned-install evidence.
+
+| Command/check | Exit code and result |
+|---|---|
+| `~/.local/bin/heavy-slot mon-1-r1-typecheck /private/tmp/ch4-pnpm-bin/pnpm --filter @jobguard/core typecheck` | **0**, initial and final runs |
+| `~/.local/bin/heavy-slot mon-1-r1-unit /private/tmp/ch4-pnpm-bin/pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts` | **0**, both runs; **2 files / 52 tests passed** each; final run includes explicit error-class assertion |
+| Read-only Python/Git preservation inspection | **0**; exactly three authorized core paths changed before this receipt append; only own index line moved; CH-4 source/test, pricing tests and lane registry byte-identical to supplied HEAD |
+| `git diff --check` | **0** before receipt append; final inspection recorded below |
+
+The heavy-slot wrapper printed sandbox diagnostics for `sysctl`, `memory_pressure`
+and `pgrep`; it proceeded to execute each suite, whose actual exit codes are
+reported above. No wrapper or environment setting was changed to bypass it.
+
+Lint (including `LANE_BASE_REF=origin/main` and `lint:lanes`), build, OpenAPI,
+umbrella tests, database/migrations and browser suites were **NOT RUN** in r1,
+under the explicit repair-round check restriction. GitHub CI after dispatcher
+push must supply the broader evidence. No lane path was added, so the lane
+registry was left unchanged. No migration, operational alert or external action
+was added. Removing the two unmerged MON-1 source exports has no tracked caller
+outside its own test file; callers use the already-exported CH-4 classifier.
+
+This is builder repair evidence, not an independent verdict or acceptance.
+MON-1 aggregate acceptance remains **HOLD**, including the previously recorded
+held server/ledger/UI scope and production gates. The dispatcher owns commit,
+push, exact-commit independent review and separate acceptance. Intended commit
+message is overwritten at `/private/tmp/jg-msg-mon-1.txt`.
+
+Final read-only inspection: **exit 0** for `git diff --check`, status/stat,
+branch/HEAD reads and the Python preservation check. Exactly four existing
+allowed paths changed; this receipt is append-only; the Git index is unstaged;
+branch and HEAD match the supplied repair baseline. Commit-message write:
+**exit 0**. No implementation or test changed after the final passing suites.
+

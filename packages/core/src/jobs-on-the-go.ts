@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isSmallJobV3 } from "./activation-v3.js";
-import { classifySiteSource, siteSourceV1, workFactTimeV1 as sourceTimeV1 } from "./job-work-state.js";
+import { workFactTimeV1 as sourceTimeV1 } from "./job-work-state.js";
 import { MAX_MONEY_PENCE, money, moneyFromBigInt } from "./money.js";
 import { divideRounded } from "./rational.js";
 
@@ -66,16 +66,6 @@ export function meterDay31Candidate(raw: unknown) {
   return parse(meterDay31CandidateV1, {
     version: "meter-day31-candidate.v1", activatedAt, date, at: utcMidnight.toISOString().replace(".000Z", ".000000Z"),
   });
-}
-
-/** Diary is a supplied classification only: CH-4's persisted diary source is not implemented here. */
-export const meterSiteSourceV1 = z.union([
-  siteSourceV1,
-  z.object({ version: z.literal("job-site-source.v1"), kind: z.literal("on_site_diary") }).strict(),
-]);
-export function classifyMeterSiteSource(raw: unknown) {
-  const source = parse(meterSiteSourceV1, raw);
-  return source.kind === "on_site_diary" ? { firstEvidence: true, activity: true } : classifySiteSource(source);
 }
 
 const suppliedJob = z.object({ tenantId: uuid, jobId: uuid, customerId: uuid, siteId: uuid, small: z.boolean() }).strict().readonly();
@@ -148,7 +138,8 @@ export function exceedsSmallJobTripThreshold(raw: unknown): boolean {
 export const suppliedMeterApprovalV1 = z.discriminatedUnion("status", [
   z.object({ version: z.literal("meter-supplied-approval.v1"), sourceId: uuid, status: z.literal("qualifying_approved"), approvedAt: workFactTimeV1, processedAt: workFactTimeV1, net: meterMoneyV1 }).strict(),
   z.object({ version: z.literal("meter-supplied-approval.v1"), sourceId: uuid, status: z.literal("proposed"), processedAt: workFactTimeV1, net: meterMoneyV1 }).strict(),
-]);
+]).refine(value => value.status === "proposed" || value.approvedAt <= value.processedAt,
+  "Approval time must be on or before processing time");
 export const suppliedMeterApprovalDateV1 = z.object({
   sourceId: uuid, originalApprovedAt: workFactTimeV1, date: londonMeterDateV1, net: meterMoneyV1,
 }).strict().readonly();
