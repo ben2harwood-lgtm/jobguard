@@ -1,0 +1,96 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
+import { UserCommandDispatcher } from "../src/commands.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
+import { adoptionFixture, importedShape, insertJob, jobDoorCounts, jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+
+let db: JobDoorsDatabase;
+beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
+afterAll(async () => { await db?.close(); });
+
+describe("LP-2 imported insertion boundary (tests first; implementation stopped)", () => {
+  const flags = [undefined, "", "false", "malformed", "enabled"];
+  it.each(flags)("[LP2-A03] a valid tenant plus adoption setting %s cannot insert an imported job", async flag => {
+    const actor = await jobDoorsActor(db.owner), before = await jobDoorCounts(db.owner, actor.tenant);
+    const runtime = db.freshRuntime();
+    try {
+      await expect(transaction(runtime, actor.tenant, async client => {
+        // An untouched physical connection exercises the actual NULL setting branch.
+        if (flag !== undefined) await client.query("SELECT set_config('app.import_command',$1,true)", [flag]);
+        await insertJob(client, actor.tenant, randomUUID(), importedShape);
+      })).rejects.toMatchObject({ code: "42501" });
+    } finally { await runtime.end(); }
+    expect(await jobDoorCounts(db.owner, actor.tenant)).toEqual(before);
+  });
+
+  it.each([undefined, "", "false", "invalid", "foreign"])("[LP2-A03] tenant setting %s plus a forged enabled adoption flag fails closed", async setting => {
+    const actor = await jobDoorsActor(db.owner), other = await jobDoorsActor(db.owner);
+    const before = await jobDoorCounts(db.owner, actor.tenant);
+    const tenantSetting = setting === "foreign" ? other.tenant : setting;
+    const runtime = db.freshRuntime();
+    try {
+      await expect(transaction(runtime, tenantSetting, async client => {
+        await client.query("SELECT set_config('app.import_command','enabled',true)");
+        await insertJob(client, actor.tenant, randomUUID(), importedShape);
+      })).rejects.toMatchObject({ code: setting === "false" || setting === "invalid" ? "22P02" : "42501" });
+    } finally { await runtime.end(); }
+    expect(await jobDoorCounts(db.owner, actor.tenant)).toEqual(before);
+  });
+
+  it("[LP2-A04] shared migration ownership plus a forged adoption flag cannot mint an imported job", async () => {
+    const actor = await jobDoorsActor(db.owner), before = await jobDoorCounts(db.owner, actor.tenant);
+    await expect(transaction(db.owner, actor.tenant, async client => {
+      await client.query("SET LOCAL ROLE jobguard_migration");
+      await client.query("SELECT set_config('app.import_command','enabled',true)");
+      await insertJob(client, actor.tenant, randomUUID(), importedShape);
+    })).rejects.toMatchObject({ code: "42501" });
+    expect(await jobDoorCounts(db.owner, actor.tenant)).toEqual(before);
+  });
+
+  it("[LP2-A06] the old thirteen-argument adoption overload is effectively unavailable to inherited runtime", async () => {
+    const actor = await jobDoorsActor(db.owner), before = await jobDoorCounts(db.owner, actor.tenant);
+    await expect(transaction(db.runtime, actor.tenant, client => client.query(
+      "SELECT app.adopt_in_flight_job($1,$2,$3,$4::varchar,$5::varchar,$6::char(64),$7::varchar,$8::bigint,$9::bigint,$10::varchar,$11::varchar,$12,$13::timestamptz)",
+      [actor.tenant, randomUUID(), randomUUID(), "Fictional import", "live", "a".repeat(64), "Fictional baseline", 100100, 1502,
+        "reference_fee_policy_v1", "synthetic_import_terms_candidate.v1", actor.member, new Date(0)],
+    ))).rejects.toMatchObject({ code: "42501" });
+    expect(await jobDoorCounts(db.owner, actor.tenant)).toEqual(before);
+  });
+
+  it("[LP2-A05] [LP2-A06] the current checked adoption preserves parties, weaker attestation and historical v1 values without billing", async () => {
+    const f = await adoptionFixture(db), dispatcher = new UserCommandDispatcher(db.runtime);
+    const mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
+    const result = await dispatcher.dispatch(testTenantContext(f.actor.tenant), f.command, mutation);
+    expect(result).toMatchObject({ jobId: f.input.jobId, baselineId: f.input.baselineId, provenance: "imported",
+      lineageStrength: "builder_attested_weaker", acceptedNetValuePence: 100100, recoveryCapPence: 1502, billing: "none", historicFeesCreated: 0 });
+    expect((await db.owner.query(`SELECT j.status,j.provenance,j.accepted_quote_version_id,j.baseline_quote_version_id,
+      j.accepted_net_value_pence,j.recovery_cap_pence,b.lineage_strength,b.fee_policy_version,p.customer_revision_id,p.site_revision_id
+      FROM app.job j JOIN app.imported_job_baseline b ON(b.tenant_id,b.job_id)=(j.tenant_id,j.id)
+      JOIN app.job_party_current c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id)
+      JOIN app.job_party_binding p ON(p.tenant_id,p.id)=(c.tenant_id,c.binding_id)
+      WHERE j.tenant_id=$1 AND j.id=$2`, [f.actor.tenant, f.input.jobId])).rows).toEqual([{
+        status: "live", provenance: "imported", accepted_quote_version_id: null, baseline_quote_version_id: null,
+        accepted_net_value_pence: "100100", recovery_cap_pence: "1502", lineage_strength: "builder_attested_weaker",
+        fee_policy_version: "reference_fee_policy_v1", customer_revision_id: f.input.parties.customerRevisionId, site_revision_id: f.input.parties.siteRevisionId,
+      }]);
+    for (const table of ["recovery_fee_journal", "synthetic_obligation", "customer_invoice"]) {
+      expect((await db.owner.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [f.actor.tenant])).rows[0]!.n).toBe(0);
+    }
+    const before = await jobDoorCounts(db.owner, f.actor.tenant);
+    expect(await dispatcher.dispatch(testTenantContext(f.actor.tenant), f.command, mutation)).toEqual(result);
+    expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
+    await expect(transaction(db.runtime, f.actor.tenant, client => client.query("UPDATE app.imported_job_baseline SET accepted_net_value_pence=100101 WHERE tenant_id=$1 AND job_id=$2", [f.actor.tenant, f.input.jobId]))).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("[LP2-A05] adoption failure after its business writes rolls back parties, job, receipt, authorization and audit together", async () => {
+    const f = await adoptionFixture(db), mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
+    const before = await jobDoorCounts(db.owner, f.actor.tenant);
+    await expect(new UserCommandDispatcher(db.runtime).dispatch(testTenantContext(f.actor.tenant), f.command, {
+      async mutate(database, command) { await mutation.mutate(database, command); throw new Error("LP2 synthetic rollback"); },
+    })).rejects.toThrow("LP2 synthetic rollback");
+    expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
+    // Reusing the pool after rollback must allow the same exact operation to commit.
+    await expect(new UserCommandDispatcher(db.runtime).dispatch(testTenantContext(f.actor.tenant), f.command, mutation)).resolves.toMatchObject({ jobId: f.input.jobId });
+  });
+});
