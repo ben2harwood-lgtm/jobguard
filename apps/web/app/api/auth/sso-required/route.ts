@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createWorkspaceApplication, ssoRequiredStatus } from "@jobguard/api/workspace";
+import { createWorkspaceApplication, SsoRequiredError, ssoRequiredStatus } from "@jobguard/api/workspace";
 import { identityApplication, identityCredentials } from "../../../lib/identity-server";
 import { syntheticPool } from "../../../lib/synthetic-server";
 const service=()=>createWorkspaceApplication({pool:syntheticPool(),identity:identityApplication()}).ssoRequired!;
@@ -14,5 +14,5 @@ export async function POST(request:Request) {
   try {
     let raw:unknown;try{raw=await request.json();}catch{await service().refuseInput();}
     return reply(await service().command(raw,await identityCredentials(request)));
-  }catch(error){const {code,status}=ssoRequiredStatus(error);return reply({code},status);}
+  }catch(error){const {code,status}=ssoRequiredStatus(error);return reply(code==="SSO_REQUIRED_UNLINKED_MEMBERS"&&error instanceof SsoRequiredError&&error.unlinked!==undefined?{code,unlinked:error.unlinked}:{code},status);}
 }

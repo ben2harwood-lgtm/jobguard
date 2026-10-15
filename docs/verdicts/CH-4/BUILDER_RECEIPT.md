@@ -1631,3 +1631,616 @@ unchanged; CH-4 is still the partial synthetic slice, not complete/unblocked MON
 The new exact-commit independent verdict and separate acceptance remain pending.
 No Git-writing command was issued by the builder. Intended commit message is
 written to `/private/tmp/jg-msg-ch-4.txt`; dispatcher owns stage/commit/push.
+
+## Repair r7 — CI 38477725695, starting head f93716d (13 October 2026)
+
+Builder: Codex. Source-inspected and locally test-executed as specified below;
+real PostgreSQL and browser execution NOT RUN. This is not an independent
+verdict or technical acceptance. No Git-writing command, package download,
+PostgreSQL start, localhost bind or merged-test edit was performed.
+
+### Actual failures and repair
+
+Read the dispatcher's complete filtered failed log at
+`/Users/benharwood/.local/share/full-steam/jg-runs/ch-4-ci-failed-38477725695.log`.
+It contains **no assertion row/hash/identity diff**. Both tests throw before
+reaching their isolation comparison:
+
+- Log lines 569–576: DW8 throws `record "new" has no field "status"` at
+  `FinalAccountLockRepository.lock`. Migration 0144's shared admission trigger
+  uses `TG_TABLE_NAME='final_account_lock_check' AND NEW.status<>'pending'`.
+  Resolving the expression still accesses the field on `final_account_lock`,
+  whose row type has no status column. Nested IF dispatch now resolves the field
+  only for the check table. The existing skip for nonpending checks, closed-job
+  refusal, tenant/session authority and locking remain intact.
+- Log lines 580–595: Test Q throws `INVALID_WORK_SOURCE` during proof completion.
+  Source inspection establishes that `ch4_receipt_integrity` runs under
+  `jobguard_migration` and reads `stage_completion`. Its FORCE RLS policy admits
+  only runtime (0015); unlike evidence and command receipts, no later migration
+  admits its owner. Thus the real runtime insert is invisible to the definer's
+  source check. Added `ch4_stage_source_read`: SELECT only for the migration owner,
+  limited to the current tenant. No RLS/owner bypass, runtime grant, source hash,
+  identity, processing clock or historical row was changed.
+
+The merged fixtures seed the same evidence in both copies, then add only private
+signal/evidence links to the many-signal copy. DW8 uses generic `photo` with zero
+bytes and a pending upload; Test Q's held source is also generic `photo` with zero
+bytes and a pending upload. Both are excluded from CH-4 photo capture by the
+existing qualification checks. Private links have no CH-4 trigger. There is no
+observed signal-derived public row difference in this supplied run; errors mask
+any subsequent comparison. Exact repaired-head CI must establish the complete
+isolation result. No shadow-table read or signal-dependent suppression was added
+to product code. The two merged tests and all of their comparisons are unchanged
+(`git diff --exit-code HEAD --` on those two paths returned 0).
+
+### Added regression and upgrade proof
+
+Added r7 coverage in own `job-work-state-sources.integration.test.ts`. A freshly
+migrated, populated source fixture is cloned into two real databases; only one
+gets 25 held signals and version-specific evidence links via `jobguard_shadow`.
+Before and after identical non-owner runtime photo and stage writes, the test
+compares complete canonical `row_to_json(t)::text` rows for all four CH-4 tables,
+source audit rows and audit heads. Receipts/events start nonempty; the business
+writes must add the expected two effects and change the snapshot. Every stored
+column is compared. A disposable-database clock fixture controls processing time,
+just as merged Test Q does; no timestamps, ids or hashes are removed. This is a
+source-trigger integration fixture, not a newly authorized command or provider
+test. Existing real EvidenceService/ProofCommandService coverage remains intact.
+
+The own rule-9 proof now seeds and compares pre-existing stage-completion rows,
+retains full named columns/types/PK identities/canonical bytes and all old
+comparisons and controls, and additionally preserves all pre-existing policies.
+It inspects the new owner SELECT policy and checks missing/wrong/correct tenant
+visibility as the actual migration role. After own-step/later-twice preservation
+checks, it issues a new lock through the real repository on the upgraded schema,
+covering the missing-status defect. All added DB assertions are NOT RUN locally;
+both test files pass strict TypeScript checking including their imports.
+
+Migration 0144 is own/unmerged and edited in place as instructed. No backfill,
+new dependency, money policy, provider, native change, UI flow, operational alert
+or public API change. Existing runtime policies/grants and immutable history are
+preserved. BEGIN/COMMIT keeps installation atomic; after release, fixes remain
+additive forward migrations rather than deleting immutable source history.
+Affected invariants: tenant isolation (§5.1), atomic source/audit effects (§5.4,
+§5.7), version-specific evidence (§5.8), hidden-signal isolation (§5.14).
+
+### Commands actually run and results
+
+Used installed pnpm 10.28.1 via the existing shim, with
+`export PATH="/private/tmp/ch4-pnpm-bin:/Users/benharwood/Library/pnpm/bin:$PATH"`.
+Node is 24.17.0. Logs are `/private/tmp/jg-ch-4-r7-*.log`.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck` | PASS; 7 successful, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS; root rules and 7 package checks, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS |
+| `pnpm build` | PASS; 7 successful, 2 cached; 31 pages |
+| `pnpm openapi:check` | BLOCKED: tsx CLI's IPC pipe listen EPERM |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS; same generator/artifact check through loader without CLI IPC |
+| `pnpm exec tsc -p /private/tmp/jg-ch-4-r7-tests-tsconfig.json` | PASS on both added/extended integration files; repeated after final test edits |
+| core `vitest run --maxWorkers=2 src` | 2,455 pass, one unchanged allocation test exceeds its existing 5-second timeout under concurrent checks |
+| core `vitest run --maxWorkers=1 src/receipt-allocation.test.ts` after other checks finish | PASS; 34/34; unchanged timed-out assertion now passes |
+| DB `vitest run --maxWorkers=1 src test/job-work-state-syntax.test.ts test/site-extra-evidence-compatibility.test.ts` | 101 pass, one unchanged audit-checkpoint source-graph test exceeds its existing 5-second timeout under concurrent checks |
+| DB `vitest run --maxWorkers=1 src/audit-checkpoint-handoff.test.ts` | First rerun during build still times out (55 pass); idle rerun PASS, 56/56; no timeout/test edits |
+| API source suite with environment exclusions below | PASS; 67 files, 1,567 tests |
+| API `vitest run --maxWorkers=1 src/final-account-lock.isolation.test.ts -t 'DW8 application read'` | PASS; two scripted reads; real-DB case excluded |
+| config / storage / AI tests | PASS; 2 / 4 / 80 tests |
+| web `test --maxWorkers=2` | PASS; 33 files, 784 tests |
+| seven tooling tests with `node --test --test-concurrency=2` | PASS; 19 tests |
+| `git diff --check` | PASS |
+
+Exact available API source command:
+
+```sh
+pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src \
+  --exclude '**/shadow-isolation.application.test.ts' \
+  --exclude '**/final-account-lock.isolation.test.ts' \
+  --exclude '**/health.test.ts' \
+  --exclude '**/contractor-practice-session.http.test.ts' \
+  --exclude '**/site-extra.http.test.ts' \
+  --exclude '**/site-extra-pricing.http.test.ts' \
+  --exclude '**/site-visit.http.test.ts' \
+  --exclude '**/auth/sso/action-paths.test.ts'
+```
+
+These exclusions require PostgreSQL or bound sockets. Scripts/CI discovery and
+mandatory tests were not changed. Tooling ran commercial-boundary, core-purity,
+decision-check-purity, decision-records, dependency-audit, policy-gate-sites and
+shared-money-origin tests. The two Git-fixture tooling suites issue Git-writing
+commands, so were not run under the dispatcher's prohibition. The umbrella
+`pnpm test` was therefore not run; these are the actual available unit subsets.
+Initial timeout results remain recorded; no green blanket suite is invented.
+Build reported existing Next warnings and restricted Turbo-cache IO warnings.
+
+### Dispatcher PostgreSQL/browser work — NOT RUN by builder
+
+Focused commands (after installed builds, with permitted PostgreSQL/socket access):
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 \
+  test/job-work-state-sources.integration.test.ts \
+  test/job-work-state-upgrade.integration.test.ts \
+  test/job-work-state.integration.test.ts \
+  test/job-work-state-post-lock.integration.test.ts \
+  test/job-work-state-races.integration.test.ts \
+  test/job-work-state-catalog.integration.test.ts
+pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 \
+  src/final-account-lock.isolation.test.ts \
+  src/shadow-isolation.application.test.ts
+pnpm test
+pnpm test:db
+pnpm test:migrations
+pnpm test:e2e
+pnpm openapi:check
+```
+
+The two previously red merged tests, new r7 source-isolation case, updated
+rule-9 proof and existing real proof commands remain explicit PostgreSQL gates.
+No exact-commit independent cross-model verdict or separate acceptance is claimed.
+G1, production disablement and held CH-4 scope remain unchanged. Dispatcher owns
+commit/push; intended message is `/private/tmp/jg-msg-ch-4.txt` (overwritten).
+
+## Repair r8 — CI 38494833390, head dc6b373 (14 October 2026, dispatcher 5)
+
+Builder: Codex. Started clean on `codex/sandbox/ch-4` at
+`dc6b37392de39ea434ca71bd1d4d2bde9ab95dd6` (r7 plus main, PR #185).
+Read the entire supplied filtered log:
+`/Users/benharwood/.local/share/full-steam/jg-runs/ch-4-ci-failed-38494833390.log`.
+The ANSI/timestamp-stripped reading copy is `/private/tmp/ch4-r8-ci-clean.log`
+(1,788 lines). The run reports **11 failing tests in seven DB files**, with
+1,950 DB tests passing; the other package suites pass. The root `pnpm test` and
+`@jobguard/db#test` failures are propagation of those eleven failures.
+These are source-inspected repairs, with local execution limited below;
+PostgreSQL/browser verification and exact-commit independent verdict/acceptance
+remain pending. No Git-writing command or package installation was issued.
+
+### Every failure in the supplied log, and its disposition
+
+| # | Failing file and exact test | Observed failure and repair |
+| --- | --- | --- |
+| 1 | `audit-export.integration.test.ts`: leaves every existing table, policy, routine privilege and runtime role attribute unchanged on upgrade | `[MO5-e]` reports exactly `policy app.stage_completion.ch4_stage_source_read: permissive policy added`. **0144 is wrong.** Removed this policy from own unmerged migration in place. No edit to the merged test. |
+| 2 | `job-work-state-post-lock.integration.test.ts`: CH4-A08 closed jobs refuse final-check admission (fixture close, new insert only) | PostgreSQL 42P08, `$2` text versus uuid at fixture line 62. **Own fixture setup is wrong.** Cast the command UUID before its text semantic-key representation; explicitly type UUID parameters in lifecycle INSERT SELECT. |
+| 3 | `job-work-state-post-lock.integration.test.ts`: CH4-A08 CH4-A17 closed storage refuses the existing lock routine atomically | Same shared lifecycle fixture 42P08 before the refusal assertion. Same setup repair; closed-job refusal and atomic rollback checks unchanged. |
+| 4 | `job-work-state-post-lock.integration.test.ts`: CH4-A13 CH4-A15 purchase-order-repository.ts#place: genuine pre-lock replay is unchanged and a new identity cannot use its allowance | Fresh post-lock ID resolved `{reused:false, placementId, outboxActionId}`. **Repository code is wrong.** Dispatcher semantic deduplication returns before mutate, bypassing the existing new-source refusal. Admission now distinguishes an already committed exact identity (including successful pre-lock no-ops), an original completed legacy receipt, and a fresh identity. Only the latter is refused before semantic reuse. Original hashes/authority/dispatcher conflict checks remain. |
+| 5 | `job-work-state-races.integration.test.ts`: CH4-A06 source activity cancels an outstanding marker without editing it | Shared lifecycle fixture 42P08. Same fixture repair; cancellation/history expectations unchanged. |
+| 6 | `job-work-state-sources.integration.test.ts`: r7 zero/25 evidence-linked held signals leave all four new tables and source audit byte-identical before and after runtime photo/stage writes | PostgreSQL 28P01 `empty password returned by client` at clone migration. **Own test pool setup is wrong.** `Pool.options.password` is non-enumerable; spreading options omits it. Copy it explicitly into each seed/clone admin/runtime pool. The zero/25 inputs and every-byte comparison stay intact. Also cast UUIDs before text use in its previously unreached source inserts. |
+| 7 | `job-work-state-upgrade.integration.test.ts`: CH4-A24 own migration preserves original rows/types/PK identities/grants; later migrations twice; comparator controls | 42P08 `$2` text versus uuid at its proof receipt insert. **Own setup is wrong.** Explicit UUID-to-text cast; all original row/type/PK/grant and comparator controls retained. The r7 positive added-policy setup also conflicts with #1: it now runs solely as a rolled-back widening control, with its original policy-name/role/visibility expectations retained. Added exact comparison of all policies on older tables, including rejection of this control. |
+| 8 | `job-work-state.integration.test.ts`: CH4-A06 finished and cancellation append immutable facts (fixture storage only) | Shared lifecycle fixture 42P08; same fixture repair, immutable predecessor assertions unchanged. |
+| 9 | `job-work-state.integration.test.ts`: CH4-A07 CH4-A09 close requires reason and note and reopen preserves history (fixture storage only) | Shared lifecycle fixture 42P08; same fixture repair, history/note/audit assertions unchanged. |
+| 10 | `job-work-state.integration.test.ts`: CH4-A18 CH4-A19 exact common party bindings create only an immutable link (fixture, admission held) | Its link command receipt has the same 42P08 UUID/text ambiguity. **Own setup is wrong.** Explicit UUID-to-text cast; common-party and no-money/no-activation expectations unchanged. |
+| 11 | `watchdog-lock-order.integration.test.ts`: evidence.ts#finalize | Audit count increased but observer saw no audit-head lock. **Own added audit timing is wrong.** CH-4 deferred source audit ran during COMMIT, after the observer's last open-transaction snapshot. Finalize now drains deferred constraints after storing its command result and running its completion callback, before returning from the transaction. All business work precedes that audit drain; no test/observer edit. |
+
+### Stage integrity without an older permission widening
+
+Keep the tenant/job/id stage key and add a tenant/job/id/completed-at/evidence-link
+unique key. The new receipt stores `stage_evidence_link_id` and references the
+full source key, with non-null/type-shape checks and a source/link hash check.
+PostgreSQL referential integrity checks the exact source row/time/link even when
+FORCE RLS hides that row from the migration owner. This replaces the failing
+owner SELECT validation without granting any new source read permission. The
+original stage/source hash derivation, source identity and microsecond time are
+unchanged. No older row, type, primary identity, policy or ACL is rewritten.
+
+Added adversarial own coverage: stage receipts reject a one-microsecond forged
+source time, another link with its matching derived hash, and an incorrect hash;
+the actual migration role still sees no stage rows. Existing real proof-source
+commands and zero/25 clone comparisons remain required. Added an actual existing
+PO repository case proving a successful pre-lock semantic no-op retains its own
+replay identity after lock, while changed requests and fresh IDs are refused.
+These added PostgreSQL tests are NOT RUN in this sandbox.
+
+The own upgrade test's r7 widening-policy assertions are retained inside an
+explicit transaction rolled back after proving the strengthened policy comparator
+rejects the widening. On the migrated schema itself, the older tables' complete
+policy sets must equal their pre-0144 sets, and the owner cannot read stage rows,
+even with the correct tenant. The original missing/wrong/correct-tenant policy
+control expectations are unchanged and distinguish the forbidden widening from
+the actual unchanged permissions. This control creates no production policy.
+
+Both protected files remain byte-for-byte identical to entry and HEAD:
+
+- `apps/api/src/shadow-isolation.application.test.ts`:
+  `8d4f2abc7b502489ac49e56e60224623d90ff901aa41892ed40ff2bf69967006`.
+- `apps/api/src/auth/context-boundary.test.ts`:
+  `a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35`.
+
+No existing expected value, refusal, count, pinned name, fingerprint or hash was
+changed. No merged test was edited. Q-01/Q-03/Q-04/Q-05/Q-06 stay unbuilt. No new
+command, permission, route, money policy, interval calculation, backfill, provider,
+native feature, production enablement or operational alert. Affected invariants:
+§§5.1, 5.3, 5.4, 5.7, 5.8 and 5.14. Contract and migration notes describe the final
+implementation. 0144 remains atomic BEGIN/COMMIT; after merge/release use a reviewed
+additive forward fix, preserving immutable history. This repair edits only own
+unmerged 0144, as instructed. No backwards-incompatible public API change.
+
+### Commands actually run
+
+Node 24.17.0, existing installed pnpm 10.28.1 via
+`PATH=/private/tmp/ch4-pnpm-bin:/Users/benharwood/Library/pnpm/bin:$PATH`.
+Logs: `/private/tmp/jg-ch-4-r8-*.log`. No package download or install attempted.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck` | PASS twice, including final source; 7 successful / 2 cached each run |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS twice, including final source; root checks and 7 package tasks / 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS twice, including final changed paths |
+| `pnpm build` | PASS twice; final source build: 7 successful / 2 cached, 31 pages |
+| `pnpm openapi:check` | BLOCKED / exit 1: tsx CLI IPC `listen EPERM` before checker execution |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS twice, including final built dependencies; same checker/artifact, no CLI IPC |
+| core `vitest run --maxWorkers=1 src` | PASS: 82 files, 2,456 tests |
+| DB `vitest run --maxWorkers=1 src test/job-work-state-syntax.test.ts test/site-extra-evidence-compatibility.test.ts` | PASS: 7 files, 104 tests; includes the unchanged 13-body migration syntax assertion; no PostgreSQL claim |
+| API source command below | Initial exit 1: 1,570 pass / one scripted PO receipt-query failure; after final source and dependency rebuild, PASS: 68 files, 1,571 tests |
+| API `vitest run --maxWorkers=1 src/watchdog-registry.test.ts` | Two intermediate reruns: 120 pass / one failure each, loading stale DB dist; final complete API rerun above passes all 121 unchanged registry tests |
+| API `vitest run --maxWorkers=1 src/final-account-lock.isolation.test.ts -t 'DW8 application read'` | PASS: two scripted reads; one real-DB test excluded |
+| config / storage / AI `test --maxWorkers=1` | PASS: 2 / 4 / 80 tests; AI runs synthetic fixtures only |
+| web `test --maxWorkers=2` | PASS twice, final built dependencies included: 33 files / 784 tests |
+| seven tooling files, `node --test --test-concurrency=2` | PASS: 19 tests |
+| `pnpm exec tsc -p /private/tmp/jg-ch-4-r8-tests-tsconfig.json` (all CH-4 tests) | Exit 2: imported, unchanged `watchdog-command-harness.ts:164` passes `string \| undefined` to a string argument. No merged harness edit. Root typecheck does not include DB integration tests. |
+| `pnpm exec tsc -p /private/tmp/jg-ch-4-r8-changed-tests-tsconfig.json` (fixture, sources, upgrade, main storage tests and their imports) | PASS: strict checking; excludes the post-lock/race imports of that existing harness |
+| `git diff --check`, protected-file SHA-256 + `git diff --exit-code HEAD --` preservation checks | PASS |
+| TypeScript AST inspection of every edited test against HEAD | PASS: every original matcher and expected argument remains present with at least its original multiplicity; added assertions only |
+
+The initial PO query returned only a `1` marker, which the existing scripted
+replay adapter does not implement. The final code uses the established full
+receipt read (`request_hash,status,result`) for legacy receipts. A prior committed
+identity also preserves pre-lock successful semantic no-ops, whose dispatcher
+receipt belongs to the first command. The dispatcher still validates payload
+hash/status before returning a cached result. The two intermediate targeted API
+reruns used the still-unrebuilt DB dist containing that initial marker query
+(confirmed by inspecting the emitted file), so both retained the same refusal
+failure. A full dependency rebuild followed by the complete available API suite
+passes unchanged; no mock expectation, refusal or source test was adjusted.
+
+The all-tests ad hoc typecheck is honestly recorded as failed on the existing
+imported harness, rather than loosening its type settings or changing that file.
+The directly changed source/upgrade/storage tests pass strict checking; real DB
+execution of these and the added post-lock no-op test remains CI work. Existing
+Next root/lockfile, CSS, file-type export/dynamic-import and restricted Turbo
+cache warnings remain in build logs. No timeout was raised or test disabled.
+
+Available API source command (CI discovery and scripts are unchanged):
+
+```sh
+pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src \
+  --exclude '**/shadow-isolation.application.test.ts' \
+  --exclude '**/final-account-lock.isolation.test.ts' \
+  --exclude '**/health.test.ts' \
+  --exclude '**/contractor-practice-session.http.test.ts' \
+  --exclude '**/site-extra.http.test.ts' \
+  --exclude '**/site-extra-pricing.http.test.ts' \
+  --exclude '**/site-visit.http.test.ts' \
+  --exclude '**/auth/sso/action-paths.test.ts'
+```
+
+Excluded cases need PostgreSQL or bound sockets, unavailable by the dispatcher's
+environment note. Seven tooling test files ran: policy-gate-sites, dependency-audit,
+decision-check-purity, decision-records, core-purity, shared-money-origin and
+commercial-boundary. The other two tooling suites issue Git-writing commands;
+therefore they and the umbrella `pnpm test` were not run. No optional-CI change.
+
+Dispatcher must run focused CH-4 PostgreSQL suites plus
+`audit-export.integration.test.ts`, `watchdog-lock-order.integration.test.ts`,
+`command-replay-contract.integration.test.ts`, the two protected API tests and
+`final-account-lock.isolation.test.ts`; then full `pnpm test`, `pnpm test:db`,
+`pnpm test:migrations`, both browser projects via `pnpm test:e2e`, and standard
+`pnpm openapi:check` after pushing. The earlier supplied run's passing protected
+and Final Check isolation suites are evidence for dc6b373 only, not this repair.
+G1/production gates, the exact-repair-commit independent cross-model verdict and
+separate acceptance remain outstanding. Dispatcher owns stage/commit/push.
+Intended conventional commit message is `/private/tmp/jg-msg-ch-4.txt` (overwritten).
+
+## Repair r9 — CI 38500017175, head 9409903 (14 October 2026, dispatcher 5)
+
+Builder: Codex. Started clean on `codex/sandbox/ch-4` at
+`940990308d380f2c9ba6ad43440c3eeb70ab465f`, PR #185. Read all 1,433 lines of
+`/Users/benharwood/.local/share/full-steam/jg-runs/ch-4-ci-failed-38500017175.log`
+in sequential chunks, including the complete failure summary and earlier stderr.
+The supplied real-PostgreSQL run reports **three failing tests in three DB files**,
+with 1,960 DB tests passing. Its other package suites pass. The root `pnpm test`
+and `@jobguard/db#test` failures propagate those same three failures.
+
+### Every failure in the supplied log
+
+| # | Failing file and exact test | Cause and repair |
+| --- | --- | --- |
+| 1 | `job-work-state-post-lock.integration.test.ts`: r8 a successful pre-lock PO semantic no-op keeps its own replay identity after lock | `TypeError: Cannot read properties of undefined (reading 'query')` at `watchdog-fixtures.ts:9`, via `sourceHarness.live()`. The r8 case belongs to the raw guard suite, but its harness was booted only by the later sibling replay suite. Added a dedicated harness and its boot/stop hooks inside the original raw guard suite. The existing r8 test body, name, suite, original fixture hooks and all replay/refusal assertions remain unchanged. No PO production-code change. |
+| 2 | `job-work-state-upgrade.integration.test.ts`: CH4-A24 own migration preserves original rows/types/PK identities/grants; later migrations twice; comparator controls | Policy control expects `roles: ['jobguard_migration']`, but `pg_policies.roles` is catalog `name[]`, returned by pg as `'{jobguard_migration}'`. Cast the query's roles column to `text[]`, which pg parses as an array. The original expected roles, pinned policy name, before/after comparison, rolled-back widening refusal and visibility controls remain unchanged. No added production policy. |
+| 3 | `job-work-state.integration.test.ts`: CH4-A18 CH4-A19 exact common party bindings create only an immutable link (fixture, admission held) | PostgreSQL 23514, `command_receipt_check`, for `ch4.fixture.link`: the fixture inserts `status='succeeded'` and a result without `completed_at`. Added `clock_timestamp()` for the fixture's completion timestamp, matching the existing lifecycle fixture and the unchanged succeeded-receipt constraint. No constraint weakened; all link-only/no-money counts and assertions unchanged. |
+
+The nearby `NOT_FOUND` and `INVOICE_NOT_FOUND` stderr is from the supplied run's
+**passing** `shadow-isolation.application.test.ts` (22 tests), whose negative GET
+paths exercise those errors. These are not extra failing tests and are not the
+r8 harness failure. That run also passes `context-boundary.test.ts` (145 tests);
+those results apply to 9409903, not to an independently verified r9 commit.
+
+### Scope and preservation
+
+Only the three own CH-4 test files above and this receipt changed. Migration
+0144 and all production source remain HEAD-identical; the log identifies fixture
+and catalog-decoding causes, so no migration repair is warranted. No merged test,
+shared harness, registry, CI discovery or package script was edited. No package
+installation/download or Git-writing command was run. Dependencies were already
+installed; Node 24.17.0 and installed pnpm 10.28.1 were used through
+`PATH=/private/tmp/ch4-pnpm-bin:/Users/benharwood/Library/pnpm/bin:$PATH`.
+
+TypeScript AST comparison against HEAD confirms every complete existing matcher
+expression and every test/suite name is unchanged. The r8 PO test body is also
+byte-identical. Protected-file SHA-256 and HEAD byte comparisons pass:
+
+- `apps/api/src/shadow-isolation.application.test.ts`:
+  `8d4f2abc7b502489ac49e56e60224623d90ff901aa41892ed40ff2bf69967006`.
+- `apps/api/src/auth/context-boundary.test.ts`:
+  `a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35`.
+
+No existing expected value, refusal, count, pinned name, fingerprint or hash was
+changed. Q-01, Q-03, Q-04, Q-05 and Q-06 stay unbuilt. No new command permission,
+interval calculation, charge, provider, production enablement, operational alert,
+schema/data migration or backwards-compatibility change. Relevant retained
+invariants: tenant-safe policies (§5.1), immutable history (§5.2), exact
+authorization (§5.3), durable replay (§5.4), audit (§5.7) and shadow isolation
+(§5.14). Existing 0144 rollback/forward-fix guidance is unchanged.
+
+### Commands actually run
+
+Logs are `/private/tmp/jg-ch-4-r9-*.log`. No PostgreSQL or browser result is claimed
+for this repair: the dispatcher explicitly states that this sandbox cannot bind
+localhost or start PostgreSQL. CI must execute those suites after the push.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck` | PASS: 7 successful tasks / 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS: root guards and 7 successful package tasks / 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS |
+| `pnpm build` | PASS: 7 successful tasks / 2 cached; 31 generated pages |
+| `pnpm openapi:check` | Exit 1 before checker execution: tsx CLI IPC `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS: same checker and committed artifact, without CLI IPC |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=1 src` | PASS: 82 files / 2,456 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src test/job-work-state-syntax.test.ts test/site-extra-evidence-compatibility.test.ts` | PASS: 7 files / 104 tests; includes unchanged migration syntax assertions; no database execution |
+| API source command below | PASS: 68 files / 1,571 tests, including unchanged context-boundary and watchdog registry assertions |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/final-account-lock.isolation.test.ts -t 'DW8 application read'` | PASS: 2 scripted reads / 1 real-DB test excluded |
+| `pnpm --filter @jobguard/config test --maxWorkers=1` | PASS: 2 files / 2 tests |
+| `pnpm --filter @jobguard/storage test --maxWorkers=1` | PASS: 2 files / 4 tests |
+| `pnpm --filter @jobguard/ai test --maxWorkers=1` | PASS: 5 files / 80 synthetic fixture tests; no live-model evaluation |
+| `pnpm --filter @jobguard/web test --maxWorkers=2` | PASS: 33 files / 784 tests |
+| Seven tooling files below, `node --test --test-concurrency=2` | PASS: 19 tests |
+| `pnpm exec tsc -p /private/tmp/jg-ch-4-r8-changed-tests-tsconfig.json` | PASS: strict fixture/source/upgrade/storage test checking |
+| `pnpm exec tsc -p /private/tmp/jg-ch-4-r8-tests-tsconfig.json` | Exit 2: same pre-existing merged `watchdog-command-harness.ts:164` passes `string \| undefined` to a string argument. No merged harness edit or relaxed compiler option. Root typecheck excludes DB integration tests. |
+| pg driver parser probe using OIDs 1003 and 1009 | PASS: actual installed pg returns catalog `name[]` as a string and `text[]` as the unchanged expected role array; no PostgreSQL server used |
+| `git diff --check`, HEAD/protected byte checks and TypeScript AST comparison | PASS; preservation output in `jg-ch-4-r9-preservation.log` |
+
+Available API source command (CI scripts/discovery unchanged):
+
+```sh
+pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src \
+  --exclude '**/shadow-isolation.application.test.ts' \
+  --exclude '**/final-account-lock.isolation.test.ts' \
+  --exclude '**/health.test.ts' \
+  --exclude '**/contractor-practice-session.http.test.ts' \
+  --exclude '**/site-extra.http.test.ts' \
+  --exclude '**/site-extra-pricing.http.test.ts' \
+  --exclude '**/site-visit.http.test.ts' \
+  --exclude '**/auth/sso/action-paths.test.ts'
+```
+
+These excluded suites need PostgreSQL or bound sockets. Tooling command:
+
+```sh
+node --test --test-concurrency=2 \
+  tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs \
+  tools/decision-check-purity.test.mjs tools/decision-records.test.mjs \
+  tools/core-purity.test.mjs tools/shared-money-origin.test.mjs \
+  tools/commercial-boundary.test.mjs
+```
+
+Build retains the existing Next workspace-root/lockfile and CSS warnings, plus
+restricted Turbo-cache IO warnings; it exits successfully.
+
+The two remaining tooling suites issue Git-writing commands (`init`, `add`,
+`commit`, checkout/switch and merge) in their fixtures. Therefore they and the
+umbrella `pnpm test` were not run under the explicit no-Git-writing instruction.
+No mandatory CI suite was made optional. No clean install was attempted.
+
+### Outstanding verification and dispatch
+
+All three repairs are source-inspected; actual PostgreSQL execution remains
+pending. Dispatcher must run the three failed cases and the full CH-4 DB suites,
+then `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, `pnpm test:e2e` and standard
+`pnpm openapi:check` in CI. Keep the merged audit-export, replay, lock-order,
+protected isolation and context-boundary suites enforced. No exact-r9-commit
+independent cross-model verdict or separate acceptance is claimed. G1/production
+release gates and held scope remain unchanged. Dispatcher owns stage/commit/push.
+Intended conventional commit message: `/private/tmp/jg-msg-ch-4.txt` (overwritten).
+
+
+## Repair round r10 — 14 October 2026, dispatcher 5
+
+Request: PR #185, issued merged head `f1694ed57fcd6bf0bc2f69d67da01f311257a7cc`
+(r9 plus main `077ab63`). Reviewed the entire 2,464-line filtered CI log for
+run `38507421951`, at
+`/Users/benharwood/.local/share/full-steam/jg-runs/ch-4-ci-failed-38507421951.log`.
+This is a builder run receipt, not an independent model verdict or acceptance.
+
+### Checkout discrepancy and dispatcher handoff
+
+The supplied worktree was clean at r9 `892a541654415bb858c5ad4a7a68746cab839711`,
+not the issued merged head. `f1694ed` was already available in the local object
+store. Materialized its 11 differing files using read-only `git show` and ordinary
+filesystem writes before testing. No Git-writing command, installation, download,
+PostgreSQL start or socket bind was attempted. `.git` and HEAD remain at r9.
+The eight materialized main-only paths explain the local lane refusals below;
+their contents are exactly `f1694ed`, not r10 changes.
+
+**Dispatcher must put the r10 repair on top of f1694ed, not commit the apparent
+main catch-up as r10 on top of this sandbox's r9 HEAD.** The scoped repair patch
+is `/private/tmp/jg-ch-4-r10.patch`, generated against `f1694ed` for exactly the
+three source files, the appended own post-lock tests and this receipt. The
+intended conventional commit message is `/private/tmp/jg-msg-ch-4.txt`, overwritten.
+The working tree contains the merged baseline plus this repair. `origin/main`
+was `45de036b3f9f1cca8d51b0781f6334a03ba0a595` during local lane checks.
+
+### Every failing CI test
+
+CI reports exactly 19 failures, in two scripted SQL test files. No other test
+failure is present in the supplied log. The real purchase-order and supplier
+integration files and CH-4 database suites passed in that historical run; that
+is evidence for f1694ed, not execution of this new repair.
+
+1. `test/audit-api-file-supplier-document.test.ts` — confirms decimal quantities using exact arithmetic
+2. `test/audit-api-file-supplier-document.test.ts` — keeps supported exact quantities: 1.000001
+3. `test/audit-api-file-supplier-document.test.ts` — keeps supported exact quantities: 0.000001
+4. `test/audit-api-file-supplier-document.test.ts` — keeps supported exact quantities: 01.10
+5. `test/audit-api-file-supplier-document.test.ts` — still rejects mismatched or fractional-penny totals: 1.1
+6. `test/audit-api-file-supplier-document.test.ts` — still rejects mismatched or fractional-penny totals: 0.5
+7. `test/audit-api-file-supplier-document.test.ts` — persists exact quantities and replays without another effect: 10000000000001.000000
+8. `test/audit-api-file-supplier-document.test.ts` — persists exact quantities and replays without another effect: 99999999999999.999999
+9. `test/audit-api-file-supplier-document.test.ts` — persists exact quantities and replays without another effect: 1.000000
+10. `test/purchase-order-audit.test.ts` — defaults the agreement comparison to server UTC today regardless of required date
+11. `test/purchase-order-audit.test.ts` — normalizes box agreement before purchase-order comparison
+12. `test/purchase-order-audit.test.ts` — purchase-order comparison excludes future rate revisions
+13. `test/purchase-order-audit.test.ts` — purchase-order comparison excludes expired rate revisions
+14. `test/purchase-order-audit.test.ts` — rejects fresh placement of superseded revision
+15. `test/purchase-order-audit.test.ts` — refuses changed revision as replay of placed order
+16. `test/purchase-order-audit.test.ts` — preserves an exact receipt replay after a later revision
+17. `test/purchase-order-audit.test.ts` — reuses only the same placed revision for a fresh exact approval
+18. `test/purchase-order-audit.test.ts` — holds revise's aggregate lock before placement identity, revision checks and audit
+19. `test/purchase-order-audit.test.ts` — refuses an unknown pack size instead of recording a fabricated comparison
+
+### Repair and retained guards
+
+Both repositories now begin with their original live guard. A `JOB_NOT_LIVE`
+refusal rolls back before reading the linked-job offer in a fresh tenant
+transaction. Live/replay paths no longer issue the added lifecycle query before
+main's statements. Unlocked non-live jobs keep `JOB_NOT_LIVE`.
+
+For new PO revisions and invoice intake, the linked offer is projected into the
+existing rate-read and intake-count statements. Refusal occurs before stale
+checks, writes and audit. For placement, the existing receipt query keeps its
+original projection/prefix and adds a UNION sentinel containing the linked offer,
+even when a fresh command has no receipt. A fresh identity is refused before the
+dispatcher can reuse a prior semantic receipt; an already succeeded exact receipt
+or stored identity retains its replay. The sentinel is read-only and never stored.
+Placement's revision read also projects the offer before new placement effects.
+
+The added helper references only public job, track, lock and party bindings,
+uses source-owned bound parameter names and adds no business lock. The original
+live guard holds the job share lock until commit, and migration 0144's insertion
+triggers remain the final database boundary. Main's per-job aggregate lock,
+current-revision check, placed-revision identity, effective-date filters, pack
+normalization and exact decimal arithmetic remain intact.
+
+The error translator now preserves an already validated linked offer as well as
+valid PostgreSQL detail. Three new refusal tests initially exposed that the
+translator discarded such an offer; production code was repaired, with their
+expectations unchanged. These were the fresh-PO-identity, locked-PO-revision and
+locked-invoice cases added below. A broader API run additionally exposed
+`watchdog-registry.test.ts`'s unchanged test **purchase-order dispatcher receipt
+replay conflict is typed at the Nest boundary**: its double requires the original
+`SELECT request_hash,status,result FROM app.command_receipt` prefix. The final
+UNION form preserves it. An immediate rerun still used the previous built DB
+artifact; rebuilding DB and rerunning passes all 121 registry tests.
+
+Five appended own scripted regressions assert fresh-identity refusal before
+semantic receipt/authorization reuse, PO revision and invoice refusal before
+writes, exact linked-offer preservation, rollback before the non-live lookup,
+and unchanged unlocked `JOB_NOT_LIVE`. They prove submitted statement behavior,
+not PostgreSQL execution, RLS or trigger correctness. Existing real DB tests
+remain unchanged and mandatory in CI.
+
+### Preservation, scope and limits
+
+All prior bytes in `job-work-state-post-lock.integration.test.ts` are unchanged;
+the new describe/import are appended. Whole-tree content comparison against a
+read-only `git archive f1694ed` finds only the five scoped r10 files. All four
+merged audit test files are byte-identical to f1694ed, as are migration 0144,
+the merged main receipts/core changes, and both protected API test files:
+
+- `shadow-isolation.application.test.ts` SHA-256:
+  `8d4f2abc7b502489ac49e56e60224623d90ff901aa41892ed40ff2bf69967006`.
+- `auth/context-boundary.test.ts` SHA-256:
+  `a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35`.
+
+No existing expected value, refusal, count, pinned name, fingerprint or hash
+changed. Q-01/Q-03/Q-04/Q-05/Q-06 stay unbuilt. No registry, route, permission,
+policy, database/data migration, provider, external action, operational alert,
+production enablement, interval or money behavior is added. Relevant retained
+invariants: tenant isolation (§5.1), immutable history (§5.2), exact authorization
+(§5.3), durable replay (§5.4), append-only audit (§5.7) and shadow isolation (§5.14).
+Existing 0144 rollback/forward-fix guidance remains unchanged.
+
+### Commands actually run
+
+Used installed Node 24.17.0 and pnpm 10.28.1 with
+`PATH=/private/tmp/ch4-pnpm-bin:/Users/benharwood/Library/pnpm/bin:$PATH`.
+Logs: `/private/tmp/jg-ch-4-r10-*.log`. Dependencies were reused; no clean install
+is claimed. Root package scripts and mandatory CI discovery were not edited.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck` | PASS: seven package tasks |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1 at lane guard: r9 index treats eight materialized main-only files as lane edits; core purity passes |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Same eight-path baseline refusal; no scope rule relaxed |
+| `pnpm turbo run lint` | PASS: seven package tasks |
+| `pnpm build` | PASS: seven package tasks; existing Next workspace/CSS and restricted-cache warnings |
+| `pnpm openapi:check` | Exit 1 before checker runs: tsx IPC `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS: same generator/check and committed artifact, without CLI IPC |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=1 src` | PASS: 82 files / 2,456 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 src test/job-work-state-syntax.test.ts test/site-extra-evidence-compatibility.test.ts test/purchase-order-audit.test.ts test/audit-api-file-supplier-document.test.ts` | PASS: nine files / 133 tests |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/purchase-order-audit.test.ts test/audit-api-file-supplier-document.test.ts` | Final PASS: two files / 29 unchanged merged tests, covering every CI failure |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/job-work-state-post-lock.integration.test.ts -t 'r10 scripted'` | Final PASS: five new scripted cases; 15 socket/DB cases excluded only for this local selection |
+| API source command below | Final PASS: 68 files / 1,571 tests, including the unchanged 145 context-boundary and 121 registry tests |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/watchdog-registry.test.ts` after DB build | PASS: all 121 tests |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/final-account-lock.isolation.test.ts -t 'DW8 application read'` | PASS: two scripted read cases; one real DB case excluded locally |
+| `pnpm --filter @jobguard/config test --maxWorkers=1` | PASS: two files / two tests |
+| `pnpm --filter @jobguard/storage test --maxWorkers=1` | PASS: two files / four tests |
+| `pnpm --filter @jobguard/ai test --maxWorkers=1` | PASS: five files / 80 synthetic fixture tests; no live-model evaluation |
+| `pnpm --filter @jobguard/web test --maxWorkers=2` | PASS: 33 files / 784 tests |
+| Money/commercial boundary scripts and seven tooling suites below | PASS: both guards and 19 tests |
+| `pnpm exec tsc -p /private/tmp/jg-ch-4-r10-tests-tsconfig.json` | Exit 2: only the pre-existing merged `watchdog-command-harness.ts:164` string-or-undefined argument error; no new test/source error and no harness edit |
+| Read-only whole-tree/protected-byte comparison; `git diff --check` | PASS |
+| `selectLane`/`matches` against exact r10 content differences from f1694ed | PASS: all five files in CH-4 scope; deterministic supplemental check, not a replacement for real lane lint |
+
+API source command:
+
+```sh
+pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src \
+  --exclude '**/shadow-isolation.application.test.ts' \
+  --exclude '**/final-account-lock.isolation.test.ts' \
+  --exclude '**/health.test.ts' \
+  --exclude '**/contractor-practice-session.http.test.ts' \
+  --exclude '**/site-extra.http.test.ts' \
+  --exclude '**/site-extra-pricing.http.test.ts' \
+  --exclude '**/site-visit.http.test.ts' \
+  --exclude '**/auth/sso/action-paths.test.ts'
+```
+
+Excluded suites require real PostgreSQL or bound sockets. The protected
+shadow-isolation file was byte-checked, not executed in this sandbox.
+Tooling command:
+
+```sh
+node tools/money-arithmetic-lint.mjs
+node tools/commercial-boundary-lint.mjs
+node --test --test-concurrency=2 \
+  tools/policy-gate-sites.test.mjs tools/dependency-audit.test.mjs \
+  tools/decision-check-purity.test.mjs tools/decision-records.test.mjs \
+  tools/core-purity.test.mjs tools/shared-money-origin.test.mjs \
+  tools/commercial-boundary.test.mjs
+```
+
+The other two tooling suites invoke Git-writing fixture commands, so they and
+umbrella `pnpm test` were not run under the dispatcher's explicit prohibition.
+Database/browser suites were left to GitHub CI as instructed. No real database,
+browser or live-provider result is claimed for r10.
+
+### Still required before technical acceptance
+
+Dispatcher: use the scoped patch on f1694ed, then run the unchanged root lint/lane
+and OpenAPI commands in the correct checkout, full `pnpm test`, `pnpm test:db`,
+`pnpm test:migrations` and `pnpm test:e2e`. In particular execute the unchanged
+CH-4 post-lock/source/race/isolation suites and both merged audit integration
+files: projected SQL and UNION behavior are only source-inspected locally.
+Keep audit, lock-order and command replay suites enforced. No exact-r10-commit
+independent cross-model verdict or separate acceptance is recorded here;
+§5.13 and production release gates remain outstanding. Dispatcher owns commit,
+push and CI; founder owns merge/release.

@@ -2,6 +2,11 @@ BEGIN;
 -- CH-4: synthetic immutable fact storage. No lifecycle/link/snagging command admission.
 -- No historical reconstruction, timer policy, eligibility policy, money or provider work.
 ALTER TABLE app.stage_completion ADD CONSTRAINT ch4_stage_job_identity UNIQUE(tenant_id,job_id,id);
+-- Validate stage identity, original server time and evidence binding through a
+-- composite FK. PostgreSQL's referential check needs no new reader policy on
+-- the older FORCE-RLS source table, and runtime retains exactly its old grants.
+ALTER TABLE app.stage_completion ADD CONSTRAINT ch4_stage_source_identity
+ UNIQUE(tenant_id,job_id,id,completed_at,evidence_link_id);
 CREATE TABLE app.job_site_source_receipt (
  tenant_id uuid NOT NULL, job_id uuid NOT NULL, id uuid NOT NULL,
  version text NOT NULL DEFAULT 'job-site-source-receipt.v1' CHECK(version='job-site-source-receipt.v1'),
@@ -10,7 +15,7 @@ CREATE TABLE app.job_site_source_receipt (
  received_at timestamptz NOT NULL, recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  source_hash char(64) NOT NULL CHECK(source_hash ~ '^[a-f0-9]{64}$'), object_version_id text,
  evidence_id uuid, upload_id uuid, document_id uuid, document_version_id uuid, goods_receipt_id uuid,
- variation_id uuid, extra_track varchar(16), extra_kind varchar(32), stage_completion_id uuid,
+ variation_id uuid, extra_track varchar(16), extra_kind varchar(32), stage_completion_id uuid, stage_evidence_link_id uuid,
  actor_membership_id uuid, provenance text NOT NULL CHECK(provenance IN('source_command','server_source')),
  environment text NOT NULL DEFAULT 'synthetic_demo' CHECK(environment='synthetic_demo'),
  PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,job_id,id), UNIQUE(tenant_id,job_id,fact_key),
@@ -22,6 +27,8 @@ CREATE TABLE app.job_site_source_receipt (
  FOREIGN KEY(tenant_id,job_id,goods_receipt_id) REFERENCES app.goods_receipt(tenant_id,job_id,id),
  FOREIGN KEY(tenant_id,job_id,variation_id,extra_track,extra_kind) REFERENCES app.extra_origin(tenant_id,job_id,variation_id,job_track,kind),
  FOREIGN KEY(tenant_id,job_id,stage_completion_id) REFERENCES app.stage_completion(tenant_id,job_id,id),
+ FOREIGN KEY(tenant_id,job_id,stage_completion_id,received_at,stage_evidence_link_id) REFERENCES app.stage_completion(tenant_id,job_id,id,completed_at,evidence_link_id),
+ CHECK((source_kind='stage_completion')=(stage_evidence_link_id IS NOT NULL)),
  FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES app.membership(tenant_id,id),
  CHECK((source_kind='photo' AND object_version_id IS NOT NULL AND evidence_id IS NOT NULL AND upload_id IS NOT NULL AND length(object_version_id)>0 AND document_id IS NULL AND document_version_id IS NULL AND goods_receipt_id IS NULL AND variation_id IS NULL AND stage_completion_id IS NULL AND extra_track IS NULL AND extra_kind IS NULL)
  OR (source_kind='delivery_note' AND document_id IS NOT NULL AND document_version_id IS NOT NULL AND evidence_id IS NULL AND upload_id IS NULL AND object_version_id IS NULL AND goods_receipt_id IS NULL AND variation_id IS NULL AND stage_completion_id IS NULL AND extra_track IS NULL AND extra_kind IS NULL)
@@ -201,7 +208,8 @@ BEGIN
  ELSIF NEW.source_kind='builder_extra' THEN
   IF NOT EXISTS(SELECT 1 FROM app.extra_origin o WHERE (o.tenant_id,o.job_id,o.variation_id)=(NEW.tenant_id,NEW.job_id,NEW.variation_id) AND o.kind='builder_logged' AND o.provenance='command' AND o.raising_membership_id=NEW.actor_membership_id AND o.source_capture_hash=NEW.source_hash AND o.server_recorded_at=NEW.received_at) THEN RAISE EXCEPTION 'INVALID_WORK_SOURCE'; END IF;
  ELSIF NEW.source_kind='stage_completion' THEN
-  IF NOT EXISTS(SELECT 1 FROM app.stage_completion s WHERE (s.tenant_id,s.job_id,s.id)=(NEW.tenant_id,NEW.job_id,NEW.stage_completion_id) AND s.completed_at=NEW.received_at) THEN RAISE EXCEPTION 'INVALID_WORK_SOURCE'; END IF;
+  -- The composite FK checks the row/time/link even when source RLS hides it.
+  IF NEW.source_hash IS DISTINCT FROM encode(sha256(convert_to(NEW.stage_completion_id::text||':'||NEW.stage_evidence_link_id::text,'UTF8')),'hex') THEN RAISE EXCEPTION 'INVALID_WORK_SOURCE'; END IF;
  END IF;
  RETURN NEW;
 END $$;
@@ -244,7 +252,7 @@ BEGIN
  ELSIF TG_TABLE_NAME='stage_completion' THEN
   SELECT c.actor_membership_id INTO actor FROM app.command_receipt c WHERE c.tenant_id=NEW.tenant_id AND c.command_id=NEW.command_id AND c.command_type='proof.complete';
   IF actor IS NOT NULL AND NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=actor AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
-  r.source_kind:='stage_completion'; r.stage_completion_id:=NEW.id; r.received_at:=NEW.completed_at; r.source_hash:=encode(sha256(convert_to(NEW.id::text||':'||NEW.evidence_link_id::text,'UTF8')),'hex'); r.fact_key:='stage_completion:'||NEW.id::text; r.actor_membership_id:=actor;
+  r.source_kind:='stage_completion'; r.stage_completion_id:=NEW.id; r.stage_evidence_link_id:=NEW.evidence_link_id; r.received_at:=NEW.completed_at; r.source_hash:=encode(sha256(convert_to(NEW.id::text||':'||NEW.evidence_link_id::text,'UTF8')),'hex'); r.fact_key:='stage_completion:'||NEW.id::text; r.actor_membership_id:=actor;
  ELSE RETURN NEW;
  END IF;
  IF r.actor_membership_id IS NULL THEN
@@ -316,7 +324,11 @@ DECLARE latest text; old_context text:=current_setting('app.tenant_id',true);
 BEGIN
  IF NEW.tenant_id IS DISTINCT FROM nullif(old_context,'')::uuid AND NOT (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true);
- IF TG_TABLE_NAME='final_account_lock_check' AND NEW.status<>'pending' THEN PERFORM set_config('app.tenant_id',coalesce(old_context,''),true); RETURN NEW; END IF;
+ -- NEW has different row types on these two tables. A combined AND expression
+ -- still resolves the missing status field on final_account_lock.
+ IF TG_TABLE_NAME='final_account_lock_check' THEN
+  IF NEW.status<>'pending' THEN PERFORM set_config('app.tenant_id',coalesce(old_context,''),true); RETURN NEW; END IF;
+ END IF;
  PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE;
  SELECT kind INTO latest FROM app.job_work_state_event WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND kind IN('closed','reopened') ORDER BY sequence DESC LIMIT 1;
  IF latest='closed' THEN RAISE EXCEPTION 'JOB_WORK_CLOSED'; END IF;

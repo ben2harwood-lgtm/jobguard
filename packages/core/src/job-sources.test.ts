@@ -23,4 +23,8 @@ describe("SV-7A source contracts (intake remains held)",()=>{
   expect(customerMessageReadV1.safeParse({...read,messages:[{...read.messages[0],actualTesterMembershipId:"Fictional Alex"}]}).success).toBe(false);
  });
  it("SV7A-01 typed failures carry stable codes",()=>{expect(new JobSourceError("INVALID_JOB_SOURCE_INPUT").code).toBe("INVALID_JOB_SOURCE_INPUT")});
+ it("SV7A-01 exact UTF-8 originals reject unpaired surrogates rather than replacing bytes",()=>{
+  for(const text of ["fictional \ud800", "\udc00 fictional"])expect(diaryInputV1.safeParse({...diary,text}).success).toBe(false);
+  expect(diaryInputV1.parse({...diary,text:"\ufeffFictional café 🛠\r\n"}).text).toBe("\ufeffFictional café 🛠\r\n");
+ });
 });

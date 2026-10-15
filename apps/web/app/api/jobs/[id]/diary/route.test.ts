@@ -13,13 +13,13 @@ describe("SV-7A Next read adapter",()=>{
   expect(get.mock.calls).toEqual([["job",{}],["job",{}]]);expect("POST" in route).toBe(false);
  });
  it("SV7A-07 SV7A-23 unauthenticated callers get the same refusal before composition",async()=>{
-  cookie.mockReturnValue(undefined);const response=await route.GET(new Request("https://fictional.invalid/"),{params:Promise.resolve({id:"unknown"})});expect(response.status).toBe(401);expect(await response.json()).toEqual({code:"UNAUTHENTICATED"});expect(get).not.toHaveBeenCalled();
+  cookie.mockReturnValue(undefined);failure.mockReturnValue({status:401,body:{version:"job-source-error.v1",code:"UNAUTHENTICATED",environment:"synthetic_demo",realExternalActions:0}});const response=await route.GET(new Request("https://fictional.invalid/"),{params:Promise.resolve({id:"unknown"})});expect(response.status).toBe(401);expect(await response.json()).toEqual({version:"job-source-error.v1",code:"UNAUTHENTICATED",environment:"synthetic_demo",realExternalActions:0});expect(failure).toHaveBeenCalledWith(expect.objectContaining({code:"UNAUTHENTICATED"}));expect(get).not.toHaveBeenCalled();
  });
  it("SV7A-23 read failures use the same shared typed mapping as Nest",async()=>{
   const error=new Error("invalid authority");get.mockRejectedValue(error);oldFailure.mockReturnValue(new Response(JSON.stringify({code:"different"}),{status:403}));
   const response=await route.GET(new Request("https://fictional.invalid/"),{params:Promise.resolve({id:"job"})});expect(response.status).toBe(404);expect(await response.json()).toEqual({version:"job-source-error.v1",code:"NOT_FOUND",environment:"synthetic_demo",realExternalActions:0});expect(failure).toHaveBeenCalledWith(error);expect(oldFailure).not.toHaveBeenCalled();
  });
  it("SV7A-21 real mode is refused before source reads",async()=>{
-  vi.stubEnv("JOBGUARD_ENV","pilot_no_charge");const response=await route.GET(new Request("https://fictional.invalid/"),{params:Promise.resolve({id:"job"})});expect(response.status).toBe(403);expect(get).not.toHaveBeenCalled();
+  vi.stubEnv("JOBGUARD_ENV","pilot_no_charge");failure.mockReturnValue({status:403,body:{version:"job-source-error.v1",code:"SYNTHETIC_MODE_REQUIRED",environment:"synthetic_demo",realExternalActions:0}});const response=await route.GET(new Request("https://fictional.invalid/"),{params:Promise.resolve({id:"job"})});expect(response.status).toBe(403);expect(await response.json()).toEqual({version:"job-source-error.v1",code:"SYNTHETIC_MODE_REQUIRED",environment:"synthetic_demo",realExternalActions:0});expect(failure).toHaveBeenCalledWith(expect.objectContaining({code:"SYNTHETIC_MODE_REQUIRED"}));expect(get).not.toHaveBeenCalled();
  });
 });

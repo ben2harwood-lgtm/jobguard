@@ -10,7 +10,7 @@ import {createWorkFixture,closeWorkFixture,type WorkFixture} from "./job-work-st
 describe("SV-7A own-step migration proof",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(false)},60000);afterAll(async()=>closeWorkFixture(f));
  it("SV7A-25 preserves named earlier rows/full types/identities/grants; later migrations twice; comparator controls",async()=>{
-  const n=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0149_job_sources.sql"));expect(n).toBeGreaterThan(0);
+  const n=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith("0164_job_sources.sql"));expect(n).toBeGreaterThan(0);
   await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS.slice(0,n)){await f.admin.query(await readFile(url,"utf8"));await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[url.pathname.split("/").at(-1)])}
   await installLegacySyntheticPartyFixtures(f.admin);const seeded=await seedEvidencePackFixture(f.admin,{withVariation:true});
@@ -22,7 +22,7 @@ describe("SV-7A own-step migration proof",()=>{
   const acl=async()=>(await f.admin.query("SELECT oid::text,relacl::text FROM pg_class WHERE relnamespace='app'::regnamespace ORDER BY oid")).rows;
   const routines=async()=>(await f.admin.query("SELECT oid::text,proacl::text,pg_get_functiondef(oid) definition FROM pg_proc WHERE pronamespace='app'::regnamespace ORDER BY oid")).rows;
   const permissions=await acl(),routineBefore=await routines();
-  await f.admin.query(await readFile(MIGRATION_URLS[n]!,"utf8"));await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0149_job_sources.sql')");
+  await f.admin.query(await readFile(MIGRATION_URLS[n]!,"utf8"));await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES('0164_job_sources.sql')");
   expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});expect((await acl()).filter(r=>permissions.some(p=>p.oid===r.oid))).toEqual(permissions);expect((await routines()).filter(r=>routineBefore.some(p=>p.oid===r.oid))).toEqual(routineBefore);
   await migrate(f.admin);await migrate(f.admin);expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
   await rolledBack(f.admin,async db=>{await db.query("SET LOCAL session_replication_role='replica'");await db.query("UPDATE app.evidence_object SET server_received_at=server_received_at+interval '1 microsecond'");expect((await proofDifferences(db,before)).rows.length).toBeGreaterThan(0)});

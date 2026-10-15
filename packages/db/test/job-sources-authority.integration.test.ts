@@ -1,6 +1,8 @@
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,describe,expect,it} from "vitest";
 import {withTenant} from "../src/tenant-context.js";
+import {issuePracticeSession,authenticatePracticeSession} from "../src/practice-session.js";
+import {rolledBack} from "./upgrade-proof-utils.js";
 import {sourcesFixture,seedSource,closeWorkFixture,type SourceFixture,workTenant} from "./job-sources-fixture.js";
 describe("SV-7A source storage/read authority",()=>{
  let f:SourceFixture;beforeAll(async()=>{f=await sourcesFixture();await seedSource(f)},60000);afterAll(async()=>closeWorkFixture(f));
@@ -26,11 +28,24 @@ describe("SV-7A source storage/read authority",()=>{
   }
   await workTenant(f.admin,f.practice.auth.context.tenantId,db=>db.query("UPDATE app.job SET status='live' WHERE id=$1",[f.practice.jobId]));
  });
+ it("SV7A-16 read routine has the exact documented authority; helpers and held writers are not callable",async()=>{
+  const routines=(await f.admin.query(`SELECT p.proname,p.prosecdef,pg_get_userbyid(p.proowner) owner,p.proconfig,
+   has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') executable,
+   EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') public_execute
+   FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname IN('read_job_sources','job_source_insert_guard','job_source_original_binding') ORDER BY p.proname`)).rows;
+  expect(routines).toEqual([
+   {proname:'job_source_insert_guard',prosecdef:true,owner:'jobguard_migration',proconfig:['search_path=pg_catalog'],executable:false,public_execute:false},
+   {proname:'job_source_original_binding',prosecdef:true,owner:'jobguard_migration',proconfig:['search_path=pg_catalog'],executable:false,public_execute:false},
+   {proname:'read_job_sources',prosecdef:true,owner:'jobguard_migration',proconfig:['search_path=pg_catalog'],executable:true,public_execute:false}
+  ]);
+  expect((await f.admin.query("SELECT pg_get_function_identity_arguments('app.read_job_sources(uuid,uuid,text,text)'::regprocedure) args")).rows[0].args).toBe('t uuid, j uuid, digest text, source text');
+  expect((await f.admin.query("SELECT proname FROM pg_proc WHERE pronamespace='app'::regnamespace AND proname IN('record_job_diary_entry','record_customer_message_source')")).rows).toEqual([]);
+ });
  it("SV7A-16 cross-tenant/wrong-job/exact-tuple fixture substitutions and immutable mutations fail",async()=>{
   const source=await seedSource(f),{context}=f.practice.auth;
   const other={jobId:randomUUID()};
   // Labelled same-tenant wrong-job storage fixture; no new intake/principal policy.
-  await workTenant(f.admin,context.tenantId,db=>db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional wrong-job fixture','live')",[other.jobId,context.tenantId]));
+  await workTenant(f.admin,context.tenantId,async db=>{await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional wrong-job fixture','live')",[other.jobId,context.tenantId]);await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')",[context.tenantId,other.jobId])});
   const names=["tenant_id","job_id","id","command_id","actor_membership_id","source_kind","entry_mode","on_site","evidence_id","object_version_id","sha256","source_received_at","notice_version","environment"];
   for(const [field,expression,code] of [["job_id",`'${other.jobId}'::uuid`,"23503"],["object_version_id","'substituted'","23503"],["tenant_id","gen_random_uuid()","42501"]]){
    const command=randomUUID();
@@ -45,5 +60,23 @@ describe("SV-7A source storage/read authority",()=>{
  it("SV7A-07 revoked session cannot read existing records",async()=>{
   await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[f.practice.auth.digest]);
   await expect(withTenant(f.runtime,f.practice.auth.context,db=>db.$client.query("SELECT app.read_job_sources($1,$2,$3,'diary')",[f.practice.auth.context.tenantId,f.practice.jobId,f.practice.auth.digest]))).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN"});
+ });
+ it("SV7A-07 persisted expired sessions and inactive actors fail the SQL read boundary",async()=>{
+  const {auth,jobId}=f.practice;
+  const sessionId=await issuePracticeSession(f.runtime),other=await authenticatePracticeSession(f.runtime,sessionId);
+  await expect(f.repository.read(other.context,jobId,other.digest,"diary")).rejects.toMatchObject({code:"JOB_SOURCE_FORBIDDEN"});
+  const targetJobId=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'",[other.context.tenantId,other.digest])).rows[0].id as string;
+  expect(await f.repository.read(other.context,targetJobId,other.digest,"diary")).toMatchObject({entries:[]});
+  for(const mutation of [
+   "UPDATE control_plane.practice_session SET expires_at=clock_timestamp()-interval '1 second' WHERE token_digest=$1",
+   "UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",
+   "UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1",
+   "UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1"
+  ])await rolledBack(f.admin,async db=>{
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[auth.context.tenantId]);
+   await db.query(mutation,[mutation.includes('control_plane')?other.digest:auth.membershipId]);
+   await db.query("SET LOCAL ROLE jobguard_runtime");
+   await expect(db.query("SELECT app.read_job_sources($1,$2,$3,'diary')",[auth.context.tenantId,targetJobId,other.digest])).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN",code:"42501"});
+  });
  });
 });

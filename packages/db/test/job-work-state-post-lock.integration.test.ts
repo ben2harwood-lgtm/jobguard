@@ -71,6 +71,9 @@ describe("CH-4 held-close admission boundary through the existing lock command",
 });
 
 describe("CH-4 raw new-work guard matrix",()=>{
+ // This suite has its own harness so the r8 recipe is booted before use.
+ const sourceHarness=createWatchdogHarness("ch4-po-noop",59600);
+ beforeAll(()=>sourceHarness.boot(),120000);afterAll(()=>sourceHarness.stop());
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},60000);afterAll(async()=>closeWorkFixture(f));
  it("CH4-A13 every raw new-work family is refused before its row constraints or effects",async()=>{
   const a=await seedWorkJob(f);
@@ -83,6 +86,15 @@ describe("CH-4 raw new-work guard matrix",()=>{
   }
   await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.transition_scope_progress($1,$2,$3,0,'in_progress','start')",[a.tenantId,a.jobId,a.scopeId]))).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
   expect((await f.admin.query("SELECT stage FROM app.scope_progress WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].stage).toBe("not_started");
+ });
+ it("r8 a successful pre-lock PO semantic no-op keeps its own replay identity after lock",async()=>{
+  const entry=sourceHarness.cases.find(c=>c.key==="purchase-order-repository.ts#place")!,jobId=await sourceHarness.live();
+  await entry.prepare(jobId);await entry.run(jobId,randomUUID(),"same");
+  const noopId=randomUUID(),first=sourceHarness.norm(await entry.noop!(jobId,noopId,"same"));
+  await boundaryLock({admin:sourceHarness.admin} as WorkFixture,{tenantId:sourceHarness.tenant,jobId,actorId:sourceHarness.member} as Awaited<ReturnType<typeof seedWorkJob>>);
+  expect(sourceHarness.norm(await entry.noop!(jobId,noopId,"same"))).toEqual(first);
+  await expect(entry.noop!(jobId,noopId,"changed")).rejects.toThrow(/CONFLICT/u);
+  await expect(entry.noop!(jobId,randomUUID(),"same")).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");
  });
 });
 
@@ -105,3 +117,66 @@ describe("CH-4 actual existing repository replay/refusal matrix",()=>{
   });
  }
 });
+
+// r10: scripted statement regressions only. These do not replace the real
+// PostgreSQL replay/trigger suites above or prove RLS and SQL execution.
+describe("r10 scripted source projections",()=>{
+ function script(jobId:string,tenantId:string,offer:unknown,notLive=false){
+  const calls:string[]=[],valuesSeen:unknown[][]=[];
+  let connections=0;
+  const client={release(){},async query(sql:string,values:unknown[]=[]){
+   calls.push(sql);valuesSeen.push(values);
+   const rows=(items:unknown[]=[])=>({rows:items,rowCount:items.length});
+   if(sql.startsWith("SELECT role FROM app.membership"))return rows([{role:"owner"}]);
+   if(sql.includes("require_watchdog_live")&&notLive)throw new Error("JOB_NOT_LIVE");
+   if(sql.startsWith("INSERT INTO app.watchdog_command_identity"))return rows([{command_id:values[1]}]);
+   if(sql.includes("ch4_locked_offer")){
+    if(sql.startsWith("SELECT request_hash,status,result"))return rows([{status:"ch4_locked",result:offer}]);
+    if(sql.includes("JOIN app.merchant_sku"))return rows([{id:randomUUID(),price_pence:2000,price_unit:"each",ch4_locked_offer:offer}]);
+    if(sql.startsWith("SELECT count(*) n"))return rows([{n:0,ch4_locked_offer:offer}]);
+   }
+   if(sql.startsWith("SELECT j.id job_id"))return rows(offer?[{job_id:jobId,customer_id:(offer as any).customerId,site_id:(offer as any).siteId}]:[]);
+   if(/^(BEGIN|COMMIT|ROLLBACK|SELECT set_config|SELECT pg_advisory_xact_lock|SELECT app\.)/u.test(sql)||sql.includes("UNION ALL")||sql.startsWith("SELECT 1 FROM app.command_receipt c"))return rows();
+   throw new Error(`Unexpected r10 scripted SQL: ${sql}`);
+  }};
+  const pool={connect:async()=>{connections++;return client}} as unknown as import("pg").Pool;
+  return{pool,calls,valuesSeen,connections:()=>connections};
+ }
+ function setup(){
+  const tenantId=randomUUID(),jobId=randomUUID(),actor=randomUUID();
+  const offer={version:"job-linked-offer.v1",code:"POST_LOCK_WORK_REQUIRES_LINKED_JOB",message:"Start a linked job for this customer and site",jobId,customerId:randomUUID(),siteId:randomUUID()};
+  return{tenantId,jobId,actor,offer,context:testTenantContext(tenantId)};
+ }
+ it("refuses a fresh PO identity before a semantic receipt or authorization can be reused",async()=>{
+  const {PurchaseOrderRepository}=await import("../src/purchase-order-repository.js"),f=setup(),db=script(f.jobId,f.tenantId,f.offer);
+  const command={version:"command.v1" as const,commandId:randomUUID(),commandType:"purchase_order.place",semanticKey:"previous-placement",actorMembershipId:f.actor,subjectType:"purchase_order",subjectRef:randomUUID(),action:{actionType:"purchase_order.simulate",recipient:"orders@fictional.invalid",contentHash:CH4_HASH,aggregateRevision:1,amountPence:20000,currency:"GBP",policyVersion:"synthetic-po.v1",expiresAt:new Date("2099-01-01T00:00:00Z")}};
+  await expect(new PurchaseOrderRepository(db.pool).place(f.context,f.jobId,command as import("../src/commands.js").ConsequentialCommand)).rejects.toMatchObject({code:f.offer.code,offer:f.offer});
+  expect(db.calls.some(sql=>sql.startsWith("INSERT INTO app.command_receipt")||sql.includes("app.action_authorization")||sql.includes("app.action_outbox"))).toBe(false);
+  expect(db.calls.at(-1)).toBe("ROLLBACK");
+  expect(db.valuesSeen[db.calls.findIndex(sql=>sql.includes("ch4_locked_offer"))]).toEqual([f.tenantId,command.commandId,f.jobId]);
+ });
+ it("refuses a locked PO revision from its existing rate-read statement before writes",async()=>{
+  const {PurchaseOrderRepository}=await import("../src/purchase-order-repository.js"),f=setup(),db=script(f.jobId,f.tenantId,f.offer);
+  await expect(new PurchaseOrderRepository(db.pool).revise(f.context,f.jobId,{version:"purchase-order-draft.v1",commandId:randomUUID(),requirementId:randomUUID(),quantity:"10",unitPricePence:2000,recipient:"orders@fictional.invalid",requiredDate:"2030-01-01",expectedRevision:0})).rejects.toMatchObject({code:f.offer.code,offer:f.offer});
+  expect(db.calls.filter(sql=>sql.includes("ch4_locked_offer"))).toHaveLength(1);
+  expect(db.calls.some(sql=>sql.startsWith("INSERT INTO app.purchase_order")||sql.startsWith("INSERT INTO app.watchdog_command_result"))).toBe(false);
+  expect(db.calls.at(-1)).toBe("ROLLBACK");
+ });
+ it("refuses a locked invoice from the existing count statement without intake or audit",async()=>{
+  const {SupplierDocumentRepository}=await import("../src/supplier-document-repository.js"),f=setup(),db=script(f.jobId,f.tenantId,f.offer);
+  await expect(new SupplierDocumentRepository(db.pool).intake(f.context,f.jobId,{version:"supplier-document-intake.v1",commandId:randomUUID(),fixtureId:"materials-B-invoice",channel:"picker",expectedRevision:0})).rejects.toMatchObject({code:f.offer.code,offer:f.offer});
+  expect(db.calls.filter(sql=>sql.includes("ch4_locked_offer"))).toHaveLength(1);
+  expect(db.calls.some(sql=>sql.startsWith("INSERT INTO app.supplier_document")||sql.startsWith("INSERT INTO app.audit_event"))).toBe(false);
+  expect(db.calls.at(-1)).toBe("ROLLBACK");
+ });
+ it.each([true,false])("reads a non-live linked offer only after rollback in a fresh transaction: locked=%s",async locked=>{
+  const {SupplierDocumentRepository}=await import("../src/supplier-document-repository.js"),f=setup(),db=script(f.jobId,f.tenantId,locked?f.offer:null,true);
+  await expect(new SupplierDocumentRepository(db.pool).intake(f.context,f.jobId,{version:"supplier-document-intake.v1",fixtureId:"materials-B-invoice",channel:"picker",expectedRevision:0})).rejects.toMatchObject(locked?{code:f.offer.code,offer:f.offer}:{code:"JOB_NOT_LIVE"});
+  const rolledBack=db.calls.indexOf("ROLLBACK"),lookup=db.calls.findIndex(sql=>sql.startsWith("SELECT j.id job_id"));
+  expect(rolledBack).toBeGreaterThan(-1);expect(lookup).toBeGreaterThan(rolledBack);
+  expect(db.calls.slice(rolledBack+1,lookup)).toContain("BEGIN");expect(db.connections()).toBe(2);
+  expect(db.calls.some(sql=>sql.startsWith("INSERT INTO"))).toBe(false);
+ });
+});
+
+import { testTenantContext } from "./tenant-context-test-utils.js";

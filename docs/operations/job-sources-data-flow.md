@@ -21,7 +21,7 @@ retention, deletion, legal or safety commitment is supplied. BEN-ANSWERS answer
 (card `jobguard-twenty-product-decisions-2026-10-13`). Privacy/safety promises
 and all real processing approval evidence remain outstanding.
 
-Apply 0149 only after CH-4/0144 lands. No backfill. Use the own-step upgrade
+Apply 0164 after merged CH-4/0144 and the current main migration prefix. No backfill. Use the own-step upgrade
 proof and catalogue/privilege checks; Q2 catalogue amendments belong to the
 coordinator. Both intake routines, all source POST routes, CH-4 diary events,
 full Test O and UI remain held/outstanding. Do not initialize a live adapter.

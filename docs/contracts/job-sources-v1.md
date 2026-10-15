@@ -1,15 +1,18 @@
 # SV-7A synthetic job sources — independent storage/read slice
 
-Issued 13 October 2026, lane RED, migration `0149_job_sources.sql`. Build base
-`f93716da170f1ba10a98abe1e17f57dd169f8cc2` contains CH-4/0144; issued main
-`e9f9bc9ef4f4aa46394c414c9a3971c523fac2e4`. No PR until CH-4 merges and catch-up.
+Issued 13 October 2026, lane AMBER, migration `0164_job_sources.sql`. Catch-up
+base `origin/main` is `6671538c8d69936c162368c760dd6ce0f7f10493`, including
+merged CH-4/0144. The old 0149 allocation and build-ahead base are superseded.
+CH-4 still has no diary source key or checked diary adapter; that integration
+requires a coordinator-owned prerequisite and Q3's authority ruling.
 
 `BUILD_PLAN.md` §§4 C3, 8 CH-2, 10.2.1–10.2.11, 10 SV-7/CH-4 and
 12.1/12.3 govern this slice. The diary and customer-message schemas are strict,
 versioned contracts only. Schema validity grants no mutation authority. Reviewed
 fictional text may be typed or dictated text: no raw audio, microphone, provider
 call or live-model inference is implemented. Text is nonblank, contains no NUL,
-and is at most 8,000 UTF-16 code units / 32,000 UTF-8 bytes. Originals preserve
+and is at most 8,000 UTF-16 code units / 32,000 UTF-8 bytes. Unpaired Unicode
+surrogates are refused so UTF-8 encoding cannot replace submitted characters. Originals preserve
 exact bytes without trimming, normalization or paraphrase.
 
 Every diary read contains exactly:
