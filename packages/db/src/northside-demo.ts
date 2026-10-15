@@ -15,6 +15,7 @@ import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMemb
 export const northsideName = "Northside Property Services";
 export const northsideTargets = { clients: 3, operatives: 40, ordersPerMonth: 2000, month: "2026-10" } as const;
 /** Demo fixture values (to be set by Ben before real use): the Northside approval rules. Whole pence only. */
+// demo placeholder figures, not product rules
 export const northsideRules = approvalRulesV1.parse({
   version: "approval-rules.v1", proceedLimit: { pence: 25000, currency: "GBP" },
   bands: [
@@ -130,13 +131,13 @@ export async function northsideRole(pool: Pool, member: AuthenticatedMembership)
 }
 /**
  * The extras this member may see, read from the rows. Operatives see what they raised; surveyors, supervisors and commercial managers see the jobs
- * their grants cover (the merged grant check); the owner sees all; a client approver sees only extras a link was issued to them for.
+ * their grants cover (the merged grant check); the owner sees all; a client approver sees only extras with an open link issued to them.
  */
 export async function northsideExtras(pool: Pool, member: AuthenticatedMembership, role: string): Promise<NorthsideExtra[]> {
   return withTenant(pool, verifiedTenantContextFromMembership(member), async db => {
     const visible = role === "owner" || role === "admin" ? "true"
       : role === "operative" ? "o.raising_membership_id=$2"
-      : role === "client_approver" ? "EXISTS(SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=o.tenant_id AND k.variation_id=o.variation_id AND k.approver_membership_id=$2)"
+      : role === "client_approver" ? "EXISTS(SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=o.tenant_id AND k.variation_id=o.variation_id AND k.approver_membership_id=$2 AND k.expires_at>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(k.tenant_id,k.id)))"
       : "app.xa_covers($2,ARRAY[$3::text],o.job_id,'job.read') IS NOT NULL";
     const rows = (await db.$client.query(`
       SELECT o.variation_id,o.job_id,w.reference,v.description,v.capture_text,o.evidence_id IS NOT NULL has_photo,o.resident_confirmation_evidence_id IS NOT NULL confirmed,
@@ -147,8 +148,8 @@ export async function northsideExtras(pool: Pool, member: AuthenticatedMembershi
         EXISTS(SELECT 1 FROM app.extra_client_link k WHERE k.tenant_id=q.tenant_id AND k.request_id=q.id) link_issued,
         (SELECT c.kind FROM app.extra_client_link k JOIN app.extra_client_link_closure c ON(c.tenant_id,c.link_id)=(k.tenant_id,k.id) WHERE k.tenant_id=q.tenant_id AND k.request_id=q.id ORDER BY k.server_recorded_at DESC LIMIT 1) link_closed,
         (SELECT out.kind FROM app.extra_approval_outcome out WHERE out.tenant_id=q.tenant_id AND out.request_id=q.id) outcome,
-        (SELECT cm.membership_id FROM app.contractor_member cm JOIN app.work_order wo ON(wo.tenant_id,wo.client_id)=(cm.tenant_id,cm.client_id) WHERE cm.tenant_id=o.tenant_id AND wo.job_id=o.job_id AND cm.membership_id IN(SELECT membership_id FROM app.membership WHERE tenant_id=o.tenant_id AND role='client_approver' AND revoked_at IS NULL) LIMIT 1) client_member,
-        (SELECT cm.email FROM app.contractor_member cm JOIN app.work_order wo ON(wo.tenant_id,wo.client_id)=(cm.tenant_id,cm.client_id) WHERE cm.tenant_id=o.tenant_id AND wo.job_id=o.job_id AND cm.membership_id IN(SELECT membership_id FROM app.membership WHERE tenant_id=o.tenant_id AND role='client_approver' AND revoked_at IS NULL) LIMIT 1) client_email
+        (SELECT cm.membership_id FROM app.contractor_member cm JOIN app.work_order wo ON(wo.tenant_id,wo.client_id)=(cm.tenant_id,cm.client_id) WHERE cm.tenant_id=o.tenant_id AND wo.job_id=o.job_id AND cm.membership_id IN(SELECT membership_id FROM app.membership WHERE tenant_id=o.tenant_id AND role='client_approver' AND revoked_at IS NULL) ORDER BY cm.membership_id LIMIT 1) client_member,
+        (SELECT cm.email FROM app.contractor_member cm JOIN app.work_order wo ON(wo.tenant_id,wo.client_id)=(cm.tenant_id,cm.client_id) WHERE cm.tenant_id=o.tenant_id AND wo.job_id=o.job_id AND cm.membership_id IN(SELECT membership_id FROM app.membership WHERE tenant_id=o.tenant_id AND role='client_approver' AND revoked_at IS NULL) ORDER BY cm.membership_id LIMIT 1) client_email
       FROM app.extra_origin o JOIN app.variation v ON(v.tenant_id,v.job_id,v.id)=(o.tenant_id,o.job_id,o.variation_id)
       JOIN app.work_order w ON(w.tenant_id,w.job_id)=(o.tenant_id,o.job_id)
       LEFT JOIN LATERAL (SELECT * FROM app.extra_approval_request r WHERE r.tenant_id=o.tenant_id AND r.variation_id=o.variation_id ORDER BY r.request_revision DESC LIMIT 1) q ON true

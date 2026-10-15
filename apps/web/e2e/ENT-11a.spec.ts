@@ -32,7 +32,9 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await expect(page.getByText(banner, { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Start Northside practice" }).click();
   await expect(page.getByTestId("fact-orders")).toHaveText("2000", { timeout: 240_000 });
-  const tenant = (await db.query("SELECT tenant_id FROM app.contractor_member WHERE email='owner@fictional.invalid' ORDER BY tenant_id")).rows.at(-1).tenant_id as string;
+  const organisation = await page.request.get("/api/contractor");
+  expect(organisation.status()).toBe(200);
+  const tenant = (await organisation.json()).tenantId as string;
   // Every number on screen is counted from the seeded rows.
   const count = async (sql: string) => String((await db.query(sql, [tenant])).rows[0].n);
   const shown = await facts(page);
@@ -145,7 +147,10 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await page.getByRole("button", { name: "Reset practice (new run)" }).click();
   await expect(page.getByTestId("fact-extras")).toHaveText("0", { timeout: 240_000 });
   await expect(page.getByTestId("fact-orders")).toHaveText("2000");
-  const tenants = (await db.query("SELECT DISTINCT tenant_id FROM app.contractor_member WHERE email='owner@fictional.invalid'")).rows;
+  const resetOrganisation = await page.request.get("/api/contractor");
+  expect(resetOrganisation.status()).toBe(200);
+  const resetTenant = (await resetOrganisation.json()).tenantId as string;
+  const tenants = (await db.query("SELECT DISTINCT tenant_id FROM app.contractor_member WHERE tenant_id=ANY($1::uuid[])", [[tenant, resetTenant]])).rows;
   expect(tenants.length).toBeGreaterThanOrEqual(2);
   expect(Number((await db.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n)).toBe(auditsBefore);
   expect(Number((await db.query("SELECT count(*) n FROM app.extra_origin WHERE tenant_id=$1", [tenant])).rows[0].n)).toBe(1);

@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
-import { ExtraApprovalRepository, northsideExtras, northsideRateCard } from "@jobguard/db";
+import { ExtraApprovalRepository, northsideExtras, northsideRateCard, withTenant } from "@jobguard/db";
 import { DemoError, bodyOf, demoActor, failure, json, requireOrigin } from "../../../../../lib/northside-server";
 
 const uuid = (value: unknown): string => { if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value)) return value.toLowerCase(); throw new DemoError("INVALID_COMMAND", 422); };
@@ -17,6 +17,9 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
       // The price is the seeded rate times the quantity the surveyor measured: whole pence, integer arithmetic.
       if (role !== "surveyor") throw new DemoError("PERMISSION_DENIED", 403);
       const quantity = body.quantity; if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000 || typeof body.sorCode !== "string") throw new DemoError("INVALID_COMMAND", 422);
+      const allowed = await withTenant(pool, tenant, async db => (await db.$client.query<{ allowed: boolean }>(
+        "SELECT app.xa_covers($1,ARRAY['surveyor']::text[],$2,'extra.price') IS NOT NULL AS allowed", [member.membershipId, jobId])).rows[0]?.allowed);
+      if (!allowed) throw new DemoError("PERMISSION_DENIED", 403);
       const rate = (await northsideRateCard(pool, member, jobId)).find(r => r.code === body.sorCode); if (!rate) throw new DemoError("NOT_FOUND", 404);
       return json({ version: "northside-priced.v1", environment: "synthetic_demo", realExternalActions: 0, netPence: rate.ratePence * quantity, result: await repo.priceExtra(tenant, member, { version: "price-extra.v1", commandId, jobId, extraId, netPence: rate.ratePence * quantity }) });
     }
