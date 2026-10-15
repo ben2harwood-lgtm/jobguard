@@ -22,9 +22,14 @@ function permutations<T>(xs: T[]): T[][] {
 }
 const payment = (patch = {}) => billingEvent({ sourceEventId: "paid-1", factType: "paid", effectiveAt: "2026-10-02T00:00:00Z",
   amount: { netPence: 50000, vatPence: 0, grossPence: 50000 }, composition: null, reconciliationId: "movement-1", ...patch });
-const allocation = (patch = {}) => ({ version: "billing-allocation.v1", invoice: billingEvent(), sourceRef: "paid-1",
-  effectiveAt: "2026-10-02T00:00:00Z", gross: { numerator: "50000", denominator: "1" }, outstanding: null,
-  explicit: null, separateInvoice: false, direction: "receipt", original: null, ...patch });
+const allocation = (patch: { invoice?: ReturnType<typeof billingEvent> } & Record<string, unknown> = {}) => {
+  const invoice = patch.invoice ?? billingEvent();
+  return { version: "billing-allocation.v1", invoice, sourceRef: "paid-1",
+    effectiveAt: "2026-10-02T00:00:00Z", gross: { numerator: "50000", denominator: "1" },
+    outstanding: invoice.composition.lines.map(l => ({ lineId: l.externalInvoiceLineId,
+      gross: { numerator: String(l.grossPence), denominator: "1" } })),
+    explicit: null, separateInvoice: false, direction: "receipt", original: null, ...patch };
+};
 
 it("E6-17 explicit shares then separate invoice then pro-rata; invalid shares/ratios refuse", () => {
   expect(allocateBillingReceipt(allocation({ explicit: [{ lineId: "original_order", gross: { numerator: "50000", denominator: "1" } }], separateInvoice: true }))[0]!.rule).toBe("explicit");
@@ -64,11 +69,29 @@ it("E6-15 mixed-job extras share the full contract-invoice denominator with orig
 
 it("E6-19 linked reversals preserve ratios and refuse more than the original remaining allocation", () => {
   const original = allocateBillingReceipt(allocation());
-  const reversed = allocateBillingReceipt(allocation({ direction: "reversal", original }));
+  const reversed = allocateBillingReceipt(allocation({ direction: "reversal", original, outstanding: null }));
   expect(reversed.find(a => a.lineId === "extra")!.net).toEqual({ numerator: "-250000", denominator: "31" });
-  expect(() => allocateBillingReceipt(allocation({ direction: "reversal", original, gross: { numerator: "50001", denominator: "1" } }))).toThrow();
-  expect(() => allocateBillingReceipt(allocation({ direction: "reversal", original: null }))).toThrow();
-  expect(() => allocateBillingReceipt(allocation({ direction: "reversal", original: original.map((a, i) => ({ ...a, sourceRef: `different-${i}` })) }))).toThrow();
+  expect(() => allocateBillingReceipt(allocation({ direction: "reversal", original, outstanding: null, gross: { numerator: "50001", denominator: "1" } }))).toThrow();
+  expect(() => allocateBillingReceipt(allocation({ direction: "reversal", original: null, outstanding: null }))).toThrow();
+  expect(() => allocateBillingReceipt(allocation({ direction: "reversal", outstanding: null, original: original.map((a, i) => ({ ...a, sourceRef: `different-${i}` })) }))).toThrow();
+});
+
+it("E6-17 requires complete current balances and never resets exhausted lines to invoice gross", () => {
+  const balances = allocation().outstanding;
+  for (const outstanding of [undefined, null, [], balances.slice(1), [balances[0], balances[0]],
+    [...balances, { lineId: "unknown", gross: { numerator: "1", denominator: "1" } }],
+    balances.map(l => ({ ...l, gross: { numerator: "-1", denominator: "1" } })),
+    balances.map(l => ({ ...l, gross: { numerator: "148801", denominator: "1" } }))]) {
+    expect(() => allocateBillingReceipt(allocation({ outstanding }))).toThrow("BILLING_INVALID");
+  }
+  const outstanding = balances.map(l => ({ ...l, gross: {
+    numerator: l.lineId === "extra" ? "0" : "50000", denominator: "1" } }));
+  const result = allocateBillingReceipt(allocation({ outstanding }));
+  expect(result.map(l => l.lineId)).toEqual(["original_order"]);
+  expect(result[0]!.gross).toEqual({ numerator: "50000", denominator: "1" });
+  expect(result[0]!.matchedExtraNet).toEqual({ numerator: "0", denominator: "1" });
+  expect(() => allocateBillingReceipt(allocation({ outstanding, gross: { numerator: "50001", denominator: "1" } })))
+    .toThrow("BILLING_INVALID");
 });
 
 it("E6-20 all arrival permutations of unambiguous invoice, payment, credit and reversal derive the same projection", () => {

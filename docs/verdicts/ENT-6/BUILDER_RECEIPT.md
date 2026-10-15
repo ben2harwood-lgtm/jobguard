@@ -420,3 +420,55 @@ PY
 `git diff --check` passed. `git diff --stat` remained two tracked additions. Eight new source/doc file stats were 99, 67, 19, 81, 23, 137, 123 and 442 added lines (991 total); each no-index diff returned 1 because it reports a new-file difference, not a check failure. The intended message file exists. This receipt is the ninth new file. The final receipt-only append used apply_patch successfully; it does not change any attested source hash or constitute package validation.
 
 
+
+
+## Repair r1
+
+15 October 2026; dispatcher 11; PR #220; inspected HEAD `dfcf3d3e6af64294f70195b744c4e2dffb969ea8`, branch `codex/sandbox/ent-6`. This section supersedes the original receipt's zero-executed-test report for this repair only. Changes remain in the working tree for dispatcher commit. No Git write commands, package downloads, pin changes, PostgreSQL starts, browser or Playwright runs were performed.
+
+### Changes and scope
+
+- Fixed the CSV grouping fallback's `never[]` inference with an explicit `unknown[]` element type; untrusted entries still pass the existing strict schema validation.
+- Removed `node:crypto` from the new core test and used the existing pure SHA-256 helper. The CSV/JSON hash comparisons and all original expected money values remain asserted.
+- Both CSV writers now prefix cells beginning with `=`, `+`, `-`, `@` or an apostrophe with an apostrophe before CSV quoting. The status reader reverses one escape, including escaped literal apostrophes, preserving source text, identities and semantic hashes. JSON keeps source text. Documented this CSV convention and added a regression covering both writers, descriptions, units, source/invoice/line identities, embedded quotes/newlines and Unicode.
+- Receipt allocation now requires complete current outstanding balances at the Zod boundary and has no original-gross fallback. Reversals instead require original movement remaining allocations with null outstanding balances. Updated only the ENT-6 fixtures to supply balances and added adversarial missing/null/incomplete/duplicate/unknown/negative/oversized/exhausted-balance checks. Existing reversal and ENT-F2 assertions remain unchanged.
+- Only ENT-6-owned source/tests, its contract and this receipt are changed. Read-only Git inspection confirmed both edited test files are absent from `origin/main`; no merged test was changed. The lane configuration is byte-for-byte unchanged from HEAD (SHA-256 `f9eb12bf333e441cd9edf03ec0a542ef78817704f4bc58470f7c2d07e5cd88df`). No operational alerts, migration, external action or production activation added.
+
+### Executed checks
+
+Commands below ran from the worktree root except where stated. The dependencies were already installed; no clean-install claim is made. Direct installed tools were used after the pnpm launcher stalled.
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| `pnpm exec turbo run typecheck --force --filter=@jobguard/core --filter=@jobguard/db` | 130 | Launcher emitted its ignored-`pnpm.overrides` warning, then stalled before Turbo/check execution; interrupted. |
+| `npm_config_manage_package_manager_versions=false pnpm --version` | 130 | Same launcher stall; interrupted. |
+| `pnpm --manage-package-manager-versions=false --version` | 130 | Same launcher stall; interrupted. |
+| `node_modules/.bin/turbo run typecheck --force --filter=@jobguard/core --filter=@jobguard/db` | 0 on interruption | Started core/storage tasks, which stalled in pnpm; interrupted with **0 successful tasks**. Not counted as a typecheck pass. |
+| `node_modules/.bin/tsc -p packages/core --noEmit` | 0 | Core typecheck actually executed and passed. |
+| `node_modules/.bin/tsc -p packages/db --noEmit` | 0 | DB typecheck actually executed and passed. |
+| `node_modules/.bin/tsc -p apps/api --noEmit` | 0 | API typecheck passed. |
+| `node_modules/.bin/tsc -p apps/web --noEmit` | 0 | Web typecheck passed. |
+| `~/.local/bin/heavy-slot ent-6-r1-core packages/core/node_modules/.bin/vitest run packages/core/src/contractor-billing.test.ts packages/core/src/contractor-billing-ordering.test.ts --maxWorkers=2 --reporter=verbose` | 0 | **21 tests passed**, 2 files: 9 contracts/export tests and 12 allocation/ordering tests. |
+| `~/.local/bin/heavy-slot ent-6-r1-adapters apps/api/node_modules/.bin/vitest run apps/api/src/contractor/billing.adapters.test.ts --maxWorkers=2 --reporter=verbose` | 0 | **9 tests passed**, 1 file, including all three fake channels and independent Node-crypto tampering checks. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | 0 | Core purity, lane boundary, money arithmetic and commercial boundary guards passed. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 0 | `lint:lanes` implementation passed against origin/main. |
+| `node_modules/.bin/tsc -p packages/core` | 0 | Core build passed. |
+| `node_modules/.bin/tsc -p packages/config` | 0 | Config build passed. |
+| `node_modules/.bin/tsc -p packages/storage` | 0 | Storage build passed. |
+| `node_modules/.bin/tsc -p packages/ai` | 0 | AI build passed. |
+| `node_modules/.bin/tsc -p packages/db` | 0 | DB build passed; no database process or SQL execution. |
+| `node_modules/.bin/nest build` (cwd `apps/api`) | 0 | API build passed. |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`), first attempt | 1 | Missing unbuilt DB dist import. Built package dependencies, then reran below. |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`), after package builds | 0 | OpenAPI check passed; committed OpenAPI unchanged. |
+| `~/.local/bin/heavy-slot ent-6-r1-web-build ../../node_modules/.bin/next build` (cwd `apps/web`), first attempt | 1 | Started before API build finished; missing API dist contract imports. Rerun after successful API build recorded below. |
+| `~/.local/bin/heavy-slot ent-6-r1-web-build ../../node_modules/.bin/next build` (cwd `apps/web`), after API build | 0 | Full web production build passed, including type validation and 32 static pages. Emitted workspace-root, CSS/autoprefixer, Nest file-type and dynamic dependency warnings. No browser launched. |
+| `git diff --check` | 0 | No whitespace errors. |
+| Read-only Python/Git source-attestation check | 0 | Exact lane bytes, unchanged HEAD, changed tests absent from origin/main, no pins changed. |
+
+**30/30 ENT-6 tests actually executed and passed (original 28 plus two regressions), zero skipped.** The core verbose run includes ENT-F2 extra gross `300000/31` and net `250000/31` pence, the reversal `-250000/31` case, and the loop over all **24 arrival-order permutations** of invoice/payment/credit/reversal. These are unit and process-local adapter tests, not persisted PostgreSQL or live-provider proofs. Each Vitest invocation used heavy-slot and `--maxWorkers=2`, with at most two files per invocation. Heavy-slot printed sandbox-denied `sysctl`/`pgrep` monitoring warnings but acquired its slot and executed both commands successfully.
+
+### Remaining gates
+
+Full-card ENT-6/H1–H7/catalogue holds in the existing receipt remain. No independent review, technical acceptance, founder approval or release is claimed. No schema/migration changes in this repair. Real PostgreSQL suites and browser checks are deferred to GitHub CI after dispatcher push, per the issued environment constraint. The full repository unit/integration/browser matrix was not run locally. The direct checks above do not constitute a successful pnpm/Turbo aggregate run.
+
+Final dispatcher handoff: all seven package/application build scripts completed successfully through the installed tools; the four direct core/DB/API/web typechecks, repository lint guards, lane lint and OpenAPI check exited 0. The final lint rerun also exited 0. Intended conventional commit message overwritten at `/private/tmp/jg-msg-ent-6.txt`; final `git diff --check`, lane check and scope/HEAD/config attestation exited 0. The dispatcher owns commit/push and the independent verdict on the resulting commit.

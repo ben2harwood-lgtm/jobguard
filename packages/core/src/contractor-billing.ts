@@ -148,7 +148,12 @@ export function stableBillingExportLineId(clientContractId: string, revisionId: 
   const digest = sha256(canonical(["billing-export-line.v1", read(uuid, clientContractId), read(uuid, revisionId)]));
   return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-${["8", "9", "a", "b"][parseInt(digest[16]!, 16) % 4]}${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 }
-const csvCell = (value: string | number) => `"${String(value).replace(/"/gu, '""')}"`;
+const csvCell = (value: string | number) => {
+  const text = String(value);
+  // Escape leading apostrophes too, so the CSV reader can restore source text exactly.
+  const safe = /^[=+\-@']/u.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/gu, '""')}"`;
+};
 function csvRows(header: readonly string[], rows: readonly (readonly (string | number)[])[]): string {
   return `${header.join(",")}\r\n${rows.map(r => r.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }
@@ -219,7 +224,7 @@ function readCsv(bytes: Uint8Array): string[][] {
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return invalid(); }
   if (text.includes("\u0000")) return invalid();
   const rows: string[][] = []; let row: string[] = [], cell = "", quoted = false, closed = false;
-  const endCell = () => { row.push(cell); cell = ""; closed = false; };
+  const endCell = () => { row.push(/^'[=+\-@']/u.test(cell) ? cell.slice(1) : cell); cell = ""; closed = false; };
   const endRow = () => { endCell(); rows.push(row); row = []; if (rows.length > MAX_ALLOCATION_LINES + 1) invalid(); };
   for (let i = 0; i < text.length; i++) {
     const c = text[i]!;
@@ -259,7 +264,7 @@ export function parseBillingCsv(bytes: Uint8Array): readonly BillingStatus[] {
     const key = canonical([data.source, data.sourceEventId]); const header = canonical(data);
     const current = events.get(key);
     if (current && current.header !== header) return invalid();
-    const entry = current ?? { header, data, lines: [] }; events.set(key, entry);
+    const entry = current ?? { header, data, lines: [] as unknown[] }; events.set(key, entry);
     const lineCells = cells.slice(19, 31);
     if (!hasComposition) { if (lineCells.some(v => v !== "") || current) return invalid(); continue; }
     const matchFields = ["export_line_id", "job_id", "extra_id", "scope_item_id", "revision_id", "revision_hash"] as const;
@@ -282,7 +287,8 @@ export const billingAllocationV1 = z.object({ version: z.literal("billing-alloca
   outstanding: z.array(z.object({ lineId: identity, gross: nonnegativeFractionInputV1 }).strict()).max(MAX_ALLOCATION_LINES).nullable(),
   explicit: z.array(explicitShare).max(MAX_ALLOCATION_LINES).nullable(), separateInvoice: z.boolean(),
   direction: z.enum(["receipt", "reversal"]), original: z.array(allocatedV1).max(MAX_ALLOCATION_LINES).nullable(),
-}).strict();
+}).strict().refine(v => v.direction === "receipt" ? v.outstanding !== null && v.original === null :
+  v.outstanding === null && v.original !== null, "Receipts require balances; reversals require remaining original allocations");
 const fraction = (v: z.infer<typeof exactPenceV1>) => exactPence(BigInt(v.numerator), BigInt(v.denominator));
 const zero = () => exactPence(0n);
 const add = (a: ExactPence, b: ExactPence) => sumExactPence([a, b]);
@@ -290,14 +296,14 @@ const negate = (a: ExactPence) => exactPence(-a.numerator, a.denominator);
 const subtract = (a: ExactPence, b: ExactPence) => add(a, negate(b));
 const positive = (a: ExactPence) => a.numerator < 0n ? zero() : a;
 
-/** Caller must supply the whole invoice and, for reversal, the original movement's remaining allocations.
+/** Caller must supply the whole invoice and complete outstanding balances for receipts;
+ * for reversal, supply the original movement's remaining allocations instead.
  * Pure arithmetic is not a persisted export-match check. Checked writers remain held.
  */
 export function allocateBillingReceipt(raw: unknown): readonly BillingAllocation[] {
   const input = read(billingAllocationV1, raw);
   const invoice = normalizeBillingStatus(input.invoice).event;
   if (invoice.factType !== "invoiced" || !invoice.composition) throw new BillingDataError("BILLING_PREREQUISITE_REQUIRED");
-  if ((input.direction === "reversal") !== (input.original !== null) || (input.original !== null && input.outstanding !== null)) return invalid();
   const lines = invoice.composition.lines;
   const original = new Map(input.original?.map(a => [a.lineId, a]));
   const outstanding = new Map(input.outstanding?.map(a => [a.lineId, a.gross]));
@@ -321,7 +327,7 @@ export function allocateBillingReceipt(raw: unknown): readonly BillingAllocation
       lines: lines.map(l => ({ id: l.externalInvoiceLineId, invoiceId: invoice.invoiceNumber, existedAt: l.existedAt,
         netPence: l.netPence, grossPence: l.grossPence,
         outstandingGross: input.original ? original.get(l.externalInvoiceLineId)?.gross ?? serializeExactPence(zero()) :
-          outstanding.get(l.externalInvoiceLineId) ?? serializeExactPence(exactPence(BigInt(l.grossPence))) })) });
+          outstanding.get(l.externalInvoiceLineId)! })) });
     return freeze(result.map(a => ({ ...a, gross: serializeExactPence(a.gross), net: serializeExactPence(a.net),
       matchedExtraNet: serializeExactPence(lines.find(l => l.externalInvoiceLineId === a.lineId)!.match ? a.net : zero()) })));
   } catch { return invalid(); }

@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { sha256 } from "./evidence-pack.js";
 import {
   BILLING_SANDBOX_LABEL, billingDeliveryV1, billingErrorV1, billingReconcileV1,
   billingStatusV1, normalizeBillingStatus, parseBillingCsv, renderBillingCsv,
@@ -77,8 +77,8 @@ describe("ENT-6 independent contracts (persisted writers held)", () => {
     expect(artifact.csv).toContain(BILLING_SANDBOX_LABEL);
     expect(artifact.csv).toContain('"Fictional, ""extra""\n第二行"');
     expect(artifact.byteLength).toBe(new TextEncoder().encode(artifact.csv).length);
-    expect(artifact.csvHash).toBe(createHash("sha256").update(artifact.csv).digest("hex"));
-    expect(artifact.jsonHash).toBe(createHash("sha256").update(artifact.json).digest("hex"));
+    expect(artifact.csvHash).toBe(sha256(artifact.csv));
+    expect(artifact.jsonHash).toBe(sha256(artifact.json));
     expect(JSON.parse(artifact.json).totalNet).toEqual({ pence: 24000, currency: "GBP" });
     expect(artifact.lines[0]!.exportLineId).toBe(stableBillingExportLineId(billingId(1), billingId(6)));
     raw.lines[0]!.description = "changed";
@@ -86,6 +86,28 @@ describe("ENT-6 independent contracts (persisted writers held)", () => {
     expect(Object.isFrozen(artifact.lines[0])).toBe(true);
     expect(() => renderBillingExport({ ...raw, lines: [exportLine(), exportLine()] })).toThrow();
     expect(() => renderBillingExport({ ...raw, lines: [exportLine(), { ...exportLine(), extraId: billingId(51), revisionId: billingId(50), approvedNet: { pence: 1_000_000_000_000, currency: "GBP" } }] })).toThrow("BILLING_INVALID");
+  });
+
+  it("E6-06 escapes spreadsheet formulas in both CSV writers while retaining exact source text", () => {
+    for (const prefix of ["=", "+", "-", "@", "'", "'=", "''"]) {
+      const text = `${prefix}SUM(1,2) "fictional"\n第二行`;
+      const artifact = renderBillingExport({ version: "billing-export.v1", clientContractId: billingId(1),
+        lines: [{ ...exportLine(), description: text, unit: text }] });
+      const escapedCell = `"'${text.replace(/"/gu, '""')}"`;
+      expect(artifact.csv.split(escapedCell)).toHaveLength(3);
+      expect(JSON.parse(artifact.json).lines[0].description).toBe(text);
+      expect(JSON.parse(artifact.json).lines[0].unit).toBe(text);
+      const sourceId = `${prefix}event`, invoiceNumber = `${prefix}invoice`, lineId = `${prefix}line`;
+      const event = billingEvent({ sourceEventId: sourceId, invoiceNumber, remittanceReference: text,
+        reconciliationId: sourceId, originalEventId: sourceId,
+        composition: { ...billingEvent().composition, lines: [billingLine("original_order", { externalInvoiceLineId: lineId }), billingLine("extra")] } });
+      const csv = renderBillingCsv([event]);
+      expect(csv).toContain(escapedCell);
+      for (const value of [sourceId, invoiceNumber, lineId]) expect(csv).toContain(`"'${value}"`);
+      const parsed = parseBillingCsv(new TextEncoder().encode(csv));
+      expect(parsed).toHaveLength(1);
+      expect(normalizeBillingStatus(parsed[0])).toEqual(normalizeBillingStatus(event));
+    }
   });
 
   it("E6-06 sorts frozen lines independently of request order and binds contract identity", () => {
@@ -98,7 +120,9 @@ describe("ENT-6 independent contracts (persisted writers held)", () => {
   it("E6-13 E6-14 pure ENT-F2 retains ordinary lines and exact fractions (PostgreSQL proof held)", () => {
     const result = allocateBillingReceipt({ version: "billing-allocation.v1", invoice: billingEvent(),
       sourceRef: "payment-1", effectiveAt: "2026-10-02T00:00:00Z", gross: { numerator: "50000", denominator: "1" },
-      outstanding: null, explicit: null, separateInvoice: false, direction: "receipt", original: null });
+      outstanding: billingEvent().composition.lines.map(l => ({ lineId: l.externalInvoiceLineId,
+        gross: { numerator: String(l.grossPence), denominator: "1" } })),
+      explicit: null, separateInvoice: false, direction: "receipt", original: null });
     const extra = result.find(a => a.lineId === "extra")!;
     expect(extra.gross).toEqual({ numerator: "300000", denominator: "31" });
     expect(extra.net).toEqual({ numerator: "250000", denominator: "31" });
