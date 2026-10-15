@@ -25,7 +25,9 @@ export function submit(pool: Pool, f: Fixture, actor: AuthenticatedMembership, r
  return new SiteExtraRepository(pool).logSiteExtra(f.ctx, actor, { jobId: converted.jobId, ...body });
 }
 export async function freshRuntime<T>(c: Cluster, work: (pool: Pool) => Promise<T>) {
- const pool = new Pool({ ...c.runtime.options, max: 3 });
+ // pg-pool makes options.password non-enumerable; a spread alone loses authentication.
+ // Retain the runtime role and its credentials, never the cluster's admin user.
+ const pool = new Pool({ ...c.runtime.options, password: c.runtime.options.password, max: 3 });
  try { return await work(pool); } finally { await pool.end(); }
 }
 /** Named columns as canonical text, including sub-millisecond server times. Refusal audit is separate. */
@@ -53,7 +55,12 @@ export async function committed(c: Cluster, f: Fixture, actor: AuthenticatedMemb
  return origin;
 }
 export async function revise(c: Cluster, f: SiteFixture, assigned: string[], expectedRevision = 1) {
- return new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional-offline-revision.csv", kind: "csv", csv: demoFile([demoRow(f.demo, 1, { expectedRevision, assignedMembershipIds: assigned, priority: "urgent" })]) });
+ // The initial demo row is already urgent. Alternate a content field so even an
+ // unchanged assignment set produces a real revision rather than an import no-op.
+ const priority = expectedRevision % 2 ? "routine" : "emergency";
+ const result = await new WorkOrderRepository(c.runtime).importCsv(f.p, { commandId: randomUUID(), name: "fictional-offline-revision.csv", kind: "csv", csv: demoFile([demoRow(f.demo, 1, { expectedRevision, assignedMembershipIds: assigned, priority })]) });
+ expect(result.rows).toEqual([expect.objectContaining({ outcome: "revised", errorCode: null, workOrderId: f.orderId, revisionId: expect.any(String) })]);
+ return result;
 }
 export async function crews(c: Cluster) {
  const f = await siteFixture(c);

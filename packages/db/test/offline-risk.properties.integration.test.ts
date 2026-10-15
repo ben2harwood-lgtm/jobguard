@@ -70,6 +70,7 @@ it("M31-S15 generated authority and baseline changes have explicit outcomes", as
   for (const operation of ["revoke", "revise"] as const) expect(results[operations.indexOf(operation)]!.status, label).toBe("fulfilled");
   const capture = results[operations.indexOf("capture")]!;
   const revisionAfter = (await c.admin.query("SELECT revision_id FROM app.work_order_current WHERE tenant_id=$1 AND work_order_id=$2", [f.p.tenantId, f.orderId])).rows[0]!.revision_id;
+  expect(revisionAfter, label).not.toBe(revisionBefore);
   if (capture.status === "fulfilled") {
    const first = capture.value as { variationId: string };
    const origin = await committed(c, f, selected.member, raw, first);

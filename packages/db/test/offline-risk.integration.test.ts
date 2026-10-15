@@ -100,10 +100,12 @@ it("M31-S17 compatibility", async () => {
 
 it("replaying a command id returns the first result, never the job's current state", async () => {
  const f = await siteFixture(c), actor = f.members.supervisor.member, raw = intent(f.jobId), first = await submit(c.runtime, f, actor, raw);
- await revise(c, f, [f.members.operative.member.membershipId]);
+ const revision = await revise(c, f, [f.members.operative.member.membershipId]);
  const laterRaw = intent(f.jobId, 1), later = await submit(c.runtime, f, actor, laterRaw);
+ expect(later.variationId).not.toBe(first.variationId);
  const oldOrigin = await committed(c, f, actor, raw, first), newOrigin = await committed(c, f, actor, laterRaw, later);
  expect(oldOrigin.work_order_revision_id).toBe(f.revisionId); expect(newOrigin.work_order_revision_id).not.toBe(f.revisionId);
+ expect(newOrigin.work_order_revision_id).toBe(revision.rows[0]!.revisionId);
  const before = await facts(c, f), head = await chain(c, f);
  expect(await freshRuntime(c, pool => submit(pool, f, actor, raw))).toEqual(first);
  expect(await facts(c, f)).toEqual(before); expect(await chain(c, f)).toBe(head);
