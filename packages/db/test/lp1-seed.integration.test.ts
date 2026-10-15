@@ -93,10 +93,16 @@ describe("LP-1 explicit owner bootstrap", () => {
     await expect(runtime.query("SET ROLE jobguard_migration")).rejects.toMatchObject({ code: "42501" });
     await expect(runtime.query("INSERT INTO app.account(id,tenant_id,name) SELECT id,tenant_id,name FROM app.account"))
       .rejects.toMatchObject({ code: "42501" });
-    expect((await owner.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='lp1_bootstrap_owner'")).rows)
-      .toEqual([{ rolsuper: false, rolbypassrls: false }]);
-    expect((await owner.query("SELECT relname,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid IN('app.account'::regclass,'app.membership'::regclass) ORDER BY relname")).rows)
-      .toEqual([{ relname: "account", relrowsecurity: true, relforcerowsecurity: true }, { relname: "membership", relrowsecurity: true, relforcerowsecurity: true }]);
+    const db = await owner.connect();
+    try {
+      // The NOINHERIT bootstrap login must assume its migration role for app
+      // schema access, including the regclass lookups in this catalogue assertion.
+      await db.query("BEGIN"); await db.query("SET LOCAL ROLE jobguard_migration");
+      expect((await db.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='lp1_bootstrap_owner'")).rows)
+        .toEqual([{ rolsuper: false, rolbypassrls: false }]);
+      expect((await db.query("SELECT relname,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid IN('app.account'::regclass,'app.membership'::regclass) ORDER BY relname")).rows)
+        .toEqual([{ relname: "account", relrowsecurity: true, relforcerowsecurity: true }, { relname: "membership", relrowsecurity: true, relforcerowsecurity: true }]);
+    } finally { await db.query("ROLLBACK"); db.release(); }
   }, 120_000);
 });
 
