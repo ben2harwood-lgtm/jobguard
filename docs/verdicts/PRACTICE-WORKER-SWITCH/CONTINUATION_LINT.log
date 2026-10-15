@@ -1,0 +1,51 @@
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running lint in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/config:lint: cache bypass, force executing 4d6da6e440405983
+@jobguard/storage:lint: cache bypass, force executing dfd13d7730ab88cd
+@jobguard/core:lint: cache bypass, force executing c6823e0cd830eab3
+@jobguard/core:lint: 
+@jobguard/core:lint: > @jobguard/core@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/core
+@jobguard/core:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/core:lint: 
+@jobguard/config:lint: 
+@jobguard/config:lint: > @jobguard/config@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/config
+@jobguard/config:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/config:lint: 
+@jobguard/storage:lint: 
+@jobguard/storage:lint: > @jobguard/storage@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/storage
+@jobguard/storage:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/storage:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/db:lint: cache bypass, force executing 37baa1f8db1e892b
+@jobguard/ai:lint: cache bypass, force executing 67b59c28eab43d11
+@jobguard/db:lint: 
+@jobguard/db:lint: > @jobguard/db@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/db
+@jobguard/db:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/db:lint: 
+@jobguard/ai:lint: 
+@jobguard/ai:lint: > @jobguard/ai@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/ai
+@jobguard/ai:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/ai:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:lint: cache bypass, force executing dad78c355b256eea
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:lint: 
+@jobguard/api:lint: > @jobguard/api@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/api
+@jobguard/api:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/api:lint: 
+@jobguard/web:lint: cache bypass, force executing 05e1ee539c35314a
+@jobguard/web:lint: 
+@jobguard/web:lint: > @jobguard/web@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/web
+@jobguard/web:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/web:lint: 
+
+ Tasks:    7 successful, 7 total
+Cached:    0 cached, 7 total
+  Time:    55.607s 
+

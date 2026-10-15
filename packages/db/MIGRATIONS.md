@@ -1137,3 +1137,19 @@ Old code ignores the added tables. New internal assembly/binding readers fail cl
 
 ## 0158 — ENT-5b approval chain for contractor extras
 `0158_extra_approval_chain.sql` is additive (built ahead on 0157). It creates `extra_approval_request`, `extra_approval_step_fact`, `extra_approval_outcome`, `extra_client_link`, `extra_client_link_closure` and `extra_escalation_fact`: owner `jobguard_migration`, forced RLS, one tenant policy, immutable-row trigger, and **SELECT only** for `jobguard_runtime`. Writers are SECURITY DEFINER routines `app.xa_submit`, `xa_price` (also ReviseExtra), `xa_approve` (also RejectExtra), `xa_withdraw`, `xa_mark_duplicate`, `xa_issue_link`, `xa_revoke_link`, `xa_client_decide` and `xa_escalate`, plus the read-only `xa_queue`/`xa_covers`/`xa_decision_id`; each re-checks the command receipt (still processing, same actor), the stored grants and the stored state. Helpers are not runtime-callable. Names avoid the `ent5_` prefix because the ENT-5 foundation test pins that no `ent5_%` function is runtime-executable. No predecessor object changes. Proof: `test/extra-approval-chain.integration.test.ts`; contract: `docs/contracts/extra-approval-chain-v1.md`.
+
+
+## 0165 — practice worker switch (PRACTICE-WORKER-SWITCH)
+
+Requires 0138 session hardening. Adds two private control-plane tables, ten routines,
+and five refusal triggers on existing tables; replaces only `app.contractor_session(uuid)`.
+No backfill or existing row changes. Decision 39 permits operative, supervisor,
+surveyor and client_approver targets. No runtime table grants; only EXECUTE on the
+three session-authorized switch routines. Audit events must commit with the switch.
+
+Forward fix: leave immutable records and permanent markers intact. Restore the
+hardened lookup and separately revoke switch-on EXECUTE using the two statements
+in `docs/contracts/practice-worker-switch-v1.md`. This disables acting and new
+switches while retaining switch-off/state access. PostgreSQL execution, catalogue,
+upgrade and rollback proofs require dispatcher/CI verification; they were not run
+in the builder sandbox.
