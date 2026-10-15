@@ -2,8 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { expect } from "vitest";
 import { ContractorRepository, PracticeWorkerSwitchRepository, WorkOrderRepository, prepareWorkOrderDemo, demoFile, demoRow, withTenant } from "../src/index.js";
-import { startSession, currentCommand, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
-export { cluster, ownerTx, startBeforeMigration, applyMigration, startSession, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, digestOf, resolvers, companyRows } from "./contractor-practice-session-fixtures.js";
+import { startSession, seedHomeOwner, currentCommand, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
+export { cluster, ownerTx, startBeforeMigration, applyMigration, startSession, makeSessionExpired, endHomeRecord, digestOf, resolvers, companyRows } from "./contractor-practice-session-fixtures.js";
+export async function startSessionWithHomeRecord(c: Cluster) {
+ // The full-migration cluster has no shared HOME owner. Seed through the
+ // existing admin-only fixture; LP-1 deliberately forbids runtime setup writes.
+ await seedHomeOwner(c);
+ return startSession(c, true);
+}
 export const migrationName = "0165_practice_worker_switch.sql";
 export const restoreHardenedLookup = `CREATE OR REPLACE FUNCTION app.contractor_session(s uuid) RETURNS TABLE(tenant_id uuid,membership_id uuid,identity_user_id uuid) LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$ SELECT l.tenant_id,l.membership_id,l.identity_user_id FROM app.contractor_practice_session_live(s) l $$;`;
 export const disableSwitchOn = "REVOKE EXECUTE ON FUNCTION app.practice_worker_switch_on(uuid,uuid,uuid) FROM jobguard_runtime;";

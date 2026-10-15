@@ -782,3 +782,82 @@ The slot wrapper printed sandbox sysctl/sysmon/pgrep restrictions; successful co
 **Still owed:** dispatcher commit/push, real PostgreSQL CI for both LP-0 integration suites, tenancy and mandatory migration/regression/feature proofs, plus independent exact-commit RED verdicts and separate acceptance. The root `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and browser suites are not run here because their database/browser execution is unavailable or explicitly excluded. No new model/prompt/parser behavior requires an evaluation. No clean dependency reinstall, new external action, data migration, new alert, production rollout or release approval is claimed. Existing commercial/security/real-data gates and the earlier PW19 limitation remain.
 
 Intended conventional commit message written to `/private/tmp/jg-msg-practice-worker-switch.txt` for the dispatcher. No staging, commit, checkout, push or other Git write command was run.
+
+## Repair r3
+
+15 October 2026, dispatcher 11; PR #225; inspected HEAD
+`38c3096abe26aeba58b69f894e125afc1c2e8b8e` on
+`codex/sandbox/practice-worker-switch`. This section records uncommitted fixture
+repairs only; it is not an independent verdict or acceptance.
+
+Read the dispatcher excerpt at
+`/Users/benharwood/.local/share/full-steam/jg-runs/d11/pws-ci-fail2.txt`, the affected
+tests, migration 0165, current LP-1 migration 0162, and the merged session/cluster
+fixtures. `gh run list --branch codex/sandbox/practice-worker-switch --limit 3
+--json databaseId,headSha,status,conclusion` failed to connect to api.github.com;
+the full remote log was unavailable.
+
+### Causes and repairs
+
+- PW16 SSO attachment, PW15 V4/V5, and the first upgrade proof all used the same
+  ambiguous parameter pattern: UUID table columns and `$1::text`/`$2::text` in
+  metadata. All three statements now cast IDs to UUID at every parameter use,
+  including UUID-to-text conversion for metadata. Every expectation is preserved.
+- The first upgrade test failed during that setup, before creating
+  `pws_scratch` or applying 0165. Source inspection explains the later
+  `SWITCH_UNAVAILABLE` and missing-scratch-schema failures as consequences of
+  that aborted setup; PostgreSQL CI must confirm the complete upgrade proof.
+- The full-migration cluster does not seed the shared HOME owner required by
+  `app.issue_practice_session`. The worker-switch fixture now wraps HOME-session
+  creation with the existing `seedHomeOwner(c)` helper, which writes through
+  `c.admin`. This repairs the PW9 home-expired/home-revoked/current-switch setup
+  without relying on account/membership writes withdrawn from runtime by LP-1.
+  Session issuance and authentication still use the real runtime routines.
+
+Only the three own test/fixture files above and this receipt changed. No defect
+in 0165's routines/triggers was established by these failures, so **migration
+0165 is unchanged**. Merged tests/code, merged fixtures, LP-1, the LP-0 inventory,
+scanner pins, grants, and all other behavior remain unchanged. A read-only
+`git show HEAD:<path>` comparison confirmed that the two edited integration
+tests differ only by the explicit SQL casts, and that 0165, 0162 and the merged
+session fixture are byte-identical to HEAD. No runtime grants or data migration
+are introduced. Existing rollback/forward-fix guidance remains applicable.
+
+### Checks actually run
+
+Installed Node `v24.17.0`, cached pinned pnpm `10.28.1`; no downloads or install.
+Every pnpm command used `PATH="/private/tmp/jg-pws-bin:$PATH"`. Heavy commands
+ran serially through `~/.local/bin/heavy-slot`. Logs are
+`/private/tmp/pws-r3-<suffix>.log`.
+
+| Command | Result | Log suffix |
+| --- | --- | --- |
+| `~/.local/bin/heavy-slot pws-r3-typecheck pnpm typecheck --force` | PASS; 7 tasks, none cached | `typecheck` |
+| `LANE_BASE_REF=origin/main ~/.local/bin/heavy-slot pws-r3-lint pnpm lint --force` | PASS; root checks and 7 tasks, none cached | `lint` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS | `lint-lanes` |
+| `~/.local/bin/heavy-slot pws-r3-build pnpm build --concurrency=2 --force` | PASS; 7 tasks, none cached | `build` |
+| `~/.local/bin/heavy-slot pws-r3-db-test-types pnpm exec tsc -p /private/tmp/jg-pws-db-test-types.json` | PASS; own four DB suites and fixture included, no database execution | `db-test-types` |
+| `~/.local/bin/heavy-slot pws-r3-core-unit pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/practice-worker-switch.test.ts` | PASS; 69 tests | `core-unit` |
+| `~/.local/bin/heavy-slot pws-r3-api-unit pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/practice-worker-switch.application.test.ts src/auth/context-boundary.test.ts` | PASS; 162 tests | `api-unit` |
+| `~/.local/bin/heavy-slot pws-r3-web-unit pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/api/contractor/practice/acting-as/route.test.ts app/api/contractor/practice/acting-as/end/route.test.ts 'app/api/contractor/practice/workers/[workerId]/acting-as/route.test.ts'` | PASS; 32 tests, no browser | `web-unit` |
+| `~/.local/bin/heavy-slot pws-r3-db-unit pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts` | PASS; 26 tests | `db-unit` |
+| `pnpm openapi:check` | Exit 1; TSX IPC listener `listen EPERM` before artifact check | `openapi` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS; same generator/check, no artifact change | `openapi-node` |
+| `git diff --check` and read-only source preservation comparison | PASS | terminal output |
+
+Total: **289 targeted unit tests passed**, seven test files. Heavy-slot reported
+sandbox process/sysctl restrictions but acquired slots and executed the checks.
+The standard OpenAPI command remains blocked by the sandbox socket restriction;
+its Node-loader invocation passed. This was not an automatic approval-review
+rejection. No claim of a clean reinstall or full `pnpm test` pass is made.
+
+**Pending:** dispatcher commit/push and real PostgreSQL CI, including all four
+worker-switch suites, LP-0, regression and migration checks. PostgreSQL and browser
+suites were NOT RUN here, as instructed; typechecking SQL-containing tests does
+not establish database behavior. No model/prompt/parser changed. Independent
+exact-commit RED verdicts, separate acceptance and all existing release/real-data
+gates remain required. No new operational alert or production rollout is claimed.
+
+Overwrote `/private/tmp/jg-msg-practice-worker-switch.txt` with the intended
+conventional commit subject and body. No Git write command, commit, push, browser
+or PostgreSQL process was run.

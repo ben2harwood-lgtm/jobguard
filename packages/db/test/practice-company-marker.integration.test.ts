@@ -42,7 +42,7 @@ it.each(insertions.slice(0, 3))("[PW15] [PW16] %s prevents marking and is refuse
 });
 it("[PW16] P4 P5 P6 P12 SSO connection attach is refused for a marked company", async () => {
  const f = await company(c); await start(c, f);
- await expect(c.admin.query("INSERT INTO identity.sso_connection(tenant_id,id,metadata) VALUES($1,$2,jsonb_build_object('version','sso-metadata.v1','protocol','saml2','provider','in-process-test-idp','id',$2::text,'tenantId',$1::text))", [f.p.tenantId, randomUUID()])).rejects.toMatchObject({ code: "42501" });
+ await expect(c.admin.query("INSERT INTO identity.sso_connection(tenant_id,id,metadata) VALUES($1::uuid,$2::uuid,jsonb_build_object('version','sso-metadata.v1','protocol','saml2','provider','in-process-test-idp','id',$2::uuid::text,'tenantId',$1::uuid::text))", [f.p.tenantId, randomUUID()])).rejects.toMatchObject({ code: "42501" });
 });
 it("[PW31] P1 signup of another company cannot affect an acting session", async () => {
  const f = await company(c); await start(c, f); const b = await company(c); expect(await lookup(c, b)).toEqual(b.p); expect((await lookup(c, f)).membershipId).toBe(f.members.operative);
@@ -112,7 +112,7 @@ it.each(variants)("[PW15] %s refuses routine and table-owner marker without writ
  }
  if (variant.startsWith("V4") || variant.startsWith("V5")) {
   const connection = randomUUID();
-  await c.admin.query("INSERT INTO identity.sso_connection(tenant_id,id,metadata) VALUES($1,$2,jsonb_build_object('version','sso-metadata.v1','protocol','saml2','provider','in-process-test-idp','id',$2::text,'tenantId',$1::text))", [f.p.tenantId, connection]);
+  await c.admin.query("INSERT INTO identity.sso_connection(tenant_id,id,metadata) VALUES($1::uuid,$2::uuid,jsonb_build_object('version','sso-metadata.v1','protocol','saml2','provider','in-process-test-idp','id',$2::uuid::text,'tenantId',$1::uuid::text))", [f.p.tenantId, connection]);
   if (variant.startsWith("V5")) await c.admin.query("INSERT INTO identity.verified_domain(tenant_id,connection_id,domain) VALUES($1,$2,$3)", [f.p.tenantId, connection, `${randomUUID()}.fictional.invalid`]);
  }
  if (variant.startsWith("V6") || variant.startsWith("V7") || variant.startsWith("RC3")) await c.admin.query(insertions[2][2], [f.p.tenantId, variant.startsWith("V7") ? f.members.admin : f.p.membershipId, `${randomUUID()}@fictional.invalid`]);
