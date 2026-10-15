@@ -41,6 +41,12 @@ async function waitBlocked(pid: number, blocker: number) {
 describe("MIGFIX-1 actual PostgreSQL identity boundary", () => {
   beforeAll(async () => {
     c = await startBeforeMigration(migrationName); await migrate(c.admin);
+    // LP-1 decision 42: TEST-ONLY non-owner writer, as in the tenancy fixture (decision 40).
+    await c.admin.query(`
+      CREATE ROLE lp1_tenancy_fixture NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+      GRANT jobguard_runtime TO lp1_tenancy_fixture;
+      GRANT INSERT, UPDATE, DELETE ON app.account, app.membership TO lp1_tenancy_fixture;
+    `);
     await c.admin.query("CREATE ROLE migfix_identity LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_identity TO migfix_identity");
     // Reuse the cluster's generated connection configuration; no credential-shaped literal.
     const auth = c.config.password;
@@ -71,7 +77,8 @@ describe("MIGFIX-1 actual PostgreSQL identity boundary", () => {
 
   it("[MIGFIX-1-1b] retained UPDATE permits row locks, no-ops and authority restriction", async () => {
     const f = await fixture();
-    await withTenant(c.runtime,verifiedTenantContextFromMembership(f.p),async db=>{
+    await withTenant(c.admin,verifiedTenantContextFromMembership(f.p),async db=>{
+      await db.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
       expect((await db.$client.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND id=$2 FOR SHARE",[f.p.tenantId,f.p.membershipId])).rows).toEqual([{id:f.p.membershipId}]);
       await db.$client.query("UPDATE app.membership SET role=role,revoked_at=revoked_at,expires_at=expires_at WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId]);
       await db.$client.query("UPDATE app.membership SET revoked_at=clock_timestamp(),expires_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId]);

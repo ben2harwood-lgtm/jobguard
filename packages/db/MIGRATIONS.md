@@ -1137,3 +1137,35 @@ Old code ignores the added tables. New internal assembly/binding readers fail cl
 
 ## 0158 — ENT-5b approval chain for contractor extras
 `0158_extra_approval_chain.sql` is additive (built ahead on 0157). It creates `extra_approval_request`, `extra_approval_step_fact`, `extra_approval_outcome`, `extra_client_link`, `extra_client_link_closure` and `extra_escalation_fact`: owner `jobguard_migration`, forced RLS, one tenant policy, immutable-row trigger, and **SELECT only** for `jobguard_runtime`. Writers are SECURITY DEFINER routines `app.xa_submit`, `xa_price` (also ReviseExtra), `xa_approve` (also RejectExtra), `xa_withdraw`, `xa_mark_duplicate`, `xa_issue_link`, `xa_revoke_link`, `xa_client_decide` and `xa_escalate`, plus the read-only `xa_queue`/`xa_covers`/`xa_decision_id`; each re-checks the command receipt (still processing, same actor), the stored grants and the stored state. Helpers are not runtime-callable. Names avoid the `ent5_` prefix because the ENT-5 foundation test pins that no `ent5_%` function is runtime-executable. No predecessor object changes. Proof: `test/extra-approval-chain.integration.test.ts`; contract: `docs/contracts/extra-approval-chain-v1.md`.
+
+## 0162 — LP-1 membership/account closure (implementation present; rollout pending)
+
+The 13 October dispatch, updated 15 October, allocated 0162. Migration `0162_membership_account_closed.sql` and its runner registration now exist. Ben decisions 40/41 authorise the bounded Q1/Q3 fixture, bootstrap and inventory changes; decision 42 authorises the four setup/expectation-only compatibility repairs in the receipt's Repair r2 section. The integrated implementation is described below; database proof and acceptance remain pending.
+
+The implemented integrated group withdraws account/membership table writes, rejects every created_at update (including no-op), retains only the immutable locking-column UPDATE, and converts all four bootstrap rows to the separately authenticated migration owner. No business table/column/backfill is added. Existing row locks, RLS boundaries, identity routines and audit ordering must survive; real-role verification remains required.
+
+Rollout remains pending: grant protection, seed conversion and approved fixture/comparator/inventory changes land together, after real-role and populated upgrade proofs. Do not apply a standalone revoke. Forward fixes retain the withdrawal; never restore broad runtime writes. No current deployment or real-data authority follows from this note. See docs/contracts/least-privilege-membership-account-v1.md.
+
+### 0162 continuation — integrated implementation, 15 October 2026
+
+Ben decisions 40/41 release the bounded fixture/bootstrap/inventory changes recorded in the LP-1 receipt. `0162_membership_account_closed.sql` is now registered after 0158. It revokes table INSERT/UPDATE/DELETE and independent write-column privileges on account/membership, then retains UPDATE(created_at) only. A migration-owned SECURITY INVOKER trigger helper (fixed pg_catalog search path; no application/PUBLIC EXECUTE) unconditionally raises 42501 in two BEFORE UPDATE OF created_at statement triggers, including no-op/empty-set UPDATE. Existing SELECT, FORCE RLS, policies, row locks, owners, values, identity routes and timestamps remain unchanged. No new table, column, backfill or callable writer. Under §11.8 R1 and decision 41, the column ACL is a proven-only reduction of broad UPDATE; acceptance still requires the real-role tests.
+
+The four bootstrap rows now use jobguard_migration on the separate owner connection; runtime is restored before job seeding. The four authorised tenancy callbacks select a disposable non-owner fixture role; all merged assertions are preserved. LP-0 inventory withdraws six table-write entries and records two retained column ACLs. Grant protection, seeds and these reviewed dispositions must land together. Q2's audit comparator and other LP-0 tests expecting withdrawn capabilities need coordinator changes before integration acceptance; this builder does not change them.
+
+Upgrade proof: lp1-upgrade.integration.test.ts installs predecessors, snapshots populated authority/receipt/audit and commercial source/pack rows as canonical named-column text/full types with original PK identities, applies 0162 alone, compares declared security changes, then runs later migrations twice. Rolled-back microsecond/type controls fail comparison; later scratch columns/functions/rows pass. Real-role refusal, all four lock strengths, RLS UPDATE-policy, nontransactional trigger-effect and bootstrap proofs are separate. PostgreSQL/browser execution is NOT RUN in the builder sandbox. No source inspection or non-DB check establishes acceptance.
+
+Rollout remains gated by coordinator repairs, real PostgreSQL fresh/populated upgrade/regression checks, exact-head RED verdicts and separate acceptance. On install failure, the migration transaction rolls back. After installation fix forward while retaining the withdrawal; do not restore broad runtime authority writes. Previous service binaries retain their unchanged lock SQL; run the updated explicit bootstrap for synthetic setup. No real-data or deployment authority follows.
+
+## 0164 — SV-7A synthetic job source storage and reads
+
+Installs three migration-owned, FORCE-RLS immutable tenant/job side tables, exact
+evidence/original relationships, private integrity triggers and one persisted-session
+authorized read routine. Runtime gains SELECT only and read EXECUTE. No earlier
+rows, grants, routines or fingerprinted table columns change; no backfill.
+Both executable source-intake routines remain held (Q3/Q4). No CH-4 event adapter
+is installed. The catch-up base includes merged CH-4/0144; its diary key/adapter
+and coordinator catalogue coverage remain prerequisites. Disable the new read entrypoints
+on deployment failure and use a reviewed forward fix; preserve originals/history.
+Own-step upgrade proof: `test/job-sources-upgrade.integration.test.ts`; PostgreSQL
+execution remains required, with later migrations applied twice and rolled-back
+canonical-row/type/identity comparator controls.
