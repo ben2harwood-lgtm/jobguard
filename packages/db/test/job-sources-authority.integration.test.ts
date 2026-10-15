@@ -50,7 +50,8 @@ describe("SV-7A source storage/read authority",()=>{
   for(const [field,expression,code] of [["job_id",`'${other.jobId}'::uuid`,"23503"],["object_version_id","'substituted'","23503"],["tenant_id","gen_random_uuid()","42501"]]){
    const command=randomUUID();
    await expect(workTenant(f.admin,context.tenantId,async db=>{
-    await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'sv7a.invalid_fixture',$2::text,$3,'succeeded',$4,'{}',clock_timestamp())",[context.tenantId,command,source.hash,f.practice.auth.membershipId]);
+    // Cast every parameter use so receipt setup reaches the intended substitution constraint.
+    await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1::uuid,$2::uuid,'sv7a.invalid_fixture',$2::text,$3::text,'succeeded',$4::uuid,'{}',clock_timestamp())",[context.tenantId,command,source.hash,f.practice.auth.membershipId]);
     const selected=names.map(name=>name===field?expression:name==="id"?"gen_random_uuid()":name==="command_id"?`'${command}'::uuid`:name).join(",");
     await db.query(`INSERT INTO app.job_diary_entry(${names.join(",")}) SELECT ${selected} FROM app.job_diary_entry WHERE id=$1`,[source.id]);
    })).rejects.toMatchObject({code});

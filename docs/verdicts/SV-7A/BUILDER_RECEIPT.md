@@ -1025,3 +1025,78 @@ required; this receipt grants neither.
 Working tree changes are ready for the dispatcher. No add, commit, checkout,
 push or other Git write command was issued against the worktree. Intended
 conventional commit subject/body is overwritten at `/private/tmp/jg-msg-sv-7a.txt`.
+
+## Repair r3 — dispatcher 11, 15 October 2026
+
+Repair against PR #222 head `f9c952e0a25e470f518930b37218b2b123977dd4`,
+branch `codex/sandbox/sv-7a`. Read repository AGENTS, BUILD_PLAN §2.4/SV-7
+and `docs/contracts/job-sources-v1.md` before edits. Only the SV-7A authority
+integration test and this receipt change. No merged tests, application code,
+migrations, contracts or assertion expectations change.
+
+### Fault and parameter audit
+
+In `SV7A-16 cross-tenant/wrong-job/exact-tuple fixture substitutions and immutable
+mutations fail`, the command-receipt INSERT before the substituted diary INSERT
+used bare `$2` for UUID `command_id` and `$2::text` for `semantic_key`. PostgreSQL
+therefore rejected statement typing before reaching the intended FK constraint.
+Cast every parameter occurrence in that receipt INSERT: `$1::uuid`, `$2::uuid`,
+`$2::text`, `$3::text`, `$4::uuid`. This matches the existing shared source fixture's
+receipt setup. Wrong-job and wrong-version expectations remain `23503`, tenant
+substitution remains `42501`, and immutable mutations remain `55000`.
+
+Inspected every parameterised statement in the authority test and neighbouring
+`job-sources-fixture.ts`, `job-sources.integration.test.ts`,
+`job-sources-evidence.integration.test.ts`, `job-sources-isolation.integration.test.ts`
+and `job-sources-upgrade.integration.test.ts`. A temporary TypeScript-AST inventory
+found 39 parameterised SQL strings/templates across these six files. Only three
+reuse a parameter: the repaired receipt, the already explicitly cast shared
+receipt, and the evidence-object INSERT whose repeated `$1` targets UUID `id`
+and UUID `upload_id`. No further mixed-type reuse was found. Byte lengths are
+used once per statement (bigint evidence-object length; integer source-original
+length). Each separate query has its own parameter namespace. Also inspected the
+imported neighbouring work-state and evidence-pack fixtures; their reused
+parameters have compatible column contexts or existing UUID-to-text casts.
+No changes to those fixtures are required. This is source inspection, not a
+PostgreSQL parse/execution result.
+
+### Commands actually run
+
+Installed Node `v24.17.0`, cached pinned pnpm `10.28.1`, Vitest `4.1.11`.
+No installs or downloads. Commands used `PATH=/private/tmp/jg-sv7a-bin:$PATH`.
+Logs below are in `/private/tmp/`; heavy-slot is `~/.local/bin/heavy-slot`.
+
+| Command | Exit / actual result | Log |
+| --- | --- | --- |
+| `heavy-slot sv-7a-r3-typecheck pnpm typecheck` | 0; 7 successful tasks, 2 cached | `sv7a-r3-typecheck.log` |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; root lint and 7 successful package tasks, 2 cached | `sv7a-r3-lint.log` |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; SV-7A boundary passed | `sv7a-r3-lint-lanes.log` |
+| `heavy-slot sv-7a-r3-test-typecheck node /private/tmp/jg-sv7a-check-tests.mjs` with all six files listed above | 0; six test/fixture sources typechecked, no DB execution | `sv7a-r3-test-typecheck.log` |
+| `heavy-slot sv-7a-r3-build pnpm build` | 0; 7 successful tasks, 2 cached | `sv7a-r3-build.log` |
+| `heavy-slot sv-7a-r3-core-final pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/job-sources.test.ts src/shadow-detection.test.ts` | 0; 14 tests passed | `sv7a-r3-core-unit-final.log` |
+| `heavy-slot sv-7a-r3-api pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/job-source.application.test.ts src/job-source.controller.test.ts` | 0; 7 tests passed | `sv7a-r3-api-unit.log` |
+| `heavy-slot sv-7a-r3-worker pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/shadow-detection.worker.test.ts src/shadow-detection-lock-race.test.ts` | 0; 8 tests passed | `sv7a-r3-worker-unit.log` |
+| `heavy-slot sv-7a-r3-web pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/jobs/[id]/diary/route.test.ts' 'app/api/jobs/[id]/customer-messages/route.test.ts'` | 0; 8 route tests passed, no browser | `sv7a-r3-web-unit.log` |
+| `pnpm openapi:check` | 1; tsx IPC listen blocked by sandbox EPERM | `sv7a-r3-openapi.log` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0; same generator/check without the IPC listener; artifact unchanged | `sv7a-r3-openapi-node.log` |
+| `node --input-type=module` (temporary SQL parameter inventory) | 0; 39 SQL strings/templates inspected, repeated uses listed | `sv7a-r3-parameter-audit.log` |
+| `git diff --check` | 0 | terminal output |
+
+The first two core heavy-slot invocations exited 2 before Vitest started
+(`sv7a-r3-core-unit.log`, `sv7a-r3-core-unit-retry.log`); the final invocation
+passed. Successful wrapper runs also emitted sandbox sysctl/sysmon/pgrep warnings;
+Turbo emitted sandbox IO warnings. These do not establish database correctness.
+
+37 focused unit/worker/route tests passed. No PostgreSQL, migration, browser or
+full `pnpm test` run was attempted: the dispatch environment cannot bind localhost
+or start PostgreSQL. CI after dispatcher push must execute the repaired authority
+test and mandatory DB/migration/regression suites. All previous intake, UI, CH-4,
+real-data and release holds remain; no new operational alert or migration is
+introduced. This receipt is builder evidence, not an independent verdict or
+technical acceptance. A fresh exact-commit review and separate acceptance remain
+required.
+
+No Git write commands were run. Changes remain in the working tree for the
+dispatcher. Intended conventional commit subject/body is overwritten at
+`/private/tmp/jg-msg-sv-7a.txt`; commit, push, merge and release remain dispatcher/
+founder-owned.
