@@ -7,10 +7,7 @@ export const activationFeePolicyV3 = shadowSuccessFeeV1.unwrap().unwrap().shape.
 const pence = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
 const uuid = z.string().uuid();
 
-/** Highest sent is zero when no immutable revision has an outbound send record. */
-export function isSmallJobV3(acceptedNetPence: number, highestSentNetPence: number): boolean {
-  return Math.max(pence.parse(acceptedNetPence), pence.parse(highestSentNetPence)) < 200_000;
-}
+export { isSmallJobV3 } from "./small-job-v3.js";
 
 /** Server-internal command: commercial facts are read under the job lock. */
 export const switchLiveV3 = z.object({
