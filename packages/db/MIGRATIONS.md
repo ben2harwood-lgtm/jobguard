@@ -1127,7 +1127,7 @@ the job pointer is the truth); `0107` `recovery_message_sources_current` picks t
 prefer an earlier-stated time of a re-acceptance. Proof: `quote-reacceptance.integration.test.ts` and
 `quote-reacceptance-upgrade.integration.test.ts`.
 
-## 0156 — customer billing integrity (MIGFIX-5)
+## 0165 — customer billing integrity (MIGFIX-5)
 
 Restates two installed routines in place with `CREATE OR REPLACE` (owner `jobguard_migration`, SECURITY DEFINER, pinned `search_path` and ACL are preserved; no GRANT, table, column, policy or row change):
 
@@ -1136,7 +1136,7 @@ Restates two installed routines in place with `CREATE OR REPLACE` (owner `jobgua
 
 Held, not in this migration: the legacy `issue_practice_customer_invoice` guard (open #189 / 0147 already restates it), cumulative whole-invoice VAT rounding (changes a merged expectation), and real PDF bytes (Ben, 14 Oct, decision 7: later). `PracticeInvoiceRepository.previewCredit` applies the same VAT cap.
 
-Upgrade proof: `packages/db/test/migfix-5-upgrade.integration.test.ts` (own step on a populated pre-0156 schema, ACL/owner kept, later migrations twice). Behaviour: `packages/db/test/migfix-5.integration.test.ts`. Forward-fix rollback only; do not edit an earlier migration.
+Upgrade proof: `packages/db/test/migfix-5-upgrade.integration.test.ts` (own step on a populated pre-0165 schema, ACL/owner kept, later migrations twice). Behaviour: `packages/db/test/migfix-5.integration.test.ts`. Forward-fix rollback only; do not edit an earlier migration.
 ## 0157 — ENT-5 extra approval foundation
 
 Requires ENT-3b/3c/3d (0139–0141), and their merged interfaces before landing. Two new immutable containers: `extra_approval_revision_binding`, `extra_evidence_pack`. Runtime SELECT only; no callable business writer, backfill, approval/state transition or external effect. Two insert guards verify same-extra immutable source/positive price/predecessor structure and extra subject. Existing source prices, baseline, hashes, origin and recovery packs remain unchanged.

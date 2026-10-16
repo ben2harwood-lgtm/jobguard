@@ -5,7 +5,7 @@ import { FinalAccountLockRepository } from "../src/final-account-lock-repository
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { createLockFixture, closeLockFixture, seedAccount, prepareLock, addFixtureCapture, asFixtureTenant, LOCK_OWNER, LOCK_HASH, type LockFixture } from "./final-account-lock.integration.test.js";
 
-// MIGFIX-5 (0156): the lock refuses an account assembled before the latest approved variation, and partial
+// MIGFIX-5 (0165): the lock refuses an account assembled before the latest approved variation, and partial
 // credit notes conserve the ORIGINAL invoice net and VAT. The legacy-issuer guard and real PDF bytes are held
 // (see docs/verdicts/MIGFIX-5/BUILDER_RECEIPT.md); nothing here asserts them.
 type Account = Awaited<ReturnType<typeof seedAccount>>;
