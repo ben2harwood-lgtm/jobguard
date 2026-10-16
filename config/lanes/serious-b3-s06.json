@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b3-s06": {
+      "branches": ["codex/sandbox/serious-b3-s06"],
+      "receipt": "docs/verdicts/SERIOUS-B3-S06/BUILDER_RECEIPT.md",
+      "note": "Coordinator ruling 67, 16 October 2026: quote net rounds once half-even (BUILD_PLAN 5.4); only the ruled values in quote.test.ts:4 and quote.integration.test.ts:6,:22 move. Lane per ruling 70.",
+      "allow": [
+        "packages/core/src/quote.ts",
+        "packages/core/src/quote-rounding.test.ts",
+        "packages/core/src/quote.test.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "docs/verdicts/SERIOUS-B3-S06/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
