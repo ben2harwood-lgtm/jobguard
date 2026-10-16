@@ -107,5 +107,7 @@ export * from "./job-source-fixtures.js";
 export * from "./enterprise-dashboard-repository.js";
 export * from "./practice-worker-switch-repository.js";
 
+export * from "./meter-persistence.js";
+export * from "./meter-repository.js";
 export * from "./northside-settings.js";
 export * from "./northside-run.js";
