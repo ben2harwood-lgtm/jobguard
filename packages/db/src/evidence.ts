@@ -82,10 +82,10 @@ export class EvidenceService {
     if("existing" in prepared) return prepared.existing;
     let object:StoredObject;
     try { object=await this.storage.readExactVersion(prepared.upload.object_key,input.objectVersionId); }
-    catch { await this.reject(context,input.uploadId,"missing_version"); throw new EvidenceError("OBJECT_INVALID","missing_version"); }
+    catch { await this.reject(context,input.uploadId,"missing_version",input.objectVersionId); throw new EvidenceError("OBJECT_INVALID","missing_version"); }
     const rejection=object.versionId!==input.objectVersionId ? "missing_version" : object.byteLength>Number(prepared.upload.maximum_bytes) ? "size_exceeded" :
       object.contentType!==prepared.upload.expected_content_type ? "wrong_type" : sha256(object.bytes)!==prepared.upload.expected_sha256.trim() ? "wrong_hash" : !hasCompleteImage(object.bytes,object.contentType)?"corrupt_image":null;
-    if(rejection){await this.reject(context,input.uploadId,rejection);throw new EvidenceError("OBJECT_INVALID",rejection);}
+    if(rejection){await this.reject(context,input.uploadId,rejection,input.objectVersionId);throw new EvidenceError("OBJECT_INVALID",rejection);}
     return withTenant(this.pool,context,async db=>{
       const target=(await db.$client.query<{job_id:string}>("SELECT job_id FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[context.tenantId,input.uploadId])).rows[0]; if(!target)throw new EvidenceError("UPLOAD_NOT_FOUND"); await checkPostLockSourceLifecycle(db,target.job_id);await requireLiveJob(db,target.job_id);
       const earlier=await this.replayFinalize(db,context.tenantId,target.job_id,input,true,completing); if(earlier)return earlier;
@@ -133,7 +133,7 @@ export class EvidenceService {
     return undefined;
   }
 
-  private reject(context:VerifiedTenantContext,id:string,code:string){return withTenant(this.pool,context,db=>db.$client.query(`UPDATE app.evidence_upload SET state='rejected',rejection_code=$3 WHERE tenant_id=$1 AND id=$2`,[context.tenantId,id,code])).catch(rethrowJobWorkState).then(()=>undefined);}
+  private reject(context:VerifiedTenantContext,id:string,code:string,objectVersionId:string|null){return withTenant(this.pool,context,db=>db.$client.query(`UPDATE app.evidence_upload SET state='rejected',rejection_code=$3 WHERE tenant_id=$1 AND id=$2 AND state IN ('pending','quarantined') AND object_version_id IS NOT DISTINCT FROM $4`,[context.tenantId,id,code,objectVersionId])).catch(rethrowJobWorkState).then(()=>undefined);}
 
   async linkAndAssertProof(context:VerifiedTenantContext,input:{id:string;evidenceId:string;jobId:string;scopeItemId:string|null;requiredEvidenceType:string}){
     return withTenant(this.pool,context,async db=>{await checkPostLockSourceLifecycle(db,input.jobId);await requireLiveJob(db,input.jobId);const result=await db.$client.query(`INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type)
@@ -151,5 +151,5 @@ export class EvidenceService {
 
   async authorizedDownloadUrl(context:VerifiedTenantContext,raw:unknown){const input=evidenceAccessSchema.parse(raw);const row=await withTenant(this.pool,context,async db=>(await db.$client.query<{object_key:string;object_version_id:string}>(`SELECT object_key,object_version_id FROM app.evidence_object WHERE tenant_id=$1 AND id=$2 AND job_id=$3 AND scope_item_id IS NOT DISTINCT FROM $4 AND kind='original'`,[context.tenantId,input.evidenceId,input.jobId,input.scopeItemId])).rows[0]).catch(rethrowJobWorkState);if(!row)throw new EvidenceError("EVIDENCE_NOT_AUTHORIZED");return this.storage.createDownloadUrl({key:row.object_key,versionId:row.object_version_id,expiresInSeconds:input.expiresInSeconds});}
 
-  async cleanupExpiredOrphans(context:VerifiedTenantContext,now=new Date()) { const rows=await withTenant(this.pool,context,async db=>(await db.$client.query<{id:string;object_key:string;object_version_id:string|null}>(`SELECT id,object_key,object_version_id FROM app.evidence_upload u WHERE tenant_id=$1 AND state IN ('pending','quarantined') AND retention_class='transient_upload' AND expires_at<$2 AND NOT EXISTS(SELECT 1 FROM app.evidence_object e WHERE (e.tenant_id,e.upload_id)=(u.tenant_id,u.id))`,[context.tenantId,now])).rows).catch(rethrowJobWorkState); for(const row of rows){if(row.object_version_id)await this.storage.deleteExactVersion(row.object_key,row.object_version_id);await this.reject(context,row.id,"orphan_expired");} return rows.length; }
+  async cleanupExpiredOrphans(context:VerifiedTenantContext,now=new Date()) { const rows=await withTenant(this.pool,context,async db=>(await db.$client.query<{id:string;object_key:string;object_version_id:string|null}>(`SELECT id,object_key,object_version_id FROM app.evidence_upload u WHERE tenant_id=$1 AND state IN ('pending','quarantined') AND retention_class='transient_upload' AND expires_at<$2 AND NOT EXISTS(SELECT 1 FROM app.evidence_object e WHERE (e.tenant_id,e.upload_id)=(u.tenant_id,u.id))`,[context.tenantId,now])).rows).catch(rethrowJobWorkState); for(const row of rows){if(row.object_version_id)await this.storage.deleteExactVersion(row.object_key,row.object_version_id);await this.reject(context,row.id,"orphan_expired",row.object_version_id);} return rows.length; }
 }
