@@ -28,8 +28,8 @@ beforeAll(async () => {
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
   // This isolated test role inherits the existing runtime privileges only.
-  await admin.query("CREATE ROLE later_b17_login LOGIN NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO later_b17_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "later_b17_login", max: 2 });
+  await admin.query(`CREATE ROLE later_b17_login LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_runtime TO later_b17_login`);
+  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "later_b17_login", password: credential, max: 2 });
 }, 120_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); });
 
