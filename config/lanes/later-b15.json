@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b15": {
+      "branches": ["codex/sandbox/later-b15"],
+      "receipt": "docs/verdicts/LATER-B15/BUILDER_RECEIPT.md",
+      "note": "LATER-B15: material corrections and typed operational controller errors. RED check; decision 74 PARK; no migration.",
+      "allow": [
+        "packages/db/src/material-repository.ts",
+        "packages/db/test/material-pack-revision-later.integration.test.ts",
+        "apps/api/src/material.controller.ts",
+        "apps/api/src/purchase-order.controller.ts",
+        "apps/api/src/supplier-document.controller.ts",
+        "apps/api/src/things-to-check.controller.ts",
+        "apps/api/src/inbox-relevance.controller.ts",
+        "apps/api/src/later-operational-errors.ts",
+        "apps/api/src/later-operational-errors.test.ts",
+        "docs/verdicts/LATER-B15/BUILDER_RECEIPT.md",
+        "docs/ledger/LATER-B15.md"
+      ]
+    }
+  }
+}
