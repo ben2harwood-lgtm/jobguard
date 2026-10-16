@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-3": {
+      "branches": [
+        "codex/sandbox/m3-3"
+      ],
+      "receipt": "docs/verdicts/M3-3/BUILDER_RECEIPT.md",
+      "note": "M3-3 RED: resource STOP before implementation; documentation only. Disk 40 GB available, required greater than 45 GB. Original card, upstream provider/auth prerequisites, device and deployment acceptance remain HELD.",
+      "allow": [
+        "docs/verdicts/M3-3/BUILDER_RECEIPT.md",
+        "docs/ledger/M3-3.md"
+      ]
+    }
+  }
+}
