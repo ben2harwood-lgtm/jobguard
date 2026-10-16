@@ -11,6 +11,7 @@
         "packages/db/src/serious-b7.test.ts",
         "packages/db/test/evidence-pack-fixture.ts",
         "packages/db/test/serious-b7.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
         "packages/db/migrations/0172_evidence_pack_authority.sql",
         "packages/db/migration-notes/0172_evidence_pack_authority.md",
         "docs/verdicts/SERIOUS-B7/BUILDER_RECEIPT.md"
