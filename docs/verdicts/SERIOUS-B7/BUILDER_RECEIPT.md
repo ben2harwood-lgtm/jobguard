@@ -95,10 +95,10 @@ expectations would not be a small correction to missing source validation.
 
 ## Migration, compatibility and invariants
 
-- **0166_evidence_pack_authority.sql** is necessary to fence the private
+- **0168_evidence_pack_authority.sql** is necessary to fence the private
   control-plane session row: runtime cannot read/lock that table directly.
   Highest migration on supplied main is **0165**. Notes:
-  `packages/db/migration-notes/0166_evidence_pack_authority.md`.
+  `packages/db/migration-notes/0168_evidence_pack_authority.md`.
 - Reuses the existing `app.authenticate_practice_session(text,uuid)` signature,
   result, default tenant, owner, ACL and principal/permission rules. No new
   capability, grant, table, policy or business-data backfill. No edits to
