@@ -30,12 +30,13 @@ BEGIN
  -- Approval writers lock their variation before inserting approval, so this statement runs after all waits.
  IF EXISTS(
   WITH effective AS (
-   SELECT DISTINCT ON (a.variation_id) r.id source_id,r.scope_item_id,r.id commercial_revision_id,
-    a.id approval_id,r.signed_delta_pence net_pence,r.description
+   -- Keep this SQL alias distinct from the final-account record variable r.
+   SELECT DISTINCT ON (a.variation_id) approved_revision.id source_id,approved_revision.scope_item_id,approved_revision.id commercial_revision_id,
+    a.id approval_id,approved_revision.signed_delta_pence net_pence,approved_revision.description
    FROM app.variation_approval a
-   JOIN app.variation_revision r ON(r.tenant_id,r.job_id,r.id)=(a.tenant_id,a.job_id,a.revision_id)
+   JOIN app.variation_revision approved_revision ON(approved_revision.tenant_id,approved_revision.job_id,approved_revision.id)=(a.tenant_id,a.job_id,a.revision_id)
    WHERE a.tenant_id=p_tenant AND a.job_id=p_job
-   ORDER BY a.variation_id,r.revision DESC
+   ORDER BY a.variation_id,approved_revision.revision DESC
   ), actual AS (
    SELECT source_id,scope_item_id,commercial_revision_id,approval_id,net_pence,description
    FROM app.final_account_line WHERE tenant_id=p_tenant AND job_id=p_job

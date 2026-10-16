@@ -1,6 +1,6 @@
-# 0165 — SERIOUS-B5 final-account sources and PDF artifacts
+# 0166 — SERIOUS-B5 final-account sources and PDF artifacts
 
-Required because the stale-account guard and both active invoice writers are controlled PostgreSQL routines. 0165 is above origin/main's highest migration, 0164, at issued base 760fe6f52cb1364540c72092c3c882532d9b9d27. Directory discovery registers this migration; migrate.ts and MIGRATIONS.md remain unchanged.
+Required because the stale-account guard and both active invoice writers are controlled PostgreSQL routines. Current migration 0166 is above the historical issued base's highest migration, 0164 (origin/main at 760fe6f52cb1364540c72092c3c882532d9b9d27). Directory discovery registers this migration; migrate.ts and MIGRATIONS.md remain unchanged.
 
 In one transaction, replace the bodies of three existing routines, retaining signatures, owners, security-definer search paths and all ACLs. No table, role, grant, policy, trigger, scheduled task or data backfill is added. No existing row, source hash, invoice bytes or authorization is rewritten.
 

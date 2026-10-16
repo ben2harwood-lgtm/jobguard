@@ -54,6 +54,23 @@ async function rebuildFixture(a: Awaited<ReturnType<typeof seedAccount>>, approv
 }
 
 describe("SERIOUS-B5 final accounts and invoice artifacts", () => {
+ it.each(["baseline-only", "approved-variation"] as const)("r1 locks and replays a %s account without SQL alias/record ambiguity", async kind => {
+  const a = await seedAccount(f.admin, undefined, 10000), repo = await prepareLock(f, a);
+  let input = a.input;
+  if (kind === "approved-variation") {
+   const variation = await addFixtureCapture(f, a, 5000), approved = await approve(a.tenantId, variation);
+   const rebuilt = await rebuildFixture(a, approved);
+   input = { ...input, finalAccountRevisionId: rebuilt.revisionId, expectedRevision: 2 };
+  }
+  const locked = await repo.lock(a.context, input);
+  expect(locked).toMatchObject({ tenantId: a.tenantId, jobId: a.jobId, finalAccountRevisionId: input.finalAccountRevisionId, baselineQuoteVersionId: a.baselineId });
+  expect((await repo.read(a.context, a.jobId)).lock).toEqual(locked);
+  expect(await repo.lock(a.context, input)).toEqual(locked);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, input.commandId])).rows[0].n).toBe(1);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='final_account.locked'", [a.tenantId])).rows[0].n).toBe(1);
+ });
+
  it("S15 pending repricing retains the last approved revision, including an omission, until replacement approval", async () => {
   await seedAccount(f.admin, DEMO_TENANT_ID, 10000);
   await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
