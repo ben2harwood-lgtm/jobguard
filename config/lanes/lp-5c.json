@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-5c": {
+      "branches": ["codex/sandbox/lp-5c"],
+      "receipt": "docs/verdicts/LP-5C/BUILDER_RECEIPT.md",
+      "test": "packages/db/test/lp-5c-direct-writes.integration.test.ts",
+      "note": "RED; C1 database access only, no web workflow. Partial tests-first preparation: inherited LP-5a/5b have no checked lifecycle or converted writers. Cutover STOPPED; new closure suites are NOT RUN and are expected red until prerequisites and withdrawal land. BUILD-DONT-MERGE.",
+      "allow": [
+        "packages/db/migrations/{mig}_revoke_direct_authority_writes.sql",
+        "packages/db/migration-notes/revoke_direct_authority_writes.md",
+        "docs/ledger/LP-5C.md",
+        "docs/contracts/lp-5c-authority-withdrawal-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/test/lp-5c-direct-writes.integration.test.ts",
+        "packages/db/test/lp-5c-catalog.integration.test.ts",
+        "packages/db/test/lp-5c-command-paths.integration.test.ts",
+        "packages/db/test/lp-5c-upgrade.integration.test.ts",
+        "docs/verdicts/LP-5C/BUILDER_RECEIPT.md",
+        "docs/verdicts/LP-5C/PROPOSED-COORDINATOR-CHANGES.md"
+      ]
+    }
+  }
+}

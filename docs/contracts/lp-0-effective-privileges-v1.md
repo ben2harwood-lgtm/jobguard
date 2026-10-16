@@ -465,3 +465,8 @@ The replay branch of the thirteen-argument adopt_in_flight_job (0095_job_parties
 ## Rollback
 
 Remove the LP-0 guard, inventory and design note through the ordinary reviewed code process. No migration, grant, role, routine, policy or trigger is installed, so there is no data rollback.
+
+
+## 16 October 2026 — LP-5C preparation; no closure
+
+LP-5C was built ahead from the partial LP-5B preparation. Its checked lifecycle, caller conversion and checked authorization revocation prerequisites are absent. No authority grant has been withdrawn, and this dated note does not close `x-command-authority-writes` or change any historical catalogue measurement. New direct-refusal and relation-catalogue test specifications are NOT RUN and expected red on the inherited base. See [LP-5C authority withdrawal](lp-5c-authority-withdrawal-v1.md) for exact recorded capability keys, remaining downstream authority paths, closing cards and required proofs. The protected JSON inventory remains unchanged; coordinator-owned seven-entry closure and existing-test compatibility repairs remain STOPPED. No partial group is secured; caller-set tenant context remains until later binding work. This note adds no runtime grant or release approval.
