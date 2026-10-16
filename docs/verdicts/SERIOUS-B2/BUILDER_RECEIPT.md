@@ -264,3 +264,65 @@ commit message written to both requested locations:
 `/private/tmp/jg-msg-serious-b2-build.txt`.
 Dispatcher owns committing/pushing and resolving the additional pin scope;
 independent exact-commit verdict and separate acceptance remain outstanding.
+
+### Addendum build attempt — rulings 70/71, STOP at lane location
+
+Dispatcher 14's addendum authorizes the extra-origin pins previously blocking
+the build. Those pins and the other named source/test lines are present. This
+attempt found a different, exact mismatch with ruling 70 before implementing:
+**`config/lanes/serious-b2.json:4` owns the existing `serious-b2` lane, with its
+allow-list starting at line 8. `config/agent-lane-assignments.json` has no
+`serious-b2` entry.** Ruling 70 explicitly locates the allow-list amendment in
+the latter file, while this work order requires every other shared list to
+stay byte-identical and a STOP when a ruling assumption is false.
+
+Before and actual after: both lane files remain byte-identical. The existing
+allow-list is exactly:
+
+```json
+[
+  "docs/verdicts/SERIOUS-B2/BUILDER_RECEIPT.md",
+  "docs/verdicts/SERIOUS-B2/s02-reproducer.patch",
+  "docs/verdicts/SERIOUS-B2/s03-prototype.patch"
+]
+```
+
+Required disposition before resuming: apply the ruled path additions to the
+existing lane at `config/lanes/serious-b2.json:8`, rather than introduce a second
+lane in the named legacy register. The proposed after would retain those three
+entries and append only the authorized implementation/test paths. No such
+amendment was made. `tools/agent-lane-boundary-lint.mjs:64` explicitly refuses
+duplicate registration. A read-only in-memory `mergeLanePolicy` check confirmed
+that copying this lane into the named register fails with:
+
+```text
+Lane file "config/lanes/serious-b2.json" refused: lane "serious-b2" is already registered in config/agent-lane-assignments.json; a lane file cannot replace it.
+```
+
+Inspected HEAD: `0c19f840b1d76dc73c1188af413278654f2fb5c2` on
+`codex/sandbox/serious-b2`; local `origin/main`:
+`d74fd66d684226a5150fe3d3576a853d58abcf31`.
+`git rev-list --count HEAD..origin/main` returned `0`. The initial working tree
+was clean. Node is `v24.17.0`. No fetch, merge, installation, download or
+Git-writing command was run.
+
+Read-only inspection covered AGENTS.md, the applicable BUILD_PLAN.md contractor
+contracts, the work-order import contract, the production repositories, named
+test lines/pins, both archived patches and the lane policy loader. The diagnostic
+above used only JSON parsing and an in-memory call; it did not write either
+register. `git diff --check` passed.
+
+**NOT RUN:** typecheck, lint with `LANE_BASE_REF=origin/main`, lint:lanes, unit
+tests, build and OpenAPI check: stopped before implementation under the explicit
+work-order rule. **NOT RUN:** affected PostgreSQL test files, test:db,
+test:migrations and browser suites. The dispatcher states this sandbox cannot
+bind localhost or start PostgreSQL. No database/browser process was attempted.
+
+Only this subsection of the existing build receipt changed. All production code,
+tests, expectations, pins, lane files, other shared lists and archived patches
+remain byte-identical to HEAD. S02/S03 remain unfixed; S04/S05 remain deferred.
+No migration, authorization change, new alert or release-gate change occurred.
+Intended conventional commit message written to
+`/private/tmp/jg-msg-ent-3b.txt` and
+`/private/tmp/jg-msg-serious-b2-build.txt`. Dispatcher owns commit/push; exact-commit
+independent verdicts and separate acceptance remain outstanding.
