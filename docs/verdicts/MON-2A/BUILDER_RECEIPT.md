@@ -342,3 +342,100 @@ status/stat and unchanged-head verification: **exit 0**. No commit or push.
 Final HEAD: `2514049c8dfb7630598fdf81f5c0d6d23444abb4`. Dispatcher must commit
 these working-tree changes, resolve the STOPs, then obtain exact-commit CI,
 independent verdict and separate acceptance. MON-2A remains **PARTIAL / HOLD**.
+
+
+## r1 — 16 October 2026, dispatcher 14: STOP before implementation
+
+**Result: BLOCKED on lane scope; no repair implemented.** Supplied and actual
+HEAD is `175262fb972f14bd6e5a353486d95a64854a6740` (keep-both merge), with
+`origin/main` at `49fc07f33a440bcca7ac443de365aba3670e9999`. MON-1 #221 is now
+merged and MON-2A PR #239 is open; the earlier build-ahead statements above are
+historical. The initial working tree was clean. This addendum changes only this
+receipt. No migration, source, test, expectation, byte pin, shared list or lane
+registration is changed. No commit, staging, checkout, push or package install.
+
+Read the independent Opus REPAIR verdict at
+`~/.local/share/full-steam/jg-runs/d14-mon-2a-opus-175262f.md`, repository AGENTS,
+the applicable BUILD_PLAN MON-2 and 10.1 contracts, and the subscription contract.
+The verdict reports CI run 38950045197 failing the unchanged transitive
+subscription architecture assertion. That result is supplied/review evidence,
+not a fresh test execution in this round.
+
+### Exact STOP, preflight and before/after
+
+The r1 instruction explicitly requires stopping if a merged repair file is
+outside the lane, without editing the assertion or shared lists. The effective
+policy from `loadLanePolicy(process.cwd())` in
+`tools/agent-lane-boundary-lint.mjs`, tested with its exported
+`lanePathAllowed("mon-2a", lane, file)`, returned **false** for all candidates:
+
+| File / exact line | Before | Actual after |
+|---|---|---|
+| `packages/core/src/jobs-on-the-go.ts:2` | `import { isSmallJobV3 } from "./activation-v3.js";` | Identical; not edited |
+| `packages/core/src/activation-v3.ts:3` | `import { shadowSuccessFeeV1 } from "./shadow-domain/success-fee.js";` | Identical; not edited |
+| `packages/core/src/activation-v3.ts:6` | `export const activationFeePolicyV3 = shadowSuccessFeeV1.unwrap().unwrap().shape.policyVersion;` | Identical; not edited |
+| `packages/core/src/shadow-domain/success-fee.ts:9` | `shadowSuccessFeeV1` contains `policyVersion: z.literal("reference_fee_policy_v3")` | Identical; not edited |
+
+The refusing MON-2A allow-list is
+`config/agent-lane-assignments.json:6`; none of those three files is included.
+No `config/lanes/mon-2a.json` override exists. The first proposed repair boundary
+is `jobs-on-the-go.ts:2`; route (2) is also blocked at `activation-v3.ts:3` and
+`shadow-domain/success-fee.ts:9`. No hypothetical edit was written to bypass the
+preflight, and the allow-list was not extended by the builder.
+
+Before any source mutation, searched repository test/spec files for these
+paths/names and inspected the two specifically named merged byte-pin registries:
+`apps/api/src/auth/context-boundary.test.ts:88-97` and
+`packages/db/test/extra-origin.integration.test.ts:243-254` ([S9]). Neither pins
+these three source files. The meter's source-inspection assertion at
+`packages/core/src/jobs-on-the-go.test.ts:153-160` checks domain imports and
+absence of environment/network/wall-clock access, rather than a byte hash.
+Shadow architecture tests also inspect their own source structurally. These
+observations do not override the lane refusal. All existing tests remain
+byte-identical to HEAD, including `subscription-architecture.test.ts`.
+
+**Coordinator ruling required:** permit an exact-file neutral dependency repair
+through an extended lane or a separately issued owner lane. Route (2) would
+share the existing Zod literal schema from a neutral module so that
+`activationFeePolicyV3` and the shadow schema retain the same schema identity
+and value, with the requested equality test. No such change or test was built.
+No ruling, approval, independent r1 verdict or acceptance is inferred.
+
+### Commands and verification actually performed
+
+- Read-only `git rev-parse HEAD`, `git rev-parse origin/main`, initial
+  `git status --short`: exit 0; refs as above and clean tree.
+- Repository `rg` searches and source/policy/verdict reads: inspected the import
+  chain and named pin registries. Some broad read output was truncated and was
+  followed by narrower reads; no implementation was inferred from truncation.
+- Effective-policy `lanePathAllowed` preflight: exit 0, **false** for each of the
+  three candidate files. This is the blocking deterministic result.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **interrupted, exit 130**. The
+  installed launcher printed a pnpm configuration warning and produced no lane
+  result before interruption. No successful pnpm check is claimed; no package
+  download/install command was issued. `ps` inspection was denied by sandbox.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: **exit 0**,
+  existing 15-path PR diff passes the current lane. This does not authorize any
+  of the three proposed repair paths: they remain outside that allow-list.
+- `git diff --check`: exit 0 before the receipt edit; rerun below for the final
+  documentation change, together with byte-preservation and path checks.
+- `node --version`: `v24.17.0`; this is not a clean pinned-install claim.
+
+Core targeted/full Vitest, `pnpm test`, typecheck, lint, build and OpenAPI checks
+are **NOT RUN in r1**, following the explicit pre-implementation STOP; no source
+was changed to verify. Database, migration and browser suites are **NOT RUN**;
+the dispatcher states this sandbox cannot start PostgreSQL or bind localhost
+and those suites belong to GitHub CI after push. No new CI run is claimed.
+The reported architecture failure remains unresolved, and the earlier LP-0
+catalogue STOP and Q3-Q9 holds remain in force. No new operational alert,
+external action, behavior change, public export change or migration exists.
+
+Intended receipt-only conventional commit message is written to both
+`/private/tmp/jg-msg-mon-2a-r1.txt` (round-specific request) and
+`/private/tmp/jg-msg-mon-2a.txt` (dispatcher handoff). The dispatcher owns any
+commit and subsequent exact-head CI/review. This is a builder STOP report,
+not technical acceptance or an independent verdict.
+
+Final r1 preservation check: **exit 0**; every tracked file equals HEAD except
+this append-only receipt. Final `git diff --check` and direct lane lint: **exit 0**.
+Only the receipt is modified; HEAD remains `175262fb972f14bd6e5a353486d95a64854a6740`.
