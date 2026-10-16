@@ -106,14 +106,14 @@ describe("MON-1B real PostgreSQL synthetic persistence",()=>{
    await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`DELETE FROM app.${table}`))).rejects.toMatchObject({code:"42501"});
   }
  });
- it("MON1-A28 MON1-A29 meter role is isolated from shadow data and runtime cannot assume it or load fixture facts",async()=>{
+ it("MON1-A28 MON1-A29 no dedicated meter role exists and runtime cannot access shadow data or load fixture facts",async()=>{
   for(const table of ["meter_input_event","meter_computation","meter_day_ledger","meter_correction","meter_projection_alert"]){
    expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') allowed",[`app.${table}`])).rows[0].allowed).toBe(false);
    expect((await f.admin.query("SELECT relrowsecurity AND relforcerowsecurity guarded FROM pg_class WHERE oid=$1::regclass",[`app.${table}`])).rows[0].guarded).toBe(true);
   }
   expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon1_store_fixture(uuid,text,uuid,jsonb)','EXECUTE') allowed")).rows[0].allowed).toBe(false);
-  await expect(f.runtime.query("SET ROLE jobguard_meter")).rejects.toMatchObject({code:"42501"});
+  expect((await f.admin.query("SELECT rolname FROM pg_roles WHERE rolname='jobguard_meter'")).rows).toEqual([]);
   const shadow=(await f.admin.query("SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname LIKE 'shadow_%' AND c.relkind='r'")).rows;
-  expect(shadow.length).toBeGreaterThan(0);for(const row of shadow)expect((await f.admin.query("SELECT has_table_privilege('jobguard_meter',$1,'SELECT,INSERT,UPDATE,DELETE') allowed",[row.oid])).rows[0].allowed).toBe(false);
+  expect(shadow.length).toBeGreaterThan(0);for(const row of shadow)expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1::oid,'SELECT,INSERT,UPDATE,DELETE') allowed",[row.oid])).rows[0].allowed).toBe(false);
  });
 });

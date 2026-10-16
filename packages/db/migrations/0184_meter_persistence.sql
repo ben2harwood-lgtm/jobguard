@@ -1,8 +1,6 @@
 BEGIN;
 -- MON-1B: explicit synthetic facts only. No subscription document, charge,
 -- lifecycle endpoint, trial entitlement, admission hook or trip transition.
-CREATE ROLE jobguard_meter NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-GRANT USAGE ON SCHEMA app TO jobguard_meter;
 
 CREATE TABLE app.meter_input_event (
  tenant_id uuid NOT NULL REFERENCES control_plane.tenant(id), id uuid NOT NULL,
@@ -54,15 +52,14 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
   -- Direct runtime SELECT deliberately sees no rows. Only checked company reads
   -- can release data; a shared-practice context cannot read a tenant summary.
-  EXECUTE format('CREATE POLICY tenant_isolation ON app.%I FOR ALL TO jobguard_migration,jobguard_meter USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
+  EXECUTE format('CREATE POLICY tenant_isolation ON app.%I FOR ALL TO jobguard_migration USING(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK(tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',n);
   EXECUTE format('CREATE TRIGGER immutable BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_commercial_mutation()',n);
  END LOOP;
 END $$;
 GRANT SELECT ON app.meter_input_event,app.meter_computation,app.meter_day_ledger,app.meter_correction,app.meter_projection_alert TO jobguard_runtime;
-GRANT SELECT,INSERT ON app.meter_input_event,app.meter_computation,app.meter_day_ledger,app.meter_correction,app.meter_projection_alert TO jobguard_meter;
 
--- Tiny authority bridge: meter gets no identity, membership or shadow table
--- grants. All authority comes from the persisted session and merged SSO gate.
+-- Private migration-owned authority bridge. All authority comes from the
+-- persisted session and merged SSO gate; runtime receives no EXECUTE grant.
 CREATE FUNCTION app.mon1_company_actor(t uuid,digest text) RETURNS uuid
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; s identity.session;
@@ -82,7 +79,6 @@ BEGIN
 END $$;
 ALTER FUNCTION app.mon1_company_actor(uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.mon1_company_actor(uuid,text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION app.mon1_company_actor(uuid,text) TO jobguard_meter;
 
 -- Independent SQL boundary projection, compared against the unchanged pure
 -- parent model in the repository and PostgreSQL suite. Input dates/facts are
@@ -242,7 +238,7 @@ END $$;
 
 DO $$ DECLARE fn text; BEGIN
  FOREACH fn IN ARRAY ARRAY['mon1_project(uuid,jsonb)','mon1_store_fixture(uuid,text,uuid,jsonb)','mon1_rebuild(uuid,text,date)','mon1_read(uuid,text,uuid)'] LOOP
-  EXECUTE 'ALTER FUNCTION app.'||fn||' OWNER TO jobguard_meter';
+  EXECUTE 'ALTER FUNCTION app.'||fn||' OWNER TO jobguard_migration';
   EXECUTE 'REVOKE ALL ON FUNCTION app.'||fn||' FROM PUBLIC';
  END LOOP;
 END $$;

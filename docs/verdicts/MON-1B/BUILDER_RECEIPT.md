@@ -347,3 +347,127 @@ Git staging/commit/push, PR creation or independent-review invocation occurred.
 Final HEAD remains `f03d19ae25bb60cbf3c84a380a61907a392b24a1`.
 Intended commit message: `/private/tmp/jg-msg-mon-1b.txt` (overwritten as requested).
 
+## Repair round r1 — dispatcher 14, 16 October 2026
+
+Starting HEAD: `e4dc2a1d09aa056cf04ed628fb117a57caa5ebc1`, branch
+`codex/sandbox/mon-1b`, clean working tree. Read AGENTS.md, applicable
+BUILD_PLAN.md §10.1 and MON-1 card, meter persistence contract, decision 60 in
+`~/.local/share/full-steam/handoffs/BEN-DECISIONS-2026-10-14.md`, and the complete
+independent Opus REPAIR verdict at
+`~/.local/share/full-steam/jg-runs/d14-mon-1b-opus-15db711.md`.
+That verdict concerns the earlier build commit `15db7118`; it is not an
+independent verdict on this repair. Acceptance remains with a separate actor.
+
+**dedicated meter role (plan card: a meter role with no grant on shadow tables) HELD for Ben**
+
+This r1 section supersedes the initial receipt's role/grant description and
+initial migration/contract documentation about the dedicated meter role. The
+repair edits only the unmerged migration 0184, this piece's own PostgreSQL test,
+its own LP-0 inventory facts, and this appended receipt. FIX-LATER findings are
+unchanged; no production, charging, API, UI or provider scope is added.
+
+### Required repairs
+
+- Removed role creation and every grant, owner and policy reference to
+  `jobguard_meter` from migration 0184. All five `app.mon1_*` routines are owned
+  by `jobguard_migration`. Tenant policies apply only to `jobguard_migration`;
+  tables retain ENABLE/FORCE RLS and direct runtime SELECT still sees no rows.
+  Runtime has SELECT on the five new tables and EXECUTE only on `mon1_read` and
+  `mon1_rebuild`. The private fixture loader remains migration-only. No meter
+  routine references shadow, finding or recovery tables. This removes the new
+  role creation/transfer requirements from repeated and demo migrations; actual
+  PostgreSQL execution remains CI work, not a claimed local pass.
+- Removed this piece's dedicated-role ACL/schema/role facts and updated reachable
+  routine owner facts to `jobguard_migration`. Per `deriveFacts`, owner ACLs and
+  owner-only routines whose owner equals the schema owner do not emit capability
+  facts: the now-redundant loader owner ACL and private `mon1_company_actor`,
+  `mon1_project`, `mon1_store_fixture` owner capability rows are removed too.
+  Their ownership is recorded in the five new routine records. The remaining
+  MON-1B capability entries total 14 (five runtime SELECTs, five table owners,
+  two runtime EXECUTEs, two reachable routine owners). All non-MON-1B entries,
+  all groups, all existing recorded routines and the tenancy catalogues remain
+  byte-for-byte unchanged. Northside's merged rows are preserved.
+- Added only these five routine records to `recorded.routines`:
+  `function:app.mon1_company_actor(uuid,text)`,
+  `function:app.mon1_project(uuid,jsonb)`,
+  `function:app.mon1_read(uuid,text,uuid)`,
+  `function:app.mon1_rebuild(uuid,text,date)`,
+  `function:app.mon1_store_fixture(uuid,text,uuid,jsonb)`.
+  All owners are `jobguard_migration`; only read/rebuild are reachable and
+  executable by runtime. Record count is 316 → 321 on the keep-both merged base.
+  Static writes/calls use the catalogue's scan rules. Definition digests are
+  source-derived using PostgreSQL's `pg_get_functiondef` rendering, checked
+  against the existing immutable-trigger and SECURITY DEFINER routine digests;
+  they are not presented as a live catalogue query. LP0-17 and its identity/count
+  assertion are untouched. PostgreSQL must corroborate the live catalogue.
+- Fixed the shadow-table privilege query to pass `$1::oid`. Replaced the removed
+  role's assumption test with an absence assertion against `pg_roles`; the
+  privilege test now checks runtime has no direct shadow-table read/write path.
+  Existing no-runtime-writes, FORCE RLS, private-loader and source-scan assertions
+  are retained. No existing unrelated test, expectation or dependency pin changed.
+
+### Verification r1
+
+All pnpm commands used the supplied cached 10.28.1 launcher by prepending
+`/private/tmp/ch4-pnpm-bin` to PATH; no install or download ran. Node is 24.17.0
+(repository `.nvmrc` remains 24.15.0); no pin changed. Logs are under
+`/private/tmp/jg-mon1b-r1-*.log`.
+
+| Command / check | Exit | Observed result |
+| --- | --- | --- |
+| `pnpm typecheck --force` | 0 | 7/7 tasks, zero cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0 | Repository boundary checks and 7/7 package tasks; 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | MON-1B lane passed against origin/main |
+| `node --test tools/*.test.mjs` | 0 | 100 passed |
+| Package unit run, `vitest run src` | 1 | Core 2,672 passed / 2 unchanged receipt-allocation tests timed out at 5 seconds; subsequent packages not reached |
+| Package unit retry, `vitest run src --maxWorkers=2` | 130 | Core 98 files / 2,674 passed; config 1 passed; storage 2 passed; AI 6 files / 85 passed. Interrupted during DB selection as explained below |
+| DB `vitest run --maxWorkers=2 ./src/*.test.ts` | 1 | 15 files passed, 1 failed; 130 tests passed, 1 unchanged C-OPS-1 timeout at 5 seconds |
+| DB C-OPS-1 retry alone after build, `vitest run --maxWorkers=1 src/audit-checkpoint-handoff.test.ts` | 0 | All 56 tests passed within unchanged time limits; no source or test changes |
+| DB `vitest run --maxWorkers=2 test/lp-0-catalog.test.ts` | 0 | 26 comparator unit tests passed; no PostgreSQL proof |
+| Web `vitest run --maxWorkers=2` | 0 | 40 files / 867 passed |
+| API selected socket-free/source unit files, `vitest run --maxWorkers=2 <explicit files>` | 1 | 72 files / 1,448 tests passed; 8 billing-adapter tests failed from stale core build exports; 17 database/socket-related files unselected |
+| API billing-adapter retry after core build, `vitest run --maxWorkers=1 src/contractor/billing.adapters.test.ts` | 0 | All 9 tests passed; no source or test changes |
+| `pnpm build --concurrency=2 --force` | 0 | 7/7 tasks, zero cached; actual Next production build |
+| `pnpm openapi:check` | 1 | `tsx` CLI IPC listener denied with `listen EPERM`; generation/check did not start |
+| Same OpenAPI check via `node --import ../../node_modules/.pnpm/tsx@4.20.3/node_modules/tsx/dist/loader.mjs src/generate-openapi.ts --check` from apps/api | 0 | Actual committed OpenAPI comparison passed; loader avoids CLI-only IPC setup |
+| Source-derived catalogue and preservation script | 0 | 5 additive routine records, static scans match catalogue helper; 14 MON-1B capability keys match source-derived ACL/owner model; inventory parses and authority paths are complete |
+| Exact-byte preservation script | 0 | Only four repair files changed; initial receipt retained as prefix; inventory bytes outside MON-1B capability rows and new routine records unchanged |
+| `git diff --check` | 0 | No whitespace errors |
+
+The initial `src` substring filter also selected unrelated integration filenames
+containing `dbsrc`. Those integration cases were skipped; the recursive command
+was interrupted (130) after this was noticed, then DB units were run with
+explicit source filenames. This selection is not a migration or database run.
+No skipped case is counted as a pass. The source-derived catalogue script imports
+`lp-0-catalog.ts` with Node's loader; its initial `pnpm --filter @jobguard/db exec
+node --import tsx` invocation failed module resolution because DB has no direct
+`tsx` dependency, before the script ran. The root-relative installed loader
+subsequently ran it successfully, without changing dependencies.
+
+Turbo emitted metadata-write `Operation not permitted` warnings; completed
+command results above are taken from exit codes and actual task output. Next
+warned about the outer workspace root and multiple lockfiles. Neither warning
+was addressed by unrelated configuration changes. Free disk stayed above 53 GB;
+observed free memory was 70–71%.
+
+NOT RUN: PostgreSQL migrations twice, `pnpm test:db`, `pnpm test:migrations`,
+meter persistence/upgrade integration, LP-0 grant-freeze/authority-path integration,
+demo bootstrap/sandbox/LP1/upgrade regressions, and browser/e2e suites. Dispatcher
+states this sandbox cannot bind localhost or start PostgreSQL; these require
+GitHub CI after push. Full `pnpm test` therefore is NOT RUN; the actual tool and
+unit subsets above are the available local checks. No fresh pinned install
+(dependencies supplied; downloads prohibited), live model evaluation, provider
+integration or professional/security/commercial approval is claimed.
+
+No new alerts or data migrations beyond the correction to this unmerged 0184.
+No deployed schema is being downgraded; the initial additive-storage forward-fix
+strategy and synthetic-only release holds remain. No Git staging, commit, push,
+branch switch or PR operation ran. Intended conventional commit subject/body is
+written identically to `/private/tmp/jg-msg-mon-1b-r1.txt` and
+`/private/tmp/jg-msg-mon-1b.txt`, for the dispatcher.
+
+Final r1 status: all selected unit failures passed on retries after reducing
+worker contention or rebuilding stale artifacts. No expectation or timeout was
+changed. All required database behavior remains NOT RUN locally and must pass
+CI. Independent exact-commit verdict and separate acceptance remain outstanding.
+Final HEAD remains `e4dc2a1d09aa056cf04ed628fb117a57caa5ebc1` (unchanged).
