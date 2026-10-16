@@ -1,0 +1,25 @@
+{
+  "version": "shadow-labels.v2",
+  "cases": [
+    {
+      "id": "held-out-1", "class": "genuine_extra",
+      "expectedWork": [{ "tenantId": "10000000-0000-4000-8000-000000000001", "jobId": "10000000-0000-4000-8000-000000000002", "scopeArea": "garden", "workReference": "work-1" }]
+    },
+    { "id": "held-out-2", "class": "contracted_work", "expectedWork": [] },
+    { "id": "held-out-3", "class": "ambiguity", "expectedWork": [] },
+    { "id": "held-out-4", "class": "chat", "expectedWork": [] },
+    { "id": "held-out-5", "class": "alternative_material", "expectedWork": [] },
+    {
+      "id": "held-out-6", "class": "duplicates",
+      "expectedWork": [{ "tenantId": "10000000-0000-4000-8000-000000000001", "jobId": "10000000-0000-4000-8000-000000000002", "scopeArea": "garden", "workReference": "work-6" }]
+    },
+    { "id": "held-out-7", "class": "cancelled_or_unfinished_request", "expectedWork": [] },
+    { "id": "held-out-8", "class": "supplier_spares", "expectedWork": [] },
+    { "id": "held-out-9", "class": "builder_mistake", "expectedWork": [] },
+    { "id": "held-out-10", "class": "already_captured", "expectedWork": [] },
+    {
+      "id": "held-out-11", "class": "extra_several_sources",
+      "expectedWork": [{ "tenantId": "10000000-0000-4000-8000-000000000001", "jobId": "10000000-0000-4000-8000-000000000002", "scopeArea": "garden", "workReference": "work-11" }]
+    }
+  ]
+}
