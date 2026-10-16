@@ -1,0 +1,57 @@
+{
+  "version": "enterprise-ai-labels.v1",
+  "cases": [
+    {
+      "id": "held-note",
+      "expected": [
+        "00000000-0000-4000-8000-000000000111:0:17"
+      ],
+      "ambiguous": []
+    },
+    {
+      "id": "held-transcript",
+      "expected": [
+        "00000000-0000-4000-8000-000000000112:26:45"
+      ],
+      "ambiguous": []
+    },
+    {
+      "id": "held-caption",
+      "expected": [
+        "00000000-0000-4000-8000-000000000113:0:31"
+      ],
+      "ambiguous": []
+    },
+    {
+      "id": "held-on-order",
+      "expected": [],
+      "ambiguous": []
+    },
+    {
+      "id": "held-negated",
+      "expected": [],
+      "ambiguous": []
+    },
+    {
+      "id": "held-ambiguous",
+      "expected": [
+        "00000000-0000-4000-8000-000000000116:17:34"
+      ],
+      "ambiguous": [
+        "00000000-0000-4000-8000-000000000116:17:34"
+      ]
+    },
+    {
+      "id": "held-instructions",
+      "expected": [
+        "00000000-0000-4000-8000-000000000117:0:15"
+      ],
+      "ambiguous": []
+    },
+    {
+      "id": "held-empty",
+      "expected": [],
+      "ambiguous": []
+    }
+  ]
+}

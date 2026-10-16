@@ -90,9 +90,9 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
   "packages/db/src/work-order-repository.ts": "9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e",
-  "packages/db/src/sor-repository.ts": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",
+  "packages/db/src/sor-repository.ts": "122322172cea27dc52754ff19629abbbe049b8d96997a1a2e42a8887ac5a62d2",
   "packages/db/src/job-scheduling-repository.ts": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
-  "packages/db/src/work-order-fixtures.ts": "cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386",
+  "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
   "packages/db/src/contractor-session-context.ts": "a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c",
 };
 const reviewedPracticeSource = (file: SourceFile) => REVIEWED_PRACTICE_SOURCES[file.path] === createHash("sha256").update(file.text).digest("hex");
