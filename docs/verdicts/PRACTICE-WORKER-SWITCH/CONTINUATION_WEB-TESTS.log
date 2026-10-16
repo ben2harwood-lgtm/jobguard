@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/web
+
+
+ Test Files  3 passed (3)
+      Tests  32 passed (32)
+   Start at  11:15:01
+   Duration  540ms (transform 466ms, setup 0ms, import 746ms, tests 19ms, environment 0ms)
+
