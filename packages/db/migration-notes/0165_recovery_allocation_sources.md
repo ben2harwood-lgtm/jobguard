@@ -1,0 +1,13 @@
+# 0165 recovery allocation sources — SERIOUS-B9
+
+Forward-only correction of the synthetic recovery reader/guard for S28–S32. Main's highest migration at dispatch is 0164. Directory discovery registers this migration; migrate.ts and MIGRATIONS.md are unchanged.
+
+Adds the invoker/RLS-protected read function `app.recovery_allocation_invoice_lines(uuid,uuid,uuid)` (migration owner, runtime EXECUTE, no PUBLIC/infrastructure EXECUTE). It reads the invoice-specific immutable line bindings. Unbound historical synthetic invoices use the existing 0132 display-tax policy: distribute the already-issued group tax by absolute line-net weights, largest remainder, line-ID tie-break. This neither changes group tax nor writes replacement invoice facts. It preserves earlier integral blended ratios, allows ordinary penny-valued legacy lines, excludes zero candidates, and still refuses unlinked signed omissions through the composition check pending S27's ruling.
+
+Replaces `app.write_recovery_allocation` under its existing owner, signature and execution grants. Validates the exact issued net/gross composition, uses recorded remittance on every positive review, excludes reversal sources effective after a receipt from its historical denominator, and permits reversals from immutable saved line balances without requalifying an invalidated original remittance. The application serializes each receipt before reading source facts; the writer repeats that lock and independently enforces every binding.
+
+No business table, policy, row, journal, invoice, existing review, allocation, audit event or source is updated, deleted or backfilled. Existing command replays return their saved result. Changed source facts invalidate pending approval hashes rather than rewriting approvals. No production fee path is enabled; proposed policy and release gates remain closed. No new external action or alert.
+
+Forward fix: ship a later numbered migration replacing the helper/guard if CI or review finds a defect. Do not roll back immutable allocation rows or rerun old migration files. A code rollback needs a compatible guard; disable new allocation commands during an incident while preserving read/replay and authorized reversals. Rehearse restore under the normal operations policy before any release.
+
+Local PostgreSQL execution is forbidden/unavailable in this sandbox. CI must run `pnpm test:db`, `pnpm test:migrations`, `packages/db/test/serious-b9.integration.test.ts`, and the existing allocation/upgrade/race suites. The new fixture covers both bound and legacy tax facts, invoice subsets, direct writer remittance forgery, historical credit cutoffs and invalidated-remittance reversal. No migration or privilege guarantee is claimed locally.
