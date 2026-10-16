@@ -1,0 +1,128 @@
+{
+  "runs": [
+    {
+      "cmd": "export PATH=\"$HOME/Library/pnpm/bin:$PATH\"; memory_pressure | tail -1; df -g /System/Volumes/Data; pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/practice-worker-switch.test.ts",
+      "chunk_id": "2cf2c3",
+      "wall_time_seconds": 10.003225334,
+      "session_id": 4982,
+      "original_token_count": 100,
+      "output": "System-wide memory free percentage: 58%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  833        64    93% 29905632 680401400    4%   /System/Volumes/Data\n[WARN] The \"pnpm\" field in package.json is no longer read by pnpm. The following keys were ignored: \"pnpm.overrides\". See https://pnpm.io/settings for the new home of each setting.\n"
+    },
+    {
+      "cmd": "export PATH=\"$HOME/Library/pnpm/bin:$PATH\"; pnpm --manage-package-manager-versions=false --version",
+      "chunk_id": "744051",
+      "wall_time_seconds": 1.002287084,
+      "session_id": 55125,
+      "original_token_count": 46,
+      "output": "[WARN] The \"pnpm\" field in package.json is no longer read by pnpm. The following keys were ignored: \"pnpm.overrides\". See https://pnpm.io/settings for the new home of each setting.\n"
+    },
+    {
+      "cmd": "memory_pressure | tail -1; df -g /System/Volumes/Data; ./node_modules/.bin/vitest run --maxWorkers=2 src/practice-worker-switch.test.ts",
+      "workdir": "packages/core",
+      "chunk_id": "15558d",
+      "wall_time_seconds": 1.002567166,
+      "session_id": 73602,
+      "original_token_count": 83,
+      "output": "System-wide memory free percentage: 58%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  834        64    93% 29904697 676179120    4%   /System/Volumes/Data\n\n RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/core\n\n"
+    },
+    {
+      "cmd": "memory_pressure | tail -1; df -g /System/Volumes/Data; ./node_modules/.bin/vitest run --maxWorkers=2 src/practice-worker-switch.test.ts",
+      "workdir": "packages/core",
+      "chunk_id": "f2b2d9",
+      "wall_time_seconds": 0.326402541,
+      "exit_code": 0,
+      "original_token_count": 124,
+      "output": "System-wide memory free percentage: 59%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  834        64    93% 29908037 675150760    4%   /System/Volumes/Data\n\n RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/core\n\n\n Test Files  1 passed (1)\n      Tests  69 passed (69)\n   Start at  10:37:39\n   Duration  193ms (transform 42ms, setup 0ms, import 62ms, tests 15ms, environment 0ms)\n\n"
+    },
+    {
+      "cmd": "memory_pressure | tail -1; df -g /System/Volumes/Data; ./node_modules/.bin/vitest run --maxWorkers=2 src/auth/context-boundary.test.ts",
+      "workdir": "apps/api",
+      "chunk_id": "155c47",
+      "wall_time_seconds": 1.001443125,
+      "session_id": 89683,
+      "original_token_count": 81,
+      "output": "System-wide memory free percentage: 59%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  834        64    93% 29909742 672803320    4%   /System/Volumes/Data\n\n RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/api\n\n"
+    },
+    {
+      "cmd": "memory_pressure | tail -1; df -g /System/Volumes/Data; ./node_modules/.bin/tsc -p packages/core/tsconfig.json --noEmit",
+      "chunk_id": "056f1d",
+      "wall_time_seconds": 1.0036695,
+      "session_id": 97978,
+      "original_token_count": 54,
+      "output": "System-wide memory free percentage: 59%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  834        64    93% 29914167 671617120    4%   /System/Volumes/Data\n"
+    },
+    {
+      "cmd": "memory_pressure | tail -1; df -g /System/Volumes/Data; LANE_BASE_REF=6671538c8d69936c162368c760dd6ce0f7f10493 node tools/lint.mjs",
+      "chunk_id": "60da3e",
+      "wall_time_seconds": 0.004561083,
+      "exit_code": 1,
+      "original_token_count": 289,
+      "output": "System-wide memory free percentage: 59%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  834        63    93% 29914316 670005360    4%   /System/Volumes/Data\nCore purity passed (169 TypeScript files).\nLane boundary FAILED: Missing branch or self-comparison range; refusing a misleading pass.\nnode:internal/errors:985\n  const err = new Error(message);\n              ^\n\nError: Command failed: /usr/local/bin/node tools/agent-lane-boundary-lint.mjs\n    at genericNodeError (node:internal/errors:985:15)\n    at wrappedFn (node:internal/errors:539:14)\n    at checkExecSyncError (node:child_process:925:11)\n    at execFileSync (node:child_process:961:15)\n    at file:///Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/tools/lint.mjs:3:1\n    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)\n    at async node:internal/modules/esm/loader:633:26\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {\n  status: 1,\n  signal: null,\n  output: [ null, null, null ],\n  pid: 5796,\n  stdout: null,\n  stderr: null\n}\n\nNode.js v24.17.0\n"
+    },
+    {
+      "cmd": "memory_pressure | tail -1; df -g /System/Volumes/Data; ./node_modules/.bin/vitest run --maxWorkers=2 src/practice-worker-switch.test.ts",
+      "workdir": "packages/core",
+      "chunk_id": "422bb3",
+      "wall_time_seconds": 0.563616666,
+      "exit_code": 0,
+      "original_token_count": 125,
+      "output": "System-wide memory free percentage: 59%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  834        63    93% 29920167 667701960    4%   /System/Volumes/Data\n\n RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/core\n\n\n Test Files  1 passed (1)\n      Tests  69 passed (69)\n   Start at  10:39:49\n   Duration  271ms (transform 99ms, setup 0ms, import 129ms, tests 12ms, environment 0ms)\n\n"
+    },
+    {
+      "cmd": "memory_pressure | tail -1; df -g /System/Volumes/Data; ./node_modules/.bin/tsc -p packages/core/tsconfig.json --noEmit",
+      "chunk_id": "d9cb63",
+      "wall_time_seconds": 1.00299975,
+      "session_id": 16298,
+      "original_token_count": 54,
+      "output": "System-wide memory free percentage: 59%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  835        63    93% 30001089 665636240    4%   /System/Volumes/Data\n"
+    },
+    {
+      "cmd": "memory_pressure | tail -1; df -g /System/Volumes/Data; ./node_modules/.bin/tsc -p packages/core/tsconfig.json --outDir /private/tmp/jg-pws-core-dist",
+      "chunk_id": "818a93",
+      "wall_time_seconds": 1.00206375,
+      "session_id": 12572,
+      "original_token_count": 54,
+      "output": "System-wide memory free percentage: 59%\nFilesystem   1G-blocks Used Available Capacity  iused     ifree %iused  Mounted on\n/dev/disk3s5       926  835        63    93% 29998827 665620600    4%   /System/Volumes/Data\n"
+    }
+  ],
+  "first_test_completion": {
+    "chunk_id": "e75405",
+    "wall_time_seconds": 0.000001666,
+    "exit_code": 1,
+    "original_token_count": 226,
+    "output": " ❯ src/practice-worker-switch.test.ts (0 test)\n\n⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯\n\n FAIL  src/practice-worker-switch.test.ts [ src/practice-worker-switch.test.ts ]\nError: Cannot find module './practice-worker-switch.js' imported from /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/core/src/practice-worker-switch.test.ts\n ❯ src/practice-worker-switch.test.ts:3:1\n      1| import { randomUUID } from \"node:crypto\";\n      2| import { describe, expect, it } from \"vitest\";\n      3| import {\n       | ^\n      4|   PRACTICE_WORKER_SWITCH_WINDOW_MINUTES,\n      5|   PracticeWorkerSwitchError,\n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯\n\n\n Test Files  1 failed (1)\n      Tests  no tests\n   Start at  10:37:18\n   Duration  592ms (transform 444ms, setup 0ms, import 0ms, tests 0ms, environment 0ms)\n\n"
+  },
+  "boundary_completion": {
+    "chunk_id": "1d8ce0",
+    "wall_time_seconds": 0.000002292,
+    "exit_code": 0,
+    "original_token_count": 43,
+    "output": "\n Test Files  1 passed (1)\n      Tests  145 passed (145)\n   Start at  10:38:27\n   Duration  1.81s (transform 156ms, setup 0ms, import 311ms, tests 1.40s, environment 0ms)\n\n"
+  },
+  "initial_typecheck_completion": {
+    "chunk_id": "9321f5",
+    "wall_time_seconds": 0.000001791,
+    "exit_code": 2,
+    "original_token_count": 36,
+    "output": "packages/core/src/practice-worker-switch.test.ts(1,28): error TS2307: Cannot find module 'node:crypto' or its corresponding type declarations.\n"
+  },
+  "final_typecheck_completion": {
+    "chunk_id": "82ab54",
+    "wall_time_seconds": 0.000002167,
+    "exit_code": 0,
+    "original_token_count": 0,
+    "output": ""
+  },
+  "core_build_completion": {
+    "chunk_id": "bcc622",
+    "wall_time_seconds": 0.000001334,
+    "exit_code": 0,
+    "original_token_count": 0,
+    "output": ""
+  },
+  "notes": [
+    "The two pnpm sessions were interrupted with Control-C; both returned exit 130.",
+    "All asynchronous completion exit codes above are observed. Earlier session_id records are starts, not final exits.",
+    "Only local leaf Vitest/TypeScript execution passed; required root forced Turbo checks were not run."
+  ]
+}

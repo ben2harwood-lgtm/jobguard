@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/core
+
+
+ Test Files  1 passed (1)
+      Tests  69 passed (69)
+   Start at  11:14:34
+   Duration  180ms (transform 64ms, setup 0ms, import 81ms, tests 8ms, environment 0ms)
+
