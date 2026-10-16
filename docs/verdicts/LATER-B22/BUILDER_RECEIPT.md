@@ -245,3 +245,50 @@ git rev-parse HEAD
 ```
 
 The receipt whitespace check was repeated after this command record: the same no-index command returned 1 with no diagnostics. Final builder HEAD remains `4c407a6c81bd714a6875b7adf995812381d0fe57`. Builder process exit 0; independent acceptance remains pending and the piece stays PARKED.
+
+## Repair r1 — dispatcher 14, 16 October 2026 night
+
+Status: requested S1 repair implemented in the working tree; PostgreSQL proof and exact-commit independent re-check remain pending. BUILD-DON'T-MERGE / PARK under decision 74. This is builder evidence, not independent verification or acceptance.
+
+- Starting and final HEAD: `83749ed2f018615598d87f94eeb7657c74034a53`, branch `codex/sandbox/later-b22`; initial working tree clean. The older HEAD, missing-lane and temporary-scratch statements above are historical and superseded by this r1 record. Dispatcher registration `config/lanes/later-b22.json` is present and passes lane lint. The ledger is untouched because this repair authorizes only the test and appended receipt.
+- Read the independent REPAIR at `/Users/benharwood/.local/share/full-steam/jg-runs/d14-later-b22-checkA-opus-83749ed.md`, AGENTS.md and BUILD_PLAN.md §§2.2, 2.4 C4–C6/C8 and ENT-10 before editing.
+- `scratchCopy` now creates ordinary `app` tables. Test 3 creates `SAVEPOINT later_b22_scratch` before either copy, and its `finally` rolls back and releases that savepoint. Scratch DDL/data cannot reach the enclosing commit, including when setup or assertions throw; no DROP/delete cleanup is used. Foreign keys can reference the permanent application/control-plane tables.
+- The shared `assertMembershipFk` helper is unchanged byte-for-byte against HEAD (checked by a read-only Python comparison). Test 3's assertions, `/promise resolved/u` expectation, positive insert and final `app.audit_export` re-check are retained. No production code, migration, real constraint, grants, earlier tests, pins or shared registries changed. No new runtime privileges, provider actions, real data, alerts or compatibility changes.
+
+### r1 commands and actual results
+
+Node `v24.17.0`; cached pinned pnpm `10.28.1`. Used a temporary `pnpm` launcher under `/private/tmp/jg-later-b22-r1-bin` that invokes `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`, with that directory prepended to PATH for child commands. No packages downloaded/installed and no verification setting disabled. The ordinary installed pnpm launcher version probe did not provide a verified version in the captured output; the cached pinned executable returned 10.28.1, exit 0.
+
+| Command | Actual result |
+| --- | --- |
+| `pnpm typecheck --force --concurrency=2` | Exit 0; 7/7 tasks, 0 cache hits. |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | Exit 0; root guards and 7/7 package tasks, 0 cache hits. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; registered later-b22 lane, base `7ff452eeec1c523345d34715adfa3f8310062013`. |
+| `pnpm exec node --test tools/*.test.mjs` | Exit 0; 100 passed, 0 failed/skipped. |
+| `pnpm build --force --concurrency=2` | Exit 0; 7/7 tasks, 0 cache hits; Next production build completed. Existing workspace-root/CSS warnings and Turbo IO permission warnings appeared. |
+| `pnpm openapi:check` | Exit 1: `tsx` could not create its IPC socket, `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/74437.pipe`. No alternative socket path or permission bypass attempted. |
+| `python3 /private/tmp/jg-later-b22-r1-unit-runner.py` | Exit 1; 97 sequential batches / 280 files; package results below. |
+| Requested PostgreSQL file | **NOT RUN**: dispatcher explicitly states this sandbox cannot bind localhost or start PostgreSQL. CI command: `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/later-audit-export-membership.integration.test.ts`. No live database pass claimed. |
+| Root `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, browser/e2e suites | NOT RUN: would start prohibited database/browser infrastructure; unit/tooling checks were run separately. No browser launched. |
+
+The unit runner discovers `*.test.ts`/`*.test.tsx` under core, config, storage, AI, db, API and web, excluding `node_modules`, `dist`, `.next`, `e2e`, `*.integration.test.ts`, `packages/db/test/free-port.test.ts` and `apps/api/src/shadow-isolation.application.test.ts`. In each package it executes `pnpm exec vitest run --maxWorkers=2 <up to three specific files>` sequentially. Several API filenames conceal HTTP/database fixtures; these were attempted and failed at the sandbox boundary. No test was modified, retried through a different route or presented as passing. The exact command/file/exit-code manifest is `/private/tmp/jg-later-b22-r1-unit-results.json`; full output is `/private/tmp/jg-later-b22-r1-unit-tests.log`. The runner's final passed counter omits passes in mixed-result batches; the table below is taken from Vitest's actual summaries.
+
+| Package | Files passed | Files failed | Tests passed | Tests failed | Tests skipped |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `packages/core` | 99 | 0 | 2696 | 0 | 0 |
+| `packages/config` | 1 | 0 | 1 | 0 | 0 |
+| `packages/storage` | 1 | 0 | 2 | 0 | 0 |
+| `packages/ai` | 10 | 0 | 113 | 0 | 0 |
+| `packages/db` | 37 | 0 | 332 | 0 | 0 |
+| `apps/api` | 84 | 8 | 1685 | 129 | 1 |
+| `apps/web` | 40 | 0 | 867 | 0 | 0 |
+
+Failed API files: `src/auth/sso/action-paths.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/site-visit.http.test.ts`, `src/health.test.ts` (HTTP binding: `listen EPERM: operation not permitted 0.0.0.0`, with follow-on null-port errors), and `src/final-account-lock.isolation.test.ts` (suite setup: `no free port in 58400..58650` before PostgreSQL startup). The API summaries total 129 failed tests and one skipped test; the isolation suite also fails setup. These are unresolved local check failures requiring CI, not a green full-suite result.
+
+Resource evidence: 39 GB available and 77% memory free before the build, above this repair's waived 30 GB night floor. A `heavy-slot later-b22-r1-probe true` probe exited 0 but printed `sysctl: sysctl fmt -1 1024 1: Operation not permitted`, `sysmon request failed with error: sysmond service not found`, and `pgrep: Cannot get process list`; its process/load metadata is unavailable and is not claimed as a successful resource guard. No database/browser test ran through it. Unit batches were sequential, with at most two workers. No 45 GB gate applied.
+
+Detailed per-check logs are `/private/tmp/jg-later-b22-r1-{typecheck,lint,lanes,tools-tests,build,openapi}.log`. No AI gateway/prompt/model/native behavior changed; AI fixture unit tests passed, while live-model/native evaluation is inapplicable to this repair. A fresh independent verdict bound to the dispatcher's eventual commit, CI database/browser results and separate acceptance remain outstanding; decision 74 still requires PARK.
+
+Both requested intended-commit files were written with the same conventional subject and body: `/private/tmp/jg-msg-later-b22-r1.txt` and `/private/tmp/jg-msg-later-b22.txt`. No git add, commit, checkout, push, merge, fetch or other Git write was performed.
+
+Final r1 boundary checks: `git diff --check`, `git diff --stat`, `git status --short`, `git rev-parse HEAD` and comparison of the two commit-message files all returned exit 0. Only this receipt and `packages/db/test/later-audit-export-membership.integration.test.ts` are modified; HEAD remains `83749ed2f018615598d87f94eeb7657c74034a53`. No commit or push performed.

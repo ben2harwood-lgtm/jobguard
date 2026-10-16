@@ -104,10 +104,10 @@ async function assertMembershipFk(db: PoolClient, table: string, fixture: Export
 }
 
 async function scratchCopy(db: PoolClient, name: string, omitMembership: boolean) {
-  const table = `pg_temp.${quoteIdentifier(name)}`;
+  const table = `app.${quoteIdentifier(name)}`;
   // LIKE copies the actual columns, defaults, checks and unique indexes. PostgreSQL
   // omits foreign keys from LIKE, so copy their current definitions from the catalog.
-  await db.query(`CREATE TEMP TABLE ${quoteIdentifier(name)} (LIKE app.audit_export INCLUDING ALL) ON COMMIT DROP`);
+  await db.query(`CREATE TABLE ${table} (LIKE app.audit_export INCLUDING ALL)`);
   const constraints = (await db.query<{ name: string; definition: string }>(`SELECT conname AS name,
     pg_get_constraintdef(oid) AS definition FROM pg_constraint
     WHERE conrelid='app.audit_export'::regclass AND contype='f' ORDER BY conname`)).rows;
@@ -146,17 +146,23 @@ describe("LATER-B22 audit-export membership proof", () => {
 
   it("L133 / api-audit-export#1: the same membership assertion fails when only the scratch relationship is absent", async () => {
     await withFixture(async (db, fixture) => {
-      const intact = await scratchCopy(db, "later_b22_intact", false);
-      const omitted = await scratchCopy(db, "later_b22_omitted", true);
-      await assertMembershipFk(db, intact, fixture);
-      // A successful invalid insert must fail the real assertion, specifically
-      // because its promise resolved, rather than because of an unrelated SQL error.
-      await expect(assertMembershipFk(db, omitted, fixture)).rejects.toThrow(/promise resolved/u);
-      expect((await insertExport(db, omitted, fixture, fixture.foreignMembershipId)).rows).toEqual([{
-        tenant_id: fixture.tenantId, id: fixture.eventId, actor_membership_id: fixture.foreignMembershipId,
-      }]);
-      // The application constraint remains present and rejects the same row afterwards.
-      await assertMembershipFk(db, "app.audit_export", fixture);
+      await db.query("SAVEPOINT later_b22_scratch");
+      try {
+        const intact = await scratchCopy(db, "later_b22_intact", false);
+        const omitted = await scratchCopy(db, "later_b22_omitted", true);
+        await assertMembershipFk(db, intact, fixture);
+        // A successful invalid insert must fail the real assertion, specifically
+        // because its promise resolved, rather than because of an unrelated SQL error.
+        await expect(assertMembershipFk(db, omitted, fixture)).rejects.toThrow(/promise resolved/u);
+        expect((await insertExport(db, omitted, fixture, fixture.foreignMembershipId)).rows).toEqual([{
+          tenant_id: fixture.tenantId, id: fixture.eventId, actor_membership_id: fixture.foreignMembershipId,
+        }]);
+        // The application constraint remains present and rejects the same row afterwards.
+        await assertMembershipFk(db, "app.audit_export", fixture);
+      } finally {
+        await db.query("ROLLBACK TO SAVEPOINT later_b22_scratch");
+        await db.query("RELEASE SAVEPOINT later_b22_scratch");
+      }
     });
   });
 });
