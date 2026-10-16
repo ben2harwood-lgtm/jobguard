@@ -1,0 +1,449 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-5/packages/db
+
+ ❯ test/migfix-5.integration.test.ts (6 tests | 5 failed) 1313ms
+     × lock rejects an account assembled before the latest variation approval, through repository and SQL, with no lock effects 54ms
+     × approval and lock racing in both directions never lose an approved source from the locked line set 23ms
+     × conserves invoice net and VAT across partial credits (10,003 / 2,001 / 12,004) 47ms
+     × split credits cannot exceed original net principal (20,003 / 4,001 / 24,004) 15ms
+     × credit VAT can never pass the VAT left on the original invoice (12 / 2 / 14 split in thirds) 11ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/migfix-5.integration.test.ts > MIGFIX-5 customer billing integrity > lock rejects an account assembled before the latest variation approval, through repository and SQL, with no lock effects
+AssertionError: promise resolved "{ …(14) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "auditEventId": "c8a4b737-4263-41ec-b7a5-e9a3dacc9de6",
++   "baselineQuoteVersionId": "dadc4997-b857-4cbd-8236-0a13f68422d1",
++   "captureRegisterHash": "8fc179fd2cd1056a5f66c2b7733c88b97cb34bf569f74fb500c1b37e46126c63",
++   "commandId": "c42407af-e704-4d11-9fb1-b73914abc055",
++   "digest": "2900a14cf47dded2e149a82125b4a732fc368a878dbd906e938adb37fab5b03f",
++   "finalAccountRevisionId": "9201c6b5-4c0a-4510-83e2-94b711a0f711",
++   "id": "58e6c095-edbe-4913-9ee7-39de30590a28",
++   "jobId": "e1eef31a-43d4-4f65-b9f4-10d77b7d7456",
++   "lineSetHash": "66a93736342f3e37d48a5831fc24c6e7bba6fc312fc91a92ffb44a7978312106",
++   "lockedAt": "2026-10-14T14:12:44.069552Z",
++   "scopeDispositionHash": "e2f16c258b12f4120bd5eb593e3ef8e5a39cd9da39da25d1e70334db582d759e",
++   "snapshot": {
++     "auditEventId": "c8a4b737-4263-41ec-b7a5-e9a3dacc9de6",
++     "baselineQuoteVersionId": "dadc4997-b857-4cbd-8236-0a13f68422d1",
++     "baselineScopeItemIds": [
++       "d5f3c4f4-3a53-4daf-8a1d-7ed8c97f5e96",
++     ],
++     "captureRegister": [
++       {
++         "aiStructured": false,
++         "description": "Fictional captured extra",
++         "id": "23b13fc9-e54a-4ef5-aeac-2e60324a09dc",
++         "jobId": "e1eef31a-43d4-4f65-b9f4-10d77b7d7456",
++         "kind": "log_extra",
++         "recordedPhase": "pre_lock",
++         "revisionId": "01313e91-cd2e-4f5d-8d75-cca8dcc04fdf",
++         "scopeArea": "job",
++         "scopeItemId": "a8cedc89-c84e-403c-b4b6-128be8a45a26",
++         "serverRecordedAt": "2026-10-14T14:12:44.054949Z",
++         "sourceRef": "23b13fc9-e54a-4ef5-aeac-2e60324a09dc:37f51e621b83157337bdb4f29eb3c3cc7f7bae6d783c2f85c5794073c337e96c",
++         "state": "approved",
++         "tenantId": "2ac07772-2904-4d22-acdb-078ac9c2d8bf",
++         "valuePence": 80000,
++         "version": "shadow-capture.v1",
++       },
++     ],
++     "commandId": "c42407af-e704-4d11-9fb1-b73914abc055",
++     "declaration": "I've reviewed the work and extras on this job and this is my complete final account.",
++     "declarationVersion": "final_account_declaration.v1",
++     "finalAccountRevisionId": "9201c6b5-4c0a-4510-83e2-94b711a0f711",
++     "jobId": "e1eef31a-43d4-4f65-b9f4-10d77b7d7456",
++     "lines": [
++       {
++         "id": "fbd7cbd9-1e0b-40fa-84f6-fb3e1b8d2e04",
++         "netPence": 3360000,
++         "revisionId": "dadc4997-b857-4cbd-8236-0a13f68422d1",
++         "scopeItemId": "d5f3c4f4-3a53-4daf-8a1d-7ed8c97f5e96",
++         "sourceRef": "dadc4997-b857-4cbd-8236-0a13f68422d1:b3219bdecc1242dd660aa4845492da39437c021f05a5cb266d088f05cfcf81a5",
++       },
++     ],
++     "lockingMembershipId": "40000000-0000-4000-8000-000000000004",
++     "onboardingTermsVersion": "synthetic_final_check_terms.v1",
++     "scopeDispositions": [
++       {
++         "disposition": "done",
++         "scopeItemId": "d5f3c4f4-3a53-4daf-8a1d-7ed8c97f5e96",
++         "sourceRef": "6ddf89e9-3d98-4356-85d1-fd1a9dcab169:283dc0d7a23aefccb970d70cda1ab195fed73fbe5ffedeac706a1dd8eca3fad5",
++       },
++     ],
++     "serverTimestamp": "2026-10-14T14:12:44.069552Z",
++     "tenantId": "2ac07772-2904-4d22-acdb-078ac9c2d8bf",
++     "version": "shadow-lock.v1",
++   },
++   "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++   "tenantId": "2ac07772-2904-4d22-acdb-078ac9c2d8bf",
+  }
+
+ ❯ test/migfix-5.integration.test.ts:82:69
+     80|     });
+     81|     expect(await before()).toEqual({ locks: 0, receipts: 0, audit: 0 }…
+     82|     await expect(repo.lock(a.context, lockInput(a, a.revisionId, 1))).…
+       |                                                                     ^
+     83|     await expect(asFixtureTenant(f.runtime, a.tenantId, lockSql(f, a, …
+     84|     expect(await before()).toEqual({ locks: 0, receipts: 0, audit: 0 }…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  test/migfix-5.integration.test.ts > MIGFIX-5 customer billing integrity > approval and lock racing in both directions never lose an approved source from the locked line set
+AssertionError: expected 'locked' to contain 'STALE_OR_BLOCKED_FINAL_ACCOUNT'
+
+Expected: "STALE_OR_BLOCKED_FINAL_ACCOUNT"
+Received: "locked"
+
+ ❯ test/migfix-5.integration.test.ts:104:29
+    102|       const racing = asFixtureTenant(f.runtime, a.tenantId, lockSql(f,…
+    103|       await blocked(); await approval.query("COMMIT");
+    104|       expect(await settled).toContain("STALE_OR_BLOCKED_FINAL_ACCOUNT"…
+       |                             ^
+    105|     } finally { await approval.query("ROLLBACK").catch(() => undefined…
+    106|     expect((await f.admin.query("SELECT count(*)::int n FROM app.final…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  test/migfix-5.integration.test.ts > MIGFIX-5 customer billing integrity > conserves invoice net and VAT across partial credits (10,003 / 2,001 / 12,004)
+AssertionError: promise resolved "Result{ command: 'SELECT', …(9) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ Result {
++   "RowCtor": null,
++   "_parsers": [
++     [Function noParse],
++     [Function noParse],
++     [Function noParse],
++     [Function parseBigInteger],
++   ],
++   "_prebuiltEmptyResultObject": {
++     "credit_note_id": null,
++     "credit_number": null,
++     "pdf_sha256": null,
++     "total_pence": null,
++   },
++   "_types": TypeOverrides {
++     "_types": {
++       "arrayParser": {
++         "create": [Function create],
++       },
++       "builtins": {
++         "ABSTIME": 702,
++         "ACLITEM": 1033,
++         "BIT": 1560,
++         "BOOL": 16,
++         "BPCHAR": 1042,
++         "BYTEA": 17,
++         "CHAR": 18,
++         "CID": 29,
++         "CIDR": 650,
++         "CIRCLE": 718,
++         "DATE": 1082,
++         "FLOAT4": 700,
++         "FLOAT8": 701,
++         "GTSVECTOR": 3642,
++         "INET": 869,
++         "INT2": 21,
++         "INT4": 23,
++         "INT8": 20,
++         "INTERVAL": 1186,
++         "JSON": 114,
++         "JSONB": 3802,
++         "MACADDR": 829,
++         "MACADDR8": 774,
++         "MONEY": 790,
++         "NUMERIC": 1700,
++         "OID": 26,
++         "PATH": 602,
++         "PG_DEPENDENCIES": 3402,
++         "PG_LSN": 3220,
++         "PG_NDISTINCT": 3361,
++         "PG_NODE_TREE": 194,
++         "POLYGON": 604,
++         "REFCURSOR": 1790,
++         "REGCLASS": 2205,
++         "REGCONFIG": 3734,
++         "REGDICTIONARY": 3769,
++         "REGNAMESPACE": 4089,
++         "REGOPER": 2203,
++         "REGOPERATOR": 2204,
++         "REGPROC": 24,
++         "REGPROCEDURE": 2202,
++         "REGROLE": 4096,
++         "REGTYPE": 2206,
++         "RELTIME": 703,
++         "SMGR": 210,
++         "TEXT": 25,
++         "TID": 27,
++         "TIME": 1083,
++         "TIMESTAMP": 1114,
++         "TIMESTAMPTZ": 1184,
++         "TIMETZ": 1266,
++         "TINTERVAL": 704,
++         "TSQUERY": 3615,
++         "TSVECTOR": 3614,
++         "TXID_SNAPSHOT": 2970,
++         "UUID": 2950,
++         "VARBIT": 1562,
++         "VARCHAR": 1043,
++         "XID": 28,
++         "XML": 142,
++       },
++       "getTypeParser": [Function getTypeParser],
++       "setTypeParser": [Function setTypeParser],
++     },
++     "binary": {},
++     "text": {},
++   },
++   "command": "SELECT",
++   "fields": [
++     Field {
++       "columnID": 0,
++       "dataTypeID": 2950,
++       "dataTypeModifier": -1,
++       "dataTypeSize": 16,
++       "format": "text",
++       "name": "credit_note_id",
++       "tableID": 0,
++     },
++     Field {
++       "columnID": 0,
++       "dataTypeID": 25,
++       "dataTypeModifier": -1,
++       "dataTypeSize": -1,
++       "format": "text",
++       "name": "credit_number",
++       "tableID": 0,
++     },
++     Field {
++       "columnID": 0,
++       "dataTypeID": 25,
++       "dataTypeModifier": -1,
++       "dataTypeSize": -1,
++       "format": "text",
++       "name": "pdf_sha256",
++       "tableID": 0,
++     },
++     Field {
++       "columnID": 0,
++       "dataTypeID": 20,
++       "dataTypeModifier": -1,
++       "dataTypeSize": 8,
++       "format": "text",
++       "name": "total_pence",
++       "tableID": 0,
++     },
++   ],
++   "oid": null,
++   "rowAsArray": false,
++   "rowCount": 1,
++   "rows": [
++     {
++       "credit_note_id": "f62f913c-8e7b-44ba-a772-b59f63750ab2",
++       "credit_number": "DEMO-CN-000003",
++       "pdf_sha256": "989bce87db186bc69662ea080fdd4368435b61634a511b5bab30cefdc43f9597",
++       "total_pence": "-2",
++     },
++   ],
+  }
+
+ ❯ test/migfix-5.integration.test.ts:135:63
+    133|     const second = await invoiced(10003);
+    134|     await credit(f, second.a, second.invoice, 10000, 0); await credit(…
+    135|     await expect(credit(f, second.a, second.invoice, 2, 12002)).reject…
+       |                                                               ^
+    136|     expect(await creditTotals(second.a, second.invoice.id)).toMatchObj…
+    137|   }, 90000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  test/migfix-5.integration.test.ts > MIGFIX-5 customer billing integrity > split credits cannot exceed original net principal (20,003 / 4,001 / 24,004)
+AssertionError: promise resolved "Result{ command: 'SELECT', …(9) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ Result {
++   "RowCtor": null,
++   "_parsers": [
++     [Function noParse],
++     [Function noParse],
++     [Function noParse],
++     [Function parseBigInteger],
++   ],
++   "_prebuiltEmptyResultObject": {
++     "credit_note_id": null,
++     "credit_number": null,
++     "pdf_sha256": null,
++     "total_pence": null,
++   },
++   "_types": TypeOverrides {
++     "_types": {
++       "arrayParser": {
++         "create": [Function create],
++       },
++       "builtins": {
++         "ABSTIME": 702,
++         "ACLITEM": 1033,
++         "BIT": 1560,
++         "BOOL": 16,
++         "BPCHAR": 1042,
++         "BYTEA": 17,
++         "CHAR": 18,
++         "CID": 29,
++         "CIDR": 650,
++         "CIRCLE": 718,
++         "DATE": 1082,
++         "FLOAT4": 700,
++         "FLOAT8": 701,
++         "GTSVECTOR": 3642,
++         "INET": 869,
++         "INT2": 21,
++         "INT4": 23,
++         "INT8": 20,
++         "INTERVAL": 1186,
++         "JSON": 114,
++         "JSONB": 3802,
++         "MACADDR": 829,
++         "MACADDR8": 774,
++         "MONEY": 790,
++         "NUMERIC": 1700,
++         "OID": 26,
++         "PATH": 602,
++         "PG_DEPENDENCIES": 3402,
++         "PG_LSN": 3220,
++         "PG_NDISTINCT": 3361,
++         "PG_NODE_TREE": 194,
++         "POLYGON": 604,
++         "REFCURSOR": 1790,
++         "REGCLASS": 2205,
++         "REGCONFIG": 3734,
++         "REGDICTIONARY": 3769,
++         "REGNAMESPACE": 4089,
++         "REGOPER": 2203,
++         "REGOPERATOR": 2204,
++         "REGPROC": 24,
++         "REGPROCEDURE": 2202,
++         "REGROLE": 4096,
++         "REGTYPE": 2206,
++         "RELTIME": 703,
++         "SMGR": 210,
++         "TEXT": 25,
++         "TID": 27,
++         "TIME": 1083,
++         "TIMESTAMP": 1114,
++         "TIMESTAMPTZ": 1184,
++         "TIMETZ": 1266,
++         "TINTERVAL": 704,
++         "TSQUERY": 3615,
++         "TSVECTOR": 3614,
++         "TXID_SNAPSHOT": 2970,
++         "UUID": 2950,
++         "VARBIT": 1562,
++         "VARCHAR": 1043,
++         "XID": 28,
++         "XML": 142,
++       },
++       "getTypeParser": [Function getTypeParser],
++       "setTypeParser": [Function setTypeParser],
++     },
++     "binary": {},
++     "text": {},
++   },
++   "command": "SELECT",
++   "fields": [
++     Field {
++       "columnID": 0,
++       "dataTypeID": 2950,
++       "dataTypeModifier": -1,
++       "dataTypeSize": 16,
++       "format": "text",
++       "name": "credit_note_id",
++       "tableID": 0,
++     },
++     Field {
++       "columnID": 0,
++       "dataTypeID": 25,
++       "dataTypeModifier": -1,
++       "dataTypeSize": -1,
++       "format": "text",
++       "name": "credit_number",
++       "tableID": 0,
++     },
++     Field {
++       "columnID": 0,
++       "dataTypeID": 25,
++       "dataTypeModifier": -1,
++       "dataTypeSize": -1,
++       "format": "text",
++       "name": "pdf_sha256",
++       "tableID": 0,
++     },
++     Field {
++       "columnID": 0,
++       "dataTypeID": 20,
++       "dataTypeModifier": -1,
++       "dataTypeSize": 8,
++       "format": "text",
++       "name": "total_pence",
++       "tableID": 0,
++     },
++   ],
++   "oid": null,
++   "rowAsArray": false,
++   "rowCount": 1,
++   "rows": [
++     {
++       "credit_note_id": "9b1e6a8a-37bf-4ccc-b06e-ad5f50655f03",
++       "credit_number": "DEMO-CN-000003",
++       "pdf_sha256": "9daa4e4ddfd457ff4ebf0c5615ef599ad32f506f47dc1b40084000edcaf38e8f",
++       "total_pence": "-1",
++     },
++   ],
+  }
+
+ ❯ test/migfix-5.integration.test.ts:152:49
+    150|     expect(issued).toEqual([-12001, -12002]);
+    151|     expect(await creditTotals(a, invoice.id)).toEqual({ net: 20003, ta…
+    152|     await expect(credit(f, a, invoice, 1, 24003)).rejects.toThrow("CRE…
+       |                                                 ^
+    153|     expect(await creditTotals(a, invoice.id)).toMatchObject({ net: 200…
+    154|   }, 90000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  test/migfix-5.integration.test.ts > MIGFIX-5 customer billing integrity > credit VAT can never pass the VAT left on the original invoice (12 / 2 / 14 split in thirds)
+error: CREDIT_EXCEEDS_AVAILABLE_AMOUNT
+ ❯ ../../node_modules/.pnpm/pg@8.16.3/node_modules/pg/lib/client.js:545:17
+ ❯ asFixtureTenant test/final-account-lock.integration.test.ts:37:122
+     35| export async function asFixtureTenant<T>(pool: Pool, tenantId: string,…
+     36|  const db = await pool.connect();
+     37|  try { await db.query("BEGIN"); await db.query("SELECT set_config('app…
+       |                                                                                                                          ^
+     38|  catch (error) { await db.query("ROLLBACK"); throw error; } finally { …
+     39| }
+ ❯ test/migfix-5.integration.test.ts:159:75
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)
+   Start at  15:12:42
+   Duration  1.74s (transform 166ms, setup 0ms, import 371ms, tests 1.31s, environment 0ms)
+
+exit 1
