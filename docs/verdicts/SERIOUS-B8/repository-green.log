@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/dbsrc-08/packages/db
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  14:25:51
+   Duration  1.18s (transform 508ms, setup 0ms, import 1.04s, tests 10ms, environment 0ms)
+

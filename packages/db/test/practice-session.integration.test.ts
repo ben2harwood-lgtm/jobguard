@@ -264,3 +264,32 @@ it("practice merchant evidence packs approve with session-scoped rates and still
  ]) await expect(denied()).rejects.toMatchObject({ code: "NOT_FOUND" });
  expect((await app.list(x.creator, caseId)).packs).toEqual(approved.packs);
 });
+it("S24: independent practice owners keep their own advisory budgets and command identities", async () => {
+ const { InboxRelevanceRepository } = await import("../src/index.js");
+ const repo = new InboxRelevanceRepository(runtime);
+ const sessions = await Promise.all([issuePracticeSession(runtime), issuePracticeSession(runtime)]);
+ const owners = await Promise.all(sessions.map(token => authenticatePracticeSession(runtime,token)));
+ const [a,b] = owners as [typeof owners[number],typeof owners[number]];
+ expect(a.membershipId).toBe(b.membershipId);
+ const liveJob = async (digest: string) => (await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",[DEMO_TENANT_ID,digest])).rows[0].id as string;
+ const aj=await liveJob(a.digest),bj=await liveJob(b.digest);
+ await repo.seed(a.context,aj,randomUUID(),a.membershipId,a.digest);
+ await repo.seed(b.context,bj,randomUUID(),b.membershipId,b.digest);
+ const input={commandId:randomUUID(),advisoryBudget:0};
+ expect((await repo.setBudget(a.context,aj,input,a.membershipId,a.digest)).advisory).toHaveLength(0);
+ const untouched=await repo.view(b.context,bj,b.membershipId,b.digest);
+ expect(untouched.advisoryBudget).toBe(100);expect(untouched.advisory).toHaveLength(2);
+ expect((await repo.view(a.context,aj,a.membershipId,a.digest)).advisoryBudget).toBe(0);
+ await repo.setBudget(a.context,aj,input,a.membershipId,a.digest);
+ await expect(repo.setBudget(b.context,bj,input,b.membershipId,b.digest)).rejects.toMatchObject({code:"IDEMPOTENCY_CONFLICT"});
+ expect((await admin.query("SELECT 1 FROM app.inbox_preference_revision WHERE tenant_id=$1 AND command_id=$2",[DEMO_TENANT_ID,input.commandId])).rowCount).toBe(1);
+ // The budget follows one session across its own jobs, rather than becoming job-local.
+ const sameOwnerJob=randomUUID();
+ await admin.query("INSERT INTO app.job(tenant_id,id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional same-owner inbox','quoting',$3,'home')",[DEMO_TENANT_ID,sameOwnerJob,a.digest]);
+ expect((await repo.view(a.context,sameOwnerJob,a.membershipId,a.digest)).advisoryBudget).toBe(0);
+ await expect(repo.setBudget(a.context,sameOwnerJob,input,a.membershipId,a.digest)).rejects.toMatchObject({code:"IDEMPOTENCY_CONFLICT"});
+ // Different session writes share the physical membership revision sequence safely.
+ await Promise.all([repo.setBudget(a.context,aj,{commandId:randomUUID(),advisoryBudget:1},a.membershipId,a.digest),repo.setBudget(b.context,bj,{commandId:randomUUID(),advisoryBudget:2},b.membershipId,b.digest)]);
+ expect((await repo.view(a.context,aj,a.membershipId,a.digest)).advisoryBudget).toBe(1);
+ expect((await repo.view(b.context,bj,b.membershipId,b.digest)).advisoryBudget).toBe(2);
+});
