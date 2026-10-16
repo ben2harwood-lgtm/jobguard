@@ -38,6 +38,12 @@ export class MissingObjectVersionError extends Error {
   constructor() { super("A concrete object version is required"); this.name = "MissingObjectVersionError"; }
 }
 
+function requireObjectVersion(versionId: unknown): asserts versionId is string {
+  if (typeof versionId !== "string" || versionId.trim().length === 0 || versionId === "null") {
+    throw new MissingObjectVersionError();
+  }
+}
+
 export class S3PrivateVersionedStorage implements PrivateVersionedStorage {
   readonly #client: S3Client;
   readonly #bucket: string;
@@ -60,17 +66,17 @@ export class S3PrivateVersionedStorage implements PrivateVersionedStorage {
   }
 
   createDownloadUrl(input: { key: string; versionId: string; expiresInSeconds: number }) {
-    if (!input.versionId) throw new MissingObjectVersionError();
+    requireObjectVersion(input.versionId);
     return getSignedUrl(this.#client, new GetObjectCommand({ Bucket: this.#bucket, Key: input.key,
       VersionId: input.versionId }), { expiresIn: input.expiresInSeconds });
   }
 
   async readExactVersion(key: string, versionId: string): Promise<StoredObject> {
-    if (!versionId) throw new MissingObjectVersionError();
+    requireObjectVersion(versionId);
     const head = await this.#client.send(new HeadObjectCommand({ Bucket: this.#bucket, Key: key, VersionId: versionId }));
-    if (!head.VersionId) throw new MissingObjectVersionError();
+    if (head.VersionId !== versionId) throw new MissingObjectVersionError();
     const result = await this.#client.send(new GetObjectCommand({ Bucket: this.#bucket, Key: key, VersionId: versionId }));
-    if (!result.VersionId || result.VersionId !== head.VersionId) throw new MissingObjectVersionError();
+    if (result.VersionId !== versionId) throw new MissingObjectVersionError();
     const bytes = await result.Body?.transformToByteArray();
     if (!bytes) throw new Error("Object body is missing");
     return { key, versionId: result.VersionId, contentType: result.ContentType ?? head.ContentType ?? "application/octet-stream",
@@ -78,7 +84,7 @@ export class S3PrivateVersionedStorage implements PrivateVersionedStorage {
   }
 
   async deleteExactVersion(key: string, versionId: string): Promise<void> {
-    if (!versionId) throw new MissingObjectVersionError();
+    requireObjectVersion(versionId);
     await this.#client.send(new DeleteObjectCommand({ Bucket: this.#bucket, Key: key, VersionId: versionId }));
   }
 }
