@@ -1,0 +1,286 @@
+
+> jobguard@ build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch
+> turbo run build --concurrency=2 --force
+
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running build in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/config:build: cache bypass, force executing a6f3f5b42fe953a0
+@jobguard/storage:build: cache bypass, force executing b78e5bb767bf3e1b
+@jobguard/config:build: 
+@jobguard/config:build: > @jobguard/config@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/config
+@jobguard/config:build: > tsc -p tsconfig.json
+@jobguard/config:build: 
+@jobguard/storage:build: 
+@jobguard/storage:build: > @jobguard/storage@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/storage
+@jobguard/storage:build: > tsc -p tsconfig.json
+@jobguard/storage:build: 
+@jobguard/core:build: cache bypass, force executing 5275a7dbaa4c4c95
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/core:build: 
+@jobguard/core:build: > @jobguard/core@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/core
+@jobguard/core:build: > tsc -p tsconfig.json
+@jobguard/core:build: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/ai:build: cache bypass, force executing 2854dc23ad19570d
+@jobguard/db:build: cache bypass, force executing b25c4088e282afba
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/db:build: 
+@jobguard/db:build: > @jobguard/db@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/db
+@jobguard/db:build: > tsc -p tsconfig.json
+@jobguard/db:build: 
+@jobguard/ai:build: 
+@jobguard/ai:build: > @jobguard/ai@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/ai
+@jobguard/ai:build: > tsc -p tsconfig.json
+@jobguard/ai:build: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:build: cache bypass, force executing f8acf0f150598ae1
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:build: 
+@jobguard/api:build: > @jobguard/api@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/api
+@jobguard/api:build: > nest build
+@jobguard/api:build: 
+@jobguard/web:build: cache bypass, force executing 8ba19f5360ffe857
+@jobguard/web:build: 
+@jobguard/web:build: > @jobguard/web@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/web
+@jobguard/web:build: > next build
+@jobguard/web:build: 
+@jobguard/web:build:  ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+@jobguard/web:build:  We detected multiple lockfiles and selected the directory of /Users/benharwood/Claude/Projects/my-new-project/pnpm-lock.yaml as the root directory.
+@jobguard/web:build:  To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+@jobguard/web:build:    See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+@jobguard/web:build:  Detected additional lockfiles: 
+@jobguard/web:build:    * /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/pnpm-lock.yaml
+@jobguard/web:build: 
+@jobguard/web:build:    ▲ Next.js 15.5.27
+@jobguard/web:build: 
+@jobguard/web:build:    Creating an optimized production build ...
+@jobguard/web:build: <w> [webpack.cache.PackFileCacheStrategy] Skipped not serializable cache item 'Compilation/modules|javascript/auto|/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/next-flight-css-loader.js??ruleSet[1].rules[14].oneOf[5].use[0]!/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[5].use[1]!/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[5].use[2]!/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/web/app/ui/practice-receipts.module.css|ssr': No serializer registered for Warning
+@jobguard/web:build: <w> while serializing webpack/lib/cache/PackFileCacheStrategy.PackContentItems -> webpack/lib/NormalModule -> Array { 1 items } -> webpack/lib/ModuleWarning -> Warning
+@jobguard/web:build:  ⚠ Compiled with warnings in 49s
+@jobguard/web:build: 
+@jobguard/web:build: ./app/ui/practice-receipts.module.css
+@jobguard/web:build: Warning
+@jobguard/web:build: 
+@jobguard/web:build: (25:44) autoprefixer: end value has mixed support, consider using flex-end instead
+@jobguard/web:build: 
+@jobguard/web:build: Import trace for requested module:
+@jobguard/web:build: ./app/ui/practice-receipts.module.css
+@jobguard/web:build: ./app/ui/practice-facts.tsx
+@jobguard/web:build: ./app/ui/workspace-shell.tsx
+@jobguard/web:build: 
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/pipes/file/file-type.validator.js
+@jobguard/web:build: Module not found: Package path . is not exported from package /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/file-type (see exports field in /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/file-type/package.json)
+@jobguard/web:build: 
+@jobguard/web:build: Import trace for requested module:
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/pipes/file/file-type.validator.js
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/pipes/file/index.js
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/pipes/index.js
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/index.js
+@jobguard/web:build: ../api/dist/job-work-state.errors.js
+@jobguard/web:build: ../api/dist/workspace/application.js
+@jobguard/web:build: ../api/dist/workspace/index.js
+@jobguard/web:build: ./app/api/contractor/route.ts
+@jobguard/web:build: 
+@jobguard/web:build: ../../node_modules/.pnpm/load-esm@1.0.3/node_modules/load-esm/index.js
+@jobguard/web:build: Critical dependency: the request of a dependency is an expression
+@jobguard/web:build: 
+@jobguard/web:build: Import trace for requested module:
+@jobguard/web:build: ../../node_modules/.pnpm/load-esm@1.0.3/node_modules/load-esm/index.js
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/pipes/file/file-type.validator.js
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/pipes/file/index.js
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/pipes/index.js
+@jobguard/web:build: ../../node_modules/.pnpm/@nestjs+common@11.2.3_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/index.js
+@jobguard/web:build: ../api/dist/job-work-state.errors.js
+@jobguard/web:build: ../api/dist/workspace/application.js
+@jobguard/web:build: ../api/dist/workspace/index.js
+@jobguard/web:build: ./app/api/contractor/route.ts
+@jobguard/web:build: 
+@jobguard/web:build: <w> [webpack.cache.PackFileCacheStrategy] Skipped not serializable cache item 'Compilation/modules|/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[2]!/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[3]!/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/web/app/styles.css': No serializer registered for Warning
+@jobguard/web:build: <w> while serializing webpack/lib/cache/PackFileCacheStrategy.PackContentItems -> webpack/lib/NormalModule -> Array { 2 items } -> webpack/lib/ModuleWarning -> Warning
+@jobguard/web:build: <w> [webpack.cache.PackFileCacheStrategy] Skipped not serializable cache item 'Compilation/modules|/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[5].use[2]!/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[5].use[3]!/Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/web/app/ui/practice-receipts.module.css': No serializer registered for Warning
+@jobguard/web:build: <w> while serializing webpack/lib/cache/PackFileCacheStrategy.PackContentItems -> webpack/lib/NormalModule -> Array { 1 items } -> webpack/lib/ModuleWarning -> Warning
+@jobguard/web:build:  ⚠ Compiled with warnings in 4.8s
+@jobguard/web:build: 
+@jobguard/web:build: ./app/ui/practice-receipts.module.css.webpack[javascript/auto]!=!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[5].use[2]!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[5].use[3]!./app/ui/practice-receipts.module.css
+@jobguard/web:build: Warning
+@jobguard/web:build: 
+@jobguard/web:build: (25:44) autoprefixer: end value has mixed support, consider using flex-end instead
+@jobguard/web:build: 
+@jobguard/web:build: Import trace for requested module:
+@jobguard/web:build: ./app/ui/practice-receipts.module.css.webpack[javascript/auto]!=!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[5].use[2]!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[5].use[3]!./app/ui/practice-receipts.module.css
+@jobguard/web:build: ./app/ui/practice-receipts.module.css
+@jobguard/web:build: ./app/ui/practice-facts.tsx
+@jobguard/web:build: ./app/ui/workspace-shell.tsx
+@jobguard/web:build: 
+@jobguard/web:build: ./app/styles.css.webpack[javascript/auto]!=!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[2]!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[3]!./app/styles.css
+@jobguard/web:build: Warning
+@jobguard/web:build: 
+@jobguard/web:build: (18:1503) autoprefixer: end value has mixed support, consider using flex-end instead
+@jobguard/web:build: 
+@jobguard/web:build: Import trace for requested module:
+@jobguard/web:build: ./app/styles.css.webpack[javascript/auto]!=!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[2]!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[3]!./app/styles.css
+@jobguard/web:build: ./app/styles.css
+@jobguard/web:build: 
+@jobguard/web:build: ./app/styles.css.webpack[javascript/auto]!=!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[2]!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[3]!./app/styles.css
+@jobguard/web:build: Warning
+@jobguard/web:build: 
+@jobguard/web:build: (35:224) autoprefixer: end value has mixed support, consider using flex-end instead
+@jobguard/web:build: 
+@jobguard/web:build: Import trace for requested module:
+@jobguard/web:build: ./app/styles.css.webpack[javascript/auto]!=!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[2]!../../node_modules/.pnpm/next@15.5.27_@playwright+test@1.55.1_@types+node@24.0.3_react-dom@19.1.9_react@19.1.9__react@19.1.9/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[14].oneOf[10].use[3]!./app/styles.css
+@jobguard/web:build: ./app/styles.css
+@jobguard/web:build: 
+@jobguard/web:build:  ✓ Compiled successfully in 54s
+@jobguard/web:build:    Linting and checking validity of types ...
+@jobguard/web:build:    Collecting page data ...
+@jobguard/web:build:    Generating static pages (0/34) ...
+@jobguard/web:build:    Generating static pages (8/34) 
+@jobguard/web:build:    Generating static pages (16/34) 
+@jobguard/web:build:    Generating static pages (25/34) 
+@jobguard/web:build:  ✓ Generating static pages (34/34)
+@jobguard/web:build:    Finalizing page optimization ...
+@jobguard/web:build:    Collecting build traces ...
+@jobguard/web:build: 
+@jobguard/web:build: Route (app)                                                                  Size  First Load JS
+@jobguard/web:build: ┌ ○ /                                                                     12.3 kB         189 kB
+@jobguard/web:build: ├ ○ /_not-found                                                             996 B         103 kB
+@jobguard/web:build: ├ ○ /admin/contractor                                                     3.59 kB         153 kB
+@jobguard/web:build: ├ ○ /admin/contractor/audit-exports                                       1.92 kB         108 kB
+@jobguard/web:build: ├ ○ /admin/contractor/identity                                             4.5 kB         107 kB
+@jobguard/web:build: ├ ƒ /api/auth/invitations                                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/request                                                       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/scim/[connectionId]/deactivations                             395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/session                                                       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/sso-required                                                  395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/sso-required/detail                                           395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/sso-required/emergency                                        395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/sso/[connectionId]/callback                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/sso/[connectionId]/start                                      395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/auth/verify                                                        395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor                                                         395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/audit-exports                                           395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/clients/[clientId]/customer-link                        395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/assignments                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/order-check                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/order-lines                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/resident-contact                              395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-extras                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-extras/sor                               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-visits                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-visits/[visitId]/complete                395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-visits/start                             395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/sor-items                                     395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/practice/acting-as                                      395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/practice/acting-as/end                                  395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/practice/session/revoke                                 395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/practice/workers/[workerId]/acting-as                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/site/jobs                                               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/sor-versions                                            395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/work-order-imports                                      395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/work-order-imports/[batchId]                            395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/contractor/work-orders/[workOrderId]/revisions                     395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/decisions                                                          395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs                                                               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]                                                          395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/commercial-integrity                                     395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/commercial-integrity/reviews                             395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/confirm                                                  395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices                                        395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]                            395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes/preview       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/receipts                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/receipts/reversals         395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/fee-illustration                                         395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/fee-illustration/what-if                                 395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account                                            395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account/dispositions                               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account/lock                                       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account/review-extras                              395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account/terms                                      395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/materials                                                395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/parties                                                  395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/parties/import                                           395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/practice-facts                                           395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/practice-feed                                            395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/prevention-checks                                        395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/prevention-checks/[action]                               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/proof                                                    395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/proposal                                                 395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders                                          395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders/placement                                395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders/revisions                                395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes                                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/acceptance                                        395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/acceptance/disposition                            395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/activation                                        395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/artifacts/[artifactId]                            395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/delivery                                          395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/delivery/[action]                                 395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/preview                                           395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/readiness                                                395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/readiness/[action]                                       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery                                                 395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-allocations                                     395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-allocations/reversals                           395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-cases                                           395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-cases/eligibility                               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-cases/terms                                     395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery/[action]                                        395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox                                          395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox/[action]                                 395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox/decisions/[decisionId]                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/review                                                   395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents                                       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/facts/confirm                         395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/intake                                395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/receipts                              395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-matches                                         395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-matches/corrections                             395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/things-to-check                                          395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/things-to-check/[action]                                 395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/value                                                    395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/variations                                               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/work-state                                               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/jobs/capture                                                       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/material-rates                                                     395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/quotes/preview                                                     395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs                                 395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval    395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/download               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/inspect                395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/follow-ups                                     395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/follow-ups/[followUpId]/commands               395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/messages                                       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/messages/[messageId]/commands                  395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/sandbox/runs                                                       395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/sandbox/runs/[id]                                                  395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/sandbox/runs/[id]/[action]                                         395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/session                                                            395 B         103 kB
+@jobguard/web:build: ├ ƒ /api/test-support/drain                                                 395 B         103 kB
+@jobguard/web:build: ├ ○ /contractor/work-orders                                               3.74 kB         153 kB
+@jobguard/web:build: ├ ƒ /contractor/work-orders/[workOrderId]                                 2.36 kB         152 kB
+@jobguard/web:build: ├ ƒ /jobs/[id]                                                            41.7 kB         218 kB
+@jobguard/web:build: ├ ƒ /jobs/[id]/value                                                      1.81 kB         121 kB
+@jobguard/web:build: ├ ƒ /practice/[id]                                                         1.7 kB         121 kB
+@jobguard/web:build: ├ ○ /sign-in                                                              2.44 kB         105 kB
+@jobguard/web:build: ├ ○ /supplier-fixtures                                                      395 B         103 kB
+@jobguard/web:build: └ ○ /things-to-check-report                                                 395 B         103 kB
+@jobguard/web:build: + First Load JS shared by all                                              102 kB
+@jobguard/web:build:   ├ chunks/5096-5c878053d6d4a57e.js                                       46.2 kB
+@jobguard/web:build:   ├ chunks/ad454de0-744f847e295242ef.js                                   54.2 kB
+@jobguard/web:build:   └ other shared chunks (total)                                           1.96 kB
+@jobguard/web:build: 
+@jobguard/web:build: 
+@jobguard/web:build: ○  (Static)   prerendered as static content
+@jobguard/web:build: ƒ  (Dynamic)  server-rendered on demand
+@jobguard/web:build: 
+
+ Tasks:    7 successful, 7 total
+Cached:    0 cached, 7 total
+  Time:    2m42.818s 
+
