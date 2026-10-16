@@ -469,3 +469,41 @@ PY
 
 Final HEAD (no task commit): `2a230bb522c2c1146c0d0741ed374237176ff02c`.
 
+
+## r-dec45 — dispatcher 13 repair (16 October 2026)
+
+Ben's decision 45 as quoted in the repair order; PR #226. This section supersedes the earlier held-mapping status. Starting/final HEAD remains `bd02384853a950acfc3e38490fd75a62b66debc8`, with `origin/main` at `760fe6f52cb1364540c72092c3c882532d9b9d27`; working tree was initially clean. No Git writes, install, migration, permission, route, UI or provider changes.
+
+Only the following line changes occur in the two repair files:
+
+```diff
+# packages/db/src/work-order-repository.ts:42
+-  if (e.code === "40001") return new WorkOrderError("STALE_REVISION");
++  if (e.code === "40001" || e.code === "40P01") return new WorkOrderError("STALE_REVISION");
+# apps/api/src/auth/context-boundary.test.ts:92
+-  "packages/db/src/work-order-repository.ts": "4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3",
++  "packages/db/src/work-order-repository.ts": "9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e",
+```
+
+Old SHA-256: `4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3`. New SHA-256: `9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e`. Confirmed test hashing at lines 98/734: SHA-256 of UTF-8 source text; computed from the new bytes with Python hashlib and confirmed with `shasum -a 256 packages/db/src/work-order-repository.ts`.
+
+Both paths were absent from the `lock-order-1` allow list. Added only `packages/db/src/work-order-repository.ts` and `apps/api/src/auth/context-boundary.test.ts` to that list in `config/agent-lane-assignments.json:197`; all other configuration, including its historical note, is unchanged. No other pin, count, fingerprint, comment or test changed.
+
+Commands used the existing `/private/tmp/jg-lock-order-1-bin/pnpm` launcher on PATH, with `COREPACK_ENABLE_NETWORK=0`: installed pnpm 10.28.1, Node v24.17.0; no dependency download or clean reinstall. Results:
+
+| Command | Exit/result |
+| --- | --- |
+| `pnpm exec turbo run typecheck --force` (once) | 0; 7/7 tasks, no cache hits |
+| `LANE_BASE_REF=origin/main pnpm lint --force` (once; includes `turbo run lint --force`) | 0; boundary checks and 7/7 tasks, no cache hits |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | 0; lock-order-1 passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; lock-order-1 passed |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/auth/context-boundary.test.ts` | 0; 145/145 passed |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/lock-order-1.test.ts` | 0; 4/4 passed |
+| `pnpm build --concurrency=2` | 0; 7/7 tasks, 2 cache hits; Next production build completed |
+| `pnpm openapi:check` | 1; tsx launcher IPC socket denied (`listen EPERM`) by sandbox |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | First attempt 1: stale core build lacked `customerMessageInputV1`; repeated after the running build refreshed core: 0, same OpenAPI check without launcher socket |
+| `git diff --check`; deterministic exact-byte/scope inspection | 0; only the two specified repair lines, two allow-list additions and this appended receipt section |
+
+Full check logs: `/private/tmp/jg-lock-order-1-r-dec45-{typecheck,lint,context-boundary,db-unit,build,openapi,openapi-node,openapi-after-core-build}.log`. Turbo emitted sandbox cache IO warnings; Next emitted workspace-root/dependency warnings; successful exit codes above are the actual results.
+
+Database integration/migration and browser suites NOT RUN: dispatcher reserves these for GitHub CI because this sandbox cannot start PostgreSQL or bind localhost. Lock-order/audit and typed retry guarantees are affected; no schema, data migration, public signature or operational alert change. No independent model verdict or technical acceptance is claimed: both checkers must confirm the exact committed repair scope after the dispatcher commits. Intended conventional commit message overwritten at `/private/tmp/jg-msg-lock-order-1.txt`.
