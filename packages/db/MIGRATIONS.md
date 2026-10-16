@@ -1188,3 +1188,18 @@ SQL file (numbered above the highest migration on main) and a note at `migration
 `migrate.ts` or this file. The runner refuses to migrate if the directory holds anything else, a listed file is missing, a new
 file is numbered at or below 0155, or two files share a number. The lane check refuses an added migration that is not numbered
 above every migration on its base; `node tools/migration-renumber.mjs --write` fixes that at catch-up with SQL bytes unchanged.
+
+## 0165 — practice worker switch (PRACTICE-WORKER-SWITCH)
+
+Requires 0138 session hardening. Adds two private control-plane tables, ten routines,
+and five refusal triggers on existing tables; replaces only `app.contractor_session(uuid)`.
+No backfill or existing row changes. Decision 39 permits operative, supervisor,
+surveyor and client_approver targets. No runtime table grants; only EXECUTE on the
+three session-authorized switch routines. Audit events must commit with the switch.
+
+Forward fix: leave immutable records and permanent markers intact. Restore the
+hardened lookup and separately revoke switch-on EXECUTE using the two statements
+in `docs/contracts/practice-worker-switch-v1.md`. This disables acting and new
+switches while retaining switch-off/state access. PostgreSQL execution, catalogue,
+upgrade and rollback proofs require dispatcher/CI verification; they were not run
+in the builder sandbox.
