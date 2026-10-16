@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_MONEY_PENCE, moneyFromBigInt } from "./money.js";
-import { exactPenceV1, serializeExactPence } from "./cumulative-fee.js";
+import { calculateCumulativeFee, exactPenceV1, serializeExactPence } from "./cumulative-fee.js";
 import { instantV1 } from "./receipt-allocation.js";
 import { enterpriseGroupV1, enterpriseModeV1, enterpriseStatementV1, compareServerInstants } from "./enterprise-domain/contracts.js";
 import { deriveEnterpriseReferenceStatement } from "./enterprise-domain/fee.js";
@@ -139,6 +139,15 @@ export function representEnterpriseFeeReference(raw: unknown, suppliedInputFacts
   const month = enterpriseFeeMonth(input.statement.period);
   if (compareServerInstants(input.statement.recordedCutoff, month.cutoff) !== 0) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
   const result = deriveEnterpriseReferenceStatement({ ...input.statement, feeGate: false, inputFactsHash });
+  for (const section of result.sections) {
+    const agreement = input.statement.agreements.find(a => a.id === section.agreementVersionId);
+    if (!agreement) throw new EnterpriseFeeError("STALE_FACTS");
+    const prior = input.statement.prior.find(p => p.agreementVersionId === section.agreementVersionId);
+    const kernel = calculateCumulativeFee({ version: "cumulative-fee.v1", rate: agreement.rate,
+      cumulativeQualifyingPrincipal: serializeExactPence(section.qualifyingPrincipal), priorNetPostedPence: prior?.priorNetPostedPence ?? 0,
+      priorPolicyVersion: prior?.priorPolicyVersion ?? section.agreementVersionId, compensatesDerivationId: prior?.derivationId ?? null });
+    if (section.cumulativeFee.pence !== kernel.cumulativeFee.pence) throw new EnterpriseFeeError("STALE_FACTS");
+  }
   const traces = new Map(input.statement.groups.map(g => [g.canonicalId, g]));
   const sections = result.sections.map(s => ({ agreementVersionId: s.agreementVersionId, qualifyingPrincipal: serializeExactPence(s.qualifyingPrincipal),
     cumulativeFeePence: s.cumulativeFee.pence, priorNetPostedPence: s.priorNetPostedFee.pence, deltaPence: s.postingDelta.pence,
