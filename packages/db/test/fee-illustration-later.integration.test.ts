@@ -52,7 +52,8 @@ describe("LATER-B18 persisted synthetic illustration", () => {
     const application = new FeeIllustrationApplication(f.runtime, practice.sessionId);
     const input = { version: "fee-illustration-source.v1", commandId: randomUUID(), fixture: "recovery-18800" };
     const created = await application.create(jobId, input);
-    expect(created).toMatchObject({ label: "Illustration — proposed policy; principal only, VAT excluded", source: { statementIssuedCount: 0, ledgerEntryCount: 0 } });
+    // Fixed v1 fixture counters are hypothetical; the snapshots prove no actual financial rows change.
+    expect(created).toMatchObject({ label: "Illustration — proposed policy; principal only, VAT excluded", source: { statementIssuedCount: 1, ledgerEntryCount: 1 } });
     expect(await allRows()).toEqual(before);
     const sourceRows = async () => (await f.admin.query("SELECT row_to_json(s)::text bytes FROM app.fee_illustration_source s WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, jobId])).rows;
     const persisted = await sourceRows();
