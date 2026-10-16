@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-4a": {
+      "branches": ["codex/sandbox/m5-4a"],
+      "receipt": "docs/verdicts/M5-4A/BUILDER_RECEIPT.md",
+      "note": "Partial M5-4: pure schema/version checks with fictional fixtures. No runtime integration, providers, persistence, authority or existing-file edits. AMBER. No web workflow.",
+      "allow": [
+        "packages/core/src/merchant-feed-review.ts",
+        "packages/core/src/merchant-feed-review.test.ts",
+        "docs/contracts/merchant-feed-review-v1.md",
+        "docs/ledger/M5-4A.md",
+        "docs/verdicts/M5-4A/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
