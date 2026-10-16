@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b4": {
+      "branches": [
+        "codex/sandbox/serious-b4"
+      ],
+      "receipt": "docs/verdicts/SERIOUS-B4/BUILDER_RECEIPT.md",
+      "note": "SERIOUS-B4, issued 16 Oct 2026: Batch 4 only (S12-S14), RED money/access/data lane. Exact allow list; no existing expectations, pins or inventory changes. PostgreSQL and browser checks run in dispatcher CI.",
+      "allow": [
+        "apps/api/src/proof/proof.application.ts",
+        "apps/api/src/proof/proof-adopted-original.test.ts",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/evidence-finalization-race.test.ts",
+        "packages/db/src/proof-repository.ts",
+        "packages/db/src/proof-replacement.test.ts",
+        "packages/db/test/proof-invalidation.test.ts",
+        "packages/db/test/serious-b4-evidence-proof.integration.test.ts",
+        "packages/db/test/serious-b4-practice.integration.test.ts",
+        "packages/db/test/serious-b4-upgrade.integration.test.ts",
+        "packages/db/migrations/0167_evidence_proof_rework.sql",
+        "packages/db/migration-notes/0167_evidence_proof_rework.md",
+        "docs/ledger/SERIOUS-B4.md",
+        "docs/verdicts/SERIOUS-B4/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
