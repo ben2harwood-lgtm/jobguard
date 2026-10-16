@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "audit-triage": {
+      "branches": ["codex/sandbox/audit-triage"],
+      "receipt": "docs/review/NIGHT-AUDIT-TRIAGE-SERIOUS-2026-10-16.md",
+      "note": "AUDIT-TRIAGE (FAST MODE rule 5, 16 Oct 2026): read-only re-sort of the 13 Oct night-audit findings into SERIOUS and LATER. Docs only; no code, test, pin or migration change.",
+      "allow": [
+        "docs/review/NIGHT-AUDIT-TRIAGE-SERIOUS-2026-10-16.md",
+        "docs/review/NIGHT-AUDIT-TRIAGE-LATER-2026-10-16.md",
+        "config/lanes/audit-triage.json"
+      ]
+    }
+  }
+}
