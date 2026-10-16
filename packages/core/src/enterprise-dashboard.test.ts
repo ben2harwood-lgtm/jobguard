@@ -45,7 +45,8 @@ describe("ENT-9B projection", () => {
   });
   it("[E9-19 E9-20] reproduces hashes and method-bearing exports across row/property order", () => {
     const a = projectEnterpriseDashboard(snapshot([fact(10), fact(11)]), query);
-    const b = projectEnterpriseDashboard(snapshot([fact(11), fact(10)]), { limit: 20, ...query });
+    const { limit = 20, ...rest } = query;
+    const b = projectEnterpriseDashboard(snapshot([fact(11), fact(10)]), { limit, ...rest });
     expect(a).toEqual(b);
     expect(a.method.text).toContain("UTC");
     expect(a.inputHash).toMatch(/^[a-f0-9]{64}$/u);

@@ -223,3 +223,38 @@ Source reads below executed **0 tests**. Repeated resource/Git probes are groupe
 All apply_patch mutations succeeded except the one atomic verification rejection described above, which applied nothing. Existing source files changed only by four additive export lines. No builder acceptance or independent review is implied by this inventory.
 
 Final source follow-up commands (exit 0, zero tests): `rg -n 'hashtextextended|advisory' packages/db/src/contractor-repository.ts packages/db/migrations/0054_contractor_organisation.sql packages/db/src/work-order-repository.ts packages/db/src/extra-repository.ts | head -30`; `sed -n '52,73p' packages/db/migrations/0138_practice_session_hardening.sql; sed -n '51,76p' packages/db/src/contractor-repository.ts`. These verified the existing shared/exclusive tenant gate before the additive read lock. The own architecture assertion was updated before adding the read lock. No shared routine was changed. A final receipt-only Python heredoc refreshed the affected own-file hashes, documented the gate and this ledger (exit 0, zero tests). Final Git whitespace/head/status and message-existence checks below are read-only and do not run implementation code.
+
+
+## r1 — dispatcher 14 repair, 16 October 2026
+
+Starting HEAD: `e3410b28b047f4651de8f98b7717b4cb53ede6d7`, branch `codex/sandbox/ent-9b`; clean working tree at entry. Read AGENTS.md, BUILD_PLAN §2.4/ENT-9, the dashboard contract and the independent Opus REPAIR verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/d14-ent-9b-opus-e3410b2.md`. This section records the repair of S1 only; the original receipt above remains historical.
+
+Changed only the E9-19/E9-20 call in `packages/core/src/enterprise-dashboard.test.ts`: destructure `const { limit = 20, ...rest } = query`, then pass `{ limit, ...rest }`. This removes TS2783 while keeping `query.limit` authoritative and `limit` first in the reordered object's properties. Input values, row-order reversal, every assertion and all other tests remain unchanged. The only other repository edit is this appended receipt. No production implementation, policy, migration, privilege, dependency, lane or expectation change.
+
+Node: `v24.17.0`. Dependencies were already installed; no install/download command was issued. `pnpm --filter @jobguard/core typecheck` emitted the existing ignored-`pnpm.overrides` warning, then stalled before launching TypeScript; interrupted with Ctrl-C (exit 130). **That pnpm check did NOT RUN.** No pnpm launcher or verification setting was changed. Remaining package checks used existing local executables directly, as listed below; these are actual executions, not claimed pnpm/Turbo wrapper successes.
+
+| Commands actually executed | Result |
+|---|---|
+| In `packages/core`: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | PASS, exit 0 |
+| In `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2 src/enterprise-dashboard.test.ts` | PASS, exit 0; 1 file, 8 tests |
+| In `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2` | PASS, exit 0; 102 files, 2,714 tests |
+| In each of `packages/config`, `packages/storage`, `packages/ai`, `packages/db`, `apps/api`, `apps/web`: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | All PASS, exit 0; together with core, every package's typecheck/lint TypeScript command passed |
+| In each of `packages/core`, `packages/config`, `packages/storage`, `packages/ai`, `packages/db`: `./node_modules/.bin/tsc -p tsconfig.json`; in `apps/api`: `./node_modules/.bin/nest build`; in `apps/web`: `./node_modules/.bin/next build` | All seven builds PASS, exit 0; Next reported existing CSS/dependency/root-lockfile warnings |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | FAIL, exit 1: core purity passed; lane stage rejects inherited ENT-7 files against origin/main, including the legacy lane register and enterprise-fee sources. No lane widening attempted |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | FAIL, exit 1; same inherited ENT-7 paths |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both PASS, exit 0 |
+| `node --test tools/*.test.mjs` | FAIL, exit 1; 99 passed, 1 failed: `SV-1/ENT-4a/M4-8-S consumers must import SH-1 rather than define competing kernels`, reporting unchanged `packages/core/src/enterprise-fee-statement.ts must import SH-1`. Outside this repair; untouched |
+| In each of `packages/config`, `packages/storage`, `packages/ai`: `./node_modules/.bin/vitest run --maxWorkers=2` | All PASS, exit 0; respectively 1, 2 and 85 tests. AI run is synthetic fixture evaluation, not a live-model evaluation |
+| In `apps/api`: `./node_modules/.bin/vitest run --maxWorkers=2 src/contractor/enterprise-dashboard.application.test.ts src/contractor/enterprise-dashboard.boundaries.test.ts` | PASS, exit 0; 2 files, 4 tests |
+| In `apps/web`: `./node_modules/.bin/vitest run --maxWorkers=2` | Initial run before dependency builds: exit 1, 19 import-failed files/20 passed files, 179 passed tests. Rerun after dependencies built: PASS, exit 0; 39 files, 844 tests |
+| In `apps/api`: `./node_modules/.bin/tsx src/generate-openapi.ts --check` | Blocked, exit 1: sandbox EPERM binding tsx's IPC socket |
+| In `apps/api`: `node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; executes the same OpenAPI check without the CLI IPC listener; no artifact rewritten |
+| `git diff --check` | PASS, exit 0 |
+
+`pnpm typecheck`, `pnpm lint`, `pnpm lint:lanes`, `pnpm test`, `pnpm build` and `pnpm openapi:check` wrappers are NOT RUN after the stalled pnpm launch; direct check results above are distinct. Full root tests, PostgreSQL/migration integration tests, browser/native suites and live-provider/model checks are NOT RUN. The sandbox cannot start PostgreSQL or bind localhost; the dispatcher must obtain the mandatory database/browser CI evidence after pushing. No mandatory suite or gate was weakened. The origin/main lane failure and SH-1 tool-test failure remain explicit holds for dispatcher handling, not green checks.
+
+Detailed local logs: `/private/tmp/jg-ent-9b-r1-local-checks.log`, `/private/tmp/jg-ent-9b-r1-tool-tests.log`, `/private/tmp/jg-ent-9b-r1-{ai,config,storage,api}-tests.log`, `/private/tmp/jg-ent-9b-r1-web-unit-tests{,-after-build}.log`, `/private/tmp/jg-ent-9b-r1-openapi-no-ipc.log`.
+
+No Git write to this worktree, commit, push or acceptance. Intended conventional commit subject/body written to both `/private/tmp/jg-msg-ent-9b-r1.txt` and `/private/tmp/jg-msg-ent-9b.txt`. HEAD remains the dispatch starting commit; dispatcher owns committing and fresh exact-head independent review/acceptance. Existing ENT-6B, ENT-9A, parent integration and real-data/commercial release holds remain unchanged.
+
+Final check: `LANE_BASE_REF=HEAD node tools/agent-lane-boundary-lint.mjs` exited 1, refusing a self-comparison range; this is not a lane pass. Final read-only scope verification and `git diff --check` passed: exactly the one test file and this appended receipt differ, the previous receipt is an unchanged prefix, and HEAD remains `e3410b28b047f4651de8f98b7717b4cb53ede6d7`.
