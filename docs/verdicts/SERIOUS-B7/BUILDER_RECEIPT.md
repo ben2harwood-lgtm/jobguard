@@ -192,3 +192,121 @@ dispatcher-created exact commit, followed by separate-actor acceptance. No claim
 of independent review, professional/commercial approval or production release.
 
 Intended commit message: `/private/tmp/jg-msg-serious-b7.txt`.
+
+## r1 — dispatcher 13 CI repair, 16 October 2026
+
+Starting HEAD: `35c5d05a8c7229a25521327297022bdc2284f001`, branch
+`codex/sandbox/serious-b7`, initially clean. Task is **SERIOUS-B7**; LP-0 is
+only the worktree label. Inspected the supplied failure excerpt for GitHub CI
+run `38908824961`, AGENTS.md, applicable BUILD_PLAN.md contracts, and the
+merged fixture/source paths. This section supersedes earlier local green
+claims only for this repair; prior reviews do not verify the new diff.
+
+### Failure 1 — practice fixture repaired
+
+`packages/db/test/evidence-pack-fixture.ts:29` inserted the practice session
+as the admin pool's `postgres` role. Migration 0109's
+`app.seed_saved_v1_sample()` is SECURITY INVOKER and explicitly requires
+`current_user='jobguard_migration'`, so superuser status does not satisfy it.
+The existing admin connection can assume that owner role. The practice-only
+branch now uses `SET LOCAL ROLE jobguard_migration` on that same transaction
+client for the session insert and its real saved-sample trigger, then
+`RESET ROLE` before continuing. This follows the existing owner-side fixture
+pattern in `packages/db/test/lp-0-authority-paths.integration.test.ts:34`.
+An insert failure reaches the existing outer transaction rollback, which
+also clears the transaction-local role. No trigger, grant or policy is bypassed.
+
+The default/non-practice branch and its statements are unchanged. No existing
+test body, assertion, expected value, count, hash, fingerprint or pin changed.
+The existing 12-test PostgreSQL suite remains the execution regression for
+practice approval, revocation, fencing and supplier routing; local static
+typechecking does not establish that those database assertions now pass.
+
+### Failure 2 — STOP, case (b): T6 fixture depends on the old routing bug
+
+**File/line:** `packages/db/test/recovery-case-terms.integration.test.ts:22`
+(raw insert inside `newCase`); T6 calls it at line 139. Left unchanged.
+
+Before, in the INSERT's values:
+
+```sql
+'Fictional party','builder_customer','customer_invoice',$6
+```
+
+The same line binds `$4` to `merchant_overcharge` and `$6` to
+`JSON.stringify(supplierRefs)` for T6's first control. `supplierFixture()`
+(lines 57–63) supplies a material-rate revision ID and two supplier-document
+IDs for that job. Thus the raw fixture says **customer invoice** while its
+references are **supplier records**. The normal opening command would reject
+this case/book/source combination in `assertRecoverySources`
+(`packages/core/src/recovery-case.ts:190–195`) before insertion.
+
+Before S22, `loadEvidencePackSources` selected the supplier queries solely
+when `case_type === 'merchant_overcharge'` (confirmed from `eae44155^`). That
+accidentally concealed the fixture mismatch. S22 selects by the persisted
+`source_type='supplier_documents'` and `book='supplier_cost'`. The fixture's
+customer labels therefore select the customer-invoice query; none of the
+supplier IDs map, and the final unmapped-reference check throws
+`EVIDENCE_PACK_SOURCE_NOT_FOUND`. No legitimate supplier source kind was
+dropped. The no-policy withheld-payment control already uses its matching
+`unboundInvoice` and customer labels.
+
+**Minimal proposed setup correction, NOT APPLIED:** replace only those two
+hard-coded labels on line 22 with expressions using the already-bound `$4`:
+
+```sql
+'Fictional party',
+CASE WHEN $4='merchant_overcharge' THEN 'supplier_cost' ELSE 'builder_customer' END,
+CASE WHEN $4='merchant_overcharge' THEN 'supplier_documents' ELSE 'customer_invoice' END,
+$6
+```
+
+This keeps all parameters, references, other fixture cases, and **every existing
+assertion** unchanged, including both T6 controls. Per the explicit r1 order,
+STOP on this setup correction and report it to the dispatcher; neither T6 nor
+the production loader was edited. Do not restore case-type routing to mask it.
+**CI remains held on T6 pending a dispatcher ruling.** The earlier S23 STOP
+also remains in force.
+
+### r1 checks and handoff
+
+Dependencies were already installed; no install/download or git-writing command
+was run. Used Node 24.17.0 and cached pnpm 10.28.1 via
+`PATH=/private/tmp/jg-migfix-2-bin:$PATH COREPACK_ENABLE_NETWORK=0 npm_config_manage_package_manager_versions=false`.
+Raw logs use `/private/tmp/jg-serious-b7-r1-*.log`.
+
+| Command actually run | r1 result |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; seven tasks successful (two cached). |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 0; lane checks and seven package tasks successful (two cached). |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; exact `serious-b7` lane and migration order. |
+| `pnpm build` | Exit 0; seven tasks successful (two cached), including production Next build. Existing Nest/load-esm import and sandbox cache-write warnings remain warnings. |
+| `node --test tools/*.test.mjs` | Exit 0; 100 passed. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Retry exit 0: core 94 files/2,601 tests; config 1/1; storage 1/2; AI 6/85. Synthetic fixtures, no live model. |
+| `pnpm --filter @jobguard/db exec vitest run src test --exclude 'dist/**' --exclude '**/*.integration.test.ts' --exclude 'test/free-port.test.ts' --maxWorkers=1` | Retry exit 0; 29 files/304 tests, including existing S21/S22 regressions. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 39 files/844 tests. |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1` with the same nine explicit local exclusions listed in the original receipt above | Exit 0; 78 files/1,642 tests. No listener/DB tests or CI check was made optional. |
+| `pnpm openapi:check` | Exit 1; tsx launcher's IPC `listen` fails EPERM, as in the original sandbox run. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; actual generator/snapshot check, avoiding launcher IPC. |
+| `pnpm --filter @jobguard/db exec tsc -p /private/tmp/jg-serious-b7-test-tsconfig.json` | Exit 0; same strict temporary config described above includes the changed fixture and integration suite. |
+| `git diff --check` | Exit 0. |
+
+The first concurrently launched core/DB runs exited 1 on unchanged five-second
+test timeouts: core `receipt-allocation.test.ts`'s denominator-bound test
+(2,600 passed, one timed out), and DB `audit-checkpoint-handoff.test.ts`'s
+transitive operator reachability test (303 passed, one timed out). Those logs
+remain `source-unit.log` and `db-unit.log` under the r1 prefix. After other
+heavy checks finished, the same complete source-unit and DB-unit commands
+passed without any assertion, timeout or configuration changes; successful
+logs end in `source-unit-retry.log` and `db-unit-retry.log`. These failures
+are recorded, not represented as first-attempt passes.
+
+Migration **0168_evidence_pack_authority.sql** and its notes are unchanged;
+there is no renumber, new migration, data backfill, new external action or
+production policy change. No PostgreSQL, browser, `pnpm test:db`,
+`pnpm test:migrations`, or full `pnpm test` run was attempted in this sandbox,
+which cannot bind localhost/start PostgreSQL. CI must execute those mandatory
+suites unchanged after the dispatcher handles the T6 ruling and pushes.
+No fresh independent verdict or technical acceptance is claimed.
+
+Intended repair commit message: `/private/tmp/jg-msg-lp-0.txt` (dispatcher commits).

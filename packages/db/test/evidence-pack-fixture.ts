@@ -26,7 +26,11 @@ export async function seedEvidencePackFixture(admin: Pool, options: { withVariat
     await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Evidence fixture builder')", [accountId, tenantId]);
     await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [memberId, tenantId, accountId, identityId]);
     if (sessionDigest) {
+      // The session's saved-sample trigger runs as its invoker and requires the
+      // migration owner. Keep this fixture-only role switch on the same client.
+      await db.query("SET LOCAL ROLE jobguard_migration");
       await db.query("INSERT INTO control_plane.practice_session(token_digest) VALUES($1)", [sessionDigest]);
+      await db.query("RESET ROLE");
       await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [sessionDigest]);
       await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$3,'Evidence fixture job',$4,'capture'),($2,$3,'Unrelated fixture job',NULL,NULL)", [jobId, otherJobId, tenantId, sessionDigest]);
     } else {
