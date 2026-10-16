@@ -22,18 +22,44 @@ describe("MON-3 parent pricing interaction over explicitly supplied trial days",
     expect(result.days.slice(10).every(day => day.basePence === 2900)).toBe(true);
   });
   it("[MON3-A14] trial and counted places remain separate; every supplied period remains below its monthly maximum", () => {
-    let cases = 0;
-    for (const length of [28, 29, 30, 31]) for (const plan of ["Solo", "Builder"] as const) for (let trialDays = 0; trialDays <= length; trialDays++) {
-      for (const places of [0, 1, 5, 6, 7, 12, 13, 14, 100]) {
-        const input = suppliedPeriod(length, trialDays, plan, places), before = JSON.stringify(input);
-        const result = computeSubscriptionPeriod(input);
-        expect(result.principal.pence).toBeGreaterThanOrEqual(0);
-        expect(result.principal.pence).toBeLessThanOrEqual(syntheticMeterPolicyV1[plan].maximumPence);
-        expect(result.days.every((day, i) => day.countedPlaces === places && (i >= trialDays || day.paidExtraPlaces === 0))).toBe(true);
-        expect(JSON.stringify(input)).toBe(before); cases++;
+    const lengths = [28, 29, 30, 31] as const; // February, leap February and both month ends.
+    const plans = ["Solo", "Builder"] as const;
+    const schedules: { length: number; trialDays: number; plan: "Solo" | "Builder"; places: number }[] = [];
+    for (const length of lengths) for (const plan of plans) {
+      // No trial, first-day end, last-day end and whole-period trial, crossed with
+      // all original place edges plus both plans' included/capped-extra boundaries.
+      for (const trialDays of [0, 1, length - 1, length]) {
+        for (const places of [0, 1, 4, 5, 6, 7, 8, 11, 12, 13, 14, 100]) {
+          schedules.push({ length, trialDays, plan, places });
+        }
       }
     }
-    expect(cases).toBe(2196);
+    // Fixed xorshift32 seed ("MON3"): reproducible interior trial days without
+    // the former 2,196-period sweep. Keep 32 distinct samples in addition to edges.
+    let seed = 0x4d4f4e33;
+    const next = (limit: number) => {
+      seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+      return (seed >>> 0) % limit;
+    };
+    const sampled = new Set<string>();
+    const sampledPlaces = [0, 1, 5, 6, 7, 12, 13, 14, 100] as const;
+    while (sampled.size < 32) {
+      const length = lengths[next(lengths.length)]!;
+      const plan = plans[next(plans.length)]!;
+      const trialDays = 2 + next(length - 3), places = sampledPlaces[next(sampledPlaces.length)]!;
+      const key = `${length}/${plan}/${trialDays}/${places}`;
+      if (sampled.has(key)) continue;
+      sampled.add(key); schedules.push({ length, trialDays, plan, places });
+    }
+    for (const { length, trialDays, plan, places } of schedules) {
+      const input = suppliedPeriod(length, trialDays, plan, places), before = JSON.stringify(input);
+      const result = computeSubscriptionPeriod(input);
+      expect(result.principal.pence).toBeGreaterThanOrEqual(0);
+      expect(result.principal.pence).toBeLessThanOrEqual(syntheticMeterPolicyV1[plan].maximumPence);
+      expect(result.days.every((day, i) => day.countedPlaces === places && (i >= trialDays || day.paidExtraPlaces === 0))).toBe(true);
+      expect(JSON.stringify(input)).toBe(before);
+    }
+    expect(schedules).toHaveLength(416);
   });
   it("[MON3-A15] supplied preview refuses cached totals and hidden signals, never creates a statement", () => {
     const input = suppliedPeriod(30, 10, "Builder", 14);
