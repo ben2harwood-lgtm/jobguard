@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-5a": {
+      "branches": ["codex/sandbox/mon-5a"],
+      "receipt": "docs/verdicts/MON-5A/BUILDER_RECEIPT.md",
+      "note": "MON-5A RED: pure customer approval and disabled link reference contracts. Approval writes held pending a verified small-builder customer binding for the merged practice switch. No existing tests, pinned lists or provider paths changed.",
+      "allow": [
+        "packages/core/src/customer-portal-approval.ts",
+        "packages/core/src/customer-portal-approval.test.ts",
+        "packages/core/src/customer-portal-approval-link.ts",
+        "packages/core/src/customer-portal-approval-link.test.ts",
+        "packages/core/src/index.ts",
+        "docs/verdicts/MON-5A/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
