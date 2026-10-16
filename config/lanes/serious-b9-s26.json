@@ -14,8 +14,8 @@
         "packages/db/test/recovery-timing-pin.integration.test.ts",
         "apps/web/e2e/CH-7.spec.ts",
         "packages/db/test/recovery-eligibility-v3-interest.test.ts",
-        "packages/db/migrations/0172_recovery_eligibility_paid_interest.sql",
-        "packages/db/migration-notes/0172_recovery_eligibility_paid_interest.md",
+        "packages/db/migrations/0173_recovery_eligibility_paid_interest.sql",
+        "packages/db/migration-notes/0173_recovery_eligibility_paid_interest.md",
         "docs/verdicts/SERIOUS-B9-S26/BUILDER_RECEIPT.md"
       ]
     }
