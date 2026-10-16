@@ -46,6 +46,7 @@ function harness() {
       // guards run normally, before the proof race being exercised.
       if (sql.startsWith("SELECT j.id job_id,b.customer_id,b.site_id FROM app.job j") && sql.includes("JOIN app.final_account_lock")) return result();
       if (sql.includes("FROM app.command_receipt")) return result();
+      if (sql.startsWith("SELECT s.id,EXISTS(")) return result();
       if (sql.startsWith("INSERT INTO app.command_receipt")) { completing = true; return result([{ command_id: values[0] }]); }
       if (sql.includes("FROM app.evidence_object") && sql.includes("e.kind='original'")) {
         // A READ COMMITTED statement takes its snapshot BEFORE a row-lock wait.
