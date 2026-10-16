@@ -310,3 +310,83 @@ suites unchanged after the dispatcher handles the T6 ruling and pushes.
 No fresh independent verdict or technical acceptance is claimed.
 
 Intended repair commit message: `/private/tmp/jg-msg-lp-0.txt` (dispatcher commits).
+
+
+## r2 — dispatcher 14, ruling 61 fixture correction, 16 October 2026
+
+Starting HEAD: `3a438ed699246a27ca1a359866608e8e77cddd52`; branch
+`codex/sandbox/serious-b7`, initially clean. Supplied `origin/main`:
+`d74fd66d684226a5150fe3d3576a853d58abcf31`. No fetch or Git write was run.
+Read AGENTS.md, applicable BUILD_PLAN.md working/terms contracts, the recovery
+terms contract, prior receipt and rulings 61/65 in the supplied decision file.
+The ruling's setup assumption matched the current code; no further setup or
+assertion correction was needed.
+
+**Only code change:** `packages/db/test/recovery-case-terms.integration.test.ts:22`.
+Before: the raw `newCase()` INSERT always used
+`'builder_customer','customer_invoice'`. After: two SQL `CASE WHEN
+$4='merchant_overcharge'` expressions use `supplier_cost/supplier_documents`
+for that type and retain `builder_customer/customer_invoice` otherwise.
+All bindings, references, other lines and every assertion remain byte-identical
+to starting HEAD. A deterministic byte comparison confirmed the replacement
+and that line 22 is the sole changed test line; this is not a model verdict.
+
+**Ruling 65:** S23 is DEFERRED to the stage-end LATER sweep; #232 carries S21
+and S22 only. Existing S23-related catalogue handling is present at
+`packages/db/src/recovery-case-sources.ts:19` (accepting known practice labels
+with `recorded: false`) and is left byte-identical. No S23 fix was added or
+removed; the historical S23 reproduction in this receipt remains unchanged.
+
+No production source, migration, policy, pin, expectation, shared list or lane
+registration changed. The only other repository edit is this appended r2
+section. No new external action, operational alert, data backfill or
+compatibility change. Existing production release gates still apply.
+
+### r2 checks and handoff
+
+Node 24.17.0; existing project pnpm 10.28.1, using
+`PATH=/private/tmp/jg-migfix-2-bin:$PATH COREPACK_ENABLE_NETWORK=0 npm_config_manage_package_manager_versions=false`.
+The initial default `pnpm --version` launcher stalled and was interrupted;
+all actual pnpm checks used the existing cached project version above. No
+package installation was run. Logs: `/private/tmp/jg-serious-b7-r2-*.log`.
+
+
+| Command actually run | r2 result |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; seven package tasks successful, two cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | **Exit 1**; lane checker rejects `packages/db/test/recovery-case-terms.integration.test.ts`; root package lint does not run after that failure. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **Exit 1**; same exact path rejection. |
+| `pnpm exec turbo run lint` | Exit 0; supplemental package lint, seven successful tasks, two cached. Does not replace or clear the root lane failure. |
+| `node tools/core-purity-lint.mjs && node tools/money-arithmetic-lint.mjs && node tools/commercial-boundary-lint.mjs` | Exit 0; remaining root boundary checks passed separately. |
+| `pnpm build` | Exit 0; seven successful tasks, two cached; production Next build completed. Existing sandbox cache-write, workspace-root and Nest/load-esm import warnings remain warnings. |
+| `node --test tools/*.test.mjs` | Exit 0; 100 passed. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Exit 0; core 98 files/2,674 tests; config 1/1; storage 1/2; AI 6/85. Synthetic AI fixtures only. |
+| `pnpm --filter @jobguard/db exec vitest run src test --exclude 'dist/**' --exclude '**/*.integration.test.ts' --exclude 'test/free-port.test.ts' --maxWorkers=1` | Exit 0; 35 files/322 tests, including S21/S22 regressions. No PostgreSQL execution. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 40 files/867 tests. No browser execution. |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1`, with the same nine explicit local exclusions listed in the original receipt | Exit 0; 81 files/1,656 tests. Listener/PostgreSQL tests excluded locally only; no file, suite or CI configuration changed. |
+| `pnpm openapi:check` | **Exit 1**; tsx launcher IPC `listen` fails EPERM in the sandbox. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; actual generator/snapshot check without the launcher's IPC listener. |
+| `pnpm --filter @jobguard/db exec tsc -p /private/tmp/jg-serious-b7-r2-test-tsconfig.json` | Exit 0; strict temporary noEmit config includes the changed recovery-terms test, SERIOUS-B7 integration test and transitive imports. Static validation only. |
+| `pnpm --filter @jobguard/db exec vitest list test/recovery-case-terms.integration.test.ts` | Exit 0; affected file collects. Hooks and assertions were **NOT RUN**. |
+| `python3 /private/tmp/jg-serious-b7-r2-verify.py` and `git diff --check` | Exit 0; exact one-line replacement, original receipt prefix preserved, only two authorized repository paths changed, no whitespace errors. |
+
+**Remaining lane failure:** `config/lanes/serious-b7.json` does not allow the
+ruling-authorized recovery-terms test path. The ruling permits only line 22 and
+this receipt section, so that shared list and every other list/pin stay
+byte-identical. The coordinator must resolve the lane mismatch separately;
+root lint and lint:lanes are not green, and no override was used.
+
+**NOT RUN:** the affected PostgreSQL integration assertions, full `pnpm test`,
+`pnpm test:db`, `pnpm test:migrations` and browser/e2e suites. The dispatcher
+states this sandbox cannot bind localhost or start PostgreSQL; these mandatory
+checks remain for unchanged GitHub CI after push. Collection, typechecking and
+scripted unit adapters do not establish PostgreSQL guarantees. No live-model,
+provider, deployment, real-data, charge or spending run occurred.
+
+Both requested intended commit-message files contain the same conventional
+subject and body: `/private/tmp/jg-msg-serious-b7-r2.txt` and
+`/private/tmp/jg-msg-lp-0.txt`. No add, commit, checkout or push was run.
+This is a builder run receipt and deterministic preservation check, not either
+checker's independent verdict or separate technical acceptance. Both checkers'
+confirmation of the exact one-line code delta and the final-commit review/
+acceptance gates remain with the dispatcher.
