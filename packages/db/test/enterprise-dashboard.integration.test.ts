@@ -29,7 +29,7 @@ describe("ENT-9B scoped persisted reads", () => {
     const link = await new ExtraApprovalRepository(c.runtime).markDuplicate(w.ctx, w.members.supervisor.member, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: w.jobId, duplicateId: b.variationId, canonicalId: a.variationId });
     const grouped = await read(s);
     expect(grouped.report.totals.captured.count).toBe(1);
-    expect(grouped.report.contributions.find(c => c.stage === "captured")?.extraIds.sort()).toEqual([a.variationId, b.variationId].sort());
+    expect(grouped.report.contributions.find(c => c.stage === "captured")?.extraIds.slice().sort()).toEqual([a.variationId, b.variationId].sort());
     await repo.unlinkDuplicate(w.ctx, { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: w.jobId, actorMembershipId: w.members.supervisor.member.membershipId, linkId: link.linkId, expectedRevision: 1, reasonCode: "linked_in_error" });
     expect((await read(s)).report.totals.captured.count).toBe(2);
   });

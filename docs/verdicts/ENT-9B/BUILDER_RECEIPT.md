@@ -258,3 +258,39 @@ Detailed local logs: `/private/tmp/jg-ent-9b-r1-local-checks.log`, `/private/tmp
 No Git write to this worktree, commit, push or acceptance. Intended conventional commit subject/body written to both `/private/tmp/jg-msg-ent-9b-r1.txt` and `/private/tmp/jg-msg-ent-9b.txt`. HEAD remains the dispatch starting commit; dispatcher owns committing and fresh exact-head independent review/acceptance. Existing ENT-6B, ENT-9A, parent integration and real-data/commercial release holds remain unchanged.
 
 Final check: `LANE_BASE_REF=HEAD node tools/agent-lane-boundary-lint.mjs` exited 1, refusing a self-comparison range; this is not a lane pass. Final read-only scope verification and `git diff --check` passed: exactly the one test file and this appended receipt differ, the previous receipt is an unchanged prefix, and HEAD remains `e3410b28b047f4651de8f98b7717b4cb53ede6d7`.
+
+
+## r2 — dispatcher 14 final repair, 16 October 2026 night
+
+Starting HEAD: `59774da5e90184e74423acc4d6a0f6c0a94ef0e6`, branch `codex/sandbox/ent-9b`; clean working tree at entry. Read AGENTS.md, BUILD_PLAN ENT-9 and the applicable enterprise duplicate/dashboard contracts. Dispatcher reports GitHub PostgreSQL run `38957169843` passed 218 of 219 files, with E9-02 failing on a frozen-array mutation. That CI result is dispatcher-supplied evidence, not a local test execution.
+
+**Repair:** `packages/db/test/enterprise-dashboard.integration.test.ts:32` called `.sort()` directly on the report's recursively frozen `extraIds`. Inserted `.slice()` before `.sort()` so only a copy is sorted. The assertion, expected IDs, comparison, optional chaining and all other test behavior remain unchanged. The mutation was in the test, not production code. No production implementation, policy, migration, privilege, dependency, lane or other test changes. The only other repository edit is this appended receipt.
+
+**Environment:** actual Node `v24.17.0` (`.nvmrc` records `24.15.0`); dependencies already installed. No install command or dependency change. `pnpm typecheck` stalled after the ignored-`pnpm.overrides` warning before launching TypeScript; interrupted (exit 130). Remaining checks used the installed local executables directly, without changing the package-manager configuration or bypassing its verification. A nested pnpm command in the broad API suite independently refused the configured `pnpm@10.28.1` version switch because registry signature verification/fetch failed; no successful download or install is claimed.
+
+| Commands actually executed | Result |
+|---|---|
+| In each of `packages/core`, `packages/config`, `packages/storage`, `packages/ai`, `packages/db`, `apps/api`, `apps/web`: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | All seven PASS, exit 0; these are also the packages' lint TypeScript checks |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | PASS, exit 0; core purity, lane, money and commercial boundaries |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | PASS, exit 0 |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both PASS, exit 0 |
+| `node --test tools/*.test.mjs` (glob expanded to the ten existing tool-test files) | PASS, exit 0; 100 tests |
+| In each of `packages/config`, `packages/core`, `packages/storage`, `packages/ai`, `packages/db`: `./node_modules/.bin/tsc -p tsconfig.json`; in `apps/api`: `./node_modules/.bin/nest build`; in `apps/web`: `./node_modules/.bin/next build` | All seven builds PASS, exit 0; Next emitted workspace-root, CSS and dependency warnings |
+| In `packages/core`: `./node_modules/.bin/vitest run --maxWorkers=2` | FAIL, exit 1; 201 files passed, 3 failed; 5,427 tests passed, 3 failed. This included duplicate emitted `dist` tests; three emitted tests could not find their TypeScript source files under `dist` |
+| In each of `packages/core`, `packages/config`, `packages/storage`: `./node_modules/.bin/vitest run src --maxWorkers=2` | All PASS, exit 0; respectively 102 files / 2,715 tests, 1 file / 1 test, 1 file / 2 tests. Source-only rerun avoids emitted duplicates; no test/configuration edits |
+| Earlier broad runs in `packages/config` and `packages/storage`: `./node_modules/.bin/vitest run --maxWorkers=2` | Both PASS, exit 0; respectively 2 files / 2 tests and 2 files / 4 tests, including emitted duplicates |
+| In `packages/ai`: `./node_modules/.bin/vitest run --maxWorkers=2` | PASS, exit 0; 10 files / 113 tests; synthetic fixture evaluation, not live-model evidence |
+| In `apps/web`: `./node_modules/.bin/vitest run --maxWorkers=2` | PASS, exit 0; 40 files / 867 tests |
+| In `apps/api`: `./node_modules/.bin/vitest run --maxWorkers=2 src/contractor/enterprise-dashboard.application.test.ts src/contractor/enterprise-dashboard.boundaries.test.ts` | PASS, exit 0; 2 files / 4 tests |
+| In `apps/api`: `./node_modules/.bin/vitest run src --maxWorkers=2` | FAIL, exit 1; 86 files passed / 9 failed; 1,689 tests passed / 129 failed / 23 skipped; 129 unhandled errors. HTTP tests report `listen EPERM` and Supertest null-port errors; final-account isolation cannot find a bindable PostgreSQL port; shadow isolation's nested pnpm web build fails version verification/fetch. Full suite is not green |
+| In `apps/api`: same source command with eight `--exclude` flags for files importing socket/HTTP infrastructure (exact arguments in `/private/tmp/jg-ent-9b-r2-api-no-sockets-results.json`) | FAIL, exit 1; 86 files passed / 1 failed; 1,673 tests passed / 1 skipped. Remaining `final-account-lock.isolation.test.ts` dynamically imports the PostgreSQL fixture and fails its port check. This diagnostic subset does not replace mandatory full-suite CI |
+| In `apps/api`: `node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; same generator check without the tsx CLI's IPC listener; no artifact rewritten |
+| `git diff --check` | PASS, exit 0 |
+
+**PostgreSQL target: NOT RUN.** `packages/db/test/enterprise-dashboard.integration.test.ts` was not executed locally: dispatcher states this sandbox cannot bind localhost or start PostgreSQL. Database/migration and browser/native suites, full root tests, and live-provider/model checks are NOT RUN as complete suites. Incidental PostgreSQL fixture setup in the broad API runs failed before a database could start. No sandbox exception or new database/browser process was requested. Dispatcher CI must verify E9-02 and the mandatory database/browser suites after pushing.
+
+The stalled `pnpm typecheck` wrapper is not a pass. `pnpm lint`, `pnpm lint:lanes`, `pnpm test`, `pnpm build` and `pnpm openapi:check` wrappers were not run directly; direct executable results above are separate evidence. No check, assertion, expectation or release gate was weakened. The previous r1 receipt remains historical; current origin/main lane and SH-1 tool checks now pass.
+
+Logs and exact check records are under `/private/tmp/jg-ent-9b-r2-*.log` and `/private/tmp/jg-ent-9b-r2-{static,build,unit,source-unit,app,api-no-sockets}-results.json`. Intended conventional commit subject/body written to both `/private/tmp/jg-msg-ent-9b-r2.txt` and `/private/tmp/jg-msg-ent-9b.txt`.
+
+Final read-only scope/whitespace checks verify exactly the one-line test repair and this appended receipt, preserve the previous receipt as an unchanged prefix, and confirm HEAD remains the dispatch starting commit. No Git writes, commit, push, acceptance or independent verdict. Dispatcher owns the commit and fresh exact-commit independent review/acceptance; existing ENT-6B, ENT-9A and real-data/commercial release holds remain.
