@@ -200,3 +200,67 @@ technical acceptance remain required. The builder does not accept this work.
 
 Intended commit message is in `/private/tmp/jg-msg-serious-b2.txt`. No Git-writing
 command was run; the dispatcher owns committing, pushing, review and merge.
+
+
+## build
+
+Dispatcher 14, 16 October 2026 night; rulings 64 and 68 inspected verbatim in
+`/Users/benharwood/.local/share/full-steam/handoffs/BEN-DECISIONS-2026-10-14.md`.
+**STOPPED before implementation under the work order's exact-file:line stop rule.**
+This section supersedes the earlier handoff only as to this new build attempt;
+S02/S03 remain unfixed. S04/S05 remain deferred.
+
+Inspected branch: `codex/sandbox/serious-b2`.
+HEAD: `1d2994a96b27ed29b70e289eb789f7e2b9b61d5c`.
+Local `origin/main`: `d74fd66d684226a5150fe3d3576a853d58abcf31`.
+`git rev-list --count HEAD..origin/main` returned `0`; the branch is not behind
+that local reference. No fetch, merge, Git-writing command, install or download.
+The working tree was clean before inspection. Node reports `v24.17.0`.
+
+### Exact blocker and before/after
+
+`packages/db/test/extra-origin.integration.test.ts:249` independently pins the
+whole S02 repository, and `:252` independently pins the whole boundary scanner.
+Both are additional to the explicitly authorized S03 pin at `:251`:
+
+| File:line | Before (also actual after this stopped attempt) | Required after implementing the authorized edits |
+| --- | --- | --- |
+| `packages/db/test/extra-origin.integration.test.ts:249` | `"packages/db/src/sor-repository.ts": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",` | Pin to the final S02 source hash; changing this extra-origin pin is not named in ruling 68. |
+| `packages/db/test/extra-origin.integration.test.ts:252` | `"apps/api/src/auth/context-boundary.test.ts": "ec6d3dd219e42707fe0bd6b0550db7f4f260f36c55ff9fee0d36bde831586ef2"` | Pin to the scanner's final hash after its authorized lines 93/95 change; changing this pin is not named in either ruling. |
+
+`shasum -a 256` confirmed these two current pins match their source files.
+The existing loop at `:254` checks every whole-source hash. Updating only the
+named lines would therefore leave that existing assertion failing. Final hashes
+were not invented or recorded: no implementation was made. The work order says
+all other pins stay byte-identical and to STOP if its assumptions fail; this is
+that stop, not a request to weaken the test or widen the allowed scope.
+
+The lane file `config/lanes/serious-b2.json` also still permits only the earlier
+receipt/diagnostic artifacts. It was inspected and left byte-identical, as required.
+The dispatcher must reconcile the authorized implementation paths with the lane
+before its normal CI check can accept those edits.
+
+### Verification and handoff
+
+Read-only inspection covered AGENTS.md, applicable BUILD_PLAN.md contracts and
+ENT-2, both archived reproducer/prototype patches, repository implementations,
+permission-function semantics, named expectations and all matching source pins.
+Commands actually run include `git status --short`, `git branch --show-current`,
+`git rev-parse HEAD`, `git rev-parse origin/main`,
+`git rev-list --count HEAD..origin/main`, `git diff --stat origin/main`, `rg`,
+`sed`, `nl`, `cat`, `node --version` and the SHA-256 checks above.
+
+**NOT RUN:** typecheck, lint (`LANE_BASE_REF=origin/main`), lint:lanes, unit tests,
+build and OpenAPI check: stopped at the pin conflict before implementation.
+**NOT RUN:** affected PostgreSQL tests, test:db, test:migrations and browser suites;
+the dispatcher states this sandbox cannot bind localhost/start PostgreSQL, and
+no such process was attempted. No passing implementation or independent verdict
+is claimed. No migrations, role changes, new alerts or release-gate changes.
+
+Only this build section was appended. All code, tests, expectations, pins, shared
+lists, lane files and archived patches remain byte-identical to HEAD. Intended
+commit message written to both requested locations:
+`/private/tmp/jg-msg-ent-3b.txt` and
+`/private/tmp/jg-msg-serious-b2-build.txt`.
+Dispatcher owns committing/pushing and resolving the additional pin scope;
+independent exact-commit verdict and separate acceptance remain outstanding.
