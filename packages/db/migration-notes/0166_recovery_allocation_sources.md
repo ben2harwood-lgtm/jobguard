@@ -1,6 +1,6 @@
-# 0165 recovery allocation sources — SERIOUS-B9
+# 0166 recovery allocation sources — SERIOUS-B9
 
-Forward-only correction of the synthetic recovery reader/guard for S28–S32. Main's highest migration at dispatch is 0164. Directory discovery registers this migration; migrate.ts and MIGRATIONS.md are unchanged.
+Forward-only correction of the synthetic recovery reader/guard for S28–S32. Migration 0166 follows main's 0165 practice worker switch. Directory discovery registers this migration; migrate.ts and MIGRATIONS.md are unchanged.
 
 Adds the invoker/RLS-protected read function `app.recovery_allocation_invoice_lines(uuid,uuid,uuid)` (migration owner, runtime EXECUTE, no PUBLIC/infrastructure EXECUTE). It reads the invoice-specific immutable line bindings. Unbound historical synthetic invoices use the existing 0132 display-tax policy: distribute the already-issued group tax by absolute line-net weights, largest remainder, line-ID tie-break. This neither changes group tax nor writes replacement invoice facts. It preserves earlier integral blended ratios, allows ordinary penny-valued legacy lines, excludes zero candidates, and still refuses unlinked signed omissions through the composition check pending S27's ruling.
 

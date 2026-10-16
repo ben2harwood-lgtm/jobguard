@@ -28,7 +28,7 @@ The five initial reader regressions were written and run before the allocation f
 
 ## Migration, compatibility and invariants
 
-Added `0166_recovery_allocation_sources.sql`, above main's highest 0164, with [migration notes](../../../packages/db/migration-notes/0166_recovery_allocation_sources.md). Directory discovery applies it; `packages/db/src/migrate.ts` and `packages/db/MIGRATIONS.md` were not edited. It adds an invoker/RLS-protected read function and replaces the existing controlled writer under the same owner/signature/grants. No business table, existing row, posted money, invoice, review, allocation, audit event or evidence is rewritten/backfilled. No ledger policy/note was needed.
+Added `0166_recovery_allocation_sources.sql`, following main's 0165 practice worker switch, with [migration notes](../../../packages/db/migration-notes/0166_recovery_allocation_sources.md). Directory discovery applies it; `packages/db/src/migrate.ts` and `packages/db/MIGRATIONS.md` were not edited. It adds an invoker/RLS-protected read function and replaces the existing controlled writer under the same owner/signature/grants. No business table, existing row, posted money, invoice, review, allocation, audit event or evidence is rewritten/backfilled. No ledger policy/note was needed.
 
 Preserves AGENTS §§5.1 (tenant trust boundary), 5.3–5.6 (exact authority, idempotency and money), 5.7–5.8 (immutable provenance/evidence), 5.10 (synthetic/no production fee authority). Public command/artifact versions and the held fractional case-money rule are unchanged. Previously reviewed artifacts whose derived sources differ require a new review hash; replay returns persisted results. No external action, operational alert, credential or provider route was added. Proposed commercial policy, production release, restore and independent-verdict gates remain outstanding. Use the documented forward fix; never edit immutable financial history.
 
@@ -65,3 +65,56 @@ API exclusions: `src/auth/sso/action-paths.test.ts`, `src/contractor/contractor-
 Do not accept this batch as seven completed fixes. Rule on S26/S27 first. Run `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, the existing allocation/line/upgrade/race suites and `packages/db/test/serious-b9.integration.test.ts` in PostgreSQL-capable CI. New cases cover legacy/bound penny tax, issued subset composition, remittance omission/direct forgery, later-credit cutoff, invalidated-remittance cancellation and helper RLS/ACLs. The S29 integration uses an isolated invoice-subset binding rather than replaying the entire Final Check/F7 issuance journey; supplementary rule provenance also has a reader unit test. Run the formal lint/lane check against the dispatcher commit; browser/e2e was explicitly not run here. Migration execution, upgrade/catalog guarantees, complete journeys and the different-model verdict bound to the eventual commit are **missing**, never inferred from source tests.
 
 Intended conventional commit message written (overwritten) to `/private/tmp/jg-msg-serious-b9.txt`. Builder records no acceptance and performs no merge/push/release.
+
+## Repair r1
+
+16 October 2026; dispatcher 13; task **SERIOUS-B9**, PR #230. `FIXLATER-6` is only the worktree/dispatcher alias. Repair HEAD: `5a3f9472edb10acb81be21b93bf8ed0a36312542`; branch `codex/sandbox/serious-b9`. At this repair, supplied `origin/main` is `66205cfa419f7ebee00dabaa4babb325aeb92472`, and its merge-base with HEAD is `5746f7b15c88db3fe279a0d4adce4dfb37491731`. These distinguish the current review range from the original dispatch baseline recorded above.
+
+Read the independent Opus REPAIR verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/d13-serious-b9-opus-5a3f947.md` and reference commit `c2bfa554`. This repair addresses B1 only, with the requested migration-number paperwork corrections. It is builder evidence, not an independent verdict or technical acceptance. S26 and S27 remain untouched and stopped; S26 belongs to its separate order and S27 waits for Ben.
+
+### Additive inventory repair
+
+`docs/contracts/lp-0-effective-privileges-v1.json` gains exactly three rows, with zero existing rows removed or changed:
+
+```text
+acl|routine|function:app.recovery_allocation_invoice_lines(uuid,uuid,uuid)|jobguard_runtime|EXECUTE|- -> a-exec-recovery-money
+owner|routine|function:app.recovery_allocation_invoice_lines(uuid,uuid,uuid)|jobguard_migration -> a-owner-routines
+recorded.routines: function:app.recovery_allocation_invoice_lines(uuid,uuid,uuid)
+```
+
+The new routine record has owner `jobguard_migration`, SECURITY INVOKER (`securityDefiner=false`), `search_path=pg_catalog, app`, reachable/runtimeExecute true, PUBLIC EXECUTE false, no other-role EXECUTE, no extension or trigger return, and empty staticWrites/staticCalls. Its new definition SHA-256 is `b549729fa079d3486d1b23ceaad8aea73edb3d59989d5d11dcbcf60962884c00`.
+
+The digest uses the source-derived `pg_get_functiondef` formatting method used by `c2bfa554`: canonical PostgreSQL header, expanded `timestamp with time zone` return type, STABLE attribute, quoted search-path entries, exact migration body, `$function$` delimiter and terminal newline; SHA-256 over UTF-8. Source-level controls reproduce the unchanged recorded hashes of `contractor_session(uuid)`, `contractor_practice_session_guard()` and the STABLE table-returning `practice_company_made_up(uuid)`. This is source inspection, not a migrated-database result. The unchanged LP-0 static scanner matches both empty lists. Actual PostgreSQL catalogue/ACL verification remains for CI; the held LP0-13 mechanism is unchanged.
+
+Added only the inventory path to the lane allow list. Corrected the lane note, migration-note heading/context and receipt migration context to identify file 0166 following the 0165 practice worker switch. The existing migration SQL, application source, tests, expectations, counts, pins, hashes, fingerprints, inventory groups/paths/base metadata and held checks are unchanged. No new migration, data/backfill, external action, alert, credential, provider route or compatibility change is introduced by r1. Earlier invariants and commercial/real-data release gates remain in force.
+
+### r1 commands and observed evidence
+
+Installed dependencies reused; no install or download. Node `v24.17.0` (repository pin `24.15.0`), cached pnpm `10.28.1`. pnpm invocations used `PATH=/private/tmp/jg-migfix-2-bin:$PATH npm_config_manage_package_manager_versions=false COREPACK_ENABLE_NETWORK=0`. These are supplied-dependency checks, not a clean pinned install. Logs and temporary validation scripts are under `/private/tmp/jg-b9-r1-*`.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm typecheck --force` | Exit 0; all 7 tasks executed. `typecheck.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | Exit 0; root guards and all 7 package checks. `lint.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0. `lint-lanes.log`. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | Passed; serious-b9 lane, merge-base comparison, including working-tree paths. `lane-direct.log`. |
+| `pnpm build --concurrency=2 --force` | Exit 0; all 7 tasks executed, including Next production build. `build.log`. |
+| `node --test tools/*.test.mjs` | Exit 0; 100 passed. `tools-unit.log`. |
+| `pnpm --filter @jobguard/db exec vitest run test/lp-0-catalog.test.ts --maxWorkers=1` | Exit 0; 26 passed. Pure catalogue/comparator unit tests, no PostgreSQL. `catalog-unit.log`. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Exit 0; core 2601, config 1, storage 2, AI 85 passed. Fixtures only; no live model evaluation. `domain-unit.log`. |
+| `pnpm --filter @jobguard/db exec vitest run src --exclude 'test/**' --maxWorkers=1` | Exit 0; 11 files / 116 passed, including all 6 SERIOUS-B9 reader regressions. `db-source-unit.log`. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 39 files / 844 passed. Unit/source checks, no browser. `web-unit.log`. |
+| API `vitest run src --maxWorkers=1` with the original eight listener/database source suites excluded | Exit 1; 78 files / 1642 tests passed, while 21 tests in `src/contractor/practice-worker-switch.http.test.ts` failed with sandbox `listen EPERM` and secondary null-port errors. `api-unit.log`. |
+| Same API command with `--exclude src/contractor/practice-worker-switch.http.test.ts` added | Exit 0; 78 files / 1642 passed. `api-unit-available.log`. The nine excluded paths are the eight listed in the original receipt plus this HTTP suite; all remain mandatory in CI. |
+| `pnpm openapi:check` | Exit 1; TSX CLI IPC listener refused with `listen EPERM`. `openapi.log`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same generator/snapshot check without the TSX CLI listener; artifact unchanged. `openapi-node.log`. |
+| `pnpm --filter @jobguard/api exec node --import tsx /private/tmp/jg-b9-r1-inventory-check.mts` | Final exit 0; strict inventory parsing, authority-path completeness, exact two added capability keys, new routine metadata and actual unchanged static scanner. `inventory-check.log`. |
+| `python3 /private/tmp/jg-b9-r1-inventory.py` | Exit 0; three unchanged hash controls matched, new digest derived, exactly three new inventory lines generated. |
+| `python3 /private/tmp/jg-b9-r1-preservation.py` | Exit 0; exactly +3/-0 inventory lines, all prior parsed rows/hash/pin/metadata unchanged, one allowed path added, exactly four authorized files edited; all source/tests/migration SQL/S26/S27 untouched. `preservation.log`. |
+| `git diff --check` | Exit 0. |
+
+Final available unit/source checks total **5417 passed**, counting each successful suite once. The initial static inventory import encountered stale installed core output (`PracticeWorkerSwitchError` export missing); after the forced build, the same check passed. No source or dependency was changed to resolve it. Turbo emitted sandbox cache IO warnings; successful task results above remain actual executions. Build warnings are retained in the log. Neither the standard OpenAPI failure nor the HTTP listener restriction is an automatic approval-review rejection. No existing test/configuration was edited or disabled to obtain a pass.
+
+CI must run the complete API suite, `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, both `lp-0-grant-freeze.integration.test.ts` and `lp-0-authority-paths.integration.test.ts`, and the SERIOUS-B9 allocation/upgrade/race/integration checks against real PostgreSQL. Browser/e2e remains for CI as instructed. No local PostgreSQL startup or browser run was attempted. This receipt does not claim migrated grants, upgrade correctness, complete journeys or production readiness. Dispatcher owns commit/push; a different-model verdict bound to the eventual commit and separate acceptance remain outstanding. No Git write command was run against this repository.
+
+The intended conventional commit message is overwritten at `/private/tmp/jg-msg-fixlater-6.txt` for dispatcher use; the original message-file reference above describes the original delivery only.

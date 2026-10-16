@@ -4,8 +4,9 @@
     "serious-b9": {
       "branches": ["codex/sandbox/serious-b9"],
       "receipt": "docs/verdicts/SERIOUS-B9/BUILDER_RECEIPT.md",
-      "note": "SERIOUS-B9: Batch 9 recovery eligibility/allocation only; RED lane. S26 and S27 stopped for coordinator rulings. No existing expectations or pinned lists changed. Migration 0165 follows main's highest 0164.",
+      "note": "SERIOUS-B9: Batch 9 recovery eligibility/allocation only; RED lane. S26 and S27 stopped for coordinator rulings. No existing expectations or pinned lists changed. Migration 0166 follows main's 0165 practice worker switch.",
       "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "packages/db/src/recovery-allocation-repository.ts",
         "packages/db/src/recovery-allocation-serious-b9.test.ts",
         "packages/db/test/serious-b9.integration.test.ts",
