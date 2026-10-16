@@ -95,10 +95,10 @@ expectations would not be a small correction to missing source validation.
 
 ## Migration, compatibility and invariants
 
-- **0172_evidence_pack_authority.sql** is necessary to fence the private
+- **0173_evidence_pack_authority.sql** is necessary to fence the private
   control-plane session row: runtime cannot read/lock that table directly.
   Highest migration on supplied main is **0165**. Notes:
-  `packages/db/migration-notes/0172_evidence_pack_authority.md`.
+  `packages/db/migration-notes/0173_evidence_pack_authority.md`.
 - Reuses the existing `app.authenticate_practice_session(text,uuid)` signature,
   result, default tenant, owner, ACL and principal/permission rules. No new
   capability, grant, table, policy or business-data backfill. No edits to
@@ -301,7 +301,7 @@ passed without any assertion, timeout or configuration changes; successful
 logs end in `source-unit-retry.log` and `db-unit-retry.log`. These failures
 are recorded, not represented as first-attempt passes.
 
-Migration **0172_evidence_pack_authority.sql** and its notes are unchanged;
+Migration **0173_evidence_pack_authority.sql** and its notes are unchanged;
 there is no renumber, new migration, data backfill, new external action or
 production policy change. No PostgreSQL, browser, `pnpm test:db`,
 `pnpm test:migrations`, or full `pnpm test` run was attempted in this sandbox,
