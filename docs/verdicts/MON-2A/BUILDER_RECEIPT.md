@@ -342,3 +342,213 @@ status/stat and unchanged-head verification: **exit 0**. No commit or push.
 Final HEAD: `2514049c8dfb7630598fdf81f5c0d6d23444abb4`. Dispatcher must commit
 these working-tree changes, resolve the STOPs, then obtain exact-commit CI,
 independent verdict and separate acceptance. MON-2A remains **PARTIAL / HOLD**.
+
+
+## r1 — 16 October 2026, dispatcher 14: STOP before implementation
+
+**Result: BLOCKED on lane scope; no repair implemented.** Supplied and actual
+HEAD is `175262fb972f14bd6e5a353486d95a64854a6740` (keep-both merge), with
+`origin/main` at `49fc07f33a440bcca7ac443de365aba3670e9999`. MON-1 #221 is now
+merged and MON-2A PR #239 is open; the earlier build-ahead statements above are
+historical. The initial working tree was clean. This addendum changes only this
+receipt. No migration, source, test, expectation, byte pin, shared list or lane
+registration is changed. No commit, staging, checkout, push or package install.
+
+Read the independent Opus REPAIR verdict at
+`~/.local/share/full-steam/jg-runs/d14-mon-2a-opus-175262f.md`, repository AGENTS,
+the applicable BUILD_PLAN MON-2 and 10.1 contracts, and the subscription contract.
+The verdict reports CI run 38950045197 failing the unchanged transitive
+subscription architecture assertion. That result is supplied/review evidence,
+not a fresh test execution in this round.
+
+### Exact STOP, preflight and before/after
+
+The r1 instruction explicitly requires stopping if a merged repair file is
+outside the lane, without editing the assertion or shared lists. The effective
+policy from `loadLanePolicy(process.cwd())` in
+`tools/agent-lane-boundary-lint.mjs`, tested with its exported
+`lanePathAllowed("mon-2a", lane, file)`, returned **false** for all candidates:
+
+| File / exact line | Before | Actual after |
+|---|---|---|
+| `packages/core/src/jobs-on-the-go.ts:2` | `import { isSmallJobV3 } from "./activation-v3.js";` | Identical; not edited |
+| `packages/core/src/activation-v3.ts:3` | `import { shadowSuccessFeeV1 } from "./shadow-domain/success-fee.js";` | Identical; not edited |
+| `packages/core/src/activation-v3.ts:6` | `export const activationFeePolicyV3 = shadowSuccessFeeV1.unwrap().unwrap().shape.policyVersion;` | Identical; not edited |
+| `packages/core/src/shadow-domain/success-fee.ts:9` | `shadowSuccessFeeV1` contains `policyVersion: z.literal("reference_fee_policy_v3")` | Identical; not edited |
+
+The refusing MON-2A allow-list is
+`config/agent-lane-assignments.json:6`; none of those three files is included.
+No `config/lanes/mon-2a.json` override exists. The first proposed repair boundary
+is `jobs-on-the-go.ts:2`; route (2) is also blocked at `activation-v3.ts:3` and
+`shadow-domain/success-fee.ts:9`. No hypothetical edit was written to bypass the
+preflight, and the allow-list was not extended by the builder.
+
+Before any source mutation, searched repository test/spec files for these
+paths/names and inspected the two specifically named merged byte-pin registries:
+`apps/api/src/auth/context-boundary.test.ts:88-97` and
+`packages/db/test/extra-origin.integration.test.ts:243-254` ([S9]). Neither pins
+these three source files. The meter's source-inspection assertion at
+`packages/core/src/jobs-on-the-go.test.ts:153-160` checks domain imports and
+absence of environment/network/wall-clock access, rather than a byte hash.
+Shadow architecture tests also inspect their own source structurally. These
+observations do not override the lane refusal. All existing tests remain
+byte-identical to HEAD, including `subscription-architecture.test.ts`.
+
+**Coordinator ruling required:** permit an exact-file neutral dependency repair
+through an extended lane or a separately issued owner lane. Route (2) would
+share the existing Zod literal schema from a neutral module so that
+`activationFeePolicyV3` and the shadow schema retain the same schema identity
+and value, with the requested equality test. No such change or test was built.
+No ruling, approval, independent r1 verdict or acceptance is inferred.
+
+### Commands and verification actually performed
+
+- Read-only `git rev-parse HEAD`, `git rev-parse origin/main`, initial
+  `git status --short`: exit 0; refs as above and clean tree.
+- Repository `rg` searches and source/policy/verdict reads: inspected the import
+  chain and named pin registries. Some broad read output was truncated and was
+  followed by narrower reads; no implementation was inferred from truncation.
+- Effective-policy `lanePathAllowed` preflight: exit 0, **false** for each of the
+  three candidate files. This is the blocking deterministic result.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **interrupted, exit 130**. The
+  installed launcher printed a pnpm configuration warning and produced no lane
+  result before interruption. No successful pnpm check is claimed; no package
+  download/install command was issued. `ps` inspection was denied by sandbox.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: **exit 0**,
+  existing 15-path PR diff passes the current lane. This does not authorize any
+  of the three proposed repair paths: they remain outside that allow-list.
+- `git diff --check`: exit 0 before the receipt edit; rerun below for the final
+  documentation change, together with byte-preservation and path checks.
+- `node --version`: `v24.17.0`; this is not a clean pinned-install claim.
+
+Core targeted/full Vitest, `pnpm test`, typecheck, lint, build and OpenAPI checks
+are **NOT RUN in r1**, following the explicit pre-implementation STOP; no source
+was changed to verify. Database, migration and browser suites are **NOT RUN**;
+the dispatcher states this sandbox cannot start PostgreSQL or bind localhost
+and those suites belong to GitHub CI after push. No new CI run is claimed.
+The reported architecture failure remains unresolved, and the earlier LP-0
+catalogue STOP and Q3-Q9 holds remain in force. No new operational alert,
+external action, behavior change, public export change or migration exists.
+
+Intended receipt-only conventional commit message is written to both
+`/private/tmp/jg-msg-mon-2a-r1.txt` (round-specific request) and
+`/private/tmp/jg-msg-mon-2a.txt` (dispatcher handoff). The dispatcher owns any
+commit and subsequent exact-head CI/review. This is a builder STOP report,
+not technical acceptance or an independent verdict.
+
+Final r1 preservation check: **exit 0**; every tracked file equals HEAD except
+this append-only receipt. Final `git diff --check` and direct lane lint: **exit 0**.
+Only the receipt is modified; HEAD remains `175262fb972f14bd6e5a353486d95a64854a6740`.
+
+
+## r2 — 16 October 2026, dispatcher 14: ruling 62 dependency repair
+
+**Result: scoped repair implemented; independent verdict and acceptance pending.**
+Started clean on `codex/sandbox/mon-2a`, HEAD
+`b1c5bd201bb5f91efefc2f6e20ed5f1dfeec0dda`, with `origin/main` at
+`d74fd66d684226a5150fe3d3576a853d58abcf31`. Ruling 62 supplied in the dispatch
+supersedes r1's exact-file lane STOP. This round makes no commit, staging,
+checkout, push, package install, migration or policy approval.
+
+### Scope, preflight and preservation
+
+- Extended only the `mon-2a` entry's allow array at
+  `config/agent-lane-assignments.json:6`, adding exactly
+  `packages/core/src/jobs-on-the-go.ts`, `packages/core/src/activation-v3.ts`
+  and `packages/core/src/small-job-v3.ts`. Every other byte of that register
+  is preserved, including every other lane and the existing note.
+- `packages/core/src/jobs-on-the-go.ts:2` before:
+  `import { isSmallJobV3 } from "./activation-v3.js";`; after:
+  `import { isSmallJobV3 } from "./small-job-v3.js";`. All other bytes preserved.
+- Moved the original `isSmallJobV3` function and its comment verbatim from
+  `activation-v3.ts:10` into new `small-job-v3.ts:6`, with only its existing
+  Zod pence validator and imports of Zod and `MAX_MONEY_PENCE`. The new module
+  has no fee/shadow import. Its validation, parse order and `< 200_000` rule
+  are unchanged. Activation now re-exports the same named function at line 10;
+  all its other bytes, including the fee-policy schema reference, are unchanged.
+- All existing tests/expectations, `shadow-domain/success-fee.ts`, public barrel
+  exports, pins and other shared lists remain byte-identical to starting HEAD.
+  No assertion was edited, including `subscription-architecture.test.ts`.
+- Before editing, searched test/spec and tool/config references for all three
+  paths and searched the current source hashes across the repository. Inspected
+  the merged pin registries in `auth/context-boundary.test.ts:88` and
+  `extra-origin.integration.test.ts:243`; neither pins these paths. The only
+  matching activation source hash is the historical CH-1 receipt manifest
+  `docs/verdicts/CH-1/attempt2-source-hashes.json:18`, described by its receipt
+  as recorded changed-source hashes; no executable guard references that
+  manifest. It is unchanged. No merged byte-pin covering the repair was found.
+- Deterministic preservation checks verify the exact function/validator move,
+  import-only meter change, exact three allow additions and every other tracked
+  file unchanged (except this append-only receipt). Built-module checks verify
+  activation's four runtime export names, function identity with the neutral
+  re-export and `reference_fee_policy_v3` value. These are deterministic builder
+  checks, not an independent model verdict.
+
+### Commands and results actually obtained
+
+Runtime is Node `v24.17.0`; used the already installed pnpm `10.28.1` binary
+from the local pnpm store through `/private/tmp/jg-bin-mon-2a-r2/pnpm` on PATH.
+The default pnpm launcher stalled at `--version` and was interrupted (130);
+no package download/install command was issued. No clean-install claim.
+Logs are under `/private/tmp/jg-mon-2a-r2-*.log` (not committed).
+
+- Affected headless command, from `packages/core`:
+  `node_modules/.bin/vitest run src/subscription-architecture.test.ts src/activation-v3.test.ts src/jobs-on-the-go.test.ts src/jobs-on-the-go-pricing.test.ts src/subscription.test.ts src/subscription-period.test.ts src/subscription-track-review.test.ts`:
+  **PASS, exit 0; 7 files, 101 tests**. The architecture assertion passed unchanged.
+- `pnpm typecheck`: **PASS, exit 0; 7/7 Turbo tasks** (2 cache hits).
+- `LANE_BASE_REF=origin/main pnpm lint`: **PASS, exit 0; 7/7 Turbo tasks**
+  (2 cache hits); core purity, lane, money and commercial-boundary checks ran.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **PASS, exit 0**; includes
+  the new neutral module and both amended source paths.
+- `node --test tools/*.test.mjs`: **PASS, exit 0; 100 tests**.
+- `pnpm exec turbo run test --filter='!@jobguard/db'`: **FAIL, exit 1**;
+  core discovered generated `dist` test copies (missing relative `.ts` files)
+  and timed out two source receipt-allocation tests under unrestricted workers.
+  Summary: 6 failed/195 passed files; 9 failed/5,319 passed tests. No test,
+  expectation or timeout was changed. Follow-up source-only runs bound workers:
+  - `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2`:
+    **PASS, exit 0; 102 files, 2,709 tests**.
+  - `pnpm --filter @jobguard/ai exec vitest run src --maxWorkers=2`:
+    **PASS, exit 0; 6 files, 85 tests**, synthetic fixtures only, no live model.
+  - `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2`:
+    **PASS, exit 0; 40 files, 867 tests** (unit tests, not browser journeys).
+  - Config/storage tests completed in the Turbo attempt: **PASS**, respectively
+    2 files/2 tests and 2 files/4 tests (includes generated duplicates).
+  - `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2`:
+    **FAIL, exit 1; 14 failed/77 passed files; 178 failed/1,611 passed/
+    23 skipped tests, 41 errors**. This includes socket `listen EPERM`,
+    null listener ports, two embedded-database fixture port-setup failures
+    (no PostgreSQL started), and `PracticeWorkerSwitchRepository is not a
+    constructor` while dependencies were being rebuilt. After the build,
+    `pnpm --filter @jobguard/api exec vitest run src/subscription-boundaries.test.ts src/contractor/practice-worker-switch.application.test.ts --maxWorkers=2`:
+    **PASS, exit 0; 2 files, 20 tests**. The broad API run remains a recorded
+    failure; no whole-suite pass is inferred from this focused rerun.
+- Direct core `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit`:
+  **PASS, exit 0**.
+- `pnpm build`: **PASS, exit 0; 7/7 Turbo tasks** (2 cache hits), including
+  the Next.js production build and 41 static pages.
+- `pnpm openapi:check`: **FAIL, exit 1**, tsx CLI IPC `listen EPERM`.
+  Initial source-loader fallback runs found stale dependency builds (missing
+  exports); after rebuilding dependencies,
+  `node --import tsx src/generate-openapi.ts --check` from `apps/api`:
+  **PASS, exit 0**, validating the committed OpenAPI unchanged. A compiled-script
+  attempt `node dist/generate-openapi.js --check` reported a stale serialization
+  (exit 1); the final source-loader command matches the prescribed source entry.
+- `git diff --check` and final scope/byte-preservation checks: **PASS, exit 0**.
+  Final lane lint also passes; HEAD remains the starting commit.
+
+`pnpm test` as a whole, `pnpm test:db`, `pnpm test:migrations` and
+`pnpm test:e2e`: **NOT RUN**. The dispatcher reserves PostgreSQL and browser
+suites for GitHub CI because this sandbox cannot start PostgreSQL or bind
+localhost. No new CI run or live-provider verification is claimed. Existing
+LP-0 catalogue persistence and Q3-Q9 holds remain; this repair does not complete
+MON-2A, authorize charges or change any commercial policy. No new external
+action, data migration, compatibility impact or operational alert is introduced.
+The affected invariants are AGENTS §§5.10/5.14 (separation of subscription inputs
+from shadow/fee proposals); the fee and activation contracts remain unchanged.
+
+Intended conventional commit message is written to both
+`/private/tmp/jg-msg-mon-2a-r2.txt` and `/private/tmp/jg-msg-mon-2a.txt`.
+The dispatcher owns commit/push and exact-commit CI; a different model must
+record an independent verdict before separate acceptance. This receipt is
+builder execution evidence, not acceptance or independent verification.
