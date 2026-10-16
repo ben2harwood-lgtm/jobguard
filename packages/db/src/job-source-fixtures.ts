@@ -1,6 +1,9 @@
 import type {Observation} from "@jobguard/core";
+import { decodeCustomerMessageFixture } from "./customer-message-fixtures.js";
 /** Only these reviewed fictional originals have structured facts. No heuristic or model inference. */
 export function decodeJobSourceFixture(reference:string|null,text:string,kind:Observation["kind"]):Pick<Observation,"text"|"facts"|"citations">|null {
+ const customerMessage = decodeCustomerMessageFixture(reference, text, kind);
+ if (customerMessage) return customerMessage;
  const completed=reference==="job-source:outside-tap.v1" && text==="Fitted outside tap." && kind==="note_or_voice";
  const requested=reference==="job-source:request-tap.v1" && text==="Please fit an outside tap." && kind==="customer_request";
  if(!completed&&!requested)return null;

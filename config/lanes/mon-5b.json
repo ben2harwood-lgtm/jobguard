@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-5b": {
+      "branches": ["codex/sandbox/mon-5b"],
+      "receipt": "docs/verdicts/MON-5B/BUILDER_RECEIPT.md",
+      "note": "MON-5B AMBER: synthetic quote cancellation companion and verified customer-message safety fixture adapter. Customer intake held pending a small-builder customer/job authority seam. No UI, grants, migration, commercial approval method or contractor write route.",
+      "allow": [
+        "packages/core/src/cancellation-kit.ts",
+        "packages/core/src/cancellation-kit.test.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/quote-document.ts",
+        "packages/db/src/customer-message-fixtures.ts",
+        "packages/db/src/customer-message-fixtures.test.ts",
+        "packages/db/src/job-source-fixtures.ts",
+        "packages/db/src/quote-document-repository.ts",
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/test/customer-message-evidence.integration.test.ts",
+        "packages/db/test/cancellation-kit.integration.test.ts",
+        "docs/contracts/customer-message-mon-5b-v1.md",
+        "docs/verdicts/MON-5B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
