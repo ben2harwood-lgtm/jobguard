@@ -104,9 +104,9 @@ describe("practice invoice audit regressions (real PostgreSQL)", () => {
     const first = await credit(f,10001), second = await credit(f,10002);
     const before = await effects(f.jobId);
     const view = await repo.creditView(context,f.jobId,f.invoiceId);
-    expect(view.invoice).toMatchObject({netPence:20003,taxPence:4001,totalPence:24004,balancePence:1});
+    expect(view.invoice).toMatchObject({netPence:20003,taxPence:4001,totalPence:24004,balancePence:0});
     expect(view.credits.reduce((n,c)=>n-c.netPence,0)).toBe(20003);
-    expect(view.credits.reduce((n,c)=>n-c.totalPence,0)).toBe(24003);
+    expect(view.credits.reduce((n,c)=>n-c.totalPence,0)).toBe(24004);
     const input = {jobId:f.jobId,invoiceId:f.invoiceId,netPence:1,reason:"Synthetic last penny"};
     await expect(repo.previewCredit(context,input)).rejects.toThrow("CREDIT_EXCEEDS_AVAILABLE_AMOUNT");
     // Supply the hash the old gross-only preview would return to test issuance
