@@ -392,3 +392,53 @@ confirmation of the exact one-line code delta and the final-commit review/
 acceptance gates remain with the dispatcher.
 
 **Ruling 70 lane repair — dispatcher 14, 16 October 2026:** from clean HEAD `fb242a6d064c421c14aed984c992930bffc05091` on `codex/sandbox/serious-b7`, added exactly `packages/db/test/recovery-case-terms.integration.test.ts` to this piece's `config/lanes/serious-b7.json` allow-list, preserving every previous entry and its order; the only other repository change is this paragraph. No test, source, migration, shared register, commercial policy or release gate changed. Using Node 24.17.0 and the existing cached pnpm 10.28.1 launcher/environment documented above (the default version launcher stalled and was interrupted; no install/download), `LANE_BASE_REF=origin/main pnpm lint:lanes`, `LANE_BASE_REF=origin/main pnpm lint`, `pnpm typecheck`, and `pnpm build` exited 0. The same source-unit commands and local exclusions documented above exited 0: tools 100 tests; core 2,674; config 1; storage 2; AI 85 synthetic-fixture tests; web 867; API 1,656; DB 322. The initial DB source run exited 1 with the existing operator-reachability test timing out at its unchanged 5-second limit during concurrent checks (321 passed); repeating the identical command exited 0, all 322 passed, without edits or timeout changes. `pnpm openapi:check` exited 1 because the tsx launcher cannot bind its IPC listener (`EPERM`); `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` exited 0 against the actual snapshot. Exact-byte lane-delta/order verification and `git diff --check` passed; logs are `/private/tmp/jg-serious-b7-lane70-*.log`. Full `pnpm test`, PostgreSQL/migration and browser suites were NOT RUN because this sandbox cannot bind localhost/start PostgreSQL; unchanged mandatory GitHub CI, exact-commit independent verdict and separate acceptance remain pending. Conventional subject/body written to both `/private/tmp/jg-msg-serious-b7-lane70.txt` and `/private/tmp/jg-msg-lp-0.txt`; no add, commit, checkout or push occurred. This is a builder run receipt and deterministic scope check, not independent verification or acceptance.
+
+## r2b — dispatcher 14, ruling 61 parameter typing, 16 October 2026 night
+
+Starting from clean `bc27f47cb33d9b92823d59beade4ff15cc44e470` on
+`codex/sandbox/serious-b7`. The dispatcher reports CI run `38957153423`
+failed six recovery-terms tests with PostgreSQL `42P08` (inconsistent
+`text`/`character varying` inference for `$4`). Read AGENTS.md, the applicable
+BUILD_PLAN.md working/CH-7 contracts, the recovery-terms contract and prior receipt.
+
+The sole test change is on `packages/db/test/recovery-case-terms.integration.test.ts:22`:
+all three occurrences of `$4` in the `newCase()` INSERT now use `$4::varchar`.
+Ruling 61 behavior is preserved: `merchant_overcharge` uses
+`supplier_cost/supplier_documents`; every other type uses
+`builder_customer/customer_invoice`. All other test bytes, bindings and assertions
+are unchanged. This section is the only other repository change. No production
+source, migration, policy, lane configuration, operational alert or release gate changed.
+
+Node 24.17.0; cached pnpm 10.28.1, with
+`PATH=/private/tmp/jg-migfix-2-bin:$PATH COREPACK_ENABLE_NETWORK=0 npm_config_manage_package_manager_versions=false`.
+No install/download. Logs: `/private/tmp/jg-serious-b7-r2b-*.log`.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; seven package tasks successful, two cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 0; root checks and seven package tasks successful. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0. |
+| `pnpm build` | Exit 0; seven package tasks successful, two cached; production Next build completed. Sandbox cache-write and Nest/load-esm warnings remain warnings. |
+| `node --test tools/*.test.mjs` | Exit 0; 100 passed. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Exit 0; core 2,696, config 1, storage 2, AI 113 tests passed. Synthetic AI fixtures only. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 867 passed. No browser execution. |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1` with the same nine explicit local exclusions listed in the original receipt | Exit 0; 1,667 passed. Listener/PostgreSQL tests excluded locally only; no suite or CI configuration changed. |
+| `pnpm --filter @jobguard/db exec vitest run src test --exclude 'dist/**' --exclude '**/*.integration.test.ts' --exclude 'test/free-port.test.ts' --maxWorkers=1` | Exit 0; 323 passed. No PostgreSQL execution. |
+| `pnpm openapi:check` | Exit 1; tsx launcher cannot bind its IPC listener (`EPERM`). |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Initial pre-build attempt exited 1 on a missing `QuoteScopeRevisionError` export in existing DB build output; identical command after `pnpm build` exited 0 against the actual snapshot. Both logs retained. |
+| `pnpm --filter @jobguard/db exec tsc -p /private/tmp/jg-serious-b7-r2-test-tsconfig.json` | Exit 0; existing temporary strict noEmit config includes the affected recovery-terms test and SERIOUS-B7 integration test. |
+| `pnpm --filter @jobguard/db exec vitest list test/recovery-case-terms.integration.test.ts` | Exit 0; collection only, hooks/assertions NOT RUN. |
+| Python exact-byte preservation check and `git diff --check` | Exit 0; only line 22 changes in the test, exactly three casts; previous receipt preserved as an exact prefix; only the two authorized repository paths differ. |
+
+**NOT RUN:** `test/recovery-case-terms.integration.test.ts` execution,
+PostgreSQL/migration suites, full `pnpm test`, and browser/e2e suites. The
+dispatcher confirms this sandbox cannot bind localhost or start PostgreSQL.
+Unchanged mandatory GitHub CI must verify the six reported failures after push;
+collection, typechecking and unit adapters do not prove PostgreSQL behavior.
+No live provider, model, real-data, charge or deployment run occurred.
+
+Identical intended conventional subject/body written to
+`/private/tmp/jg-msg-serious-b7-r2b.txt` and `/private/tmp/jg-msg-lp-0.txt`.
+No add, commit, checkout or push. This is a builder run receipt and deterministic
+scope check, not independent review or acceptance. Exact-commit independent
+verdict and separate acceptance remain pending with the dispatcher.
