@@ -18,3 +18,11 @@ owner could replace the complete chain and its in-database checkpoints, so this 
 
 Migration `0001_audit.sql` is forward-only. If deployment fails, fix forward; do not roll back by
 deleting audit history. External checkpoint anchoring remains deferred to M4 as specified by the plan.
+
+## LP-4 compatibility preparation — 16 October 2026
+
+The standalone candidate statement format is specified in
+[lp-4-audit-append-v1.md](lp-4-audit-append-v1.md). It is not installed or accepted
+for persistence or exports. V1 writers and verification remain unchanged; old
+entries gain no new provenance claim. Database append, caller/export conversion
+and withdrawal form the stopped landing group recorded in the LP-4 receipt.
