@@ -507,3 +507,44 @@ Commands used the existing `/private/tmp/jg-lock-order-1-bin/pnpm` launcher on P
 Full check logs: `/private/tmp/jg-lock-order-1-r-dec45-{typecheck,lint,context-boundary,db-unit,build,openapi,openapi-node,openapi-after-core-build}.log`. Turbo emitted sandbox cache IO warnings; Next emitted workspace-root/dependency warnings; successful exit codes above are the actual results.
 
 Database integration/migration and browser suites NOT RUN: dispatcher reserves these for GitHub CI because this sandbox cannot start PostgreSQL or bind localhost. Lock-order/audit and typed retry guarantees are affected; no schema, data migration, public signature or operational alert change. No independent model verdict or technical acceptance is claimed: both checkers must confirm the exact committed repair scope after the dispatcher commits. Intended conventional commit message overwritten at `/private/tmp/jg-msg-lock-order-1.txt`.
+
+
+## r-owntests — dispatcher 13 own-test repair (16 October 2026)
+
+PR #226; starting/final uncommitted HEAD `36ca6182a5b676868ff63ca8c5be672eb0a83258`, branch `codex/sandbox/lock-order-1`; working tree initially clean. This section records the repair ordered after CI run `38897748993`, following the already-reviewed decision-45 repair. It is builder evidence, not an independent verdict or acceptance.
+
+Only `packages/db/test/lock-order-1.integration.test.ts` and this appended receipt section change. All three scenarios reuse ENT-3's merged `siteFixture(c)` and `f.members.operative`, establishing the same imported live work-order baseline, assignment and actor/grant setup as the governed site-extra integration tests. The shared fixture/harness itself is untouched. Both the observer pool in (a) and the three single-session pools in (c)/(d) now use `{ ...c.runtime.options, password: c.runtime.options.password, max: 1 }`, as merged multi-connection tests do (for example `job-work-state-sources.integration.test.ts` and `job-sources.integration.test.ts`). Installed pg-pool explicitly defines `options.password` as non-enumerable; object spread alone drops it. In (a), `logSiteExtra` maps an unclassified connection error to `SITE_EXTRA_UNAVAILABLE`, so that pool also requires the credential fix. No CI credential or URL is hardcoded or logged.
+
+Read AGENTS.md, BUILD_PLAN §§2.2–2.4, 5.6, ENT-2, ENT-3 and ENT-4b, the CI failure excerpt, and the merged extra-origin/site-extra fixtures and tests. An exact-diff check against HEAD confirms that every assertion, accepted error code, round count, backend-PID check, lock observation and audit/state check is unchanged; only imports, fixture/actor selection and credential propagation differ. No product code, merged test, pin/hash/count/fingerprint, lane configuration, migration, data contract, operational alert, public interface or release policy changes. No Git writes, dependency downloads, PostgreSQL startup, browser startup or external provider calls.
+
+Environment: Node `v24.17.0`, installed pnpm `10.28.1`, reused dependencies. Commands use `/private/tmp/jg-lock-order-1-bin` on PATH and `COREPACK_ENABLE_NETWORK=0`. No clean install is claimed. Logs are `/private/tmp/jg-lock-order-1-r-owntests-*.log`.
+
+| Command / check | Actual result |
+| --- | --- |
+| `pnpm exec turbo run typecheck --force` | Exit 0; 7/7 tasks, none cached. |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | Exit 0; boundary checks and 7/7 package tasks, none cached. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | Exit 0; lock-order-1 passed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; lock-order-1 passed. |
+| `pnpm build --concurrency=2` | Exit 0; 7/7 tasks, 2 cached; Next production build completed. Existing sandbox cache IO and Next workspace/CSS warnings remain. |
+| `node --test tools/*.test.mjs` | Exit 0; 100/100 passed. |
+| `pnpm -r --workspace-concurrency=2 exec vitest run --maxWorkers=1 --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts'` | Exit 1; generated core `dist` copies were collected: 2 generated-source lookup failures / 5,062 passed in core; config/storage also passed. Source-only retry below corrects selection without changing tests or tooling. |
+| Same recursive command with additional `--exclude '**/dist/**'` | Exit 1 overall: core 2,532/2,532, config 1/1, storage 2/2, AI fixtures 85/85, DB 305/305 passed. API: 77 files passed, 8 failed; 1,643 tests passed, 108 failed, 23 skipped, 108 unhandled listen errors. Six failing HTTP files require prohibited socket binding (`EPERM` / Supertest null port); the other two suites (`final-account-lock.isolation.test.ts`, `shadow-isolation.application.test.ts`) attempt database fixtures but stop at `freePort` before PostgreSQL starts. These tests are unchanged and still require CI. Web had not run when recursive execution stopped. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=1 --exclude '**/dist/**' --exclude '**/*.integration.test.ts'` | Exit 0; 36 files, 812/812 tests passed. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/auth/context-boundary.test.ts` | Exit 0; 145/145 passed. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/lock-order-1.test.ts` | Exit 0; 4/4 passed, including both retryable SQLSTATE mappings. |
+| `pnpm openapi:check` | Exit 1; tsx launcher IPC `listen EPERM`, before the OpenAPI check runs. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same OpenAPI comparison without the IPC launcher. |
+| Offline installed-pg pool construction check (`pnpm --filter @jobguard/db exec node --input-type=module -e ...`) | Exit 0; confirms password is non-enumerable and the repaired copy preserves password, database, runtime user and `max: 1`; no connection opened and no credentials printed. This is not a database test. |
+| Exact-diff inspection against HEAD | Exit 0; only fixture/actor selection, imports and explicit password propagation; all assertions unchanged. |
+
+The socket-dependent API failures are in `src/health.test.ts`, `src/auth/sso/action-paths.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/site-extra.http.test.ts`, and `src/contractor/site-visit.http.test.ts`. They and the two database isolation suites need the normal CI environment. `free-port.test.ts` was excluded from the local source-unit selection because it intentionally binds localhost. No exclusion or optionality was added to repository/CI configuration. Full root `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and browser suites are not claimed as locally passing; PostgreSQL integration/migrations and browser execution remain CI-only here.
+
+After the dispatcher commits/pushes, CI must pass **all three unchanged tests** in `packages/db/test/lock-order-1.integration.test.ts` (targeted reproduction: `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/lock-order-1.integration.test.ts`):
+
+- `[LOCK-ORDER-1(a)] holds the shared tenant administration lock before the origin foreign key can lock the work order`: observe `[true]` immediately before the actual origin insert.
+- `[LOCK-ORDER-1(c)] 50 same-instant captures and baseline revisions use separate connections and leave consistent committed state`: retain 50 successful captures/revisions, 51 revisions, distinct backend sessions, complete origin/variation/scope/receipt/event/baseline/audit joins and valid audit chain.
+- `[LOCK-ORDER-1(d)] M31-S15 same-instant capture, revoke and revise have explicit outcomes`: retain four simultaneous rotated rounds, committed revoke/revise, only the existing explicit capture outcomes, no partial effects, post-revocation NOT_FOUND and valid audit chains.
+
+CI must also preserve the 4/4 `lock-order-1.test.ts` and 145/145 context-boundary results, and the existing full checks (root `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, OpenAPI and browser coverage). The separate known `[S9] scanner and seven pinned bridges stay byte-identical` failure in `extra-origin.integration.test.ts` is deliberately untouched: this repair does not resolve it, repin either source, or claim green full CI. That coordinator ruling remains required before full technical acceptance. New committed bytes require independent review bound to the dispatcher's exact commit and separate acceptance; neither is claimed here.
+
+Intended conventional commit message overwritten at `/private/tmp/jg-msg-lock-order-1.txt`. Only this test and the appended `r-owntests` receipt are handed back for the dispatcher to commit; no Git write command was run.

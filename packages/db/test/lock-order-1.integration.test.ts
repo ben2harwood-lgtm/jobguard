@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { SiteExtraRepository, WorkOrderRepository, demoFile, demoRow, derivedUuid, verifiedTenantContextFromMembership } from "../src/index.js";
-import { cluster, fixture, type Cluster, type Fixture } from "./extra-fixtures.js";
-import { actor, chain, command } from "./site-extra-fixtures.js";
+import { cluster, type Cluster, type Fixture } from "./extra-fixtures.js";
+import { siteFixture, chain, command } from "./site-extra-fixtures.js";
 
 let c: Cluster;
 beforeAll(async () => {
@@ -23,7 +23,7 @@ const revise = (pool: Pool, f: Fixture, expectedRevision: number) => new WorkOrd
 
 /** Each participant owns a pre-connected pool with one connection; no race can share a session. */
 async function connections<T>(work: (pools: Pool[]) => Promise<T>): Promise<T> {
-  const pools = Array.from({ length: 3 }, () => new Pool({ ...c.runtime.options, max: 1 }));
+  const pools = Array.from({ length: 3 }, () => new Pool({ ...c.runtime.options, password: c.runtime.options.password, max: 1 }));
   try {
     const pids = await Promise.all(pools.map(async pool => (await pool.query("SELECT pg_backend_pid() pid")).rows[0]!.pid));
     expect(new Set(pids).size).toBe(3);
@@ -95,9 +95,9 @@ function revised(result: PromiseSettledResult<unknown>): number {
 }
 
 it("[LOCK-ORDER-1(a)] holds the shared tenant administration lock before the origin foreign key can lock the work order", async () => {
-  const f = await fixture(c), operative = await actor(c, f, f.demo.operativeMembershipId);
+  const f = await siteFixture(c), operative = f.members.operative;
   const observed: boolean[] = [];
-  const pool = new Pool({ ...c.runtime.options, max: 1 });
+  const pool = new Pool({ ...c.runtime.options, password: c.runtime.options.password, max: 1 });
   pool.on("connect", client => {
     const query = client.query.bind(client);
     // Observe actual PostgreSQL locks immediately before the real INSERT; no repository or database effect is faked.
@@ -119,7 +119,7 @@ it("[LOCK-ORDER-1(a)] holds the shared tenant administration lock before the ori
 });
 
 it("[LOCK-ORDER-1(c)] 50 same-instant captures and baseline revisions use separate connections and leave consistent committed state", async () => {
-  const f = await fixture(c), operative = await actor(c, f, f.demo.operativeMembershipId);
+  const f = await siteFixture(c), operative = f.members.operative;
   const context = verifiedTenantContextFromMembership(operative.member);
   let successes = 0, captures = 0;
   await connections(async ([capturePool, revisionPool]) => {
@@ -146,7 +146,7 @@ it("[LOCK-ORDER-1(c)] 50 same-instant captures and baseline revisions use separa
 
 it("[LOCK-ORDER-1(d)] M31-S15 same-instant capture, revoke and revise have explicit outcomes", async () => {
   for (let round = 0; round < 4; round++) {
-    const f = await fixture(c), operative = await actor(c, f, f.demo.operativeMembershipId);
+    const f = await siteFixture(c), operative = f.members.operative;
     const context = verifiedTenantContextFromMembership(operative.member), input = request(f);
     const before = await revisionState(f);
     await connections(async ([capturePool, revisionPool, revokePool]) => {
