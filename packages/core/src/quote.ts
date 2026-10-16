@@ -14,7 +14,7 @@ export const quoteLineV1 = z.object({
   rateProvenance:z.enum(["entered","suggestion_accepted"]).nullable(), category:z.string().max(100).nullable(), region:z.string().max(100).nullable(),
 });
 export type QuoteLine = z.infer<typeof quoteLineV1>;
-export type QuoteBlocker={code:"missing_quantity"|"missing_rate"|"missing_unit"|"unsupported_tax"|"unresolved_question"|"missing_exclusion_reason";scopeItemId?:string;message:string};
+export type QuoteBlocker={code:"missing_quantity"|"missing_rate"|"missing_unit"|"unsupported_tax"|"unresolved_question"|"missing_exclusion_reason"|"missing_scope";scopeItemId?:string;message:string};
 export type CoverageDiff={unpricedCaptured:Array<{scopeItemId:string;description:string}>;excluded:Array<{scopeItemId:string;description:string;reason:string}>;unresolvedBlockingQuestions:string[];humanAddedExtras:Array<{scopeItemId:string;description:string}>};
 export type QuoteTotals={subtotal:Money;discount:Money;net:Money;taxGroups:ReadonlyArray<{treatment:"standard_rate_20";net:Money;tax:Money}>;tax:Money;total:Money};
 
