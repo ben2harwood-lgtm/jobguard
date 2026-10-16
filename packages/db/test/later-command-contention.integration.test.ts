@@ -45,7 +45,7 @@ async function auditChain(tenant: string): Promise<AuditEvent[]> {
     payload: row.payload, payloadHash: row.payload_hash, previousHash: row.previous_hash, eventHash: row.event_hash }));
 }
 
-async function observeBlocking(pool: Pool, waiter: () => number | undefined, blocker: number, timeout = 3_000): Promise<void> {
+async function observeBlocking(pool: Pool, waiter: () => number | undefined, blocker: number, timeout = 15_000): Promise<void> {
   const deadline = Date.now() + timeout;
   do {
     const waiting = (await pool.query<{ blocked: boolean }>(`SELECT EXISTS (
@@ -61,7 +61,8 @@ async function observeBlocking(pool: Pool, waiter: () => number | undefined, blo
 it("[L022] business-row contention is observed before command completion", async () => {
   const f = await acceptedJob(), before = await auditChain(f.tenant);
   expect(before).toHaveLength(1);
-  const blocker = await c.runtime.connect();
+  // Runtime cannot lock app.job directly; only the competing test fixture uses admin.
+  const blocker = await c.admin.connect();
   let pending: ReturnType<UserCommandDispatcher["dispatch"]> | undefined;
   let settled = false, waiterPid: number | undefined, mutations = 0;
   const transition: CommandMutation<{ jobId: string; revision: number; status: string }> = {
@@ -104,14 +105,17 @@ it("[L022] business-row contention is observed before command completion", async
     expect(after.at(-1)).toMatchObject({ eventType: "command.succeeded", subjectRef: f.job, previousHash: before[0]!.eventHash });
     expect(() => verifyAuditChain(after)).not.toThrow();
   } finally {
-    await blocker.query("ROLLBACK");
-    blocker.release();
-    await pending?.catch(() => undefined);
+    try {
+      await blocker.query("ROLLBACK");
+    } finally {
+      blocker.release();
+      await pending?.catch(() => undefined);
+    }
   }
-});
+}, 30_000);
 
 it("[L022] blocking observer refuses a SELECT-only substitute while the same business row is locked", async () => {
-  const f = await acceptedJob(), blocker = await c.runtime.connect(), reader = await c.runtime.connect();
+  const f = await acceptedJob(), blocker = await c.admin.connect(), reader = await c.runtime.connect();
   try {
     await blocker.query("BEGIN");
     await blocker.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenant]);
@@ -124,9 +128,15 @@ it("[L022] blocking observer refuses a SELECT-only substitute while the same bus
     expect((await reader.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [f.tenant, f.job])).rows).toEqual([{ id: f.job }]);
     await expect(observeBlocking(c.admin, () => readerPid, blockerPid, 150)).rejects.toThrow("No business-row contention observed before command completion");
   } finally {
-    await blocker.query("ROLLBACK");
-    await reader.query("ROLLBACK");
-    blocker.release();
-    reader.release();
+    try {
+      await blocker.query("ROLLBACK");
+    } finally {
+      blocker.release();
+      try {
+        await reader.query("ROLLBACK");
+      } finally {
+        reader.release();
+      }
+    }
   }
 });

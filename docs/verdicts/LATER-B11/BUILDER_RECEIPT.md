@@ -314,3 +314,51 @@ cat /private/tmp/jg-msg-later-b11.txt
 The closing evidence-only block (also exit 0) is `git diff --check`, `git status --short --untracked-files=all`, `git diff --stat`, `git rev-parse HEAD`, and `df -g /System/Volumes/Data`. It checks the completed receipt and the same four allowed paths; no further source change or test run follows.
 
 
+
+## Repair round r1 — dispatcher 14, 16 October 2026 night
+
+Request: repair PR #257 on `codex/sandbox/later-b11`, inspected HEAD `154c69898f6942b56a4c356149ed94d59d5ca21a`; `origin/main` is `7ff452eeec1c523345d34715adfa3f8310062013`. Initial working tree was clean. Independent input: Claude Opus REPAIR at `~/.local/share/full-steam/jg-runs/d14-later-b11-checkA-opus-154c698.md`, bound to that HEAD. This addendum supersedes the original L022 runtime-blocker description and earlier lane-registration blockers; it does not claim a fresh independent verdict or technical acceptance.
+
+Source repair is confined to `packages/db/test/later-command-contention.integration.test.ts`:
+
+- Both competing `FOR UPDATE` blockers now connect through `c.admin`, following the merged job-work-state race precedent. The actual dispatcher/transition and plain-SELECT reader still use `c.runtime`; the waiter still asserts the actual runtime login. No grant or shared harness changed.
+- The blocking-observation deadline is 15,000 ms, up from 3,000 ms. The positive test has a 30,000 ms test timeout so Vitest's default timeout cannot cut the observation window short. The SELECT-only negative control retains its explicit 150 ms deadline.
+- Each acquired client's rollback is enclosed by a `finally` that releases that client, including the reader if blocker rollback fails. Pending dispatch rejection handling remains attached immediately and awaited during cleanup.
+- Existing contention, replay, revision, single-effect and audit-chain assertions remain in place. No production behavior, contract, migration, role privilege, dependency or operational alert changes.
+
+Run environment: Node `v24.17.0`, cached pnpm `10.28.1`, installed dependencies reused. The global pnpm `--version` launcher stalled and was interrupted (130); subsequent pnpm commands used `PATH="/private/tmp/jg-pnpm-later-b11:$PATH"` with the already-present cached-pnpm wrapper. No package installation/download command was run. Disk observations were 36, 35 and 35 GiB available, above the dispatcher's 30 GB night floor; the 45 GB gate was waived. No browsers, Git write commands, commit, push, merge or deployment. BUILD-DON'T-MERGE / PARK under decision 74 remains in force.
+
+### r1 executed checks
+
+Logs are `/private/tmp/jg-later-b11-r1-<suffix>.log`. All listed pnpm invocations use the cached-pnpm PATH above. These are executed builder checks, not independent verification.
+
+| Command | Exit | Actual result / log suffix |
+| --- | --- | --- |
+| `pnpm typecheck --force --concurrency=2` | 0 | 7/7 tasks executed; 0 cached; `typecheck`. |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | 0 | Boundary tools pass; 7/7 package tasks executed, 0 cached; `lint`. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Registered later-b11 lane passes; `lanes`. |
+| `pnpm exec tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext packages/db/test/later-command-contention.integration.test.ts` | 0 | Repaired integration file typechecked separately (package tsconfig covers src only); `target-typecheck`. |
+| `pnpm --filter @jobguard/db exec vitest run src --exclude '**/test/**' --exclude '**/dist/**' --maxWorkers=2` | 0 | 16 files / 146 tests pass, including all 71 handoff guard cases; `db-unit-source`. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --filter @jobguard/web --workspace-concurrency=1 test --maxWorkers=2 --exclude '**/dist/**'` | 0 | Core 100 files / 2,717 tests; config 1/1; storage 1/2; AI 10/113; web 40/867: all pass; `unit-source`. Web tests are headless units, no browser launch. |
+| `node --test tools/*.test.mjs` | 0 | 100 tests pass; `tools-unit`. |
+| `pnpm build --force --concurrency=2` | 0 | 7/7 tasks executed, 0 cached; `build`. |
+| `pnpm openapi:check` | 1 | Blocked before comparison: tsx CLI `listen EPERM` on its IPC pipe; `openapi`. |
+| `node --import tsx src/generate-openapi.ts --check` (cwd `apps/api`) | 0 | Same source generator and committed OpenAPI comparison pass through the installed tsx loader, without the CLI IPC server; `openapi-source`. |
+| `git diff --check` | 0 | Whitespace check passes. |
+
+Non-passing exploratory runs are retained as evidence, not silently treated as passes:
+
+- `pnpm --filter @jobguard/db exec vitest run src --maxWorkers=2`: exit 1, 20 files passed / 170 tests passed; 4 integration suites failed in setup and 18 tests were skipped. Vitest's substring filter also matched `test/*dbsrc*` filenames; those harnesses reported `no free port` because localhost binding is unavailable. No database assertion executed in those suites. The corrected source-only command above passes. Log: `db-unit`.
+- The five-package unit command above without `--exclude '**/dist/**'`: exit 1. Core discovered generated dist copies as well as source (197 files passed, 3 failed; 5,431 tests passed, 3 failed). The three generated-copy failures read nonexistent `dist/*.ts` source files. Source-only runs pass; no tracked config/test was changed to filter or weaken CI. Log: `unit`.
+- `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --exclude '**/dist/**' --exclude '**/*.http.test.ts' --exclude '**/health.test.ts' --exclude '**/final-account-lock.isolation.test.ts' --exclude '**/shadow-isolation.application.test.ts'`: exit 1, 84 files passed / 1 failed; 1,684 tests passed / 2 failed; 2 unhandled errors. The remaining `auth/sso/action-paths.test.ts` contains Supertest HTTP cases: localhost `listen EPERM` left `server.address()` null, failing those two transport cases. No source change or permission escalation attempted. Log: `api-unit`.
+- `node apps/api/dist/generate-openapi.js --check`: exit 1, reports stale OpenAPI from the compiled generator. This is not the repository's source-generator command; the source generator's actual committed-file comparison passes as recorded above. No OpenAPI artifact was rewritten. Log: `openapi-compiled`.
+
+Turbo reported shared-cache `Operation not permitted` warnings, but forced tasks executed successfully. Next reported existing multiple-lockfile/workspace-root and compilation warnings; the build exited 0.
+
+### r1 remaining evidence and handoff
+
+- Repaired `test/later-command-contention.integration.test.ts`: **NOT RUN**, both cases. Its existing `cluster()` starts embedded PostgreSQL and binds localhost, unavailable in this sandbox per dispatcher. Typechecking/source inspection does not prove contention. Dispatcher/GitHub CI must execute `pnpm --filter @jobguard/db exec vitest run test/later-command-contention.integration.test.ts --maxWorkers=2` after push.
+- Full root `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, browser/e2e/native suites: **NOT RUN**; database/socket suites remain CI-owned, browsers expressly excluded. No schema change. No changed AI policy/prompt/model requiring a new evaluation gate; existing synthetic AI units passed.
+- This repair remains uncommitted, unpushed and unaccepted. A fresh or explicitly rebound independent verdict on the dispatcher-created repair commit remains required. No professional or release sign-off is inferred.
+- Intended conventional commit subject and body are written identically to `/private/tmp/jg-msg-later-b11-r1.txt` and `/private/tmp/jg-msg-later-b11.txt`, satisfying both dispatch paths.
+- Repaired integration source SHA-256: `0a173c5210824a0f642ac0f05df1b99193fd0498370b6a5d09f679bfbf30b30a`. Only that source file and this receipt are changed from inspected HEAD; no ledger, grant, migration, harness or other source file changed in r1.
