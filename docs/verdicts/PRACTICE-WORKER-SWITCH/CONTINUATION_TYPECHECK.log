@@ -1,0 +1,51 @@
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running typecheck in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:typecheck: cache bypass, force executing 6e63c4a1e08b44e8
+@jobguard/config:typecheck: cache bypass, force executing a8e3dafb7d992578
+@jobguard/storage:typecheck: cache bypass, force executing 3abc7c01a1728bbe
+@jobguard/storage:typecheck: 
+@jobguard/storage:typecheck: > @jobguard/storage@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/storage
+@jobguard/storage:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/storage:typecheck: 
+@jobguard/config:typecheck: 
+@jobguard/config:typecheck: > @jobguard/config@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/config
+@jobguard/config:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/config:typecheck: 
+@jobguard/core:typecheck: 
+@jobguard/core:typecheck: > @jobguard/core@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/core
+@jobguard/core:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/core:typecheck: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/ai:typecheck: cache bypass, force executing e054760468294c25
+@jobguard/db:typecheck: cache bypass, force executing 62904311b67778d4
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/db:typecheck: 
+@jobguard/db:typecheck: > @jobguard/db@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/db
+@jobguard/db:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/db:typecheck: 
+@jobguard/ai:typecheck: 
+@jobguard/ai:typecheck: > @jobguard/ai@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/packages/ai
+@jobguard/ai:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/ai:typecheck: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:typecheck: cache bypass, force executing cfdcd5b77672099c
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:typecheck: 
+@jobguard/api:typecheck: > @jobguard/api@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/api
+@jobguard/api:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/api:typecheck: 
+@jobguard/web:typecheck: cache bypass, force executing 521e99e1010ff62d
+@jobguard/web:typecheck: 
+@jobguard/web:typecheck: > @jobguard/web@0.0.0 typecheck /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/web
+@jobguard/web:typecheck: > tsc -p tsconfig.json --noEmit
+@jobguard/web:typecheck: 
+
+ Tasks:    7 successful, 7 total
+Cached:    0 cached, 7 total
+  Time:    1m4.568s 
+
