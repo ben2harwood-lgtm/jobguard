@@ -154,3 +154,55 @@ The intended conventional commit message is `/private/tmp/jg-msg-lp0-fix-1.txt` 
 
 
 **r1 final integration STOP:** The final lane rerun found the known Opus merge-order condition has now materialized: `origin/main` advanced externally during this session to `0bbb5ddbd074b791ece740a1861a6b7cc2fd6577`; it contains `0166_customer_billing_integrity.sql`, so its highest migration is now 0166. The original lane and lint checks passed against base `66205cfa419f7ebee00dabaa4babb325aeb92472`; the final `LANE_BASE_REF=origin/main pnpm lint:lanes` fails migration order. No git ref was changed by this builder. Per the repair instruction forbidding existing test/pin/reference changes, migration renumbering and its test/lane/note references are left untouched for the dispatcher. The repair is not represented as merge-ready. See `/private/tmp/jg-serious-b3-r1-lanes-final.log`.
+
+## r2 — dispatcher 14 final repair (16 October 2026 night)
+
+SERIOUS-B3 / PR #231, branch `codex/sandbox/serious-b3`, starting HEAD `356a1fb508b183ea821635c40018be90e6e35da6`; `LP0-FIX-1` identifies only this worktree path. Repair round r2 under fast-mode rule 6. Read AGENTS.md, BUILD_PLAN §§2.4/5.1–5.4 and the Batch 3 scope. **Uncommitted builder repair; no acceptance or new independent verdict is claimed. S06 stays STOPPED and out of scope.**
+
+### Exact repair
+
+The failing statement is in the test helper `preFixDraft`, `packages/db/test/serious-b3-quotes.integration.test.ts:63`, not production code. Its original SQL position 225 is the first `$5`. The same bind supplied both `content_hash char(64)` and `object_version_id varchar(300)` (column declarations in unchanged migration 0010). Cast the two occurrences to `$5::char(64)` and `$5::varchar(300)` respectively so PostgreSQL does not infer incompatible bind types. Both still receive the same original SHA-256 value.
+
+A read-only comparison against HEAD verified that removing exactly these two casts reproduces the entire original test file byte for byte. No other test, assertion, expected value, pin, production code or earlier SQL changed. No new migration; 0170 is untouched. This repair enables the existing S08 regression to reach its commercial-scope/history/effects assertions; it introduces no runtime, schema, permission, money/tax, backwards-compatibility or operational-alert change.
+
+### r2 executed checks
+
+Supplied dependencies only; no install/download. Node `v24.17.0`, cached pnpm `10.28.1`. Commands use `PATH="/private/tmp/jg-migfix-2-bin:$PATH" COREPACK_ENABLE_NETWORK=0 npm_config_manage_package_manager_versions=false` to select that already installed pnpm. No Git write command, commit, push, checkout, migration renumber or ref update was performed.
+
+| Command | Actual r2 result |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; 7 successful tasks, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1; core purity passes, then lane migration-order check blocks execution of the later checks. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; unchanged `0170_quote_scope_lineage.sql` must be numbered above base migration 0171. Base `origin/main` is `49fc07f33a440bcca7ac443de365aba3670e9999`, containing `0171_evidence_proof_rework.sql`. No migration/reference/pin is changed under this repair's explicit scope. |
+| `node tools/money-arithmetic-lint.mjs && node tools/commercial-boundary-lint.mjs && pnpm exec turbo run lint` | Exit 0; remaining boundary checks and all 7 package lint tasks pass (2 cached). Does not turn the failed full lint/lane checks into passes. |
+| `pnpm build` | Exit 0; 7 successful tasks, 2 cached; production Next build completed. Workspace-root/webpack/CSS and unavailable shared-cache warnings reported. |
+| `node --test tools/*.test.mjs` | Exit 0; 100/100 tests. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Exit 0; core 98 files/2,674 tests, config 1/1, storage 1/2, AI 6/85. Synthetic fixtures only, no live-model evaluation. |
+| `pnpm --filter @jobguard/db exec vitest run src --exclude 'test/**' --maxWorkers=1` | Exit 0; 13 files/116 tests. Source units, no PostgreSQL. |
+| API source subset command below | Exit 0; 82 files/1,657 tests. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 39 files/844 tests. Source units, no browser. |
+| `pnpm openapi:check` | Exit 1; sandbox `EPERM` on tsx CLI IPC listener. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same OpenAPI source generator/snapshot check without the CLI IPC listener. |
+| Inline Node/TypeScript `createProgram` for the affected integration file, repository strict compiler options and `noEmit:true` | Exit 0; zero diagnostics. The same script verified SQL position 225 and exact preservation apart from the two casts. No database execution. |
+| `git diff --check` | Exit 0. |
+
+API source subset (same nine listener/database exclusions as r1, supplied on the command line only):
+
+```sh
+pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 \
+  --exclude src/auth/sso/action-paths.test.ts \
+  --exclude src/contractor/contractor-practice-session.http.test.ts \
+  --exclude src/contractor/site-extra-pricing.http.test.ts \
+  --exclude src/contractor/site-extra.http.test.ts \
+  --exclude src/contractor/site-visit.http.test.ts \
+  --exclude src/contractor/practice-worker-switch.http.test.ts \
+  --exclude src/health.test.ts \
+  --exclude src/shadow-isolation.application.test.ts \
+  --exclude src/final-account-lock.isolation.test.ts
+```
+
+**NOT RUN:** `packages/db/test/serious-b3-quotes.integration.test.ts`, full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, real HTTP and browser/e2e suites. The dispatcher explicitly states this sandbox cannot bind localhost or start PostgreSQL; these suites remain mandatory in GitHub CI after the dispatcher commits/pushes. Typechecking/source inspection does not prove the PostgreSQL fix. The dispatcher's reported 203/204 PostgreSQL CI file result concerns the earlier commit, not this repair.
+
+Logs: `/private/tmp/jg-serious-b3-r2-{typecheck,lint,lanes,lint-remainder,build,tool-tests,domain-tests,db-unit-tests,api-unit-tests,web-unit-tests,openapi,openapi-direct}.log`. Intended conventional commit subject/body written to **both** requested paths: `/private/tmp/jg-msg-lp0-fix-1.txt` and `/private/tmp/jg-msg-serious-b3-r2.txt`.
+
+Remaining gates: dispatcher resolves the unchanged migration-order blocker outside this minimal repair; exact-commit GitHub PostgreSQL/HTTP/browser checks; refreshed independent exact-commit verdict and separate acceptance; founder-owned integration/release. S06 remains STOPPED. No check or gate is waived.
