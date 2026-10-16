@@ -150,3 +150,71 @@ d9269a0217b0240123ca0da1f2398d4a98842860d700f9c2bc22c355473b1d3e  tools/shared-m
 No detector fixes or stronger tests have been implemented. B19 acceptance remains unmet. Source scanners would supply bounded static evidence only; no claim about arbitrary program behaviour is made. Merge, activation and deployment remain HELD for Ben.
 
 Builder receipt only — not independently reviewed or accepted. Decision 74: PARK after both independent checks.
+
+---
+
+# LATER-B19 — builder STOP receipt
+
+Authored by Codex; finalized 17 October 2026. No build was performed. The requested first-line attribution to Claude Sonnet 5.5 would be inaccurate and is not asserted.
+
+Builder receipt only — not independently reviewed or accepted. Decision 74: PARK after both independent checks.
+
+## STOP: missing cited anchor
+
+The issued header requires: “If a cited anchor no longer exists, STOP on that line and report file, line, before, after.”
+
+- File and cited line: `LANE-LOG.md:350`.
+- Before (draft assertion): “records that B19 was left for this round because of priority, not an implementation dependency.”
+- After (current checkout): the file does not exist. `rg` reported `LANE-LOG.md: No such file or directory (os error 2)`; `rg --files` found no file with that name; `git ls-tree -r --name-only HEAD LANE-LOG.md` returned no entry.
+- No replacement anchor was invented. Dispatcher correction is required before implementation resumes.
+
+## Checkout and scope
+
+- HEAD and final head SHA: `18e4f618837cb2fa25f36585d5f4e368b6fc2ab6`.
+- Local `origin/main`: `f9288fece150c2ed6b645739ed217a61fd72155e`.
+- Draft base: `7ff452eeec1c523345d34715adfa3f8310062013`; the actual checkout differs, so current sources govern.
+- Actual branch: `codex/sandbox/later-b19`; issued header requested `codex/sandbox/b19`. Neither branch nor registry was changed.
+- Work performed only in the supplied `mon-8` directory.
+- `BUILD_PLAN.md:123` and `BUILD_PLAN.md:479–488` retain the cited C8 and SH-1 requirements.
+- Existing `config/lanes/later-b19.json` was read only.
+- Authored repository path: this receipt only. Intended message supplied at `/private/tmp/jg-msg-mon-8.txt` as requested by the final environment note.
+- No temporary fixtures, migrations, GRANTs, product changes, test changes or scanner changes.
+- Standard F: no direct application-login write grants were added; no database changes were made.
+
+## Commands and results
+
+Shell commands were grouped for read-only inspection. Group exit codes below are not represented as individual-command evidence when the shell only returned a group result.
+
+1. `pwd; git rev-parse HEAD; git branch --show-current; git status --short; node --version; export PATH="$HOME/Library/pnpm/bin:$PATH"; pnpm --version` — working directory, HEAD and branch as above; initial status empty; Node `v24.17.0`. `pnpm --version` emitted a warning about ignored `pnpm.overrides` and did not return a version during inspection. Interrupted through the execution session, exit 130. No test counts.
+2. `cat AGENTS.md; rg -n 'SH-1 Shared|C8 —|no binary-float arithmetic|no second implementation|LATER-B19' BUILD_PLAN.md LANE-LOG.md; cat tools/money-arithmetic-lint.mjs tools/core-purity-lint.mjs` — group exit 0 (last read); the search reported the missing file. Instructions and existing two scanners read; no tests run.
+3. `rg --files -g '*LANE-LOG*' -g '*lane*b19*' -g '*later-b19*'; git ls-tree -r --name-only HEAD LANE-LOG.md; git rev-parse origin/main; git status --short; sed -n '479,488p' BUILD_PLAN.md` — group exit 0; only the existing lane JSON matched; no tracked log entry; clean initial status.
+4. `cat config/lanes/later-b19.json; git diff --stat; git diff --check; shasum -a 256 tools/money-arithmetic-lint.mjs tools/core-purity-lint.mjs tools/shared-money-origin.test.mjs tools/commercial-boundary.test.mjs; git rev-parse HEAD` — group exit 0; tracked diff stat empty; whitespace check passed; hashes below.
+5. `apply_patch` initially replaced the tracked receipt during this session. The prior HEAD receipt was then restored verbatim and this session record appended; the final diff is additions only.
+
+No initial failing controls exist: the missing-anchor STOP occurred before test authoring. No behavioural result or import/tooling failure is claimed.
+
+## Preserved-source hashes (SHA-256)
+
+```text
+dff54e9aa8ed32a853e2ef397102c1dc80d2f09725275b7299915a019e276187  tools/money-arithmetic-lint.mjs
+da53827bf755b05d9424b6824f6fe15a603736d3c3f1a9e2493c4fae033d3ea6  tools/core-purity-lint.mjs
+d9269a0217b0240123ca0da1f2398d4a98842860d700f9c2bc22c355473b1d3e  tools/shared-money-origin.test.mjs
+9f86901162c8588ebf8d286a4bb7318145bfb5ad6e457ad6f77e7bc3153120ec  tools/commercial-boundary.test.mjs
+```
+
+## NOT RUN and remaining work
+
+All requested test files, scanner CLIs, forced typecheck, forced lint, forced build, root lint/lane validation and OpenAPI check: NOT RUN because the required anchor verification triggered STOP before implementation. No cache-hit result is claimed. New test files were not created. Full tests, PostgreSQL/migration suites and browser/e2e were also NOT RUN under the dispatch restrictions. Exact-commit lane validation remains for the dispatcher. No dependencies were installed.
+
+## Builder inspection and limits
+
+Only initial source inspection was completed. No detector fix or stronger test was implemented, and no acceptance criterion is claimed satisfied. Static scanning remains bounded evidence; no claim about arbitrary program behaviour is made. No independent review occurred. Merge, activation and deployment remain HELD for Ben. No UI or other adjacent work was added.
+
+## Final recording commands
+
+- Session polling returned no new output; cancellation returned exit 130.
+- `apply_patch` updated this session record, success.
+- Wrote `/private/tmp/jg-msg-mon-8.txt` with a documentation-only STOP commit subject and body; then ran `git diff --check; git diff --stat; git status --short; git rev-parse HEAD`, group exit 0. Inspection identified the prior tracked receipt; no prior receipt content is removed in the final change.
+- `git show HEAD:docs/verdicts/LATER-B19/BUILDER_RECEIPT.md; git diff --numstat; git status --short`, group exit 0, read the prior receipt before preserving it.
+- Python recording command read the prior receipt through `git show`, restored its full text, and appended this session record; exit recorded by the tool.
+- Final verification commands: `git diff --check; git diff --stat; git diff --numstat; git status --short; git rev-parse HEAD`; results reported to the dispatcher. Only this receipt is changed; tests executed: 0.
