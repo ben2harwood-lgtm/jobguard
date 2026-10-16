@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-5a": {
+      "branches": [
+        "codex/sandbox/lp-5a"
+      ],
+      "receipt": "docs/verdicts/LP-5A/BUILDER_RECEIPT.md",
+      "test": "packages/db/test/lp-5a-dispatcher.test.ts",
+      "note": "RED; partial candidate input codec only on incomplete LP-4. Dispatcher/database cutover stopped on missing checked audit and coordinator-owned tests/baseline. No migration, grant or caller conversion. Synthetic preparation; review and acceptance outstanding. UI parked.",
+      "allow": [
+        "docs/ledger/LP-5A.md",
+        "docs/contracts/lp-5a-command-lifecycle-v1.md",
+        "packages/db/src/lp-command-contract.ts",
+        "packages/db/test/lp-5a-dispatcher.test.ts",
+        "docs/verdicts/LP-5A/BUILDER_RECEIPT.md",
+        "docs/verdicts/LP-5A/PROPOSED-COORDINATOR-CHANGES.md"
+      ]
+    }
+  }
+}
