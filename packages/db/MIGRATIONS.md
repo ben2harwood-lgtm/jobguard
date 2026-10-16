@@ -1127,6 +1127,16 @@ the job pointer is the truth); `0107` `recovery_message_sources_current` picks t
 prefer an earlier-stated time of a re-acceptance. Proof: `quote-reacceptance.integration.test.ts` and
 `quote-reacceptance-upgrade.integration.test.ts`.
 
+## 0166 — customer billing integrity (MIGFIX-5)
+
+Restates two installed routines in place with `CREATE OR REPLACE` (owner `jobguard_migration`, SECURITY DEFINER, pinned `search_path` and ACL are preserved; no GRANT, table, column, policy or row change):
+
+- `app.lock_final_account(...)` (0132): after the existing variation row locks it refuses with `STALE_OR_BLOCKED_FINAL_ACCOUNT` any account whose revision lacks a currently-approved variation revision of the job, so an account assembled before the latest approval cannot be locked. An approval that commits first is visible to the lock; one still in flight makes the lock wait; a lock that commits first makes the approval a post-lock source. No new lock edge is added.
+- `app.issue_practice_customer_credit_note(...)` (0028): cumulative credited net can never pass the original invoice net (`CREDIT_EXCEEDS_AVAILABLE_AMOUNT`, in SQL as well as the repository), and each credit's VAT keeps the merged per-credit half-up rule but is capped at the VAT still remaining on the original invoice.
+
+Held, not in this migration: the legacy `issue_practice_customer_invoice` guard (open #189 / 0147 already restates it), cumulative whole-invoice VAT rounding (changes a merged expectation), and real PDF bytes (Ben, 14 Oct, decision 7: later). `PracticeInvoiceRepository.previewCredit` applies the same VAT cap.
+
+Upgrade proof: `packages/db/test/migfix-5-upgrade.integration.test.ts` (own step on a populated pre-0166 schema, ACL/owner kept, later migrations twice). Behaviour: `packages/db/test/migfix-5.integration.test.ts`. Forward-fix rollback only; do not edit an earlier migration.
 ## 0157 — ENT-5 extra approval foundation
 
 Requires ENT-3b/3c/3d (0139–0141), and their merged interfaces before landing. Two new immutable containers: `extra_approval_revision_binding`, `extra_evidence_pack`. Runtime SELECT only; no callable business writer, backfill, approval/state transition or external effect. Two insert guards verify same-extra immutable source/positive price/predecessor structure and extra subject. Existing source prices, baseline, hashes, origin and recovery packs remain unchanged.
@@ -1155,3 +1165,41 @@ The four bootstrap rows now use jobguard_migration on the separate owner connect
 Upgrade proof: lp1-upgrade.integration.test.ts installs predecessors, snapshots populated authority/receipt/audit and commercial source/pack rows as canonical named-column text/full types with original PK identities, applies 0162 alone, compares declared security changes, then runs later migrations twice. Rolled-back microsecond/type controls fail comparison; later scratch columns/functions/rows pass. Real-role refusal, all four lock strengths, RLS UPDATE-policy, nontransactional trigger-effect and bootstrap proofs are separate. PostgreSQL/browser execution is NOT RUN in the builder sandbox. No source inspection or non-DB check establishes acceptance.
 
 Rollout remains gated by coordinator repairs, real PostgreSQL fresh/populated upgrade/regression checks, exact-head RED verdicts and separate acceptance. On install failure, the migration transaction rolls back. After installation fix forward while retaining the withdrawal; do not restore broad runtime authority writes. Previous service binaries retain their unchanged lock SQL; run the updated explicit bootstrap for synthetic setup. No real-data or deployment authority follows.
+
+## 0164 — SV-7A synthetic job source storage and reads
+
+Installs three migration-owned, FORCE-RLS immutable tenant/job side tables, exact
+evidence/original relationships, private integrity triggers and one persisted-session
+authorized read routine. Runtime gains SELECT only and read EXECUTE. No earlier
+rows, grants, routines or fingerprinted table columns change; no backfill.
+Both executable source-intake routines remain held (Q3/Q4). No CH-4 event adapter
+is installed. The catch-up base includes merged CH-4/0144; its diary key/adapter
+and coordinator catalogue coverage remain prerequisites. Disable the new read entrypoints
+on deployment failure and use a reviewed forward fix; preserve originals/history.
+Own-step upgrade proof: `test/job-sources-upgrade.integration.test.ts`; PostgreSQL
+execution remains required, with later migrations applied twice and rolled-back
+canonical-row/type/identity comparator controls.
+
+## Adding a migration after MERGE-CHURN-1 (founder decision 35, 14 October 2026)
+
+`src/migrate.ts` lists the 85 migrations merged through `0155_quote_reacceptance.sql` explicitly and never changes again;
+every newer `NNNN_lowercase_name.sql` in `migrations/` is discovered and run after them in name order. A piece adds only its
+SQL file (numbered above the highest migration on main) and a note at `migration-notes/<file stem>.md`; it does not edit
+`migrate.ts` or this file. The runner refuses to migrate if the directory holds anything else, a listed file is missing, a new
+file is numbered at or below 0155, or two files share a number. The lane check refuses an added migration that is not numbered
+above every migration on its base; `node tools/migration-renumber.mjs --write` fixes that at catch-up with SQL bytes unchanged.
+
+## 0165 — practice worker switch (PRACTICE-WORKER-SWITCH)
+
+Requires 0138 session hardening. Adds two private control-plane tables, ten routines,
+and five refusal triggers on existing tables; replaces only `app.contractor_session(uuid)`.
+No backfill or existing row changes. Decision 39 permits operative, supervisor,
+surveyor and client_approver targets. No runtime table grants; only EXECUTE on the
+three session-authorized switch routines. Audit events must commit with the switch.
+
+Forward fix: leave immutable records and permanent markers intact. Restore the
+hardened lookup and separately revoke switch-on EXECUTE using the two statements
+in `docs/contracts/practice-worker-switch-v1.md`. This disables acting and new
+switches while retaining switch-off/state access. PostgreSQL execution, catalogue,
+upgrade and rollback proofs require dispatcher/CI verification; they were not run
+in the builder sandbox.

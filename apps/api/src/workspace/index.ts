@@ -83,3 +83,8 @@ export * from "../auth/sso/scim.application.js";
 export * from "../auth/sso/scim.contracts.js";
 export * from "../recovery-allocation.application.js";
 export * from "../recovery-allocation.contracts.js";
+
+export * from "../job-source.application.js";
+export * from "../job-source.contracts.js";
+export * from "../job-source.errors.js";
+export * from "../contractor/practice-worker-switch.application.js";
