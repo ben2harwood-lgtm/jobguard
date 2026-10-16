@@ -12,6 +12,18 @@ async function navigation(page: Page, label: string) {
   await desktop.getByRole('button', { name: new RegExp(`^${label}`) }).click();
 }
 
+const enabledPreview = process.env.VERCEL_ENV !== 'production'
+  && (process.env.CI !== 'true' || process.env.JOBGUARD_UI_PREVIEW === '1' || process.env.VERCEL_ENV === 'preview');
+
+test('preview is closed on the normal production-mode CI host', async ({ request }) => {
+  test.skip(enabledPreview, 'This run explicitly enables the isolated preview.');
+  const response = await request.get('/preview');
+  expect(response.status()).toBe(404);
+});
+
+test.describe('explicitly enabled preview', () => {
+  test.skip(!enabledPreview, 'Requires JOBGUARD_UI_PREVIEW=1 on an isolated test host; not evidence of a passed journey.');
+
 test('design capture, pricing and exact-revision approvals survive reload', async ({ page }) => {
   await page.goto('/preview');
   await page.getByRole('button', { name: 'Log an extra', exact: true }).first().click();
@@ -82,4 +94,6 @@ test('mobile capture remains usable at 360 and 390 pixels', async ({ page }) => 
     await expect(page.getByLabel('What is the extra work?', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
+});
+
 });
