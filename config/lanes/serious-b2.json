@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b2": {
+      "branches": ["codex/sandbox/serious-b2"],
+      "receipt": "docs/verdicts/SERIOUS-B2/BUILDER_RECEIPT.md",
+      "note": "SERIOUS-B2, dispatcher 13, 16 Oct 2026: S02 and S03 reproduced, then stopped at existing expectation/source-hash pins pending coordinator ruling. S04/S05 deferred. RED access/data lane; diagnostic patches and receipt only; no existing expectations or pins changed.",
+      "allow": [
+        "docs/verdicts/SERIOUS-B2/BUILDER_RECEIPT.md",
+        "docs/verdicts/SERIOUS-B2/s02-reproducer.patch",
+        "docs/verdicts/SERIOUS-B2/s03-prototype.patch",
+        "packages/db/test/contractor.integration.test.ts",
+        "apps/api/src/auth/context-boundary.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts",
+        "packages/db/src/sor-repository.ts",
+        "packages/db/src/work-order-fixtures.ts"
+      ]
+    }
+  }
+}
