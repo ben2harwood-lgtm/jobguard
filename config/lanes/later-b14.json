@@ -10,6 +10,7 @@
       "allow": [
         "apps/api/src/decisions/decisions-later.test.ts",
         "apps/api/src/decisions/decisions.application.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/ledger/LATER-B14.md",
         "docs/verdicts/LATER-B14/BUILDER_RECEIPT.md",
         "packages/core/src/decision-checks-later.test.ts",

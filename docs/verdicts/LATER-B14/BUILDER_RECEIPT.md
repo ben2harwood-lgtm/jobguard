@@ -140,3 +140,43 @@ Task deliverables other than this self-referential receipt (working SHA-256):
 | `docs/ledger/LATER-B14.md` | `e7c6f17662a6ebba5ae3c943f67a6ad3d7197699a21210d424631300c2bc9f6b` |
 
 Final HEAD: `7ff452eeec1c523345d34715adfa3f8310062013` (unchanged; all changes are uncommitted).
+
+
+## r1 — LP-0 inventory repair (dispatcher 14, 16 October 2026 night)
+
+Prepared by Codex from clean HEAD `4cd1aa7e9ed767f8aa7b26f07d22f58027322760` on `codex/sandbox/later-b14`, PR #263. BUILD-DON'T-MERGE (Ben decision 74): uncommitted repair, PARKED pending two independent exact-commit verdicts and separate acceptance. No commit, staging, push, merge, deployment, browser, provider call or real data. The dispatcher will commit and push. This append supersedes the original receipt's claim that no shared inventory update was needed.
+
+Authority inspected: independent check B `d14-later-b14-checkB-opus-4cd1aa7.md`, Ben decision 60 (additive rows for newly created objects, existing runtime role plus owner/routine records), ruling 70 (add exactly the named contract path to the lane), AGENTS.md and BUILD_PLAN C4–C6 / LP-0. The existing Node 24.17.0 and cached pnpm 10.28.1 launcher `/private/tmp/jg-later-b14-bin/pnpm` were used; no install or download. Available disk was 35 GB, above the dispatcher's waived night floor of 30 GB; the superseded 45 GB gate was not imposed.
+
+Only the requested inventory, lane and receipt change in r1. `docs/contracts/lp-0-effective-privileges-v1.json` gains exactly four entries: the runtime EXECUTE fact for `app.decision_check_command(text,jsonb,text,jsonb)` and migration-owner facts for that function, `app.guard_decision_check_receipt()` and `app.require_completed_decision_check()`. The EXECUTE entry uses the existing authority group `x-command-authority-writes` / `ap-command-receipts`, because the routine owns the checked receipt lifecycle and Decision creation; owners use `a-owner-routines`. Exactly three recorded routine identities are added, since `lp-0-authority-paths.integration.test.ts` checks identity completeness including owner-only routines. Rows are inserted in the existing lexical order without changing any existing row, group, metadata, trigger record or policy. The lane gains only `docs/contracts/lp-0-effective-privileges-v1.json`.
+
+Recorded definer, search path, trigger-return and ACL posture come from 0193. Static writes/calls were checked with `staticScan` from `packages/db/test/lp-0-catalog.ts` against its migration source and inventory names; strict `parseInventory` passed. PostgreSQL-generated definition digests are explicitly `null`, not invented from SQL source bytes. These are source-derived records, not a live catalogue read. Both receipt guard functions remain non-definer, owner-only and unexecutable by runtime/PUBLIC/infrastructure. This repair grants no database privilege, creates no object, changes no SQL or application behavior, and adds no role, table, RLS policy, migration, operational alert or compatibility impact. The only inventoried runtime capability is the existing 0193 EXECUTE grant. No other role gains anything.
+
+### r1 executed checks
+
+Every pnpm command used the pinned temporary launcher in PATH. Typecheck/lint/build were forced real executions, with zero cache hits and concurrency 2; unit suites used at most two workers and ran sequentially after build. Existing Turbo cache-write and Next dependency/CSS/workspace warnings were nonfatal.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck --force --concurrency=2` | PASS, 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | PASS, root tools and 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, includes working-tree repair and original branch diff |
+| `pnpm build --force --concurrency=2` | PASS, 7/7 tasks |
+| `node --test tools/*.test.mjs` | PASS, 100 tests |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, 101 files / 2,720 tests |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2` | PASS, 10 files / 113 fixture tests; no live model |
+| `pnpm --filter @jobguard/config exec vitest run src --maxWorkers=2` | PASS, 1 file / 1 test |
+| `pnpm --filter @jobguard/storage exec vitest run src --maxWorkers=2` | PASS, 1 file / 2 tests; fake adapters |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | PASS, 40 files / 867 tests |
+| `pnpm --filter @jobguard/db exec vitest run --exclude 'test/*.integration.test.ts' --exclude test/free-port.test.ts --maxWorkers=2` | PASS, 53 files / 463 unit tests, including LP-0 catalogue unit tests |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2` with the nine exclusions below | PASS, 86 files / 1,675 tests |
+| `pnpm openapi:check` | Exit 1 before generator: tsx CLI IPC socket `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same OpenAPI generator/check through installed loader, no socket |
+| Inline Node check via `pnpm --filter @jobguard/api exec node --import tsx --input-type=module` | PASS: strict inventory schema, exactly 4 added entries / 3 added routines, previous rows and their order/all other fields preserved, catalogue static scan matches |
+| `git diff --check` | PASS |
+
+API exclusions (each passed as `--exclude`): `src/shadow-isolation.application.test.ts`, `src/health.test.ts`, `src/auth/sso/action-paths.test.ts`, `src/contractor/site-visit.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/final-account-lock.isolation.test.ts`. These need PostgreSQL and/or listeners. The initial API selection omitted the last exclusion: 86 files passed / one suite setup failed at `freePort` (`no free port in 58400..58650`), 1,677 tests passed / 1 skipped. No PostgreSQL process started. The subsequent run added that exclusion and passed as recorded above; the failed setup is not a passing integration test. The initial inline inventory check from the db package also failed to resolve tsx; using the API package's already installed loader resolved that tooling issue.
+
+Unique successful final selections total 5,941 tests (including 100 tooling tests); retries are not added to that total. Logs are `/private/tmp/jg-later-b14-r1-{typecheck,lint,lanes,build,tools-tests,core,ai,config,storage,web,db-unit,api-unit,api-unit-rerun,openapi,openapi-loader,inventory}.log`; exact initial unit invocation arrays/results are in `/private/tmp/jg-later-b14-r1-unit-results.json`.
+
+**NOT RUN:** PostgreSQL LP-0 grant-freeze and authority-path suites, other real database/upgrade/migration suites, full `pnpm test` / `pnpm test:db` / `pnpm test:migrations`, listener-dependent tests and browser/e2e suites. Dispatcher states this sandbox cannot bind localhost or start PostgreSQL and prohibits browsers; those checks belong in GitHub CI after dispatcher push. No LP0-01/LP0-02 live pass or independent review of this repair is claimed. Both RED verdicts on the eventual repair commit, separate acceptance and Ben's decision-74 merge/enablement approval remain pending. Commit subject/body is written to both `/private/tmp/jg-msg-later-b14-r1.txt` and `/private/tmp/jg-msg-later-b14.txt`.
