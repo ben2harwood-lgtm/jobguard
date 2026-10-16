@@ -31,6 +31,105 @@
         ]
       }
     },
+    "/contractor/practice/acting-as": {
+      "get": {
+        "operationId": "PracticeWorkerSwitchController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the current practice acting-as state",
+        "tags": [
+          "practice-worker-switch"
+        ]
+      }
+    },
+    "/contractor/practice/workers/{workerId}/acting-as": {
+      "post": {
+        "operationId": "PracticeWorkerSwitchController_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "practice-worker-switch-on.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Act as an existing made-up member of this practice company for thirty minutes",
+        "tags": [
+          "practice-worker-switch"
+        ]
+      }
+    },
+    "/contractor/practice/acting-as/end": {
+      "post": {
+        "operationId": "PracticeWorkerSwitchController_end",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "practice-worker-switch-off.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "End this practice session's acting-as switch",
+        "tags": [
+          "practice-worker-switch"
+        ]
+      }
+    },
     "/auth/scim/{connectionId}/deactivations": {
       "post": {
         "operationId": "ScimController_deactivate",
