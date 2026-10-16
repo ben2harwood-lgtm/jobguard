@@ -1127,6 +1127,16 @@ the job pointer is the truth); `0107` `recovery_message_sources_current` picks t
 prefer an earlier-stated time of a re-acceptance. Proof: `quote-reacceptance.integration.test.ts` and
 `quote-reacceptance-upgrade.integration.test.ts`.
 
+## 0166 — customer billing integrity (MIGFIX-5)
+
+Restates two installed routines in place with `CREATE OR REPLACE` (owner `jobguard_migration`, SECURITY DEFINER, pinned `search_path` and ACL are preserved; no GRANT, table, column, policy or row change):
+
+- `app.lock_final_account(...)` (0132): after the existing variation row locks it refuses with `STALE_OR_BLOCKED_FINAL_ACCOUNT` any account whose revision lacks a currently-approved variation revision of the job, so an account assembled before the latest approval cannot be locked. An approval that commits first is visible to the lock; one still in flight makes the lock wait; a lock that commits first makes the approval a post-lock source. No new lock edge is added.
+- `app.issue_practice_customer_credit_note(...)` (0028): cumulative credited net can never pass the original invoice net (`CREDIT_EXCEEDS_AVAILABLE_AMOUNT`, in SQL as well as the repository), and each credit's VAT keeps the merged per-credit half-up rule but is capped at the VAT still remaining on the original invoice.
+
+Held, not in this migration: the legacy `issue_practice_customer_invoice` guard (open #189 / 0147 already restates it), cumulative whole-invoice VAT rounding (changes a merged expectation), and real PDF bytes (Ben, 14 Oct, decision 7: later). `PracticeInvoiceRepository.previewCredit` applies the same VAT cap.
+
+Upgrade proof: `packages/db/test/migfix-5-upgrade.integration.test.ts` (own step on a populated pre-0166 schema, ACL/owner kept, later migrations twice). Behaviour: `packages/db/test/migfix-5.integration.test.ts`. Forward-fix rollback only; do not edit an earlier migration.
 ## 0157 — ENT-5 extra approval foundation
 
 Requires ENT-3b/3c/3d (0139–0141), and their merged interfaces before landing. Two new immutable containers: `extra_approval_revision_binding`, `extra_evidence_pack`. Runtime SELECT only; no callable business writer, backfill, approval/state transition or external effect. Two insert guards verify same-extra immutable source/positive price/predecessor structure and extra subject. Existing source prices, baseline, hashes, origin and recovery packs remain unchanged.
