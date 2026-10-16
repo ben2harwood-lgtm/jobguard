@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as enterpriseFeeDomain from "./enterprise-domain/fee.js";
+import { money } from "./money.js";
 import {
   enterpriseFeeCommandV1, enterpriseFeeReconciliationV1, enterpriseFeeReadV1,
   enterpriseFeeAgreementV1, enterpriseFeeReferenceInputV1, enterpriseFeeSignedArtifactV1,
@@ -172,6 +174,22 @@ describe("ENT-7 independent reference boundaries (no database or command executi
     r.statement.prior = [{ agreementVersionId: "v1", priorPolicyVersion: "v1", priorNetPostedPence: 0,
       derivationId: id(101), contributions: [{ extraId: id(1), qualifyingPrincipal: exact(15) }] }];
     expect(() => representEnterpriseFeeReference(r, hash())).toThrow("INVALID_STATEMENT");
+  });
+  it("E7-10 refuses STALE_FACTS when a later section's cumulative fee disagrees with the shared kernel", () => {
+    const r = reference([group(1), group(2)]);
+    r.statement.groups[1]!.agreementVersionId = "v2";
+    r.statement.groups[1]!.members[0]!.origin.serverRecordedAt = "2026-10-20T12:00:00Z";
+    r.statement.agreements.push({ ...r.statement.agreements[0]!, id: "v2", effectiveFrom: "2026-10-15T00:00:00Z",
+      rate: { ...r.statement.agreements[0]!.rate, policyVersion: "v2", numerator: "8" } });
+    const derived = enterpriseFeeDomain.deriveEnterpriseReferenceStatement({ ...r.statement, feeGate: false, inputFactsHash: hash() });
+    const sections = derived.sections.map((s, i) => i === 1
+      ? { ...s, cumulativeFee: money(1199) } : s);
+    const derivation = vi.spyOn(enterpriseFeeDomain, "deriveEnterpriseReferenceStatement").mockReturnValue({ ...derived, sections });
+    try {
+      expect(() => representEnterpriseFeeReference(r, hash())).toThrowError(new EnterpriseFeeError("STALE_FACTS"));
+    } finally {
+      derivation.mockRestore();
+    }
   });
   it("E7-10 signed mixed contribution changes preserve FP-2 without authorizing posting", () => {
     const r = reference([group(1, 15000), group(2, 10000)]);

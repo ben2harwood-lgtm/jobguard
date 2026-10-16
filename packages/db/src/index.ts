@@ -99,9 +99,13 @@ export * from "./extra-approval-repository.js";
 export * from "./extra-evidence-pack-sources.js";
 export * from "./extra-evidence-pack-repository.js";
 export * from "./extra-approval-chain-repository.js";
+export * from "./northside-demo.js";
 
 export * from "./job-source-repository.js";
 export * from "./job-source-observation-reader.js";
 export * from "./job-source-fixtures.js";
 export * from "./enterprise-dashboard-repository.js";
 export * from "./practice-worker-switch-repository.js";
+
+export * from "./northside-settings.js";
+export * from "./northside-run.js";

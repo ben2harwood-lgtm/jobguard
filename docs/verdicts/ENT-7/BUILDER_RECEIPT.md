@@ -459,3 +459,46 @@ Additional shell edits/inventories, all exit 0: one Python heredoc inserted only
 Final head: `5105a55eb2a712af7c4b6001ae73bfde934b5679`. All changes remain uncommitted; dispatcher/CI verification and independent acceptance remain outstanding.
 
 Final verification: `git diff --check` exit 0; final receipt update/inventory Python heredoc exit 0. Source-only path inventory remains 10 changed/new files, including this receipt; 31 authored unit cases remain NOT RUN. Intended commit message exists at `/private/tmp/jg-msg-ent-7.txt`.
+
+
+## r1 — dispatcher 14 repair, 16 October 2026
+
+Builder: Codex. Repair base: `0a6f9dec09d52f626feb81a00998d2a776bd6679`, branch `codex/sandbox/ent-7`, PR #238. Initial working tree was clean. Read the independent Claude Opus REPAIR verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/d14-ent-7-opus-0a6f9de.md`, repository AGENTS, BUILD_PLAN §§9.1.5–9.1.13 and ENT-7, and `docs/contracts/enterprise-fee-statement-v1.md` before implementation. This section supersedes the original receipt's NOT RUN counts for the unit cases below; it does not close parent ENT-7 acceptance or any held persistence/production gate.
+
+### Repair and invariants
+
+`enterprise-fee-statement.ts` now imports and actually calls `calculateCumulativeFee` from `./cumulative-fee.js` for **every** derived section. The check uses that section's exact qualifying principal, agreement rate/version and supplied prior-posting/compensation facts. A missing agreement or disagreement with the derived cumulative fee refuses with the existing `STALE_FACTS` error before the artifact is returned. All arithmetic remains in the shared exact-integer/rational kernel; no competing rounding helper was added.
+
+Exactly **one** unit case was added. It derives two agreement sections at 10% and 8%, substitutes an incorrect 1199p cumulative fee for the second section's 1200p result, and requires `EnterpriseFeeError("STALE_FACTS")`. The derivation spy is restored in `finally`. After correcting the new fixture's agreement effective dates, the case failed before the implementation because no error was thrown (21 existing cases passed), then passed with the implementation. The first fixture attempt was invalid (`AGREEMENT_VERSION_MISMATCH`); no existing fixture or assertion was changed. A subsequent typecheck caught the test's unbranded pence literal; the test now constructs its altered value with the existing validated `money(1199)` helper.
+
+Only the statement source, its test file (imports plus one added case), and this appended receipt change. No existing test assertion, pin, shared list, lane registry, guard, kernel, migration, API source or contract was edited. No file was renamed. No schema/data migration, compatibility change for valid artifacts, new alert, external action, charge or authorization path was introduced. All previous reference-only and refusal-only behavior remains in place.
+
+### Commands and observed results
+
+Used installed dependencies; no install or package download. Runtime was Node `v24.17.0` (repository `.nvmrc`: `24.15.0`). The default pnpm launcher reported a v11 configuration warning and stalled; those launcher attempts were interrupted. The cached pinned pnpm `10.28.1` was then invoked through `/private/tmp/jg-ent-7-r1-bin/pnpm`, a plain wrapper executing `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`, with that directory prepended to PATH. No repository tooling was changed. This is verification against the existing install, not a clean-install claim. Turbo reused two unaffected cached tasks in the final typecheck/lint runs and emitted sandbox cache I/O warnings.
+
+| Command | Observed result |
+|---|---|
+| `node --test tools/shared-money-origin.test.mjs` | Before repair: 2 pass, 1 fail as reported. After repair: **3/3 PASS**, exit 0. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src/enterprise-fee-statement.test.ts` | **22/22 PASS**, exit 0, including the one new mismatch case. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/contractor/enterprise-fee.application.test.ts src/contractor/enterprise-fee.executor.test.ts` | **10/10 PASS**, exit 0. Total ENT-7 cases: **32/32 PASS**, comprising all 31 existing cases plus one new case. |
+| `pnpm typecheck` | **PASS**, exit 0; 7/7 tasks successful. |
+| `LANE_BASE_REF=origin/main pnpm lint` | **PASS**, exit 0; source guards and 7/7 package tasks successful. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | **PASS**, exit 0. The shared `origin/main` ref advanced externally during verification; no fetch or ref write was performed here. |
+| `node --test tools/*.test.mjs` | **100/100 PASS**, exit 0. |
+| `pnpm --filter @jobguard/core exec vitest run --maxWorkers=2 src` | **2575/2575 PASS**, 96 files, exit 0. An earlier unrestricted-worker source run had one existing receipt-allocation 5000ms timeout; no timeout, test or pin was edited. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | **812/812 PASS**, 36 files, exit 0. Unit tests, not browser journeys. |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2 src` | **85/85 PASS**, 6 files, exit 0; synthetic fixtures, not a live model evaluation. |
+| `pnpm --filter @jobguard/storage exec vitest run --maxWorkers=2 src` | **2/2 PASS**, exit 0. |
+| `pnpm build` | **PASS**, exit 0; 7/7 tasks successful, including Next.js production build. Existing dependency/workspace-root and sandbox cache I/O warnings were emitted. |
+| `pnpm openapi:check` | Wrapper fails, exit 1: `tsx` IPC `listen EPERM`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | **PASS**, exit 0, using the same generator/check without the CLI IPC listener. OpenAPI unchanged. |
+| `pnpm --filter @jobguard/core test` | Exit 1: 5147 pass, 2 fail across generated `dist` and source tests. Existing generated `dist/site-extra-pricing.test.js` and `dist/recovery-allocation.test.js` try to read absent `.ts` source files beside themselves. Source-only run above passes. No harness changes made. |
+| `pnpm --filter @jobguard/api exec vitest run src` | Exit 1: 1662 pass, 108 fail, 23 skip, 108 errors. HTTP tests hit sandbox `listen EPERM` on `0.0.0.0`; targeted ENT-7 unit tests pass. |
+| `git diff --check` | **PASS**, exit 0. |
+
+Full `pnpm test`, PostgreSQL/database/migration suites and browser/e2e suites: **NOT RUN**. The full command includes the database suite, and the dispatcher states this sandbox cannot start PostgreSQL or bind localhost; GitHub CI must run these after the dispatcher commits/pushes. No database or browser verification is claimed. Repair logs are in `/private/tmp/jg-ent-7-r1-*.log`.
+
+### Handoff and acceptance
+
+Intended conventional commit subject/body is written to **both** `/private/tmp/jg-msg-ent-7-r1.txt` and `/private/tmp/jg-msg-ent-7.txt`. No git add, commit, push, checkout, reset, merge or other git write was performed. The dispatcher owns committing and pushing this working-tree diff. No new independent r1 verdict or acceptance is claimed: a different model must review the dispatcher's exact repair commit, followed by separate acceptance. Existing persistence, Q-02–Q-07, commercial policy and production release holds remain unchanged.
