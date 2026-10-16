@@ -67,6 +67,7 @@ export * from "./site-visit.js";
 export * from "./site-extra-evidence.js";
 export * from "./recovery-payment-payer.js";
 export * from "./job-work-state.js";
+export * from "./jobs-on-the-go.js";
 export * from "./extra-approval.js";
 export * from "./extra-client-approval.js";
 export * from "./extra-evidence-pack.js";
