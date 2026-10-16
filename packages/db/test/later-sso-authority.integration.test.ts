@@ -52,7 +52,9 @@ describe("LATER-B28 actual PostgreSQL boundaries", () => {
   });
   it("FL64 four concurrent link starts do not exhaust the four-client pool", async () => {
     const f = await fixture(h, true, false);
-    const pool = new Pool({ ...h.identity.options, max: 4, connectionTimeoutMillis: 3000 });
+    const login = `b28_${randomUUID().replaceAll("-", "")}`, credential = randomUUID();
+    await h.admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT jobguard_identity TO ${login}`);
+    const pool = new Pool({ ...h.identity.options, user: login, password: credential, max: 4, connectionTimeoutMillis: 3000 });
     try {
       const provider = new PersistedAuthProvider(new IdentityRepository(pool), "s".repeat(40));
       // Use the original digest authority with the bounded pool; no synthetic session is reissued.

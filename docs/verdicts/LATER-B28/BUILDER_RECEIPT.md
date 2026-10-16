@@ -171,3 +171,31 @@ Actual `git diff --stat` (tracked files only; exit 0):
 Untracked additions, also checked by the lane tool: the three new test files, the new lane registration, ledger and this receipt. Git diff does not include these until the dispatcher stages them. No staging was performed.
 
 Final verification/receipt commands: `git rev-parse HEAD`, `git rev-parse origin/main`, `git diff --check` (all 0), Python byte comparison of all seven cited files between the two observed main refs (0; 7 unchanged), and this Python receipt/manifest update (0; 7 artifact hashes, 10 unchanged sentinel comparisons). No other repository path changed.
+
+## r1 — repair round, dispatcher 14, 17 October night
+
+PR #256; branch `codex/sandbox/later-b28`; starting HEAD `b4a900076ab5a0402420bc66cbecb3640d863804`. This appendix records only the requested repair. The earlier receipt remains historical. Decision 74 BUILD-DON'T-MERGE remains in force; no commit, staging, push, browser, database start, package install or download was performed.
+
+Dispatcher-supplied CI run `38964614690` reported 2544 passes, one expected failure (L054, unchanged) and one failure: FL64's bounded-pool test could not authenticate (PostgreSQL 28P01, empty password). Inspected the supplied local excerpt. A local, connection-free inspection of installed `pg` confirmed `Pool.options.password` is non-enumerable and absent from an object spread.
+
+Changed only `packages/db/test/later-sso-authority.integration.test.ts` and this receipt. FL64 now creates a dedicated synthetic login with a runtime-generated UUID password, grants it the existing `jobguard_identity` role, and passes the identical password explicitly to the four-client Pool. This follows `final-account-lock.integration.test.ts`'s login/password pattern without changing the shared harness. The pool limit, concurrency assertions, cleanup and L054 `it.fails` remain unchanged. No migration, production grants, API, policy, authorization or operational behavior changed.
+
+Verification used Node `v24.17.0` and the already-cached pinned pnpm `10.28.1`, with `PATH=/private/tmp/jg-pnpm-later-b11:$PATH`. The default launcher version probe stalled and was interrupted (130); no download/install command was issued. Turbo checks used `--force`; no cached check is reported as execution.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck --force --concurrency=2` | PASS; 7 tasks, 0 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | PASS; root boundary checks and 7 tasks, 0 cached. Turbo emitted an IO permission warning. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS; later-b28 lane. |
+| `pnpm --filter @jobguard/db exec tsc -p /private/tmp/jg-later-b28-integration-tsconfig.json` | PASS; separate no-emit compilation includes the changed integration test. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 --config /private/tmp/jg-later-b28-vitest.config.mjs src/later-sso-refusal.test.ts` | PASS; 9 unit tests. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 --config /private/tmp/jg-later-b28-vitest.config.mjs src/auth/sso/later-sso-resource.test.ts` | PASS; 14 unit tests. |
+| `pnpm build --force --concurrency=2` | PASS; 7 tasks, 0 cached; Next production build completed. |
+| `pnpm openapi:check` | BLOCKED; exit 1 before generation: `listen EPERM` on the tsx IPC pipe. No workaround/retry. |
+| `git diff --check` | PASS. |
+
+The existing temporary Vitest config aliases workspace imports to this worktree's sources; the existing temporary TypeScript config extends this checkout's strict config and includes the integration file. Neither changes repository configuration. Logs: `/private/tmp/jg-later-b28-r1-{typecheck,lint,lanes,integration-types,db-unit,api-unit,build,openapi}.log`.
+
+PostgreSQL integration test **NOT RUN**: the dispatcher states PostgreSQL is unavailable and this sandbox cannot bind/start it. No PostgreSQL client was found in the inspected standard locations. Full `pnpm test`, database/migration suites and browser suites **NOT RUN** because they require the prohibited infrastructure; only the two scoped unit files ran. No AI evaluation applies. CI must execute the repaired PostgreSQL test and retain L054's expected failure. This is local build evidence, not an independent verdict or acceptance; decision 74 and existing release gates remain held.
+
+Intended conventional commit subject/body written to both `/private/tmp/jg-msg-later-b28-r1.txt` and `/private/tmp/jg-msg-later-b28.txt` for the dispatcher. No Git writes performed.
