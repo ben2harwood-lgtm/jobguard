@@ -327,3 +327,42 @@ Other broad API failures include Supertest `listen EPERM` / null server port err
 `pnpm test`, `pnpm lint`, `pnpm lint:lanes`, `pnpm build`, `pnpm typecheck` and `pnpm openapi:check` orchestration are NOT RUN; direct constituent executions and their exact results are listed above. PostgreSQL suites (including the eight new ENT-6B integration suites, real catalog/LP-0 and upgrade/migration proofs), browser/e2e and live-provider/model checks remain **NOT RUN**. No PostgreSQL or browser was started. Dispatcher/GitHub CI must run the required database and browser gates after push. No model/prompt/parser changed, so no new live-model evaluation is applicable.
 
 All production, real-data, G4-C/G5 and independent exact-commit review/separate acceptance holds remain. No self-acceptance. No git write, commit, push, checkout, deployment or external message occurred. Intended conventional commit subject/body written to both `/private/tmp/jg-msg-ent-6b-r1.txt` and `/private/tmp/jg-msg-ent-6b.txt`; dispatcher owns committing and pushing.
+
+
+## r2 — dispatcher 14 final repair, 16 October 2026
+
+Repair base/head: `c6e5d271bd755526496fa08d1a693bba2ddd6e97`, branch `codex/sandbox/ent-6b`, PR #240. Read AGENTS, BUILD_PLAN §9.1.8 / ENT-6, both billing contracts and the independent Opus delta verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/d14-ent-6b-opus-delta-c6e5d27.md`. This is builder execution evidence, not an independent r2 verdict or technical acceptance.
+
+### Exact repair and scope
+
+Renamed only `BillingApplication`'s private `context` method to `resolveContext` in `apps/api/src/contractor/billing.application.ts` and updated every call. The inspected source contains **six call sites plus the declaration** (seven replacements), rather than seven call sites. A comparison against `git show HEAD:<path>` proves the entire resulting file equals those substitutions alone. Runtime behavior, authentication/mode checks and tenant-context handling are unchanged; the helper name no longer collides with the scanner's tracked local `context` variable.
+
+Only that application file and this appended receipt change. The boundary test is byte-identical to HEAD; no tests, allow-lists, shared lists, pins, schemas, migrations, generated OpenAPI, commercial policies, alerts or release capabilities change. No new migration or backwards-compatibility action is needed.
+
+### Commands and results
+
+Node `v24.17.0`; used existing dependencies, with no install/download or package-manager/pin override. `pnpm --version` stalled after the ignored-`pnpm.overrides` warning and was interrupted (exit 130). Consequently pnpm/turbo root orchestration is **NOT RUN**, not reported as passing. The installed tools behind the scripts were executed directly below. Commands are relative to the named package; logs are `/private/tmp/jg-ent-6b-r2-*.log` unless the result was captured directly in tool output.
+
+| Actual execution | Result |
+|---|---|
+| API: `./node_modules/.bin/vitest run src/auth/context-boundary.test.ts src/contractor/billing.application.test.ts --maxWorkers=2` | PASS, exit 0: 2 files, **147 tests** (145 boundary + 2 billing application). The real-repository context boundary assertion now passes. |
+| All seven packages (core, config, storage, ai, db, api, web): `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | PASS, all exit 0 (`typecheck-<package>.log`). These are also the exact bodies of all seven package lint scripts; executed once per package. |
+| Root: `LANE_BASE_REF=origin/main node tools/lint.mjs` | PASS, exit 0 (`lint.log`), including purity, lane, money and commercial boundaries. |
+| Root: `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | PASS, exit 0 (`lanes.log`); direct body of `lint:lanes`. |
+| Root: `node --test tools/*.test.mjs` | PASS, exit 0: 100 tests (`tools-tests.log`). |
+| core / config / storage / ai: `./node_modules/.bin/vitest run src --maxWorkers=2` | PASS, all exit 0: respectively 99 / 1 / 1 / 6 files and **2,679 / 1 / 2 / 85 tests** (`tests-<package>.log`). |
+| web: `./node_modules/.bin/vitest run --maxWorkers=2` | PASS, exit 0: 42 files, **869 tests** (`tests-apps-web.log`). Unit/transport tests, not browser journeys. |
+| API: `./node_modules/.bin/vitest run src --maxWorkers=2 --exclude src/shadow-isolation.application.test.ts --exclude src/final-account-lock.isolation.test.ts --exclude src/health.test.ts --exclude src/contractor/site-visit.http.test.ts --exclude src/contractor/site-extra-pricing.http.test.ts --exclude src/contractor/site-extra.http.test.ts --exclude src/contractor/contractor-practice-session.http.test.ts --exclude src/contractor/practice-worker-switch.http.test.ts --exclude src/auth/sso/action-paths.test.ts` | PASS, exit 0: 83 files, **1,660 tests** (`api-unit-tests.log`). Nine socket/PostgreSQL suites explicitly excluded; no full-API-suite pass is claimed. Includes billing HTTP/controller tests. |
+| db: `./node_modules/.bin/vitest run src --maxWorkers=2` | FAIL, exit 1: 17 files passed, 5 failed; 142 tests passed, 1 failed, 18 skipped (`db-unit-tests.log`). The substring filter unexpectedly also collected four `test/*dbsrc*.integration.test.ts` files and built test files; the four integration preflights failed with no free port before PostgreSQL start. The C-OPS-1 source reachability scan exceeded the default 5-second timeout. |
+| db: `./node_modules/.bin/vitest run src --exclude 'test/**' --exclude 'dist/**' --maxWorkers=2` | FAIL, exit 1: 13 files passed, 1 failed; 118 tests passed, 1 failed, solely the same C-OPS-1 default-timeout failure (`db-source-unit-tests.log`). |
+| db: `./node_modules/.bin/vitest run src --exclude 'test/**' --exclude 'dist/**' --maxWorkers=1 --testTimeout=60000` | PASS, exit 0: 14 files, **119 tests** (`db-source-unit-retry.log`). Timeout/workers changed only on this invocation, with no test/config edits; this does not prove the default-timeout run passes. |
+| core / config / storage / ai / db: `./node_modules/.bin/tsc -p tsconfig.json`; API: `./node_modules/.bin/nest build` | PASS, all six exit 0 (`build-<package>.log`). |
+| web: `./node_modules/.bin/next build` | PASS, exit 0, including type validation and 41 static pages (`build-apps-web.log`). Workspace-root/CSS/dependency warnings logged. |
+| API: `node --import tsx src/generate-openapi.ts --check` | PASS, exit 0 (`openapi-check.log`); source generator behind `openapi:check`, avoiding the tsx CLI IPC listener. No snapshot regeneration. |
+| Root: Python exact-substitution/unchanged-boundary-test comparison against HEAD; `git diff --check` | PASS. Final two-file scope check recorded after receipt append. |
+
+### Remaining holds and handoff
+
+`pnpm typecheck`, `LANE_BASE_REF=origin/main pnpm lint`, `pnpm lint:lanes`, `pnpm test`, `pnpm build` and `pnpm openapi:check` orchestration are **NOT RUN** due to the stalled launcher; actual constituent executions are listed above. PostgreSQL integration/migration/catalogue/LP-0/upgrade proofs, excluded socket suites and browser/e2e remain **NOT RUN** as completed suites and must run in dispatcher/GitHub CI. The four inadvertently selected integration preflights failed locally; they do not establish database behavior, and no PostgreSQL instance started. The default-timeout C-OPS-1 failure remains an out-of-scope CI hold; its unchanged assertions pass with the explicit 60-second invocation. No model/prompt/parser changed; no new live-model evaluation applies.
+
+No self-acceptance, exact-commit independent r2 review, green-CI or production-readiness claim. Existing real-data, G4-C/G5 and independent-review/separate-acceptance gates remain. No git write, commit, push, checkout, deployment or external message occurred. Intended conventional commit subject/body written to **both** `/private/tmp/jg-msg-ent-6b-r2.txt` and `/private/tmp/jg-msg-ent-6b.txt`; dispatcher owns commit and push.
