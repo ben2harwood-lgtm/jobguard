@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b8": {
+      "branches": ["codex/sandbox/serious-b8"],
+      "receipt": "docs/verdicts/SERIOUS-B8/BUILDER_RECEIPT.md",
+      "note": "SERIOUS-B8, issued 16 October 2026: Batch 8 only, S24 practice inbox owner isolation and S25 prevention revocation fencing. Check lane RED. No migration or changes to existing test expectations or pinned lists.",
+      "allow": [
+        "apps/api/src/inbox-relevance.application.ts",
+        "apps/api/src/inbox-relevance.session.test.ts",
+        "packages/db/src/inbox-relevance-repository.ts",
+        "packages/db/src/prevention-check-repository.ts",
+        "packages/db/src/serious-b8.test.ts",
+        "packages/db/test/practice-session.integration.test.ts",
+        "packages/db/test/prevention-checks.integration.test.ts",
+        "docs/verdicts/SERIOUS-B8/BUILDER_RECEIPT.md",
+        "docs/verdicts/SERIOUS-B8/s24-red.log",
+        "docs/verdicts/SERIOUS-B8/repository-red.log",
+        "docs/verdicts/SERIOUS-B8/repository-green.log"
+      ]
+    }
+  }
+}

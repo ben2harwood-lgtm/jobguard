@@ -58,9 +58,10 @@ export class PracticeInvoiceRepository {
   await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,0))`,[context.tenantId,invoiceId]);
  }
  private async creditAmounts(db:TenantTransaction,context:VerifiedTenantContext,input:{jobId:string;invoiceId:string;netPence:number}) {
-  const row=(await db.$client.query<any>(`SELECT i.pdf_sha256,i.invoice_number,i.net_pence,i.total_pence,
+  const row=(await db.$client.query<any>(`SELECT i.pdf_sha256,i.invoice_number,i.net_pence,i.tax_pence,i.total_pence,
    COALESCE((SELECT sum(c.amount_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited,
-   COALESCE((SELECT -sum(c.net_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited_net
+   COALESCE((SELECT -sum(c.net_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited_net,
+   COALESCE((SELECT -sum(c.tax_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited_tax
    FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.job_id=$2 AND i.id=$3`,[context.tenantId,input.jobId,input.invoiceId])).rows[0];
   if(!row)throw new Error("INVOICE_NOT_FOUND");
   // Independent net ceiling: split VAT rounding must never create principal.
@@ -71,7 +72,8 @@ export class PracticeInvoiceRepository {
   return withTenant(this.pool,context,async db=>{
    await this.lockCredits(db,context,input.invoiceId);
    const row=await this.creditAmounts(db,context,input);
-   const tax=Math.floor((input.netPence+2)/5),gross=input.netPence+tax;
+   // Same cumulative whole-invoice VAT rule as app.issue_practice_customer_credit_note (0156): half-up on cumulative net; the credit reaching full net takes exactly the original VAT.
+   const cumulativeNet=Number(row.credited_net)+input.netPence,cumulativeTax=cumulativeNet===Number(row.net_pence)?Number(row.tax_pence):Math.min(Math.floor((cumulativeNet+2)/5),Number(row.tax_pence)),tax=Math.max(0,Math.min(cumulativeTax-Number(row.credited_tax),Number(row.tax_pence)-Number(row.credited_tax))),gross=input.netPence+tax;
    if(gross>Number(row.total_pence)-Number(row.credited))throw new Error("CREDIT_EXCEEDS_AVAILABLE_AMOUNT");
    return {previewHash:createHash("sha256").update(`${input.jobId}${input.invoiceId}${input.netPence}${row.credited}${row.pdf_sha256.trim()}`).digest("hex"),invoiceNumber:row.invoice_number,netPence:-input.netPence,taxPence:-tax,totalPence:-gross,reason:input.reason,availablePence:Number(row.total_pence)-Number(row.credited)};
   });
