@@ -379,3 +379,207 @@ Diff evidence, captured with `git diff origin/main --stat` before adding this ev
 Additionally untracked: packages/db/test/lp-job-doors-upgrade.integration.test.ts, 129 lines. All eight changed/new paths belong to the LP-2 lane. Incoming staged main files explain the longer git status; they are identical to origin/main, not LP-2 edits. Final read-only inspection checks lane preservation, receipt hashes, intended message and whitespace; no further test/build run is authorized or needed after documentation-only edits.
 
 Final HEAD remains `ad0a8088be34a734bbd564fa92516cd4d1db5c8a`. Intended commit message is `/private/tmp/jg-msg-lp-2.txt`. The dispatcher must stage the resolved JSON/new upgrade file, finish the merge, obtain the missing coordinator prerequisites and request fresh reviews on an exact committed head. No acceptance is claimed.
+
+
+## Round 3 — 16 October 2026, build and park
+
+Actual builder: Codex. Earlier text above is preserved byte for byte as historical evidence; the requested Claude attribution remains inaccurate and is not substituted. This round supersedes the earlier preparation-only/Q5/Q6/migration-number status. **No acceptance, independent verdict, deployed enforcement or executed PostgreSQL guarantee is claimed.** Decision 74/75 authorizes construction of the money/access parts, with RED Opus plus Sol checks and then PARK; no merge, enablement or deployment without Ben's button.
+
+### Current base and merge
+
+Issued header base was `ca435eeb5791638c787c830d6ba717146f694539`; observed `origin/main` is `31682762c903d716657c573e1b5deae63588aad7`. Current main wins. HEAD is `7aa461d0b6fb9842231734d62143ed78d0503434`, branch `codex/sandbox/lp-2`. The dispatcher completed the merge before this turn: initial `git status --short` and `git ls-files -u` were empty, no conflict marker remained. The builder performed no git write, staging, commit, merge, push, deployment, approval, install/download, database start, browser run, external send, spending or deletion command. Dependencies were already installed. Node is v24.17.0, cached pinned pnpm 10.28.1, Turbo 2.10.12; the PostgreSQL dependency remains 16.10.0-beta.15.
+
+Cited current sites were re-read against main. LP-1's account/membership seed conversion remains, including the existing transaction-local role changes. MERGE-CHURN-1 is present: the shared migration registry and MIGRATIONS.md are untouched. Migration 0195 and its per-file note use automatic discovery; no earlier SQL is edited. Main's latest predecessor is 0172, not the draft's 0138/0162 floor. Existing reservations/gaps are not reused. The old receipt's earlier hashes and base describe earlier rounds, not today's main.
+
+### Delivered, source-inspected
+
+- Migration `0195_unchecked_job_doors.sql`: ordinary runtime draft-only insertion guard; null-safe permit-based imported/work-order/home/sandbox insertion; private exact tenant/job/backend/xid8/operation/shape permits, tenant-qualified identity references, FORCE RLS, one-use consumption and deferred unused-permit refusal. No caller-set import flag is read. Shared migration ownership alone cannot insert an imported/work-order/home/core-1000 job.
+- Static replacements preserve the current eighteen-argument adoption checks/party binding/deferred record checks and v1 value/cap/lineage, ENT-2's checked work-order creation, and home state/revision/session recipe. The old thirteen-argument adoption runtime grant is withdrawn. No business table gains a column, no existing row is backfilled or rewritten, and no financial formula is changed.
+- The narrow review routine preserves the existing current-owner confirmation permission. It validates the processing actor/type/job/proposal receipt and exact approved action, hashes the unchanged raw review serialization, reconstructs the persisted review and checks accepted canonical scope. Only non-stored parent/question ordering is normalized for content comparison. It checks ordinary draft source/expected revision, confirms the review and changes only job status/revision/update time. It cannot express acceptance/live/settlement or set money/policy/pointers. `reviewContentHash` is unchanged. The review caller remains in its existing dispatcher transaction; broad transition runtime/PUBLIC/identity/infrastructure EXECUTE is withdrawn. Source search finds no SQL wrapper reaching it; generic JobRepository.transition remains unavailable with runtime credentials.
+- Sandbox creation uses its existing persisted session's authenticated membership and a fixed checked core-1000 creator, with state/revision and existing replay behavior preserved. Bootstrap's same owner connection creates its three existing quoting rows as the migration role; LP-1's account/membership work and row identities/replay SQL are preserved. No service receives owner credentials.
+- The four named actor-less practice signatures retain their current business bodies and gain the trusted-database restriction. The landing body comes from 0097, including current-state reads and lock order; it is not replaced with 0018's old body. Restricting the database does not supply actor binding. Later LP binding gates remain.
+- Per-file version-2 lane and migration note; exact proposed coordinator fixture/catalogue/lane changes; rollout document labelled **prepared, not reviewed, not run**. No new public endpoint, UI, provider, AI/parser/prompt, native work or operational alert. C1: existing journeys only; browser regression execution is CI-only.
+
+### Tests and acceptance evidence (all PostgreSQL NOT RUN)
+
+The earlier 66 prepared cases remain represented, including the original 36. Initial new transition/practice/permit tests and the corrected own-step proof were written before the migration/caller implementation. Additional catalogue and preservation cases were added during source inspection. No intended boundary assertion was executed without the implementation because PostgreSQL and local sockets cannot start here: **first failing behavioral run NOT RUN**, never presented as a red-to-green test run.
+
+| Own file | Declared cases | Coverage / execution |
+|---|---:|---|
+| lp-job-doors.integration.test.ts | 19 | A02/A14: initial fields/refusal effects, actual inherited-runtime table/role/trigger denial, private helpers/search paths/trigger timing. NOT RUN. |
+| lp-adoption-boundary.integration.test.ts | 46 | A03–A06/A10: tenant/settings, persisted actor/receipt/approval/parties, immutable v1 product adoption, replay/rollback, exact permits and job/shape/backend/transaction substitutions, one-use/deferred cleanup. NOT RUN. |
+| lp-job-doors-compatibility.integration.test.ts | 7 | A04/A12/A13: ENT-2 product creation/replay, direct work-order refusal, home/sandbox ownership/session expiry/revocation, saved-v1 and sandbox replay. NOT RUN. |
+| lp-job-doors-upgrade.integration.test.ts | 2 | A15/A16: own step and later runner twice, populated original identities, canonical row text/full types, comparator controls. NOT RUN. |
+| lp-start-quote.integration.test.ts | 13 | A01/A07–A10: broad grant/call refusal, stable concurrent result, no billing, changed significant input conflict, authority-first identical refusal, SQL boundary fields and rollback. NOT RUN. |
+| lp-practice-doors.integration.test.ts | 5 | A11: all four signatures refuse a non-practice database despite forged settings; trusted-database legacy scenario/landing/reversal/illustration and invalid evidence preserve their checks. NOT RUN. |
+
+Total: **92 declared cases, zero executed**. Compilation is not behavioral evidence. The prepared home assertion is now explicitly filtered to home scenarios; an additional saved-v1 assertion covers the separately generated draft instead of incorrectly counting it as a home. No earlier intended case is skipped or deleted. The own-piece tests/helpers (seven TypeScript files) compile with strict settings. One later compile caught an out-of-scope test variable (TS2304), which was corrected; its final compile passed.
+
+A02–A15 are implemented/prepared, not passed. A16–A19 have source preservation plus own historical proof preparation, not executed regression evidence. All six contractor replay/refusal properties and the shared watchdog/replay/lock suites remain mandatory, unchanged. No new contractor command or watchdog registry/guard/harness is introduced. A20 has a prepared release sequence only; A21 lacks CI and exact-commit RED/acceptance records. No whole acceptance criterion is closed by this receipt.
+
+An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
+
+The own proof uses unchanged upgrade-proof-utils: canonical `row_to_json(t)::text`, original primary keys, names plus `format_type(atttypid,atttypmod)`, and nonempty guards. Rolled-back controls exercise one microsecond and retyping failures, and nullable-column/function-replacement/later-insert passes through the same comparator. Existing rows/types are compared immediately after 0195 alone, then after later migrations twice. Function replacement after N is allowed. No later definition or entire shared file is frozen.
+
+### STOP / coordinator-owned compatibility work
+
+`docs/verdicts/LP-2/PROPOSED-COORDINATOR-CHANGES.md` contains exact current lines, before text and proposed after setup. No change in that document is approval, and none was applied to merged tests/pins.
+
+1. **Item 1**, `packages/db/test/migfix-4.integration.test.ts:24`: runtime quoting INSERT -> identical owner-connected tenant setup before the unchanged runtime scope/quote operations. All seven tests using issued() are source-inspected as blocked on PROPOSED-COORDINATOR-CHANGES item 1 once 0195 is installed; exact declarations follow below.
+2. **Item 2**, `packages/db/test/quote-reacceptance-upgrade.integration.test.ts:25`: same proposed fixture conversion. Its current exact test is `keeps old acceptance rows byte for byte and then accepts the same document again as sequence 2`. **Its existing sequence seeds before 0155/0195, then migrates, so that line is not claimed to fail in the current upgrade ordering.** The requested proposal preserves compatibility for full-schema setup and every acceptance assertion; it is not a fabricated executed blocker.
+3. **Item 3**, `packages/db/test/small-builder-origin.integration.test.ts:156`: explicit owner-only exact permit setup for the identical live/revision-zero/imported/capture/v1-net-10000-cap-150 fixture. Exact affected test: `the existing application propose action works on a No charge (pilot_no_charge) practice job`, blocked on PROPOSED-COORDINATOR-CHANGES item 3 and its trusted-practice database setup. The current adoption product signature creates an unowned revision-one job, so moving this INSERT to another owner connection or assigning ownership later would not preserve the fixture. No production bypass was added.
+4. **Item 4**, `config/agent-lane-assignments.json:85`: existing legacy lp-2 entry -> coordinator retires it when adopting the requested per-file version-2 lane. Loader :65 deliberately refuses duplicate registrations; the builder does not relax it, edit another lane or use another base. The legacy entry itself is unchanged from HEAD; removing only its prior LP-2 addition reproduces origin/main's registry byte for byte. New exact allow list does not list itself or the legacy register. Both root lint and lint:lanes fail here, truthfully.
+5. **Item 5**, `docs/contracts/lp-0-effective-privileges-v1.json:517`, :553 and :628: existing old-adoption-runtime, imported-guard-PUBLIC and broad-transition-runtime ACL keys -> remove the withdrawn capabilities in a coordinator-reviewed inventory delta. Add the new permit/helper/routine identities and reviewed dispositions/protection facts. `packages/db/test/lp-0-authority-paths.integration.test.ts:198` identity-completeness check needs that updated inventory, unchanged assertion. At :247 its existing `rejects.not.toMatchObject({ code: "42501" })` for broad transition must become coordinator-owned runtime refusal expectation; the exact before/after is proposed, never applied. Exact blocked tests: `[LP0-02] installed base matches reviewed capabilities`, `[LP0-17] every reachable authority path has a disposition`, and `reports existing exceptions truthfully: the real runtime login can do these things today`. Additional LP-0 controls require their inventory precondition and cannot be claimed green.
+6. **Item 6 / inherited Q3/Q4**: further confirmed setup sites are `small-builder-origin.integration.test.ts:90`, `quote.integration.test.ts:4` and `practice-session.integration.test.ts:288`, plus the issued Q3 broad-transition and Q4 positive-practice target lists. They stay untouched. The machine-derived nearest declaration below names the :90 test exactly. Existing positive suites targeting postgres need the trusted practice database. The coordinator must preserve observed transactions/races, not move a mutation out of its observed transaction. The owner invocation of evidence-pack-fixture.ts:34 in this piece's own proof and the explicitly owner-connected demo-seed.ts:83 need no conversion.
+
+Reviewed rollout evidence is a separate hold. The prepared document explains the additive expand step, compatible callers, old-instance/queue observations and the contract step; current 0195 is an atomic contract artifact and must not be applied blindly over expanded objects or old running callers. No deployment evidence/approval was supplied or manufactured. Build-only decision 74 does not waive the compatible-landing group or whole-track real-data gate.
+
+### Commands and actual results
+
+Every pnpm invocation used `export PATH="$HOME/Library/pnpm/bin:$PATH"; export PATH="/private/tmp/jg-lp1-bin:$PATH"`; the already existing shim invokes cached pinned pnpm. No launcher download or alternate permission route was attempted. Heavy checks ran serially; memory checks showed 79–82% free and disk 47 GB available throughout, above the 35%/45 GB limits. No test/build overlap occurred.
+
+| Actual invocation | Exit / result |
+|---|---|
+| Strict own-test compiler command below, first run | 0; seven test/helper files at that point, no tests executed. |
+| Same compiler command after extending preservation cases | 1 (underlying tsc exit 2); TS2304 at lp-start-quote.integration.test.ts:78, out-of-scope `field`. |
+| Same compiler command after removing that unintended test line | 0; seven final test/helper files, no tests executed. |
+| `pnpm exec turbo run typecheck --force` | 0; 7 successful / 7, 0 cached, 15.588s. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 1; duplicate lp-2 registration at legacy register :85; no alternate lane/base. |
+| `LANE_BASE_REF=origin/main pnpm lint` | 1; core purity passes 190 files, then the same lane failure before package lint. Root lint is NOT green. |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force` | 0; 7 successful / 7 package checks, 0 cached, 11.686s. |
+| `node tools/money-arithmetic-lint.mjs` | 0; money arithmetic boundary passed. |
+| `node tools/commercial-boundary-lint.mjs` | 0; no findings/output. |
+| `pnpm openapi:check` | 1; refused before generation by tsx pipe listen EPERM, exact refusal below. |
+| `pnpm build --concurrency=2 --force` | 0; 7 successful / 7, 0 cached, 34.552s. |
+| Repeated `git diff --check` | 0; no whitespace errors. |
+| Read-only Python preservation inspection | 0; 25 protected files and all historical migrations equal main, no merged test edited, all 18 changed/new paths in the new exact lane, original receipt unchanged before append. |
+
+Exact own-test compilation:
+
+```sh
+pnpm --filter @jobguard/db exec tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2023 --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck test/lp-job-doors-fixtures.ts test/lp-job-doors.integration.test.ts test/lp-adoption-boundary.integration.test.ts test/lp-job-doors-compatibility.integration.test.ts test/lp-job-doors-upgrade.integration.test.ts test/lp-start-quote.integration.test.ts test/lp-practice-doors.integration.test.ts
+```
+
+All three forced checks actually executed with `--force`; no FULL TURBO/cache-hit result is presented as a run. Turbo printed cache IO warnings `Operation not permitted (os error 1)` while the tasks themselves completed successfully; no alternative cache-write route was attempted. Build retained existing Next workspace-root, CSS/autoprefixer, webpack serialization and Nest/file-type/load-esm warnings. No warning was suppressed or code changed to hide it.
+
+Exact stopped OpenAPI item:
+
+```text
+Command: pnpm openapi:check
+Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/12925.pipe
+code: EPERM; syscall: listen
+```
+
+No alternate invocation, socket route or escalation was attempted. No automatic approval review was requested or rejected. OpenAPI parity is NOT RUN, not failed application parity.
+
+Read-only command audit (all shell batches exit 0 unless listed above): `pwd`; `git status --short`; `git branch --show-current`; `git rev-parse HEAD`, `origin/main`; `git ls-files -u`; `git diff origin/main --stat`, `--name-only`, `--numstat`; `git diff --check`; `git show origin/main:<protected path>` and `HEAD:<receipt/legacy lane>`; `git ls-tree -r --name-only origin/main`; `git ls-files --others --exclude-standard`; repeated `memory_pressure | tail -1` and `df -g /System/Volumes/Data`. `cat`, `sed`, `nl` and `rg` read the complete two issued orders and standing handoff, AGENTS, BUILD_PLAN contracts/task, previous receipt, LP-0 guards/inventory, current migrations and callers, shared upgrade/harness fixtures, own tests, lane loader and package scripts. Inspections of nonexistent config/lanes/lp-2.json (before creation), lp-1.json and ent-11a.json produced `No such file or directory`; those combined read batches ended 0 after their final successful read. They were missing files, not permission refusals. No contents were inferred from them.
+
+Mutation-command audit (each exit 0): create and run `/private/tmp/lp2-tests-first.py`, `/private/tmp/lp2-implement.py`, `/private/tmp/lp2-docs.py`, `/private/tmp/lp2-practice-positive.py`; inline Python exact caller/test/contract/lane updates; here-doc append of private-permit and catalogue/saved-v1 tests; here-doc append of the narrow SQL and final COMMIT; here-doc writes of the migration note and prepared rollout document; create and run `/private/tmp/lp2-round3-receipt.py` to append this section and write the expressly requested intended message. These edit only LP-2 paths and temporary task scripts, never .git or a merged test. Final read-only whitespace/preservation inspection is recorded after this append. No Vitest, browser, DB gate invocation or whole-suite run occurred.
+
+### NOT RUN list and release limits
+
+- All six own PostgreSQL test files in the table above: **NOT RUN (cannot start PostgreSQL or bind sockets here)**. The seven-file compile includes the helper; it is not a substitute. Failed-first and fresh/upgrade/concurrency/rollback/catalogue execution all require CI.
+- All unchanged required DB/fingerprint/pack/message/receipt/financial-source, auth-context, watchdog registry/replay/lock, LP-0, import/review/quote/practice/bootstrap and restore regressions: NOT RUN (PostgreSQL unavailable and local runs limited to own piece). No earlier suite is waived. The six exact contractor replay/refusal properties remain the unchanged CI contracts.
+- Whole pnpm test/test:db/test:migrations/test:restore: NOT RUN (dispatcher/CI only, no database here). No distinct own non-database unit suite exists for these SQL/caller changes; no artificial passing substitute was added.
+- Browser/e2e/Playwright, both projects: **NOT RUN (explicitly CI only; browser unavailable)**. No browser was started.
+- OpenAPI parity: NOT RUN (generation refused by pipe permission, as above).
+- Install/clean install, paid/live provider/model eval: NOT RUN (already installed; downloads and real processing excluded; no AI change).
+- Expanded/mixed-version rollout: NOT RUN / NOT REVIEWED; RED model verdicts and separate acceptance: NOT DONE. Dispatcher must commit the working diff before reviewers can bind a verdict to its exact head. No reviewer is impersonated and no model review is claimed.
+
+### New GRANTs — one line each
+
+Build standard F: **no new direct INSERT/UPDATE/DELETE grant to jobguard_runtime on any money, membership, authorization, receipt or audit table; no unrestricted equivalent routine bypass.** The new permit table has no runtime table access. Exactly two GRANT statements occur in 0195:
+
+```sql
+GRANT EXECUTE ON FUNCTION app.create_practice_sandbox_job(uuid,uuid,uuid,text) TO jobguard_runtime;
+GRANT EXECUTE ON FUNCTION app.start_quote_from_review(uuid,uuid,integer,uuid,uuid,uuid,uuid,text) TO jobguard_runtime;
+```
+
+The first is the existing fixed sandbox recipe with its own persisted session/member/database checks; the second is the existing owner-approved review transition with exact receipt/authorization/content/source checks. Other changed existing signatures retain their prior EXECUTE grants via CREATE OR REPLACE; there is no grant-default widening. The migration revokes all private helper execution and the old broad-transition/adoption capabilities. Test-only inherited login setup retains `GRANT jobguard_runtime TO lp2_login`; it grants no fixture or owner power and is not migration SQL.
+
+### Builder self-inspection (not an independent verdict)
+
+Checked the new SQL against current static definitions: fixed trusted search paths; schema-qualified private tables; no dynamic SQL or generic permit mint function; no runtime role assumption; no secret values; no new protected-table grants; exact transaction-bound consumption and rollback; original party/track/saved-v1/baseline triggers retained; no fingerprinted-column change; existing `reviewContentHash` bytes preserved; no business lock after audit append. Own tests exercise actual SQL/roles when CI runs, not ORM mocks. Existing main tests and all pinned inputs remain unchanged. The new private table/entry points still require the coordinator's reviewed LP-0 inventory delta; a successful source inspection cannot replace that evidence.
+
+The ordinary owner fixture capability is explicit and limited to ordinary rows; shared ownership cannot substitute for an insertion permit on protected provenance/practice paths. Tenant context and server-selected identity remain on the existing pre-binding boundary; no full protection against compromised privileged credentials is claimed. Trusted database naming is operational configuration, not an administrator-proof boundary. Temporary actor-less signatures still need later actor/receipt binding. No check is made weaker to get green. No real data, fee, send, collection, UI or production enablement is introduced.
+
+Operational repair is additive forward-fix, not restoration of unchecked runtime grants. Migration/application compatibility must be resolved as one group before landing. This remains a **partial, parked build with unexecuted database evidence and coordinator prerequisites**, not full LP-2 completion or technical acceptance.
+
+Exact tests blocked on PROPOSED-COORDINATOR-CHANGES item 1 (source-inspected, NOT RUN):
+
+- `[MIGFIX-4.1] supersession invalidates pending acceptance`
+- `[MIGFIX-4.2] superseded document cannot be accepted with a fresh revision`
+- `[MIGFIX-4.3] acceptance and supersession serialize on the job`
+- `[MIGFIX-4.4] issued unsuperseded control accepts once and original command replays without duplicate effects`
+- `[MIGFIX-4.4] supersession original command replays without a second event or revision`
+- `[MIGFIX-4.exact] exact document hash, version, total, issue record and live baseline refusals remain`
+- `[MIGFIX-4.authority] routine authority is checked before unknown, foreign, quoting, accepted or live job state`
+
+Item 6, small-builder-origin.integration.test.ts:90 nearest declaration: `it("the existing application propose action issues LogBuilderExtra, with price, and replays",async()=>{` (line 78).
+
+### Round 3 preservation evidence
+
+25 SHA-256 values below are byte-equal to current origin/main (source preservation, not executed regression evidence):
+
+```text
+ec6d3dd219e42707fe0bd6b0550db7f4f260f36c55ff9fee0d36bde831586ef2 apps/api/src/auth/context-boundary.test.ts
+9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14 packages/db/src/practice-session.ts
+56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c packages/db/src/contractor-repository.ts
+e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0 packages/db/src/contractor-party-repository.ts
+9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e packages/db/src/work-order-repository.ts
+45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5 packages/db/src/sor-repository.ts
+ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d packages/db/src/job-scheduling-repository.ts
+cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386 packages/db/src/work-order-fixtures.ts
+a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c packages/db/src/contractor-session-context.ts
+a07e5784fd37ee475227caf58705b75c587ee344c39f1001e9df82c944e2c5ca packages/core/src/watchdog.ts
+3bad6abf073b44b84575a7421ddaf7b275d9a75d2d93b20bcf744ed4d3fbbbd6 packages/db/test/watchdog-command-harness.ts
+db2315937aad7fe0443f020060a2575aa79f509ec344a35dd8387626ba5de62f packages/db/test/command-replay-contract.integration.test.ts
+be34095677e52d4e63c771799c99a11e0e52a73fdf2d85808550b17a583ab3a8 packages/db/test/fingerprinted-row-shape.integration.test.ts
+468dd30e7a0b9ac92f64bc93585d27040ca205047bcd080393c7d6a12f85513e docs/contracts/lp-0-effective-privileges-v1.json
+d9ac38c5bae60a487b2835c1681167ea5bf985f1449469c56eec0403772c8983 packages/db/src/migrate.ts
+1790932d10a34c8cd0bf2bced5426ebff39717d4c9bafe55f290795ad462356d packages/db/MIGRATIONS.md
+3f45db86ff4e281ff9788029cf1d082c0bb09087f129f0d8e844b57a04ae70d3 packages/db/test/migfix-4.integration.test.ts
+de090ede9e23a9ca5ad7b63b91e4d0b873b7f4919f41932c10bac3c9baf7ecad packages/db/test/quote-reacceptance-upgrade.integration.test.ts
+757e0d9e12685f9a459f74ff1be68b643d0986db1df1026b4b489221ddf28697 packages/db/test/small-builder-origin.integration.test.ts
+6f7d00c09fa5837c639ec792a08924d0d95133e996bd791a889934186b0c8ab9 packages/db/test/quote.integration.test.ts
+ff75968d7871497050997b660398f7968e18dff474ad1ebefb6ee67c78cc7cce packages/db/test/practice-session.integration.test.ts
+625cfe56ef983fd58562300bc7886b2f7b011de671e0f7ac958b9f08a6e009bc packages/db/test/lp-0-authority-paths.integration.test.ts
+18196d9cfaac0fed6ee8301a0c1f305a79aa1757f0f0963fb6a4a78e9ad6ece5 packages/db/test/lp-0-grant-freeze.integration.test.ts
+8903cfb2ce110bfa8f5d7f0bef33b5c629a32f9a2ca2f613cfaef2a823119e45 tools/agent-lane-boundary-lint.mjs
+384fdb07869e780e44e9761a7aaa355ddb4dc0b7fb03b5370d65c47c2891fcdd BUILD_PLAN.md
+```
+
+All historical migration files also compare byte-equal to main; no merged test is edited. Original 381-line receipt prefix SHA-256: `82ce4e8527de00879f577b4b2489798bc9ca63fad36308c38a6fef8c29aacb42` (checked unchanged before this append). New migration SHA-256: `f78976e3645f4e247b2b18141822ee8631c85a77e381902627d940a48cee377a`.
+
+`git diff origin/main --stat` captured after the Round 3 text, before this evidence block:
+
+```text
+ config/agent-lane-assignments.json                 |   1 +
+ docs/contracts/least-privilege-job-doors-v1.md     |  21 +
+ docs/verdicts/LP-2/BUILDER_RECEIPT.md              | 518 +++++++++++++++++++++
+ packages/db/src/demo-bootstrap.ts                  |   3 +-
+ packages/db/src/review-repository.ts               |   3 +-
+ packages/db/src/sandbox-repository.ts              |   4 +-
+ .../test/lp-adoption-boundary.integration.test.ts  | 170 +++++++
+ .../lp-job-doors-compatibility.integration.test.ts | 103 ++++
+ packages/db/test/lp-job-doors-fixtures.ts          | 197 ++++++++
+ .../test/lp-job-doors-upgrade.integration.test.ts  | 123 +++++
+ packages/db/test/lp-job-doors.integration.test.ts  |  98 ++++
+ 11 files changed, 1236 insertions(+), 5 deletions(-)
+```
+
+Untracked artifacts (git diff --stat omits them):
+
+- `config/lanes/lp-2.json`
+- `docs/operations/lp-2-rollout-evidence.md`
+- `docs/verdicts/LP-2/PROPOSED-COORDINATOR-CHANGES.md`
+- `packages/db/migration-notes/0195_unchecked_job_doors.md`
+- `packages/db/migrations/0195_unchecked_job_doors.sql`
+- `packages/db/test/lp-practice-doors.integration.test.ts`
+- `packages/db/test/lp-start-quote.integration.test.ts`
+
+All 18 changed/new paths belong to the requested LP-2 scope. The legacy registry's sole difference from main is the earlier LP-2 entry; it is unchanged by this round and no other lane changes. Exact new lane allow list excludes the lane file itself and both frozen shared migration files. Final read-only inspection verifies the preserved prefix, hashes, lane paths and whitespace; any resulting failure is reported rather than silently repaired outside this lane.
+
+Final HEAD: `7aa461d0b6fb9842231734d62143ed78d0503434` (unchanged; implementation is uncommitted). Intended commit message: `/private/tmp/jg-msg-lp-2.txt`. The dispatcher owns the commit and RED review handoff. No acceptance, push, merge, enablement or deployment is performed.
+
+Final read-only command receipt: `git diff --check` and Python prefix/hash/line/message verification exited 0; confirmed seven MIGFIX-4 test declarations and exactly two new GRANT statements. `git rev-parse HEAD origin/main`, `git status --short`, memory/disk checks exited 0; HEAD unchanged, memory 81% free, disk 47 GB available. This documentation correction changes only the Round 3 count, preserving the historical prefix.

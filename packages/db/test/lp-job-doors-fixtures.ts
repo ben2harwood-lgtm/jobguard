@@ -1,4 +1,4 @@
-// LP-2 tests-first preparation. Enforcement is stopped on coordinator-owned fixtures.
+// LP-2 isolated synthetic setup; owner and runtime connections stay separate.
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -169,4 +169,29 @@ export async function callAdoption(client: PoolClient, f: Awaited<ReturnType<typ
     f.input.feePolicyVersion, f.input.importTermsVersion, change.actor ?? f.actor.member, f.input.attestedAt,
     change.customer ?? f.input.parties.customerRevisionId, change.site ?? f.input.parties.siteRevisionId,
     change.payer ?? null, f.command.commandId, f.authorization]);
+}
+
+export async function reviewFixture(db: JobDoorsDatabase) {
+  const { CaptureRepository } = await import("../src/capture-repository.js");
+  const { ProposalReviewRepository, reviewContentHash } = await import("../src/review-repository.js");
+  const { testTenantContext } = await import("./tenant-context-test-utils.js");
+  const actor = await jobDoorsActor(db.owner), context = testTenantContext(actor.tenant), captureId = randomUUID();
+  const source = "Fit fictional cabinets", provenance = { kind: "extracted" as const,
+    span: { sourceId: captureId, sourceVersion: 1 as const, start: 0, end: source.length } };
+  const captured = await new CaptureRepository(db.runtime).persist(context, { captureId, text: source,
+    promptVersion: "lp2.fixture.v1", schemaVersion: "lp2.fixture.v1", model: "fixture-only",
+    proposal: { title: { value: source, provenance }, lines: [{ description: { value: source, provenance },
+      quantity: { value: "1", provenance }, unit: { value: "item", provenance },
+      unitPricePence: { value: null, provenance: { kind: "defaulted", note: "price during quote" } } }], materials: [], questions: [] } });
+  const line = (await db.owner.query("SELECT id,scope_item_id FROM app.proposal_line WHERE tenant_id=$1 AND proposal_id=$2",
+    [actor.tenant, captured.id])).rows[0]!;
+  const review = await new ProposalReviewRepository(db.runtime).save(context, { version: "proposal_review_v1",
+    reviewId: randomUUID(), proposalId: captured.id, jobId: captured.job_id, revision: 0,
+    lines: [{ id: line.id, scopeItemId: line.scope_item_id, origin: "proposal", description: source, room: "Kitchen", category: "Joinery",
+      quantity: "1", unit: "item", unitPricePence: null, disposition: "accepted", dismissalReason: null, parentScopeItemIds: [], sourceExcerpt: source }], questions: [] }, 0);
+  const command: ConsequentialCommand = { version: "command.v1", commandId: randomUUID(), commandType: "confirm_proposal_review",
+    semanticKey: `job:${review.jobId}:confirm:${review.proposalId}`, actorMembershipId: actor.member, subjectType: "job", subjectRef: review.jobId,
+    action: { actionType: "confirm_scope", recipient: null, contentHash: reviewContentHash(review), aggregateRevision: review.revision,
+      amountPence: null, currency: null, policyVersion: "synthetic-uiwire-1", expiresAt: new Date("2099-01-01T00:00:00Z") } };
+  return { actor, context, review, command, scopeId: line.scope_item_id as string };
 }

@@ -9,7 +9,7 @@ let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
 afterAll(async () => { await db?.close(); });
 
-describe("LP-2 imported insertion boundary (tests first; implementation stopped)", () => {
+describe("LP-2 imported insertion boundary", () => {
   const invalidAuthority: Array<[string, NonNullable<Parameters<typeof adoptionAuthority>[1]>]> = [
     ...(["worker", "revoked", "expired"] as const).map(member => [`${member} member`, { member }] as [string, { member: typeof member }]),
     ...(["missing", "actor", "type", "subject", "succeeded"] as const).map(receipt => [`${receipt} receipt`, { receipt }] as [string, { receipt: typeof receipt }]),
@@ -118,5 +118,53 @@ describe("LP-2 imported insertion boundary (tests first; implementation stopped)
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
     // Reusing the pool after rollback must allow the same exact operation to commit.
     await expect(new UserCommandDispatcher(db.runtime).dispatch(testTenantContext(f.actor.tenant), f.command, mutation)).resolves.toMatchObject({ jobId: f.input.jobId });
+  });
+});
+
+describe("LP-2 private permit consumption", () => {
+  async function mint(client: import("pg").PoolClient, tenant: string, job: string, actor: string,
+    change: { job?: string; backend?: number; transaction?: string; shape?: boolean } = {}) {
+    await client.query(`INSERT INTO app.lp_job_insert_permit
+      (tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id)
+      SELECT $1,$2,coalesce($4,pg_backend_pid()),coalesce($5::xid8,pg_current_xact_id()),'work_order',
+        app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,$6::jsonb)),$3`,
+    [tenant, change.job ?? job, actor, change.backend ?? null, change.transaction ?? null,
+      JSON.stringify({ tenant_id: tenant, id: job, title: "Fictional LP2 initial job", status: "draft", revision: 0,
+        provenance: "work_order", ...(change.shape ? { accepted_net_value_pence: 1 } : {}) })]);
+  }
+  it.each(["job", "shape", "backend", "transaction"])("[LP2-A04] a permit bound to another %s cannot authorize insertion", async field => {
+    const actor = await jobDoorsActor(db.owner), job = randomUUID();
+    await expect(transaction(db.owner, actor.tenant, async client => {
+      await mint(client, actor.tenant, job, actor.member, field === "job" ? { job: randomUUID() }
+        : field === "shape" ? { shape: true } : field === "backend" ? { backend: 0 } : { transaction: "1" });
+      await client.query("SET LOCAL ROLE jobguard_migration");
+      await insertJob(client, actor.tenant, job, { provenance: "work_order" });
+    })).rejects.toMatchObject({ code: "42501" });
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.lp_job_insert_permit")).rows).toEqual([{ n: 0 }]);
+  });
+  it("[LP2-A04] [LP2-A10] an exact permit is consumed once and rollback restores both insertion and permit atomically", async () => {
+    const actor = await jobDoorsActor(db.owner), job = randomUUID(), before = await jobDoorCounts(db.owner, actor.tenant);
+    await expect(transaction(db.owner, actor.tenant, async client => {
+      await mint(client, actor.tenant, job, actor.member);
+      await insertJob(client, actor.tenant, job, { provenance: "work_order" });
+      expect((await client.query("SELECT count(*)::int n FROM app.lp_job_insert_permit")).rows).toEqual([{ n: 0 }]);
+      await client.query("SAVEPOINT reuse");
+      await expect(insertJob(client, actor.tenant, job, { provenance: "work_order" })).rejects.toMatchObject({ code: "42501" });
+      await client.query("ROLLBACK TO SAVEPOINT reuse");
+      throw new Error("LP2 permit rollback");
+    })).rejects.toThrow("LP2 permit rollback");
+    expect(await jobDoorCounts(db.owner, actor.tenant)).toEqual(before);
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.lp_job_insert_permit")).rows).toEqual([{ n: 0 }]);
+  });
+  it("[LP2-A04] a stale committed permit cannot cross a transaction or a physical connection", async () => {
+    const actor = await jobDoorsActor(db.owner), job = randomUUID();
+    // The migration-owned deferred guard prevents a committed unused capability.
+    await expect(transaction(db.owner, actor.tenant, client => mint(client, actor.tenant, job, actor.member)))
+      .rejects.toMatchObject({ code: "23514", message: "JOB_INSERT_PERMIT_UNCONSUMED" });
+    const fresh = db.freshRuntime();
+    try { await expect(transaction(fresh, actor.tenant, client => insertJob(client, actor.tenant, job, { provenance: "work_order" })))
+      .rejects.toMatchObject({ code: "42501" }); }
+    finally { await fresh.end(); }
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.lp_job_insert_permit")).rows).toEqual([{ n: 0 }]);
   });
 });

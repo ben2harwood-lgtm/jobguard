@@ -1,4 +1,4 @@
-// Tests-first upgrade preparation. Migration 0168 remains stopped; no executed proof is claimed.
+// LP-2 own-step proof; execution evidence is recorded separately.
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const ownName = "0168_unchecked_job_doors.sql";
+const ownName = "0195_unchecked_job_doors.sql";
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(true, ownName); }, 300_000);
 afterAll(async () => { await db?.close(); });
@@ -55,7 +55,7 @@ describe("LP-2 canonical upgrade proof preparation", () => {
 
   it("[LP2-A15] [LP2-A16] own-step and later runner replay preserve populated history by named columns, full types and original identities", async () => {
     const own = MIGRATION_URLS.find(url => url.pathname.endsWith(`/${ownName}`));
-    expect(own, "STOP: the complete insertion group and coordinator inventory prerequisite must arrive before registration").toBeDefined();
+    expect(own, "own migration must be discovered").toBeDefined();
     await installLegacySyntheticPartyFixtures(db.owner);
     const commercial = await seedEvidencePackFixture(db.owner);
     const imported = await adoptionFixture(db);
@@ -101,17 +101,11 @@ describe("LP-2 canonical upgrade proof preparation", () => {
       "app.recovery_fee_derivation", "app.recovery_fee_journal", "app.fee_illustration_source"];
     const before = await proofBefore(db.owner, tables);
     requireRows(before);
-    const held = ["app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)",
-      "app.configure_recovery_demo(uuid,uuid,character varying)", "app.approve_synthetic_landing(jsonb)",
-      "app.reverse_synthetic_landing(uuid,uuid,uuid,uuid,uuid,bigint,character varying)", "app.create_fee_illustration_source(uuid,uuid)"];
-    const routine = async (signature: string) => (await db.owner.query(`SELECT pg_get_functiondef($1::regprocedure) AS definition,
-      has_function_privilege('jobguard_runtime',$1::regprocedure,'EXECUTE') AS executable`, [signature])).rows;
-    const heldBefore = await Promise.all(held.map(routine));
     await db.owner.query(await readFile(own!, "utf8"));
     await db.owner.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [ownName]);
     expect(await proofDifferences(db.owner, before)).toEqual(noChanges);
     for (const table of tables) expect((await proofColumns(db.owner, table)).map(column => column.name)).toEqual(before[table]!.names);
-    expect(await Promise.all(held.map(routine))).toEqual(heldBefore);
+    expect((await db.owner.query("SELECT has_function_privilege('jobguard_runtime','app.transition_job(uuid,uuid,integer,character varying,character varying,uuid,bigint,character varying,bigint)','EXECUTE') allowed")).rows).toEqual([{ allowed: false }]);
     expect((await db.owner.query("SELECT count(*)::int AS n FROM app.lp_job_insert_permit")).rows).toEqual([{ n: 0 }]);
     expect((await db.owner.query(`SELECT has_function_privilege('jobguard_runtime',
       'app.adopt_in_flight_job(uuid,uuid,uuid,character varying,character varying,character,character varying,bigint,bigint,character varying,character varying,uuid,timestamp with time zone)','EXECUTE') AS allowed`)).rows)

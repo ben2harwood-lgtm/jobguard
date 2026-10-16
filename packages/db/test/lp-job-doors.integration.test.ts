@@ -6,7 +6,7 @@ let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
 afterAll(async () => { await db?.close(); });
 
-describe("LP-2 ordinary insertion boundary (tests first; implementation stopped)", () => {
+describe("LP-2 ordinary insertion boundary", () => {
   it("[LP2-A14] the private permit has a tenant key, forced RLS and no runtime table privilege", async () => {
     const object = (await db.owner.query(`SELECT r.rolname AS owner,c.relrowsecurity,c.relforcerowsecurity
       FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner
@@ -68,5 +68,31 @@ describe("LP-2 ordinary insertion boundary (tests first; implementation stopped)
     const actor = await jobDoorsActor(db.owner), before = await jobDoorCounts(db.owner, actor.tenant);
     await expect(transaction(db.runtime, actor.tenant, client => insertJob(client, actor.tenant, randomUUID(), shape))).rejects.toMatchObject({ code: "42501" });
     expect(await jobDoorCounts(db.owner, actor.tenant)).toEqual(before);
+  });
+});
+
+describe("LP-2 effective routine and trigger catalogue", () => {
+  it("[LP2-A14] every LP-2 helper is private and every definer has a fixed trusted search path", async () => {
+    const names = ["guard_imported_job", "lp_job_insert_shape", "lp_job_permit_consumed", "lp_ordinary_job_initial_shape",
+      "create_practice_sandbox_job", "start_quote_from_review"];
+    const routines = (await db.owner.query(`SELECT p.proname,p.prosecdef,p.proconfig,r.rolname AS owner,
+      has_function_privilege('lp2_login',p.oid,'EXECUTE') AS runtime,
+      has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') AS infrastructure,
+      has_function_privilege('jobguard_identity',p.oid,'EXECUTE') AS identity,
+      EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') AS public
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+      WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY p.proname`, [names])).rows;
+    expect(routines).toHaveLength(names.length);
+    for (const row of routines) {
+      expect(row.owner).toBe("jobguard_migration"); expect(row.proconfig).toContain("search_path=pg_catalog");
+      expect(row.infrastructure).toBe(false); expect(row.identity).toBe(false); expect(row.public).toBe(false);
+      expect(row.runtime).toBe(["create_practice_sandbox_job", "start_quote_from_review"].includes(row.proname));
+    }
+    const triggers = (await db.owner.query(`SELECT tgname,tgtype::int,tgenabled FROM pg_trigger
+      WHERE tgrelid='app.job'::regclass AND tgname IN('aaa_lp_ordinary_job_initial_shape','imported_job_command_only') ORDER BY tgname`)).rows;
+    expect(triggers).toEqual([
+      { tgname: "aaa_lp_ordinary_job_initial_shape", tgtype: 7, tgenabled: "O" },
+      { tgname: "imported_job_command_only", tgtype: 7, tgenabled: "O" },
+    ]);
   });
 });

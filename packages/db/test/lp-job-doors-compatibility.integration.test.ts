@@ -56,7 +56,7 @@ describe("LP-2 creation caller compatibility groundwork", () => {
 
   it("[LP2-A13] home and sandbox creation preserve ownership, scenario, state and revision", async () => {
     const session = await issuePracticeSession(db.runtime), auth = await authenticatePracticeSession(db.runtime, session);
-    const home = (await db.owner.query("SELECT title,status,revision,practice_scenario FROM app.job WHERE practice_session_digest=$1 ORDER BY title", [auth.digest])).rows;
+    const home = (await db.owner.query("SELECT title,status,revision,practice_scenario FROM app.job WHERE practice_session_digest=$1 AND practice_scenario='home' ORDER BY title", [auth.digest])).rows;
     expect(home).toEqual([
       { title: "Kitchen extension", status: "live", revision: 0, practice_scenario: "home" },
       { title: "Loft conversion", status: "quoting", revision: 0, practice_scenario: "home" },
@@ -80,5 +80,24 @@ describe("LP-2 creation caller compatibility groundwork", () => {
     const before = await jobDoorCounts(db.owner, DEMO_TENANT_ID);
     await expect(new SandboxRepository(db.runtime).create(session, randomUUID())).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
     expect(await jobDoorCounts(db.owner, DEMO_TENANT_ID)).toEqual(before);
+  });
+});
+
+describe("LP-2 saved sample and caller replay", () => {
+  it("[LP2-A13] saved-v1 remains a server-created draft and sandbox creation replays without another job or audit", async () => {
+    const session = await issuePracticeSession(db.runtime), auth = await authenticatePracticeSession(db.runtime, session);
+    expect((await db.owner.query(`SELECT status,revision,practice_scenario,saved_v1_sample FROM app.job
+      WHERE tenant_id=$1 AND practice_session_digest=$2 AND practice_scenario='v1_sample'`, [DEMO_TENANT_ID, auth.digest])).rows)
+      .toEqual([{ status: "draft", revision: 0, practice_scenario: "v1_sample", saved_v1_sample: true }]);
+    const repository = new SandboxRepository(db.runtime), command = randomUUID(), first = await repository.create(session, command);
+    const before = await jobDoorCounts(db.owner, DEMO_TENANT_ID);
+    expect(await repository.create(session, command)).toEqual(first);
+    expect(await jobDoorCounts(db.owner, DEMO_TENANT_ID)).toEqual(before);
+    await expect(transaction(db.runtime, DEMO_TENANT_ID, c => c.query(`INSERT INTO app.job
+      (tenant_id,id,title,practice_session_digest,practice_scenario,saved_v1_sample)
+      VALUES($1,$2,'Fictional invalid sample',$3,'v1_sample',true)`, [DEMO_TENANT_ID, randomUUID(), auth.digest])))
+      .rejects.toMatchObject({ code: "42501" });
+    expect(await jobDoorCounts(db.owner, DEMO_TENANT_ID)).toEqual(before);
+    expect((await db.owner.query("SELECT count(*)::int n FROM app.lp_job_insert_permit")).rows).toEqual([{ n: 0 }]);
   });
 });
