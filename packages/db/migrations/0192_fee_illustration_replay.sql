@@ -24,7 +24,7 @@ BEGIN
  -- One command lock, then one job lock: serialize both uniqueness dimensions.
  PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext('fee-illustration:'||p_command::text));
  PERFORM 1 FROM app.job j JOIN app.job_commercial_track c ON (c.tenant_id,c.job_id)=(j.tenant_id,j.id)
-  WHERE j.tenant_id=t AND j.id=p_job AND c.job_track='small_builder' AND c.environment='synthetic_demo'
+  WHERE j.tenant_id=t AND j.id=p_job AND c.job_track='small_builder' AND c.environment IN ('synthetic_demo','pilot_no_charge')
   FOR UPDATE OF j;
  IF NOT FOUND THEN RAISE EXCEPTION 'FEE_ILLUSTRATION_FORBIDDEN' USING ERRCODE='42501'; END IF;
 

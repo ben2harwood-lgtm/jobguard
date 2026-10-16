@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FeeIllustrationRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID } from "../src/index.js";
+import { FeeIllustrationRepository, PracticeActivationRepository, QuoteRepository, QuoteDeliveryRepository, QuoteAcceptanceRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID } from "../src/index.js";
 import { FeeIllustrationApplication } from "../../../apps/api/src/workspace/fee-illustration.application.js";
 import { createWorkFixture, closeWorkFixture, seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
@@ -17,6 +17,59 @@ afterAll(async () => {
 });
 
 describe("LATER-B18 persisted synthetic illustration", () => {
+  it("r1 replays a v1 no_charge practice illustration without changing journals, obligations, statements or receipts", async () => {
+    const practice = await seedWorkPractice(f), context = practice.auth.context;
+    const jobId = (await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND saved_v1_sample", [DEMO_TENANT_ID, practice.auth.digest])).rows[0].id as string;
+    const scopeId = randomUUID(), revisionId = randomUUID();
+    // Prepare fictional confirmed scope on the session's saved v1 sample; use real commands thereafter.
+    await workTenant(f.admin, DEMO_TENANT_ID, async db => {
+      await db.query("UPDATE app.job SET status='quoting' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, jobId]);
+      await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, DEMO_TENANT_ID, jobId]);
+      await db.query("INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional decorating','1','item',1880000,1880000)", [revisionId, DEMO_TENANT_ID, jobId, scopeId]);
+    });
+    await new QuoteRepository(f.runtime).saveDraft(context, {
+      jobId, draftId: randomUUID(), expectedRevision: 0, currency: "GBP", taxPolicyVersion: "candidate_m1_standard_v1", blockingQuestions: [], effectiveAt: new Date(),
+      lines: [{ id: randomUUID(), scopeItemId: scopeId, scopeRevisionId: revisionId, description: "Fictional decorating", origin: "captured", included: true, exclusionReason: null, quantity: "1", unit: "item", unitRatePence: 1880000, discountPercent: "0", taxTreatment: "standard_rate_20", rateProvenance: "entered", category: "Work", region: null }],
+    });
+    const delivery = new QuoteDeliveryRepository(f.runtime), recipient = "fixture-customer@example.invalid";
+    const preview = await delivery.preview(context, jobId, recipient);
+    await delivery.issue(context, jobId, { commandId: randomUUID(), documentId: preview.documentId, contentHash: preview.hash, recipient });
+    await delivery.execute(context, jobId, preview.documentId, "success");
+    await new QuoteAcceptanceRepository(f.runtime).accept(context, jobId, {
+      commandId: randomUUID(), documentId: preview.documentId, documentHash: preview.hash, documentVersion: preview.document.documentVersion,
+      statedCustomerName: "Practice Customer", statedMethod: "email", acceptedAt: new Date().toISOString(),
+    });
+    const live = await new PracticeActivationRepository(f.runtime).start(context, jobId, { commandId: randomUUID(), scenario: "no_charge" });
+    expect(live).toMatchObject({ jobStatus: "live", activation: { policyVersion: "reference_fee_policy_v1", scenario: "no_charge" } });
+    expect((await f.admin.query("SELECT job_track,environment FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, jobId])).rows).toEqual([{ job_track: "small_builder", environment: "pilot_no_charge" }]);
+    expect((await f.admin.query("SELECT mode FROM app.job_activation WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, jobId])).rows).toEqual([{ mode: "pilot_no_charge" }]);
+
+    // Activation legitimately writes receipts; snapshot after setup and compare after both illustration calls.
+    const extra = (await f.admin.query("SELECT 'app.'||tablename name FROM pg_tables WHERE schemaname='app' AND (tablename LIKE '%statement%' OR tablename LIKE '%receipt%' OR tablename LIKE '%obligation%')")).rows.map(row => row.name as string);
+    const tracked = [...new Set(["app.journal", "app.journal_line", "app.synthetic_obligation", "app.command_receipt", ...extra])];
+    const allRows = async () => Promise.all(tracked.map(async table => (await f.admin.query(`SELECT row_to_json(t)::text bytes FROM ${table} t ORDER BY row_to_json(t)::text COLLATE "C"`)).rows));
+    const before = await allRows();
+    const application = new FeeIllustrationApplication(f.runtime, practice.sessionId);
+    const input = { version: "fee-illustration-source.v1", commandId: randomUUID(), fixture: "recovery-18800" };
+    const created = await application.create(jobId, input);
+    expect(created).toMatchObject({ label: "Illustration — proposed policy; principal only, VAT excluded", source: { statementIssuedCount: 0, ledgerEntryCount: 0 } });
+    expect(await allRows()).toEqual(before);
+    const sourceRows = async () => (await f.admin.query("SELECT row_to_json(s)::text bytes FROM app.fee_illustration_source s WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, jobId])).rows;
+    const persisted = await sourceRows();
+    expect(persisted).toHaveLength(1);
+    expect(await application.create(jobId, input)).toEqual(created);
+    expect(await application.read(jobId)).toEqual(created);
+    expect(await sourceRows()).toEqual(persisted);
+    expect(await allRows()).toEqual(before);
+
+    const contractorJobId = randomUUID();
+    await workTenant(f.admin, DEMO_TENANT_ID, async db => {
+      await db.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional contractor job')", [contractorJobId, DEMO_TENANT_ID]);
+      await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'contractor','synthetic_demo','work_order_import')", [DEMO_TENANT_ID, contractorJobId]);
+    });
+    await expect(repo.create(contractorJobId, randomUUID())).rejects.toMatchObject({ code: "42501", message: "FEE_ILLUSTRATION_FORBIDDEN" });
+  });
+
   it("L101 concurrent identical creation returns one persisted illustration; stable replay", async () => {
     const commandId = randomUUID();
     const replies = await Promise.all(Array.from({ length: 4 }, () => repo.create(owner.jobId, commandId)));

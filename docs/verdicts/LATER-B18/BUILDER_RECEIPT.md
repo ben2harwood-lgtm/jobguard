@@ -21,7 +21,7 @@ Decision 74: built with made-up data and PARKED. RED Opus and Sol-high verdicts,
 
 Standard F: the checked SECURITY DEFINER routine has its OWN current owner-role check against the retained fixed DEMO identity before any job lookup. The existing HTTP practice-session/job ownership checks remain authoritative at the request boundary. No persisted-session constructor, credential, capability, direct business write grant or production route is added. As before, this fixed synthetic database bridge is not protection from someone holding application database credentials. It is not a production authorization design.
 
-Only synthetic small-builder jobs pass the routine's track/environment predicate. Contractor and pilot jobs are refused. Consequently this piece introduces no contractor write route requiring a watchdog registration change; watchdog registries/harness/replay tests are untouched. The route's existing `post_live_billing` classification is unchanged.
+Small-builder jobs in `synthetic_demo` or `pilot_no_charge` pass the routine's track/environment predicate, including the default no-charge practice activation (corrected in repair r1). Contractor jobs remain refused. Illustrations remain hypothetical and non-posting. Consequently this piece introduces no contractor write route requiring a watchdog registration change; watchdog registries/harness/replay tests are untouched. The route's existing `post_live_billing` classification is unchanged.
 
 Migration: `packages/db/migrations/0192_fee_illustration_replay.sql`; no runner/inventory changes. Forward fix is a later replacement routine preserving all history and replay behavior; no destructive rollback. See its migration note. No new alert or external-provider action is introduced. No AI prompt/model/parser change; eval is inapplicable. No UI change.
 
@@ -146,3 +146,37 @@ Tracked `git diff --stat` (untracked new files are listed with hashes above):
 ```
 
 Final head: `31682762c903d716657c573e1b5deae63588aad7`. No commit/push performed. Intended message: `/private/tmp/jg-msg-later-b18.txt`.
+
+## Repair r1 — dispatcher 14, 16 October 2026 night
+
+Built by Codex on `codex/sandbox/later-b18`, starting and ending at committed HEAD `80806e34bd799575ed3e0c4548dae7d8c5ef0aa0`; repair changes are uncommitted. Read the second independent check at `~/.local/share/full-steam/jg-runs/d14-later-b18-second-opus-80806e3.md` (REPAIR, bound to that starting commit). This receipt records implementation and deterministic checks, not an independent verdict or acceptance of the repaired diff. Decision 74 remains BUILD-DON'T-MERGE / PARK.
+
+S1 repair: edited this piece's unmerged migration 0192 in place to accept `small_builder` jobs in either `synthetic_demo` or `pilot_no_charge`; the contractor predicate, owner/membership checks, locks, replay/conflict behavior and non-posting fixed illustration remain intact. Corrected the pilot-refusal wording above and in the migration note. No earlier migration, existing test assertion, expectation, pin, runner, inventory or application code changed. No new grant, table, privilege, operational alert or external action. The previously documented forward-fix strategy remains applicable after merge; no destructive rollback is proposed.
+
+Added exactly one real-PostgreSQL case in `fee-illustration-later.integration.test.ts` (five cases total). It uses the issued session's saved v1 sample, prepares fictional confirmed scope, then runs the real quote draft/preview/simulated-send/acceptance and `PracticeActivationRepository.start(... scenario: "no_charge")` paths. It asserts the v1 live activation and `pilot_no_charge` small-builder track, calls the existing illustration application, replays the same command, and reads the same result. Exact ordered PostgreSQL `row_to_json(...)::text` snapshots cover journal headers/lines and every app obligation/statement/receipt table after activation, after creation and after replay. The persisted illustration row, including IDs and timestamp, is also compared exactly. A contractor fixture in the same case still receives `42501 / FEE_ILLUSTRATION_FORBIDDEN`. **Execution of this new case is NOT RUN**, not a demonstrated database guarantee; collection alone succeeded.
+
+Dependencies were already installed; no install/download was attempted. Used the existing cached pnpm 10.28.1 wrapper via `PATH=/private/tmp/jg-pnpm-later-b16:$PATH`; actual Node was 24.17.0 (repository `.nvmrc` says 24.15.0, unchanged). Commands/results below are this repair's runs. Logs are `/private/tmp/jg-later-b18-r1-*.log` and are local evidence, not committed CI artifacts.
+
+| Command | Exit and evidence |
+| --- | --- |
+| `pnpm typecheck` | 0; 7 successful tasks, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint` | 0; boundary/static checks plus 7 successful tasks, 2 cached |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0; registered `later-b18` lane passed |
+| `node --test tools/*.test.mjs` | 0; 100 passed |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai --filter @jobguard/web --filter @jobguard/config --filter @jobguard/storage --parallel test` | 1 overall; web 867, AI 113, config 2 and storage 4 passed. Core: 5 failed / 5387 passed, including three compiled `dist` source-file lookups (ENOENT) and two allocation-test timeouts. No test was altered. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | 0; all 2696 source tests passed, 99 files, original timeout unchanged |
+| `pnpm --filter @jobguard/api exec vitest run src --exclude '**/shadow-isolation.application.test.ts' --maxWorkers=2` | 1; 1717 passed / 129 failed / 1 skipped; 129 socket-listen EPERM errors in HTTP suites. Explicit exclusion avoids that file's PostgreSQL/server startup. |
+| `pnpm --filter @jobguard/api exec vitest run src/workspace/fee-illustration-later.test.ts --maxWorkers=2` | 0; 32 passed |
+| `pnpm --filter @jobguard/db exec vitest run src --maxWorkers=2` | 130; stopped when substring filter `src` also selected `dbsrc` integration files. Four integration files reported skipped cases; one source import-graph assertion had failed before interruption. The explicit source-only run below then passed after dependency builds. No database success claimed. |
+| `pnpm exec vitest run src/*.test.ts --maxWorkers=2` (DB cwd) | 0; explicit source unit filenames, 131 passed / 16 files |
+| `pnpm --filter @jobguard/db exec vitest list test/fee-illustration-later.integration.test.ts --json` | 0; five tests collected, including r1; no hooks/tests executed |
+| `pnpm build` | 0; 7 successful tasks, 2 cached; 41 static pages generated |
+| `pnpm openapi:check` | 1; tsx CLI IPC socket `listen EPERM` |
+| `node --import tsx src/generate-openapi.ts --check` (API cwd) | 0; same source OpenAPI check without the CLI IPC listener |
+| `git diff --check` | 0 |
+
+Turbo reported shared-cache IO permission warnings; the successful commands above retained their actual cached-task counts. Build reported existing root/lockfile, CSS and Nest/load-esm warnings. No warning or failure was suppressed by changing code, checks or configuration. The broad unit-command failures remain recorded even though the explicit core source run passed.
+
+**NOT RUN:** the fee illustration PostgreSQL integration and upgrade files, full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, and all browser/e2e suites. The dispatcher states that this sandbox cannot bind localhost or start PostgreSQL, and expressly defers database/browser execution to GitHub CI. No browser was started. Dispatcher waived the old 45 GB disk gate for r1 (night floor 30 GB); no disk-gate workaround was used. AI live evaluation is inapplicable to this SQL/test/documentation repair; no live provider was invoked.
+
+Remaining gates: dispatcher must commit/push and obtain database/upgrade CI and MON-7, VALUE-1, UIWIRE-15, UIWIRE-14, fee-statement and m1-15 e2e results on the repaired commit; a different model must record its verdict on that exact commit, with separate acceptance and founder merge/release authority. No commit, staging, checkout, push, merge, enablement or deployment was performed here. Intended conventional commit subject/body is written to both `/private/tmp/jg-msg-later-b18-r1.txt` and `/private/tmp/jg-msg-later-b18.txt` as requested.
