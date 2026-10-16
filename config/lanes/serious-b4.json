@@ -18,8 +18,8 @@
         "packages/db/test/serious-b4-evidence-proof.integration.test.ts",
         "packages/db/test/serious-b4-practice.integration.test.ts",
         "packages/db/test/serious-b4-upgrade.integration.test.ts",
-        "packages/db/migrations/0167_evidence_proof_rework.sql",
-        "packages/db/migration-notes/0167_evidence_proof_rework.md",
+        "packages/db/migrations/0171_evidence_proof_rework.sql",
+        "packages/db/migration-notes/0171_evidence_proof_rework.md",
         "docs/ledger/SERIOUS-B4.md",
         "docs/verdicts/SERIOUS-B4/BUILDER_RECEIPT.md"
       ]
