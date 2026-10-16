@@ -4,7 +4,7 @@
  * This tool verified only that every commit is a clean merge of main or an exact current branch tip that passes its own lane check; it does not verify that any piece is approved (verdicts live off-branch).
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,87 @@ export function matches(pattern, file) {
   if (pattern.endsWith("/**")) return file.startsWith(pattern.slice(0, -2));
   return pattern === file;
 }
+
+// MERGE-CHURN-1 (founder decision 35): one lane per file in config/lanes/<lane-id>.json, read as the union with the
+// legacy register. A lane file holds exactly one lane, named by its file, with exact branches only. Only the branch
+// of that lane, or an integration (coordinator) lane, may add, change or remove it; see lanePathAllowed.
+export const LEGACY_POLICY_PATH = "config/agent-lane-assignments.json";
+export const LANE_DIR = "config/lanes/";
+const LANE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const LANE_FILE_KEYS = new Set(["branches", "allow", "receipt", "note", "test"]);
+export const laneFilePath = (name) => `${LANE_DIR}${name}.json`;
+const isLaneDirPath = (file) => file.startsWith(LANE_DIR);
+// A lane file may not grant the lane register itself, by exact path or by a directory scope that contains it.
+const grantsRegister = (pattern) => typeof pattern === "string" && (pattern.startsWith(LANE_DIR) || pattern === "config/lanes" ||
+  [LEGACY_POLICY_PATH, `${LANE_DIR}x.json`].some((file) => matches(pattern, file)));
+
+export function lanePathAllowed(name, lane, file) {
+  if (isLaneDirPath(file)) return lane.integration === true || (name !== undefined && file === laneFilePath(name));
+  return lane.allow.some((pattern) => matches(pattern, file));
+}
+
+/** entries: [{ path, text }] for every entry under config/lanes/ (text undefined for a non-file entry). */
+export function mergeLanePolicy(legacy, entries) {
+  if (!entries.length) return legacy;
+  if (!legacy || typeof legacy !== "object" || !legacy.lanes || typeof legacy.lanes !== "object") throw new Error("Lane policy must be version 2 with no fallback/default lane.");
+  const lanes = { ...legacy.lanes }, added = [];
+  for (const { path, text } of [...entries].sort((a, b) => (a.path < b.path ? -1 : 1))) {
+    const where = `Lane file ${JSON.stringify(path)}`;
+    const id = path.slice(LANE_DIR.length, -".json".length);
+    if (!path.startsWith(LANE_DIR) || !path.endsWith(".json") || !LANE_ID.test(id) || text === undefined) {
+      throw new Error(`${where} refused: only files named config/lanes/<lane-id>.json (lowercase words joined by single hyphens) may live in ${LANE_DIR}.`);
+    }
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { throw new Error(`${where} refused: not valid JSON.`); }
+    const keys = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? Object.keys(parsed) : [];
+    if (parsed?.version !== 2 || keys.length !== 2 || !keys.includes("lanes") || !parsed.lanes || typeof parsed.lanes !== "object" || Array.isArray(parsed.lanes)) {
+      throw new Error(`${where} refused: it must be {"version":2,"lanes":{"${id}":{...}}} with nothing else.`);
+    }
+    const ids = Object.keys(parsed.lanes);
+    if (ids.length !== 1 || ids[0] !== id) throw new Error(`${where} refused: it must hold exactly one lane and that lane's id must equal the file name ${JSON.stringify(id)}; found ${JSON.stringify(ids)}.`);
+    const lane = parsed.lanes[id];
+    if (!lane || typeof lane !== "object" || Array.isArray(lane)) throw new Error(`${where} refused: the lane must be an object.`);
+    const extra = Object.keys(lane).filter((key) => !LANE_FILE_KEYS.has(key));
+    if (extra.length) throw new Error(`${where} refused: a lane file may hold only branches, allow, receipt, note and test; found ${extra.map((key) => JSON.stringify(key)).join(", ")} (prefixes, integration and fallback lanes stay in the coordinator's legacy register).`);
+    if (!Array.isArray(lane.branches) || !lane.branches.length || lane.branches.some((branch) => typeof branch !== "string" || !branch)) throw new Error(`${where} refused: branches must be a non-empty list of exact branch names.`);
+    if (Array.isArray(lane.allow) && lane.allow.some(grantsRegister)) throw new Error(`${where} refused: a lane file cannot grant the lane register (${LEGACY_POLICY_PATH} or ${LANE_DIR}); its own file is always editable by its own branch.`);
+    if (Object.hasOwn(lanes, id)) throw new Error(`${where} refused: lane ${JSON.stringify(id)} is already registered in ${LEGACY_POLICY_PATH}; a lane file cannot replace it.`);
+    lanes[id] = lane; added.push(id);
+  }
+  const merged = { ...legacy, lanes };
+  for (const id of added) for (const branch of lanes[id].branches) {
+    const found = matchingLanes(merged, branch).map(([name]) => name);
+    if (found.length !== 1 || found[0] !== id) throw new Error(`Lane file ${JSON.stringify(laneFilePath(id))} refused: branch ${JSON.stringify(branch)} must select only lane ${JSON.stringify(id)}; it matches ${JSON.stringify(found)}.`);
+  }
+  return merged;
+}
+
+export function loadLanePolicy(cwd) {
+  const legacy = JSON.parse(readFileSync(resolve(cwd, LEGACY_POLICY_PATH), "utf8"));
+  let dirents;
+  try { dirents = readdirSync(resolve(cwd, LANE_DIR), { withFileTypes: true }); }
+  catch (error) { if (error.code === "ENOENT") return legacy; throw error; }
+  return mergeLanePolicy(legacy, dirents.map((entry) => ({ path: `${LANE_DIR}${entry.name}`,
+    text: entry.isFile() ? readFileSync(resolve(cwd, LANE_DIR, entry.name), "utf8") : undefined })));
+}
+
+// MERGE-CHURN-1: a migration added by a change must be numbered above every migration already on its base, with no
+// two added migrations sharing a number. This keeps the run order identical on fresh and upgraded databases.
+export const MIGRATION_PATH = /^packages\/db\/migrations\/(\d{4})_[^/]+\.sql$/u;
+export function migrationOrderViolations(baseFiles, addedFiles) {
+  const number = (file) => Number(MIGRATION_PATH.exec(file)[1]);
+  const base = baseFiles.filter((file) => MIGRATION_PATH.test(file));
+  const highest = base.length ? Math.max(...base.map(number)) : -1;
+  const seen = new Map(), violations = [];
+  for (const file of addedFiles.filter((path) => MIGRATION_PATH.test(path)).sort()) {
+    const n = number(file);
+    if (n <= highest) violations.push(`${JSON.stringify(file)} must be numbered above ${String(highest).padStart(4, "0")}, the highest migration already on the base`);
+    if (seen.has(n)) violations.push(`${JSON.stringify(file)} shares number ${String(n).padStart(4, "0")} with ${JSON.stringify(seen.get(n))}`);
+    seen.set(n, file);
+  }
+  return violations;
+}
+const migrationFailure = (violations) => new Error(`Migration order FAILED:\n${violations.join("\n")}\nRun node tools/migration-renumber.mjs --write after catching up with main (SQL bytes stay unchanged).`);
 
 const matchingLanes = (config, branch) => Object.entries(config.lanes).filter(([, lane]) =>
     lane.branches?.includes(branch) || lane.branchPrefixes?.some((prefix) =>
@@ -49,8 +130,8 @@ export const TRAIN_NOTICE = "This tool verified only that every commit is a clea
 const isTrainName = (branch) => typeof branch === "string" && branch.length <= 64 &&
   /^train\/[a-z0-9]+(?:-[a-z0-9]+)*$(?![\s\S])/u.test(branch);
 
-export function trainPathViolations(files, lanes) {
-  return files.filter((file) => !lanes.some((lane) => lane.allow.some((pattern) => matches(pattern, file))));
+export function trainPathViolations(files, lanes, names = []) {
+  return files.filter((file) => !lanes.some((lane, index) => lanePathAllowed(names[index], lane, file)));
 }
 
 // L1: Approved cannot be seen: verdicts live off-branch. The integrator checks
@@ -112,8 +193,15 @@ function inspectTrain({ cwd, event, branch, base, target, comparison, eventName,
       if (!branches?.length) throw new Error(`commit ${trainCommit}, second parent ${sha}: no branch tip points exactly at this parent.`);
       const tree = plainMerge(base, sha, `commit ${trainCommit}, second parent ${sha}`);
       let policy;
-      try { policy = JSON.parse(git(["show", "--end-of-options", `${tree}:config/agent-lane-assignments.json`])); }
-      catch { throw new Error(`commit ${trainCommit}, second parent ${sha}: invalid or unavailable piece lane policy.`); }
+      try {
+        const legacy = JSON.parse(git(["show", "--end-of-options", `${tree}:${LEGACY_POLICY_PATH}`]));
+        const listing = git(["ls-tree", "-z", "--end-of-options", tree, LANE_DIR]).split("\0").filter(Boolean);
+        policy = mergeLanePolicy(legacy, listing.map((line) => {
+          const match = /^(\d+) (\w+) ([0-9a-f]{40})\t(.+)$/su.exec(line);
+          if (!match) throw new Error("unexpected lane directory listing.");
+          return { path: match[4], text: match[2] === "blob" && match[1] !== "120000" ? git(["cat-file", "blob", match[3]]) : undefined };
+        }));
+      } catch (error) { throw new Error(`commit ${trainCommit}, second parent ${sha}: invalid or unavailable piece lane policy${error.message.startsWith("Lane file") ? ` (${error.message})` : ""}.`); }
       const selected = [], reasons = [];
       for (const branch of branches) {
         try { selected.push({ branch, ...selectLane(policy, branch, undefined, "pull_request") }); }
@@ -122,9 +210,9 @@ function inspectTrain({ cwd, event, branch, base, target, comparison, eventName,
       if (!selected.length) throw new Error(`commit ${trainCommit}, second parent ${sha}: not registered; ${reasons.join("; ")}`);
       if (new Set(selected.map((entry) => entry.name)).size !== 1) throw new Error(`commit ${trainCommit}, second parent ${sha}: exact branch tips select different lanes: ${selected.map((entry) => `${entry.branch} (${entry.name})`).join(", ")}.`);
       const { branch, name, lane } = selected[0];
-      const violations = trainPathViolations(paths(base, sha, true), [lane]);
+      const violations = trainPathViolations(paths(base, sha, true), [lane], [name]);
       if (violations.length) throw new Error(`commit ${trainCommit}, second parent ${sha}, piece ${branch}, lane ${name} cannot edit: ${violations.map((file) => JSON.stringify(file)).join(", ")}`);
-      return { piece: { branch, lane: name, head: sha }, lane };
+      return { piece: { branch, lane: name, head: sha }, lane, name };
     };
     const commits = [], entries = [];
     let current = target;
@@ -145,8 +233,11 @@ function inspectTrain({ cwd, event, branch, base, target, comparison, eventName,
     if (!commits.length) throw new Error("at least one train commit is required.");
     if (!entries.length) throw new Error("at least one registered head must be a second parent.");
     const files = paths(base, target, true).sort();
-    const violations = trainPathViolations(files, entries.map((entry) => entry.lane));
+    const violations = trainPathViolations(files, entries.map((entry) => entry.lane), entries.map((entry) => entry.name));
     if (violations.length) throw new Error(`paths outside every piece lane: ${violations.map((file) => JSON.stringify(file)).join(", ")}`);
+    const order = migrationOrderViolations(splitPaths(git(["ls-tree", "-r", "--name-only", "-z", "--end-of-options", base, "--", "packages/db/migrations/"])),
+      splitPaths(git(["diff", "--no-renames", "--diff-filter=A", "--name-only", "-z", "--end-of-options", `${base}...${target}`, "--", "packages/db/migrations/"])));
+    if (order.length) throw migrationFailure(order);
     return { lane: null, branch, event: eventName, base, head: target, comparison, files,
       train: { pieces: entries.reverse().map((entry) => entry.piece), commits } };
   } catch (error) {
@@ -213,7 +304,7 @@ export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [],
   const args = argv.filter((value) => value.startsWith("--lane="));
   if (args.length > 1 || argv.some((value) => !value.startsWith("--lane="))) throw new Error("Usage: node tools/agent-lane-boundary-lint.mjs [--lane=registered-name]");
   if (args[0] === "--lane=") throw new Error("An explicit lane cannot be empty.");
-  const policy = config ?? JSON.parse(readFileSync(resolve(cwd, "config/agent-lane-assignments.json"), "utf8"));
+  const policy = config ?? loadLanePolicy(cwd);
   const requested = args[0]?.slice(7) || env.AGENT_LANE;
   if (args.length && env.AGENT_LANE && requested !== env.AGENT_LANE) throw new Error("Conflicting explicit lane assignments.");
   if (eventName === "pull_request" && isTrainName(branch) && !args.length && env.AGENT_LANE === undefined && hasNoLane(policy, branch)) {
@@ -229,8 +320,18 @@ export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [],
       for (const file of splitPaths(git(args))) files.add(file);
     }
   }
-  const violations = [...files].filter((file) => !lane.allow.some((pattern) => matches(pattern, file)));
+  const violations = [...files].filter((file) => !lanePathAllowed(name, lane, file));
   if (violations.length) throw new Error(`Lane ${name} cannot edit:\n${violations.map((file) => JSON.stringify(file)).join("\n")}`);
+  if (comparison !== "initial-tree" && [...files].some((file) => MIGRATION_PATH.test(file))) {
+    const scope = ["--", "packages/db/migrations/"];
+    const added = new Set(splitPaths(git(["diff", "--no-renames", "--diff-filter=A", "--name-only", "-z", ...(comparison === "merge-base" ? [`${base}...${target}`] : [base, target]), ...scope])));
+    if (eventName === "local") {
+      for (const file of splitPaths(git(["diff", "--no-renames", "--diff-filter=A", "--name-only", "-z", "--cached", "HEAD", ...scope]))) added.add(file);
+      for (const file of splitPaths(git(["ls-files", "--others", "--exclude-standard", "-z", ...scope]))) added.add(file);
+    }
+    const order = migrationOrderViolations(splitPaths(git(["ls-tree", "-r", "--name-only", "-z", base, ...scope])), [...added]);
+    if (order.length) throw migrationFailure(order);
+  }
   return { lane: name, branch, event: eventName, base, head: target, comparison, files: [...files].sort() };
 }
 
