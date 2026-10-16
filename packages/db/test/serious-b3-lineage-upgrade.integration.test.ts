@@ -5,7 +5,7 @@ import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils
 import { QuoteRepository, withTenant } from "../src/index.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 let c: Awaited<ReturnType<typeof clusterBefore>>;
-beforeAll(async()=>{c=await clusterBefore("0170_quote_scope_lineage.sql");},120_000);
+beforeAll(async()=>{c=await clusterBefore("0172_quote_scope_lineage.sql");},120_000);
 afterAll(async()=>{await c?.close();});
 it("S09 upgrades populated quote lineage without changing immutable rows, grants or RLS",async()=>{
   const tenant=randomUUID(),job=randomUUID(),scope=randomUUID(),revision=randomUUID();

@@ -47,9 +47,9 @@ No existing expected value, refusal, count, pinned name, hash, fingerprint, test
 
 ## Migration and compatibility
 
-`0170_quote_scope_lineage.sql` is above 0165, the highest on origin/main inspected during this task. Directory discovery registers it automatically. It adds a unique tenant/job/item/revision key and two validated foreign keys. No business row, column, grant, policy, owner or routine changes; no backfill. Existing correct documents/lines/observations remain byte-identical.
+`0172_quote_scope_lineage.sql` is above 0165, the highest on origin/main inspected during this task. Directory discovery registers it automatically. It adds a unique tenant/job/item/revision key and two validated foreign keys. No business row, column, grant, policy, owner or routine changes; no backfill. Existing correct documents/lines/observations remain byte-identical.
 
-A historical mismatched pairing fails installation transactionally; do not silently rewrite immutable history or relax validation. After successful install fix forward while retaining source ownership. Earlier application versions remain compatible for correct pairings. See `packages/db/migration-notes/0170_quote_scope_lineage.md` for rollout and failure handling. The new populated-predecessor upgrade regression checks preserved typed row bytes, grants/RLS, validated constraints, replay and corrupt-history refusal. **No migration or PostgreSQL test was run here.** Integration must renumber if another migration reaches main first.
+A historical mismatched pairing fails installation transactionally; do not silently rewrite immutable history or relax validation. After successful install fix forward while retaining source ownership. Earlier application versions remain compatible for correct pairings. See `packages/db/migration-notes/0172_quote_scope_lineage.md` for rollout and failure handling. The new populated-predecessor upgrade regression checks preserved typed row bytes, grants/RLS, validated constraints, replay and corrupt-history refusal. **No migration or PostgreSQL test was run here.** Integration must renumber if another migration reaches main first.
 
 ## Commands actually run
 
@@ -132,7 +132,7 @@ Environment: supplied dependencies, Node `v24.17.0`, cached pnpm `10.28.1`; no i
 | --- | --- |
 | `pnpm typecheck` | Exit 0; 7 tasks, 2 cached. |
 | `LANE_BASE_REF=origin/main pnpm lint` | Exit 0; lane, purity, money/commercial boundary checks and 7 package lint tasks. |
-| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Initial exit 0 against `66205cfa419f7ebee00dabaa4babb325aeb92472`, including working-tree changes. Final rerun exit 1: origin/main advanced during the session and now already contains migration 0166; this branch's unchanged `0170_quote_scope_lineage.sql` must be above that number. STOP: no migration number, test reference, lane migration path or pin changed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Initial exit 0 against `66205cfa419f7ebee00dabaa4babb325aeb92472`, including working-tree changes. Final rerun exit 1: origin/main advanced during the session and now already contains migration 0166; this branch's unchanged `0172_quote_scope_lineage.sql` must be above that number. STOP: no migration number, test reference, lane migration path or pin changed. |
 | `pnpm build` | Exit 0; 7 tasks, 2 cached; production Next build completed. Existing workspace-root/webpack/CSS and sandbox shared-cache warnings reported. |
 | `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Exit 0; core 94 files/2,601 tests; config 1/1; storage 1/2; AI 6/85 (fixtures only). |
 | `pnpm --filter @jobguard/db exec vitest run src --exclude 'test/**' --maxWorkers=1` | Final exit 0; 10 files/110 tests. First concurrent run had 109 passes and the existing operator-reachability test timed out at its unchanged 5s limit; rerun after build/load completed passed without edits. |
@@ -173,7 +173,7 @@ Supplied dependencies only; no install/download. Node `v24.17.0`, cached pnpm `1
 | --- | --- |
 | `pnpm typecheck` | Exit 0; 7 successful tasks, 2 cached. |
 | `LANE_BASE_REF=origin/main pnpm lint` | Exit 1; core purity passes, then lane migration-order check blocks execution of the later checks. |
-| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; unchanged `0170_quote_scope_lineage.sql` must be numbered above base migration 0171. Base `origin/main` is `49fc07f33a440bcca7ac443de365aba3670e9999`, containing `0171_evidence_proof_rework.sql`. No migration/reference/pin is changed under this repair's explicit scope. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; unchanged `0172_quote_scope_lineage.sql` must be numbered above base migration 0171. Base `origin/main` is `49fc07f33a440bcca7ac443de365aba3670e9999`, containing `0171_evidence_proof_rework.sql`. No migration/reference/pin is changed under this repair's explicit scope. |
 | `node tools/money-arithmetic-lint.mjs && node tools/commercial-boundary-lint.mjs && pnpm exec turbo run lint` | Exit 0; remaining boundary checks and all 7 package lint tasks pass (2 cached). Does not turn the failed full lint/lane checks into passes. |
 | `pnpm build` | Exit 0; 7 successful tasks, 2 cached; production Next build completed. Workspace-root/webpack/CSS and unavailable shared-cache warnings reported. |
 | `node --test tools/*.test.mjs` | Exit 0; 100/100 tests. |
