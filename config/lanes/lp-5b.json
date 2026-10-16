@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-5b": {
+      "branches": [
+        "codex/sandbox/lp-5b"
+      ],
+      "receipt": "docs/verdicts/LP-5B/BUILDER_RECEIPT.md",
+      "test": "packages/db/test/lp-5b-writers.integration.test.ts",
+      "note": "RED; independent writer inventory and source checks only. Inherited LP-5a has no checked SQL lifecycle; conversion/migration stopped. No grants, production caller changes or acceptance. BUILD-DONT-MERGE; UI parked.",
+      "allow": [
+        "docs/ledger/LP-5B.md",
+        "docs/contracts/lp-5b-command-writers-v1.md",
+        "docs/verdicts/LP-5B/BUILDER_RECEIPT.md",
+        "docs/verdicts/LP-5B/PROPOSED-COORDINATOR-CHANGES.md",
+        "packages/db/test/lp-5b-writers.integration.test.ts"
+      ]
+    }
+  }
+}
