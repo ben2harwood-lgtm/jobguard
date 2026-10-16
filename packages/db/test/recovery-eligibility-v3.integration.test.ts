@@ -295,6 +295,7 @@ it("settlement at exactly the case opening instant is excluded with zero Q",asyn
 });
 it("settled-before-opening is decided in PostgreSQL on microsecond timestamps: settlement 800 microseconds AFTER opening in the same millisecond qualifies at the plan figure",async()=>{
  const f=await fixture();await f.advance("receipt-3000");
+ await advanceInterestFact(f,"receipt-interest-120");await advanceInterestFact(f,"receipt-compensation-70");
  await stampTimes(f,"receipt-3000","2026-10-11T12:00:00.000100Z","2026-10-11T12:00:00.000900Z");
  const r=await f.repo.review(ctx,f.jobId,review(f.c,"F18"),actor,f.auth.digest);
  expect(r.result).toMatchObject({qualifyingPrincipal:{pence:262000,currency:"GBP"},outcome:"eligible_for_review",reason:"Fixed statutory compensation is not part of the fee base"});

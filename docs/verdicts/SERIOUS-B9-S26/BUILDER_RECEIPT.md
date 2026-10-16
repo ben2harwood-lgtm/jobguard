@@ -82,3 +82,63 @@ Migration notes: `packages/db/migration-notes/0172_recovery_eligibility_paid_int
 Final scoped recheck: `LANE_BASE_REF=origin/main pnpm lint` again exited 0 (7 successful tasks; `/private/tmp/jg-s26-lint-final.log`); direct lane check again exited 0 and included all seven changed/new files (`/private/tmp/jg-s26-lane-final.log`). Final read-only comparison verified every pre-existing migration, runner and MIGRATIONS.md unchanged, and all original integration rows/assertions retained. `git diff --check` passed; HEAD remained the issued baseline.
 
 Dispatcher must commit, obtain exact-commit independent RED verdicts and separate acceptance, resolve the held additional fixtures and run the complete PostgreSQL fresh/upgrade/regression suites in CI. No technical acceptance, independently verified guarantee or production release is claimed. No database/browser execution in this sandbox. Intended commit message is `/private/tmp/jg-msg-serious-b9-s26.txt` (overwritten as ordered).
+
+
+## r1 (ruling 66)
+
+16 October 2026; dispatcher 14; working-tree delivery on `codex/sandbox/serious-b9-s26`, starting HEAD `eb1e1e687f5e5a95e8b78ae914e037158c6ec0bd`. Read-only Git inspection confirms issued implementation `8cff9817` is an ancestor; the intervening merge and migration renumbering are retained. No commit, staging, checkout, push, download or shared-list change. This section supersedes the earlier eight-site setup hold only; it is builder evidence, not an independent verdict or acceptance.
+
+Read the complete on-disk AGENTS instructions, applicable BUILD_PLAN §§10.3.3–10.3.5 / CH-7, the eligibility contract, coordinator rulings 55 and 66, and the eight-site proposal at `/Users/benharwood/.local/share/full-steam/jg-runs/PROPOSED-RULINGS-2026-10-16.md:14–26`.
+
+**Change:** add setup-only settlement of `receipt-interest-120` and `receipt-compensation-70` through the same `PracticeFeedRepository.factsView` / `factsCommand` helper pattern as 55(a). Each command reads the current feed revision. Local copies of that helper in the insurer and timing test files avoid importing a test module or changing a shared helper. No assertion, amount (including 262000), reason, test name, pin, shared list, runtime source, migration, dependency or configuration is changed.
+
+| Authorized site (starting-HEAD line) | Setup added before the unchanged review/assertions |
+| --- | --- |
+| `recovery-eligibility-v3.integration.test.ts:296–301` | Settle both components before the microsecond timestamp setup/review. The existing principal timestamps remain exact. |
+| `recovery-insurer-money.integration.test.ts:122–132` | Settle both components on the legacy F18 job before the pre-payer-migration review. |
+| Same file `:326–343` | Settle both before opening the mark transaction in the concurrency test. |
+| Same file `:399–420` | Settle both for F18 before the initial insurer exclusion; the F19 setup is untouched. |
+| Same file `:421–424` | Settle both only for the positive-Q rows; insurer-zero controls retain their setups. |
+| Same file `:425–438` | Settle both on the actual unbound job after `f.jobId` / `f.c` point to it. |
+| Same file `:449–454` | Settle both before changing the payer to person; the already saved exclusion remains unchanged. |
+| `recovery-timing-pin.integration.test.ts:116–128` | Settle both only for after-opening F18 calls; F19 and before-opening setup paths remain untouched. |
+
+Read-only baseline comparison: all three test diffs contain insertions only (22 added lines total); removing the insertions restores each complete original file byte-for-byte. Every original assertion line is byte-identical. The original ruling-55 F18 setup, principal-only case, reader and migration are untouched. No site required an assertion change. This is source inspection, not PostgreSQL proof.
+
+### r1 validation and remaining holds
+
+Installed dependencies reused; Node `24.17.0` versus `.nvmrc` `24.15.0`; cached pinned pnpm `10.28.1`. Commands use `PATH=/private/tmp/jg-migfix-2-bin:$PATH npm_config_manage_package_manager_versions=false COREPACK_ENABLE_NETWORK=0`; no package installation and no claim of a clean pinned install.
+
+| Command | Actual result / evidence |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; 7 successful tasks, 2 cached; `/private/tmp/jg-s26-r1-typecheck.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1 at lane check: insurer/timing files are absent from the unchanged allow-list; `/private/tmp/jg-s26-r1-lint.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1, same two files; `/private/tmp/jg-s26-r1-lint-lanes.log`. |
+| `node tools/core-purity-lint.mjs && node tools/money-arithmetic-lint.mjs && node tools/commercial-boundary-lint.mjs && pnpm exec turbo run lint` | Exit 0; all remaining lint checks and 7 package tasks (2 cached) passed independently of the failed lane gate; `/private/tmp/jg-s26-r1-lint-remaining.log`. This does not make full lint green. |
+| `pnpm build` | Exit 0; 7 successful tasks, 2 cached, including Next production build; `/private/tmp/jg-s26-r1-build.log`. Turbo cache-write EPERM, Next workspace-root and webpack dynamic-import warnings retained. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1` | Exit 1: 2673 passed / 1 failed across 98 files. The sole failure at unchanged `src/receipt-allocation.test.ts:212` was a 5000ms timeout; `/private/tmp/jg-s26-r1-core-unit.log`. |
+| `pnpm --filter @jobguard/core exec vitest run src/receipt-allocation.test.ts --maxWorkers=1 --testTimeout=30000` | Exit 0; all 34 tests in the timed-out file passed; `/private/tmp/jg-s26-r1-core-retry.log`. CLI-only timeout allowance; no test/configuration edits. |
+| `pnpm --filter @jobguard/{config,storage,ai} exec vitest run src --maxWorkers=1` (three individual commands) | Each exit 0; respectively 1 / 2 / 85 passed; `/private/tmp/jg-s26-r1-{config,storage,ai}-unit.log`. AI is synthetic fixture coverage only. |
+| `pnpm --filter @jobguard/db exec vitest run src test --exclude 'test/**/*.integration.test.ts' --exclude 'test/free-port.test.ts' --maxWorkers=1` | Exit 1: 441 passed / 2 failed across 49 files. Both failures were 5000ms timeouts in the unchanged source and compiled `audit-checkpoint-handoff` operator-reachability test (`src/audit-checkpoint-handoff.test.ts:279`); `/private/tmp/jg-s26-r1-db-unit.log`. Compiled test copies are included by this invocation. No PostgreSQL executed. |
+| `pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts dist/audit-checkpoint-handoff.test.js --maxWorkers=1 --testTimeout=30000` | Exit 0; all 112 source/compiled tests passed; `/private/tmp/jg-s26-r1-db-retry.log`. CLI-only timeout allowance; no test/configuration edits. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 40 files / 867 tests; `/private/tmp/jg-s26-r1-web-unit.log`. No browser. |
+| API unit command below | Exit 0; 81 files / 1656 tests; `/private/tmp/jg-s26-r1-api-unit.log`. Nine socket/database suites excluded only from this invocation. |
+| Tool unit command below | Exit 0; 19 tests; `/private/tmp/jg-s26-r1-tools-unit.log`. Three Git-writing tool suites deferred. |
+| `pnpm openapi:check` | Exit 1: tsx CLI cannot bind IPC pipe (`EPERM`); `/private/tmp/jg-s26-r1-openapi.log`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same generator/snapshot comparison without the CLI listener; `/private/tmp/jg-s26-r1-openapi-direct.log`. |
+| `pnpm --filter @jobguard/db exec vitest list test/recovery-eligibility-v3.integration.test.ts test/recovery-insurer-money.integration.test.ts test/recovery-timing-pin.integration.test.ts --json` | Exit 0; respectively 39 / 40 / 27 cases collected; `/private/tmp/jg-s26-r1-collection.json`. Hooks/tests NOT EXECUTED. |
+| `git diff --check`; read-only scope/original-byte checks | Pass; only the three authorized test files plus this appended receipt section differ from starting HEAD. |
+
+API command: `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 --exclude src/auth/sso/action-paths.test.ts --exclude src/contractor/contractor-practice-session.http.test.ts --exclude src/contractor/site-extra-pricing.http.test.ts --exclude src/contractor/site-extra.http.test.ts --exclude src/contractor/site-visit.http.test.ts --exclude src/contractor/practice-worker-switch.http.test.ts --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/final-account-lock.isolation.test.ts`.
+
+Tool command: `node --test tools/core-purity.test.mjs tools/commercial-boundary.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs`.
+
+The original default-timeout unit invocations failed; passing targeted reruns establish their assertions under the stated CLI allowance and do not relabel those original invocations as passing.
+
+**Scope/compatibility:** fixture setup only, preserving settled-money eligibility (§5.6), versioned proof (§5.8), exact amounts and immutable review history. No production behavior, financial posting, migration/rollback requirement, external action, provider, model/prompt, operational alert or commercial approval changes. The earlier production, PostgreSQL and independent-review release gates remain.
+
+**Lane STOP (shared list unchanged):** `config/lanes/serious-b9-s26.json:10–17` permits the original eligibility test but omits `packages/db/test/recovery-insurer-money.integration.test.ts` and `packages/db/test/recovery-timing-pin.integration.test.ts`. Before/after that allow-list is byte-identical; both requested lint commands reject those two ruling-66-authorized files. No widening, bypass or invented approval was applied. Dispatcher/coordinator must disposition this lane hold.
+
+**Database/browser: NOT RUN.** The direct headless prerequisite probe `node --input-type=module` with `createServer().listen({host:'127.0.0.1',port:0})` returned `EPERM: listen EPERM: operation not permitted 127.0.0.1`. No PostgreSQL cluster or browser was started. All 106 affected integration cases were collected only. GitHub CI owes the three affected files and complete mandatory PostgreSQL fresh/upgrade/regression and browser suites. `pnpm test`, `pnpm test:db`, `pnpm test:migrations`, and `pnpm test:e2e` were NOT RUN: they require the unavailable subsystem; the aggregate tool suite also includes Git-writing fixtures prohibited by this order. Invocation-only exclusions below do not disable or alter any repository test.
+
+Dispatcher owns commit/push. Intended conventional commit subject/body is written identically to both requested paths: `/private/tmp/jg-msg-serious-b9-s26-r1.txt` and `/private/tmp/jg-msg-ent-2.txt`. Exact-commit independent RED verdicts and separate acceptance remain required; no approval or technical acceptance is claimed.
