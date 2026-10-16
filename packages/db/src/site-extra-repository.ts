@@ -21,7 +21,7 @@ export type EvidenceFacts = { photoEvidenceId: string | null; residentConfirmati
 export type LoggedSiteExtra = RaisedExtra & { evidence?: EvidenceFacts };
 type Refusal = { code: "TRACK_FORBIDDEN" | "EXTRA_FORBIDDEN" | "NOT_FOUND"; reason: "track_not_contractor" | "member_inactive" | "role_not_permitted" | "job_out_of_scope" | "visit_out_of_scope" };
 type SiteExtraRefusal = Refusal | EvidenceRefusal;
-type Authority = { grant: string } | Refusal;
+type Authority = { grant: string; replay?: LoggedSiteExtra } | Refusal;
 const answerV1 = z.discriminatedUnion("decision", [
  z.object({ decision: z.literal("allowed"), reason_code: z.literal("allowed"), raising_grant: z.string().uuid() }).strict(),
  z.object({ decision: z.literal("forbidden"), reason_code: z.enum(["member_inactive", "command_type_not_permitted", "role_not_permitted"]), raising_grant: z.null() }).strict(),
@@ -45,8 +45,10 @@ const photoRefusal: EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED", reason: "pho
 type Gate = { raise: { evidenceId?: string; residentConfirmationEvidenceId?: string }; evidence?: EvidenceFacts };
 export class SiteExtraRepository {
  constructor(private readonly pool: Pool) {}
- private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string): Promise<Authority> {
+ private async precheck(context: VerifiedTenantContext, actor: AuthenticatedMembership, jobId: string, siteVisitId?: string, replayInput?: InputV3): Promise<Authority> {
   return withTenant(this.pool, context, async db => {
+   // Serialize replay disclosure with membership/grant/assignment changes, just as the writer does.
+   if (replayInput) await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [context.tenantId.toLowerCase()]);
    try { await assertContractorGate(db, actor, "member"); } catch (error) {
     if (error instanceof WorkOrderError && error.code === "TRACK_FORBIDDEN") return { code: "TRACK_FORBIDDEN", reason: "track_not_contractor" };
     if (error instanceof WorkOrderError && error.code === "NOT_FOUND") return { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
@@ -56,6 +58,10 @@ export class SiteExtraRepository {
    const answer = answerV1.safeParse(rows.length === 1 ? rows[0] : undefined);
    if (!answer.success) return { code: "NOT_FOUND", reason: "job_out_of_scope" };
    if (answer.data.decision === "allowed") {
+    if (replayInput) {
+     const replay = await this.priorLog(db, context, actor, replayInput);
+     if (replay) return { grant: answer.data.raising_grant, replay };
+    }
     await requireLiveJob(db, jobId);
     // A visit reference is checked only after the caller is known to be allowed: it must be the caller's own open visit on this job.
     if (siteVisitId && !(await db.$client.query("SELECT 1 FROM app.site_visit WHERE tenant_id=$1 AND id=$2 AND job_id=$3 AND membership_id=$4 AND completed_at IS NULL", [actor.tenantId, siteVisitId, jobId, actor.membershipId])).rowCount) return { code: "NOT_FOUND", reason: "visit_out_of_scope" };
@@ -64,6 +70,28 @@ export class SiteExtraRepository {
    if (answer.data.decision === "not_found") return { code: "NOT_FOUND", reason: "job_out_of_scope" };
    return { code: "EXTRA_FORBIDDEN", reason: answer.data.reason_code === "role_not_permitted" ? "role_not_permitted" : "member_inactive" };
   });
+ }
+ /** Called only after current authority is checked, under the tenant administration lock. No lifecycle check or write on an exact replay. */
+ private async priorLog(db: TenantTransaction, context: VerifiedTenantContext, actor: AuthenticatedMembership, input: InputV3): Promise<LoggedSiteExtra | undefined> {
+  const tenant = context.tenantId.toLowerCase();
+  const row = (await db.$client.query<{ command_type: string; request_hash: string; status: string; result: unknown; actor_membership_id: string | null; raising_grant_id: string | null; variation_id: string | null; job_id: string | null; evidence_hash: string | null }>(
+   `SELECT c.command_type,c.request_hash,c.status,c.result,c.actor_membership_id,o.raising_grant_id,o.variation_id,o.job_id,o.evidence_hash
+    FROM app.command_receipt c LEFT JOIN app.extra_origin o ON(o.tenant_id,o.command_id)=(c.tenant_id,c.command_id)
+    WHERE c.tenant_id=$1 AND c.command_id=$2`, [tenant, input.commandId])).rows[0];
+  if (!row) return undefined;
+  const photo = input.photoEvidenceId?.toLowerCase() ?? null, shown = input.shownContentSha256 ?? null;
+  const confirmation = shown === null ? null : derivedUuid(`resident-confirmation:${tenant}:${input.jobId.toLowerCase()}:${input.commandId.toLowerCase()}`);
+  // Bind to the original grant in the stored request; present authority was checked separately.
+  const content = { version: "raise-extra.v1", commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: row.raising_grant_id,
+   note: input.note, description: input.description, ...(input.siteVisitId ? { siteVisitId: input.siteVisitId } : {}),
+   ...(photo === null ? {} : { evidenceId: photo }), ...(confirmation === null ? {} : { residentConfirmationEvidenceId: confirmation }) };
+  const result = z.object({ variationId: z.string().uuid() }).strict().safeParse(row.result);
+  if (row.command_type !== commandType || row.status !== "succeeded" || row.actor_membership_id?.toLowerCase() !== actor.membershipId.toLowerCase() || row.job_id?.toLowerCase() !== input.jobId.toLowerCase() || row.raising_grant_id === null ||
+   row.request_hash !== sha256Hex(canonicalJson(content)) || !result.success || result.data.variationId !== row.variation_id) throw new SiteExtraError("COMMAND_CONFLICT");
+  if (photo === null && shown === null) return result.data;
+  const contentSha256 = siteExtraContentSha256V1({ jobId: input.jobId.toLowerCase(), description: input.description, note: input.note, photoSha256: row.evidence_hash });
+  if (shown !== null && shown !== contentSha256) throw new SiteExtraError("COMMAND_CONFLICT");
+  return { ...result.data, evidence: { photoEvidenceId: photo, residentConfirmationEvidenceId: confirmation, contentSha256 } };
  }
  private async recordRefusal(context: VerifiedTenantContext, actor: AuthenticatedMembership, input: Input, reason: SiteExtraRefusal["reason"]): Promise<void> {
   try { await withTenant(this.pool, context, async db => {
@@ -154,8 +182,9 @@ export class SiteExtraRepository {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (actor.tenantId.toLowerCase() !== context.tenantId.toLowerCase()) refusal = { code: "EXTRA_FORBIDDEN", reason: "member_inactive" };
    else {
-    const authority = await this.precheck(context, actor, input.jobId, input.siteVisitId);
+    const authority = await this.precheck(context, actor, input.jobId, input.siteVisitId, input);
     if ("code" in authority) refusal = authority;
+    else if (authority.replay) return authority.replay;
     else {
      const gate = await this.evidenceGate(context, actor, input);
      if ("code" in gate) refusal = gate; else

@@ -51,7 +51,7 @@ async function finish(db: TenantTransaction, tenant: string, commandId: string, 
 }
 /**
  * ENT-3b: visit start and complete, and the site worker's two read lists. The visit rule lives once, in app.ent3b_visit_authority; this class calls it.
- * Order of every command: tenant identity, pre-check (authority first, no lock), then one transaction that locks tenant authority shared, rechecks authority/ownership, checks the job is live, claims the command,
+ * Order of every command: tenant identity, pre-check (authority first, no lock), then one transaction that locks tenant authority shared, rechecks authority/ownership, returns an exact prior result or checks the job is live and claims the command,
  * calls the controlled routine and appends the one audit event last. A caller who may not visit the job never learns whether it is live.
  */
 export class SiteVisitRepository {
@@ -102,16 +102,25 @@ export class SiteVisitRepository {
     await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [tenant]);
     const authority = await this.visitAuthority(db, actor, kind, input);
     if (authority) throw new FactsChanged("SITE_VISIT_UNAVAILABLE", authority);
+    const type = kind === "start" ? startCommandType : completeCommandType;
+    const content = kind === "start" ? { commandType: type, jobId: input.jobId, membershipId: actor.membershipId } : { commandType: type, jobId: input.jobId, membershipId: actor.membershipId, visitId: input.visitId, closeoutAnswer: input.closeoutAnswer };
+    const semantic = kind === "start" ? `site-visit-start:${input.jobId}:${actor.membershipId}:${input.commandId}` : `site-visit-complete:${input.jobId}:${input.visitId}:${input.commandId}`;
+    const hash = sha256Hex(canonicalJson(content));
+    // Read only, after authority and before lifecycle guards: closed work permits no new command.
+    const prior = (await db.$client.query<{ command_type: string; semantic_key: string; request_hash: string; status: string; actor_membership_id: string; result: unknown }>(
+     "SELECT command_type,semantic_key,request_hash,status,actor_membership_id,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, input.commandId])).rows[0];
+    if (prior) {
+     const stored = schema.safeParse(prior.result);
+     if (prior.command_type !== type || prior.semantic_key !== semantic || prior.request_hash !== hash || prior.actor_membership_id !== actor.membershipId || prior.status !== "succeeded" || !stored.success) throw new SiteVisitError("IDEMPOTENCY_CONFLICT");
+     return stored.data;
+    }
     // Authority first, then the live-job row share lock, then the receipt; audit head remains last.
     try { await requireLiveJob(db, input.jobId); } catch (error) {
      if (error instanceof WatchdogError && error.code === "JOB_NOT_LIVE") throw new FactsChanged("JOB_NOT_LIVE");
      if (error instanceof WatchdogError) throw new FactsChanged();
      throw error;
     }
-    const type = kind === "start" ? startCommandType : completeCommandType;
-    const content = kind === "start" ? { commandType: type, jobId: input.jobId, membershipId: actor.membershipId } : { commandType: type, jobId: input.jobId, membershipId: actor.membershipId, visitId: input.visitId, closeoutAnswer: input.closeoutAnswer };
-    const semantic = kind === "start" ? `site-visit-start:${input.jobId}:${actor.membershipId}:${input.commandId}` : `site-visit-complete:${input.jobId}:${input.visitId}:${input.commandId}`;
-    const replay = await claim(db, tenant, input.commandId, type, semantic, sha256Hex(canonicalJson(content)), actor.membershipId);
+    const replay = await claim(db, tenant, input.commandId, type, semantic, hash, actor.membershipId);
     if (replay !== null) {
      // Claim can wait on another command. Recheck immediately before returning its cached answer, still under the shared authority lock.
      const current = await this.visitAuthority(db, actor, kind, input);

@@ -40,9 +40,13 @@ export async function searchItems(db: TenantTransaction, tenant: string, version
 export type SorReplay = { revision?: { variationId: string; jobId: string; raisingMembershipId: string; requestHash: string }; receiptExists: boolean };
 /** What the database already holds under a command id: the priced revision (if any) and whether any receipt, of any command, uses the id. */
 export async function readReplay(db: TenantTransaction, tenant: string, commandId: string): Promise<SorReplay> {
-  const revision = unique((await db.$client.query<{ variation_id: string; job_id: string; raising_membership_id: string; request_hash: string }>(
-    "SELECT variation_id,job_id,raising_membership_id,request_hash FROM app.extra_sor_revision WHERE tenant_id=$1 AND command_id=$2", [tenant, commandId])).rows);
-  const receiptExists = (await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [tenant, commandId])).rowCount! > 0;
+  // READ COMMITTED gives each statement its own snapshot: read both facts in one statement.
+  const rows = (await db.$client.query<{ variation_id: string | null; job_id: string | null; raising_membership_id: string | null; request_hash: string | null; receipt_exists: boolean }>(
+    `SELECT r.variation_id,r.job_id,r.raising_membership_id,r.request_hash,c.receipt_exists
+     FROM (SELECT EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2) AS receipt_exists) c
+     LEFT JOIN app.extra_sor_revision r ON r.tenant_id=$1 AND r.command_id=$2`, [tenant, commandId])).rows;
+  const revision = unique(rows.filter((row): row is typeof row & { variation_id: string; job_id: string; raising_membership_id: string; request_hash: string } => row.variation_id !== null && row.job_id !== null && row.raising_membership_id !== null && row.request_hash !== null));
+  const receiptExists = rows[0]?.receipt_exists === true;
   return { ...(revision ? { revision: { variationId: revision.variation_id, jobId: revision.job_id, raisingMembershipId: revision.raising_membership_id, requestHash: revision.request_hash } } : {}), receiptExists };
 }
 

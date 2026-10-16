@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b10": {
+      "branches": ["codex/sandbox/later-b10"],
+      "receipt": "docs/verdicts/LATER-B10/BUILDER_RECEIPT.md",
+      "note": "RED, decision 74: build and PARK. L034-L037 site replay and pricing consistency with synthetic fixtures only. No migration, grant, route, UI, merged test, pin or fingerprint changes. C1: repository repair and database coverage; no web workflow introduced.",
+      "allow": [
+        "packages/db/src/site-extra-pricing-queries.ts",
+        "packages/db/src/site-extra-repository.ts",
+        "packages/db/src/site-visit-repository.ts",
+        "packages/db/test/later-site-replay.integration.test.ts",
+        "packages/db/test/later-contractor-start.integration.test.ts",
+        "docs/verdicts/LATER-B10/BUILDER_RECEIPT.md",
+        "docs/ledger/LATER-B10.md"
+      ]
+    }
+  }
+}
