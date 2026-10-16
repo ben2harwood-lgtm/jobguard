@@ -5,7 +5,7 @@ import type { Cluster } from "./extra-fixtures.js";
 import { chainWorld, submitted } from "./extra-approval-chain-fixtures.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
 import { migrate, registerNorthsideRun, withTenant } from "../src/index.js";
-const migration = "0166_northside_run_attribution.sql";
+const migration = "0167_northside_run_attribution.sql";
 let c: Cluster;
 beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; c = await startBeforeMigration(migration); }, 240000);
 afterAll(async () => { await c?.close(); });
