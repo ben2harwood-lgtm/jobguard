@@ -12,7 +12,9 @@
         "packages/db/test/serious-b5.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/serious-b5-pdf-reader.ts",
-        "docs/verdicts/SERIOUS-B5/BUILDER_RECEIPT.md"
+        "docs/verdicts/SERIOUS-B5/BUILDER_RECEIPT.md",
+        "apps/api/src/shadow-isolation.application.test.ts",
+        "docs/verdicts/SERIOUS-B5/TESTQ-PROPOSAL.md"
       ]
     }
   }

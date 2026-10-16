@@ -188,3 +188,49 @@ The actual approved tuple still has description `Fictional captured tap` and net
 | Read-only `git diff --check` and Python byte-prefix/path comparison against HEAD | Exit 0; earlier receipt bytes preserved, only the r3 section appended, no other tracked working-tree change. |
 
 **Handoff: HOLD.** This documents an explicit assumption-mismatch stop, not a completed Test Q repair or technical acceptance. Ruling 63's revision-2 setup and its two checker confirmations remain outstanding pending dispatcher reconciliation of line 339. Full mandatory PostgreSQL, migration and browser checks remain for GitHub CI; no production gate is lifted. No commit or push was performed. The intended conventional commit subject/body for this receipt-only handoff is written identically to both requested paths: `/private/tmp/jg-msg-serious-b5-r3.txt` and `/private/tmp/jg-msg-fixlater-5.txt`. Independent exact-commit verdict and separate acceptance remain required after dispatcher commit.
+
+
+## r4 (ruling 73)
+
+Issued by dispatcher 14 on 16 October 2026 for SERIOUS-B5 / PR #229, worktree `fixlater-5`, branch `codex/sandbox/serious-b5`. Inspected clean starting HEAD `128abc69981915314020bcd22ab7fa94f1ff1d71` and supplied `origin/main` `4c407a6c81bd714a6875b7adf995812381d0fe57`. Read AGENTS.md, applicable BUILD_PLAN.md commercial-history, command and final-account-lock contracts (§§5 and 10.2.6 / SV-4), `docs/contracts/final-account-lock-v1.md`, the prior receipt, and `docs/verdicts/SERIOUS-B5/TESTQ-PROPOSAL.md`. Read ruling 73 at `/Users/benharwood/.local/share/full-steam/handoffs/BEN-DECISIONS-2026-10-14.md:95`: it replaces ruling 63 and expressly adds the test and proposal paths to this piece's lane. The proposal's numbered source excerpts match starting HEAD; no assumption-mismatch stop was needed.
+
+**Applied exactly the four proposal sites inside mutation Test Q.** Removed the old line-339 0p placeholder. Inserted the proposal's revision-2 block verbatim after old line 358: read only baseline lines from revision 1 and the actual immutable approved +12,000p `Fictional captured tap` revision/approval, assemble via the existing pure core function, hash its canonical source, insert the successor snapshot/lines/proof and advance the draft. The lock and invoice inputs now use that revision and its source hash. Expected fixture totals are 112,000p net / 22,400p candidate tax / 134,400p total; this is source-inspected, not a locally observed PostgreSQL invoice. Revision 1 and both unpriced captures are preserved. No shared fixture, schema, guard, production assembler or invoice path changed. No migration, operational alert, runtime compatibility or commercial-policy change arises from r4.
+
+**Exact scope evidence.** The deterministic read-only check `/private/tmp/jg-serious-b5-r4-scope.py` reconstructs the expected file from HEAD and the proposal's three code blocks, checks equality, then reverses the four edits and recovers the original test bytes exactly. Every assertion, expectation, pin, timeout, normalizer, comparator and other test therefore remains byte-identical. The check also requires the proposal itself unchanged (SHA-256 `524cf3cef40d399995b864740dacf58404bccec4fccd616f1322bdfe32c8f2a9`), the historical receipt prefix unchanged, and no other tracked/untracked changes. `config/lanes/serious-b5.json` gains only `apps/api/src/shadow-isolation.application.test.ts` followed by `docs/verdicts/SERIOUS-B5/TESTQ-PROPOSAL.md`; all existing lane fields and pre-existing allow-list paths retain their contents and order. No shared lane list changes. This is a deterministic scope check, not either required independent checker confirmation.
+
+**Environment.** Dependencies were already installed; no install/download or Git write command was issued. Node 24.17.0 (repository pin 24.15.0), cached pnpm 10.28.1 via `PATH=/private/tmp/jg-migfix-2-bin:$PATH`, `npm_config_manage_package_manager_versions=false`, `COREPACK_ENABLE_NETWORK=0`. Lint commands use `LANE_BASE_REF=origin/main`. Logs are ephemeral `/private/tmp/jg-serious-b5-r4-*.log`, not committed evidence artifacts.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; 7 tasks successful, 2 cached. Includes the edited API test file. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 0; root checks and 7 package tasks successful, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; serious-b5 lane against the base/HEAD above; final receipt-inclusive recheck also passed. |
+| `pnpm build` | Exit 0; 7 tasks successful, 2 cached; production Next build completed. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Exit 0; core 2,696, config 1, storage 2, AI 113 tests passed. AI fixture evaluation only. |
+| `pnpm --filter @jobguard/db exec vitest run src test/audit-api-file-final-account.test.ts --exclude 'test/*.integration.test.ts' --maxWorkers=1` | Exit 0; 21 files / 158 tests passed. No PostgreSQL execution. |
+| API source unit subset, exact command below | Exit 0; 84 files / 1667 tests passed. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 40 files / 867 tests passed. No browser. |
+| `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` | Exit 0; 19 tests passed. |
+| `pnpm openapi:check` | Exit 1; sandbox refused the tsx CLI IPC listener (`listen EPERM`). |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` (before build) | Exit 1; supplied stale DB build lacked the current `QuoteScopeRevisionError` export. No source repair made. |
+| Same headless OpenAPI command after dependency/API builds | Exit 0; same generator/check without the CLI listener; committed OpenAPI unchanged. |
+| `python3 /private/tmp/jg-serious-b5-r4-scope.py`; read-only `git diff --check` | Exit 0; exact four-site/scope/assertion/lane/append-only checks, including final receipt. |
+
+Exact API subset command (the nine PostgreSQL/listener suites are excluded for this sandbox only; committed test configuration is unchanged):
+
+```sh
+pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 \
+  --exclude src/auth/sso/action-paths.test.ts \
+  --exclude src/contractor/contractor-practice-session.http.test.ts \
+  --exclude src/contractor/site-extra-pricing.http.test.ts \
+  --exclude src/contractor/site-extra.http.test.ts \
+  --exclude src/contractor/site-visit.http.test.ts \
+  --exclude src/contractor/practice-worker-switch.http.test.ts \
+  --exclude src/health.test.ts \
+  --exclude src/shadow-isolation.application.test.ts \
+  --exclude src/final-account-lock.isolation.test.ts
+```
+
+**NOT RUN / CI hold.** Test Q and its affected file, SERIOUS-B5 PostgreSQL regressions, `pnpm test:db`, `pnpm test:migrations`, full root `pnpm test`, and browser/e2e suites were NOT RUN. The affected file's global `beforeAll` at lines 102–104 requires a localhost listener and PostgreSQL startup even when selecting one test; the dispatcher's sandbox note reserves those executions for GitHub CI. Full root tests also include three tool suites (`agent-lane-boundary`, `agent-lane-boundary-train`, `merge-churn`) that write temporary Git repositories; those were not run under the no-Git-write instruction. Unit subsets and green typechecks do not establish Test Q or database correctness. No mandatory CI suite is disabled or weakened.
+
+**Handoff: HOLD for CI and independent review.** Ruling 73's two checker confirmations of the four-site-only diff, an independent verdict bound to the dispatcher's exact resulting commit and separate technical acceptance remain outstanding. All existing release gates remain closed. No commit or push was performed. Identical conventional-commit subject/body files are written at `/private/tmp/jg-msg-SERIOUS-B5-r4.txt` and `/private/tmp/jg-msg-fixlater-5.txt`; the dispatcher owns committing and pushing.
