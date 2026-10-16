@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b14": {
+      "branches": [
+        "codex/sandbox/later-b14"
+      ],
+      "receipt": "docs/verdicts/LATER-B14/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B14; BUILD-DON'T-MERGE (decision 74). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "apps/api/src/decisions/decisions-later.test.ts",
+        "apps/api/src/decisions/decisions.application.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/ledger/LATER-B14.md",
+        "docs/verdicts/LATER-B14/BUILDER_RECEIPT.md",
+        "packages/core/src/decision-checks-later.test.ts",
+        "packages/core/src/decision-checks.ts",
+        "packages/db/migration-notes/0193_later_decision_identity.md",
+        "packages/db/migrations/0193_later_decision_identity.sql",
+        "packages/db/src/decision-repository.ts",
+        "packages/db/test/decisions-later.integration.test.ts",
+        "packages/db/test/later-decisions-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
