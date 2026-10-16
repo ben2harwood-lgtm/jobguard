@@ -81,6 +81,8 @@ export * from "./job-sources.js";
 export * from "./subscription.js";
 export * from "./subscription-period.js";
 export * from "./subscription-track-review.js";
+
+export * from "./plan-entitlements.js";
 export * from "./contractor-billing.js";
 export * from "./enterprise-fee-statement.js";
 export * from "./enterprise-baseline.js";
