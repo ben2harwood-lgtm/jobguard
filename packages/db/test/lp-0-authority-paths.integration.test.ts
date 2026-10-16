@@ -230,12 +230,18 @@ describe("LP-0 authority paths", () => {
     await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES ($1); INSERT INTO identity.identity_user(id) VALUES ($2)".replace("$1", `'${tenant}'`).replace("$2", `'${user}'`));
     await db.admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES ($1,$2,'LP-0 fixture')".replace("$1", `'${account}'`).replace("$2", `'${tenant}'`));
     try {
-      // LP-1: a membership (an owner) can be forged by the application login itself, inside its tenant, until LP-1 revokes the write.
+      // LP-1: the application login cannot forge an owner membership; committed state stays unchanged.
+      const committed = async () => (await db.admin.query(`SELECT
+        ARRAY(SELECT row_to_json(m)::text FROM app.membership m WHERE tenant_id=$1 ORDER BY id) AS memberships,
+        ARRAY(SELECT row_to_json(a)::text FROM app.account a WHERE tenant_id=$1 ORDER BY id) AS accounts,
+        ARRAY(SELECT row_to_json(u)::text FROM identity.identity_user u WHERE id=$2) AS users,
+        ARRAY(SELECT row_to_json(t)::text FROM control_plane.tenant t WHERE id=$1) AS tenants`, [tenant, user])).rows;
+      const before = await committed();
       await runtime.query("BEGIN");
       await runtime.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
-      const inserted = await runtime.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES (gen_random_uuid(),$1,$2,$3,'owner') RETURNING role", [tenant, account, user]);
-      expect(inserted.rows[0].role).toBe("owner");
+      await expect(runtime.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES (gen_random_uuid(),$1,$2,$3,'owner') RETURNING role", [tenant, account, user])).rejects.toMatchObject({ code: "42501" });
       await runtime.query("ROLLBACK");
+      expect(await committed()).toEqual(before);
       // LP-2: the legacy transition routine is executable (it fails on its own checks, not on permission).
       await runtime.query("BEGIN");
       await expect(runtime.query("SELECT app.transition_job(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)")).rejects.not.toMatchObject({ code: "42501" });
