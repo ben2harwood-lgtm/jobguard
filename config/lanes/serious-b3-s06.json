@@ -10,6 +10,8 @@
         "packages/core/src/quote-rounding.test.ts",
         "packages/core/src/quote.test.ts",
         "packages/db/test/quote.integration.test.ts",
+        "packages/db/src/final-account-repository.ts",
+        "packages/db/test/final-account-baseline-net.integration.test.ts",
         "docs/verdicts/SERIOUS-B3-S06/BUILDER_RECEIPT.md"
       ]
     }
