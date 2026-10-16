@@ -17,8 +17,8 @@
         "packages/db/src/acceptance-repository.ts",
         "packages/db/test/serious-b3-quotes.integration.test.ts",
         "packages/db/test/serious-b3-lineage-upgrade.integration.test.ts",
-        "packages/db/migrations/0166_quote_scope_lineage.sql",
-        "packages/db/migration-notes/0166_quote_scope_lineage.md",
+        "packages/db/migrations/0167_quote_scope_lineage.sql",
+        "packages/db/migration-notes/0167_quote_scope_lineage.md",
         "docs/verdicts/SERIOUS-B3/BUILDER_RECEIPT.md",
         "docs/verdicts/SERIOUS-B3/S06.repro.test.ts",
         "docs/ledger/SERIOUS-B3.md"
