@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { NorthsidePractice } from "../../northside/northside-practice";
 import { pounds } from "../../lib/pounds";
 import styles from "../../northside/northside.module.css";
 
@@ -25,7 +26,7 @@ export function SiteExtra() {
   async function attach() {
     setBusy(true); setError("");
     try {
-      const r = await fetch("/api/northside/photo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jobId, description, note }) });
+      const r = await fetch("/api/northside/photo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "northside-command.v1", jobId, description, note }) });
       const body = await r.json(); if (!r.ok) throw new Error(`The practice photo could not be attached (${body.code}).`);
       setPhoto(body);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -39,6 +40,7 @@ export function SiteExtra() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <main className={styles.page}>
+    <NorthsidePractice />
     <Link href="/northside">Practice hub</Link>
     <h1>Log an extra</h1>
     <p className={styles.note}>Practice data for the generated fictional contractor. The photo is a generated picture, nothing is sent.</p>

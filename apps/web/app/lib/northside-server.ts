@@ -1,8 +1,10 @@
 import "server-only";
 import { createHash, randomInt } from "node:crypto";
+import type { Pool } from "pg";
 import { deflateSync } from "node:zlib";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { ContractorError } from "@jobguard/core";
 import { ContractorRepository, EvidenceService, ExtraApprovalError, WatchdogError, contractorSessionContext, northsideRole, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { syntheticPool } from "./synthetic-server";
@@ -21,9 +23,19 @@ export async function demoActor() {
   let member: AuthenticatedMembership;
   try { member = await new ContractorRepository(pool).resolveSession(sessionId); } catch { throw new DemoError("UNAUTHENTICATED", 401); }
   const context: VerifiedTenantContext = await contractorSessionContext(pool, sessionId);
-  const role = await northsideRole(pool, member);
+  const role = await northsideRole(pool, member, context);
   if (!role) throw new DemoError("UNAUTHENTICATED", 401);
-  return { pool, member, context, role };
+  return { pool, member, role, sessionId };
+}
+/** Forward the existing bridge's complete stamped value; never retain it in an actor container. */
+export async function demoContext(pool: Pool, sessionId: string): Promise<VerifiedTenantContext> {
+  return contractorSessionContext(pool, sessionId);
+}
+/** Northside transport boundaries are closed: no request can name its actual tester or fictional authority. */
+export function parseDemoBody<T>(schema: z.ZodType<T>, body: unknown): T {
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) throw new DemoError("INVALID_COMMAND", 422);
+  return parsed.data;
 }
 export function requireOrigin(request: Request) { if (!isTrustedBrowserOrigin(request)) throw new DemoError("ORIGIN_FORBIDDEN", 403); }
 export async function bodyOf(request: Request): Promise<Record<string, unknown>> {

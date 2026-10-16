@@ -1,40 +1,61 @@
 import "server-only";
+import type { VerifiedTenantContext } from "@jobguard/db";
+import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
-import { ExtraApprovalRepository, northsideExtras, northsideRateCard, withTenant } from "@jobguard/db";
-import { DemoError, bodyOf, demoActor, failure, json, requireOrigin } from "../../../../../lib/northside-server";
+import { ExtraApprovalRepository, northsideExtras, northsideRateCard, northsideRun, withTenant } from "@jobguard/db";
+import { DemoError, bodyOf, demoActor, demoContext, failure, json, requireOrigin, parseDemoBody } from "../../../../../lib/northside-server";
 
 const uuid = (value: unknown): string => { if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value)) return value.toLowerCase(); throw new DemoError("INVALID_COMMAND", 422); };
 /** One route per step of the journey, each a thin call into the merged ENT-5b commands. The role gates here are only a courtesy: the database routines refuse anyone without the grant. */
 export async function POST(request: Request, context: { params: Promise<{ extraId: string; action: string }> }) {
   try {
     requireOrigin(request);
-    const { extraId: rawExtra, action } = await context.params, extraId = uuid(rawExtra), body = await bodyOf(request);
-    const jobId = uuid(body.jobId), commandId = body.commandId === undefined ? randomUUID() : uuid(body.commandId);
-    const { pool, member, context: tenant, role } = await demoActor();
+    const { pool, member, role, sessionId } = await demoActor();
+    const tenant: VerifiedTenantContext = await demoContext(pool, sessionId);
+    const { extraId: rawExtra, action } = await context.params, extraId = uuid(rawExtra);
+    const common = { version: z.literal("northside-command.v1"), jobId: z.string().uuid(), commandId: z.string().uuid().optional() };
+    if (action === "send" && role !== "owner") throw new DemoError("PERMISSION_DENIED", 403);
+    const boundSchema = z.object({ ...common, requestId: z.string().uuid(), revisionHash: z.string().regex(/^[a-f0-9]{64}$/u), netPence: z.number().int().positive().max(1_000_000_000_000), stepIndex: z.number().int().nonnegative().optional() }).strict();
+    const body = action === "price"
+      ? parseDemoBody(z.object({ ...common, quantity: z.number().int().min(1).max(1000), sorCode: z.string().min(1).max(100) }).strict(), await bodyOf(request))
+      : action === "approve" || action === "send" ? parseDemoBody(boundSchema, await bodyOf(request))
+      : parseDemoBody(z.object(common).strict(), await bodyOf(request));
+    const jobId = uuid(body.jobId), commandId = body.commandId ?? randomUUID();
     const repo = new ExtraApprovalRepository(pool);
-    const current = async () => { const found = (await northsideExtras(pool, member, role)).find(x => x.extraId === extraId && x.jobId === jobId); if (!found) throw new DemoError("NOT_FOUND", 404); return found; };
+    const current = async () => { const found = (await northsideExtras(pool, member, role, tenant)).find(x => x.extraId === extraId && x.jobId === jobId); if (!found) throw new DemoError("NOT_FOUND", 404); return found; };
     if (action === "price") {
       // The price is the seeded rate times the quantity the surveyor measured: whole pence, integer arithmetic.
       if (role !== "surveyor") throw new DemoError("PERMISSION_DENIED", 403);
-      const quantity = body.quantity; if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000 || typeof body.sorCode !== "string") throw new DemoError("INVALID_COMMAND", 422);
+      const price = body as typeof body & { quantity: number; sorCode: string };
+      const quantity = price.quantity; if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000 || typeof price.sorCode !== "string") throw new DemoError("INVALID_COMMAND", 422);
       const allowed = await withTenant(pool, tenant, async db => (await db.$client.query<{ allowed: boolean }>(
         "SELECT app.xa_covers($1,ARRAY['surveyor']::text[],$2,'extra.price') IS NOT NULL AS allowed", [member.membershipId, jobId])).rows[0]?.allowed);
       if (!allowed) throw new DemoError("PERMISSION_DENIED", 403);
-      const rate = (await northsideRateCard(pool, member, jobId)).find(r => r.code === body.sorCode); if (!rate) throw new DemoError("NOT_FOUND", 404);
+      const rate = (await northsideRateCard(pool, member, jobId, tenant)).find(r => r.code === price.sorCode); if (!rate) throw new DemoError("NOT_FOUND", 404);
       return json({ version: "northside-priced.v1", environment: "synthetic_demo", realExternalActions: 0, netPence: rate.ratePence * quantity, result: await repo.priceExtra(tenant, member, { version: "price-extra.v1", commandId, jobId, extraId, netPence: rate.ratePence * quantity }) });
     }
     if (action === "submit") return json({ version: "northside-submitted.v1", environment: "synthetic_demo", realExternalActions: 0, result: await repo.submitExtra(tenant, member, { version: "submit-extra.v1", commandId, jobId, extraId }) });
     if (action === "approve") {
+      const binding = parseDemoBody(boundSchema, body);
+      const queue = await repo.queue(tenant, member.membershipId);
+      const eligible = queue.find(q => q.variation_id === extraId && q.job_id === jobId);
+      if (!eligible) throw new DemoError("PERMISSION_DENIED", 403);
       const extra = await current();
+      if (binding.requestId !== extra.requestId || binding.revisionHash !== extra.revisionHash || binding.netPence !== extra.netPence || binding.stepIndex !== extra.nextStepIndex || eligible.request_id !== extra.requestId || eligible.step_index !== extra.nextStepIndex) throw new DemoError("STALE_REVISION", 409);
       if (extra.requestId === null || extra.revisionHash === null || extra.netPence === null || extra.nextStepIndex === null) throw new DemoError("INVALID_TRANSITION", 409);
       return json({ version: "northside-approved.v1", environment: "synthetic_demo", realExternalActions: 0, result: await repo.approveExtraStep(tenant, member, { version: "approve-extra-step.v1", commandId, jobId, requestId: extra.requestId, stepIndex: extra.nextStepIndex, revisionHash: extra.revisionHash, netPence: extra.netPence }) });
     }
     if (action === "send") {
+      if (role !== "owner") throw new DemoError("PERMISSION_DENIED", 403);
       // Owner only (the merged command refuses anyone else). Practice: the message is queued to the fake adapter at a .invalid address and nothing leaves; the owner is shown the link.
+      const binding = parseDemoBody(boundSchema, body);
       const extra = await current();
+      if (binding.requestId !== extra.requestId || binding.revisionHash !== extra.revisionHash || binding.netPence !== extra.netPence) throw new DemoError("STALE_REVISION", 409);
       if (extra.requestId === null || extra.clientApproverMembershipId === null || extra.clientApproverEmail === null) throw new DemoError("INVALID_TRANSITION", 409);
+      const run = await northsideRun(pool, member, tenant);
+      if (!run) throw new DemoError("NOT_FOUND", 404);
       const token = randomBytes(32).toString("base64url");
-      const sent = await repo.issueClientApproval(tenant, member, { version: "issue-client-approval.v1", commandId, jobId, requestId: extra.requestId, approverMembershipId: extra.clientApproverMembershipId, recipient: extra.clientApproverEmail, linkToken: token, expiresAt: new Date(Date.now() + 24 * 3_600_000) });
+      const sent = await repo.issueClientApproval(tenant, member, { version: "issue-client-approval.v1", commandId, jobId, requestId: extra.requestId, approverMembershipId: extra.clientApproverMembershipId, recipient: extra.clientApproverEmail, linkToken: token, expiresAt: new Date(Date.now() + run.settings.linkLifetimeMinutes * 60_000) });
       return json({ version: "northside-link.v1", environment: "synthetic_demo", realExternalActions: 0, recipient: extra.clientApproverEmail, path: `/extra-approval/${jobId}/${extra.requestId}#t=${token}`, result: sent });
     }
     throw new DemoError("NOT_FOUND", 404);

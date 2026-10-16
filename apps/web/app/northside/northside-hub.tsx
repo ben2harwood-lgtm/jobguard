@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { NorthsidePractice } from "./northside-practice";
 import { pounds } from "../lib/pounds";
 import styles from "./northside.module.css";
 
@@ -20,11 +21,18 @@ export function NorthsideHub() {
   async function start(first: boolean) {
     setBusy(true); setError("");
     try {
-      if (!first) { const revoked = await post("/api/contractor/practice/session/revoke", { version: "contractor-practice-session-revoke.v1" }); if (!revoked.ok) throw new Error("The earlier run could not be closed."); }
+      if (!first) {
+        const current = await fetch("/api/contractor/practice/acting-as", { cache: "no-store" });
+        if (!current.ok) throw new Error("The earlier practice switch could not be read.");
+        if ((await current.json()).state !== "owner") {
+          const ended = await post("/api/contractor/practice/acting-as/end", { version: "practice-worker-switch-off.v1", commandId: crypto.randomUUID() });
+          if (!ended.ok) throw new Error("The earlier practice switch could not be ended.");
+        }
+        const revoked = await post("/api/contractor/practice/session/revoke", { version: "contractor-practice-session-revoke.v1" }); if (!revoked.ok) throw new Error("The earlier run could not be closed."); }
       const session = await post("/api/session", {}); if (!session.ok) throw new Error("A practice session could not be started.");
       const started = await post("/api/contractor?action=start", { version: "contractor-practice.v1", environment: "synthetic_demo" }); if (!started.ok) throw new Error("The practice organisation could not be started.");
       setStatus("Generating Northside Property Services through the commands…");
-      const seeded = await post("/api/northside", { action: "seed" }); if (!seeded.ok) throw new Error(`The generated contractor could not be made (${seeded.body.code ?? seeded.status}).`);
+      const seeded = await post("/api/northside", { version: "northside-command.v1", action: "seed" }); if (!seeded.ok) throw new Error(`The generated contractor could not be made (${seeded.body.code ?? seeded.status}).`);
       await load();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -37,8 +45,9 @@ export function NorthsideHub() {
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {signedOut && <section className={styles.card}><h2>No practice running</h2><button disabled={busy} onClick={() => void start(true)}>Start Northside practice</button></section>}
     {summary && <>
+      {summary.seeded && <NorthsidePractice />}
       <p>Signed in as <strong data-testid="northside-role">{summary.role}</strong></p>
-      {!summary.seeded && summary.role === "owner" && <section className={styles.card}><h2>Not generated yet</h2><button disabled={busy} onClick={() => void (async () => { setBusy(true); setError(""); try { const seeded = await post("/api/northside", { action: "seed" }); if (!seeded.ok) throw new Error(`The generated contractor could not be made (${seeded.body.code ?? seeded.status}).`); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } })()}>Generate Northside Property Services</button></section>}
+      {!summary.seeded && summary.role === "owner" && <section className={styles.card}><h2>Not generated yet</h2><button disabled={busy} onClick={() => void (async () => { setBusy(true); setError(""); try { const seeded = await post("/api/northside", { version: "northside-command.v1", action: "seed" }); if (!seeded.ok) throw new Error(`The generated contractor could not be made (${seeded.body.code ?? seeded.status}).`); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } })()}>Generate Northside Property Services</button></section>}
       {summary.seeded && f && <section className={styles.card} aria-label="Counted facts"><h2>Counted from the seeded records</h2>
         <ul className={styles.facts}>
           <li><span>Clients</span><strong data-testid="fact-clients">{f.clients}</strong></li>
@@ -50,7 +59,7 @@ export function NorthsideHub() {
       <section className={styles.card}><h2>Walk the journey</h2>
         <ul>
           <li><Link href="/site/extra">Operative: log an extra (phone)</Link></li>
-          <li><Link href="/approvals/extras">Surveyor, supervisor and owner: price, approve, send to the client</Link></li>
+          <li><Link href="/approvals/extras">Surveyor, supervisor and owner: price, approve, prepare a local client request</Link></li>
         </ul></section>
       {summary.role === "owner" && <section className={styles.card}><h2>Reset</h2><p>Starts a new run with a new generated contractor. The earlier run and its audit records stay.</p><button disabled={busy} onClick={() => void start(false)}>Reset practice (new run)</button></section>}
     </>}

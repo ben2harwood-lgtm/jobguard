@@ -1,7 +1,6 @@
-import { createHash, randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { Pool } from "pg";
 test.setTimeout(420_000);
 const baseURL = "http://127.0.0.1:3000";
@@ -10,21 +9,9 @@ const admin = () => new Pool({ host: "127.0.0.1", port: 55432, user: "postgres",
 const pounds = (pence: number) => `£${Math.floor(pence / 100).toLocaleString("en-GB")}.${String(pence % 100).padStart(2, "0")}`;
 const noSideScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
-/** Test support only: the product has no in-product role switch (held), so the test stores a live practice session for a seeded member directly. */
-async function sessionFor(db: Pool, tenant: string, email: string) {
-  const m = (await db.query("SELECT c.membership_id,m.identity_user_id FROM app.contractor_member c JOIN app.membership m ON(m.tenant_id,m.id)=(c.tenant_id,c.membership_id) WHERE c.tenant_id=$1 AND c.email=$2", [tenant, email])).rows[0];
-  const token = randomUUID(), digest = createHash("sha256").update(token).digest("hex");
-  await db.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) VALUES(gen_random_uuid(),$1,$2,$3,$4,clock_timestamp(),clock_timestamp()+interval '1 day')", [tenant, m.membership_id, m.identity_user_id, digest]);
-  return token;
-}
-async function as(browser: Browser, token: string, mobile: boolean) {
-  const context = await browser.newContext({ baseURL, viewport: mobile ? { width: 360, height: 800 } : { width: 1280, height: 800 } });
-  await context.addCookies([{ name: "jg_session", value: token, url: baseURL }]);
-  return { context, page: await context.newPage() };
-}
 const facts = async (page: Page) => ({ clients: await page.getByTestId("fact-clients").innerText(), operatives: await page.getByTestId("fact-operatives").innerText(), orders: await page.getByTestId("fact-orders").innerText(), value: await page.getByTestId("fact-value").innerText() });
 
-test("the first contractor demo: operative logs an extra with photo and resident confirmation, surveyor prices, supervisor approves, client approves, and it survives a reload", async ({ page, browser }, info) => {
+test("the first contractor demo: operative logs an extra with photo and resident confirmation, surveyor prices, supervisor approves, client approves, and it survives a reload", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "one run drives all three viewports itself");
   const db = admin();
   // Owner starts and generates the contractor through the commands.
@@ -45,14 +32,27 @@ test("the first contractor demo: operative logs an extra with photo and resident
   const value = Number((await db.query("SELECT sum(r.net_total_pence) n FROM app.work_order_current c JOIN app.work_order_revision r ON(r.tenant_id,r.id)=(c.tenant_id,c.revision_id) WHERE c.tenant_id=$1", [tenant])).rows[0].n);
   expect(shown.value).toBe(pounds(value));
 
-  const sessions = {
-    operative: await sessionFor(db, tenant, "demo.operative@fictional.invalid"), surveyor: await sessionFor(db, tenant, "surveyor@northside-fictional.invalid"),
-    supervisor: await sessionFor(db, tenant, "supervisor@northside-fictional.invalid"), client: await sessionFor(db, tenant, "client.approver@northside-fictional.invalid"),
+  // One jg_session throughout: each switch uses the product control and explicitly ends the previous switch.
+  const originalCookie = (await page.context().cookies()).find(c => c.name === "jg_session")!.value;
+  const switchTo = async (role: string) => {
+    await page.goto("/northside");
+    await page.getByRole("button", { name: role === "owner" ? "Return to owner" : `Act as ${role}`, exact: true }).click();
+    await expect(page.getByTestId("actual-actor")).toContainText(`Acting as ${role}`);
+    expect((await page.context().cookies()).find(c => c.name === "jg_session")!.value).toBe(originalCookie);
   };
+  const ownerMember = (await db.query("SELECT owner_membership_id FROM app.northside_run WHERE tenant_id=$1", [tenant])).rows[0].owner_membership_id as string;
+  const settings = (await db.query("SELECT settings_version,settings_hash,classification FROM app.northside_run WHERE tenant_id=$1", [tenant])).rows[0];
+  expect(settings).toMatchObject({ settings_version: "northside-settings.v1", classification: "demo_settings" });
+  await page.getByTestId("demo-settings").getByText("Demo settings", { exact: true }).click();
+  await expect(page.getByTestId("demo-settings")).toContainText("Demo settings, not real rules — Ben sets these before any real customer");
+  await expect(page.getByTestId("demo-settings")).toContainText("Demo setting, not a real rule");
+  await expect(page.getByTestId("demo-settings")).toContainText("Timers and escalation are not scheduled");
   const description = "Extra: six further void units cleared";
 
   // 1. Operative, phone width.
-  const op = await as(browser, sessions.operative, true);
+  await switchTo("operative");
+  await page.setViewportSize({ width: 360, height: 800 }); // mobile-360
+  const op = { page };
   await op.page.goto("/site/extra");
   await expect(op.page.getByText(banner, { exact: true })).toHaveCount(1);
   await expect(op.page.getByLabel("Job")).toContainText("NS-1-0001");
@@ -74,7 +74,9 @@ test("the first contractor demo: operative logs an extra with photo and resident
 
   // 2. Surveyor prices from the seeded rate card.
   const rate = Number((await db.query("SELECT i.rate_pence n FROM app.sor_item i WHERE i.tenant_id=$1 AND i.code='CLEAR-VOID' LIMIT 1", [tenant])).rows[0].n);
-  const sv = await as(browser, sessions.surveyor, false);
+  await switchTo("surveyor");
+  await page.setViewportSize({ width: 1280, height: 800 }); // desktop
+  const sv = { page };
   await sv.page.goto("/approvals/extras");
   await expect(sv.page.getByTestId("approvals-role")).toHaveText("surveyor");
   await sv.page.getByLabel("Rate card item").selectOption("CLEAR-VOID");
@@ -86,7 +88,8 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await expect(sv.page.getByTestId("extra-state")).toHaveText("Priced - ready to submit");
 
   // 3. Supervisor submits and approves.
-  const su = await as(browser, sessions.supervisor, false);
+  await switchTo("supervisor");
+  const su = { page };
   await su.page.goto("/approvals/extras");
   await expect(su.page.getByTestId("extra-amount")).toHaveText(pounds(rate * 6));
   await su.page.getByRole("button", { name: "Submit for approval" }).click();
@@ -98,16 +101,20 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await expect(su.page.getByTestId("extra-steps")).toContainText("supervisor: done");
   await su.page.screenshot({ path: "test-results/ENT-11a-supervisor-desktop.png", fullPage: true });
 
-  // 4. Owner approves the send; the message is queued to the practice adapter and nothing leaves.
+  // 4. Return explicitly to the owner for exact approval of a local fake request; pending is not delivery.
+  await switchTo("owner");
   await page.goto("/approvals/extras");
   await page.getByRole("button", { name: "Approve sending to the client (practice)" }).click();
   const href = await page.getByTestId("client-link").getAttribute("href");
   expect(href).toMatch(/^\/extra-approval\/[0-9a-f-]{36}\/[0-9a-f-]{36}#t=/);
+  await page.reload();
+  await expect(page.getByTestId("client-link")).toHaveAttribute("href", href!);
   const outbox = (await db.query("SELECT adapter,status,recipient FROM app.action_outbox WHERE tenant_id=$1", [tenant])).rows;
   expect(outbox).toHaveLength(1); expect(outbox[0]).toMatchObject({ adapter: "fake_email", status: "pending" }); expect(outbox[0].recipient).toMatch(/\.invalid$/);
 
   // 5. Client decides on the link, desktop.
-  const cl = await as(browser, sessions.client, false);
+  await switchTo("client_approver");
+  const cl = { page };
   await cl.page.goto(href!);
   await expect(cl.page.getByText(banner, { exact: true })).toHaveCount(1);
   await cl.page.getByLabel(/The email address this link was sent to/).fill("client.approver@northside-fictional.invalid");
@@ -115,8 +122,7 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await expect(cl.page.getByTestId("client-amount")).toHaveText(pounds(rate * 6));
   await expect(cl.page.getByTestId("client-description")).toHaveText(description);
   await expect(cl.page.getByTestId("client-company-approvals")).toContainText("supervisor");
-  await cl.page.getByLabel(/Your role/).fill("Fictional housing officer");
-  await cl.page.getByLabel("Who is really testing").fill("Practice tester");
+  await expect(cl.page.getByTestId("actual-actor")).toContainText(ownerMember);
   await cl.page.getByRole("button", { name: "Approve this extra" }).click();
   await expect(cl.page.getByTestId("client-decided")).toContainText("approved");
   await cl.page.reload();
@@ -126,15 +132,23 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await cl.page.screenshot({ path: "test-results/ENT-11a-client-desktop.png", fullPage: true });
 
   // 6. Everyone sees the stored result after a reload; the facts are the stored rows.
-  await op.page.reload(); await expect(op.page.getByTestId("my-extra-state")).toHaveText("Approved");
-  await su.page.reload(); await expect(su.page.getByTestId("extra-state")).toHaveText("Approved");
-  await page.reload(); await expect(page.getByTestId("extra-state")).toHaveText("Approved");
+  await switchTo("operative"); await page.goto("/site/extra"); await page.reload(); await expect(page.getByTestId("my-extra-state")).toHaveText("Approved");
+  await expect(page.getByTestId("action-attribution")).toContainText(ownerMember);
+  await switchTo("supervisor"); await page.goto("/approvals/extras"); await page.reload(); await expect(page.getByTestId("extra-state")).toHaveText("Approved");
+  await switchTo("owner"); await page.goto("/approvals/extras"); await page.reload(); await expect(page.getByTestId("extra-state")).toHaveText("Approved");
   const outcome = (await db.query("SELECT kind,actor_kind FROM app.extra_approval_outcome WHERE tenant_id=$1", [tenant])).rows;
   expect(outcome).toEqual([{ kind: "approved", actor_kind: "client_approver" }]);
   const fact = (await db.query("SELECT fictional_role_name,actual_tester_reference FROM app.extra_approval_step_fact WHERE tenant_id=$1 AND actor_kind='client_approver'", [tenant])).rows;
-  expect(fact).toEqual([{ fictional_role_name: "Fictional housing officer", actual_tester_reference: "Practice tester" }]);
+  expect(fact).toEqual([{ fictional_role_name: "Fictional client approver", actual_tester_reference: `membership:${ownerMember}` }]);
   const nonPending = (await db.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1 AND status NOT IN('pending','cancelled')", [tenant])).rows[0].n;
   expect(nonPending).toBe(0);
+  expect((await db.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(0);
+  const actionBindings = (await db.query(`SELECT r.command_type,a.actor_role,a.actor_membership_id,a.tester_membership_id,a.switch_id,a.settings_version,a.settings_hash
+    FROM app.command_receipt r JOIN app.northside_action_attribution a ON(a.tenant_id,a.command_id)=(r.tenant_id,r.command_id)
+    WHERE r.tenant_id=$1 AND r.command_type=ANY($2::text[]) ORDER BY r.completed_at`, [tenant, ["LogSiteExtra", "PriceExtra", "SubmitExtra", "ApproveExtraStep", "IssueClientApproval", "ClientDecideExtra"]])).rows;
+  expect(actionBindings.map(a => a.actor_role)).toEqual(["operative", "surveyor", "supervisor", "supervisor", "owner", "client_approver"]);
+  for (const a of actionBindings) { expect(a.tester_membership_id).toBe(ownerMember); expect(a.settings_hash).toBe(settings.settings_hash); expect(a.settings_version).toBe(settings.settings_version); expect(a.switch_id === null).toBe(a.actor_role === "owner"); }
+  const attributionBefore = (await db.query("SELECT row_to_json(a)::text bytes FROM app.northside_action_attribution a WHERE tenant_id=$1 ORDER BY source_kind,source_id", [tenant])).rows;
 
   // 7. Reset starts a new run and keeps the earlier audits.
   const auditsBefore = Number((await db.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n);
@@ -152,8 +166,10 @@ test("the first contractor demo: operative logs an extra with photo and resident
   const resetTenant = (await resetOrganisation.json()).tenantId as string;
   const tenants = (await db.query("SELECT DISTINCT tenant_id FROM app.contractor_member WHERE tenant_id=ANY($1::uuid[])", [[tenant, resetTenant]])).rows;
   expect(tenants.length).toBeGreaterThanOrEqual(2);
-  expect(Number((await db.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n)).toBe(auditsBefore);
+  expect(Number((await db.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n)).toBe(auditsBefore + 1); // the owner-authorized revoke appends one audit
+  const retained = (await db.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [tenant])).rows;
+  expect(retained.slice(0, rows.length)).toEqual(rows); verifyAuditChain(asEvents(retained));
+  expect((await db.query("SELECT row_to_json(a)::text bytes FROM app.northside_action_attribution a WHERE tenant_id=$1 ORDER BY source_kind,source_id", [tenant])).rows).toEqual(attributionBefore);
   expect(Number((await db.query("SELECT count(*) n FROM app.extra_origin WHERE tenant_id=$1", [tenant])).rows[0].n)).toBe(1);
-  for (const c of [op.context, sv.context, su.context, cl.context]) await c.close();
   await db.end();
 });
