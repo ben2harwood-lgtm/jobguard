@@ -1,6 +1,36 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/diary": {
+      "get": {
+        "operationId": "JobSourceController_diary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "job-diary-read.v1: immutable original text, exact evidence binding and standing notice"
+          }
+        },
+        "summary": "Read saved synthetic diary records with the constant standing notice; intake held",
+        "tags": [
+          "JobSource"
+        ]
+      }
+    },
+    "/jobs/{id}/customer-messages": {
+      "get": {
+        "operationId": "JobSourceController_messages",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "customer-message-read.v1: named fictional customer and separate actual tester attribution"
+          }
+        },
+        "summary": "Read synthetic customer-message sources; creation authority held",
+        "tags": [
+          "JobSource"
+        ]
+      }
+    },
     "/contractor/practice/acting-as": {
       "get": {
         "operationId": "PracticeWorkerSwitchController_read",
