@@ -80,3 +80,4 @@ export * from "./job-sources.js";
 export * from "./subscription.js";
 export * from "./subscription-period.js";
 export * from "./subscription-track-review.js";
+export * from "./free-first-job.js";

@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-3": {
+      "branches": [
+        "codex/sandbox/mon-3"
+      ],
+      "receipt": "docs/verdicts/MON-3/BUILDER_RECEIPT.md",
+      "note": "MON-3 RED: synthetic pure preview and uncomposed application read port on unmerged MON-2A. No web workflow (C1); UI parked by dispatch. No persisted authority, writes, billing or provider calls. Parent files unchanged except additive core export.",
+      "allow": [
+        "packages/core/src/free-first-job.ts",
+        "packages/core/src/free-first-job.test.ts",
+        "packages/core/src/free-first-job-period.test.ts",
+        "packages/core/src/index.ts",
+        "apps/api/src/free-first-job.application.ts",
+        "apps/api/src/free-first-job.application.test.ts",
+        "apps/api/src/free-first-job-card.adapter.ts",
+        "apps/api/src/free-first-job-card.adapter.test.ts",
+        "docs/contracts/free-first-job-v1.md",
+        "docs/ledger/MON-3.md",
+        "docs/verdicts/MON-3/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
