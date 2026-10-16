@@ -35,7 +35,7 @@ beforeAll(async () => {
   await installLegacySyntheticPartyFixtures(admin);
   fixture = await seedEvidencePackFixture(admin, { practice: true });
   upgradeProof = await proofBefore(admin, ["control_plane.practice_session", "app.membership", "app.job", "app.recovery_case", "app.recovery_claim_revision"]);
-  const migration = MIGRATION_URLS.find(url => url.pathname.endsWith("/0173_evidence_pack_authority.sql"));
+  const migration = MIGRATION_URLS.find(url => url.pathname.endsWith("/0185_evidence_pack_authority.sql"));
   expect(migration).toBeDefined();
   // The normal non-superuser migration owner must be able to apply this migration.
   const client = await admin.connect();
