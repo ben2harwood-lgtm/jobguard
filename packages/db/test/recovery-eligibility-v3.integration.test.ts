@@ -98,6 +98,7 @@ async function fixture(type="withheld_customer_payment",before=false){
 const review=(c:{id:string;revision:number},fixture:string,expectedReviewRevision=0)=>({version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,expectedReviewRevision,fixture});
 it.each([["F15","merchant_overcharge",0,"Credit note below the £250 minimum"],["F17","duplicate_supplier_payment",45000,null],["F18","withheld_customer_payment",262000,"Fixed statutory compensation is not part of the fee base"],["F19","withheld_customer_payment",250000,"Fixed statutory compensation is not part of the fee base"],["F20","withheld_customer_payment",0,"Paid before you opened this case"],["F21","merchant_overcharge",0,null],["F22","prevention",0,"Prevented spending is not recovered cash"]] as const)("DW1 %s uses M4-7-S facts and persists exact Q/reason",async(name,type,q,reason)=>{
  const f=await fixture(type,name==="F20");if(name!=="F20"&&name!=="F15")await f.advance(name==="F17"?"supplier-refund-540":"receipt-3000");
+ if(name==="F18"){await advanceInterestFact(f,"receipt-interest-120");await advanceInterestFact(f,"receipt-compensation-70");}
  const command=review(f.c,name),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
  expect(r.result).toMatchObject({qualifyingPrincipal:{pence:q,currency:"GBP"},reason,outcome:q>0?"eligible_for_review":"excluded",terminal:name==="F22",productionEnabled:false});
  if(["F15","F21","F22"].includes(name))expect(r.sourceEventId).toBeNull();
@@ -578,4 +579,100 @@ it("0130 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
  }finally{
   await closeTestPools(upgradeRuntime,upgradeAdmin);await admin.query(`DROP DATABASE ${database}`);
  }
+});
+
+// SERIOUS-B9-S26: use the existing practice-facts command path for separate components.
+async function advanceInterestFact(f:Awaited<ReturnType<typeof fixture>>,movement:"receipt-interest-120"|"receipt-compensation-70",step="settled"){
+ const feed=new PracticeFeedRepository(runtime,"synthetic_demo");
+ const current=await feed.factsView(ctx,actor,f.auth.digest,f.jobId);
+ return feed.factsCommand(ctx,actor,f.auth.digest,f.jobId,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:current.revision,action:"advance",movement,step});
+}
+it("F18 principal-only",async()=>{
+ const f=await fixture();await f.advance("receipt-3000");
+ const command=review(f.c,"F18"),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
+ expect(r.result).toMatchObject({qualifyingPrincipal:{pence:250000,currency:"GBP"},reason:"Pending money cannot qualify",outcome:"eligible_for_review"});
+ expect(r.result.lines).toMatchObject([
+  {kind:"principal",qualifyingPrincipal:{pence:250000},reason:null},
+  {kind:"statutory_interest",qualifyingPrincipal:{pence:0},reason:"Pending money cannot qualify"},
+  {kind:"fixed_compensation",qualifyingPrincipal:{pence:0},reason:"Fixed statutory compensation is not part of the fee base"},
+ ]);
+ expect(await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest)).toEqual(r);
+ const saved=r.result;
+ await advanceInterestFact(f,"receipt-interest-120","pending");
+ const pending=await f.repo.review(ctx,f.jobId,review(f.c,"F18",1),actor,f.auth.digest);
+ expect(pending.result.qualifyingPrincipal.pence).toBe(250000);
+ await advanceInterestFact(f,"receipt-compensation-70");
+ const compensation=await f.repo.review(ctx,f.jobId,review(f.c,"F18",2),actor,f.auth.digest);
+ expect(compensation.result.qualifyingPrincipal.pence).toBe(250000);
+ await advanceInterestFact(f,"receipt-interest-120");
+ const paid=await f.repo.review(ctx,f.jobId,review(f.c,"F18",3),actor,f.auth.digest);
+ expect(paid.result).toMatchObject({qualifyingPrincipal:{pence:262000},reason:"Fixed statutory compensation is not part of the fee base"});
+ await advanceInterestFact(f,"receipt-interest-120","alternate_representation");
+ const replay=await f.repo.review(ctx,f.jobId,review(f.c,"F18",4),actor,f.auth.digest);
+ expect(replay.result.qualifyingPrincipal.pence).toBe(262000);
+ await advanceInterestFact(f,"receipt-interest-120","unknown_duplicate");
+ const held=await f.repo.review(ctx,f.jobId,review(f.c,"F18",5),actor,f.auth.digest);
+ expect(held.result).toMatchObject({qualifyingPrincipal:{pence:250000},reason:"Pending money cannot qualify"});
+ expect((await admin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,r.id])).rows[0].result).toEqual(saved);
+ expect(await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest)).toEqual(r);
+});
+it.each(["amount","component"] as const)("F18 raw runtime writer cannot include unpaid interest in the %s",async(shape)=>{
+ const f=await fixture();await f.advance("receipt-3000");
+ const sourceEventId=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='receipt-3000' AND event_kind='settled'",[T,f.jobId])).rows[0].id as string;
+ const full=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+ const result=shape==="amount"?full:{...full,qualifyingPrincipal:{pence:250000,currency:"GBP"},reason:"Pending money cannot qualify",lines:full.lines.map(line=>line.kind==="statutory_interest"?{...line,reason:"Pending money cannot qualify"}:line)};
+ await expect(rawInterestCandidate(f,sourceEventId,result as ReturnType<typeof evaluateRecoveryEligibilityV3>)).rejects.toMatchObject({code:"23514",message:shape==="amount"?"ELIGIBILITY_FIXTURE_MISMATCH":"ELIGIBILITY_LINES_REQUIRED"});
+ for(const table of ["recovery_eligibility_v3_review","recovery_claim_line"])expect((await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND case_id=$2`,[T,f.c.id])).rows[0].n).toBe(0);
+});
+it("F18 interest on another job cannot settle this job's component",async()=>{
+ const f=await fixture();await f.advance("receipt-3000");
+ const other=await fixture();await advanceInterestFact(other,"receipt-interest-120");
+ expect((await f.repo.review(ctx,f.jobId,review(f.c,"F18"),actor,f.auth.digest)).result.qualifyingPrincipal.pence).toBe(250000);
+});
+it.each([
+ ["before","2026-10-11T12:00:00.000100Z",250000,"Paid before you opened this case"],
+ ["at","2026-10-11T12:00:00.000900Z",250000,"Paid before you opened this case"],
+ ["after","2026-10-11T12:00:00.001100Z",262000,"Fixed statutory compensation is not part of the fee base"],
+] as const)("F18 original interest settled %s opening uses its own timestamp",async(_label,eventAt,pence,reason)=>{
+ const f=await fixture();await f.advance("receipt-3000");await advanceInterestFact(f,"receipt-interest-120");
+ await stampTimes(f,"receipt-interest-120","2026-10-11T12:00:00.000900Z",eventAt);
+ const r=await f.repo.review(ctx,f.jobId,review(f.c,"F18"),actor,f.auth.digest);
+ expect(r.result).toMatchObject({qualifyingPrincipal:{pence},reason});
+ expect(r.result.lines.find(line=>line.kind==="principal")).toMatchObject({qualifyingPrincipal:{pence:250000},reason:null});
+});
+
+async function rawInterestCandidate(f:Awaited<ReturnType<typeof fixture>>,sourceEventId:string,result:ReturnType<typeof evaluateRecoveryEligibilityV3>){
+ return withTenant(practiceMaterialPool(runtime,f.auth.digest),ctx,async db=>{
+  await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
+  const id=randomUUID(),commandId=randomUUID(),payloadHash=createHash("sha256").update(commandId).digest("hex");
+  const inserted=await db.$client.query<{h:string}>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F18',$6,$7,$8,$9,$10) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') h",[id,T,f.jobId,f.c.id,f.c.revision,sourceEventId,M,commandId,payloadHash,JSON.stringify(result)]);
+  for(const line of result.lines)await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),T,f.jobId,f.c.id,id,line.kind,line.debtorType,line.netPence]);
+  await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${M}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:f.c.id,payload:{references:{jobId:f.jobId,reviewId:id,commandId,sourceEventId},hashes:{command:payloadHash,result:inserted.rows[0]!.h},classifications:{recovery:"financial"}}}]);
+  return id;
+ });
+}
+it("0166 upgrades the previous guards without rewriting saved reviews, claim lines, audit or privileges",async()=>{
+ const f=await fixture();await f.advance("receipt-3000");
+ const oldUrl=MIGRATION_URLS.find(u=>basename(fileURLToPath(u))==="0142_recovery_insurer_money.sql")!;
+ const newUrl=MIGRATION_URLS.find(u=>basename(fileURLToPath(u))==="0166_recovery_eligibility_paid_interest.sql")!;
+ const previous=await readFile(oldUrl,"utf8"),forward=await readFile(newUrl,"utf8");
+ const previousGuards=previous.slice(previous.indexOf("CREATE OR REPLACE FUNCTION app.guard_recovery_eligibility_v3()"),previous.lastIndexOf("COMMIT;"));
+ const security=async()=>(await admin.query("SELECT proname,pg_get_userbyid(proowner) owner,proacl::text,prosecdef,proconfig FROM pg_proc WHERE oid IN('app.guard_recovery_eligibility_v3()'::regprocedure,'app.require_recovery_eligibility_v3_effect()'::regprocedure) ORDER BY proname")).rows;
+ const beforeSecurity=await security();
+ try{
+  await admin.query(previousGuards);
+  const sourceEventId=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='receipt-3000' AND event_kind='settled'",[T,f.jobId])).rows[0].id as string;
+  const legacy=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+  const id=await rawInterestCandidate(f,sourceEventId,legacy);
+  const proof=await mo4Proof.proofBefore(admin,["app.recovery_eligibility_v3_review","app.recovery_claim_line","app.audit_event"]);
+  await admin.query(forward);
+  expect(await mo4Proof.proofDifferences(admin,proof)).toEqual({rows:[],types:[]});
+  expect(await security()).toEqual(beforeSecurity);
+  const corrected=await f.repo.review(ctx,f.jobId,review(f.c,"F18",1),actor,f.auth.digest);
+  expect(corrected.result).toMatchObject({qualifyingPrincipal:{pence:250000},reason:"Pending money cannot qualify"});
+  expect((await admin.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,id])).rows[0].result).toEqual(legacy);
+  expect(await mo4Proof.proofDifferences(admin,proof)).toEqual({rows:[],types:[]});
+  await migrate(admin);await migrate(admin);
+  expect(await security()).toEqual(beforeSecurity);
+ }finally{await admin.query(forward);}
 });

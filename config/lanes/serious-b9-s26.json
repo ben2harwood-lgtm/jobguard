@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b9-s26": {
+      "branches": [
+        "codex/sandbox/serious-b9-s26"
+      ],
+      "receipt": "docs/verdicts/SERIOUS-B9-S26/BUILDER_RECEIPT.md",
+      "note": "SERIOUS-B9-S26, RED money lane; coordinator ruling 55. Working-tree delivery; existing expectations are unchanged.",
+      "allow": [
+        "packages/db/src/recovery-eligibility-v3-repository.ts",
+        "packages/db/test/recovery-eligibility-v3.integration.test.ts",
+        "packages/db/test/recovery-eligibility-v3-interest.test.ts",
+        "packages/db/migrations/0166_recovery_eligibility_paid_interest.sql",
+        "packages/db/migration-notes/0166_recovery_eligibility_paid_interest.md",
+        "docs/verdicts/SERIOUS-B9-S26/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
