@@ -326,3 +326,143 @@ Intended conventional commit message written to
 `/private/tmp/jg-msg-ent-3b.txt` and
 `/private/tmp/jg-msg-serious-b2-build.txt`. Dispatcher owns commit/push; exact-commit
 independent verdicts and separate acceptance remain outstanding.
+
+### Completed S02/S03 build — rulings 64, 68, 70 and 71; lane clarification
+
+Dispatcher 14, 16 October 2026 night. **S02 and S03 are now implemented in the
+working tree.** This subsection supersedes the stopped build attempts above.
+S04/S05 remain deferred. This is builder evidence, not an independent verdict or
+technical acceptance. No commit, push, merge, release or deployment was performed.
+
+Inspected starting HEAD: `15a055fe5351b107548d79d21423939be79c594f` on
+`codex/sandbox/serious-b2`; local `origin/main`:
+`d74fd66d684226a5150fe3d3576a853d58abcf31`. The starting working tree was clean.
+`git rev-list --left-right --count HEAD...origin/main` returned `4 0`;
+`git rev-list --count HEAD..origin/main` returned `0`. No fetch or merge was
+necessary or attempted. Read AGENTS.md, BUILD_PLAN.md §§2.1–2.4, 3,
+9.1.2–9.1.3 and ENT-1/ENT-2, the S02/S03 audit entries, both preserved patches,
+the existing permission function and the ruled files before changing code.
+
+**Implementation and invariants:**
+
+- S02: after the existing active-membership/contractor gate, read the membership's
+  persisted role inside the tenant transaction. Missing membership or
+  `client_approver` returns the existing typed `NOT_FOUND` before any schedule
+  read. All other roles retain the exact existing contract-read permission SQL
+  and schedule SELECT. Approval-pack access and the shared role/permission matrix
+  are unchanged. Only the client-approver outcome at
+  `packages/db/test/contractor.integration.test.ts:422` changes from true to false.
+- S03: reload generated site revisions by their stored numbered street address,
+  using numeric ordering and an ID tie-break. This restores initial creation
+  order instead of ordering equal transaction timestamps by random UUID, so the
+  same sample keeps its site bindings and bytes across preparation calls. The
+  final implementation matches the archived prototype's source hash. No migration
+  or data rewrite; no attempt to repair already-imported historical misbindings.
+- Lane: appended exactly the five ruled paths, in the clarification's order, to
+  `config/lanes/serious-b2.json`'s existing allow array. Its note and all other
+  values remain unchanged. `config/agent-lane-assignments.json` is unchanged.
+- Pin order: finalized both sources, refreshed only context-boundary lines 93/95,
+  then refreshed only extra-origin lines 249/251/252 to those final source hashes
+  and the final scanner hash. No source/test edits followed those pin updates.
+
+Final SHA-256 identities (before → after):
+
+| Source | Before | Final |
+| --- | --- | --- |
+| `packages/db/src/sor-repository.ts` | `45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5` | `122322172cea27dc52754ff19629abbbe049b8d96997a1a2e42a8887ac5a62d2` |
+| `packages/db/src/work-order-fixtures.ts` | `cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386` | `703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea` |
+| `apps/api/src/auth/context-boundary.test.ts` | `ec6d3dd219e42707fe0bd6b0550db7f4f260f36c55ff9fee0d36bde831586ef2` | `ad2b6cd2fe2d1d7a4edd8351312a9fc8bee0dde18bb2eafa215f233727766e03` |
+
+**Preserved regressions:** both archived patches remain byte-identical. To obey
+the restriction on every other test file, their two source-unit reproducers were
+extracted into `/private/tmp/jg-serious-b2-build-regressions/`; only their relative
+source imports were rewritten to absolute imports of this worktree's real source.
+No test assertions were changed. Both failed before the fix (exit 1, two failures,
+`/private/tmp/jg-serious-b2-build-red.log`) and both passed after it (exit 0,
+`/private/tmp/jg-serious-b2-build-green.log`). They remain preserved as patches,
+not added to normal repository test discovery.
+
+A supplemental temporary suite exercises all nine persisted roles with both
+prior permission outcomes, missing membership and revoked membership: 20 passing
+scripted-driver checks. It explicitly verifies no schedule SELECT for a refused
+caller. The archived S02 double itself supplies no role row to the new query,
+so its green result proves the fail-closed path; the supplemental cases also
+supply a real `client_approver` role value to test that refusal directly.
+An extracted copy of the existing [S9] assertion also passes without its enclosing
+PostgreSQL setup (only its original file URL base was restored for temporary
+execution). Final temporary result: **4 files, 23 tests, exit 0**. These are
+scripted repository and file-integrity checks, not PostgreSQL authorization proof.
+
+Actual final harness command:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 --root /private/tmp/jg-serious-b2-build-regressions
+```
+
+**Checks actually run:** Node `v24.17.0`, installed pnpm `10.28.1`, Vitest
+`4.1.11`; no install/download or clean-install claim. pnpm commands used the
+already-cached launcher via `PATH=/private/tmp/jg-serious-b2-bin:$PATH`.
+Logs are `/private/tmp/jg-serious-b2-build-*.log`.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | PASS, exit 0; 7 package tasks (`typecheck.log`). |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS, exit 0; root boundary checks and 7 package tasks (`lint.log`). |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0 (`lanes.log`); includes the working-tree changes. |
+| `pnpm build` | PASS, exit 0; 7 package tasks, including production Next build (`build.log`). Next reports dynamic-dependency warnings; Turbo reports sandbox IO warnings, without task failures. |
+| `pnpm openapi:check` | BLOCKED, exit 1: tsx CLI IPC socket `listen EPERM` (`openapi.log`). |
+| `cd apps/api && node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; same generator/check without the CLI socket, repeated after build (`openapi-final.log`). No schema edit. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1 src/auth/context-boundary.test.ts` | PASS, 145 tests, exit 0 (`boundary.log`); also included in the final API suite below. |
+| Foundation source suites, command below | PASS, exit 0: core 2,674; config 1; storage 2; AI 85 (`unit-foundations.log`). AI evidence is synthetic fixtures only. |
+| DB source suite, command below | PASS, exit 0: 15 files, 124 tests (`unit-db.log`). |
+| API source suite with listed environment-dependent exclusions, command below | PASS after build, exit 0: 80 files, 1,653 tests (`unit-api-final.log`). |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=1` | PASS, exit 0: 40 files, 867 tests (`unit-web.log`); unit tests, not browser journeys. |
+| Seven safe tool suites, command below | PASS, exit 0: 19 tests (`unit-tools.log`). |
+| Temporary regression/S9 harness, command above | PASS, exit 0: 23 tests (`regressions-final.log`). |
+| `python3 /private/tmp/jg-serious-b2-build-audit.py` | PASS, exit 0 (`scope.log`): exact authorized test-line changes, final hashes, exact ordered lane delta, all other tracked files byte-identical to inspected HEAD; this receipt only appended. Deterministic verification, not checker review. |
+| `git diff --check` | PASS, exit 0. |
+
+The first broad API source run preceded the required build and failed eight
+billing-adapter tests because installed workspace imports used older generated
+core exports (`renderBillingExport` and a billing schema). The normal build
+refreshed ignored artifacts. The full same API command then passed, without any
+source change, test change or additional exclusion (`unit-api.log` →
+`unit-api-final.log`). No failing test was weakened.
+
+Successful source-suite commands (from repo root unless shown):
+
+```sh
+pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai exec vitest run --maxWorkers=1 src
+cd packages/db
+pnpm exec vitest run --maxWorkers=1 src --exclude 'test/**'
+cd ../../apps/api
+pnpm exec vitest run --maxWorkers=1 src --exclude '**/shadow-isolation.application.test.ts' --exclude '**/final-account-lock.isolation.test.ts' --exclude '**/health.test.ts' --exclude '**/*.http.test.ts' --exclude '**/auth/sso/action-paths.test.ts'
+cd ../..
+node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs
+```
+
+**NOT RUN:** the complete affected files
+`packages/db/test/contractor.integration.test.ts` and
+`packages/db/test/extra-origin.integration.test.ts`; the archived S03 PostgreSQL
+replay/amendment regression in `s03-prototype.patch`; `pnpm test:db`,
+`pnpm test:migrations`, browser/e2e suites and the excluded API database/HTTP
+suites. The dispatcher states this sandbox cannot bind localhost or start
+PostgreSQL; no database or browser process was attempted. The isolated S9 check
+is not a passing full extra-origin integration run. **NOT RUN:** root `pnpm test`,
+which includes Git-writing tool fixtures and unavailable integration suites.
+These partial source-unit runs do not constitute full CI. Dispatcher/GitHub CI
+must run the real PostgreSQL and browser checks after committing/pushing.
+
+No new tables, migrations, ledger effects, external actions, credentials, alerts,
+provider calls, policy approvals or release-gate changes. Affected invariants are
+scoped access and stable generated party identity/idempotency. Existing imported
+records are not backfilled. Shared source pins and the single conformance
+expectation were changed only under the recorded rulings; overlap edits must
+serialize against these final hashes. All other tests, expectations, pins, shared
+lists and preserved patches are byte-identical to starting HEAD.
+
+The dispatcher owns committing and pushing. Intended conventional commit message
+(subject and body) is written to `/private/tmp/jg-msg-ent-3b.txt` and
+`/private/tmp/jg-msg-serious-b2-build.txt`. Both independent checker verdicts bound
+to the eventual exact commit and separate technical acceptance remain outstanding;
+no builder self-acceptance or production-release approval is claimed.

@@ -8,7 +8,12 @@
       "allow": [
         "docs/verdicts/SERIOUS-B2/BUILDER_RECEIPT.md",
         "docs/verdicts/SERIOUS-B2/s02-reproducer.patch",
-        "docs/verdicts/SERIOUS-B2/s03-prototype.patch"
+        "docs/verdicts/SERIOUS-B2/s03-prototype.patch",
+        "packages/db/test/contractor.integration.test.ts",
+        "apps/api/src/auth/context-boundary.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts",
+        "packages/db/src/sor-repository.ts",
+        "packages/db/src/work-order-fixtures.ts"
       ]
     }
   }
