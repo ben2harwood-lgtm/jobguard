@@ -232,8 +232,8 @@ Changed/new files (receipt excluded):
 | `packages/core/src/contractor-billing-commands.ts` | 11 | `ed56eebf3620885df2d641637b68bcc8ab9b8b4a1b9968fd8b325a31b8140edf` |
 | `packages/core/src/index.ts` | 81 | `bc1a0d0080f19d46da600801b696fcbcdb0549e83628d06ca876e034d379440f` |
 | `packages/core/src/watchdog.ts` | 198 | `e701816098929c9df9f2a8b196461c876dfb3ea46b432f4f0014637c21ef5e6c` |
-| `packages/db/migration-notes/0181_contractor_billing.md` | 9 | `5b1eb2a6dd11f5780d3b8f41e6238ded93e5877ff136603f8c2d68ced90cb78c` |
-| `packages/db/migrations/0181_contractor_billing.sql` | 613 | `8fe77300205ac8dfaf97aa6be843d48bf71747e5c73e81e35fb6ce7dd0d50e20` |
+| `packages/db/migration-notes/0185_contractor_billing.md` | 9 | `5b1eb2a6dd11f5780d3b8f41e6238ded93e5877ff136603f8c2d68ced90cb78c` |
+| `packages/db/migrations/0185_contractor_billing.sql` | 613 | `8fe77300205ac8dfaf97aa6be843d48bf71747e5c73e81e35fb6ce7dd0d50e20` |
 | `packages/db/src/contractor-billing-delivery.ts` | 35 | `d83ef364b8abcfab73a1187d421162717a6b0d9fb0b9051ded88cfad00f5106d` |
 | `packages/db/src/contractor-billing-projection.ts` | 32 | `08d3d59e3b11139f7ce451d82f81eb249e51f2c05ec6610e0f0256a40ccee364` |
 | `packages/db/src/contractor-billing-repository.ts` | 72 | `d78579622cc6f7daadcfb7321bfb8a968f89e2796da4e8bd604f66b158caa5cd` |
@@ -290,7 +290,7 @@ Repair base/head: `65ff2f443c126b269d7bbe41d1a9ad623c3f69fa`, branch `codex/sand
 
 - Changed only the repository parse-helper signature and the explicit `BillingStatus` callback parameter. The helper now accepts `{ safeParse(raw: unknown): z.SafeParseReturnType<unknown, T> }` and returns `T`. This is the permitted equivalent of the suggested schema/output signature: the exact `S extends z.ZodTypeAny` / `z.output<S>` attempt still failed TS2589 at lines 22, 34 and 53 locally. The method-only contract avoids full structural comparison between core's Zod 3.25.67 and db's Zod 3.25.76. The safeParse call, invalid-input error and returned parsed data are unchanged. No runtime behavior or boundary schema changed.
 - Regenerated `apps/api/openapi.json` with the repository's `apps/api/src/generate-openapi.ts` generator. Exactly 108 lines were added: GET `/contractor/jobs/{id}/billing`, GET `/contractor/jobs/{id}/billing/{batchId}/download`, POST `/contractor/jobs/{id}/billing/{action}`. A JSON comparison against HEAD proves that removing those three paths restores the entire previous document, including all schemas.
-- All existing tests, expectations, package pins and shared lists are unchanged. No migration was added or changed. Migration `0181_contractor_billing.sql` is byte-identical to HEAD; SHA-256 remains `8fe77300205ac8dfaf97aa6be843d48bf71747e5c73e81e35fb6ce7dd0d50e20`. No new data migration, backwards-compatibility change, operational alert or release capability is introduced.
+- All existing tests, expectations, package pins and shared lists are unchanged. No migration was added or changed. Migration `0185_contractor_billing.sql` is byte-identical to HEAD; SHA-256 remains `8fe77300205ac8dfaf97aa6be843d48bf71747e5c73e81e35fb6ce7dd0d50e20`. No new data migration, backwards-compatibility change, operational alert or release capability is introduced.
 
 ### Execution evidence
 
