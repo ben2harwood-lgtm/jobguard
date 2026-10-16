@@ -1,0 +1,17 @@
+# LATER-B16 — 0190 credit command replay
+
+PARK under decision 74. Synthetic data only; no merge, enablement or deployment without Ben's button.
+
+This migration replaces only `app.issue_practice_customer_credit_note(uuid,uuid,uuid,uuid,uuid,bigint,text,text)` from 0166. It keeps the installed owner, SECURITY DEFINER, fixed search path and ACL through CREATE OR REPLACE. There are **no new GRANT statements**, tables, columns, financial postings, tax changes, backfills or external actions. The application's login gains no direct protected write grant (standard F).
+
+An active owner is required before reading command history or looking up an invoice and is checked again after waits. The command advisory transaction lock precedes the receipt read and the invoice lock. A waiting identical request sees the committed receipt in its next statement. Replays require the same stored digest, command type, successful status and actor. Historical request digests retain their existing representation. The 0166 body from the invoice SELECT through RETURN is unchanged except the authority check immediately before that SELECT; cumulative VAT and artifact arithmetic are preserved verbatim. Repository callers use the same command-before-invoice order. The generic billing service also serializes semantic identity and compares its persisted credit fields before dispatcher replay.
+
+Deployment order: install every migration before 0190, apply 0190 alone, then all later migrations. No runner or inventory edit is included; the current runner discovers newer migration files. The dispatcher owns renumbering if needed, preserving SQL bytes.
+
+The own-step upgrade proof compares catalog privileges and function definitions only across 0190. After later migrations it compares named pre-existing columns as canonical JSON text, full column types, and rows selected by their original primary keys. It includes rolled-back controls for a one-microsecond time change and retype (refused), and a nullable column, replaced routine and later inserted row (allowed). Every compared table must have an existing row.
+
+An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
+
+Rollback: before commit, rollback the transaction; the test verifies the prior function and rows return. After commit, use a reviewed forward fix. Restoring the old function would reintroduce its replay race; never edit old rows or migrations. The migration is repeatable through CREATE OR REPLACE. Database execution is NOT RUN in this sandbox; CI must establish fresh-install, upgrade, rollback and concurrency results.
+
+L081 stays held: `apps/api/src/customer-invoice.contracts.ts:29` requires complete hashes, signed amounts and approval date. A nullable legacy/unknown response needs a versioned product contract outside this lane. No historical facts are fabricated. No UI change is included.

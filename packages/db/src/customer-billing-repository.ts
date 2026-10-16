@@ -39,9 +39,18 @@ export class CustomerBillingCommandService{
   const input=creditCustomerInvoiceV1.parse(raw),c=input.command;
   if(c.commandType!=="customer_credit_note.issue"||c.action.actionType!=="customer_credit_note.issue"||c.action.amountPence!==input.amountPence||c.action.currency!=="GBP")throw new Error("CREDIT_ACTION_MISMATCH");
   return this.dispatcher.dispatch(context,c,{
-   // Match the existing practice-credit routine's lock namespace. A separate
-   // statement acquires it before the balance snapshot and any receipt/FK locks.
-   lock:async db=>{await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text || ':' || $2::uuid::text,0))`,[context.tenantId,input.invoiceId]);},
+   // Bind fields outside the dispatcher envelope to the persisted credit on replay.
+   // Command and semantic identities serialize even if a retry changes its invoice.
+   lock:async db=>{
+    await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':credit-command:'||$2::uuid::text,0))`,[context.tenantId,c.commandId]);
+    await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':credit-semantic:'||$2,0))`,[context.tenantId,c.semanticKey]);
+    const prior=(await db.$client.query<{job_id:string;invoice_id:string;amount_pence:string;reason:string}>(`SELECT n.job_id,n.invoice_id,n.amount_pence,n.reason
+     FROM app.command_receipt r LEFT JOIN app.customer_credit_note n
+      ON n.tenant_id=r.tenant_id AND n.id::text=r.result->>'creditNoteId'
+     WHERE r.tenant_id=$1 AND (r.command_id=$2 OR (r.command_type='customer_credit_note.issue' AND r.semantic_key=$3))`,[context.tenantId,c.commandId,c.semanticKey])).rows;
+    if(prior.some(row=>row.job_id!==c.subjectRef||row.invoice_id!==input.invoiceId||Number(row.amount_pence)!==input.amountPence||row.reason!==input.reason))throw new CommandError("COMMAND_CONFLICT");
+    await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text || ':' || $2::uuid::text,0))`,[context.tenantId,input.invoiceId]);
+   },
    mutate:async(db,command)=>{
     const invoice=(await db.$client.query<any>(`SELECT i.*,COALESCE((SELECT sum(amount_pence) FROM app.customer_credit_note n WHERE(n.tenant_id,n.invoice_id)=(i.tenant_id,i.id)),0) credited FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.job_id=$2 AND i.id=$3`,[context.tenantId,command.subjectRef,input.invoiceId])).rows[0];
     if(!invoice||BigInt(invoice.credited)+BigInt(input.amountPence)>BigInt(invoice.total_pence))throw new Error("INVALID_CREDIT_AMOUNT");
