@@ -1,8 +1,16 @@
 import {createHash,randomUUID} from "node:crypto";
 import type {Pool,PoolClient} from "pg";
-import {evaluateDraftQuote,quoteLineV1,type QuoteLine} from "@jobguard/core";
-import {withTenant,type VerifiedTenantContext} from "./tenant-context.js";
+import {evaluateDraftQuote,quoteLineV1,type QuoteBlocker,type QuoteLine} from "@jobguard/core";
+import {withTenant,type TenantTransaction,type VerifiedTenantContext} from "./tenant-context.js";
 import {appendAuditBatch} from "./audit.js";
+// Persisted issuable flags predate coverage validation and cannot authorize a new document/send.
+export async function assertQuoteScopeCoverage(db:TenantTransaction,tenantId:string,jobId:string,quoteRevisionId:string){
+ const missing=(await db.$client.query<{scope_item_id:string}>(`SELECT si.id AS scope_item_id FROM app.scope_identity si
+  WHERE si.tenant_id=$1 AND si.job_id=$2 AND si.state='confirmed' AND NOT EXISTS(
+   SELECT 1 FROM app.quote_line ql WHERE (ql.tenant_id,ql.job_id,ql.scope_item_id)=(si.tenant_id,si.job_id,si.id)
+    AND ql.quote_revision_id=$3 AND (ql.included OR nullif(ql.exclusion_reason,'') IS NOT NULL)) ORDER BY si.id`,[tenantId,jobId,quoteRevisionId])).rows;
+ if(missing.length){const blockers:QuoteBlocker[]=missing.map(item=>({code:"missing_scope",scopeItemId:item.scope_item_id,message:"Include this confirmed scope item or record an explicit exclusion before issue."}));throw Object.assign(new Error("QUOTE_NOT_ISSUABLE"),{code:"QUOTE_NOT_ISSUABLE",blockers});}
+}
 export class QuoteConflictError extends Error{readonly code="QUOTE_REVISION_CONFLICT";}
 export class QuoteScopeRevisionError extends Error{readonly code="QUOTE_SCOPE_REVISION_MISMATCH";constructor(){super("QUOTE_SCOPE_REVISION_MISMATCH");}}
 export class QuoteRepository{constructor(private readonly pool:Pool){}

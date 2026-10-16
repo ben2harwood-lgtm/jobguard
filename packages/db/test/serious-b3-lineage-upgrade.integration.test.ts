@@ -36,7 +36,7 @@ it("S09 upgrades populated quote lineage without changing immutable rows, grants
     await db.query("ALTER TABLE app.quote_line DISABLE TRIGGER quote_line_immutable");
     const other=randomUUID(),otherRevision=randomUUID();
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[other,tenant,job]);
-    await db.query("INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description) VALUES($1,$2,$3,$4,1,'Synthetic other item')",[otherRevision,tenant,job,other]);
+    await db.query("INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit) VALUES($1,$2,$3,$4,1,'Synthetic other item','1','item')",[otherRevision,tenant,job,other]);
     await db.query("UPDATE app.quote_line SET scope_revision_id=$1 WHERE job_id=$2",[otherRevision,job]);
     await expect(db.query("ALTER TABLE app.quote_line ADD CONSTRAINT quote_line_item_source_fk FOREIGN KEY(tenant_id,job_id,scope_item_id,scope_revision_id) REFERENCES app.scope_revision(tenant_id,job_id,scope_item_id,id)")).rejects.toMatchObject({code:"23503"});
   });

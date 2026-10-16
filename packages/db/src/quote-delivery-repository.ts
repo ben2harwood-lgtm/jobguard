@@ -3,6 +3,7 @@ import type {Pool} from "pg";
 import {evaluateDraftQuote,quoteDocumentV1,renderQuotePdf,type QuoteLine} from "@jobguard/core";
 import {ActionExecutor,reconcileOutbox,type OutboundAction,type OutboundAdapter,type SafeTelemetry} from "./outbox.js";
 import {IssueQuoteMutation} from "./quote-document-repository.js";
+import {assertQuoteScopeCoverage} from "./quote-repository.js";
 import {UserCommandDispatcher} from "./commands.js";
 import {DEMO_MEMBERSHIP_ID} from "./demo-seed.js";
 import {withTenant,type VerifiedTenantContext} from "./tenant-context.js";
@@ -18,6 +19,7 @@ export class QuoteDeliveryRepository{
    if(!parties)throw new Error("JOB_PARTIES_REQUIRED");
    const r=(await db.$client.query<any>(`SELECT qr.*,coalesce(json_agg(json_build_object('id',ql.id,'scopeItemId',ql.scope_item_id,'scopeRevisionId',ql.scope_revision_id,'description',ql.description,'origin',ql.origin,'included',ql.included,'exclusionReason',ql.exclusion_reason,'quantity',ql.quantity_decimal,'unit',ql.unit,'unitRatePence',ql.unit_rate_pence,'discountPercent',ql.discount_decimal,'taxTreatment',ql.tax_treatment,'rateProvenance',ql.rate_provenance,'category',ql.category,'region',ql.region) ORDER BY ql.ordinal) FILTER(WHERE ql.included),'[]') lines FROM app.quote_revision qr JOIN app.quote_draft qd ON(qd.tenant_id,qd.current_revision_id)=(qr.tenant_id,qr.id) LEFT JOIN app.quote_line ql ON(ql.tenant_id,ql.quote_revision_id)=(qr.tenant_id,qr.id) WHERE qr.job_id=$1 AND qr.issuable=true GROUP BY qr.tenant_id,qr.id`,[jobId])).rows[0];
    if(!r)throw new Error("QUOTE_NOT_ISSUABLE");
+   await assertQuoteScopeCoverage(db,context.tenantId,jobId,r.id);
    const lines=(r.lines as QuoteLine[]).map(line=>({scopeItemId:line.scopeItemId,description:line.description,quantity:line.quantity,unit:line.unit,netPence:evaluateDraftQuote({currency:r.currency,taxPolicyVersion:r.tax_policy_version,lines:[line]}).totals.net.pence}));
    if(lines.reduce((total,line)=>total+line.netPence,0)!==Number(r.net_pence))throw new Error("QUOTE_LINE_TOTALS_MISMATCH");
    const old=(await db.$client.query<any>(`SELECT id,content_hash,snapshot FROM app.quote_document_version WHERE job_id=$1 AND quote_revision_id=$2 AND customer->>'email'=$3 AND parties_snapshot->>'bindingId'=$4 ORDER BY document_version DESC LIMIT 1`,[jobId,r.id,recipient,parties.bindingId])).rows[0];

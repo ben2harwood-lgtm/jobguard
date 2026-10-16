@@ -13,6 +13,7 @@
         "packages/core/src/quote.ts",
         "packages/db/src/quote-repository.ts",
         "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/src/quote-document-repository.ts",
         "packages/db/src/acceptance-repository.ts",
         "packages/db/test/serious-b3-quotes.integration.test.ts",
         "packages/db/test/serious-b3-lineage-upgrade.integration.test.ts",
