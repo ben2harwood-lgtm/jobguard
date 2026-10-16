@@ -12,7 +12,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const nameOf = (url: URL) => fileURLToPath(url).split("/").at(-1)!;
-const ownName = "0165_customer_billing_integrity.sql";
+const ownName = "0166_customer_billing_integrity.sql";
 const credential = randomUUID();
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool;
 let clusterPort: number;

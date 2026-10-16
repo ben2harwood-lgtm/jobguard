@@ -2,7 +2,7 @@
 
 Not independently verified, not accepted. Builder only; a different-model verdict and separate acceptance are still required. No PR opened.
 
-Migration: `0165_customer_billing_integrity.sql` (the draft's 0154 is superseded; main has 0150, 0151, 0153, 0154; open PRs use 0145, 0147, 0152, 0155). Base: origin/main `0349f906`.
+Migration: `0166_customer_billing_integrity.sql` (the draft's 0154 is superseded; main has 0150, 0151, 0153, 0154; open PRs use 0145, 0147, 0152, 0155). Base: origin/main `0349f906`.
 
 ## What was built
 
