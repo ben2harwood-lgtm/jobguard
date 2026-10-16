@@ -23,7 +23,12 @@
         "packages/db/test/lp-job-doors-upgrade.integration.test.ts",
         "packages/db/test/lp-job-doors.integration.test.ts",
         "packages/db/test/lp-practice-doors.integration.test.ts",
-        "packages/db/test/lp-start-quote.integration.test.ts"
+        "packages/db/test/lp-start-quote.integration.test.ts",
+        "packages/db/test/migfix-4.integration.test.ts",
+        "packages/db/test/quote-reacceptance-upgrade.integration.test.ts",
+        "packages/db/test/small-builder-origin.integration.test.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/practice-session.integration.test.ts"
       ]
     }
   }

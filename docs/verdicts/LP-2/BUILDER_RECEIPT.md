@@ -583,3 +583,72 @@ All 18 changed/new paths belong to the requested LP-2 scope. The legacy registry
 Final HEAD: `7aa461d0b6fb9842231734d62143ed78d0503434` (unchanged; implementation is uncommitted). Intended commit message: `/private/tmp/jg-msg-lp-2.txt`. The dispatcher owns the commit and RED review handoff. No acceptance, push, merge, enablement or deployment is performed.
 
 Final read-only command receipt: `git diff --check` and Python prefix/hash/line/message verification exited 0; confirmed seven MIGFIX-4 test declarations and exactly two new GRANT statements. `git rev-parse HEAD origin/main`, `git status --short`, memory/disk checks exited 0; HEAD unchanged, memory 81% free, disk 47 GB available. This documentation correction changes only the Round 3 count, preserving the historical prefix.
+
+
+## r3 (ruling 80)
+
+16 October 2026; dispatcher 14; branch `codex/sandbox/lp-2`. Issued/current HEAD `ae0e1ceef9009cb4b4f1d83631f553483ee4e983`; `origin/main` `4c407a6c81bd714a6875b7adf995812381d0fe57`. **BUILD-DON'T-MERGE under decision 74. PARTIAL / STOP on the legacy-lane union below.** No commit, index write, push, merge, technical acceptance or release performed. Both independent exact-commit checker verdicts remain pending; no deterministic check below is represented as a model review.
+
+Read AGENTS.md, BUILD_PLAN.md §2/§5.1/§11.8 LP-2 and the issued PROPOSED-COORDINATOR-CHANGES.md. The six named setup sites match the proposal's current before text. The proposal, all application code, migrations, grants, credentials, shared inventories, scanner pins, every other test and every other lane remain byte-identical to this round's starting HEAD. No test exemption or runtime grant was added. Existing release/rollout/LP-0 holds are not discharged.
+
+Applied only the named setup conversions:
+
+- `packages/db/test/migfix-4.integration.test.ts`, original :24: the identical quoting job INSERT now runs in a preceding `withTenant(c.admin, context, ...)`; scope setup and all quote operations remain on `c.runtime`.
+- `packages/db/test/quote-reacceptance-upgrade.integration.test.ts`, original :25: the same conversion, preserving the upgrade operations and assertions.
+- `packages/db/test/small-builder-origin.integration.test.ts`, original :156: copied item 3's entire owner fixture code block byte for byte, around the identical original INSERT in the existing `asTenant` transaction; the original following pilot track binding is unchanged.
+- The same file, original :90: item 6's same owner-capability recipe in `asTenant`, with permit shape selected using the original SELECT's existing title, practice digest and scenario. The original INSERT SELECT SQL/arguments are unchanged; only its connection changes from `admin` to that owner transaction's `db`. Its following track/scope setup and assertions are unchanged.
+- `packages/db/test/quote.integration.test.ts`, original :4: moved only the identical quoting job INSERT to a preceding `withTenant(admin, context, ...)`; runtime scope setup and the rest of the compact line are unchanged.
+- `packages/db/test/practice-session.integration.test.ts`, original :288: the same tagged quoting/home job INSERT runs in `withTenant(admin, a.context, ...)` after an exact `practice_home` fixture permit for its existing tenant, ID, title, status, revision zero, digest, home scenario and default provenance. The existing assertions remain byte-identical.
+- `config/lanes/lp-2.json`: added exactly the five named test paths, preserving all previous paths, note, branch and receipt fields. No extra path or wildcard added.
+
+### STOP: literal lane union is refused by the unchanged loader
+
+Stopped on `config/agent-lane-assignments.json:85`; **no edit to that file**. Before: the legacy `lp-2` entry's allow list includes `"config/agent-lane-assignments.json"`, along with five other old-only paths (`packages/db/migrations/0168_unchecked_job_doors.sql`, `packages/db/src/migrate.ts`, `packages/db/MIGRATIONS.md`, `packages/db/src/index.ts`, `packages/db/src/lp-job-doors.ts`).
+
+Ruling 80's required after is one registration with the union of the old paths and the per-file paths. Retiring the legacy entry and putting that literal union in `config/lanes/lp-2.json` is rejected by `tools/agent-lane-boundary-lint.mjs:63`:
+
+```text
+Lane file "config/lanes/lp-2.json" refused: a lane file cannot grant the lane register (config/agent-lane-assignments.json or config/lanes/); its own file is always editable by its own branch.
+```
+
+This was reproduced read-only by passing an in-memory union, with the legacy duplicate removed, to the unchanged `mergeLanePolicy`. Nothing was written by that reproduction. Dropping the forbidden path would violate the literal union requirement; changing the loader is outside scope. A clarification was requested via the user-input tool: retire the legacy entry and retain every other old path plus the five named test paths. **No answer has arrived; dependent lane consolidation remains held.** No alternate base, lane, loader relaxation or exemption was used. The five expressly authorized own-lane additions were completed independently.
+
+### Checks actually run
+
+Actual check commands used the existing cached pnpm 10.28.1 shim via `PATH="/private/tmp/jg-lp1-bin:$PATH"`; no install performed. Runtime is Node 24.17.0; the unchanged `.nvmrc` says 24.15.0. Initial default-launcher `pnpm --version` probes emitted pnpm warnings without a version before the cached shim was found; the last probe was interrupted (130). No dependency download command was issued.
+
+Logs and the exact selected unit-file manifests are in `/private/tmp/jg-lp2-r3/` (not committed).
+
+| Command/check | Actual result |
+|---|---|
+| `pnpm typecheck` | PASS, 7/7 tasks; 2 cached, 5 executed. |
+| `LANE_BASE_REF=origin/main pnpm lint` | FAIL (1): core purity passes, then existing duplicate `lp-2` registration blocks the lane stage. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | FAIL (1): same existing duplicate; no alternate base. |
+| `LANE_BASE_REF=origin/main pnpm exec turbo run lint --concurrency=2 --force` | PASS, 7/7 package checks, zero cached; does not make root lint green. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | PASS, both exit 0. |
+| `node --test tools/*.test.mjs` | FAIL (1), 99 pass / 1 fail: unchanged MC-5 cannot load the duplicate lane registration. Its fixture Git writes are confined to temporary test repositories; this worktree's Git/index was not written. |
+| `pnpm exec turbo run test --filter=@jobguard/core --filter=@jobguard/config --filter=@jobguard/ai --filter=@jobguard/storage --concurrency=2 --force` | FAIL (1), core 5,385 pass / 7 fail: generated-dist tests cannot find three adjacent `.ts` source files, and four allocator executions time out at the unchanged 5-second limit. Other tasks not claimed complete by this aborted run. No fix or expectation change made. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, 99 files / 2,696 source tests. Follow-up distinguishes source execution from the generated-dist failures above; no timeout change. |
+| `pnpm --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage --workspace-concurrency=1 test` | PASS: config 2, AI 113, storage 4 tests. AI results are synthetic fixtures, not live-model approval. |
+| `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 <21 non-integration unit files>` | FAIL (1), 193 pass / 8 fail. All failures in unchanged `audit-api-capture.test.ts`: scripted SQL rejects the already-existing `SELECT revision FROM app.start_quote_from_review(...)`. Full arguments: `db-unit-files.json`; output: `db-unit.log`. No changed integration file runs here. |
+| `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 <83 non-database/non-HTTP unit files>` | PASS, 83 files / 1,664 tests. Full arguments: `api-unit-files.json`; output: `api-unit.log`. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | PASS, 40 files / 867 tests. |
+| Direct strict `tsc` on the five changed integration files (command below) | PASS (0). |
+| `pnpm build --concurrency=2 --force` | PASS, 7/7 tasks, zero cached. |
+| `pnpm openapi:check` | Launcher FAIL (1), before checking parity: tsx CLI IPC `listen EPERM`. |
+| `node --import tsx src/generate-openapi.ts --check` from `apps/api` | PASS (0). Same source generator and `--check`, launched without the tsx CLI IPC listener; no schema output rewritten. |
+| TypeScript AST/source-byte assertion and declaration comparison | PASS: all 412 assertion call expressions and all declarations in the five files byte-identical; no parse errors. Item 3's complete code block matches the proposal exactly. `assertion-preservation.json`. |
+| Tracked-file SHA-256 comparison against the round-start snapshot | PASS before this receipt: only the five named tests and own lane file differ; all 2,098 other tracked files identical. Final check also allows this append only. `scope-preservation.json`. |
+| `git diff --check`; final scope/prefix/message verification | PASS (0). |
+
+Strict fixture compilation command:
+
+```text
+pnpm --filter @jobguard/db exec tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2023 --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck test/migfix-4.integration.test.ts test/quote-reacceptance-upgrade.integration.test.ts test/small-builder-origin.integration.test.ts test/quote.integration.test.ts test/practice-session.integration.test.ts
+```
+
+**NOT RUN:** the five affected PostgreSQL suites, all other PostgreSQL suites, test:db/test:migrations/test:restore, DB-backed API isolation, localhost/HTTP tests and browser/e2e suites. The dispatcher explicitly states that this sandbox cannot start PostgreSQL or bind localhost; these run in GitHub CI after dispatcher's push. API selection excludes `health.test.ts`, `shadow-isolation.application.test.ts`, `final-account-lock.isolation.test.ts`, `auth/sso/action-paths.test.ts` and `*.http.test.ts`; DB selection excludes integration files and socket-based `free-port.test.ts`. These are execution selections, not changed tests or new exemptions. Full `pnpm test` is NOT RUN and not claimed green. No baseline test rerun, clean install, live provider/model test or rollout execution claimed.
+
+The original receipt prefix is retained exactly, SHA-256 `942e8d1d5601cb30cb929e2a462c6ef5f26a566f718243fa63cff82d53feeabf`. No migration, backwards-compatibility change to application code, new runtime permission or operational alert in this round. Existing LP-0/coordinator delta and rollout holds persist. Exact-commit independent Opus/Sol verdicts, their confirmation that only named setup changed, and separate actor acceptance remain absent; builder does not accept its own work. Park for Ben's button; no merge authority.
+
+Intended conventional commit message written to both requested paths: `/private/tmp/jg-msg-LP-2-r3.txt` and `/private/tmp/jg-msg-lp-2.txt`. Dispatcher owns any subsequent commit, push and checker handoff.
