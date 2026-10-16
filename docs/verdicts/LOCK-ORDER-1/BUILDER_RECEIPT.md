@@ -548,3 +548,44 @@ After the dispatcher commits/pushes, CI must pass **all three unchanged tests** 
 CI must also preserve the 4/4 `lock-order-1.test.ts` and 145/145 context-boundary results, and the existing full checks (root `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, OpenAPI and browser coverage). The separate known `[S9] scanner and seven pinned bridges stay byte-identical` failure in `extra-origin.integration.test.ts` is deliberately untouched: this repair does not resolve it, repin either source, or claim green full CI. That coordinator ruling remains required before full technical acceptance. New committed bytes require independent review bound to the dispatcher's exact commit and separate acceptance; neither is claimed here.
 
 Intended conventional commit message overwritten at `/private/tmp/jg-msg-lock-order-1.txt`. Only this test and the appended `r-owntests` receipt are handed back for the dispatcher to commit; no Git write command was run.
+
+
+## r-ruling54 — coordinator ruling 54, dispatcher 13 (16 October 2026)
+
+PR #226; explicit repair order under coordinator ruling 54, following Ben's decision 45. Starting HEAD `a8505bf949f2dc895422865bba9a6c7e1efdbfd6`, branch `codex/sandbox/lock-order-1`; working tree initially clean. Read AGENTS.md and applicable BUILD_PLAN command/audit, acceptance and contractor task contracts. This is builder evidence, not an independent verdict or technical acceptance.
+
+`shasum -a 256 packages/db/src/work-order-repository.ts apps/api/src/auth/context-boundary.test.ts` confirmed both expected hashes exactly. Only these two lines change in `packages/db/test/extra-origin.integration.test.ts`, within `[S9] scanner and seven pinned bridges stay byte-identical`:
+
+```diff
+# line 248
+-   "packages/db/src/work-order-repository.ts": "4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3",
++   "packages/db/src/work-order-repository.ts": "9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e",
+# line 252
+-   "apps/api/src/auth/context-boundary.test.ts": "a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35"
++   "apps/api/src/auth/context-boundary.test.ts": "ec6d3dd219e42707fe0bd6b0550db7f4f260f36c55ff9fee0d36bde831586ef2"
+```
+
+The `lock-order-1` lane lacked this test path. Added only `packages/db/test/extra-origin.integration.test.ts` to its allow list; the historical lane note and all other lane configuration remain unchanged. No other test or production file changes. Exact-content comparison against HEAD verifies the two replacements and the single allowance addition. Affected invariant: preserve earlier byte-pinning guarantees with the explicitly authorized current bytes. No migration, backwards-compatibility impact, new operational alert, provider action or release enablement.
+
+Environment: Node `v24.17.0`, installed pnpm `10.28.1`, reused dependencies; no clean install or download. Commands use the existing `/private/tmp/jg-lock-order-1-bin/pnpm` launcher with `COREPACK_ENABLE_NETWORK=0`. Logs: `/private/tmp/jg-lock-order-1-r-ruling54-*.log`.
+
+
+| Command / check | Actual result |
+| --- | --- |
+| `shasum -a 256 packages/db/src/work-order-repository.ts apps/api/src/auth/context-boundary.test.ts` | Exit 0; both hashes match the order's expected values. |
+| `pnpm typecheck --force` | Exit 0; 7/7 tasks passed, none cached. |
+| `LANE_BASE_REF=origin/main pnpm lint --force` | Exit 0; boundary checks and 7/7 package tasks passed, none cached. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | Exit 0; lock-order-1 passed. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; lock-order-1 passed. |
+| `node --test tools/*.test.mjs` | Exit 0; 100/100 passed. |
+| `pnpm build --concurrency=2` | Exit 0; 7/7 tasks passed, 2 cached; Next production build completed. Sandbox cache IO and Next dependency/CSS warnings were emitted. |
+| `pnpm openapi:check` | Exit 1; tsx launcher IPC `listen EPERM` before the comparison runs. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same OpenAPI comparison without the IPC launcher. |
+| Offline S9 file comparison using Node SHA-256 | Exit 0; all eight pinned files match. Deterministic file check only, not PostgreSQL execution. |
+| Exact-content comparison against HEAD | Exit 0; only two test line replacements and one lane allowance addition. |
+| `pnpm -r --workspace-concurrency=2 exec vitest run --maxWorkers=1 --exclude '**/dist/**' --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --exclude '**/health.test.ts' --exclude '**/auth/sso/action-paths.test.ts' --exclude '**/contractor/*.http.test.ts' --exclude '**/final-account-lock.isolation.test.ts' --exclude '**/shadow-isolation.application.test.ts'` | Exit 0; core 2,532/2,532, config 1/1, storage 2/2, AI fixtures 85/85, DB units 305/305, API 1,625/1,625 and web 812/812 passed (5,362 total). Context-boundary and lock-order unit tests are included. |
+| Final `git diff --check` and scope inspection | Exit 0; exactly the authorized test, lane file and append-only receipt changed; HEAD unchanged. |
+
+The local unit selection excludes generated build copies, PostgreSQL integration suites, the free-port socket test, and the previously documented HTTP/socket and PostgreSQL isolation tests. These are command-line selections only; no test, assertion, suite configuration or CI requirement was weakened. Full root `pnpm test`, database/migration suites, S9's enclosing PostgreSQL integration suite and browser suites are NOT claimed as locally executed or passing: PostgreSQL and socket/browser execution remain GitHub CI work after the dispatcher commits/pushes. Fixture AI checks are not a live-model evaluation. All existing release gates and exact-commit independent review/separate acceptance requirements remain held.
+
+Final HEAD remains `a8505bf949f2dc895422865bba9a6c7e1efdbfd6`. Intended conventional commit subject/body overwritten at `/private/tmp/jg-msg-lock-order-1.txt`. No Git write command was run; the dispatcher owns commit/push. This section supersedes only the prior receipt's outstanding ruling for the two S9 pins; it does not assert green full CI or technical acceptance.
