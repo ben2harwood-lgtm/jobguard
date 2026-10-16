@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b3": {
+      "branches": [
+        "codex/sandbox/serious-b3"
+      ],
+      "receipt": "docs/verdicts/SERIOUS-B3/BUILDER_RECEIPT.md",
+      "note": "SERIOUS-B3: Batch 3 only (S06-S11), RED. S06 stopped at existing penny expectations; S07-S11 corrections and regression evidence. No existing test values, pins or shared migration/lane lists edited.",
+      "allow": [
+        "apps/api/src/quote/quote.application.ts",
+        "apps/api/src/quote/serious-b3-preview.test.ts",
+        "packages/core/src/quote.ts",
+        "packages/db/src/quote-repository.ts",
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/src/quote-document-repository.ts",
+        "packages/db/src/acceptance-repository.ts",
+        "packages/db/test/serious-b3-quotes.integration.test.ts",
+        "packages/db/test/serious-b3-lineage-upgrade.integration.test.ts",
+        "packages/db/migrations/0172_quote_scope_lineage.sql",
+        "packages/db/migration-notes/0172_quote_scope_lineage.md",
+        "docs/verdicts/SERIOUS-B3/BUILDER_RECEIPT.md",
+        "docs/verdicts/SERIOUS-B3/S06.repro.test.ts",
+        "docs/ledger/SERIOUS-B3.md"
+      ]
+    }
+  }
+}
