@@ -1179,3 +1179,12 @@ on deployment failure and use a reviewed forward fix; preserve originals/history
 Own-step upgrade proof: `test/job-sources-upgrade.integration.test.ts`; PostgreSQL
 execution remains required, with later migrations applied twice and rolled-back
 canonical-row/type/identity comparator controls.
+
+## Adding a migration after MERGE-CHURN-1 (founder decision 35, 14 October 2026)
+
+`src/migrate.ts` lists the 85 migrations merged through `0155_quote_reacceptance.sql` explicitly and never changes again;
+every newer `NNNN_lowercase_name.sql` in `migrations/` is discovered and run after them in name order. A piece adds only its
+SQL file (numbered above the highest migration on main) and a note at `migration-notes/<file stem>.md`; it does not edit
+`migrate.ts` or this file. The runner refuses to migrate if the directory holds anything else, a listed file is missing, a new
+file is numbered at or below 0155, or two files share a number. The lane check refuses an added migration that is not numbered
+above every migration on its base; `node tools/migration-renumber.mjs --write` fixes that at catch-up with SQL bytes unchanged.
