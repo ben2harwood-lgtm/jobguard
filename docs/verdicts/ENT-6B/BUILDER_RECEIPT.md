@@ -281,3 +281,49 @@ Tracked `git diff --stat` (new files are above):
 ```
 
 Final HEAD: `60a5fcb890a2529af6d114bac16be0d26ea0ce66` (unchanged; dispatcher commits). Final resources: disk **34 GB**, memory **56% free**.
+
+## r1 — dispatcher 14 repair, 16 October 2026
+
+Repair base/head: `65ff2f443c126b269d7bbe41d1a9ad623c3f69fa`, branch `codex/sandbox/ent-6b`, PR #240. Read the independent Opus REPAIR verdict at `/Users/benharwood/.local/share/full-steam/jg-runs/d14-ent-6b-opus-65ff2f4.md`, AGENTS, BUILD_PLAN §9.1.8 / ENT-6 and both billing contracts. This section records new execution evidence; earlier NOT RUN entries describe the initial build, not r1. No independent r1 verdict or acceptance is claimed.
+
+### Changes and protected scope
+
+- Changed only the repository parse-helper signature and the explicit `BillingStatus` callback parameter. The helper now accepts `{ safeParse(raw: unknown): z.SafeParseReturnType<unknown, T> }` and returns `T`. This is the permitted equivalent of the suggested schema/output signature: the exact `S extends z.ZodTypeAny` / `z.output<S>` attempt still failed TS2589 at lines 22, 34 and 53 locally. The method-only contract avoids full structural comparison between core's Zod 3.25.67 and db's Zod 3.25.76. The safeParse call, invalid-input error and returned parsed data are unchanged. No runtime behavior or boundary schema changed.
+- Regenerated `apps/api/openapi.json` with the repository's `apps/api/src/generate-openapi.ts` generator. Exactly 108 lines were added: GET `/contractor/jobs/{id}/billing`, GET `/contractor/jobs/{id}/billing/{batchId}/download`, POST `/contractor/jobs/{id}/billing/{action}`. A JSON comparison against HEAD proves that removing those three paths restores the entire previous document, including all schemas.
+- All existing tests, expectations, package pins and shared lists are unchanged. No migration was added or changed. Migration `0181_contractor_billing.sql` is byte-identical to HEAD; SHA-256 remains `8fe77300205ac8dfaf97aa6be843d48bf71747e5c73e81e35fb6ce7dd0d50e20`. No new data migration, backwards-compatibility change, operational alert or release capability is introduced.
+
+### Execution evidence
+
+Node: `v24.17.0`; dependencies already installed. No install/download command, package-manager override or pin change was issued. The pnpm launcher stalled after its ignored-`pnpm.overrides` warning; `pnpm --version`, `pnpm --filter @jobguard/db typecheck` and `pnpm --filter @jobguard/api openapi:generate` were interrupted (exit 130), without a completed package check. Pnpm-wrapper results are **NOT RUN**. Unlike the initial build, r1 then executed the already-installed pinned compiler, test runner, build tools and generator directly. These are actual executions, not syntax-only checks and not a claim that pnpm/turbo orchestration passed.
+
+Paths below are relative to each package unless prefixed by a root path. Logs are temporary local evidence in `/private/tmp/jg-ent-6b-r1-*.log`.
+
+| Command actually executed | Result |
+|---|---|
+| `./node_modules/.bin/tsc -p tsconfig.json --noEmit` in `packages/db` | PASS, exit 0 (`jg-ent-6b-r1-db-typecheck-direct.log`). The earlier exact suggested-signature attempt failed TS2589; the final method-only signature passed. |
+| Same tsc command in `packages/core`, `packages/config`, `packages/storage`, `packages/ai`, `apps/api`, `apps/web` | PASS, all six exit 0 (`typecheck-<package>.log`). All seven package lint scripts have this identical compiler body; it was executed once per package rather than repeated. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs` | PASS, exit 0; core purity, lane, money and commercial boundaries. Repeated after generation, also PASS. |
+| `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | PASS, exit 0; repeated after generation, also PASS. |
+| `node --test tools/*.test.mjs` | PASS: 100 tests, exit 0. |
+| `./node_modules/.bin/tsc -p tsconfig.json` in core, config, storage, ai and db | PASS, all five exit 0. One redundant db build was interrupted before the scheduled db build completed successfully. |
+| `./node_modules/.bin/nest build` in `apps/api` | PASS, exit 0. |
+| `./node_modules/.bin/next build` in `apps/web` | PASS, exit 0, including type validation and 34 static pages. Existing workspace-root/CSS warnings remain. |
+| `node --import tsx src/generate-openapi.ts` in `apps/api` | PASS, exit 0, after building workspace dependencies. An earlier attempt failed ERR_MODULE_NOT_FOUND because db/dist did not yet exist. Same repository generator, with tsx imported through Node to avoid the CLI's IPC listener. |
+| `node --import tsx src/generate-openapi.ts --check` in `apps/api` | PASS, exit 0 (`jg-ent-6b-r1-openapi-check.log`); this executes the script behind `openapi:check`. The pnpm-wrapper check itself is NOT RUN. |
+| `./node_modules/.bin/vitest run src --maxWorkers=2` in core | PASS: 97 files, 2,627 tests. |
+| Same source test command in config / ai / storage | PASS: respectively 1 / 85 / 2 tests, in 1 / 6 / 1 files. |
+| `./node_modules/.bin/vitest run src --exclude src/shadow-isolation.application.test.ts --maxWorkers=2` in api | FAIL, exit 1: 80 files passed, 9 failed; 1,672 tests passed, 130 failed, 1 skipped; 129 unhandled errors. The explicitly excluded suite requires listening PostgreSQL infrastructure. See holds below. |
+| `./node_modules/.bin/vitest run --maxWorkers=2` in web | PASS: 41 files, 846 tests. Unit/transport tests, not browser journeys. |
+| `./node_modules/.bin/vitest run src/contractor/billing.application.test.ts src/contractor/billing.http.test.ts --maxWorkers=2` in api | PASS: both billing files, 4 tests. Together with source core/web runs, the 11 new non-PostgreSQL test cases have now executed and passed. |
+| Initial `./node_modules/.bin/vitest run --maxWorkers=2` in core | FAIL: 5,252 passed, 2 failed across 194 files because it also collected built `dist` tests. Those two source-inspection tests tried to open nonexistent `dist/recovery-allocation.ts` and `dist/site-extra-pricing.ts`. The source-only run above passed all 2,627 source tests. The initial multi-package runner was interrupted during its following config run; no result is claimed for that interrupted attempt. |
+| Python JSON/byte/scope comparison against `git show HEAD:<path>`; `git diff --check` | PASS: exactly three new OpenAPI paths, all previous document content equal; migration bytes equal; only the repository, generated OpenAPI and this receipt changed; whitespace check clean. |
+
+### Remaining holds and out-of-scope findings
+
+**The broad API suite is not green.** Its real-source `src/auth/context-boundary.test.ts` assertion reports nine existing uses in `apps/api/src/contractor/billing.application.ts` (lines 24, 30, 36, 40, 46, 50, 51, 58, 59) as context uses outside the allow-list. This is a real deterministic source-boundary failure, not a socket restriction. No application or allow-list/test change was made: the issued r1 order explicitly limits repairs to the parse types and generated OpenAPI. This hold needs dispatcher disposition before a green-CI/acceptance claim.
+
+Other broad API failures include Supertest `listen EPERM` / null server port errors, and `final-account-lock.isolation.test.ts` failing its free-port preflight (`58400..58650`). The sandbox denies listening sockets; these are not claimed as passing HTTP or PostgreSQL tests. The billing controller tests above call methods directly and passed without a server.
+
+`pnpm test`, `pnpm lint`, `pnpm lint:lanes`, `pnpm build`, `pnpm typecheck` and `pnpm openapi:check` orchestration are NOT RUN; direct constituent executions and their exact results are listed above. PostgreSQL suites (including the eight new ENT-6B integration suites, real catalog/LP-0 and upgrade/migration proofs), browser/e2e and live-provider/model checks remain **NOT RUN**. No PostgreSQL or browser was started. Dispatcher/GitHub CI must run the required database and browser gates after push. No model/prompt/parser changed, so no new live-model evaluation is applicable.
+
+All production, real-data, G4-C/G5 and independent exact-commit review/separate acceptance holds remain. No self-acceptance. No git write, commit, push, checkout, deployment or external message occurred. Intended conventional commit subject/body written to both `/private/tmp/jg-msg-ent-6b-r1.txt` and `/private/tmp/jg-msg-ent-6b.txt`; dispatcher owns committing and pushing.
