@@ -1,3 +1,4 @@
+import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { ExtraApprovalRepository } from "../src/index.js";
@@ -8,7 +9,7 @@ export async function world(c: Cluster) {
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
  const w = await chainWorld(c), ctx = await w.ctx, repo = new ContractorBillingRepository(c.runtime);
  const session = randomUUID();
- await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id) VALUES($1,$2,$3,$4)", [session,w.p.tenantId,w.members.finance.member.membershipId,w.members.finance.member.identityUserId]);
+ await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,$2,$3,$4,$5,r.t,r.t+interval '7 days' FROM (SELECT clock_timestamp() t) r", [session,w.p.tenantId,w.members.finance.member.membershipId,w.members.finance.member.identityUserId,digestOf(session)]);
  const s = await submitted(c,w,24000);
  await new ExtraApprovalRepository(c.runtime).approveExtraStep(ctx,w.members.supervisor.member,approveInput(s,0));
  const contract = w.demo.contractId;
