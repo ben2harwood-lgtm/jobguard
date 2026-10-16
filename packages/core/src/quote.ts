@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { addMoney, money, moneyFromBigInt, type Money } from "./money.js";
+import { addMoney, money, subtractMoney, type Money } from "./money.js";
 import { calculateNetLine, parseQuantity } from "./quantity.js";
 import { candidateM1TaxPolicy, CANDIDATE_M1_TAX_POLICY_VERSION, UnsupportedTaxTreatmentError } from "./tax.js";
-import { divideRounded } from "./rational.js";
 
 export const M1_QUOTE_POLICY = Object.freeze({ currency: "GBP" as const, taxTreatment: "standard_rate_20" as const, taxPolicyVersion: CANDIDATE_M1_TAX_POLICY_VERSION });
 const decimal = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/;
@@ -14,7 +13,7 @@ export const quoteLineV1 = z.object({
   rateProvenance:z.enum(["entered","suggestion_accepted"]).nullable(), category:z.string().max(100).nullable(), region:z.string().max(100).nullable(),
 });
 export type QuoteLine = z.infer<typeof quoteLineV1>;
-export type QuoteBlocker={code:"missing_quantity"|"missing_rate"|"missing_unit"|"unsupported_tax"|"unresolved_question"|"missing_exclusion_reason";scopeItemId?:string;message:string};
+export type QuoteBlocker={code:"missing_quantity"|"missing_rate"|"missing_unit"|"unsupported_tax"|"unresolved_question"|"missing_exclusion_reason"|"missing_scope";scopeItemId?:string;message:string};
 export type CoverageDiff={unpricedCaptured:Array<{scopeItemId:string;description:string}>;excluded:Array<{scopeItemId:string;description:string;reason:string}>;unresolvedBlockingQuestions:string[];humanAddedExtras:Array<{scopeItemId:string;description:string}>};
 export type QuoteTotals={subtotal:Money;discount:Money;net:Money;taxGroups:ReadonlyArray<{treatment:"standard_rate_20";net:Money;tax:Money}>;tax:Money;total:Money};
 
@@ -32,9 +31,10 @@ export function evaluateDraftQuote(input:{currency:string;taxPolicyVersion:strin
     if(!line.unit)blockers.push({code:"missing_unit",scopeItemId:line.scopeItemId,message:`${line.description} needs a unit before issue.`});
     if(line.unitRatePence===null){blockers.push({code:"missing_rate",scopeItemId:line.scopeItemId,message:`${line.description} needs a confirmed unit rate before issue.`});if(line.origin==="captured")coverage.unpricedCaptured.push({scopeItemId:line.scopeItemId,description:line.description});}
     if(!line.quantity||line.unitRatePence===null)continue;
-    const gross=calculateNetLine(parseQuantity(line.quantity),money(line.unitRatePence));const ratio=decimalRatio(line.discountPercent);
-    const lineDiscount=moneyFromBigInt(divideRounded(BigInt(gross.pence)*ratio.numerator,ratio.denominator,"half_even"));
-    subtotal=addMoney(subtotal,gross);discount=addMoney(discount,lineDiscount);net=addMoney(net,money(gross.pence-lineDiscount.pence));
+    const quantity=parseQuantity(line.quantity),rate=money(line.unitRatePence),ratio=decimalRatio(line.discountPercent);
+    // Round the exact discounted line once; the displayed discount reconciles subtotal to net.
+    const gross=calculateNetLine(quantity,rate),lineNet=calculateNetLine(quantity,rate,ratio);
+    subtotal=addMoney(subtotal,gross);discount=addMoney(discount,subtractMoney(gross,lineNet));net=addMoney(net,lineNet);
   }
   let tax=money(0);try{tax=candidateM1TaxPolicy.calculateGroup(net,M1_QUOTE_POLICY.taxTreatment);}catch(error){if(!(error instanceof UnsupportedTaxTreatmentError))throw error;}
   const totals={subtotal,discount,net,taxGroups:[{treatment:M1_QUOTE_POLICY.taxTreatment,net,tax}],tax,total:addMoney(net,tax)};
