@@ -43,7 +43,8 @@ it("own-step comparator detects timestamp/type changes and missing rows; later a
     if (control === "time") {
       await db.query("SET LOCAL session_replication_role=replica");
       await db.query("UPDATE control_plane.contractor_practice_session SET created_at=created_at+interval '1 microsecond',expires_at=expires_at+interval '1 microsecond'");
-    } else if (control === "type") await db.query("ALTER TABLE control_plane.contractor_practice_session ALTER COLUMN created_at TYPE timestamp(3) with time zone");
+    // Explicit microsecond precision changes the type declaration without rounding a seven-day capped session.
+    } else if (control === "type") await db.query("ALTER TABLE control_plane.contractor_practice_session ALTER COLUMN created_at TYPE timestamp(6) with time zone");
     else { await db.query("SET LOCAL session_replication_role=replica"); await db.query("DELETE FROM control_plane.contractor_practice_session"); }
     const diff = await proofDifferences(db, before);
     expect(control === "type" ? diff.types.length : diff.rows.length).toBeGreaterThan(0);

@@ -4,15 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   actor: vi.fn(), query: vi.fn(), withTenant: vi.fn(), beginUpload: vi.fn(), finalize: vi.fn(), put: vi.fn(),
-  evidenceService: vi.fn(), rateCard: vi.fn(), priceExtra: vi.fn(), extras: vi.fn(), run: vi.fn(), queue: vi.fn(), clientView: vi.fn(), clientDecide: vi.fn(), facts: vi.fn(), targets: vi.fn(), ownActions: vi.fn(),
+  evidenceService: vi.fn(), rateCard: vi.fn(), priceExtra: vi.fn(), extras: vi.fn(), run: vi.fn(), queue: vi.fn(), clientView: vi.fn(), clientDecide: vi.fn(), facts: vi.fn(), targets: vi.fn(), ownActions: vi.fn(), approvalArtifact: vi.fn(), issueClientApproval: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@jobguard/db", () => ({
   withTenant: h.withTenant,
   northsideRateCard: h.rateCard,
   northsideExtras: h.extras,
+  northsideApprovalArtifact: h.approvalArtifact,
   northsideRun: h.run, northsideFacts: h.facts, northsideTargets: { month: "2026-10" }, northsideSwitchTargets: h.targets, northsideOwnActions: h.ownActions,
-  ExtraApprovalRepository: class { priceExtra = h.priceExtra; queue = h.queue; clientApprovalView = h.clientView; decideClientApproval = h.clientDecide; },
+  ExtraApprovalRepository: class { priceExtra = h.priceExtra; queue = h.queue; clientApprovalView = h.clientView; decideClientApproval = h.clientDecide; issueClientApproval = h.issueClientApproval; },
 }));
 vi.mock("../../lib/northside-server", () => ({
   DemoError: class extends Error { constructor(readonly code: string, readonly status: number) { super(code); } },
@@ -39,6 +40,48 @@ const extraId = "00000000-0000-4000-8000-000000000004";
 const pool = {}, context = { tenantId }, member = { tenantId, membershipId };
 const request = (body: Record<string, unknown>) => new Request("https://practice.invalid/api/northside", {
   method: "POST", headers: { "content-type": "application/json", origin: "https://practice.invalid" }, body: JSON.stringify({ version: "northside-command.v1", ...body }),
+});
+
+describe("Northside send replay (stored-artifact/command doubles)", () => {
+  const commandId = "00000000-0000-4000-8000-000000000005", revisionHash = "b".repeat(64), recipient = "client@fictional.invalid";
+  const binding = { commandId, jobId, requestId: extraId, revisionHash, netPence: 108000 };
+  const send = (change = {}) => action(request({ ...binding, ...change }), { params: Promise.resolve({ extraId, action: "send" }) });
+  const artifact = (input: { linkToken: string; expiresAt: Date }) => ({ jobId, extraId, revisionHash, approverMembershipId: membershipId,
+    artifact: { token: input.linkToken, expiresAt: input.expiresAt.toISOString(), requestId: extraId, recipient, netPence: 108000 } });
+  beforeEach(() => {
+    h.actor.mockResolvedValue({ pool, context, member, role: "owner" });
+    h.extras.mockResolvedValue([{ extraId, jobId, requestId: extraId, revisionHash, netPence: 108000, clientApproverMembershipId: membershipId, clientApproverEmail: recipient }]);
+    h.approvalArtifact.mockResolvedValue(null);
+  });
+  it("returns the original artifact and result on an identical commandId retry, including its expiry", async () => {
+    const result = { linkId: extraId, outboxActionId: jobId };
+    h.issueClientApproval.mockImplementation(async (_context, _member, input) => { h.approvalArtifact.mockResolvedValue(artifact(input)); return result; });
+    const first = await send(), original = h.issueClientApproval.mock.calls[0]![2];
+    expect(first.status).toBe(200);
+    const replay = await send(); expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(await first.json());
+    expect(h.issueClientApproval.mock.calls[1]![2]).toEqual(original);
+    expect(h.approvalArtifact).toHaveBeenCalledWith(pool, member, context, commandId);
+  });
+  it.each([{ netPence: 108001 }, { revisionHash: "c".repeat(64) }, { requestId: commandId }])("rejects changed displayed content %j", async change => {
+    h.approvalArtifact.mockResolvedValue(artifact({ linkToken: "a".repeat(40), expiresAt: new Date("2026-10-17T00:00:00Z") }));
+    expect((await send(change)).status).toBe(409);
+    expect(h.issueClientApproval).not.toHaveBeenCalled();
+  });
+  it("rejects commandId reuse for a different extra even if its displayed binding matches", async () => {
+    h.approvalArtifact.mockResolvedValue({ ...artifact({ linkToken: "a".repeat(40), expiresAt: new Date("2026-10-17T00:00:00Z") }), extraId: commandId });
+    const response = await send(); expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ code: "COMMAND_CONFLICT" });
+    expect(h.issueClientApproval).not.toHaveBeenCalled();
+  });
+  it("recovers a concurrently committed winner after the generated artifact loses the command race", async () => {
+    const winner = artifact({ linkToken: "a".repeat(40), expiresAt: new Date("2026-10-17T00:00:00Z") });
+    h.approvalArtifact.mockResolvedValueOnce(null).mockResolvedValue(winner);
+    h.issueClientApproval.mockRejectedValueOnce({ code: "COMMAND_CONFLICT" }).mockResolvedValue({ linkId: extraId });
+    const response = await send(); expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ path: `/extra-approval/${jobId}/${extraId}#t=${winner.artifact.token}` });
+    expect(h.issueClientApproval.mock.calls[1]![2]).toMatchObject({ linkToken: winner.artifact.token, expiresAt: new Date(winner.artifact.expiresAt) });
+  });
 });
 const attach = () => photo(request({ jobId, description: "Fictional extra", note: "Fictional note" }));
 const price = () => action(request({ jobId, quantity: 6, sorCode: "CLEAR-VOID" }), { params: Promise.resolve({ extraId, action: "price" }) });

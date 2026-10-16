@@ -20,7 +20,8 @@ CREATE TABLE app.northside_action_attribution (
  actor_membership_id uuid NOT NULL, actor_role text NOT NULL,
  tester_membership_id uuid NOT NULL, tester_identity_user_id uuid NOT NULL,
  session_ref uuid NOT NULL REFERENCES control_plane.contractor_practice_session(session_id),
- switch_id uuid REFERENCES control_plane.practice_worker_switch(id),
+ -- A checked immutable event reference, without an incoming FK changing the switch table's TRUNCATE guard.
+ switch_id uuid,
  settings_version text NOT NULL, settings_hash text NOT NULL,
  environment text NOT NULL DEFAULT 'synthetic_demo' CHECK(environment='synthetic_demo'),
  classification text NOT NULL DEFAULT 'demo_settings' CHECK(classification='demo_settings'),
@@ -40,6 +41,20 @@ CREATE TABLE app.northside_action_attribution (
   WHEN 'upload' THEN source_id=upload_id WHEN 'evidence' THEN source_id=evidence_id WHEN 'contract' THEN source_id=contract_version_id WHEN 'sor' THEN source_id=sor_version_id ELSE false END IS TRUE),
  CHECK((switch_id IS NULL)=(actor_membership_id=tester_membership_id))
 );
+CREATE FUNCTION app.northside_attribution_guard() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.switch_id IS NOT NULL AND NOT EXISTS(
+  SELECT 1 FROM control_plane.practice_worker_switch s
+  WHERE s.id=NEW.switch_id AND s.tenant_id=NEW.tenant_id AND s.session_ref=NEW.session_ref
+   AND s.owner_membership_id=NEW.tester_membership_id AND s.worker_membership_id=NEW.actor_membership_id
+   AND s.started_at<=NEW.recorded_at AND s.expires_at>NEW.recorded_at
+   AND (s.ended_at IS NULL OR s.ended_at>=NEW.recorded_at))
+ THEN RAISE EXCEPTION 'NORTHSIDE_SWITCH_REFERENCE_INVALID' USING ERRCODE='23503'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER northside_attribution_reference BEFORE INSERT ON app.northside_action_attribution
+ FOR EACH ROW EXECUTE FUNCTION app.northside_attribution_guard();
 -- Derive the actual tester from the run's persisted owner session, never a request label or role assertion.
 -- These trigger inserts occur during source mutation, before the existing command's final audit-head lock.
 CREATE FUNCTION app.northside_capture_action() RETURNS trigger
@@ -137,8 +152,9 @@ DO $$ DECLARE tab text; BEGIN
  END LOOP;
 END $$;
 ALTER FUNCTION app.northside_capture_action() OWNER TO jobguard_migration;
+ALTER FUNCTION app.northside_attribution_guard() OWNER TO jobguard_migration;
 ALTER FUNCTION app.northside_register(uuid,jsonb) OWNER TO jobguard_migration;
 ALTER FUNCTION app.northside_immutable() OWNER TO jobguard_migration;
-REVOKE ALL ON FUNCTION app.northside_capture_action(),app.northside_register(uuid,jsonb),app.northside_immutable() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
+REVOKE ALL ON FUNCTION app.northside_attribution_guard(),app.northside_capture_action(),app.northside_register(uuid,jsonb),app.northside_immutable() FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.northside_register(uuid,jsonb) TO jobguard_runtime;
 COMMIT;

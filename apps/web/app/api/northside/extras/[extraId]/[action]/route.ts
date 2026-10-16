@@ -2,7 +2,7 @@ import "server-only";
 import type { VerifiedTenantContext } from "@jobguard/db";
 import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
-import { ExtraApprovalRepository, northsideExtras, northsideRateCard, northsideRun, withTenant } from "@jobguard/db";
+import { ExtraApprovalRepository, northsideApprovalArtifact, northsideExtras, northsideRateCard, northsideRun, withTenant } from "@jobguard/db";
 import { DemoError, bodyOf, demoActor, demoContext, failure, json, requireOrigin, parseDemoBody } from "../../../../../lib/northside-server";
 
 const uuid = (value: unknown): string => { if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value)) return value.toLowerCase(); throw new DemoError("INVALID_COMMAND", 422); };
@@ -54,8 +54,24 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
       if (extra.requestId === null || extra.clientApproverMembershipId === null || extra.clientApproverEmail === null) throw new DemoError("INVALID_TRANSITION", 409);
       const run = await northsideRun(pool, member, tenant);
       if (!run) throw new DemoError("NOT_FOUND", 404);
-      const token = randomBytes(32).toString("base64url");
-      const sent = await repo.issueClientApproval(tenant, member, { version: "issue-client-approval.v1", commandId, jobId, requestId: extra.requestId, approverMembershipId: extra.clientApproverMembershipId, recipient: extra.clientApproverEmail, linkToken: token, expiresAt: new Date(Date.now() + run.settings.linkLifetimeMinutes * 60_000) });
+      const recover = () => northsideApprovalArtifact(pool, member, tenant, commandId);
+      const issue = async (prior: Awaited<ReturnType<typeof recover>>) => {
+        if (prior && (prior.jobId !== jobId || prior.extraId !== extraId || prior.artifact.requestId !== binding.requestId || prior.revisionHash !== binding.revisionHash || prior.artifact.netPence !== binding.netPence || prior.approverMembershipId !== extra.clientApproverMembershipId || prior.artifact.recipient !== extra.clientApproverEmail)) throw new DemoError("COMMAND_CONFLICT", 409);
+        const token = prior?.artifact.token ?? randomBytes(32).toString("base64url");
+        const expiresAt = prior ? new Date(prior.artifact.expiresAt) : new Date(Date.now() + run.settings.linkLifetimeMinutes * 60_000);
+        const sent = await repo.issueClientApproval(tenant, member, { version: "issue-client-approval.v1", commandId, jobId, requestId: extra.requestId, approverMembershipId: extra.clientApproverMembershipId, recipient: extra.clientApproverEmail, linkToken: token, expiresAt });
+        return { token, sent };
+      };
+      const prior = await recover();
+      let issued;
+      try { issued = await issue(prior); }
+      catch (error) {
+        // Concurrent identical first requests may both generate inputs. Reuse the winner after its commit, once.
+        if (prior || (error as { code?: string }).code !== "COMMAND_CONFLICT") throw error;
+        const winner = await recover(); if (!winner) throw error;
+        issued = await issue(winner);
+      }
+      const { token, sent } = issued;
       return json({ version: "northside-link.v1", environment: "synthetic_demo", realExternalActions: 0, recipient: extra.clientApproverEmail, path: `/extra-approval/${jobId}/${extra.requestId}#t=${token}`, result: sent });
     }
     throw new DemoError("NOT_FOUND", 404);

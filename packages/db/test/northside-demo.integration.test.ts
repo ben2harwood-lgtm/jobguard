@@ -5,7 +5,7 @@ import { cluster, type Cluster } from "./extra-fixtures.js";
 import { siteExtraContentSha256V1 } from "@jobguard/core";
 import { startSession } from "./contractor-practice-session-fixtures.js";
 import { photo } from "./site-extra-evidence-fixtures.js";
-import { ExtraApprovalRepository, SiteExtraRepository, PracticeWorkerSwitchRepository, northsideExtras, northsideRun, northsideLocalLinks, northsideSettings, registerNorthsideRun, contractorSessionContext, ContractorPracticeSessionRepository, withTenant, verifyAuditChain, type AuthenticatedMembership } from "../src/index.js";
+import { ExtraApprovalRepository, SiteExtraRepository, PracticeWorkerSwitchRepository, northsideApprovalArtifact, northsideExtras, northsideRun, northsideLocalLinks, northsideSettings, registerNorthsideRun, contractorSessionContext, ContractorPracticeSessionRepository, withTenant, verifyAuditChain, type AuthenticatedMembership } from "../src/index.js";
 
 let c: Cluster;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); }, 240_000);
@@ -66,6 +66,14 @@ it("ACTION-ATTRIBUTION durably binds every journey command to the persisted test
   const owner = await act(), sendId = randomUUID(), token = randomUUID().replaceAll("-", "").repeat(2);
   await repo.issueClientApproval(await ctx(), owner, { version: "issue-client-approval.v1", commandId: sendId, jobId: extra.jobId, requestId: submitted.requestId,
     approverMembershipId: seed.clientApproverMembershipId, recipient: seed.clientApproverEmail, linkToken: token, expiresAt: new Date(Date.now() + northsideSettings.linkLifetimeMinutes * 60000) });
+  const replay = await northsideApprovalArtifact(c.runtime, owner, await ctx(), sendId);
+  expect(replay).toMatchObject({ jobId: extra.jobId, extraId: extra.extraId, revisionHash: submitted.revisionHash, artifact: { token } });
+  const sendRows = await c.admin.query("SELECT row_to_json(r)::text bytes FROM app.command_receipt r WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, sendId]);
+  const sendAudits = (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows;
+  await repo.issueClientApproval(await ctx(), owner, { version: "issue-client-approval.v1", commandId: sendId, jobId: extra.jobId, requestId: submitted.requestId,
+    approverMembershipId: seed.clientApproverMembershipId, recipient: replay!.artifact.recipient, linkToken: replay!.artifact.token, expiresAt: new Date(replay!.artifact.expiresAt) });
+  expect((await c.admin.query("SELECT row_to_json(r)::text bytes FROM app.command_receipt r WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, sendId])).rows).toEqual(sendRows.rows);
+  expect((await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.p.tenantId])).rows).toEqual(sendAudits);
   expect(await northsideLocalLinks(c.runtime, owner, await ctx())).toEqual([{ extraId: extra.extraId, recipient: seed.clientApproverEmail, path: `/extra-approval/${extra.jobId}/${submitted.requestId}#t=${token}` }]);
   expect(await northsideLocalLinks(c.runtime, sup, await ctx())).toEqual([]);
   const client = await act(seed.clientApproverMembershipId), decideId = randomUUID();
@@ -97,7 +105,10 @@ it("CLIENT-ISOLATION permits a second client's own extra and denies cross-client
   const { f, seed, act, ctx, log, repo } = world;
   await act();
   const secondOrder = (await c.admin.query(`SELECT w.job_id,w.client_id,w.contract_id,a.membership_id FROM app.work_order w JOIN app.job_assignment a ON(a.tenant_id,a.job_id)=(w.tenant_id,w.job_id)
-    WHERE w.tenant_id=$1 AND w.reference='NS-2-0001'`, [f.p.tenantId])).rows[0];
+    JOIN app.membership m ON(m.tenant_id,m.id)=(a.tenant_id,a.membership_id)
+    JOIN app.work_order_current cur ON(cur.tenant_id,cur.work_order_id,cur.revision_id)=(w.tenant_id,w.id,a.revision_id)
+    WHERE w.tenant_id=$1 AND w.reference='NS-2-0001' AND m.role='operative' ORDER BY m.id LIMIT 1`, [f.p.tenantId])).rows[0];
+  expect(secondOrder?.membership_id).toBeTruthy();
   const contractors = new ContractorRepository(c.runtime);
   const invite = async (fields: Record<string, unknown>) => {
     const v = await contractors.query(f.p, { version: "contractor-query.v1", tenantId: f.p.tenantId, resource: "organisation" });
@@ -127,6 +138,23 @@ it("CLIENT-ISOLATION permits a second client's own extra and denies cross-client
   await repo.decideClientApproval(await ctx(), right, { ...decision, commandId: randomUUID() });
   expect((await northsideExtras(c.runtime, right, "client_approver", await ctx()))).toEqual([]); // no historical-read entitlement from this presentation
 }, 120_000);
+
+it("SWITCH-REFERENCE rejects invented, cross-actor, cross-session and out-of-window references without masking the existing switch TRUNCATE guard", async () => {
+  const { f, act, ctx } = world; await act();
+  const { rolledBack } = await import("./upgrade-proof-utils.js");
+  const overrides = [{ switch_id: randomUUID() }, { actor_membership_id: f.p.membershipId }, { session_ref: randomUUID() }, { tenant_id: randomUUID() }, { tester_membership_id: randomUUID() }, { recorded_at: "2000-01-01T00:00:00Z" }];
+  for (const change of overrides) await rolledBack(c.admin, async db => {
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
+    await db.query("SET LOCAL ROLE jobguard_migration");
+    await expect(db.query(`INSERT INTO app.northside_action_attribution
+      SELECT (jsonb_populate_record(NULL::app.northside_action_attribution,to_jsonb(a)||$2::jsonb)).*
+      FROM app.northside_action_attribution a WHERE a.tenant_id=$1 AND a.switch_id IS NOT NULL LIMIT 1`, [f.p.tenantId, JSON.stringify(change)])).rejects.toMatchObject({ code: "23503", message: "NORTHSIDE_SWITCH_REFERENCE_INVALID" });
+  });
+  await expect(withTenant(c.admin, await ctx(), async db => {
+    await db.$client.query("SET LOCAL ROLE jobguard_migration");
+    await db.$client.query("TRUNCATE control_plane.practice_worker_switch");
+  })).rejects.toMatchObject({ message: "SWITCH_RECORD_IMMUTABLE" });
+});
 
 it("SETTINGS-SNAPSHOT retains the stored definition, contract references and immutable requirement snapshots", async () => {
   const { f, act } = world; await act();

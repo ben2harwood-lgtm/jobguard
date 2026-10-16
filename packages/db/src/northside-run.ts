@@ -4,6 +4,7 @@ import { appendAuditBatch } from "./audit.js";
 import { northsideSettings, northsideSettingsV1 } from "./northside-settings.js";
 import { withTenant, type VerifiedTenantContext, type AuthenticatedMembership } from "./tenant-context.js";
 import { derivedUuid } from "./work-order-repository.js";
+import { ExtraApprovalError } from "./extra-approval-chain-repository.js";
 
 /** The run is its generated tenant, with a permanent reference to the original practice owner. */
 export async function registerNorthsideRun(pool: Pool, owner: AuthenticatedMembership, context: VerifiedTenantContext) {
@@ -40,6 +41,24 @@ export async function northsideOwnActions(pool: Pool, member: AuthenticatedMembe
 
 const localArtifact = z.object({ version: z.literal("extra-client-approval-message.v1"), linkId: z.string().uuid(), requestId: z.string().uuid(), revision: z.number().int(),
   recipient: z.string().email().refine(s => s.endsWith(".invalid")), netPence: z.number().int().positive(), expiresAt: z.string().datetime(), path: z.string(), token: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u) }).strict();
+/** Recover server-generated replay inputs from this owner's exact command, including closed/expired artifacts.
+ * The merged dispatcher still verifies the complete command hash and returns its stored result. */
+export async function northsideApprovalArtifact(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext, commandId: string) {
+  return withTenant(pool, context, async db => {
+    const allowed = (await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND role='owner' AND app.contractor_member_active(id)", [member.tenantId, member.membershipId, member.identityUserId])).rowCount;
+    if (!allowed) throw new ExtraApprovalError("PERMISSION_DENIED");
+    const row = (await db.$client.query<{
+      command_type: string; status: string; actor_membership_id: string; job_id: string; variation_id: string; approver_membership_id: string; revision_hash: string; immutable_content: string;
+    }>(`SELECT r.command_type,r.status,r.actor_membership_id,k.job_id,k.variation_id,k.approver_membership_id,q.revision_hash,o.immutable_content
+      FROM app.command_receipt r LEFT JOIN app.extra_client_link k ON(k.tenant_id,k.command_id)=(r.tenant_id,r.command_id)
+      LEFT JOIN app.extra_approval_request q ON(q.tenant_id,q.id)=(k.tenant_id,k.request_id)
+      LEFT JOIN app.action_outbox o ON(o.tenant_id,o.id)=(k.tenant_id,k.outbox_action_id)
+      WHERE r.tenant_id=$1 AND r.command_id=$2`, [member.tenantId, commandId])).rows[0];
+    if (!row) return null;
+    if (row.command_type !== "IssueClientApproval" || row.status !== "succeeded" || row.actor_membership_id !== member.membershipId || !row.immutable_content) throw new ExtraApprovalError("COMMAND_CONFLICT");
+    return { jobId: row.job_id, extraId: row.variation_id, approverMembershipId: row.approver_membership_id, revisionHash: row.revision_hash, artifact: localArtifact.parse(JSON.parse(row.immutable_content)) };
+  });
+}
 /** Only the owner can recover the exact locally approved artifact after reload. This performs no delivery. */
 export async function northsideLocalLinks(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {
   return withTenant(pool, context, async db => {
