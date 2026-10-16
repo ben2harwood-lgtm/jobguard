@@ -7,8 +7,8 @@
       "note": "RED: issued Batch 5 only, S15–S17 final-account approved sources, lock freshness and immutable synthetic invoice PDFs. No existing expectations, pins, grants or historical artifacts changed. PostgreSQL and browser verification deferred to dispatcher/CI.",
       "allow": [
         "packages/db/src/final-account-repository.ts",
-        "packages/db/migrations/0166_final_account_sources_and_pdf.sql",
-        "packages/db/migration-notes/0166_final_account_sources_and_pdf.md",
+        "packages/db/migrations/0172_final_account_sources_and_pdf.sql",
+        "packages/db/migration-notes/0172_final_account_sources_and_pdf.md",
         "packages/db/test/serious-b5.integration.test.ts",
         "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/serious-b5-pdf-reader.ts",

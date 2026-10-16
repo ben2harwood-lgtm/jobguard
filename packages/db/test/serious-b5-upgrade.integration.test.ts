@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { asFixtureTenant, closeLockFixture, createLockFixture, LOCK_OWNER, seedAccount, type LockFixture } from "./final-account-lock.integration.test.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-const own = "0166_final_account_sources_and_pdf.sql";
+const own = "0172_final_account_sources_and_pdf.sql";
 let f: LockFixture;
 beforeAll(async () => { f = await createLockFixture(false); }, 60000);
 afterAll(async () => { if (f) await closeLockFixture(f); });
