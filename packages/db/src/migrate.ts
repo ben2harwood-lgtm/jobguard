@@ -91,7 +91,6 @@ const LISTED_MIGRATION_URLS = [
   new URL("../migrations/0153_quote_supersession_guard.sql", import.meta.url),
   new URL("../migrations/0154_follow_up_clock_fence.sql", import.meta.url),
   new URL("../migrations/0155_quote_reacceptance.sql", import.meta.url),
-  new URL("../migrations/0156_customer_billing_integrity.sql", import.meta.url),
   new URL("../migrations/0157_extra_approval.sql", import.meta.url),
   new URL("../migrations/0158_extra_approval_chain.sql", import.meta.url),
   new URL("../migrations/0162_membership_account_closed.sql", import.meta.url),
