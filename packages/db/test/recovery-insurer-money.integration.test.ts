@@ -489,5 +489,6 @@ it("[B2 DB16 Round2] pending F19 interest keeps approved words and settled F18 i
  expect(r.lines.find(l=>l.kind==="principal")).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Pending money cannot qualify",reasonHeld:false});
  expect(r.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.",reasonHeld:false});
  const settled=await fixture("withheld_customer_payment",false);await settled.advance("receipt-3000");
+ await advanceInterestFact(settled,"receipt-interest-120");await advanceInterestFact(settled,"receipt-compensation-70");
  expect((await reviewPayer(settled)).result.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({qualifyingPrincipal:{pence:12000},reason:null,reasonHeld:false});
 });

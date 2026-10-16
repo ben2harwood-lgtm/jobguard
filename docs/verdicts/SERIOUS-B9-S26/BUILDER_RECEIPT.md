@@ -144,3 +144,61 @@ The original default-timeout unit invocations failed; passing targeted reruns es
 Dispatcher owns commit/push. Intended conventional commit subject/body is written identically to both requested paths: `/private/tmp/jg-msg-serious-b9-s26-r1.txt` and `/private/tmp/jg-msg-ent-2.txt`. Exact-commit independent RED verdicts and separate acceptance remain required; no approval or technical acceptance is claimed.
 
 **Rulings 70/72 follow-up — 16 October 2026, dispatcher 14:** starting/unchanged HEAD `daf27456b319623b3a5b376d02cdf2392d616e79`, branch `codex/sandbox/serious-b9-s26`; read-only inspection confirms r1 edited all three named database tests. The eligibility integration path was already allowed; added exactly the missing insurer and timing integration paths, followed by `apps/web/e2e/CH-7.spec.ts`, to this piece's existing lane entry, preserving all earlier entries and every other lane field. This supersedes the r1 lane STOP above. CH-7 gains only four setup lines: for F18, after case opening and principal settlement, GET the existing authenticated `/api/jobs/:id/practice-facts` view and POST separate `practice-facts-command.v1` settlements for `receipt-interest-120` and `receipt-compensation-70`, carrying each returned revision forward before review. Source inspection confirms that route, schema and server implementation already support both movements; removing precisely the inserted block restores the entire original spec byte-for-byte, including £2,620.00 / 262000 and every assertion; F19 and insurer controls are unchanged. No database test, runtime source, migration, contract, dependency or shared helper changed. Installed dependencies reused with cached pnpm 10.28.1 via `PATH=/private/tmp/jg-migfix-2-bin:$PATH npm_config_manage_package_manager_versions=false COREPACK_ENABLE_NETWORK=0`; Node 24.17.0 versus repo pin 24.15.0, not a clean pinned install. Actual checks: `LANE_BASE_REF=origin/main pnpm lint:lanes`, `LANE_BASE_REF=origin/main pnpm lint`, `pnpm typecheck`, and `pnpm build` all exit 0; existing Turbo cache-permission, Next workspace-root and webpack warnings remain. All seven package unit invocations exit 0: core 2674, config 1, storage 2, AI 85 synthetic-fixture tests, DB 443 (including compiled copies), web 867, API 1656; all use `--maxWorkers=1 --testTimeout=30000`, with the same invocation-only DB integration/free-port and nine API socket/database exclusions documented in r1, no test/configuration edits. Exact unit commands, exits and log paths are recorded in `/private/tmp/jg-s26-lane70-unit-results.json`. The same seven non-Git-writing tool suites documented in r1 pass 19/19. `pnpm openapi:check` exits 1 because the tsx CLI IPC listener is denied (`EPERM`); the same generator/snapshot check via `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` exits 0. Logs are `/private/tmp/jg-s26-lane70-*.log`. Read-only scope/byte comparisons and `git diff --check` pass. Database integration/migration suites and browser e2e are **NOT RUN** on this Mac; GitHub CI owes them, including CH-7 in both existing viewport projects. Aggregate `pnpm test` is NOT RUN because it includes PostgreSQL and prohibited Git-writing fixtures. Only the lane file, CH-7 spec and this single appended paragraph change; no Git write, commit, push, browser, PostgreSQL startup or download. Identical intended conventional commit subject/body is written to `/private/tmp/jg-msg-serious-b9-s26-lane70.txt` and `/private/tmp/jg-msg-ent-2.txt`. Builder evidence only; exact-commit independent RED verdicts, separate acceptance and existing production gates remain required.
+
+
+## r2 (ruling 81)
+
+16 October 2026; dispatcher 14, night; branch `codex/sandbox/serious-b9-s26`; starting/unchanged HEAD `519c284aa2230d8611422f340fb39376a8d33232`, local `origin/main` `4c407a6c81bd714a6875b7adf995812381d0fe57`. Working-tree delivery only. Read the on-disk AGENTS.md, BUILD_PLAN §§10.3.3–10.3.5 and CH-7, `docs/contracts/recovery-eligibility-v3.md`, this piece's earlier receipt and lane, and the dispatcher's verbatim ruling 81. This is builder evidence, not independent review or acceptance.
+
+**Authorized site:** `packages/db/test/recovery-insurer-money.integration.test.ts:491–492` at starting HEAD, `[B2 DB16 Round2]`. Before: settle `receipt-3000` only, then expect statutory interest 12000p with null reason and `reasonHeld:false`. After: retain that entire setup and assertion, inserting only `await advanceInterestFact(settled,"receipt-interest-120");await advanceInterestFact(settled,"receipt-compensation-70");` between them. The existing ruling-66 helper uses `factsView` / `factsCommand`, reads the current revision for each call, and defaults each component to settled. No helper or assertion is changed; the original assertion moves to line 493. The pending F19 branch is byte-identical.
+
+**Standing-clause audit:** no further identical-pattern sites found. Inspected the F18 / 262000 / statutory-interest expectations and their setup paths in the insurer, eligibility-v3, timing-pin and practice-facts database integration tests, the interest reader unit test, CH-7 / PRACTICE-FACTS-1 browser specs and API eligibility tests. Existing positive-interest setups already settle the component; raw-writer refusal, principal-only, individual, pending, timestamp and insurer-zero controls do not qualify for this repair and remain unchanged. Only the ninth site above is repaired in r2.
+
+**Lane:** `config/lanes/serious-b9-s26.json:13` already permits the insurer integration file under the earlier 70/72 follow-up. The requested membership is satisfied; no duplicate entry or lane change is needed. The complete lane file, every shared list, pin, expectation, earlier receipt byte, other test, runtime source, migration and dependency remain byte-identical to starting HEAD.
+
+### r2 commands and results
+
+Reused installed dependencies; no download or clean-install claim. Node `24.17.0` versus `.nvmrc` `24.15.0`; cached pinned pnpm `10.28.1`, selected with `PATH=/private/tmp/jg-migfix-2-bin:$PATH npm_config_manage_package_manager_versions=false COREPACK_ENABLE_NETWORK=0`. Logs below are local evidence, not committed artifacts.
+
+| Command | Actual result / evidence |
+| --- | --- |
+| `pnpm build` | Exit 0; 7 successful tasks, 2 cached; `/private/tmp/jg-s26-r2-build.log`. Existing Turbo cache-write EPERM, workspace-root and webpack dynamic-import warnings retained. |
+| `pnpm typecheck` after build | Exit 0; `/private/tmp/jg-s26-r2-typecheck-final.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint` after build | Exit 0; `/private/tmp/jg-s26-r2-lint-final.log`. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 0; `/private/tmp/jg-s26-r2-lint-lanes.log`. |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck test/recovery-insurer-money.integration.test.ts` | Exit 0; `/private/tmp/jg-s26-r2-target-typecheck.log`. Compilation only. |
+| `pnpm --filter @jobguard/db exec vitest list test/recovery-insurer-money.integration.test.ts --json` | Exit 0; 40 cases collected; `/private/tmp/jg-s26-r2-collection.json`. No hooks/tests executed. |
+| `pnpm openapi:check` | Exit 1: tsx CLI cannot bind its IPC pipe (`EPERM`); `/private/tmp/jg-s26-r2-openapi.log`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same generator/snapshot comparison without the CLI listener; `/private/tmp/jg-s26-r2-openapi-direct.log`. |
+| core unit | Exit 0; 2696 passed (2696); `/private/tmp/jg-s26-r2-core-unit.log`. |
+| config unit | Exit 0; 1 passed (1); `/private/tmp/jg-s26-r2-config-unit.log`. |
+| storage unit | Exit 0; 2 passed (2); `/private/tmp/jg-s26-r2-storage-unit.log`. |
+| ai unit | Exit 0; 113 passed (113); `/private/tmp/jg-s26-r2-ai-unit.log`. |
+| db unit | Exit 0; 468 passed (468); `/private/tmp/jg-s26-r2-db-unit.log`. |
+| web unit | Exit 0; 867 passed (867); `/private/tmp/jg-s26-r2-web-unit.log`. |
+| api unit | Exit 0; 1667 passed (1667); `/private/tmp/jg-s26-r2-api-unit.log`. |
+| tools unit | Exit 0; 19; `/private/tmp/jg-s26-r2-tools-unit.log`. |
+| `python3 /private/tmp/jg-s26-r2-preservation.py`; `git diff --check` | Exit 0; exact two-call insertion only in the test, appended r2 receipt only, unchanged lane/HEAD, no untracked files and clean whitespace; `/private/tmp/jg-s26-r2-preservation.log`. |
+
+The initial `pnpm typecheck` and `LANE_BASE_REF=origin/main pnpm lint` invocations each exited 2 with TS6053 for generated `apps/web/.next/types/...` files while the concurrently started build regenerated them. Logs: `/private/tmp/jg-s26-r2-typecheck.log` and `/private/tmp/jg-s26-r2-lint.log`. After build completed, both were rerun successfully without changing source or configuration. The earlier failures remain recorded as failures.
+
+Exact unit invocations (all package suites use the CLI-only 30000ms timeout; no test/configuration changes):
+
+```sh
+pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/config exec vitest run src --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/storage exec vitest run src --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/ai exec vitest run src --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/db exec vitest run src test --maxWorkers=1 --testTimeout=30000 --exclude 'test/**/*.integration.test.ts' --exclude test/free-port.test.ts
+pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1 --testTimeout=30000
+pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 --testTimeout=30000 --exclude src/auth/sso/action-paths.test.ts --exclude src/contractor/contractor-practice-session.http.test.ts --exclude src/contractor/site-extra-pricing.http.test.ts --exclude src/contractor/site-extra.http.test.ts --exclude src/contractor/site-visit.http.test.ts --exclude src/contractor/practice-worker-switch.http.test.ts --exclude src/health.test.ts --exclude src/shadow-isolation.application.test.ts --exclude src/final-account-lock.isolation.test.ts
+node --test tools/core-purity.test.mjs tools/commercial-boundary.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs
+```
+
+The DB invocation excludes integration and free-port listener tests; it includes compiled test copies selected by the existing Vitest configuration. Nine API socket/database suites and three Git-writing tool fixture suites are excluded from these local invocations as in r1. Exact commands, exits and logs are also in `/private/tmp/jg-s26-r2-unit-results.json`. AI tests are synthetic fixtures, not live provider evaluation. No browser is involved in the web units.
+
+**Database/browser: NOT RUN.** The affected insurer integration test (including the repaired case), full `pnpm test:db`, `pnpm test:migrations` and `pnpm test:e2e` require PostgreSQL/listeners/browser execution unavailable in the dispatcher's sandbox. No database or browser was started. `pnpm test` is NOT RUN because it includes PostgreSQL, socket and Git-writing fixtures; the runnable unit coverage above is separate evidence. GitHub CI must execute the affected file and the mandatory database fresh/upgrade/regression and browser checks after the dispatcher pushes. Collection and compilation do not prove the integration assertions.
+
+**Invariants and remaining gates:** setup-only repair preserves the settled-money eligibility and versioned-proof requirements (AGENTS §§5.6, 5.8) and all exact amounts/reasons. No production behavior, authorization, fee rule, external action, model/prompt, provider, alert or migration changed; no rollback/backwards-compatibility impact. PostgreSQL CI, exact-commit independent RED verdicts and separate acceptance remain outstanding. No technical acceptance or production release is claimed.
+
+No repository Git write, commit, staging, checkout or push. Identical intended conventional commit subject/body is written to `/private/tmp/jg-msg-SERIOUS-B9-S26-r2.txt` and `/private/tmp/jg-msg-ent-2.txt`; dispatcher owns commit/push.
