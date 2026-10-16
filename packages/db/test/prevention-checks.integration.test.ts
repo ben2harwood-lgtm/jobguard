@@ -40,6 +40,34 @@ beforeAll(async () => {
 afterAll(async () => { await closeTestPools(runtime,admin);if(pg)await pg.stop();if(dir)await rm(dir,{recursive:true,force:true});if(previousMode===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previousMode; });
 
 describe("MON-7a real PostgreSQL guarantees", () => {
+  it("S25: prevention waits for pending revocation and refuses without facts, receipt or audit", async () => {
+    const j=await job(),input=command(j.binding),revoker=await admin.connect();
+    let outcome: {status:"fulfilled"|"rejected";reason?:unknown}|undefined;
+    let pending: Promise<void>|undefined;
+    try {
+      await revoker.query("BEGIN");
+      const pid=(await revoker.query("SELECT pg_backend_pid() pid")).rows[0].pid;
+      await revoker.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[tenant,member]);
+      pending=prevention.command(context,member,j.id,input).then(()=>{outcome={status:"fulfilled"};},reason=>{outcome={status:"rejected",reason};});
+      let blocked=false;
+      for(let attempt=0;attempt<200&&!outcome;attempt++){
+        blocked=!!(await admin.query("SELECT 1 FROM pg_stat_activity WHERE usename='prevention_login' AND $1::int=ANY(pg_blocking_pids(pid))",[pid])).rowCount;
+        if(blocked)break;
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      expect({blocked,outcome}).toEqual({blocked:true,outcome:undefined});
+      await revoker.query("COMMIT");await pending;
+      expect(outcome).toMatchObject({status:"rejected",reason:{code:"FORBIDDEN"}});
+      for(const table of ["property_constraint_fact","counterparty_check","command_receipt"]){
+        expect((await admin.query(`SELECT 1 FROM app.${table} WHERE tenant_id=$1 AND command_id=$2`,[tenant,input.commandId])).rowCount).toBe(0);
+      }
+      expect((await admin.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type LIKE 'prevention.%'",[tenant,j.id])).rowCount).toBe(0);
+    } finally {
+      await revoker.query("ROLLBACK");await pending;
+      await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[tenant,member]);
+      revoker.release();
+    }
+  });
   it("persists cited property facts for homeowners, replaying exactly once with atomic audit", async () => {
     const j=await job(), input=command(j.binding);
     const [a,b]=await Promise.all([prevention.command(context,member,j.id,input),prevention.command(context,member,j.id,input)]);

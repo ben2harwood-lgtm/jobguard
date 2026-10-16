@@ -89,7 +89,7 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
-  "packages/db/src/work-order-repository.ts": "4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3",
+  "packages/db/src/work-order-repository.ts": "9e4d46c5290e25647d714810d67b2efee6f674a1d52f654142297d22c476e22e",
   "packages/db/src/sor-repository.ts": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",
   "packages/db/src/job-scheduling-repository.ts": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
   "packages/db/src/work-order-fixtures.ts": "cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386",

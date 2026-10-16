@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-5/packages/db
+
+
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+   Start at  15:14:38
+   Duration  2.29s (transform 629ms, setup 0ms, import 1.22s, tests 3.14s, environment 0ms)
+
+exit 0
