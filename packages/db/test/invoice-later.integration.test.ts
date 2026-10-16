@@ -109,6 +109,49 @@ describe("LATER-B16 persisted invoice facts", () => {
   expect((await repo.creditView(context,f.jobId,f.invoice.id)).credits).toHaveLength(1);
   expect((await repo.creditView(context,other.jobId,other.invoice.id)).credits).toHaveLength(0);
  });
+ for (const identity of ["command", "semantic"]) {
+  it(`r1 L076 concurrent changed invoice conflicts after waiting on ${identity} uniqueness`, async () => {
+   const f = await fresh(10000,2000), other = await fresh(10000,2000);
+   let atCommit!: () => void, releaseCommit!: () => void;
+   const reachedCommit = new Promise<void>(resolve => { atCommit = resolve; });
+   const canCommit = new Promise<void>(resolve => { releaseCommit = resolve; });
+   let held = false;
+   // Pause a real transaction just before COMMIT; every SQL statement still goes
+   // to PostgreSQL under the runtime role. No provider/SQL result is substituted.
+   const heldPool = { connect: async () => {
+    const client = await runtime.connect();
+    return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
+     if (sql === "COMMIT" && !held) { held = true; atCommit(); await canCommit; }
+     return client.query(sql,values);
+    } };
+   } } as unknown as Pool;
+   const input = { version:"customer-credit-note.issue.v1",invoiceId:f.invoice.id,amountPence:1200,reason:"Synthetic correction",
+    command:{version:"command.v1",commandId:randomUUID(),commandType:"customer_credit_note.issue",semanticKey:`credit:${randomUUID()}`,
+     actorMembershipId:M,subjectType:"job",subjectRef:f.jobId,action:{actionType:"customer_credit_note.issue",recipient:null,contentHash:H,
+      aggregateRevision:0,amountPence:1200,currency:"GBP",policyVersion:"candidate_m1_standard_v1",expiresAt:new Date(Date.now()+300000)}} };
+   const first = new CustomerBillingCommandService(heldPool).credit(context,input);
+   const firstObserved = first.then(value=>({value}),error=>({error}));
+   let second: Promise<unknown> | undefined;
+   try {
+    await Promise.race([reachedCommit,first.then(()=>{throw new Error("credit completed before commit barrier");})]);
+    second = new CustomerBillingCommandService(runtime).credit(context,{...input,invoiceId:other.invoice.id,
+     command:{...input.command,commandId:identity==="command"?input.command.commandId:randomUUID()}});
+    const observed = second.then(value=>({value}),error=>({error}));
+    let waiting = false;
+    for (let attempt=0;attempt<100&&!waiting;attempt++) {
+     waiting = (await admin.query(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename='invoice_later_login' AND wait_event='transactionid') waiting`)).rows[0].waiting;
+     if (!waiting) await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    expect(waiting).toBe(true);
+    releaseCommit();
+    expect(await firstObserved).toHaveProperty("value.creditNoteId");
+    expect(await observed).toMatchObject({error:{code:"COMMAND_CONFLICT"}});
+    expect((await admin.query(`SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_type='customer_credit_note.issue' AND semantic_key=$2`,[T,input.command.semanticKey])).rows[0].n).toBe(1);
+    expect((await repo.creditView(context,f.jobId,f.invoice.id)).credits).toHaveLength(1);
+    expect((await repo.creditView(context,other.jobId,other.invoice.id)).credits).toHaveLength(0);
+   } finally { releaseCommit(); await firstObserved; await second?.catch(()=>undefined); }
+  });
+ }
  it("L082 concurrent identical direct credit commands return one credit and replay", async () => {
   const f = await fresh(), input = await creditCommand(f);
   const holder = await runtime.connect();

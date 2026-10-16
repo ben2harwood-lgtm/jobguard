@@ -17,3 +17,9 @@ No new GRANT statements, direct protected grants, columns, tables, UI changes, p
 Coordinator prerequisite: `config/lanes/later-b16.json` is absent and no later-b16 legacy registration exists. The builder leaves it unchanged. Lane check also cannot compare the uncommitted HEAD with the identical origin/main. The coordinator must provide registration and a reviewable commit/range.
 
 Evidence and exact STOP lines: `docs/verdicts/LATER-B16/BUILDER_RECEIPT.md`. The dispatcher owns the commit, RED review and acceptance; this ledger is a builder report only.
+
+## Repair r1 — 16 October 2026, dispatcher 14
+
+Supersedes the original command/semantic application-lock description above. The second independent check at `~/.local/share/full-steam/jg-runs/d14-later-b16-second-opus-242ad2d.md` requested option (b), with no changes to merged tests. Repository preflight now releases its invoice lock in a separate read-only transaction; issuance and audit remain atomic under 0190's own command → invoice locks. The service keeps one invoice advisory lock per mutating transaction; command/semantic receipt uniqueness serializes competing dispatches, followed by a read of the returned immutable credit to validate fields outside the dispatcher hash. Replay creates no new effects. Concurrent changed-invoice tests cover both command and semantic uniqueness on real PostgreSQL (written, CI execution pending).
+
+The two merged regression files pass unchanged locally, together with this lane's pure tests (23 tests, two workers). 0190 is unchanged. No browser or PostgreSQL execution is permitted locally; those gates and a fresh exact-commit independent verdict remain outstanding. Lane registration now exists in `config/lanes/later-b16.json`, provided by the dispatcher before this repair. Detailed r1 check results are appended to the builder receipt. BUILD-DON'T-MERGE remains in force; no commit or push by this builder.

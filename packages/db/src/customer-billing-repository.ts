@@ -38,17 +38,10 @@ export class CustomerBillingCommandService{
  async credit(context:VerifiedTenantContext,raw:unknown){
   const input=creditCustomerInvoiceV1.parse(raw),c=input.command;
   if(c.commandType!=="customer_credit_note.issue"||c.action.actionType!=="customer_credit_note.issue"||c.action.amountPence!==input.amountPence||c.action.currency!=="GBP")throw new Error("CREDIT_ACTION_MISMATCH");
-  return this.dispatcher.dispatch(context,c,{
-   // Bind fields outside the dispatcher envelope to the persisted credit on replay.
-   // Command and semantic identities serialize even if a retry changes its invoice.
+  const result=await this.dispatcher.dispatch(context,c,{
+   // One shared invoice lock protects remaining debt. Receipt uniqueness serializes
+   // command and semantic identities, including retries targeting another invoice.
    lock:async db=>{
-    await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':credit-command:'||$2::uuid::text,0))`,[context.tenantId,c.commandId]);
-    await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':credit-semantic:'||$2,0))`,[context.tenantId,c.semanticKey]);
-    const prior=(await db.$client.query<{job_id:string;invoice_id:string;amount_pence:string;reason:string}>(`SELECT n.job_id,n.invoice_id,n.amount_pence,n.reason
-     FROM app.command_receipt r LEFT JOIN app.customer_credit_note n
-      ON n.tenant_id=r.tenant_id AND n.id::text=r.result->>'creditNoteId'
-     WHERE r.tenant_id=$1 AND (r.command_id=$2 OR (r.command_type='customer_credit_note.issue' AND r.semantic_key=$3))`,[context.tenantId,c.commandId,c.semanticKey])).rows;
-    if(prior.some(row=>row.job_id!==c.subjectRef||row.invoice_id!==input.invoiceId||Number(row.amount_pence)!==input.amountPence||row.reason!==input.reason))throw new CommandError("COMMAND_CONFLICT");
     await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text || ':' || $2::uuid::text,0))`,[context.tenantId,input.invoiceId]);
    },
    mutate:async(db,command)=>{
@@ -67,6 +60,14 @@ export class CustomerBillingCommandService{
     await db.$client.query(`INSERT INTO app.customer_credit_note(id,tenant_id,job_id,invoice_id,authorization_id,credit_number,amount_pence,currency,reason,net_pence,tax_pence,total_pence,source_invoice_hash,preview_hash,pdf_sha256,pdf_bytes,tax_policy_version,approved_at)VALUES($1,$2,$3,$4,$5,$6,$7,'GBP',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,[id,context.tenantId,command.subjectRef,input.invoiceId,command.authorizationId,creditNumber,input.amountPence,input.reason,-Number(net),-Number(tax),-input.amountPence,sourceInvoiceHash,previewHash,pdfSha256,Buffer.from(pdf),invoice.tax_policy_version,approvedAt]);
     return{creditNoteId:id,creditNumber,originalInvoiceUnchanged:true};
    }
+  });
+  // Receipt uniqueness waits for competing command/semantic inserts to commit.
+  // Dispatcher replay has no effects; bind its returned immutable credit before returning.
+  // Do this after dispatch releases its invoice lock, with no further business lock.
+  return withTenant(this.pool,context,async db=>{
+   const credit=(await db.$client.query<{job_id:string;invoice_id:string;amount_pence:string;reason:string}>(`SELECT job_id,invoice_id,amount_pence,reason FROM app.customer_credit_note WHERE tenant_id=$1 AND id=$2`,[context.tenantId,result.creditNoteId])).rows[0];
+   if(!credit||credit.job_id!==c.subjectRef||credit.invoice_id!==input.invoiceId||BigInt(credit.amount_pence)!==BigInt(input.amountPence)||credit.reason!==input.reason)throw new CommandError("COMMAND_CONFLICT");
+   return result;
   });
  }
  async reversePayment(context:VerifiedTenantContext,raw:unknown){const p=customerPaymentReversalV1.parse(raw),command:ConsequentialCommand={version:"command.v1",commandId:p.commandId,commandType:"customer_payment.reverse",semanticKey:`payment-reversal:${p.paymentId}`,actorMembershipId:p.actorMembershipId,subjectType:"job",subjectRef:p.jobId,authorizationId:randomUUID(),action:{actionType:"customer_payment.reverse",recipient:null,contentHash:sha(JSON.stringify(p)),aggregateRevision:0,amountPence:null,currency:null,policyVersion:"manual_receipt_v1",expiresAt:new Date(Date.now()+300000)}};return this.dispatcher.dispatch(context,command,{mutate:async(db,c)=>{const row=(await db.$client.query<any>(`SELECT p.invoice_id FROM app.customer_payment p JOIN app.customer_invoice i ON(i.tenant_id,i.id)=(p.tenant_id,p.invoice_id) WHERE p.tenant_id=$1 AND p.job_id=$2 AND p.id=$3`,[context.tenantId,p.jobId,p.paymentId])).rows[0];if(!row)throw new Error("PAYMENT_NOT_FOUND");const id=randomUUID();await db.$client.query(`INSERT INTO app.customer_payment_reversal(id,tenant_id,job_id,payment_id,authorization_id,reason)VALUES($1,$2,$3,$4,$5,$6)`,[id,context.tenantId,p.jobId,p.paymentId,c.authorizationId,p.reason]);return{reversalId:id,invoiceId:row.invoice_id}}});}

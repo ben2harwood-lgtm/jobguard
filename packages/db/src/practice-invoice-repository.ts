@@ -85,15 +85,17 @@ export class PracticeInvoiceRepository {
   });
  }
  async issueCredit(context:VerifiedTenantContext,input:{jobId:string;invoiceId:string;actorMembershipId:string;commandId:string;netPence:number;reason:string;previewHash:string}) {
-  return withTenant(this.pool,context,async db=>{
-   // Same command-before-invoice order as the controlled routine, including callers
-   // that bypass this repository. No receipt can be read before its command lock.
-   await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':credit-command:'||$2::uuid::text,0))`,[context.tenantId,input.commandId]);
+  // Preserve the early net-ceiling error in a separate, read-only preflight.
+  // Release its invoice lock before the routine takes command -> invoice locks.
+  // The routine alone authorizes replay and revalidates all amounts at issuance.
+  await withTenant(this.pool,context,async db=>{
    await this.lockCredits(db,context,input.invoiceId);
    // Completed commands must reach the routine's exact replay/conflict check,
    // even when that original credit has since exhausted the available net.
    const replay=(await db.$client.query(`SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,input.commandId])).rowCount;
    if(!replay)await this.creditAmounts(db,context,input);
+  });
+  return withTenant(this.pool,context,async db=>{
    const row=(await db.$client.query<any>(`SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,[context.tenantId,input.jobId,input.invoiceId,input.actorMembershipId,input.commandId,input.netPence,input.reason,input.previewHash])).rows[0];
    const seen=(await db.$client.query(`SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND event_type='customer_credit_note.synthetic_approved' AND payload->'references'->>'creditNoteId'=$2`,[context.tenantId,row.credit_note_id])).rowCount;
    if(!seen)await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${input.actorMembershipId}`,eventType:"customer_credit_note.synthetic_approved",subjectType:"job",subjectRef:input.jobId,payload:{references:{creditNoteId:row.credit_note_id,invoiceId:input.invoiceId,commandId:input.commandId},hashes:{pdfSha256:row.pdf_sha256,previewHash:input.previewHash},classifications:{action:"commercial",environment:"operational"}}}]);

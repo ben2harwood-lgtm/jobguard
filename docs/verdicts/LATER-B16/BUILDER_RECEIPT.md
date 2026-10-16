@@ -190,3 +190,74 @@ c73d0e1a68fcb7332f44208bb359c5f7b651e09c99f2221c40a446866869613e  packages/db/sr
 ```
 
 No files outside the issued allow list changed. Final HEAD remains **`31682762c903d716657c573e1b5deae63588aad7`**. This SHA identifies the base; the **uncommitted diff** is what the dispatcher must commit and have independently checked. The dispatcher must not bind a verdict on this base SHA to the uncommitted implementation.
+
+
+## r1 — repair round, dispatcher 14, 16 October 2026 night
+
+Built by Codex from clean branch `codex/sandbox/later-b16`, HEAD `242ad2d46f390a3e66e3b222962e0b11af8cc184` (PR #251). This addendum supersedes the original receipt's application lock-order description and missing-registration STOP: the dispatcher supplied `config/lanes/later-b16.json` before r1. BUILD-DON'T-MERGE, decision 74, remains in force. No commit, add, checkout, push, merge, deployment, browser or dependency install was performed. The dispatcher waived the 45 GB disk gate for this repair; no such gate was imposed. No PostgreSQL server was started.
+
+Read the full repository AGENTS.md, applicable BUILD_PLAN §§2.2–2.4/C4–C6, M1-12 mapping, LP-8a boundaries, original lane receipt/ledger/migration notes, dispatcher lane registration, command dispatcher, repositories and related tests. Read the complete independent second check at `/Users/benharwood/.local/share/full-steam/jg-runs/d14-later-b16-second-opus-242ad2d.md`: **REPAIR**, bound to 242ad2d4. Implemented the requested option (b); neither merged test file was changed.
+
+### Final repair and invariants
+
+- Repository `issueCredit` keeps its existing early net-ceiling check in a separate read-only tenant transaction. That transaction releases its one invoice advisory lock before the issuing transaction enters 0190. No TypeScript command lock remains. The issuing transaction relies solely on 0190's reviewed **authority → command → receipt → invoice** sequence; issuance and audit append still commit or roll back together. The preflight is not authorization and cannot weaken the routine's final amount/preview/replay checks. Stale concurrent proposals still require the existing error/repreview path.
+- Credit service takes exactly one advisory lock, the existing tenant-qualified invoice lock, in its mutating dispatcher transaction. The existing unique command/semantic receipt constraints serialize competing inserts. After dispatch releases that lock, a separate tenant-scoped read validates the returned immutable credit's job/invoice/amount/reason before returning success. This covers both previously committed replay and a replay that waited for an uncommitted receipt against another invoice. A dispatcher replay creates no new domain, authorization or audit effects, so a mismatch rejects without an extra credit. Historical dispatcher hashes/receipts are unchanged. The verification transaction takes no advisory/business lock. A verification read failure after a new credit committed leaves the durable command receipt intact; retry the same command, never mint a replacement command.
+- No business lock is acquired after audit append. No money/VAT/PDF arithmetic, grants, SQL routine, schema, migration inventory, runtime permission, provider, secret, policy or UI change. No new alerts or backfills. Existing synthetic and release gates remain. The two extra read-only transaction phases add database round trips.
+- Added four pure regression cases for preflight lock release and returned-credit job/amount/exact-match validation; retained L076's changed-invoice/reason titles and assertions, now exercising validation of the returned immutable credit. Added two real-PostgreSQL cases that pause an actual first transaction just before COMMIT, observe a second changed-invoice command waiting on command or semantic uniqueness, and require COMMAND_CONFLICT, one receipt and one credit on the original invoice. No SQL result is mocked in those integration cases. All previous L082 routine/repository replay, authority and expiry cases remain unchanged.
+- 0190 SQL and both merged test files are byte-for-byte unchanged from 242ad2d4. No previous acceptance test was edited or weakened. The source unit double evidence below is not PostgreSQL proof.
+
+### r1 executed checks
+
+All successful pnpm runs use the existing cached wrapper `PATH=/private/tmp/jg-pnpm-later-b16:$PATH` (pnpm 10.28.1, Node v24.17.0). No packages downloaded. Vitest runs are headless with `--maxWorkers=2`. Root Turbo checks use `--force --concurrency=2`, with actual execution and zero cached tasks. Logs are under `/private/tmp/jg-later-b16-r1-*.log`.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `pnpm --version` via default launcher | 130 | Startup stalled after a pnpm configuration warning; interrupted, then used the already cached pinned wrapper. |
+| `pnpm --filter @jobguard/db exec vitest run src/practice-invoice-repository.test.ts test/audit-dbsrc-03.test.ts src/practice-invoice-later.test.ts --maxWorkers=2` on unchanged 242ad2d4 | 1 | Reproduced second check: 4 failed, 15 passed, 19 total (`red.log`). |
+| Same targeted command after first restructuring | 1 | 3 failed, 20 passed, 1 unhandled rejection: merged BillingSql also rejected the early receipt-join SQL. Removed that early lookup; final validation uses the returned credit after dispatcher uniqueness resolves. No merged test change. Intermediate output is in the session tool record. |
+| Same targeted command on final repair | 0 | 3 files, 23 tests passed (`targeted.log`). Both merged files green unchanged; lane's own 11 pure cases green. |
+| `pnpm typecheck --force --concurrency=2` | 0 | All 7 tasks passed, 0 cached (`typecheck.log`). |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | 0 | Root purity/lane/money/commercial checks and all 7 package lint tasks passed, 0 cached (`lint.log`). |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | 0 | Registered later-b16 lane passed against merge base 4c407a6c / HEAD 242ad2d4 (`lanes.log`). |
+| `pnpm --filter @jobguard/db exec vitest run src test --exclude '**/*.integration.test.ts' --exclude 'test/free-port.test.ts' --maxWorkers=2` | 1 | Also discovered stale generated `dist` tests: 1 stale compiled repository test failed, 468 passed (`db-unit.log`). No source regression. |
+| Same broad DB command with `--exclude 'dist/**'` | 0 | Source tests only: 38 files, 343 tests passed (`db-unit-source.log`). Database integration and socket-dependent free-port tests excluded locally; remain mandatory in CI. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai -r --workspace-concurrency=1 exec vitest run src --maxWorkers=2` | 0 | Core: 99 files / 2696 tests; config: 1/1; storage: 1/2; AI: 10/113 passed (`package-unit.log`). AI evidence is recorded-fixture evaluation, not a live provider/model run. |
+| `pnpm --filter @jobguard/db exec vitest list test/invoice-later.integration.test.ts test/invoice-later-upgrade.integration.test.ts --maxWorkers=2` | 0 | Collected all 11 tests, including new command/semantic races; hooks/tests NOT executed (`db-collection.log`). |
+| `pnpm --filter @jobguard/api exec vitest run src --exclude 'src/shadow-isolation.application.test.ts' --exclude 'src/health.test.ts' --exclude 'src/contractor/*.http.test.ts' --maxWorkers=2` | 1 | 84 files passed; two files hit sandbox socket restrictions: `final-account-lock.isolation.test.ts` imports a DB fixture (`no free port`), SSO `action-paths.test.ts` has Supertest socket cases (`listen EPERM`, 2 failed tests / 2 unhandled errors). Summary: 1685 passed, 2 failed, 1 skipped (`api-unit.log`). No DB server started; no test edited. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | 0 | OpenAPI current (`openapi.log`). Same checker as openapi:check using Node's tsx loader without the CLI IPC listener. |
+
+| `pnpm --filter @jobguard/api exec vitest run src --exclude 'src/shadow-isolation.application.test.ts' --exclude 'src/final-account-lock.isolation.test.ts' --exclude 'src/health.test.ts' --exclude 'src/contractor/*.http.test.ts' --exclude 'src/auth/sso/action-paths.test.ts' --maxWorkers=2` | 0 | 84 files / 1667 tests passed (`api-unit-nosocket.log`). Local-only selection leaves socket/DB suites for CI; no suite or runner edited. |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | 0 | 40 files / 867 tests passed (`web-unit.log`); unit tests only, no browser launched. |
+| `pnpm build --force --concurrency=2` | 0 | All 7 tasks passed, 0 cached, 58.403s; Next generated all 41 static pages (`build.log`). Existing workspace-root/CSS/Nest dependency warnings did not stop the build. |
+| `git diff --check` | 0 | No whitespace errors; final status confined to the seven allowed repair paths. |
+
+Turbo's sandbox shared-cache write warnings did not prevent actual package checks. No cache or permission workaround was introduced. Read-only Git status/diff and `git diff --check` were used; no Git-writing command was executed.
+
+### Pending evidence and handoff
+
+Real PostgreSQL L076/L082 concurrency/replay, fresh-install/upgrade/migration preservation, full `pnpm test`, `pnpm test:db` and `pnpm test:migrations` remain for GitHub CI after the dispatcher commits and pushes. The local environment cannot bind localhost/start PostgreSQL; collection and query doubles are not execution evidence. Socket-dependent API/free-port suites also remain mandatory in CI. No browser suite was run under the dispatcher's no-browser instruction; previous browser gates remain intact. L081 stays HELD for its versioned product contract. No changed AI/model/prompt or native behavior; live eval/native checks inapplicable.
+
+This is builder source inspection and local test execution only. r1 needs a new independent verdict bound to the dispatcher-created exact commit and separate acceptance. The prior REPAIR verdict on 242ad2d4 does not verify this uncommitted diff. Founder/dispatcher retains commit, push and release authority. Intended conventional commit subject/body is written to both `/private/tmp/jg-msg-later-b16-r1.txt` and `/private/tmp/jg-msg-later-b16.txt`. No coordinator ruling to change merged tests was requested or used.
+
+Protected-file verification for r1 (working bytes compared to `git show HEAD:<path>`):
+
+```text
+b0df28890221496d703501743592c84ac7347feb0bb16fe9cfeb869c40980b63  packages/db/migrations/0190_credit_command_replay.sql  unchanged from 242ad2d4
+c73d0e1a68fcb7332f44208bb359c5f7b651e09c99f2221c40a446866869613e  packages/db/src/practice-invoice-repository.test.ts  unchanged from 242ad2d4
+561cb59cf86e09a9302b8c068fdd4442bc2c1cd5dac435d7b3c8906bb21b61b5  packages/db/test/audit-dbsrc-03.test.ts  unchanged from 242ad2d4
+```
+
+Final r1 changed-file hashes (receipt excluded to avoid self-reference):
+
+```text
+4f3f1b0922e9919998af9cab0611353a63152fa8fc2225caf7a572b81fedaff6  docs/ledger/LATER-B16.md
+314e28dd927e37855a184a0c71849285ff02b50f8a6d859cb719b90e9e7bafef  packages/db/migration-notes/0190_credit_command_replay.md
+5c97afab967bd5b890c9bb41a5f099df75d2a8a8e215cb71b2b4e366020a0c86  packages/db/src/customer-billing-repository.ts
+c43e21397bdcc36e0b97461a088428f6b4140c32ef2084e435956f4fdda0280d  packages/db/src/practice-invoice-later.test.ts
+1d537523a64411a4b20ebb768e3bc065d123811d76c74823582a8e1e5d0db91f  packages/db/src/practice-invoice-repository.ts
+abbe111e4f9b401c645d3c395e62545417ee2612b6d5340ea92267fd67aa4faa  packages/db/test/invoice-later.integration.test.ts
+```
+
+Final HEAD remains `242ad2d46f390a3e66e3b222962e0b11af8cc184`; the working-tree diff requires a dispatcher-created commit and fresh review. Both requested commit-message files contain the same conventional subject and body. No automatic approval-review escalation or rejection occurred.
+
+Final `LANE_BASE_REF=origin/main pnpm lint:lanes` rerun: exit 0 (`lanes-final.log`), merge base `7ff452eeec1c523345d34715adfa3f8310062013`, HEAD still `242ad2d4`. Final `git diff --check`: exit 0.
