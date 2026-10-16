@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/practice-worker-switch/apps/api
+
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  11:14:40
+   Duration  1.16s (transform 511ms, setup 0ms, import 1.07s, tests 8ms, environment 0ms)
+
