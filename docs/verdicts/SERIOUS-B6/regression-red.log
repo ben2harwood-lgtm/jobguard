@@ -1,0 +1,91 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-8a/packages/db
+
+ ❯ src/serious-b6.test.ts (4 tests | 4 failed) 14ms
+     × S18: a later delivery preserves the original and has a distinct delivery identity 3ms
+     × S19: zero accepted receipts stay cited without a zero allocation (mixed=false) 7ms
+     × S19: zero accepted receipts stay cited without a zero allocation (mixed=true) 1ms
+     × S20: unchanged evaluation never audits a discarded finding ID and stores both results 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/serious-b6.test.ts > SERIOUS-B6 > S18: a later delivery preserves the original and has a distinct delivery identity
+AssertionError: expected '2cf68a9e-277f-4677-b2f5-1f3f048c23c7' not to be '2cf68a9e-277f-4677-b2f5-1f3f048c23c7' // Object.is equality
+ ❯ src/serious-b6.test.ts:44:32
+     42|     await repo.appendReceipt(context, job, { accepted: "1", rejected: …
+     43|     expect(inserts).toHaveLength(1);
+     44|     expect(inserts[0]![4]).not.toBe(document);
+       |                                ^
+     45|     expect(inserts[0]!.slice(7, 11)).toEqual(["1", "1", "0", "9"]);
+     46|     expect(prior.accepted_quantity).toBe("8.000000");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/serious-b6.test.ts > SERIOUS-B6 > S19: zero accepted receipts stay cited without a zero allocation (mixed=false)
+ FAIL  src/serious-b6.test.ts > SERIOUS-B6 > S19: zero accepted receipts stay cited without a zero allocation (mixed=true)
+AssertionError: promise rejected "Error: supplier_match_allocation_quantity…" instead of resolving
+ ❯ src/serious-b6.test.ts:67:93
+     65|     } };
+     66|     const repo = new SupplierMatchRepository(driver as unknown as Pool…
+     67|     await expect(repo.create(context, job, { commandId: randomUUID(), …
+       |                                                                                             ^
+     68|     expect(revisions).toHaveLength(1);
+     69|     expect(revisions[0]![7]).toContain(rejected);
+
+Caused by: Error: supplier_match_allocation_quantity_decimal_check
+ ❯ Object.query src/serious-b6.test.ts:54:38
+ ❯ SupplierMatchRepository.insertRevision src/supplier-match-repository.ts:287:16
+ ❯ src/supplier-match-repository.ts:73:9
+ ❯ src/serious-b6.test.ts:67:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/serious-b6.test.ts > SERIOUS-B6 > S20: unchanged evaluation never audits a discarded finding ID and stores both results
+AssertionError: expected [ { …(7) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "actorRef": "system:discrepancy-rule",
++     "eventType": "discrepancy.evaluated",
++     "id": "958fdc15-bad2-443b-9c88-b2d629496c00",
++     "payload": {
++       "classifications": {
++         "action": "operational",
++       },
++       "hashes": {
++         "payloadHash": "c6627e5e1a72db2c8c5ff433c86edf8efe2b609a6d4ca34965d9696221da2f4a",
++       },
++       "references": {
++         "findingId": "856b9aae-7b11-41f4-be1f-ddc0ede11722",
++         "sourceVersionId": "52e6944b-a647-4832-baa8-68bd8186b70d",
++       },
++     },
++     "subjectRef": "ec42ff33-ade3-4d23-820d-30ddff7cbb74",
++     "subjectType": "job",
++     "version": "audit.v1",
++   },
++ ]
+
+ ❯ src/serious-b6.test.ts:91:85
+     89|     expect(findings).toHaveLength(1);
+     90|     const events = vi.mocked(appendAuditBatch).mock.calls.flatMap(([, …
+     91|     expect(events.filter(e => !findings.includes(e.payload.references.…
+       |                                                                                     ^
+     92|     expect(storeCommandResult).toHaveBeenCalledTimes(2);
+     93|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  14:20:18
+   Duration  577ms (transform 227ms, setup 0ms, import 493ms, tests 14ms, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-8a/packages/db:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/serious-b6.test.ts --maxWorkers=1

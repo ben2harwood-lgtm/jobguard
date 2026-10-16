@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
   proposeSupplierMatch,
+  receiptQuantityMicros,
   type SupplierMatchCorrection,
 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
@@ -82,7 +83,7 @@ export class SupplierMatchRepository {
             orderVersionId: sources.order.versionId,
             receiptVersionIds: sources.receipts.map((x: any) => x.versionId),
             billVersionId: sources.bill.versionId,
-            allocations: sources.receipts.map((x: any) => ({
+            allocations: sources.receipts.filter((x: any) => receiptQuantityMicros(x.quantity) > 0n).map((x: any) => ({
               receiptVersionId: x.versionId,
               quantity: x.quantity,
             })),

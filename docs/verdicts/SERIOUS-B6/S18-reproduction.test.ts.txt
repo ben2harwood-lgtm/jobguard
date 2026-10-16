@@ -1,0 +1,44 @@
+// HELD S18 reproduction. Copy to packages/db/src/serious-b6-s18.test.ts to run; do not include in CI until coordinator rules.
+import { randomUUID } from "node:crypto";
+import type { Pool } from "pg";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SupplierDocumentRepository } from "./supplier-document-repository.js";
+import { verifiedTenantContextForQueuedJob } from "./tenant-context.js";
+
+vi.mock("./tenant-context.js", async original => ({
+  ...await original<typeof import("./tenant-context.js")>(),
+  withTenant: async (pool: unknown, _context: unknown, work: (db: unknown) => unknown) => work({ $client: pool }),
+}));
+vi.mock("./watchdog.js", async original => ({
+  ...await original<typeof import("./watchdog.js")>(),
+  requireLiveJob: vi.fn(),
+  beginStoredCommand: async () => ({ replay: false }),
+  storeCommandResult: vi.fn(),
+  runStoredCommand: async (_db: unknown, _spec: unknown, hooks: { work: () => unknown }) => hooks.work(),
+}));
+vi.mock("./audit.js", () => ({ appendAuditBatch: vi.fn(async (_db, events) => events) }));
+const tenant = randomUUID(), job = randomUUID(), draft = randomUUID(), document = randomUUID();
+const context = verifiedTenantContextForQueuedJob(tenant);
+beforeEach(() => vi.clearAllMocks());
+
+describe("S18 held reproduction", () => {
+  it("S18: a later delivery preserves the original and has a distinct delivery identity", async () => {
+    const inserts: unknown[][] = [];
+    const prior = { id: randomUUID(), document_id: document, order_draft_id: draft, revision: 1,
+      ordered_quantity: "10.000000", delivered_quantity: "10.000000", accepted_quantity: "8.000000",
+      rejected_quantity: "0.000000", missing_quantity: "2.000000" };
+    const driver = { query: async (sql: string, values: unknown[] = []) => {
+      if (sql.includes("INSERT INTO app.goods_receipt")) inserts.push(values);
+      if (sql.includes("FROM app.goods_receipt")) return { rows: [prior] };
+      if (sql.startsWith("INSERT INTO")) return { rows: [] };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    } };
+    const repo = new SupplierDocumentRepository(driver as unknown as Pool);
+    await repo.appendReceipt(context, job, { accepted: "1", rejected: "0", expectedRevision: 1 });
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]![4]).not.toBe(document);
+    expect(inserts[0]!.slice(7, 11)).toEqual(["1", "1", "0", "9"]);
+    expect(prior.accepted_quantity).toBe("8.000000");
+  });
+
+});

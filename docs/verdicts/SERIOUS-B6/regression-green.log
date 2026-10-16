@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-8a/packages/db
+
+
+ Test Files  3 passed (3)
+      Tests  28 passed (28)
+   Start at  14:31:20
+   Duration  5.65s (transform 1.82s, setup 0ms, import 5.05s, tests 105ms, environment 0ms)
+

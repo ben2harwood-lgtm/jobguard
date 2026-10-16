@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b6": {
+      "branches": [
+        "codex/sandbox/serious-b6"
+      ],
+      "receipt": "docs/verdicts/SERIOUS-B6/BUILDER_RECEIPT.md",
+      "note": "SERIOUS-B6 Batch 6, RED lane: S19/S20 fixes; S18 reproduced and STOPPED pending coordinator ruling on apps/web/e2e/M2-2-S.spec.ts:2 (1 each -> 9 each). No existing expectations or pinned lists changed.",
+      "allow": [
+        "packages/db/src/supplier-match-repository.ts",
+        "packages/db/src/discrepancy-repository.ts",
+        "packages/db/src/serious-b6.test.ts",
+        "packages/db/test/serious-b6.integration.test.ts",
+        "docs/verdicts/SERIOUS-B6/BUILDER_RECEIPT.md",
+        "docs/verdicts/SERIOUS-B6/regression-red.log",
+        "docs/verdicts/SERIOUS-B6/regression-green.log",
+        "docs/verdicts/SERIOUS-B6/S18-reproduction.test.ts.txt"
+      ]
+    }
+  }
+}
