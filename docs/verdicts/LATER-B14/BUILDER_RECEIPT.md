@@ -180,3 +180,55 @@ API exclusions (each passed as `--exclude`): `src/shadow-isolation.application.t
 Unique successful final selections total 5,941 tests (including 100 tooling tests); retries are not added to that total. Logs are `/private/tmp/jg-later-b14-r1-{typecheck,lint,lanes,build,tools-tests,core,ai,config,storage,web,db-unit,api-unit,api-unit-rerun,openapi,openapi-loader,inventory}.log`; exact initial unit invocation arrays/results are in `/private/tmp/jg-later-b14-r1-unit-results.json`.
 
 **NOT RUN:** PostgreSQL LP-0 grant-freeze and authority-path suites, other real database/upgrade/migration suites, full `pnpm test` / `pnpm test:db` / `pnpm test:migrations`, listener-dependent tests and browser/e2e suites. Dispatcher states this sandbox cannot bind localhost or start PostgreSQL and prohibits browsers; those checks belong in GitHub CI after dispatcher push. No LP0-01/LP0-02 live pass or independent review of this repair is claimed. Both RED verdicts on the eventual repair commit, separate acceptance and Ben's decision-74 merge/enablement approval remain pending. Commit subject/body is written to both `/private/tmp/jg-msg-later-b14-r1.txt` and `/private/tmp/jg-msg-later-b14.txt`.
+
+## r2 — final PostgreSQL CI repair (dispatcher 14, 16 October 2026 night)
+
+Prepared by Codex from clean HEAD `a2fbd4e74a715d4736cfc016ee51cf76e050ba40` (r1), branch `codex/sandbox/later-b14`, PR #263. BUILD-DON'T-MERGE (decision 74). Read the supplied CI excerpt at `~/.local/share/full-steam/jg-runs/later-b14-ci-38969664243-excerpt.txt`: run 38969664243 reported three failures out of 2,559, namely the two L063 tests and LP0-02. That run predates this repair and is not evidence that r2 passes PostgreSQL. No staging, commit, push, merge, deployment, browser, external provider call or real data. Dispatcher owns commit/push. Disk remained 33 GiB available, above the waived night floor of 30 GB; no 45 GB gate was imposed. Existing dependencies were used without installation/download; checks used Node 24.17.0 and the cached pnpm 10.28.1 launcher `/private/tmp/jg-later-b14-bin/pnpm`.
+
+### Cause and bounded repair
+
+The **new LATER-B14 test fixtures were wrong**. Both failed while directly inserting `evidence_upload`, before their proof assertions: `guard_watchdog_input()` compares `NEW.tenant_id` with transaction-local `app.tenant_id`, which the unscoped admin queries omitted. In `packages/db/test/decisions-later.integration.test.ts`, the proof fixture inserts now run through existing `withTenant(admin, f.auth.context, ...)`, on its pinned transaction connection. The invalidation insert uses that same verified context. All assertions, finalized object/version/type/scope bindings, invalidation, wrong-scope rejection, pending-upload rejection and immutable response replay are preserved. No guard is bypassed/disabled, and no production code or merged test is changed. This is persisted synthetic fixture setup, not storage/provider verification or a PostgreSQL pass.
+
+The **r1 additive LP-0 entries were wrong**. `deriveFacts` in `packages/db/test/lp-0-catalog.ts` emits a routine-owner fact only when the ACL has a non-owner grantee or the routine owner differs from its schema owner. Migration 0193 assigns all three functions to `jobguard_migration`, which owns `app`. Only `decision_check_command(text,jsonb,text,jsonb)` grants EXECUTE to `jobguard_runtime`; the two trigger functions revoke PUBLIC/runtime/infrastructure access and remain owner-only. Therefore remove just the r1-added owner entries for `guard_decision_check_receipt()` and `require_completed_decision_check()`.
+
+The final LATER-B14 inventory delta has exactly these two capability facts:
+
+- `acl|routine|function:app.decision_check_command(text,jsonb,text,jsonb)|jobguard_runtime|EXECUTE|-`
+- `owner|routine|function:app.decision_check_command(text,jsonb,text,jsonb)|jobguard_migration`
+
+All three recorded routine identities remain, including the two owner-only trigger functions. Their existing source-derived security/ACL/static-call records match 0193; unknown PostgreSQL definition digests remain `null`. No pre-LATER-B14 row, group, role, metadata, ordering, policy or trigger record changes. Ben decision 60 is preserved: the only added non-owner capability belongs to the existing runtime role. No grants or owners in SQL change; no new migration, financial behavior, compatibility impact or operational alert is introduced.
+
+Only the new integration test, the requested additive inventory entries and this receipt change in r2. The receipt's r1 claim that four capability entries were needed is superseded by this correction. No repair required an existing baseline row or merged behavior to change.
+
+### r2 executed checks
+
+Typecheck, lint and build were forced executions, each with seven successful tasks and zero cache hits. Existing Turbo cache-write and Next workspace/dependency/CSS warnings were nonfatal. Commands prefixed `pnpm` below used the pinned temporary launcher in PATH.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck --force --concurrency=2` | PASS, 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | PASS, root tools and 7/7 tasks |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, rerun after receipt append |
+| `pnpm build --force --concurrency=2` | PASS, 7/7 tasks |
+| `node --test tools/*.test.mjs` | PASS, 100 tests |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, 101 files / 2,720 tests |
+| `pnpm --filter @jobguard/ai exec vitest run --maxWorkers=2` | PASS, 10 files / 113 fixture tests; no live model |
+| `pnpm --filter @jobguard/config exec vitest run src --maxWorkers=2` | PASS, 1 file / 1 test |
+| `pnpm --filter @jobguard/storage exec vitest run src --maxWorkers=2` | PASS, 1 file / 2 tests; fake adapters |
+| `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2` | PASS, 40 files / 867 tests |
+| `pnpm --filter @jobguard/db exec vitest run --exclude 'test/*.integration.test.ts' --exclude test/free-port.test.ts --maxWorkers=2` | PASS, 53 files / 463 unit tests, including catalogue derivation/comparison |
+| `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2` with exclusions below | PASS, 86 files / 1,675 tests |
+| `pnpm openapi:check` | Exit 1 before checker: tsx CLI IPC `listen EPERM` |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same installed OpenAPI checker through loader, no IPC listener |
+| `JG_REPO_ROOT="$PWD" pnpm --filter @jobguard/api exec node --import tsx /private/tmp/jg-later-b14-r2-inventory.mjs` | PASS, strict inventory parse; all 0193 function owners/revokes/grants modelled through actual `deriveFacts`; exactly 2 added facts / 3 recorded routines; `staticScan` matches; every baseline row, its order and all other inventory fields unchanged |
+| `git diff --check` | PASS |
+
+API exclusions (each passed as `--exclude`): `src/shadow-isolation.application.test.ts`, `src/health.test.ts`, `src/auth/sso/action-paths.test.ts`, `src/contractor/site-visit.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/final-account-lock.isolation.test.ts`. These need PostgreSQL and/or listeners; no such suite is represented as passing. Unit invocation arrays, exits and log paths are preserved in `/private/tmp/jg-later-b14-r2-unit-results.json`; the runner is `/private/tmp/jg-later-b14-r2-units.py`. Successful selections total 5,941 tests including tooling, without counting retries.
+
+The temporary inventory validator's initial attempt incorrectly compared recorded baseline rows to the current `origin/main` tip instead of this branch's merge base; that comparison failed. Correcting the temporary validator to the branch merge base made the complete preservation comparison pass. No inventory baseline row was edited to satisfy it. This is source-derived deterministic validation using the existing catalogue functions, not a live catalogue read, independent model review or acceptance.
+
+Logs: `/private/tmp/jg-later-b14-r2-{typecheck,lint,lanes,build,tools-tests,core,ai,config,storage,web,db-unit,api-unit,openapi,openapi-loader,inventory}.log`.
+
+**NOT RUN:** `packages/db/test/decisions-later.integration.test.ts` (including both repaired L063 cases), `packages/db/test/lp-0-grant-freeze.integration.test.ts`, `packages/db/test/lp-0-authority-paths.integration.test.ts`, `packages/db/test/later-decisions-upgrade.integration.test.ts`, other PostgreSQL/migration/upgrade suites, full `pnpm test` / `pnpm test:db` / `pnpm test:migrations`, listener-dependent tests and all browser/e2e suites. Dispatcher states this sandbox cannot bind localhost or start PostgreSQL and prohibits browsers. PostgreSQL checks must run in GitHub CI after dispatcher push. No local database start/probe was attempted.
+
+Decision 74 remains BUILD, CHECK, PARK. Fresh exact-commit independent verdicts, separate acceptance and founder-owned merge/enablement remain outstanding. This repair is uncommitted; HEAD remains `a2fbd4e74a715d4736cfc016ee51cf76e050ba40`. Intended conventional commit subject/body is written to both `/private/tmp/jg-msg-later-b14-r2.txt` and `/private/tmp/jg-msg-later-b14.txt` for the dispatcher.

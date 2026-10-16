@@ -44,16 +44,19 @@ it("L063 completion proof comes from current persisted proof, including invalida
   expect(before.decisions.filter((x: any) => x.classification === "mandatory")).toHaveLength(1);
   // Persist finalized linked proof as fixture setup; no provider or storage integration is claimed.
   const upload = randomUUID(), evidence = randomUUID(), objectKey = `synthetic/later/${evidence}`, version = randomUUID();
-  await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,state,object_version_id,server_verified_at,retention_class,expires_at)
-    VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'verified',$7,clock_timestamp(),'standard_evidence',clock_timestamp()+interval '1 day')`, [upload, DEMO_TENANT_ID, f.job, f.scope, objectKey, "a".repeat(64), version]);
-  await admin.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,evidence_type,kind,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-    VALUES($1,$2,$3,$4,$5,'electrical_certificate','original',$6,$7,$8,1,'application/pdf','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidence, DEMO_TENANT_ID, upload, f.job, f.scope, objectKey, version, "a".repeat(64)]);
-  await admin.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'electrical_certificate')", [randomUUID(), DEMO_TENANT_ID, evidence, f.job, f.scope]);
+  // Fixture writes obey the same transaction-local tenant guard as evidence commands.
+  await withTenant(admin, f.auth.context, async db => {
+    await db.$client.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,state,object_version_id,server_verified_at,retention_class,expires_at)
+      VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'verified',$7,clock_timestamp(),'standard_evidence',clock_timestamp()+interval '1 day')`, [upload, DEMO_TENANT_ID, f.job, f.scope, objectKey, "a".repeat(64), version]);
+    await db.$client.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,evidence_type,kind,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+      VALUES($1,$2,$3,$4,$5,'electrical_certificate','original',$6,$7,$8,1,'application/pdf','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidence, DEMO_TENANT_ID, upload, f.job, f.scope, objectKey, version, "a".repeat(64)]);
+    await db.$client.query("INSERT INTO app.evidence_link(id,tenant_id,evidence_id,job_id,scope_item_id,required_evidence_type) VALUES($1,$2,$3,$4,$5,'electrical_certificate')", [randomUUID(), DEMO_TENANT_ID, evidence, f.job, f.scope]);
+  });
   expect((await f.app.list({ tenantId: DEMO_TENANT_ID, jobId: f.job })).counts.mandatory).toBe(0);
   const after = await f.app.evaluate({ ...f.command, commandId: randomUUID() });
   expect(after.counts.mandatory).toBe(0);
   expect(await f.app.evaluate(f.command)).toEqual(before);
-  await admin.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), DEMO_TENANT_ID, evidence, DEMO_MEMBERSHIP_ID]);
+  await withTenant(admin, f.auth.context, db => db.$client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), DEMO_TENANT_ID, evidence, DEMO_MEMBERSHIP_ID]));
   expect((await f.app.evaluate({ ...f.command, commandId: randomUUID() })).counts.mandatory).toBe(1);
 });
 it("L064 retired finding disappears from current projection but remains in history", async () => {
@@ -138,11 +141,13 @@ it("L063 proof for another scope and pending uploads do not complete the current
   const f = await fixture(), scope = randomUUID(), upload = randomUUID(), evidence = randomUUID(), version = randomUUID();
   await admin.query("INSERT INTO app.scope_identity(tenant_id,job_id,id,state) VALUES($1,$2,$3,'confirmed')", [DEMO_TENANT_ID, f.job, scope]);
   const objectKey = `synthetic/later/${evidence}`;
-  await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,state,object_version_id,server_verified_at,retention_class,expires_at)
-    VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'verified',$7,clock_timestamp(),'standard_evidence',clock_timestamp()+interval '1 day')`, [upload, DEMO_TENANT_ID, f.job, scope, objectKey, "a".repeat(64), version]);
-  await admin.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,evidence_type,kind,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
-    VALUES($1,$2,$3,$4,$5,'electrical_certificate','original',$6,$7,$8,1,'application/pdf','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidence, DEMO_TENANT_ID, upload, f.job, scope, objectKey, version, "a".repeat(64)]);
-  await admin.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
-    VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')`, [randomUUID(), DEMO_TENANT_ID, f.job, f.scope, `synthetic/later/${randomUUID()}`, "b".repeat(64)]);
+  await withTenant(admin, f.auth.context, async db => {
+    await db.$client.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,state,object_version_id,server_verified_at,retention_class,expires_at)
+      VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'verified',$7,clock_timestamp(),'standard_evidence',clock_timestamp()+interval '1 day')`, [upload, DEMO_TENANT_ID, f.job, scope, objectKey, "a".repeat(64), version]);
+    await db.$client.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,evidence_type,kind,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
+      VALUES($1,$2,$3,$4,$5,'electrical_certificate','original',$6,$7,$8,1,'application/pdf','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidence, DEMO_TENANT_ID, upload, f.job, scope, objectKey, version, "a".repeat(64)]);
+    await db.$client.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
+      VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')`, [randomUUID(), DEMO_TENANT_ID, f.job, f.scope, `synthetic/later/${randomUUID()}`, "b".repeat(64)]);
+  });
   expect((await f.app.evaluate(f.command)).counts.mandatory).toBe(1);
 });
