@@ -1022,6 +1022,12 @@ Forward-fix with a reviewed additive migration. Do not delete events or links,
 rewrite documents/money/audit, or reconstruct unknown historical site times.
 Database and upgrade proofs require the dispatcher's PostgreSQL environment.
 
+### 0147 — SV5PRE final-check prerequisites (13 October 2026)
+
+Six tenant/job-qualified append-only FORCE RLS side tables persist server inventory, processing attempts, exact run binding, canonical available results and opaque completion certificates. Private checked triggers retain the existing shadow INSERT-only check boundary. Both invoice routines require authoritative completion for new final/supplementary effects; history remains unchanged. Runtime has no certificate SELECT or proof DML. Evidence upload/object registration serializes source receipt against manifest freezing; no fingerprinted columns are added. Forward-fix only, keeping issuance fail-closed. The actual worker registration is present but domain execution is explicitly uninstalled until SV-5. See `docs/contracts/sv5pre-completion-v1.md` and `docs/verdicts/SV5PRE/BUILDER_RECEIPT.md`; PostgreSQL upgrade/access proofs remain NOT RUN in the builder sandbox.
+
+SV5PRE r8 (0147, unmerged, edited in place): signal-derived attempt/result/run/certificate proofs are `shadow_final_check_*`, with no runtime SELECT. Public completion audit records only check/run/lock references. Both invoice issuers retain full issue-time verification through the private definer predicate; the signal-independent manifest/source and check facts stay public. Rule-9 upgrade proof uses the new relation names, verifies private grants and preserves original row/type/ACL evidence. After deployment, use additive forward fixes; do not remove the invoice gate.
+
 ## 0150 — membership authority repair (MIGFIX-1, repair r1)
 
 Replaces three existing identity routines (`current_memberships(uuid)`,

@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { Pool, type PoolClient } from "pg";
+import { withSyntheticShadow } from "./final-account-lock-journey";
 import { expect, type APIResponse, type Page } from "@playwright/test";
 import { openReview } from "./capture-journey";
 const tenant="11111111-1111-4111-8111-111111111111";
@@ -65,6 +68,7 @@ export async function issueInvoice(page:Page){
  expect(completed.completion.id).toEqual(expect.any(String));
  const final=await jsonResult(page.request.post(finalPath,{data:{version:"final-account.assemble.v1",commandId:crypto.randomUUID(),expectedRevision:blocked.account.revision}}),"Rebuild after proof");
  expect(final.account.issueBlocked).toBe(false);
+ await prepareInvoiceFinalCheck(page,jobId,final.account);
  const issued=await jsonResult(page.request.post(`/api/jobs/${jobId}/customer-invoices`,{data:{version:"practice-customer-invoice.issue.v1",commandId:crypto.randomUUID(),finalAccountRevisionId:final.account.id,expectedSourceHash:final.account.sourceHash,recipient:"practice-customer@example.invalid",issuedOn:"2026-09-19"}}),"Issue synthetic invoice");
  const invoiceId=issued.invoices.at(-1).id as string;
  await page.reload();await enterQuote(page);
@@ -73,3 +77,47 @@ export async function issueInvoice(page:Page){
  return {jobId,invoiceId,receiptPath:`/api/jobs/${jobId}/customer-invoices/${invoiceId}/receipts`};
 }
 export async function recordThroughUi(page:Page,amount:string){await page.getByTestId("uiwire12-receipt-amount").fill(amount);await click(page,"Record practice receipt");}
+
+/** Coordinator r2 setup only: simulated worker output is persisted through the checked publication path.
+ * This establishes invoice premises; it does not install the SV-5 domain handler. */
+async function inInvoiceFixtureTransaction<T>(pool:Pool,tenantId:string,work:(db:PoolClient)=>Promise<T>):Promise<T>{
+ const db=await pool.connect();
+ try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);const result=await work(db);await db.query("COMMIT");return result;}
+ catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
+}
+const fixtureResultHash="a".repeat(64);
+export async function publishInvoiceFixtureCompletion(shadow: Pool, admin: Pool, tenantId: string, jobId: string, overrides: { lockId?: string; cutoff?: string; checkId?: string } = {}) {
+ const manifestId=randomUUID(),runId=randomUUID(),executionId=randomUUID(),checkId=overrides.checkId??randomUUID();
+ const lock=(await admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[tenantId,jobId])).rows[0];
+ await inInvoiceFixtureTransaction(shadow,tenantId,db=>db.query("INSERT INTO app.final_check_manifest(tenant_id,job_id,id,lock_id,evidence_cutoff_at,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,'synthetic-fixture.v1','synthetic-fixture.v1')",[tenantId,jobId,manifestId,overrides.lockId??lock.id,overrides.cutoff??lock.cutoff]));
+ // Read the inventory after its transaction commits; the restricted worker cannot read original evidence rows.
+ const sources=(await admin.query("SELECT s.*,e.id finalized_id,e.object_version_id finalized_version,e.sha256 finalized_hash,e.server_received_at::text finalized_received FROM app.final_check_manifest_source s LEFT JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id)=(s.tenant_id,s.job_id,s.upload_id) AND e.kind='original' WHERE s.tenant_id=$1 AND s.job_id=$2 AND s.manifest_id=$3 ORDER BY s.id",[tenantId,jobId,manifestId])).rows;
+ return inInvoiceFixtureTransaction(shadow,tenantId,async db=>{
+  await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at,status) VALUES($1,$2,$3,'synthetic-fixture.v1',$4,'completed')",[tenantId,jobId,runId,lock.cutoff]);
+  const signals=(await db.query("SELECT DISTINCT s.id FROM app.shadow_commercial_signal s JOIN app.shadow_signal_evidence e ON(e.tenant_id,e.job_id,e.signal_id)=(s.tenant_id,s.job_id,s.id) WHERE s.tenant_id=$1 AND s.job_id=$2 AND e.source_received_at<=$3::timestamptz ORDER BY s.id",[tenantId,jobId,lock.cutoff])).rows;
+  for(const source of sources) {
+   const signalIds=(await db.query("SELECT DISTINCT signal_id FROM app.shadow_signal_evidence WHERE tenant_id=$1 AND job_id=$2 AND evidence_id=$3 ORDER BY signal_id",[tenantId,jobId,source.finalized_id])).rows.map(row=>row.signal_id);
+   // Successful empty output is explicit. A missing/quarantined upload is refused by the checked trigger.
+   for(const stage of ["detection","reconciliation"]) await db.query("INSERT INTO app.shadow_final_check_source_attempt(tenant_id,job_id,manifest_id,source_id,id,execution_id,stage,version,input_hash,outcome,result_hash,result_signal_ids,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic-fixture.v1',$8,'succeeded',$9,$10,$11,$12,$13,$14::timestamptz)",[tenantId,jobId,manifestId,source.id,randomUUID(),executionId,stage,stage==='detection'?source.frozen_input_hash:fixtureResultHash,fixtureResultHash,signalIds,source.finalized_id,source.finalized_version,source.finalized_hash,source.finalized_received]);
+  }
+  for(const signal of signals) {
+   const classification=randomUUID();
+   await db.query("INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[tenantId,jobId,classification,runId,signal.id]);
+   await db.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,signal_id,classification_id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,$5,$6,'final-check-result.v1',$7::jsonb)",[tenantId,jobId,runId,randomUUID(),signal.id,classification,JSON.stringify({version:'final-check-result.v1',outcome:'not_enough_evidence',signalId:signal.id,classificationId:classification})]);
+  }
+  if(!signals.length) await db.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,'final-check-result.v1',$5::jsonb)",[tenantId,jobId,runId,randomUUID(),JSON.stringify({version:'final-check-result.v1',outcome:'zero_result'})]);
+  await db.query("INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic-fixture.v1','synthetic-fixture.v1')",[tenantId,jobId,runId,manifestId,lock.id,lock.cutoff,executionId]);
+  await db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status,run_id) VALUES($1,$2,$3,$4,$5,'completed',$6)",[tenantId,jobId,checkId,lock.id,lock.cutoff,runId]);
+  return checkId;
+ });
+}
+export async function prepareInvoiceFinalCheck(page:Page,jobId:string,account:{id:string;revision:number}){
+ await withSyntheticShadow(tenant,async(shadow,admin)=>{
+  const path=`/api/jobs/${jobId}/final-account`;
+  await jsonResult(page.request.post(`${path}/terms`,{data:{version:"final-check-terms.accept.v1",commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"}}),"Accept invoice fixture terms");
+  const scope=(await admin.query("SELECT DISTINCT scope_item_id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'",[tenant,jobId,account.id])).rows;
+  for(const item of scope)await jsonResult(page.request.post(`${path}/dispositions`,{data:{version:"final-account.disposition.v1",commandId:randomUUID(),scopeItemId:item.scope_item_id,disposition:"done"}}),"Record invoice fixture disposition");
+  await jsonResult(page.request.post(`${path}/lock`,{data:{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:account.id,expectedRevision:account.revision,declarationVersion:"final_account_declaration.v1"}}),"Lock invoice fixture");
+  await publishInvoiceFixtureCompletion(shadow,admin,tenant,jobId);
+ });
+}

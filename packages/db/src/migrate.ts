@@ -86,6 +86,7 @@ const LISTED_MIGRATION_URLS = [
   new URL("../migrations/0142_recovery_insurer_money.sql", import.meta.url),
   new URL("../migrations/0143_sso_emergency_owner_window.sql", import.meta.url),
   new URL("../migrations/0144_job_work_state.sql", import.meta.url),
+  new URL("../migrations/0147_final_check_prerequisites.sql", import.meta.url),
   new URL("../migrations/0150_membership_authority_fix.sql", import.meta.url),
   new URL("../migrations/0151_ledger_corrections_fix.sql", import.meta.url),
   new URL("../migrations/0153_quote_supersession_guard.sql", import.meta.url),

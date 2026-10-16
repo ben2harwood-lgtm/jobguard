@@ -296,9 +296,12 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
   await db.$client.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID,a.jobId,a.scopeItemId]);
  });
  await withTenant(initial,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+  // Freeze the disposable fixture clock before receipt; immutable upload receipts cannot be rewritten after lock.
+  await db.$client.query("CREATE OR REPLACE FUNCTION pg_catalog.clock_timestamp() RETURNS timestamptz LANGUAGE sql AS 'SELECT ''2026-10-01T00:00:00Z''::timestamptz'");
   // An original evidence object needs its upload parent row (evidence_object_kind_ck, evidence_object_upload_fk).
   await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[signalUpload,DEMO_TENANT_ID,a.jobId,signalUpload]);
   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$6,$3,$4,'original','photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence',$5,$5)",[signalEvidence,DEMO_TENANT_ID,a.jobId,a.scopeItemId,fixed,signalUpload]);
+  await db.$client.query("UPDATE app.evidence_upload SET state='verified',object_version_id='Q:v1',server_verified_at=$3::timestamptz WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,signalUpload,fixed]);
   await db.$client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'synthetic_notification')",[decision,DEMO_TENANT_ID,a.jobId]);
   await db.$client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[approval,DEMO_TENANT_ID,decision,DEMO_MEMBERSHIP_ID]);
   const hash=createHash("sha256").update(artifact).digest("hex");
@@ -363,6 +366,10 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    const executor=new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:(name:Parameters<import("@jobguard/db").SafeTelemetry["emit"]>[0],fields:Readonly<Record<string,string|number>>)=>trace.telemetry.push({name,fields})});
    await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
    expect(trace.notifications).toHaveLength(2);expect(trace.telemetry).toContainEqual(expect.objectContaining({name:"outbox.retry"}));
+   // Setup only: simulate authoritative processing of every frozen source without advancing public UUIDs per signal.
+   const {publishFixtureCompletion}=await import(new URL("../../../packages/db/test/sv5pre-fixtures.ts",import.meta.url).href);
+   const completionWorker=pool("sv3_isolation_shadow",database);
+   try{await publishFixtureCompletion(completionWorker,inspect,DEMO_TENANT_ID,a.jobId,{deterministicIds:true})}finally{await closeTestPools(completionWorker)}
    await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:"a".repeat(64),recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
    const invoice=(await app.customerInvoice.get(a.jobId)).invoices[0]!;
    const pdf=await app.customerInvoice.pdf(a.jobId,invoice.id);expect(pdf.byteLength).toBeGreaterThan(0);trace.exports.push(Buffer.from(pdf).toString("base64"));
