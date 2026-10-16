@@ -655,7 +655,7 @@ async function rawInterestCandidate(f:Awaited<ReturnType<typeof fixture>>,source
 it("0166 upgrades the previous guards without rewriting saved reviews, claim lines, audit or privileges",async()=>{
  const f=await fixture();await f.advance("receipt-3000");
  const oldUrl=MIGRATION_URLS.find(u=>basename(fileURLToPath(u))==="0142_recovery_insurer_money.sql")!;
- const newUrl=MIGRATION_URLS.find(u=>basename(fileURLToPath(u))==="0173_recovery_eligibility_paid_interest.sql")!;
+ const newUrl=MIGRATION_URLS.find(u=>basename(fileURLToPath(u))==="0185_recovery_eligibility_paid_interest.sql")!;
  const previous=await readFile(oldUrl,"utf8"),forward=await readFile(newUrl,"utf8");
  const previousGuards=previous.slice(previous.indexOf("CREATE OR REPLACE FUNCTION app.guard_recovery_eligibility_v3()"),previous.lastIndexOf("COMMIT;"));
  const security=async()=>(await admin.query("SELECT proname,pg_get_userbyid(proowner) owner,proacl::text,prosecdef,proconfig FROM pg_proc WHERE oid IN('app.guard_recovery_eligibility_v3()'::regprocedure,'app.require_recovery_eligibility_v3_effect()'::regprocedure) ORDER BY proname")).rows;
