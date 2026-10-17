@@ -419,7 +419,7 @@ it('ENT-2 conformance: the work-order import, SoR import, register, batch, revis
   expect(await importNew('B',++sequence+100),`${label}: work-order import for client B (other branch)`).toBe(canImportFor('B'));
   for(const job of jobs.filter(j=>j.name==='own'||j.name==='clientB'))expect(await reviseOld(job),`${label}: revision of the ${job.name} order (client ${job.client}) through the import`).toBe(canImportFor(job.client));
   expect(await outcome(()=>rates.importVersion(actor,{version:'sor-version-import.v1',environment:'synthetic_demo',commandId:randomUUID(),scheduleId:randomUUID(),reference:`Conformance ${sequence}`,effectiveFrom:'2027-01-01',items:[{code:'C',description:'c',unit:'each',rate:{pence:1,currency:'GBP'}}]})),`${label}: SoR import`).toBe(may('contract.manage',tenantTarget));
-  expect(await outcome(()=>rates.list(actor)),`${label}: price-list read`).toBe(may('contract.read',tenantTarget)||may('contract.read',clientTargets.A)||may('contract.read',clientTargets.B));
+  expect(await outcome(()=>rates.list(actor)),`${label}: price-list read`).toBe(!grants.some(g=>g.role==='client_approver')&&(may('contract.read',tenantTarget)||may('contract.read',clientTargets.A)||may('contract.read',clientTargets.B)));
   // The register and the batch view list exactly the orders (and receipts) of clients the actor may import for; with none, they are the not-found.
   const register=await value(()=>orders.overview(actor));
   expect(register!==null,`${label}: register`).toBe(canImportAny);
