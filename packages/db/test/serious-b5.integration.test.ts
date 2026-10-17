@@ -103,8 +103,8 @@ describe("SERIOUS-B5 final accounts and invoice artifacts", () => {
   const a = await seedAccount(f.admin, undefined, 10000), repo = await prepareLock(f, a);
   const variation = await addFixtureCapture(f, a, 5000), approved = await approve(a.tenantId, variation);
   const auditBefore = (await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [a.tenantId])).rows[0].n;
-  await expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "FINAL_ACCOUNT_SOURCE_CHANGED" });
-  await expect(asFixtureTenant(f.runtime, a.tenantId, db => db.query("SELECT app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId,a.jobId,LOCK_OWNER,a.input.commandId,a.revisionId,1,a.input.declarationVersion]))).rejects.toThrow("FINAL_ACCOUNT_SOURCE_CHANGED");
+  await expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "STALE_REVISION" });
+  await expect(asFixtureTenant(f.runtime, a.tenantId, db => db.query("SELECT app.lock_final_account($1,$2,$3,$4,$5,$6,$7)", [a.tenantId,a.jobId,LOCK_OWNER,a.input.commandId,a.revisionId,1,a.input.declarationVersion]))).rejects.toThrow("STALE_OR_BLOCKED_FINAL_ACCOUNT");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [a.tenantId,a.input.commandId])).rows[0].n).toBe(0);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(auditBefore);
@@ -131,7 +131,7 @@ describe("SERIOUS-B5 final accounts and invoice artifacts", () => {
   } } as unknown as Pool;
   const approving = approve(a.tenantId, variation, LOCK_OWNER, delayed);
   await ready;
-  const locking = expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "FINAL_ACCOUNT_SOURCE_CHANGED" });
+  const locking = expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "STALE_REVISION" });
   try {
    let waiting = false;
    for (let attempt = 0; attempt < 100; attempt++) {

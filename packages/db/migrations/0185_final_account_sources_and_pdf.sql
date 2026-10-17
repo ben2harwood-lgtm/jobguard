@@ -44,7 +44,7 @@ BEGIN
   )
   SELECT * FROM (TABLE effective EXCEPT ALL TABLE actual) missing
   UNION ALL SELECT * FROM (TABLE actual EXCEPT ALL TABLE effective) obsolete
- ) THEN RAISE EXCEPTION 'FINAL_ACCOUNT_SOURCE_CHANGED' USING ERRCODE='40001'; END IF;
+ ) THEN RAISE EXCEPTION 'STALE_OR_BLOCKED_FINAL_ACCOUNT' USING ERRCODE='40001'; END IF;
  sources:=app.read_final_account_lock_sources(p_tenant,p_job,p_revision);
  IF jsonb_array_length(sources->'captureRegister')<>(SELECT count(DISTINCT value->>'id') FROM jsonb_array_elements(sources->'captureRegister')) THEN RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_LOCK_INPUT'; END IF;
  IF EXISTS(SELECT 1 FROM jsonb_array_elements(sources->'captureRegister') c WHERE length(c.value->>'description') NOT BETWEEN 1 AND 4000 OR (c.value->>'valuePence')::numeric>1000000000000)

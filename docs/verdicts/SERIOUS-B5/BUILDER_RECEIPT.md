@@ -234,3 +234,55 @@ pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 \
 **NOT RUN / CI hold.** Test Q and its affected file, SERIOUS-B5 PostgreSQL regressions, `pnpm test:db`, `pnpm test:migrations`, full root `pnpm test`, and browser/e2e suites were NOT RUN. The affected file's global `beforeAll` at lines 102–104 requires a localhost listener and PostgreSQL startup even when selecting one test; the dispatcher's sandbox note reserves those executions for GitHub CI. Full root tests also include three tool suites (`agent-lane-boundary`, `agent-lane-boundary-train`, `merge-churn`) that write temporary Git repositories; those were not run under the no-Git-write instruction. Unit subsets and green typechecks do not establish Test Q or database correctness. No mandatory CI suite is disabled or weakened.
 
 **Handoff: HOLD for CI and independent review.** Ruling 73's two checker confirmations of the four-site-only diff, an independent verdict bound to the dispatcher's exact resulting commit and separate technical acceptance remain outstanding. All existing release gates remain closed. No commit or push was performed. Identical conventional-commit subject/body files are written at `/private/tmp/jg-msg-SERIOUS-B5-r4.txt` and `/private/tmp/jg-msg-fixlater-5.txt`; the dispatcher owns committing and pushing.
+
+
+## r5 (ruling 86) — existing stale errors and MIGFIX-5 setup (17 October 2026)
+
+Dispatcher 14's repair round for **SERIOUS-B5 / PR #229**, branch `codex/sandbox/serious-b5`, starting HEAD `73e64c70`. Read AGENTS.md, BUILD_PLAN.md scope/revision and command contracts, §10.2.6 and SV-4, migration 0185, the repository error mapping, both affected tests and this lane. GitHub run `38963077043` and its three reported MIGFIX-5 failures are dispatcher-supplied evidence, not a local database reproduction.
+
+**Repair scope.** In this piece's unmerged `0185_final_account_sources_and_pdf.sql`, change only the source-mismatch exception literal from `FINAL_ACCOUNT_SOURCE_CHANGED` to the existing `STALE_OR_BLOCKED_FINAL_ACCOUNT`; retain SQLSTATE `40001` and the complete source guard. The existing repository mapping already returns `STALE_REVISION` for that SQL message and is untouched. Change only B5's three new error expectations: two repository expectations to `STALE_REVISION`, one direct SQL expectation to `STALE_OR_BLOCKED_FINAL_ACCOUNT`.
+
+In merged `migfix-5.integration.test.ts`, change **only line 44's setup insert**: select the real immutable approval ID and approved-revision description, joined by tenant/job/revision. Preserve the existing parameters, amounts, revision identity and every assertion, including **3,440,000p net / 688,000p tax / 4,128,000p total**. The approval table's existing `(tenant_id, revision_id)` uniqueness makes the selected source unambiguous. Add only `packages/db/test/migfix-5.integration.test.ts` to this lane's allow list. No runtime source, historical migration, guard, API, schema, permission, commercial/tax policy, dependency, lockfile, grant, operational alert or historical receipt text changes.
+
+**Deterministic scope evidence.** A read-only Python comparison to HEAD passed: the migration differs by exactly one exception literal; B5's test differs by exactly the three specified error expectations; MIGFIX-5 differs by exactly one removed/added setup line; its entire `describe` block and all assertion lines remain byte-identical. The original MIGFIX-5 file at HEAD also equals `origin/main` byte-for-byte. The lane differs by exactly the one added path. A supplemental check using `loadLanePolicy`, `selectLane` and `lanePathAllowed` confirms every changed path is permitted. These are deterministic checks, **not either required independent checker confirmation**.
+
+**Environment.** Supplied dependencies, no install/download. Node 24.17.0 (repository pin 24.15.0), cached pnpm 10.28.1 via `PATH=/private/tmp/jg-migfix-2-bin:$PATH`, `npm_config_manage_package_manager_versions=false`, `COREPACK_ENABLE_NETWORK=0`. Logs are ephemeral `/private/tmp/jg-serious-b5-r5-*.log`. No Git write command, PostgreSQL startup, localhost server or browser was run.
+
+| Command actually run | r5 result |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; all 7 tasks successful, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1 after core purity passes: migration-order check requires this branch's 0185 above main's highest 0186. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; same migration-order failure. No alternate base or bypass. |
+| `pnpm exec turbo run lint` | Exit 0; all 7 package tasks successful, 2 cached. This does not replace official root lint. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both exit 0. |
+| `pnpm build` | Exit 0; all 7 tasks successful, 2 cached; production Next build completed. Existing shared-cache EPERM/dependency tracing warnings were non-fatal. |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --esModuleInterop test/serious-b5.integration.test.ts test/serious-b5-upgrade.integration.test.ts test/migfix-5.integration.test.ts` | Exit 0; type-check only, no PostgreSQL execution. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Exit 0; core 2,696, config 1, storage 2, AI 113 tests passed. AI fixture evaluation only. |
+| `pnpm --filter @jobguard/db exec vitest run src test/audit-api-file-final-account.test.ts --exclude 'test/*.integration.test.ts' --maxWorkers=1` | Exit 0; 21 files / 158 tests passed. Scripted SQL tests do not prove PostgreSQL semantics. |
+| API source unit subset (exact command below) | Exit 0; 84 files / 1,667 tests passed. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 40 files / 867 tests passed. No browser. |
+| `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` | Exit 0; 19 tests passed. |
+| `pnpm openapi:check` | Exit 1; sandbox rejects tsx CLI IPC listener with `listen EPERM`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same OpenAPI validation through Node loader, no snapshot changes. |
+| Read-only byte/scope comparison; `git diff --check` | Exit 0; only the five authorized paths differ, including this appended receipt. |
+
+Exact API subset command (same nine sandbox-only exclusions as r4; committed test configuration unchanged):
+
+```sh
+pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 \
+  --exclude src/auth/sso/action-paths.test.ts \
+  --exclude src/contractor/contractor-practice-session.http.test.ts \
+  --exclude src/contractor/site-extra-pricing.http.test.ts \
+  --exclude src/contractor/site-extra.http.test.ts \
+  --exclude src/contractor/site-visit.http.test.ts \
+  --exclude src/contractor/practice-worker-switch.http.test.ts \
+  --exclude src/health.test.ts \
+  --exclude src/shadow-isolation.application.test.ts \
+  --exclude src/final-account-lock.isolation.test.ts
+```
+
+**CI and dispatcher hold.** `origin/main` is `1bcd8db8e129809e9b6a84d0c8acc9c09e66a3f4` and now contains `0185_evidence_pack_authority.sql` and `0186_recovery_eligibility_paid_interest.sql`; this supplied branch still has B5 at 0185. Official lint therefore fails pending dispatcher catch-up/renumbering. No renumbering is included in the ruling's “Nothing else” repair scope. No new migration or data backfill is introduced by r5; the existing migration note's forward-fix strategy remains applicable.
+
+MIGFIX-5 and B5 PostgreSQL suites, full root `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and browser/e2e suites were NOT RUN under the dispatcher's service/browser prohibition. Full root tests also invoke three tool suites that write temporary Git repositories; those were excluded under the no-Git-write instruction. No mandatory CI suite was disabled or weakened. Run the affected real PostgreSQL tests and mandatory suites in GitHub CI after dispatch; local typechecks and unit subsets do not establish the migration's database behavior.
+
+**Handoff: HOLD for CI and independent review.** Both required checker confirmations that only MIGFIX-5's setup line changed remain outstanding, as do the independent different-model exact-commit verdict and separate acceptance. All existing release gates remain closed. No commit or push performed. Identical conventional-commit subject/body files are written at `/private/tmp/jg-msg-serious-b5-r5.txt` and `/private/tmp/jg-msg-fixlater-5.txt`; the dispatcher owns committing and pushing.
