@@ -1,4 +1,35 @@
-Built by Codex; dispatched 13 Oct 2026.
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
+
+# LATER-B9 — Outbox retry and audit correctness
+
+Status: STOPPED on merged-test conflicts (rule G); NOT BUILT; no acceptance claimed. Decision 74: RED check then PARK; never merge or enable.
+
+## Dispatcher 14 section (17 Oct 2026)
+
+The earlier stop (16 Oct, 44 GiB free against the then 45 GB gate) is kept below as history. Decision 82 lowered the gate to 33 GB; free disk now 47 GiB, so that gate no longer blocks. I re-read the order, `packages/db/src/outbox.ts` and the three merged outbox test files, and found that each of L019, L020 and L027 cannot be delivered without changing a merged test line. The order forbids that (HARD LIMITS: no existing expectations; rule G). I changed no production code, test, migration or grant. Branch is behind origin/main (now 1bcd8db8); nothing merged or rebased. `config/lanes/later-b9.json` is the dispatcher's job.
+
+### STOP lines (file:line, what the change would be)
+
+1. L019 `safeRetry` boolean: `packages/db/test/outbox.integration.test.ts:243`
+   - Before: `await operateOutbox(runtime, context, action.id, "retry", true);` then expects `retryable`. This runs right after `reconcileOutbox` returned `"unknown"` (no durable evidence), so the test requires the boolean to release `outcome_unknown`.
+   - After needed: the call must be refused (`UNSAFE_OUTBOX_COMMAND`) or must carry real reconciliation evidence, and the expectation at 244 changes with it.
+2. L020 audit on success: `packages/db/test/outbox.integration.test.ts:187`
+   - Before: `expect(after.audit).toEqual(before.audit);` after a succeeded delivery (queried at 144). A success audit event makes this fail.
+   - After needed: `after.audit` has exactly one more event, of the success type.
+3. L020 audit, SQL-protocol mocks reject any SQL they do not list: `packages/db/src/outbox.test.ts:97` (retry exhaustion, 5th attempt) and `packages/db/src/audit-fix-dbsrc-08.test.ts:79` (owner check). `appendAuditBatch` issues `SELECT nullif(current_setting...)`, `SELECT ... app.lock_audit_head()`, `SELECT clock_timestamp()` and `SELECT app.advance_audit_head(...)`; the mocks at outbox.test.ts:93-96 and audit-fix-dbsrc-08.test.ts:75-78 do not answer them and throw. The set-up lines would need audit SELECT answers.
+4. L027 due-time claim: `packages/db/test/outbox.integration.test.ts:257` (loop of five immediate `execute` calls). The executor sets `next_attempt_at = now + 1 minute` on `retryable` (outbox.ts:13); once the claim honours `next_attempt_at`, iterations 2 to 5 are refused and the test (which expects `dead_letter` on the fifth) fails. After needed: the test must advance or set `next_attempt_at` to now between attempts.
+
+Nothing in L019, L020 or L027 is separable from these lines: each acceptance line (boolean cannot release; one audit event per committed outcome including success; future `next_attempt_at` prevents claim) contradicts a merged assertion. I did not work round them (for example by dropping the retry back-off, keeping the boolean working, or skipping audit on success), because each would leave the defect the order names in place.
+
+### Commands run this session
+- `git status`, `git branch`, `git log`, `df -g` (47 GiB free), reads of the order, template, `outbox.ts`, `audit.ts`, migration `0006_outbox.sql`, and the three test files, `git fetch`. No tests, typecheck, lint or build were run (nothing changed). All checks: NOT RUN, nothing to check.
+- New GRANTs: none. Migrations: none. Standard F: unaffected.
+
+### Ready when the coordinator rules
+Once the four lines above are re-ruled (or the order is amended to allow those exact edits), the build is: (a) `operateOutbox` refuses unless a reconciliation record proving `not_found`/`succeeded` for this action exists (no new caller-created facts); (b) executor claim adds `next_attempt_at<=clock_timestamp()` in the locked SELECT; (c) each committed transition calls `appendAuditBatch` last in the same transaction after the row locks. Later UI thought: none.
+
+## History: earlier stop (16 Oct)
+
 
 # LATER-B9 — stopped at resource gate
 
