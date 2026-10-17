@@ -88,8 +88,8 @@ export async function expireSession(c: AuthorityCluster, w: AuthorityWorld) {
   try {
     await client.query("BEGIN");
     await client.query("ALTER TABLE control_plane.contractor_practice_session DISABLE TRIGGER USER");
-    await client.query(`WITH t AS MATERIALIZED (SELECT clock_timestamp()-interval '8 days' at)
-      UPDATE control_plane.contractor_practice_session SET created_at=t.at,expires_at=t.at+interval '7 days'
+    await client.query(`WITH t AS MATERIALIZED (SELECT clock_timestamp()-interval '8 days' AS fixture_time)
+      UPDATE control_plane.contractor_practice_session SET created_at=t.fixture_time,expires_at=t.fixture_time+interval '7 days'
       FROM t WHERE session_id=$1`, [w.sessionRef]);
     await client.query("ALTER TABLE control_plane.contractor_practice_session ENABLE TRIGGER USER");
     await client.query("COMMIT");

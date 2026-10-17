@@ -213,3 +213,67 @@ Intended conventional commit subject/body written to both requested paths:
 `/private/tmp/jg-msg-tests-dashboard-authority-1-r1.txt` and
 `/private/tmp/jg-msg-ent-9b.txt`. No commit or push by the builder.
 **RED / PARK remains; no self-acceptance, merge or release.**
+
+## r2 — dispatcher 14 final repair, 17 October 2026
+
+Entry HEAD `416f0766`, branch `codex/sandbox/tests-dashboard-authority-1`,
+clean at entry. Read the dispatch-supplied excerpt for CI run `38989379116`:
+DA1 failed in `expireSession` with PostgreSQL syntax error at `)`. The
+2575/2576 CI count is dispatcher-supplied evidence, not a local execution.
+
+Changed only the expiry SQL in the task-owned fixture and this appended receipt.
+The bare `at` alias is ambiguous with PostgreSQL's `AT` expression syntax.
+It is now the explicit, ordinary alias `AS fixture_time`; both timestamp
+references use `t.fixture_time`. No assertion or production code changed.
+
+**PG16 manual grammar/semantics inspection:** `WITH t AS MATERIALIZED
+(SELECT <timestamp expression> AS fixture_time)` is a materialized SELECT CTE.
+`UPDATE <table> SET created_at=t.fixture_time,
+expires_at=t.fixture_time+interval '7 days' FROM t WHERE session_id=$1` uses
+that CTE as the UPDATE source. The expression is `clock_timestamp()-interval
+'8 days'`, evaluated once for both assignments. Creation remains eight days
+before that clock reading; expiry is seven days after creation, hence one day
+before the reading. The session-id predicate, bounded seven-day lifetime,
+unrevoked state, transaction and owner-only trigger handling are preserved.
+This is manual source inspection, not a database parser/execution result.
+
+**PostgreSQL authority file: NOT RUN.** The dispatcher states that this sandbox
+cannot bind localhost or start PostgreSQL. The broad API attempt below also
+fails on socket binding/free-port discovery. No authority database was started;
+eight-case collection proves no DA1–DA5 assertion. Real PG16 CI remains required.
+No browsers/e2e, dedicated DB/migration suite or root `pnpm test` ran. No schema,
+AI gateway, prompt or model changed; live-model evaluation is inapplicable.
+
+Actual r2 logs and exact command/exit records are in
+`/private/tmp/jg-test-tests-dashboard-authority-1-r2/`, with phase-specific
+`wrappers-results.json`, `static-results.json`, `unit-results.json` and
+`build-results.json`. Installed dependencies were reused without downloads.
+All lint attempts set `LANE_BASE_REF=origin/main`.
+
+| Commands actually run | Result |
+| --- | --- |
+| `pnpm typecheck`, `pnpm lint`, `pnpm lint:lanes`, `pnpm build`, `pnpm openapi:check` | All stalled after the ignored-overrides warning, before launching the check; each terminated after 12 seconds with SIGTERM, exit -15. No wrapper pass claimed. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs`; same environment with `node tools/agent-lane-boundary-lint.mjs` | Both PASS, exit 0. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both PASS, exit 0. |
+| In core/config/storage/ai/db/API/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | All seven PASS, exit 0; also the package lint checks. |
+| In db: `./node_modules/.bin/tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck test/enterprise-dashboard.authority-race.integration.test.ts` | PASS, exit 0; explicitly compiles the test and repaired fixture, excluded by the normal source-only db tsconfig. |
+| In db: `./node_modules/.bin/vitest list test/enterprise-dashboard.authority-race.integration.test.ts` | PASS, exit 0; eight cases collected, zero executed. |
+| `node --test tools/*.test.mjs` (runner expands glob) | PASS, exit 0; 100 tests. |
+| In core/config/storage/ai: `./node_modules/.bin/vitest run src --maxWorkers=1` | All PASS, exit 0; respectively 2,801 / 1 / 2 / 113 tests. AI fixtures are synthetic, not live-provider evidence. |
+| In API: `./node_modules/.bin/vitest run src --maxWorkers=1` | FAIL, exit 1; 92 files passed, 9 failed; 1,719 tests passed, 129 failed, 23 skipped, 129 unhandled errors. HTTP failures report `listen EPERM` and Supertest null `port`; two existing DB fixture hooks fail at free-port discovery. See `unit-api.log`; this is not a successful API/database run. |
+| In web: `./node_modules/.bin/vitest run --maxWorkers=1` | PASS, exit 0; 40 files / 867 tests. No browser/e2e execution. |
+| In core/config/storage/ai/db: `./node_modules/.bin/tsc -p tsconfig.json`; in API: `./node_modules/.bin/nest build`; in web: `./node_modules/.bin/next build` | All seven PASS, exit 0. Next retains existing workspace-root, CSS and dependency-expression warnings. No browser started. |
+| In API: `node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; installed loader runs the existing generator check without the IPC CLI. |
+| `git diff --check`; read-only branch/HEAD/status/diff inspection; final `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | PASS, exit 0, including after receipt append. Only this receipt and the fixture changed from entry HEAD; the assertion file is unchanged. A diagnostic `ps` attempt was denied by the sandbox; no escalation attempted. |
+
+No product implementation, assertion, migration, permission, policy, pin or lane
+change; no new operational alert or backwards-compatibility impact. The affected
+invariant remains stored-session revalidation despite a previously verified
+context; this fixture repair does not establish that invariant locally.
+No Git writes, commit, push, merge or release. No new independent model verdict
+or separate acceptance is claimed. Exact-commit CI, independent review and
+separate technical acceptance remain HOLD; RED / PARK remains.
+
+Conventional commit subject/body saved to both requested paths:
+`/private/tmp/jg-msg-tests-dashboard-authority-1-r2.txt` and
+`/private/tmp/jg-msg-ent-9b.txt`. The dispatcher owns committing and pushing.
