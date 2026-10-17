@@ -61,7 +61,7 @@ async function setup(options:{documents?:boolean;claim?:number;type?:'merchant_o
   const f=await liveJob(admin,runtime),feed=new PracticeFeedRepository(runtime,'synthetic_demo'),cases=new RecoveryCaseRepository(f.scoped);
   await feed.command(context,actor,f.auth.digest,f.jobId,{version:'practice-feed-command.v1',commandId:randomUUID(),expectedRevision:0,action:'connect'});
   if(options.documents!==false)await documents(f);
-  const c=options.open===false?null:await cases.command(context,f.jobId,{version:'recovery-case-command.v1',commandId:randomUUID(),action:'open',caseType:options.type??'merchant_overcharge',claimedNetPence:options.claim??30000,counterparty:'Fictional supplier',book:'supplier_cost',sourceType:'supplier_documents',sourceRefs:['CR-PF1B-001','INV-PF1B-001'],expectedRevision:0},actor);
+  const c=options.open===false?null:await cases.command(context,f.jobId,{version:'recovery-case-command.v1',commandId:randomUUID(),action:'open',caseType:options.type??'merchant_overcharge',claimedNetPence:options.claim??30000,counterparty:'Fictional supplier',book:'supplier_cost',sourceType:'supplier_documents',sourceRefs:['Supplier agreement AG-320','Supplier invoice INV-320'],expectedRevision:0},actor);
   return {...f,feed,cases,c,repo:new RecoveryEligibilityV3Repository(f.scoped,'synthetic_demo')};
 }
 async function documents(f:Awaited<ReturnType<typeof liveJob>>) {

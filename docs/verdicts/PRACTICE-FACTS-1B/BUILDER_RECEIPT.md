@@ -240,3 +240,11 @@ Built by Claude Sonnet (Codex stand-in), dispatcher 14
 Change: `packages/db/test/practice-supplier-credit.integration.test.ts:285` `forged` now passes `payer:'not_insurer'` (same missing fact). Grep of the piece's own test files found no other evaluateRecoveryEligibilityV3 call missing it (core test:26 and api test:13 already fixed). Expected values unchanged.
 
 Run: `pnpm --filter @jobguard/db typecheck`: see below result. NOT RUN: DB integration test (not started), lane lint.
+
+## r5
+
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Root cause: `assertRecoverySources` (packages/core/src/recovery-case.ts:~195) accepts only catalogue labels of the right source type (recoverySourceCatalogueV1) or recorded-id (UUID) shaped refs. The piece's own test fixture opened its case with `sourceRefs:['CR-PF1B-001','INV-PF1B-001']` (document numbers), which are neither, so every test failed at open with RECOVERY_SOURCE_NOT_RECOGNISED.
+Change: `packages/db/test/practice-supplier-credit.integration.test.ts:64` sourceRefs now `['Supplier agreement AG-320','Supplier invoice INV-320']` (catalogue labels, supplier_documents). The supplier-credit binding is by document number inside the SQL routine, not via the case's sourceRefs (grep of CR-PF1B-001/INV-PF1B-001 shows no sourceRefs link), so intent and expected values are unchanged. Main's recovery-case rules and merged tests untouched.
+Run: `pnpm --filter @jobguard/db typecheck` clean. NOT RUN: the DB integration test (no PostgreSQL), lane lint. Residual risk: if the test or SQL later reads the case's source refs to match documents, CI will show it.
