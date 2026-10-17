@@ -232,3 +232,11 @@ Built by Claude Sonnet (Codex stand-in), dispatcher 14
 Change: `apps/api/src/practice-supplier-credit.application.test.ts:13` candidate() now passes `payer: "not_insurer"` to evaluateRecoveryEligibilityV3 (same missing fact as r2). Expected values unchanged; no product code or merged test touched.
 
 Run: `pnpm --filter @jobguard/core build`; api vitest on that file (--maxWorkers=2): 5 of 5 pass; `pnpm --filter @jobguard/api typecheck`: clean. NOT RUN: lane lint, DB integration tests.
+
+## r4
+
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Change: `packages/db/test/practice-supplier-credit.integration.test.ts:285` `forged` now passes `payer:'not_insurer'` (same missing fact). Grep of the piece's own test files found no other evaluateRecoveryEligibilityV3 call missing it (core test:26 and api test:13 already fixed). Expected values unchanged.
+
+Run: `pnpm --filter @jobguard/db typecheck`: see below result. NOT RUN: DB integration test (not started), lane lint.

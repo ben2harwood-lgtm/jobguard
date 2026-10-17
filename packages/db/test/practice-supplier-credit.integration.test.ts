@@ -282,7 +282,7 @@ it('PF1B-A24 A24_F17NewestTimingGuardPreserved',async()=>{
     const r=await save(f,review(f,'F17'));expect(r.result).toMatchObject({qualifyingPrincipal:{pence:earlier?0:45000},reason:earlier?'Paid before you opened this case':null});
     if(earlier)await expect(rolledBack(admin,async db=>{
       await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[T,f.auth.digest]);
-      const forged=evaluateRecoveryEligibilityV3({version:'recovery-eligibility-facts.v3',environment:'synthetic_demo',tenantId:T,jobId:f.jobId,caseId:f.c!.id,fixture:'F17',settlement:'settled',paymentTiming:'after_opening',sourceRef:r.sourceEventId});
+      const forged=evaluateRecoveryEligibilityV3({version:'recovery-eligibility-facts.v3',environment:'synthetic_demo',tenantId:T,jobId:f.jobId,caseId:f.c!.id,fixture:'F17',payer:'not_insurer',settlement:'settled',paymentTiming:'after_opening',sourceRef:r.sourceEventId});
       await db.query('INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result) VALUES($1,$2,$3,$4,2,$5,\'F17\',$6,$7,$8,$9,$10)',[randomUUID(),T,f.jobId,f.c!.id,f.c!.revision,r.sourceEventId,M,randomUUID(),'a'.repeat(64),forged]);
     })).rejects.toThrow('ELIGIBILITY_FIXTURE_MISMATCH');
   }
