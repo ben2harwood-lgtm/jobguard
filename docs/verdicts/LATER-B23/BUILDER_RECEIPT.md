@@ -1,4 +1,31 @@
-Built by Codex; dispatched 13 Oct 2026; stopped before implementation on 16 Oct 2026.
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
+
+# LATER-B23 builder receipt (rewritten 17 Oct 2026)
+
+Status: BUILT, not accepted. RED lane, decision 74: PARK, never merge or enable. Only independent reviewers accept. Base: branch head ab44fd7a (on origin/main 31682762; origin/main has since moved to 1bcd8db8 and does not change fee.ts; not merged, per template).
+
+History kept: an earlier Codex run on 16 Oct stopped before implementation at the old 45 GB disk gate (its receipt follows below, unchanged). Decision 82 lowered the gate to 33 GB; free disk this run was 46-47 GB.
+
+## Changes
+- `packages/core/src/enterprise-domain/fee.ts` (reversal branch of `allocateEnterpriseReceipt`, now around lines 39-60): (1) removed the blanket `receipt.explicit !== null` refusal; (2) an explicit reversal is accepted only when the original receipt was explicit and every named line was explicitly settled originally and takes no more than its original explicit gross share (otherwise INVALID_ALLOCATION); the existing balance/outstanding, net/gross ratio, invoice, effective-time and separateInvoiceId checks and the shared allocator (exact arithmetic, signed negative deltas) are unchanged; (3) a reversal whose sourceRef is already recorded as a `reversed` billing fact on any supplied extra is refused (no double reversal); (4) a malformed original receipt is now INVALID_ALLOCATION instead of MONEY_LIMIT.
+- `packages/core/src/enterprise-domain/later-explicit-refund.test.ts` (new, 8 tests): GBP 288 gross / 240 net extra, 60 gross refund reverses 50 net; conservation and unrelated order line earns no fee; two-part refund bounded by original share; negatives for over-refund, wrong line (incl. pro-rata original steering), forged original (balance, sourceRef, shares, ratio), repeated source identity (explicit and pro-rata), mismatched invoice.
+- No existing test, pin, harness or expected value edited (sha256 of fee.test.ts 67fa2296..., fee-both.test.ts 2ddceef4..., fee-pins.test.ts 99921a04... unchanged from the earlier receipt). Existing "round2 P2-2 refuses reversal steering" still passes. No rate, fee-base, priority or entitlement change. No migration, no GRANT (standard F: none), no database work.
+- Note: the premise line moved: the refusal was fee.ts:43 on this base (order said :39); main wins.
+
+## Commands run
+- Tests first: new file against unchanged fee.ts: 4 failed / 4 passed (explicit reversal x3 refused with INVALID_ALLOCATION at fee.ts:43; duplicate-source pro-rata case accepted). After the change: 8/8 pass.
+- `pnpm --filter @jobguard/core exec vitest run` later-explicit-refund + fee.test + fee-both (--maxWorkers=2): 143/143 pass. fee-pins + origin + transitions: 277/277 pass.
+- `pnpm exec turbo run typecheck --force --concurrency=2`: exit 0, 7/7, 0 cached. `... lint --force --concurrency=2`: exit 0, 7/7, 0 cached. `pnpm build --force --concurrency=2`: exit 0, 7/7, 0 cached.
+- `git diff --check`: clean.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: FAILED as expected: branch matches no registered lane (config/lanes/later-b23.json missing; the dispatcher registers it to the changed files: fee.ts, later-explicit-refund.test.ts, receipt, ledger).
+
+## NOT RUN
+Full `pnpm test`, `test:db`, `test:migrations`, `test:e2e`, PostgreSQL and browser suites (sandbox rule; CI runs them). Lane lint pass (lane file absent). No migration, so no upgrade proof.
+
+## Limits
+The pure allocator cannot prove persisted source uniqueness; the double-reversal check covers facts supplied in `groups` only, the database remains the authority. Self-inspection only; no independent review claimed. UI: none. Pending: RED two-model check, acceptance, Ben's button.
+
+---- Earlier receipt (Codex, 16 Oct 2026), kept as history ----
 
 LATER-B23 / L121 / pkg-src-82#5. RED lane. Decision 74: PARK; no merge, enablement or deployment. No acceptance claimed. The requested first-line attribution to Claude Sonnet 5.5 is inaccurate for this session and is not asserted.
 
