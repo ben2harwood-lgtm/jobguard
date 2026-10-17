@@ -17,8 +17,7 @@ export type OutboxRevocationRefusal = { kind: "cancelled"; code: "AUTHORIZATION_
 async function cancelRevokedAction(db: TenantTransaction, id: string, adapters: readonly string[]): Promise<OutboxRevocationRefusal | undefined> {
   // A failed authority lookup must not leave revoked work eligible for blind retry.
   // Scope both the authorization and revocation to the action's tenant and author.
-  const cancelled = await db.$client.query<{ id: string }>(`
-    UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
+  const cancelled = await db.$client.query<{ id: string }>(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
     FROM app.action_authorization a
     JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id
     LEFT JOIN app.contractor_membership_revocation revoked
