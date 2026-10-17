@@ -87,7 +87,33 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
   // issuance-routine home job: same practice session and scenario, live, with the full imported baseline columns together
   // (job_baseline_shape refuses a lone pair of values).
   const job=randomUUID(),scope=randomUUID();
-  await admin.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) SELECT $3,tenant_id,title,'live',practice_session_digest,practice_scenario,'imported',10000,'reference_fee_policy_v1',150 FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",[DEMO_TENANT_ID,auth.digest,job]);
+  await asTenant(DEMO_TENANT_ID,async db=>{
+    const fixtureCommand = randomUUID(), fixtureDecision = randomUUID();
+    const fixtureResolution = randomUUID(), fixtureAuthorization = randomUUID();
+    await db.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
+      VALUES($1,$2,'job.adopt_in_flight',$3,$4,'processing',$5)`,
+      [DEMO_TENANT_ID,fixtureCommand,`import:${job}`,"a".repeat(64),DEMO_MEMBERSHIP_ID]);
+    await db.query(`INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type)
+      VALUES($1,$2,'job',$3,'job.adopt_in_flight')`,[DEMO_TENANT_ID,fixtureDecision,job]);
+    await db.query(`INSERT INTO app.decision_resolution(tenant_id,id,decision_id,resolution,actor_membership_id)
+      VALUES($1,$2,$3,'approved',$4)`,[DEMO_TENANT_ID,fixtureResolution,fixtureDecision,DEMO_MEMBERSHIP_ID]);
+    await db.query(`INSERT INTO app.action_authorization(tenant_id,id,decision_id,resolution_id,actor_membership_id,
+      action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
+      VALUES($1,$2,$3,$4,$5,'job.adopt_in_flight',NULL,$6,0,10000,'GBP','synthetic_import_terms_candidate.v1',clock_timestamp()+interval '5 minutes')`,
+      [DEMO_TENANT_ID,fixtureAuthorization,fixtureDecision,fixtureResolution,DEMO_MEMBERSHIP_ID,"a".repeat(64)]);
+    await db.query(`INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,
+      insert_shape,actor_membership_id,command_id,authorization_id)
+      SELECT tenant_id,$3,pg_backend_pid(),pg_current_xact_id(),'adoption',
+       app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object(
+        'tenant_id',tenant_id,'id',$3::uuid,'title',title,'status','live','revision',0,
+        'practice_session_digest',practice_session_digest,'practice_scenario',practice_scenario,'provenance','imported',
+        'accepted_net_value_pence',10000,'fee_policy_version','reference_fee_policy_v1','recovery_cap_pence',150))),$4,$5,$6
+      FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'`,
+      [DEMO_TENANT_ID,auth.digest,job,DEMO_MEMBERSHIP_ID,fixtureCommand,fixtureAuthorization]);
+    await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) SELECT $3,tenant_id,title,'live',practice_session_digest,practice_scenario,'imported',10000,'reference_fee_policy_v1',150 FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",[DEMO_TENANT_ID,auth.digest,job]);
+    await db.query(`UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp()
+      WHERE tenant_id=$1 AND command_id=$2`,[DEMO_TENANT_ID,fixtureCommand]);
+  });
   // The legacy live-job trigger binds the small-builder track only for non-imported live inserts, so bind the same track it bound for the home job.
   await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture',$2)",[DEMO_TENANT_ID,job]);
   await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
@@ -153,7 +179,30 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
    // The end state of a job started with the UI's default No charge scenario: owned by this practice session, bound pilot_no_charge.
    await asTenant(DEMO_TENANT_ID,async db=>{
     // 0110 makes job provenance immutable: the job is created imported (with its full baseline columns) rather than updated afterwards.
+    const fixtureCommand = randomUUID(), fixtureDecision = randomUUID();
+    const fixtureResolution = randomUUID(), fixtureAuthorization = randomUUID();
+    await db.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
+      VALUES($1,$2,'job.adopt_in_flight',$3,$4,'processing',$5)`,
+      [DEMO_TENANT_ID,fixtureCommand,`import:${job}`,"a".repeat(64),DEMO_MEMBERSHIP_ID]);
+    await db.query(`INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type)
+      VALUES($1,$2,'job',$3,'job.adopt_in_flight')`,[DEMO_TENANT_ID,fixtureDecision,job]);
+    await db.query(`INSERT INTO app.decision_resolution(tenant_id,id,decision_id,resolution,actor_membership_id)
+      VALUES($1,$2,$3,'approved',$4)`,[DEMO_TENANT_ID,fixtureResolution,fixtureDecision,DEMO_MEMBERSHIP_ID]);
+    await db.query(`INSERT INTO app.action_authorization(tenant_id,id,decision_id,resolution_id,actor_membership_id,
+      action_type,recipient,content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
+      VALUES($1,$2,$3,$4,$5,'job.adopt_in_flight',NULL,$6,0,10000,'GBP','synthetic_import_terms_candidate.v1',clock_timestamp()+interval '5 minutes')`,
+      [DEMO_TENANT_ID,fixtureAuthorization,fixtureDecision,fixtureResolution,DEMO_MEMBERSHIP_ID,"a".repeat(64)]);
+    await db.query(`INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,
+      insert_shape,actor_membership_id,command_id,authorization_id)
+      VALUES($1,$2,pg_backend_pid(),pg_current_xact_id(),'adoption',
+       app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object(
+        'tenant_id',$1::uuid,'id',$2::uuid,'title','Fictional No charge practice job','status','live','revision',0,
+        'practice_session_digest',$3::text,'practice_scenario','capture','provenance','imported',
+        'accepted_net_value_pence',10000,'fee_policy_version','reference_fee_policy_v1','recovery_cap_pence',150))),$4,$5,$6)`,
+      [DEMO_TENANT_ID,job,auth.digest,DEMO_MEMBERSHIP_ID,fixtureCommand,fixtureAuthorization]);
     await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Fictional No charge practice job','live',$3,'capture','imported',10000,'reference_fee_policy_v1',150)",[job,DEMO_TENANT_ID,auth.digest]);
+    await db.query(`UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp()
+      WHERE tenant_id=$1 AND command_id=$2`,[DEMO_TENANT_ID,fixtureCommand]);
     await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[DEMO_TENANT_ID,job]);
    });
    await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
