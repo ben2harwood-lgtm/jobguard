@@ -47,6 +47,21 @@ export class EvidencePackRepository {
     return (await db.$client.query<PackRow>('SELECT * FROM app.evidence_pack_revision WHERE tenant_id=$1 AND case_id=$2 ORDER BY revision', [tenantId, caseId])).rows;
   }
 
+  private async authorizeAttachment(db: TenantTransaction, tenantId: string, actorRef: string) {
+    // The application installs this server-authenticated digest on its pool.
+    // Legacy internal tenant-only fixtures have no practice principal.
+    const digest = (await db.$client.query<{ digest: string | null }>(
+      "SELECT nullif(current_setting('app.practice_material_digest',true),'') AS digest",
+    )).rows[0]?.digest;
+    if (digest) {
+      await db.$client.query("SELECT set_config('app.evidence_pack_approval_fence','on',true)");
+      const principal = (await db.$client.query<{ membership_id: string }>(
+        "SELECT * FROM app.authenticate_practice_session($1,$2)", [digest, tenantId],
+      )).rows[0];
+      if (!principal || actorRef !== `membership:${principal.membership_id}`) fail('UNAUTHENTICATED');
+    }
+  }
+
   private async current(db: TenantTransaction, tenantId: string, caseId: string) {
     const { jobId, sources, omissions } = await loadEvidencePackSources(db, tenantId, caseId);
     const manifest = buildEvidenceManifest(caseId, jobId, sources, omissions);
@@ -128,6 +143,8 @@ export class EvidencePackRepository {
     const input = approvalInput.parse(raw), requestHash = sha256(JSON.stringify({ action: 'approve_attachment', caseId, packId, ...input, actorRef }));
     await withTenant(this.pool, ctx, async db => {
       await this.lock(db, ctx.tenantId, caseId, input.commandId);
+      // Fence session/member AFTER command/case waits, including replays.
+      await this.authorizeAttachment(db, ctx.tenantId, actorRef);
       if ((await db.$client.query('SELECT 1 FROM app.evidence_pack_revision WHERE tenant_id=$1 AND command_id=$2', [ctx.tenantId, input.commandId])).rowCount) fail('EVIDENCE_PACK_COMMAND_CONFLICT');
       const replay = (await db.$client.query<{ request_hash: string }>('SELECT request_hash FROM app.evidence_pack_attachment_approval WHERE tenant_id=$1 AND command_id=$2', [ctx.tenantId, input.commandId])).rows[0];
       if (replay) { if (replay.request_hash !== requestHash) fail('EVIDENCE_PACK_COMMAND_CONFLICT'); return; }
@@ -137,6 +154,9 @@ export class EvidencePackRepository {
       if (!pack.artifact_text || !this.integrity(pack).valid || current.omissions.length || !verifyStandalonePack(pack.artifact_text).contentMatches ||
           pack.manifest_hash !== input.expectedManifestHash || pack.content_hash !== input.expectedContentHash ||
           current.manifestHash !== pack.manifest_hash || current.contentHash !== pack.content_hash) fail('EVIDENCE_PACK_STALE_APPROVAL');
+      // Row locks fence revocation; a fresh clock check also catches expiry
+      // during source assembly. This is still before the final audit lock.
+      await this.authorizeAttachment(db, ctx.tenantId, actorRef);
       await db.$client.query(`INSERT INTO app.evidence_pack_attachment_approval(id,tenant_id,job_id,case_id,pack_id,command_id,request_hash,manifest_hash,content_hash,actor_ref)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [randomUUID(), ctx.tenantId, pack.job_id, caseId, packId, input.commandId, requestHash, pack.manifest_hash, pack.content_hash, actorRef]);
       await appendAuditBatch(db, [{ id: randomUUID(), version: 'audit.v1', actorRef, eventType: 'evidence_pack.attachment_approved', subjectType: 'evidence_pack', subjectRef: packId,

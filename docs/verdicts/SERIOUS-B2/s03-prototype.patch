@@ -1,0 +1,109 @@
+diff --git a/packages/db/src/work-order-fixtures.ts b/packages/db/src/work-order-fixtures.ts
+--- a/packages/db/src/work-order-fixtures.ts
++++ b/packages/db/src/work-order-fixtures.ts
+@@ -42,7 +42,9 @@
+       const version = contracts.contracts.filter(c => c.client_id === existing.id).at(-1)!;
+       const document = version.document as ReturnType<typeof contractDocument>;
+       const stored = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => ({
+-        sites: (await db.$client.query<{ id: string }>("SELECT id FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street' ORDER BY created_at,id")).rows.map(r => r.id),
++        // The generator creates numbered streets in numeric order; transaction timestamps and random UUIDs cannot recover that order.
++        sites: (await db.$client.query<{ id: string; address_line: string }>("SELECT id,payload->'addressLines'->>0 address_line FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street'"))
++          .rows.sort((a, b) => a.address_line.localeCompare(b.address_line, "en", { numeric: true }) || a.id.localeCompare(b.id)).map(r => r.id),
+         operative: (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.contractor_member WHERE email='demo.operative@fictional.invalid'")).rows[0]?.membership_id,
+         sor: (await db.$client.query<{ schedule_id: string }>("SELECT schedule_id FROM app.sor_version WHERE id=$1", [document.sorVersionIds[0]])).rows[0]?.schedule_id,
+       }));
+diff --git a/packages/db/test/work-order-import.integration.test.ts b/packages/db/test/work-order-import.integration.test.ts
+--- a/packages/db/test/work-order-import.integration.test.ts
++++ b/packages/db/test/work-order-import.integration.test.ts
+@@ -681,3 +681,40 @@
+   });
+   it("canonicalJson is key-order independent, so a request hash is stable", () => { expect(canonicalJson({ b: 1, a: [2, { d: 1, c: 2 }] })).toBe(canonicalJson({ a: [2, { c: 2, d: 1 }], b: 1 })); });
+ });
++
++describe("SERIOUS-B2 generated site identity regression", () => {
++  it("S03: generated samples retain site bindings across preparation, replay and amendments", async () => {
++    const { generateWorkOrderSample } = await import("../src/work-order-fixtures.js");
++    const p = await contractors.startPractice(randomUUID());
++    // Descending UUIDs force the old equal-timestamp reload to reverse creation order.
++    // Twelve sites also detects accidental lexical ordering (1, 10, 11, 12, 2, ...).
++    const uuids = await import("node:crypto"), prefix = randomUUID().slice(0, 24);
++    let sequence = 1000000, demo: WorkOrderDemo;
++    const uuid = vi.spyOn(uuids, "randomUUID").mockImplementation(() => `${prefix}${String(sequence--).padStart(12, "0")}` as ReturnType<typeof randomUUID>);
++    try { demo = await prepareWorkOrderDemo(runtime, p, { siteCount: 12 }); }
++    finally { uuid.mockRestore(); }
++    expect([...demo.siteRevisionIds].sort().reverse()).toEqual(demo.siteRevisionIds);
++    const timestamps = await admin.query("SELECT count(DISTINCT created_at)::int n FROM app.site_revision WHERE tenant_id=$1", [p.tenantId]);
++    expect(timestamps.rows[0].n).toBe(1);
++    const reloaded = await prepareWorkOrderDemo(runtime, p);
++    expect(reloaded.siteRevisionIds).toEqual(demo.siteRevisionIds);
++    for (const sample of ["starter_orders", "orders_with_errors", "revised_orders"] as const) {
++      expect(generateWorkOrderSample(sample, reloaded)).toBe(generateWorkOrderSample(sample, demo));
++    }
++    const csv = generateWorkOrderSample("starter_orders", demo), commandId = randomUUID();
++    const first = await importOf(p, csv, "generated: starter_orders", commandId), before = await counts(p.tenantId);
++    expect(first.counts).toMatchObject({ created: 5, rejected: 0 });
++    const replay = await importOf(p, generateWorkOrderSample("starter_orders", reloaded), "generated: starter_orders", commandId);
++    const freshCommand = await importOf(p, generateWorkOrderSample("starter_orders", await prepareWorkOrderDemo(runtime, p)), "generated: starter_orders");
++    for (const result of [replay, freshCommand]) {
++      expect(result).toEqual({ ...first, replayed: true });
++      expect(result.counts.rejected).toBe(0);
++    }
++    expect(await counts(p.tenantId)).toEqual(before);
++    const amended = await importOf(p, generateWorkOrderSample("revised_orders", await prepareWorkOrderDemo(runtime, p)), "generated: revised_orders");
++    expect(amended.counts).toEqual({ rows: 4, created: 0, revised: 3, unchanged: 1, rejected: 0 });
++    const after = await counts(p.tenantId);
++    expect(after.work_order).toBe(before.work_order);
++    expect(after.work_order_revision).toBe(before.work_order_revision! + 3);
++  });
++});
+diff --git a/packages/db/src/serious-b2-fixtures.test.ts b/packages/db/src/serious-b2-fixtures.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/db/src/serious-b2-fixtures.test.ts
+@@ -0,0 +1,46 @@
++import { randomUUID } from "node:crypto";
++import type { Pool } from "pg";
++import { afterEach, expect, it, vi } from "vitest";
++import { ContractorRepository, type ContractorView } from "./contractor-repository.js";
++import { demoClientName, generateWorkOrderSample, prepareWorkOrderDemo, type WorkOrderDemo } from "./work-order-fixtures.js";
++import type { AuthenticatedMembership } from "./tenant-context.js";
++
++afterEach(() => vi.restoreAllMocks());
++
++it("S03: reloaded generated samples preserve the original numbered site bindings (scripted database rows)", async () => {
++  const principal = { tenantId: randomUUID(), membershipId: randomUUID(), identityUserId: randomUUID() } as AuthenticatedMembership;
++  // All sites are created in one transaction. PostgreSQL then sorts equal timestamps by UUID,
++  // deliberately the reverse of creation order here; 12 sites also catches lexical street sorting.
++  const sites = Array.from({ length: 12 }, (_, index) => ({
++    id: `00000000-0000-4000-8000-${String(12 - index).padStart(12, "0")}`,
++    address_line: `${index + 1} Fictional Demo Street`,
++  }));
++  const demo: WorkOrderDemo = {
++    clientId: randomUUID(), contractId: randomUUID(), contractVersionId: randomUUID(),
++    scheduleId: randomUUID(), sorVersionId: randomUUID(), siteRevisionIds: sites.map(site => site.id),
++    teamId: randomUUID(), branchId: randomUUID(), operativeMembershipId: randomUUID(),
++    adjustment: { numerator: "-35", denominator: "1000" }, issuedOn: "2026-10-08",
++  };
++  vi.spyOn(ContractorRepository.prototype, "query").mockResolvedValue({
++    version: "contractor-workspace.v1", environment: "synthetic_demo", tenantId: principal.tenantId,
++    membershipId: principal.membershipId, revision: 1, realExternalActions: 0,
++    units: [], members: [], grants: [], teamMemberships: [],
++    teams: [{ id: demo.teamId, branch_id: demo.branchId, name: "Fictional team" }],
++    clients: [{ id: demo.clientId, name: demoClientName, branch_id: demo.branchId }],
++    contracts: [{ id: demo.contractVersionId, contract_id: demo.contractId, client_id: demo.clientId, revision: 1,
++      rule_version_id: randomUUID(), rules: {},
++      document: { sorVersionIds: [demo.sorVersionId], tenderedAdjustment: demo.adjustment } }],
++  } satisfies ContractorView);
++  const query = vi.fn(async (sql: string) => {
++    if (sql.includes("FROM app.site_revision")) return { rows: [...sites].reverse() };
++    if (sql.includes("FROM app.contractor_member")) return { rows: [{ membership_id: demo.operativeMembershipId }] };
++    if (sql.includes("FROM app.sor_version")) return { rows: [{ schedule_id: demo.scheduleId }] };
++    return { rows: [] };
++  });
++  const pool = { connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
++  const reloaded = await prepareWorkOrderDemo(pool, principal);
++  expect(reloaded.siteRevisionIds).toEqual(demo.siteRevisionIds);
++  for (const sample of ["starter_orders", "orders_with_errors", "revised_orders"] as const) {
++    expect(generateWorkOrderSample(sample, reloaded)).toBe(generateWorkOrderSample(sample, demo));
++  }
++});
