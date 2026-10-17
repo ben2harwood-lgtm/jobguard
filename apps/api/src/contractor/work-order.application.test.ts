@@ -70,7 +70,7 @@ describe("ENT-2 transport (adapter tests, not PostgreSQL proof)", () => {
   it("exposes the scheduling projections for GET only: no scheduling write route exists at the transport", async () => {
     const spec = JSON.parse(await readFile(new URL("../../openapi.json", import.meta.url), "utf8"));
     for (const path of ["/contractor/jobs/{id}/assignments", "/contractor/jobs/{id}/site-visits"]) expect(Object.keys(spec.paths[path])).toEqual(["get"]);
-    expect(Object.keys(spec.paths).filter(p => /assign|schedul|visit/u.test(p))).toEqual(["/contractor/jobs/{id}/assignments", "/contractor/jobs/{id}/site-visits"]);
+    expect(Object.keys(spec.paths).filter(p => /assign|schedul|visit/u.test(p))).toEqual(["/contractor/jobs/{id}/site-visits/start", "/contractor/jobs/{id}/site-visits/{visitId}/complete", "/contractor/jobs/{id}/assignments", "/contractor/jobs/{id}/site-visits"]);
     for (const route of ["jobs/[id]/assignments", "jobs/[id]/site-visits"]) {
       const source = await readFile(new URL(`../../../web/app/api/contractor/${route}/route.ts`, import.meta.url), "utf8");
       expect([...source.matchAll(/export (?:async )?function (\w+)/gu)].map(m => m[1])).toEqual(["GET"]);

@@ -21,6 +21,10 @@ for(const [name,button,movement,q,reason] of [
   await page.getByRole("button",{name:button,exact:true}).click();
   await expect(page.getByRole("article",{name:"Selected recovery case"})).toBeVisible();
   if(movement&&name!=="F20")await settle();
+  if(name==="F18"){
+   const factsPath=`/api/jobs/${jobId}/practice-facts`;let facts=await get(page,factsPath);
+   for(const movement of ["receipt-interest-120","receipt-compensation-70"] as const)facts=await post(page,factsPath,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:facts.revision,action:"advance",movement,step:"settled"});
+  }
   const control=page.getByRole("button",{name:`Review v3 ${name}`,exact:true});await expect(control).toBeEnabled();
   const box=await control.boundingBox();expect(box?.width).toBeGreaterThanOrEqual(44);expect(box?.height).toBeGreaterThanOrEqual(44);
   await control.focus();await expect(control).toBeFocused();expect(await control.evaluate(el=>{const css=getComputedStyle(el);return css.outlineStyle!=="none"&&parseFloat(css.outlineWidth)>0;})).toBe(true);await page.keyboard.press("Enter");
@@ -29,6 +33,7 @@ for(const [name,button,movement,q,reason] of [
    await expect(view.getByTestId("v3-outcome")).toHaveText(q==="£0.00"?"Excluded":"Eligible for review");
    if(reason)await expect(view.getByTestId("v3-reason")).toHaveText(reason);
    if(name==="F19")await expect(view.getByTestId("v3-line-statutory_interest")).toContainText("£0.00");
+   if(name==="F19")await expect(view.getByTestId("v3-line-statutory_interest")).toContainText("Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.");
    if(name==="F21")await expect(view.getByTestId("v3-reason")).toHaveCount(0);
    await expect(view.getByText(banner,{exact:true})).toHaveCount(1);
    expect(await view.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
@@ -79,4 +84,19 @@ test("F17 refund settled before opening shows the existing timing exclusion thro
  await page.getByRole("article",{name:"Selected recovery case"}).waitFor();
  await page.getByRole("button",{name:"Review v3 F17",exact:true}).click();
  await expect(page.getByTestId("v3-reason")).toHaveText("Paid before you opened this case");
+});
+
+
+test("[A1 A6 Browser] insurer-paid F18 uses its own exclusion reason and survives reload",async({page})=>{
+ await confirmCapturedScope(page);const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
+ const partiesPath=`/api/jobs/${jobId}/parties`,before=await get(page,partiesPath);
+ const insurer=await post(page,partiesPath,{version:"job-parties-command.v1",commandId:randomUUID(),action:"create_customer",customer:{version:"customer.v1",name:"Fictional insurer",type:"insurer"}});
+ await post(page,partiesPath,{version:"job-parties-command.v1",commandId:randomUUID(),action:"bind",expectedJobRevision:before.jobRevision,parties:{version:"job-parties.v1",customerRevisionId:before.current.customerRevisionId,siteRevisionId:before.current.siteRevisionId,payingPartyRevisionId:insurer.revisionId}});
+ await page.getByRole("button",{name:"Open £2,500 withheld payment",exact:true}).click();
+ await expect(page.getByRole("article",{name:"Selected recovery case"})).toBeVisible();
+ const path=`/api/jobs/${jobId}/practice-feed`,feed=await post(page,path,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
+ await post(page,path,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:feed.revision,action:"advance",movement:"receipt-3000",step:"settled"});
+ await page.getByRole("button",{name:"Review v3 F18",exact:true}).click();
+ const verify=async()=>{await expect(page.getByTestId("v3-qualifying-principal")).toHaveText("£0.00");await expect(page.getByTestId("v3-outcome")).toHaveText("Excluded");await expect(page.getByTestId("v3-reason")).toHaveText("Insurer proceeds never qualify");};
+ await verify();await page.reload();await verify();
 });

@@ -15,9 +15,11 @@ type PartiesRow = { snapshot: unknown; created_at: Date };
 export class PreventionCheckRepository {
   constructor(private readonly pool: Pool) {}
   private syntheticOnly() { if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new PreventionCheckError("SYNTHETIC_ONLY"); }
-  private async authorize(db: TenantTransaction, tenant: string, actor: string, job: string, practiceDigest?: string) {
+  private async authorize(db: TenantTransaction, tenant: string, actor: string, job: string, practiceDigest?: string, lockAuthority = false) {
+    // Fence before receipts/domain/audit locks. FOR SHARE conflicts with revocation
+    // updates and rechecks active authority after any pending update commits.
     if (!(await db.$client.query(`SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner'
-      AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`, [tenant,actor])).rowCount) throw new PreventionCheckError("FORBIDDEN");
+      AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())${lockAuthority ? " FOR SHARE" : ""}`, [tenant,actor])).rowCount) throw new PreventionCheckError("FORBIDDEN");
     if (!(await db.$client.query(`${practiceOwnedJobsSql("$3")} SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2
       AND ($3::text IS NULL OR id IN (SELECT id FROM practice_owned_job))`, [tenant,job,practiceDigest??null])).rowCount) throw new PreventionCheckError("NOT_FOUND");
   }
@@ -75,7 +77,7 @@ export class PreventionCheckRepository {
     const input = parsed.data, requestHash = digest({ job, input });
     return withTenant(this.pool,context,async db=>{
       const tenant = context.tenantId;
-      await this.authorize(db,tenant,actor,job,practiceDigest);
+      await this.authorize(db,tenant,actor,job,practiceDigest,true);
       // One receipt claim, then aggregate serialization/current-party share guard;
       // domain writes finish before the audit head. No new privileged helper.
       const claim = await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id)

@@ -20,6 +20,10 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and the route carries its own live-job guard
   "/api/contractor/jobs/[id]/site-extras/sor": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-extras/sor": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/site-visits/start": "pre_live_allowed",
+  "/api/contractor/jobs/[id]/site-visits/[visitId]/complete": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/site-visits/start": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/site-visits/:visitId/complete": "pre_live_allowed",
   "/api/jobs/[id]/commercial-integrity/reviews": "post_live_billing",
   "/api/jobs/[id]/confirm": "pre_live_allowed",
   "/api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes/preview": "post_live_billing",
@@ -124,6 +128,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:AcceptFinalCheckTerms": "post_live_billing",
   "command:AddFinalReviewExtra": "post_live_billing",
   "command:IssueLockBoundInvoice": "post_live_billing",
+  "command:IssueClientApproval": "post_live_billing",
   "nest:/jobs/:id/final-account": "post_live_billing",
   "nest:/jobs/:id/materials": "pre_live_allowed",
   "nest:/jobs/:id/parties": "pre_live_allowed",
