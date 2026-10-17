@@ -112,3 +112,19 @@ b434b444dd3b44891455f84b22128e81937202afc0fd671a99d78a9097de9429  /private/tmp/j
 ```
 
 This final receipt-only `apply_patch` succeeded. Final HEAD remains `31682762c903d716657c573e1b5deae63588aad7`; no Git mutation was performed. Source hashes are documentary evidence, not a permanent test pin.
+
+## r1 repair (review eed47072)
+
+Repaired by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Changes:
+- S1: removed `class VariationCommandConflict extends VariationRevisionConflict` from `packages/db/src/variation-repository.ts`; the three repository sites (priced revision write, approve, reject) and the one site in `apps/api/src/variation/variation.application.ts` now throw `new VariationRevisionConflict("VARIATION_COMMAND_CONFLICT")`; the import was dropped. The controller still maps `VariationRevisionConflict` to 409 with the code; no test edited.
+- S2: in `writePricedRevision`, `approvePricedVariation` and `reject` the variation row is locked in its own `SELECT ... FOR UPDATE` statement; the prior revision / approval / rejection look-up by command id (and the job-closed flag) is a separate following statement, then compare/return, then the live and stale checks. Replay still writes nothing and appends no audit; a new write appends audit once. The misleading comment was corrected.
+
+Commands run:
+- `pnpm --filter @jobguard/db... build`: exit 0.
+- `pnpm --filter @jobguard/api exec vitest run src/watchdog-registry.test.ts src/variation --maxWorkers=2`: 2 files, 126 tests passed.
+- `pnpm --filter @jobguard/db typecheck` and `pnpm --filter @jobguard/api typecheck`: exit 0. `pnpm --filter <pkg> lint` (tsc): exit 0.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: passed, same 8-file lane.
+
+NOT RUN: `packages/db/test/later-variation-*.integration.test.ts` (embedded PostgreSQL does not start here; an attempt at the replay file reported 5 skipped, file failed). The S2 concurrent test is unproven until CI. No `--force` turbo runs or full build were done for this repair.

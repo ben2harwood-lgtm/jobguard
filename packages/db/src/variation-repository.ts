@@ -8,25 +8,23 @@ import{randomUUID}from"node:crypto";import{appendAuditBatch}from"./audit.js";imp
 export class VariationRevisionConflict extends Error {
  constructor(readonly code: string = "VARIATION_REVISION_CONFLICT") { super(code); this.name = "VariationRevisionConflict"; }
 }
-/** A committed command id was reused with a different payload. Still an HTTP 409 through the revision-conflict mapping. */
-export class VariationCommandConflict extends VariationRevisionConflict {
- constructor() { super("VARIATION_COMMAND_CONFLICT"); this.name = "VariationCommandConflict"; }
-}
 export async function insertVariationProposal(db:TenantTransaction,tenantId:string,raw:unknown){const p=variationProposalV1.parse(raw);if(!p.existingScopeItemId){await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state)VALUES($1,$2,$3,'reserved') ON CONFLICT DO NOTHING`,[p.scopeItemId,tenantId,p.jobId]);if(p.lineageParentScopeItemId)await db.$client.query(`INSERT INTO app.scope_lineage(tenant_id,job_id,parent_scope_item_id,child_scope_item_id,kind)VALUES($1,$2,$3,$4,'variation') ON CONFLICT DO NOTHING`,[tenantId,p.jobId,p.lineageParentScopeItemId,p.scopeItemId]);}const s=p.suggestion;await db.$client.query(`INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,lineage_parent_scope_item_id,capture_kind,capture_text,description,ai_rate_pence,ai_source_ref,ai_source_hash,ai_rate_version)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[p.id,tenantId,p.jobId,p.scopeItemId,p.existingScopeItemId,p.lineageParentScopeItemId,p.captureKind,p.captureText,p.description,s?.unitRatePence??null,s?.sourceRef??null,s?.sourceHash??null,s?.rateVersion??null]);return p;}
 /** Writes the priced revision rows. Returns false for an exact replay of an already committed revision (no second effect).
- * The replay look-up shares the variation row-lock statement, so an identical concurrent twin is recognised after waiting
- * for the winner and a stale writer is still refused with that single locked statement. */
+ * The variation row is locked in its own statement; the replay look-up is a separate, later statement, so under READ COMMITTED
+ * an identical concurrent twin sees the winner's committed revision and replays cleanly. */
 async function writePricedRevision(db:TenantTransaction,tenantId:string,r:VariationRevision,enforceLive:boolean):Promise<boolean>{
- const current=await db.$client.query(`SELECT state,current_revision_id,(SELECT j.status<>'live' FROM app.job j WHERE j.tenant_id=$1 AND j.id=variation.job_id) job_closed,(SELECT jsonb_build_object('variation_id',x.variation_id,'revision',x.revision,'previous',x.previous_revision_id,'description',x.description,'unit',x.unit,'rate',x.unit_rate_pence::text,'delta',x.signed_delta_pence::text,'hash',x.content_hash) FROM app.variation_revision x WHERE x.tenant_id=$1 AND x.id=$3) prior FROM app.variation WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,r.variationId,r.id]);
+ const current=await db.$client.query(`SELECT job_id,state,current_revision_id FROM app.variation WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,r.variationId]);
  const row=current.rows[0];
  if(!current.rowCount||!row)throw new Error("VARIATION_NOT_FOUND");
- const prior=row.prior as Record<string,unknown>|null|undefined;
+ // Separate statement after the lock: a fresh snapshot sees a concurrent identical twin's committed revision.
+ const look=(await db.$client.query(`SELECT (SELECT j.status<>'live' FROM app.job j WHERE j.tenant_id=$1 AND j.id=$3) job_closed,(SELECT jsonb_build_object('variation_id',x.variation_id,'revision',x.revision,'previous',x.previous_revision_id,'description',x.description,'unit',x.unit,'rate',x.unit_rate_pence::text,'delta',x.signed_delta_pence::text,'hash',x.content_hash) FROM app.variation_revision x WHERE x.tenant_id=$1 AND x.id=$2) prior`,[tenantId,r.id,row.job_id])).rows[0];
+ const prior=look.prior as Record<string,unknown>|null|undefined;
  if(prior){
   const same=prior.variation_id===r.variationId&&(prior.previous??null)===(r.previousRevisionId??null)&&prior.revision===r.revision&&prior.description===r.description&&prior.unit===r.unit&&prior.rate===String(r.unitRatePence)&&prior.delta===String(r.signedDeltaPence)&&prior.hash===r.contentHash;
-  if(!same)throw new VariationCommandConflict();
+  if(!same)throw new VariationRevisionConflict("VARIATION_COMMAND_CONFLICT");
   return false;
  }
- if(enforceLive&&row.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
+ if(enforceLive&&look.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
  if(row.current_revision_id!==r.previousRevisionId)throw new VariationRevisionConflict();
  await db.$client.query(`INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,previous_revision_id,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)SELECT $1,$2,job_id,id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16 FROM app.variation WHERE tenant_id=$2 AND id=$17`,[r.id,tenantId,r.scopeItemId,r.revision,r.previousRevisionId,r.description,r.quantity,r.unit,r.unitRatePence,r.signedDeltaPence,r.contentHash,r.confirmedByMembershipId,r.rateProvenance.kind,r.rateProvenance.sourceRef,r.rateProvenance.sourceHash,r.rateProvenance.rateVersion,r.variationId]);
  await db.$client.query(`INSERT INTO app.variation_rate_observation(id,tenant_id,job_id,variation_id,revision_id,unit,unit_rate_pence,provenance_kind,source_ref,source_hash,rate_version)SELECT $1,$2,job_id,id,$3,$4,$5,$6,$7,$8,$9 FROM app.variation WHERE tenant_id=$2 AND id=$10`,[randomUUID(),tenantId,r.id,r.unit,r.unitRatePence,r.rateProvenance.kind,r.rateProvenance.sourceRef,r.rateProvenance.sourceHash,r.rateProvenance.rateVersion,r.variationId]);
@@ -47,16 +45,18 @@ async function storedApproval(db:TenantTransaction,tenantId:string,revisionId:st
 /** Approval is idempotent on its own id: an exact committed replay returns the stored approval before any stale-write check,
  * a reused id with a different payload is a typed conflict, and every returned field is read back from the stored row. */
 export async function approvePricedVariation(db:TenantTransaction,tenantId:string,variationId:string,a:VariationApproval){
- const v=await db.$client.query(`SELECT job_id,current_revision_id,state,(SELECT j.status<>'live' FROM app.job j WHERE j.tenant_id=$1 AND j.id=variation.job_id) job_closed,(SELECT jsonb_build_object('variation_id',x.variation_id,'revision_id',x.revision_id,'revision',x.revision,'hash',x.content_hash,'delta',x.signed_delta_pence::text,'method',x.method,'actor',x.actor_membership_id,'evidence',x.evidence_id) FROM app.variation_approval x WHERE x.tenant_id=$1 AND x.id=$3) prior FROM app.variation WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,variationId,a.id]);
+ const v=await db.$client.query(`SELECT job_id,current_revision_id,state FROM app.variation WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,variationId]);
  const row=v.rows[0];
- const prior=row?.prior as Record<string,unknown>|null|undefined;
+ // Separate statement after the lock (fresh READ COMMITTED snapshot) so an identical concurrent twin replays.
+ const look=row?(await db.$client.query(`SELECT (SELECT j.status<>'live' FROM app.job j WHERE j.tenant_id=$1 AND j.id=$3) job_closed,(SELECT jsonb_build_object('variation_id',x.variation_id,'revision_id',x.revision_id,'revision',x.revision,'hash',x.content_hash,'delta',x.signed_delta_pence::text,'method',x.method,'actor',x.actor_membership_id,'evidence',x.evidence_id) FROM app.variation_approval x WHERE x.tenant_id=$1 AND x.id=$2) prior`,[tenantId,a.id,row.job_id])).rows[0]:undefined;
+ const prior=look?.prior as Record<string,unknown>|null|undefined;
  if(prior){
   const same=prior.variation_id===variationId&&prior.revision_id===a.revisionId&&prior.revision===a.revision&&prior.hash===a.contentHash&&prior.delta===String(a.signedDeltaPence)&&prior.method===a.method&&prior.actor===a.actorMembershipId&&(prior.evidence??null)===(a.evidenceId??null);
-  if(!same)throw new VariationCommandConflict();
+  if(!same)throw new VariationRevisionConflict("VARIATION_COMMAND_CONFLICT");
   return storedApproval(db,tenantId,a.revisionId);
  }
  if(!row||row.state!=="priced"&&row.state!=="approved"||row.current_revision_id!==a.revisionId)throw new Error("EXACT_CURRENT_PRICED_REVISION_REQUIRED");
- if(row.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
+ if(look?.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
  const exact=await db.$client.query(`SELECT 1 FROM app.variation_revision WHERE tenant_id=$1 AND id=$2 AND revision=$3 AND content_hash=$4 AND signed_delta_pence=$5`,[tenantId,a.revisionId,a.revision,a.contentHash,a.signedDeltaPence]);
  if(!exact.rowCount)throw new Error("EXACT_CURRENT_PRICED_REVISION_REQUIRED");
  // One statement: the approval and, for newly approved scope only, its single operational progress identity.
@@ -174,15 +174,18 @@ export class VariationRepository{
  async read(context:VerifiedTenantContext,jobId:string){return withTenant(this.pool,context,async db=>{const activation=await db.$client.query(`SELECT accepted_net_value_pence AS accepted_net_pence,recovery_cap_pence FROM app.job WHERE tenant_id=$1 AND id=$2 AND status IN('live','invoiced','paid')`,[context.tenantId,jobId]);if(!activation.rowCount)throw new Error("ACTIVATION_REQUIRED");const scope=await db.$client.query(`SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY id LIMIT 1`,[context.tenantId,jobId]);if(!scope.rowCount)throw new Error("SCOPE_REQUIRED");const values=await db.$client.query(`SELECT v.id,v.scope_item_id,v.existing_scope_item_id,v.lineage_parent_scope_item_id,v.description,v.capture_text,v.state,v.current_revision_id,r.id revision_id,r.revision,r.description revision_description,r.quantity_decimal,r.unit,r.unit_rate_pence,r.signed_delta_pence,r.content_hash,r.confirmed_by_membership_id,r.rate_source_ref,(a.id IS NOT NULL) approved,(x.id IS NOT NULL) rejected FROM app.variation v LEFT JOIN app.variation_revision r ON r.tenant_id=v.tenant_id AND r.variation_id=v.id LEFT JOIN app.variation_approval a ON a.tenant_id=r.tenant_id AND a.revision_id=r.id LEFT JOIN app.variation_rejection x ON x.tenant_id=r.tenant_id AND x.revision_id=r.id WHERE v.tenant_id=$1 AND v.job_id=$2 ORDER BY v.created_at,r.revision`,[context.tenantId,jobId]);const map=new Map<string,VariationWorkspaceRow>();for(const row of values.rows){let item=map.get(row.id);if(!item){item={id:row.id,scopeItemId:row.scope_item_id,existingScopeItemId:row.existing_scope_item_id,lineageParentScopeItemId:row.lineage_parent_scope_item_id,description:row.description,captureText:row.capture_text,state:row.state,currentRevisionId:row.current_revision_id,revisions:[]};map.set(row.id,item)}if(row.revision_id)item.revisions.push({id:row.revision_id,revision:row.revision,description:row.revision_description,quantity:row.quantity_decimal,unit:row.unit,unitRatePence:Number(row.unit_rate_pence),signedDeltaPence:Number(row.signed_delta_pence),contentHash:row.content_hash,approved:row.approved,rejected:row.rejected,actor:`membership:${row.confirmed_by_membership_id}`,source:row.rate_source_ref});}return{baselinePence:Number(activation.rows[0].accepted_net_pence),capPence:Number(activation.rows[0].recovery_cap_pence),parentScopeItemId:scope.rows[0].id,variations:[...map.values()]};}).catch(rethrowJobWorkState)}
  async transact<T>(context:VerifiedTenantContext,fn:(db:TenantTransaction)=>Promise<T>){return withTenant(this.pool,context,fn).catch(rethrowJobWorkState)}
  async reject(db:TenantTransaction,tenantId:string,input:{id:string;variationId:string;revisionId:string;actorMembershipId:string}){
-  const row=await db.$client.query(`SELECT job_id,state,current_revision_id,(SELECT j.status<>'live' FROM app.job j WHERE j.tenant_id=$1 AND j.id=variation.job_id) job_closed,(SELECT jsonb_build_object('variation_id',x.variation_id,'revision_id',x.revision_id,'actor',x.actor_membership_id) FROM app.variation_rejection x WHERE x.tenant_id=$1 AND x.id=$3) prior FROM app.variation WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,input.variationId,input.id]);
+  const row=await db.$client.query(`SELECT job_id,state,current_revision_id FROM app.variation WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,input.variationId]);
   if(!row.rowCount)throw new Error("VARIATION_NOT_FOUND");
-  const variation=row.rows[0],prior=variation.prior as Record<string,unknown>|null|undefined;
+  const variation=row.rows[0];
+  // Separate statement after the lock (fresh READ COMMITTED snapshot) so an identical concurrent twin replays.
+  const look=(await db.$client.query(`SELECT (SELECT j.status<>'live' FROM app.job j WHERE j.tenant_id=$1 AND j.id=$3) job_closed,(SELECT jsonb_build_object('variation_id',x.variation_id,'revision_id',x.revision_id,'actor',x.actor_membership_id) FROM app.variation_rejection x WHERE x.tenant_id=$1 AND x.id=$2) prior`,[tenantId,input.id,variation.job_id])).rows[0];
+  const prior=look.prior as Record<string,unknown>|null|undefined;
   if(prior){
-   if(prior.variation_id!==input.variationId||prior.revision_id!==input.revisionId||prior.actor!==input.actorMembershipId)throw new VariationCommandConflict();
+   if(prior.variation_id!==input.variationId||prior.revision_id!==input.revisionId||prior.actor!==input.actorMembershipId)throw new VariationRevisionConflict("VARIATION_COMMAND_CONFLICT");
    return input;
   }
   if(variation.state!=="priced"||variation.current_revision_id!==input.revisionId)throw new VariationRevisionConflict();
-  if(variation.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
+  if(look.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
   const approved=await db.$client.query(`SELECT 1 FROM app.variation_approval WHERE tenant_id=$1 AND revision_id=$2`,[tenantId,input.revisionId]);
   if(approved.rowCount)throw new VariationRevisionConflict();
   const inserted=await db.$client.query(`INSERT INTO app.variation_rejection(id,tenant_id,job_id,variation_id,revision_id,actor_membership_id,reason_code,rejected_at)VALUES($1,$2,$3,$4,$5,$6,'customer_did_not_approve',transaction_timestamp()) ON CONFLICT(tenant_id,variation_id,revision_id) DO NOTHING`,[input.id,tenantId,variation.job_id,input.variationId,input.revisionId,input.actorMembershipId]);
