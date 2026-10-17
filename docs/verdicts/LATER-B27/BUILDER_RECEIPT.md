@@ -160,3 +160,20 @@ Commands actually run (worktree on `codex/sandbox/later-b27`, clean at start; br
 Not run: full `pnpm test`, `test:db`, `test:migrations`, e2e/browser (CI). The first-failing-run (red) record remains unavailable.
 
 AGENTS.md section 5.5 check (source inspection): amounts pass through the public `money()` validator (safe integer, existing 1_000_000_000_000 limit, typed `MoneyError`); the proposal total is derived with the existing `calculateNetLine` half-even kernel, no second arithmetic implementation; no float multiplication added; ledger still requires positive amounts; nullable job-transition fields stay nullable. No fee, tax, VAT or rounding-policy change.
+
+## r2 repair (CI run 39017455685)
+
+Repaired by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Defect: `apps/api/src/auth/context-boundary.test.ts:748` flagged `packages/db/src/commands.ts:16` because the Zod `superRefine` callback's second parameter was named `context`.
+
+Change: `packages/db/src/commands.ts:12` and `:16` - parameter renamed `context` -> `refinementIssues` (name only; no behaviour, boundary test or allow-list change).
+
+Run:
+- `pnpm --filter @jobguard/db... build` -> passed.
+- `pnpm --filter @jobguard/api exec vitest run src/auth/context-boundary.test.ts --maxWorkers=2` -> 145/145 passed.
+- `pnpm --filter @jobguard/db exec vitest run src/later-money-boundaries.test.ts --maxWorkers=2` -> 5/5 passed.
+- `pnpm --filter @jobguard/db typecheck` -> passed.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes` -> passed.
+
+Not run: db integration tests, full `pnpm test`, migrations, e2e (CI).

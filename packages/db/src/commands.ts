@@ -9,11 +9,11 @@ import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "
 const uuid = z.string().uuid();
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 /** Shared boundary adapter; the public money kernel owns magnitude and integer rules. */
-export const nonnegativeMoneyPenceSchema = z.number().nonnegative().superRefine((value, context) => {
+export const nonnegativeMoneyPenceSchema = z.number().nonnegative().superRefine((value, refinementIssues) => {
   try { money(value); }
   catch (error) {
     if (!(error instanceof MoneyError)) throw error;
-    context.addIssue({ code: z.ZodIssueCode.custom, message: error.message, params: { moneyCode: error.code } });
+    refinementIssues.addIssue({ code: z.ZodIssueCode.custom, message: error.message, params: { moneyCode: error.code } });
   }
 });
 const actionSchema = z.object({
