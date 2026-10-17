@@ -1,6 +1,40 @@
-Built by Codex (GPT-6), dispatched 13 Oct 2026; stopped at the disk preflight on 16 Oct 2026.
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
 
-# LATER-B25 — stopped before implementation
+# LATER-B25 — Variation lifecycle integrity (built 17 Oct 2026)
+
+Status: **BUILT, NOT ACCEPTED; PostgreSQL files NOT RUN here; Decision 74 PARK (check, then park; never merge/enable/deploy).** The 16 Oct stop at the old 45 GB gate is kept below as history; Decision 82 lowered the gate to 33 GB and `df -g` showed 47 GB free, so the build proceeded on top of commit ba34d8ae. No migration. **New GRANTs: none** (standard F: no direct protected-table write grant added; the existing runtime INSERT on `app.scope_progress` is reused). Base: local `origin/main` 1bcd8db8 (order cited ca435eeb); both touched source files are identical on main and this branch.
+
+## What changed
+- `packages/db/src/variation-repository.ts`
+  - `VariationRevisionConflict` now carries a settable `code`; new `VariationCommandConflict` (code `VARIATION_COMMAND_CONFLICT`, subclass, so the existing controller maps it to HTTP 409 unchanged).
+  - L145: `insertPricedVariation` appends one `variation.priced` audit event atomically; `reject` appends one `variation.rejected`. Capture commands (`logBuilderExtra`, `addFinalReviewExtra`) use the internal `writePricedRevision` and keep their single capture event (no double audit).
+  - L149: pricing, approval and rejection look up their own command id inside the same row-lock statement; an exact committed command returns without effect (no second row, observation or audit), a reused id with a different payload throws `VariationCommandConflict`; replay is decided before the stale-pointer check. The extra look-up rides on the existing locked statement so the merged scripted test's one-query stale-writer assertion still holds.
+  - L150: approval and, for new scope only (`existing_scope_item_id IS NULL`), one `app.scope_progress` row are written in one data-modifying statement; pending/rejected proposals never reach it.
+  - L151: `approvePricedVariation` returns the stored approval row (`storedApproval`), not `{...caller}`.
+  - L153: `read()` accepts status `live`, `invoiced`, `paid`. New writes on a non-live job are refused in the three write paths with the existing `ACTIVATION_REQUIRED` error (the guard was previously the read's side effect).
+- `apps/api/src/variation/variation.application.ts`: revise replays/conflicts from the stored history before the stale check; approve accepts an already-approved earlier revision so its committed command can replay; changed payload throws `VariationCommandConflict`.
+- New tests (tests first; all PostgreSQL, all NOT RUN here): `later-variation-isolation.integration.test.ts` (L144, ports 58200+), `later-variation-history.integration.test.ts` (L145, L150, L151, L153; 58400+), `later-variation-replay.integration.test.ts` (L149 incl. concurrent twin; 58600+). Titles carry the item id.
+
+## Commands actually run
+- `pnpm --filter @jobguard/db... build` (plain): exit 0 (an attempt with `--concurrency=2` passed to tsc failed with TS5023; harmless, re-run plain).
+- First failing run of the three new files: **NOT RUN as a real red**: vitest transforms the files, then every file fails at `Postgres init script exited with code null` (embedded PostgreSQL cannot start in this sandbox; the existing `audit-api-variation.integration.test.ts` fails identically). 11 tests skipped.
+- `vitest run test/audit-api-variation.test.ts` (db, scripted merged test, unedited): 7 passed. `vitest run src/variation` (api): 5 passed. Both re-run after the final edit.
+- `pnpm exec turbo run typecheck --force --concurrency=2`: exit 0 (7/7, 0 cached). `... lint --force ...`: exit 0 (7/7). `pnpm build --force --concurrency=2`: exit 0 (7/7). `--force` used, no cache hits.
+- `git diff --check`: exit 0.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: **fails by design**: "must match exactly one registered lane; found 0" because `config/lanes/later-b25.json` is not in the repo (dispatcher registers it to the changed files).
+
+## NOT RUN
+- The three new PostgreSQL files and every other `*.integration.test.ts` (embedded PostgreSQL cannot start here; CI/dispatcher Mac run them). The SQL (row-lock statement with scalar sub-selects, the approval/progress CTE) is therefore unproven against a real server.
+- `pnpm test`, `test:db`, `test:migrations`, `test:e2e`, browsers, `pnpm eval`.
+
+## Stops / notes
+- No STOP: no merged assertion needed editing. `watchdogCommandGuards`, the command harness and the replay contract test untouched.
+- Replay is derived from stored rows (revision/approval/rejection ids), not `app.command_receipt`, to avoid touching the pinned receipt family.
+- Reviewer attention: (1) the three scalar sub-selects in the `FOR UPDATE` statements and the `job_closed` flag (undefined in the scripted mock = treated as live); (2) approve on an old approved revision with a NEW approval id still returns `EXACT_CURRENT_PRICED_REVISION_REQUIRED`; (3) existing-scope variation approvals add no progress row.
+- LATER (UI): none added.
+
+
+## History: 16 Oct 2026 stop (superseded by the build below)
 
 Status: **BLOCKED / PARKED; no acceptance claimed**. No source files, existing tests, migrations, grants, pins or policies changed. No customer data, external actions or Git writes were used.
 
