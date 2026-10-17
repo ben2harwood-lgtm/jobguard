@@ -54,7 +54,7 @@ async function fixture(insurer: boolean) {
 }
 
 it("0187 preserves 0142 insurer exclusion, 0186 unpaid interest, and F19's released reason", async () => {
-  expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0187_practice_supplier_credit.sql'")).rows).toHaveLength(1);
+  expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0188_practice_supplier_credit.sql'")).rows).toHaveLength(1);
   for (const [insurer, name] of [[true, "F19"], [false, "F18"], [false, "F19"]] as const) {
     const f = await fixture(insurer);
     if (name === "F18") await f.feed.factsCommand(context, actor, f.auth.digest, f.jobId, { version: "practice-facts-command.v1", commandId: randomUUID(), action: "advance", movement: "receipt-interest-120", step: "pending", expectedRevision: 2 });

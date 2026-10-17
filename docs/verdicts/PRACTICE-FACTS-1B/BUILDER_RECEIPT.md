@@ -9,7 +9,7 @@ No acceptance or independent verdict is claimed. All changes are uncommitted. Th
 - Branch: `codex/sandbox/practice-facts-1b`.
 - Issued base and current HEAD: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`.
 - Initial `origin/main` matched the issued base. It advanced during this task first to `43a52cd957b3b41fe3fa44eb2153213b62717b39` (FIXLATER-7), then to `2350b1a718b76aabdedd1782f02e92f516914246` (SV-3-BARRIER), the final inspected main. Main wins. The plan, applicable 0119/0130 routine definitions and migration runner are byte-identical between those heads; the newer changes concern another upgrade test, an SV-3 browser barrier, receipts and lane registration. No Git write or refresh was attempted. The dispatcher must integrate newer main and its lane entry.
-- Migration: `0187_practice_supplier_credit.sql`; runner registration appended after 0140. 0130 remains the newest pre-existing eligibility guard; 0119 remains the newest completeness routine. Both #138 and #139's migrations, 0130 and 0131, are in the issued base.
+- Migration: `0188_practice_supplier_credit.sql`; runner registration appended after 0140. 0130 remains the newest pre-existing eligibility guard; 0119 remains the newest completeness routine. Both #138 and #139's migrations, 0130 and 0131, are in the issued base.
 - Read AGENTS.md, BUILD_PLAN.md rev 3.0 §10.3.3/§10.3.5/CH-7 and §12.2, the issued order/addendum, the standing handoff, practice-facts, recovery-eligibility and recovery-timing contracts, the original hold note and the later two-document ruling. The plan/category/fixture/ledger citations still match current main.
 - Installed runtime: Node `v24.17.0`; repository `.nvmrc` is `24.15.0`. Cached pinned pnpm `10.28.1` was used. No dependency download, installation or fresh pinned-install verification was performed, as the dispatch forbids it.
 - Intended commit message: `/private/tmp/jg-msg-practice-facts-1b.txt`. No commit, push, PR, merge, review or acceptance action was performed.
@@ -199,7 +199,7 @@ Changed payload SHA-256 (receipt excluded from its own recursive hash):
 | packages/core/src/practice-supplier-credit.test.ts | new | 36 | 54bf49f6e70133308a79192b5e0069cff9e1b03562a184f0760bcb57f6805770 |
 | packages/core/src/supplier-documents.ts | tracked edit | 30 | d6269db6c3dce0901f2c77c2059b1127c9b79f5a7e56355bf993d48b35239b6a |
 | packages/db/MIGRATIONS.md | tracked edit | 975 | 85ede0d50bc54da1342a1306b36d64646abcb2bf1b8b57ed382a32922ed5adc5 |
-| packages/db/migrations/0187_practice_supplier_credit.sql | new | 425 | ef25c48e36c00c7296f7ca07733a20fa922421af293dac5f100933f29762f222 |
+| packages/db/migrations/0188_practice_supplier_credit.sql | new | 425 | ef25c48e36c00c7296f7ca07733a20fa922421af293dac5f100933f29762f222 |
 | packages/db/src/migrate.ts | tracked edit | 99 | 986a613045e0196de1a4b183c9c6a92622d893fbd47087a572bd61cea08ed504 |
 | packages/db/src/practice-supplier-credit-repository.ts | new | 50 | 500b34d262237374680934ae528acfa9d76b071ba70df4be63d989eee601fd1f |
 | packages/db/src/recovery-eligibility-v3-repository.ts | tracked edit | 72 | 5d6729d8661114c77abdc4d67aff1675be4263bda50ed00f0bca2619cee739c0 |

@@ -53,7 +53,7 @@ async function liveJob(admin:Pool,runtime:Pool,live=true) {
 }
 const compared=['app.recovery_case','app.recovery_case_event','app.recovery_claim_revision','app.recovery_eligibility_revision','app.recovery_eligibility_v3_review','app.recovery_claim_line','app.supplier_document','app.supplier_document_version','app.supplier_document_intake','app.practice_feed_account','app.practice_feed_command','app.practice_feed_event','app.audit_event'];
 let proof:Awaited<ReturnType<typeof proofBefore>>;
-const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),position=names.indexOf('0187_practice_supplier_credit.sql');
+const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),position=names.indexOf('0188_practice_supplier_credit.sql');
 const security=async(pool:Pool)=>({
  tables:(await pool.query("SELECT c.oid,c.relname,c.relowner,c.relrowsecurity,c.relforcerowsecurity,c.relacl::text FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relkind='r' AND c.relname NOT LIKE 'practice_supplier_credit_%' ORDER BY c.oid")).rows,
  policies:(await pool.query("SELECT p.oid,p.polrelid,p.polname,p.polcmd,p.polroles,p.polqual::text,p.polwithcheck::text FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid WHERE c.relname NOT LIKE 'practice_supplier_credit_%' ORDER BY p.oid")).rows,
