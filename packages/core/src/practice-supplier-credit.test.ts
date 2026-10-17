@@ -23,7 +23,7 @@ it("PF1B-A01 A01_AppendTwoInterimDocuments", () => {
 });
 
 const id = "10000000-0000-4000-8000-000000000001";
-const result = (fixture: string) => evaluateRecoveryEligibilityV3({ version: "recovery-eligibility-facts.v3", environment: "synthetic_demo", tenantId: id, jobId: id, caseId: id, fixture, settlement: "settled", paymentTiming: "after_opening", sourceRef: id });
+const result = (fixture: string) => evaluateRecoveryEligibilityV3({ version: "recovery-eligibility-facts.v3", environment: "synthetic_demo", tenantId: id, jobId: id, caseId: id, fixture, payer: "not_insurer", settlement: "settled", paymentTiming: "after_opening", sourceRef: id });
 it("PF1B-A08 A08_ReferenceFeeZeroThenThirty", () => {
   for (const [fixture, expected] of [["F16-partial", 0], ["F16-full", 3000], ["F14", 3000]] as const) {
     const q = result(fixture).qualifyingPrincipal.pence;

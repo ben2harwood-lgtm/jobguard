@@ -209,3 +209,18 @@ Changed payload SHA-256 (receipt excluded from its own recursive hash):
 Final manifest: 14 files total (5 tracked edits, 9 new files including this receipt), all in the exact registered lane. No tracked file outside the lane changed. The receipt hash is emitted separately after its final write.
 
 Final head SHA: `269874640468a6e1dfdfed63edd4ce187d1d9dbb`. This identifies the unchanged base HEAD, not an invented commit of this uncommitted payload. Dispatcher commitment and exact-commit CI/independent verdict remain required.
+
+## r2
+
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Change: `packages/core/src/practice-supplier-credit.test.ts:26` helper `result()` now passes `payer: "not_insurer"`, the fact `recoveryEligibilityFactsV3` (recovery-eligibility-v3.ts:14) now requires. Expected values unchanged. No other file touched (recovery-eligibility-v3.ts and merged tests untouched).
+
+Commands run:
+- `pnpm --filter @jobguard/core exec vitest run src/practice-supplier-credit.test.ts --maxWorkers=2`: 3 of 3 pass.
+- `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2`: 112 files, 2804 of 2804 pass.
+- `pnpm --filter @jobguard/core typecheck`: clean.
+
+Note: running vitest without `src` also picks up the git-ignored stale `packages/core/dist` copies (7 failures, ENOENT on dist/*.ts and the old test); not part of CI, not a change in this branch.
+
+NOT RUN: lane lint, DB integration tests (unchanged by r2). Not committed or pushed, per the r2 order.
