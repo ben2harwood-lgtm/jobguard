@@ -133,3 +133,9 @@ SHA-256 closeout values (receipt omitted because it contains this evidence):
 - No reviewer or acceptance has been fabricated.
 
 Final HEAD: `31682762c903d716657c573e1b5deae63588aad7` (no commits).
+
+## Repair r1 (coordinator, #279, CI run 39017577681)
+Built by Claude Sonnet (Codex stand-in), dispatcher 14.
+Root cause: my reconcile branch in `finishHistory` required the bound attempt's outcome to be `outcome_unknown`. The merged scripted test (`recovery-message-repository.test.ts`, P2-5) models a reconcile_started history with an attempt row of outcome `succeeded`, so no `reconciled` event was written.
+Change (`packages/db/src/recovery-message-repository.ts`, reconcile_started branch only): require only that the bound attempt exists (`last.kind === "reconcile_started" && own`); the reconciliation outcome belongs to the attempt being reconciled. The started-branch binding (one attempt's outcome never closes a later one) is unchanged. Merged test not edited.
+Results: `vitest run test/recovery-message-repository.test.ts --maxWorkers=2` 9/9 passed; `turbo typecheck --force --filter=@jobguard/db` exit 0. PostgreSQL files still NOT RUN here (CI).

@@ -510,7 +510,8 @@ export class RecoveryMessageRepository {
           const match = settled[own.outcome];
           if (match && match[0] === m.outbox_status) kind = match[1];
         }
-      } else if (last.kind === "reconcile_started" && own?.outcome === "outcome_unknown") {
+      } else if (last.kind === "reconcile_started" && own) {
+        // The check belongs to the attempt it reconciles (the bound one); a later attempt that has no record yet cannot be closed by it.
         if (m.outbox_status === "succeeded") kind = "reconciled";
         else if (m.outbox_status === "retryable") kind = "retryable";
       }
