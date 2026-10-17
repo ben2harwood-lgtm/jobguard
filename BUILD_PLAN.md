@@ -4,6 +4,8 @@
 **Companion:** `AGENTS.md`, revision 3.0  
 **Status:** implementation plan. It describes work to perform; it is not evidence that anything is built or verified. Commercial terms are `proposed` decision records; none is approved.
 
+**17 October 2026 product/UX audit proposal:** The `UX-*` cards and §12.5/§13.3 in this branch are **NOT ADOPTED**. They are candidate scope and acceptance text for founder/independent review, not build-order dispatch, product availability, a changed commercial policy, or permission for real user data. Rev 3.0 and the adopted least-privilege §11.8 remain authoritative on `main` until a separately reviewed/adopted plan change.
+
 **How to read this plan.** §1 is the product and the two commercial deals. §2 is how the build runs. §3 gates, §4 decisions, §5 contracts and §6 the data model apply to everything. §7 says what is already built. §8 changes to built work that both tracks need. §9 is the contractor track, §10 the small-builder track, §11 shared platform and live work. §12 is the one dependency graph and build order. §13 lists every promise sales may make and the task that delivers it. Task cards use one format: **Track**, **Depends on**, **Build**, **Done when**.
 
 **What rev 3.0 replaces.** Rev 2.5 was the validated rev 2.2 core plus a sandbox addendum (§13) and three layered amendments (§14 shadow bill, §15 monetisation, §16 contractor track). Rev 3.0 merges them into one plan with one definition per task. Completed task cards (M0, M1, the built §13 leaves) are summarised in §7; their original text is preserved in `docs/archive/BUILD_PLAN.rev2.5.md`, as are rev 2.1–2.4. Rev 3.0 also records a new founder decision (30 September 2026): the line between the two deals is 7 jobs at once, per company, and the Firm and Contractor subscription plans are withdrawn.
@@ -2827,6 +2829,55 @@ Every task in this section inherits C1–C8 and AGENTS §2. For work that reache
 
 **M2 exit:** the £320 discrepancy is genuinely derived from confirmed source documents; readiness checks use explicit facts; G2 and the held-out tests pass. Findings remain human-reviewed, and prevention remains non-billable.
 
+### 11.3A Proposed end-user feature-coverage cards — **NOT ADOPTED**
+
+**Scope and authority:** These proposed cards come from a 17 October 2026 JobGuard USP/sales-bible versus build-plan versus UI audit. Current M1 quote, M2 materials/readiness, and UIWIRE proof/finance tasks already provide the domain basis. These additions describe missing *user-visible journeys and acceptance evidence*; they do not reclassify earlier task status as verified. Until a recorded independent plan verdict, Ben's approval, and adoption, no task below authorises production scope, a real-data connection, cost, a provider send or new pricing. Full project-management/Gantt remains out of scope under §14.1.
+
+### UX-Q1 — Builder-owned quote costing and line-level margin (**PROPOSED**)
+**Track:** small-builder; synthetic UI first.
+**Depends on:** M1-4, UIWIRE-2, M2-1A-S (or their currently accepted equivalent); any connected quote write also depends on applicable versioned quote/money/tax contracts and review.
+**Build:** a builder-led estimating workspace from confirmed scope: own saved selling rates/units and rate provenance; item quantity; entered labour-hours and cost rates, materials, subcontract/plant and overhead allowances; selling price, estimated cost and difference/margin *per line and job*. Explicitly distinguish gross margin from markup and exclude unsupported taxes. Show outdated/unknown rates, unpriced lines, assumed cost and negative margin. Draft revisions do not change an already issued/accepted quote.
+**Done when:** 
+- On desktop and phone, a builder can create/review the quote line, inspect where its price came from, edit costs and see exact integer-pence totals and negative margins without silent defaults. An unpriced line cannot appear as confirmed.
+- Suggestions from M5-6 are later, advisory and human-accepted; no model or rate-book lookup silently issues/sends a quote. Reuse source-scoped quote versions, tax gates, customer review and retry/outcome-unknown handling.
+- Tests cover quantity/unit/pack differences, markup versus margin, 0/negative margin, tax-unknown state, revised/expired rates, edited accepted quotes and underpriced-scope warnings. This is no permission to send or price from real suppliers yet.
+**Open decision:** Is full labour/plant/subcontract/overhead estimation in the v1 product, or an explicit later upgrade? Neither the current M1-4 card nor the published sales register commits to this whole costing model.
+
+### UX-D1 — Goods-receipt check-in and supplier match screens (**PROPOSED UX COMPLETION**)
+**Track:** small-builder; synthetic UI first; contractor adaptation requires ENT permissions/source contracts.
+**Depends on:** M2-1A-S/M2-1B-S, M2-2-S, M2-4-S, M2-5-S; verified real-data/provider flows inherit live M2-1…5, M3 evidence and G1/G2.
+**Build:** simple site-level delivery check-in against a specific PO: received, accepted, damaged/rejected, still missing and later-delivered quantities; delivery-note reference/photo provenance; who checked it in; summary against the order and the supplier invoice with agreed-rate version, pack/unit and VAT basis. Keep partial deliveries and returned goods as separate facts; do not infer a settled refund from a price discrepancy.
+**Done when:** 
+- The operative sees the order and expected items, can check in a partial delivery, attach actual permitted evidence when connected, and receives an accurate status. An office reviewer can compare ordered ↔ accepted ↔ invoiced line by line.
+- Missing/extra/damaged goods, duplicate notes, repeat check-ins, split invoices, changed prices, unknown documents and mismatches stay visible; no automatic order placement, supplier complaint, payment or fee results.
+- Acceptance includes 360px field UI, keyboard/accessibility, tenant/job/role scope, exact quantity/price tests, stale revision and unknown-outcome recovery. The demo must label typed practice facts, not claim supplier/OCR verification.
+
+### UX-C1 — Crew and workday capacity with site readiness (**PROPOSED; FOUNDER SCOPE DECISION REQUIRED**)
+**Track:** small-builder; limited planning proposal, NOT a full planner.
+**Depends on:** M2-6-S, CH-3a, confirmed work stage and minimal role/worker identity contracts; connected contractor staff planning, if chosen, requires ENT-1 roles and a separately agreed model.
+**Build:** a bounded *workday* view of named people/trades, builder-supplied availability hours, assignment against a job/date, required headcount/hours, same-day overbooking and gaps, with M2-6 facts for ordered/delivered materials, previous stage, site access and source-backed cure/weather constraints. Explain and propose alternative dates; only the builder can confirm a changed plan.
+**Done when:** 
+- A missing worker, double-booked worker or unconfirmed access/material/predecessor fact creates a clear human action rather than a green “ready” status; unknown is not treated as available. A partially received purchase order can create a linked readiness warning without making a supplier claim.
+- Changing dates/crew is an explicit versioned action; scope, PII, user permissions and storage/retention for worker availability are reviewed first. No autonomous rescheduling, full Gantt/dependency optimiser, payroll, automatic personnel messages, timesheets or unsupported calendar integrations.
+- Tests include duplicate assignment, capacity overruns, part-day availability, changed shift, shared job/tenant boundary, timezone/DST and conflicting material readiness. Any expansion beyond this narrow workday check needs a separately approved product decision under §14.1.
+
+### UX-P1 — Proof-by-stage reminders (**PROPOSED UX COMPLETION**)
+**Track:** small-builder; contractor adaptation uses work-order/operative permissions.
+**Depends on:** M1-10, UIWIRE-7; connected mobile proof reuses M3-5 and verified evidence M0-11.
+**Build:** show the next stage, required photographs/certificates, why each proof is needed, its submitted/verified/unknown state and the exact blocker before finishing or covering work.
+**Done when:** 
+- Evidence is tied to job, scope and stage; an on-device text note/illustration is not represented as a verified photo. A genuine stage cannot be marked complete where its required proof gate is not satisfied.
+- Missing, duplicated, stale, rejected and offline-queued evidence have clear next actions and honest server acknowledgment, with the existing tenancy/security/provenance checks.
+
+### UX-DEMO1 — Product-value-to-interface demo coverage (**PROPOSED NON-PRODUCTION WORK**)
+**Track:** shared interface/communication; synthetic preview only.
+**Depends on:** the currently approved/reusable web components and source contracts; this does not make unmerged dependencies accepted.
+**Build:** show all seven small-builder money leaks and the contractor extra capture/billing chain as labelled examples. Keep two paths: a short guided walkthrough with one obvious next action, and a genuinely blank sandbox that lets a person create their own fictional business, customer, job and test records. Both should surface quote costing, delivery check-in, supplier match, workday capacity, proof, Final Check concept and money history. Reuse the accepted mock-up visual direction rather than a generic second design.
+**Done when:** 
+- An observer can watch two builders attempt representative flows unscripted, recording what they click, wrong turns, wording confusion and exit/repair actions; build/test execution is not a substitute for that human observation (M1-15T).
+- Every example distinguishes design-only steps from connected persisted actions, evidence from illustration, rates from assumptions, “captured” from “approved”, “exported” from “invoiced”, and “paid” from verified settlement.
+- Desktop and mobile screenshots, real-browser keyboard checks, contradictory/empty states and all intended CTA destinations are reviewed against the source board. No live launch/financial permission is implied.
+
 ### 11.4 Field app and offline
 
 The risk validation is explicitly first. Do not interpret a later task number as an instruction to start it earlier. M0's command contract is the base; M3 freezes its download/upload/conflict profile before feature screens depend on it. The contractor operative app (ENT-12) is M3 scoped to the operative's jobs, "Log an extra", photos, resident sign-off and the close-out question; it builds on M3-1 and follows the same acceptance.
@@ -3733,6 +3784,18 @@ These tasks are not dispatched automatically. Their deterministic implementation
 
 ---
 
+### 12.5 Proposed UI coverage — review inventory only (**NOT DISPATCHED**)
+
+These rows are not part of §12.3's authorised dependency graph and **do not create work orders**. They record the scopes needing explicit review and an adoption decision. Purely fictional standalone design previews may be evaluated without connecting provider or customer data.
+
+| Candidate | Existing task foundation | Required before connected implementation |
+|---|---|---|
+| UX-Q1 | M1-4, UIWIRE-2, M2-1A-S | Confirm v1 costing model, rate provenance, permissions, accepted quote/tax version handling; independent review |
+| UX-D1 | M2-1B-S, M2-2-S, M2-4-S, M2-5-S | Review goods-receipt route/permissions and partial-delivery identity; live M2 gates before real documents |
+| UX-C1 | M2-6-S, CH-3a, site/money contracts | Founder approval of bounded crew-planning scope; worker-data/role review; no blanket Gantt expansion |
+| UX-P1 | M1-10, UIWIRE-7, M0-11/M3-5 | Verify real upload, stage-proof gate and offline acknowledgment contracts |
+| UX-DEMO1 | Existing mock-up, UI components, synthetic contract fixtures | Human unscripted evaluation, independent UI check, explicit design/real-action boundaries |
+
 ## 13. Sales promises register
 
 Nothing may be promised to a customer that has no task here. When a task is dropped or delayed, the matching sales material changes in the same PR (`sales/`).
@@ -3788,6 +3851,22 @@ Withdrawn with the Firm and Contractor plans (remove from sales material): Firm 
 
 ---
 
+### 13.3 Full-product demo coverage review (**PROPOSED, NOT ADDITIONAL SALES PROMISES**)
+
+These gaps were observed comparing the seven-leak Sales Bible, §13 promises and the 17 October interface previews. The existing underlying tasks continue to govern delivery; making a button clickable in a fictional preview is not completion.
+
+| User-facing benefit to demonstrate | Planned work / candidate | Audit status |
+|---|---|---|
+| Say the job once; price every line from confirmed builder rates, with costs and estimated margin visible before sending | M1-2/3/4, UIWIRE-2, M5-6; UX-Q1 | Original quote pricing planned/built synthetically; **full costing model needs founder scope decision** |
+| Check in what arrived on site: accepted, damaged, short, later delivered | M2-2 and M2-2-S; UX-D1 | Domain planned/synthetic work present; intuitive operative interaction missing from earlier demo |
+| Compare ordered ↔ delivered ↔ invoiced at actual agreed rates and flag a discrepancy *before payment* | M2-1…5; UX-D1 | Existing plan covers check; demo UI now mocks it; connected merchant extraction/live provider gates remain |
+| Make sure the right crew can work on the right day; spot overbooking and missing prerequisites | M2-6-S / M2-6; UX-C1 | Readiness is planned; **staff capacity and scheduling only proposed**, full Gantt stays out of scope |
+| Require stage photos/certificates before work is covered | M1-10/UIWIRE-7, M3-5; UX-P1 | Domain planned; source-backed production proof gates must not be simulated as verification |
+| Carry captured extras through approval, billing and payment and distinguish builder-owned value from paid Final Check finds | ENT-3/5/6/7; SV-4/5/6, MON-4 | Planned across separate commercial tracks, not one combined deal; commercial decisions/gates continue to apply |
+| Show the full sales proposition without guessing what button to press | UX-DEMO1, M1-15T | Guided/blank/design-only experiences need human observation and independent acceptance |
+
+**Sales Bible repair:** Its older Part 4/5 Firm and Contractor subscription tiers conflict with §1.3 and the withdrawn note above. Do not re-introduce them or guarantee offline/provider/security outcomes from a UI mock-up. Update that sales collateral in the relevant reviewed task, not by changing agreed commercial rules here.
+
 ## 14. Scope limits
 
 ### 14.1 Out of scope unless separately approved
@@ -3804,6 +3883,7 @@ Agents append adjacent findings here rather than implementing them inline, with 
 
 | Date | Finding | Related | Proposed handling |
 |---|---|---|---|
+| 2026-10-17 | Full-product proposition exceeds the visible demo: delivery check-in, line-level estimate costs, workday crew capacity and stage proof needed to be shown. M2-1…6 contain much of the underlying plan, but full roster/Gantt is explicitly out of scope under §14.1. | §11.3A, §12.5, §13.3, M1-4, M2-2, M2-6, UIWIRE-7 | Proposed UX-Q1/UX-D1/UX-C1/UX-P1/UX-DEMO1 cards for independent review and founder adoption. Synthetic click-throughs are not connected-feature acceptance; do not change the plan's commercial/release rules. |
 | 2026-09-25 | Leaves merged after 14 September have no recorded verdict files in `docs/verdicts/` | AGENTS §5.13; §7 | Retrospective verdicts by the checker, labelled as such (§7) |
 | 2026-09-25 | Docker is not installed on the build Mac; database and browser suites run only in CI | §2.2 | Install Docker Desktop (Ben, needs a password) to shorten fix loops |
 | 2026-09-25 | Codex repeatedly mis-named lanes in earlier cloud runs | §2.2 | Lane entry is the first change of every work order; checker verifies before review |
