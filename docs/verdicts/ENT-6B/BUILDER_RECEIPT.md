@@ -412,3 +412,58 @@ Final verification: `python3 /private/tmp/jg-ent-6b-r3-attest.py` and `git diff 
 - **Root pnpm commands NOT RUN:** typecheck/lint/lint:lanes/test/build/openapi:check orchestration, due to stalled launcher. Direct constituent executions and failures are recorded above. This was not an auto-review rejection.
 - **Out-of-scope failures are parked:** migration-order lint against `origin/main` (0181 must be above 0184), and the unchanged C-OPS-1 default timeout. Ruling 78 permits no other repairs and no r4. No renumbering, test weakening, timeout change or scope extension was made. Full green CI is not claimed.
 - No model, prompt, parser or AI gateway changed; no live-model evaluation applies to these fixture/inventory repairs. Exact-commit independent recorded verdict, separate acceptance and all existing release gates remain outstanding; the builder does not accept its own work.
+
+## r4-diagnostic (ruling 84) — dispatcher 14, 17 October 2026
+
+Diagnostic-only authority: coordinator ruling 84 (16 October, approximately 22:05), under ruling 51 and FAST-MODE rule 6. PR #240 remains parked; any fix requires a new ruling. Inspected branch `codex/sandbox/ent-6b`, exact HEAD `85e14df8fd444c49d798c2039e5928f79b692e0b`; initial worktree clean. Read AGENTS, BUILD_PLAN ENT-6 / §9.1.8, the persistence contract, repository import path, migration 0185 and the three reported failing suites and their fixtures. This round changes only this appended receipt. No product, migration, inventory or test change, and no temporary logging was added.
+
+### Diagnosis — source-inspected, not PostgreSQL-executed
+
+The underlying error indicated by the source is PostgreSQL **SQLSTATE `55000` (`object_not_in_prerequisite_state`), message `record "f" is not assigned yet`**, with detail `The tuple structure of a not-yet-assigned record is indeterminate.` This is a source-derived diagnosis of CI run **38963350223**, not a claim to have captured its unwrapped exception or reproduced it locally. The dispatcher states this sandbox cannot bind localhost or start PostgreSQL; no database start, port bind or integration-test attempt was made.
+
+Exact cause: `packages/db/migrations/0185_contractor_billing.sql:496`, the SELECT inside `app.cb_derive` (continued at lines 497–498). The function declares an untyped PL/pgSQL `f record` at line 479, then uses `f` as a table alias in `JOIN app.billing_fact f ON(f.tenant_id,f.id)=...`. That record is first assigned by the later `FOR f IN ...` at line 505. Planning the allocation-line SELECT resolves `f.tenant_id` as a possible record-field reference while the record has no tuple descriptor. PostgreSQL raises the unassigned-record error before it can report an ordinary column ambiguity. There is no local `#variable_conflict use_column` override in this function.
+
+The error identity and name-resolution mechanism were checked against the primary PostgreSQL 16 sources: [pl_comp.c, column-reference resolution and make_datum_param](https://github.com/postgres/postgres/blob/REL_16_STABLE/src/pl/plpgsql/src/pl_comp.c#L1025), [pl_exec.c, instantiate_empty_record_variable](https://github.com/postgres/postgres/blob/REL_16_STABLE/src/pl/plpgsql/src/pl_exec.c#L7167), and [errcodes.txt, SQLSTATE mapping](https://github.com/postgres/postgres/blob/REL_16_STABLE/src/backend/utils/errcodes.txt). This corroborates the static diagnosis; it is not execution evidence.
+
+Call path: `ContractorBillingRepository.import` invokes `cb_begin` (repository line 36), `cb_ingest` (38), `cb_inputs` (39), derives the pure projection (44), then calls `cb_derive` (47). The exception rolls back `withTenant` and is caught at repository line 50. `billingDatabaseFailure` has no mapping for `55000`, so line 17 replaces it with `ContractorBillingError("DATABASE_UNAVAILABLE")`, discarding the PostgreSQL code, message and detail.
+
+The fixture at `packages/db/test/contractor-billing-fixtures.ts:24` supplies a complete original-order/extra invoice; the failing tests add settled-payment movements. Those produce nonempty `projection.allocations`, reaching migration lines 494–498. Four allocation tests, two import tests (source-event/cross-channel identity and conflicting cross-source identity), and both ordering tests take this path: **eight**, matching the reported failures. Invoice-only and held-payment-without-composition projections skip the allocation-line loop, explaining why other imports can succeed. The first ordering test reaches the fault when the held payment gains its invoice; the permutation test reaches it once a usable invoice/payment pair exists.
+
+### Smallest proposed fix — NOT APPLIED
+
+Rename only the SQL alias `f` to `bf` and its qualified references in the SELECT at migration lines 496–498, leaving the later record loop unchanged:
+
+```sql
+SELECT m.export_line_id,m.line_job_id INTO exported,line_job
+FROM app.billing_line_match m
+JOIN app.billing_fact bf ON(bf.tenant_id,bf.id)=(m.tenant_id,m.fact_id)
+WHERE bf.tenant_id=t AND bf.job_id=p_job AND bf.source=p_source
+  AND bf.invoice_number=p_invoice AND bf.match_valid
+  AND bf.payload->>'factType'='invoiced'
+  AND m.external_invoice_line_id=l->>'lineId' LIMIT 1;
+```
+
+A newly authorized repair would also need the corresponding `cb_derive` definition hash in `docs/contracts/lp-0-effective-privileges-v1.json` refreshed from the real PostgreSQL catalog, and the eight failing tests plus affected catalog/upgrade checks rerun. Do not remap `55000` as a substitute for fixing the collision, change the allocator, or weaken the tests. No repair is implemented or claimed green in this round.
+
+### Verification (r4-diagnostic)
+
+Node `v24.17.0`, dependencies already installed. No package installation/download command or pin/runner override. Actual `pnpm typecheck` stalled after the ignored-`pnpm.overrides` warning; a Python subprocess timeout terminated the launcher after 15 seconds. Root pnpm/turbo orchestration did not complete. The installed constituent tools were then executed directly below; this does not claim the root pnpm suites passed. Logs: `/private/tmp/jg-ent-6b-r4-*.log`; command/exit manifests: `/private/tmp/jg-ent-6b-r4-checks.json`, `jg-ent-6b-r4-builds.json`, `jg-ent-6b-r4-tests.json`.
+
+| Actual command (relative to named package unless root) | Result |
+|---|---|
+| All seven packages: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | PASS, all exit 0; also the exact contents of all seven package lint scripts. |
+| Root: `LANE_BASE_REF=origin/main node tools/lint.mjs` | FAIL, exit 1. Core purity passes; lane check stops on migration 0185 needing to be above 0186 on base `1bcd8db8e129809e9b6a84d0c8acc9c09e66a3f4`. No renumbering authorized or attempted. |
+| Root: `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | FAIL, exit 1, same migration-order hold. |
+| Root: `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | PASS, both exit 0, separately executed because combined lint stopped early. |
+| Root: `node --test tools/*.test.mjs` (Python-expanded file list) | PASS, exit 0, 100 tests. |
+| core / config / storage / ai: `./node_modules/.bin/vitest run src --maxWorkers=2` | PASS, all exit 0: respectively 100 / 1 / 1 / 10 files, 2,701 / 1 / 2 / 113 tests. |
+| db: `./node_modules/.bin/vitest run src --exclude 'test/**' --exclude 'dist/**' --maxWorkers=1` | PASS, exit 0, 16 files / 131 tests, including the previously timed-out C-OPS-1 source scan. No timeout or test/config change. |
+| db: `./node_modules/.bin/vitest run test/lp-0-catalog.test.ts --maxWorkers=1` | PASS, exit 0, 1 file / 26 tests; pure catalog unit tests, not a live catalog observation. |
+| API: `./node_modules/.bin/vitest run src --maxWorkers=2 --exclude src/shadow-isolation.application.test.ts --exclude src/final-account-lock.isolation.test.ts --exclude src/health.test.ts --exclude src/contractor/site-visit.http.test.ts --exclude src/contractor/site-extra-pricing.http.test.ts --exclude src/contractor/site-extra.http.test.ts --exclude src/contractor/contractor-practice-session.http.test.ts --exclude src/contractor/practice-worker-switch.http.test.ts --exclude src/auth/sso/action-paths.test.ts` | PASS, exit 0, 86 files / 1,671 tests. Same nine infrastructure/socket exclusions as r3; no full API suite pass claimed. |
+| web: `./node_modules/.bin/vitest run --maxWorkers=2` | PASS, exit 0, 42 files / 869 tests. Unit/transport, not browser journeys. |
+| core / config / storage / ai / db: `./node_modules/.bin/tsc -p tsconfig.json`; API: `./node_modules/.bin/nest build`; web: `./node_modules/.bin/next build` | PASS, all seven exit 0, including Next compilation/type validation/static generation. |
+| API: `node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; snapshot unchanged. |
+
+PostgreSQL own failing suites, full database/migration/upgrade suites, browser/e2e and the nine excluded API suites: **NOT RUN**, require dispatcher/GitHub CI infrastructure. No claim that the eight CI failures pass. No AI behavior changed; live-model evaluation inapplicable. Lint's migration-order failure is left parked. The diagnostic is source-inspected, not independently verified or accepted; exact-commit independent verdict, separate acceptance and existing release gates remain outstanding.
+
+Final attestation: `git diff --check` and a Python comparison with read-only `git show HEAD:<receipt>` pass; the previous receipt bytes are preserved and the only tracked or untracked worktree change is this appended receipt. Intended conventional commit subject/body written to **both** `/private/tmp/jg-msg-ent-6b-diag.txt` and `/private/tmp/jg-msg-ent-6b.txt`. No git write, commit, add, checkout, push, deployment or external message. Dispatcher owns commit/push; ENT-6B remains parked pending a new ruling for any repair.
