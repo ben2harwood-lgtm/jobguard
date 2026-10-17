@@ -34,8 +34,10 @@ export const outcome = <T>(work: Promise<T>) => work.then(
 );
 
 export async function authorityCluster() {
-  const space = await statfs(tmpdir());
-  if (space.bavail * space.bsize < 33 * 1024 ** 3) throw new Error("Retained database requires at least 33 GiB free");
+  if (process.env.CI === undefined) {
+    const space = await statfs(tmpdir());
+    if (space.bavail * space.bsize < 33 * 1024 ** 3) throw new Error("Retained database requires at least 33 GiB free");
+  }
   const directory = await mkdtemp(join(tmpdir(), "jg-dashboard-authority-"));
   const port = await freePort(58800, 400);
   // persistent:true is essential: embedded-postgres.stop() deletes a non-persistent directory.
@@ -48,8 +50,8 @@ export async function authorityCluster() {
   };
   const control = retainedPool(config);
   const admin = retainedPool({ ...config, database: "jobguard_synthetic_demo", statement_timeout: 15000 });
-  const runtimePool = (name: string) => retainedPool({ ...config, database: "jobguard_synthetic_demo", user: "dashboard_authority_login",
-    application_name: name, max: 1, connectionTimeoutMillis: 8000, lock_timeout: 12000, statement_timeout: 15000 });
+  const runtimePool = (name: string, max = 4) => retainedPool({ ...config, database: "jobguard_synthetic_demo", user: "dashboard_authority_login",
+    application_name: name, max, connectionTimeoutMillis: 8000, lock_timeout: 12000, statement_timeout: 15000 });
   const close = async () => { try { await closeTestPools(...pools); } finally { await postgres.stop(); } };
   // Preserve the location even if startup/migration fails. No teardown path removes it.
   await writeFile(join(directory, "TEST-RETENTION.txt"), "TESTS-DASHBOARD-AUTHORITY-1 synthetic database; stop and retain.\n");

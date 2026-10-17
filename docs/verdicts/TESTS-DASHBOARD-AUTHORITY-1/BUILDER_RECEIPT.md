@@ -154,3 +154,62 @@ pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/enterprise-dashbo
 
 Existing release/prerequisite holds remain. PARK until the required external
 evidence and Ben's instruction; the builder does not accept its own work.
+
+## r1 — dispatcher 14 repair, 17 October 2026 night
+
+Entry HEAD `021e922652eb9dd45016d3e54334b32b955078da`, branch
+`codex/sandbox/tests-dashboard-authority-1`, clean at entry. Repair addresses the
+dispatcher's eight CI connection timeouts and both Opus REPAIR reports on that
+commit. Those reports were read from the dispatch-supplied local paths; no fresh
+independent verdict or technical acceptance is claimed for this working tree.
+
+Changed only the two task-owned test files and this appended receipt:
+
+- Runtime pools default to four connections, allowing fixture helpers to acquire
+  a second connection while another is checked out.
+- DA4 creates a separate, retained `max: 1` runtime pool. Both scheduled reads and
+  the transaction-local tenant-state check use that pool. PID equality, leakage,
+  refusal, commercial-state and race assertions keep their existing conditions.
+- The 33 GiB preflight runs only when `process.env.CI` is unset. CI no longer has
+  a Mac housekeeping requirement. This supersedes the unconditional preflight
+  described in the initial receipt/ledger. `persistent: true`, registered pool
+  shutdown, PostgreSQL stop and directory retention are unchanged.
+
+No product code, existing shared helper, migration, policy, grant, pin, lane,
+ledger or expected assertion value changed. No install/download command,
+browser, Git write, commit, push, merge or release. No new operational alert or
+compatibility impact. Node remains `v24.17.0`; no runtime/pin repair attempted.
+
+Actual r1 command records and logs are in
+`/private/tmp/jg-test-tests-dashboard-authority-1-r1/`. Its phase-specific
+`*-results.json` files record exact commands, working directories and exits.
+All lint commands used `LANE_BASE_REF=origin/main`.
+
+| Commands actually run | Result |
+| --- | --- |
+| `pnpm typecheck`, `pnpm lint`, `pnpm lint:lanes`, `pnpm build`, `pnpm openapi:check` | Each stalled before launching the check, after the existing ignored-overrides warning; terminated after 12 seconds with SIGTERM (exit -15). These wrappers did not pass. No package download/configuration workaround used. |
+| `LANE_BASE_REF=origin/main node tools/lint.mjs`; `node tools/agent-lane-boundary-lint.mjs` with the same environment | Both PASS, exit 0. Unlike the original uncommitted handoff, HEAD now differs from origin/main, so the real lane comparison runs and passes. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both PASS, exit 0. |
+| In each of core/config/storage/ai/db/API/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | All seven PASS, exit 0; these are also the packages' lint checks. |
+| In `packages/db`: `./node_modules/.bin/tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --target ES2023 --module NodeNext --moduleResolution NodeNext --skipLibCheck test/enterprise-dashboard.authority-race.integration.test.ts` | PASS, exit 0, explicitly compiles both repaired test files, which the db source-only tsconfig excludes. |
+| In `packages/db`: `./node_modules/.bin/vitest list test/enterprise-dashboard.authority-race.integration.test.ts` | PASS, exit 0; eight cases collected, zero executed. |
+| `node --test tools/*.test.mjs` (shell glob expanded by the runner) | PASS, 100 tests. |
+| In core/config/storage/ai: `./node_modules/.bin/vitest run src --maxWorkers=1` | All PASS, respectively 2,801 / 1 / 2 / 113 tests. AI uses synthetic fixtures, not a live provider evaluation. |
+| In `apps/api`: `./node_modules/.bin/vitest run src --maxWorkers=1` | FAIL, exit 1: 92 files passed, 9 failed; 1,719 tests passed, 129 failed, 23 skipped, 129 unhandled errors. HTTP failures report `listen EPERM` and Supertest's null `port`; two existing database isolation fixture hooks fail at free-port discovery before PostgreSQL startup. See `unit-api.log`. This broad attempt is not a successful API or database run. |
+| In `apps/web`: `./node_modules/.bin/vitest run --maxWorkers=1` | PASS, 40 files / 867 tests; no browser/e2e run. |
+| In core/config/storage/ai/db: `./node_modules/.bin/tsc -p tsconfig.json`; in API: `./node_modules/.bin/nest build`; in web: `./node_modules/.bin/next build` | All seven PASS, exit 0. Next emits existing workspace-root, CSS and dependency-expression warnings. |
+| In `apps/api`: `node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; existing generator through the installed loader, avoiding the IPC CLI. |
+| `git diff --check`; read-only HEAD/branch/status/diff inspection | PASS; changes confined to the two test files plus this receipt. |
+
+**PostgreSQL authority target: NOT RUN.** The dispatcher states this sandbox
+cannot bind localhost or start PostgreSQL, and the broad API attempt confirms
+port discovery/bind failures. No PostgreSQL cluster was started for this repair.
+Collection/typechecking do not prove DA1–DA5 or the negative control. Root
+`pnpm test`, dedicated database/migration suites and browsers/e2e were not run.
+The dispatcher must push and obtain real PostgreSQL CI results and independent
+exact-commit verdicts; the previous repair reports do not approve this diff.
+
+Intended conventional commit subject/body written to both requested paths:
+`/private/tmp/jg-msg-tests-dashboard-authority-1-r1.txt` and
+`/private/tmp/jg-msg-ent-9b.txt`. No commit or push by the builder.
+**RED / PARK remains; no self-acceptance, merge or release.**

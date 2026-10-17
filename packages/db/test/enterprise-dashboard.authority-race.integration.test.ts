@@ -105,7 +105,8 @@ describe("TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate", () => {
     populated(await read(a), a); populated(await read(b), b);
     await new ContractorRepository(c.runtime).command(a.p, await revocationInput(c, a, "grant.revoke"));
     const beforeA = await storedRows(c, a.p.tenantId), beforeB = await storedRows(c, b.p.tenantId);
-    const reused = scheduledPool(c.runtime); // max:1: same actual backend, verified below, no parallel checkout.
+    const reusePool = c.runtimePool("da4_reused", 1);
+    const reused = scheduledPool(reusePool); // max:1: same actual backend, verified below, no parallel checkout.
     await refuses(a, reused.pool);
     const refusedPid = reused.pid;
     const result = await read(b, reused.pool);
@@ -113,7 +114,7 @@ describe("TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate", () => {
     populated(result, b);
     const json = JSON.stringify(result);
     for (const forbidden of [a.p.tenantId, a.jobId, a.extraId, a.demo.teamId, a.demo.clientId, a.demo.contractId, a.demo.operativeMembershipId]) expect(json).not.toContain(forbidden);
-    expect((await c.runtime.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows).toEqual([{ tenant: null }]);
+    expect((await reusePool.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant")).rows).toEqual([{ tenant: null }]);
     expect(await storedRows(c, a.p.tenantId)).toEqual(beforeA);
     expect(await storedRows(c, b.p.tenantId)).toEqual(beforeB);
   });
