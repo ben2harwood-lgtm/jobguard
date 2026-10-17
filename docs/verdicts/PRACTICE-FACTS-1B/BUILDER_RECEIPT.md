@@ -224,3 +224,11 @@ Commands run:
 Note: running vitest without `src` also picks up the git-ignored stale `packages/core/dist` copies (7 failures, ENOENT on dist/*.ts and the old test); not part of CI, not a change in this branch.
 
 NOT RUN: lane lint, DB integration tests (unchanged by r2). Not committed or pushed, per the r2 order.
+
+## r3
+
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Change: `apps/api/src/practice-supplier-credit.application.test.ts:13` candidate() now passes `payer: "not_insurer"` to evaluateRecoveryEligibilityV3 (same missing fact as r2). Expected values unchanged; no product code or merged test touched.
+
+Run: `pnpm --filter @jobguard/core build`; api vitest on that file (--maxWorkers=2): 5 of 5 pass; `pnpm --filter @jobguard/api typecheck`: clean. NOT RUN: lane lint, DB integration tests.

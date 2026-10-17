@@ -10,7 +10,7 @@ const pool = {} as Pool, session = randomUUID(), job = randomUUID(), caseId = ra
 const principal = { digest: "a".repeat(64), context: testTenantContext(randomUUID()), membershipId: randomUUID(), identityUserId: randomUUID() };
 const command = () => ({ version: "recovery-eligibility-command.v3", action: "review", commandId: randomUUID(), caseId, fixture: "F16-partial", expectedCaseRevision: 2, expectedReviewRevision: 0 });
 const access = () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.spyOn(PracticeAccess.prototype, "job").mockResolvedValue(principal as never); };
-const candidate = (fixture: "F16-partial" | "F16-full") => ({ id: randomUUID(), revision: fixture === "F16-partial" ? 1 : 2, caseRevision: 2, sourceEventId: randomUUID(), result: evaluateRecoveryEligibilityV3({ version: "recovery-eligibility-facts.v3", environment: "synthetic_demo", tenantId: principal.context.tenantId, jobId: job, caseId, fixture, settlement: "settled", paymentTiming: "after_opening", sourceRef: randomUUID() }) });
+const candidate = (fixture: "F16-partial" | "F16-full") => ({ id: randomUUID(), revision: fixture === "F16-partial" ? 1 : 2, caseRevision: 2, sourceEventId: randomUUID(), result: evaluateRecoveryEligibilityV3({ version: "recovery-eligibility-facts.v3", environment: "synthetic_demo", tenantId: principal.context.tenantId, jobId: job, caseId, fixture, payer: "not_insurer", settlement: "settled", paymentTiming: "after_opening", sourceRef: randomUUID() }) });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 it("PF1B-A07 A07_WorkbenchAndCommandResult", async () => {
   access(); const partial = candidate("F16-partial"), full = candidate("F16-full");
