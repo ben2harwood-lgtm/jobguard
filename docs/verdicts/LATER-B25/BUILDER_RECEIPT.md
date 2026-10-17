@@ -6,13 +6,13 @@ Status: **BUILT, NOT ACCEPTED; PostgreSQL files NOT RUN here; Decision 74 PARK (
 
 ## What changed
 - `packages/db/src/variation-repository.ts`
-  - `VariationRevisionConflict` now carries a settable `code`; new `VariationCommandConflict` (code `VARIATION_COMMAND_CONFLICT`, subclass, so the existing controller maps it to HTTP 409 unchanged).
+  - `VariationRevisionConflict` carries a settable `code`; a reused command id with a different payload throws `new VariationRevisionConflict("VARIATION_COMMAND_CONFLICT")` (no subclass), so the existing controller maps it to HTTP 409 unchanged.
   - L145: `insertPricedVariation` appends one `variation.priced` audit event atomically; `reject` appends one `variation.rejected`. Capture commands (`logBuilderExtra`, `addFinalReviewExtra`) use the internal `writePricedRevision` and keep their single capture event (no double audit).
-  - L149: pricing, approval and rejection look up their own command id inside the same row-lock statement; an exact committed command returns without effect (no second row, observation or audit), a reused id with a different payload throws `VariationCommandConflict`; replay is decided before the stale-pointer check. The extra look-up rides on the existing locked statement so the merged scripted test's one-query stale-writer assertion still holds.
+  - L149: pricing, approval and rejection look up their own command id with a sub-select inside the row-lock statement; an exact committed command returns without effect (no second row, observation or audit), a reused id with a different payload throws `VariationRevisionConflict("VARIATION_COMMAND_CONFLICT")`; replay is decided before the stale-pointer check. A separate fresh-snapshot look-up runs only when the sub-select found nothing but the locked row shows the same command's own write (concurrent identical twin), so a stale writer still costs one query and the merged scripted test holds.
   - L150: approval and, for new scope only (`existing_scope_item_id IS NULL`), one `app.scope_progress` row are written in one data-modifying statement; pending/rejected proposals never reach it.
   - L151: `approvePricedVariation` returns the stored approval row (`storedApproval`), not `{...caller}`.
   - L153: `read()` accepts status `live`, `invoiced`, `paid`. New writes on a non-live job are refused in the three write paths with the existing `ACTIVATION_REQUIRED` error (the guard was previously the read's side effect).
-- `apps/api/src/variation/variation.application.ts`: revise replays/conflicts from the stored history before the stale check; approve accepts an already-approved earlier revision so its committed command can replay; changed payload throws `VariationCommandConflict`.
+- `apps/api/src/variation/variation.application.ts`: revise replays/conflicts from the stored history before the stale check; approve accepts an already-approved earlier revision so its committed command can replay; changed payload throws `VariationRevisionConflict("VARIATION_COMMAND_CONFLICT")`.
 - New tests (tests first; all PostgreSQL, all NOT RUN here): `later-variation-isolation.integration.test.ts` (L144, ports 58200+), `later-variation-history.integration.test.ts` (L145, L150, L151, L153; 58400+), `later-variation-replay.integration.test.ts` (L149 incl. concurrent twin; 58600+). Titles carry the item id.
 
 ## Commands actually run
@@ -128,3 +128,11 @@ Commands run:
 - `LANE_BASE_REF=origin/main pnpm lint:lanes`: passed, same 8-file lane.
 
 NOT RUN: `packages/db/test/later-variation-*.integration.test.ts` (embedded PostgreSQL does not start here; an attempt at the replay file reported 5 skipped, file failed). The S2 concurrent test is unproven until CI. No `--force` turbo runs or full build were done for this repair.
+
+## r2 repair (delta check aad5dfe6)
+
+Repaired by Claude Sonnet (Codex stand-in), dispatcher 14
+
+- `packages/db/src/variation-repository.ts`: the r1 split lookup broke the merged scripted `test/audit-api-variation.test.ts` (5/7). The prior-command sub-select is back inside the locked `FOR UPDATE` statement (as before r1). A separate fresh-snapshot lookup runs only when `prior` is NULL and the locked row already shows the twin's own write: revise `current_revision_id = r.id`; approve `state='approved'` and `current_revision_id = a.revisionId`; reject `state='rejected'` and `current_revision_id = input.revisionId`. S1 unchanged. Receipt lines 9, 11, 15 corrected.
+- Run: db `vitest run test/audit-api-variation.test.ts --maxWorkers=2`: 7/7 pass. api `src/watchdog-registry.test.ts src/variation`: 126/126 pass. db and api typecheck exit 0. `LANE_BASE_REF=origin/main pnpm lint:lanes` passed.
+- NOT RUN: `later-variation-*.integration.test.ts` (embedded PostgreSQL does not start here); the concurrent-twin test is unproven until CI.
