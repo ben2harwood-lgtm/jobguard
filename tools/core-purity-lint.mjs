@@ -31,6 +31,19 @@ function forbiddenModule(specifier) {
 const literalText = (node) =>
   node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : null;
 
+/** Unwraps parentheses, `as`, `!`, type assertions and comma sequences, then tests for fetch / x.fetch / x["fetch"]. */
+function isFetchReference(expression) {
+  let e = expression;
+  for (;;) {
+    if (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e) || ts.isTypeAssertionExpression(e) || ts.isSatisfiesExpression(e)) e = e.expression;
+    else if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.CommaToken) e = e.right;
+    else break;
+  }
+  return (ts.isIdentifier(e) && e.text === "fetch")
+    || (ts.isPropertyAccessExpression(e) && e.name.text === "fetch")
+    || (ts.isElementAccessExpression(e) && literalText(e.argumentExpression) === "fetch");
+}
+
 /**
  * Pure source check: returns one message per purity violation in the given source text.
  * options.computed: "refuse" (default) counts computed module names as violations; "report" lists them only.
