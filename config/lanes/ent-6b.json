@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-6b": {
+      "branches": [
+        "codex/sandbox/ent-6b"
+      ],
+      "receipt": "docs/verdicts/ENT-6B/BUILDER_RECEIPT.md",
+      "note": "ENT-6B RED: persisted synthetic finance-only billing on ENT-6 parent 60a5fcb8. New migration 0181 is provisional. New-object catalogue/privilege rows additive only, pending coordinator ruling. Shared app/index/watchdog and reviewed-list edits serialize at landing; parent pure modules remain unchanged. No PR before parent merge.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/contractor/billing.application.test.ts",
+        "apps/api/src/contractor/billing.application.ts",
+        "apps/api/src/contractor/billing.controller.ts",
+        "apps/api/src/contractor/billing.http.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/contractor/jobs/[id]/billing/[action]/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/billing/[action]/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/billing/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/billing/route.ts",
+        "docs/contracts/contractor-billing-persistence-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/operations/contractor-billing-persistence-synthetic.md",
+        "docs/verdicts/ENT-6B/BUILDER_RECEIPT.md",
+        "packages/core/src/contractor-billing-commands.test.ts",
+        "packages/core/src/contractor-billing-commands.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/0185_contractor_billing.md",
+        "packages/db/migrations/0185_contractor_billing.sql",
+        "packages/db/src/contractor-billing-delivery.ts",
+        "packages/db/src/contractor-billing-projection.ts",
+        "packages/db/src/contractor-billing-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/contractor-billing-allocation.integration.test.ts",
+        "packages/db/test/contractor-billing-catalog.integration.test.ts",
+        "packages/db/test/contractor-billing-delivery.integration.test.ts",
+        "packages/db/test/contractor-billing-export.integration.test.ts",
+        "packages/db/test/contractor-billing-fixtures.ts",
+        "packages/db/test/contractor-billing-import.integration.test.ts",
+        "packages/db/test/contractor-billing-ordering.integration.test.ts",
+        "packages/db/test/contractor-billing-replay.integration.test.ts",
+        "packages/db/test/contractor-billing-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}
