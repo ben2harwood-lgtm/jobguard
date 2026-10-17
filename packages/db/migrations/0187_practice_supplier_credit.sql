@@ -161,12 +161,12 @@ BEGIN
  IF NOT FOUND OR NOT c.synthetic OR c.claim_revision IS NULL THEN RAISE EXCEPTION 'RECOVERY_CASE_NOT_FOUND' USING ERRCODE='23514';END IF;
  SELECT r.* INTO latest FROM app.recovery_eligibility_v3_review r WHERE r.tenant_id=t AND r.case_id=cid ORDER BY r.revision DESC LIMIT 1;
  IF c.revision<>expected_case OR coalesce(latest.revision,0)<>expected_review THEN RAISE EXCEPTION 'ELIGIBILITY_STALE_REVISION' USING ERRCODE='40001';END IF;
+ IF job_status<>'live' THEN RAISE EXCEPTION 'ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE' USING ERRCODE='0A000';END IF;
+ sources:=app.pf1b_source_bundle(t,j,cid);
  IF c.case_type<>'merchant_overcharge' OR c.claim_pence<30000
  OR latest.id IS NOT NULL AND latest.fixture<>fixture AND NOT(latest.fixture='F16-partial' AND fixture='F16-full')
  OR fixture='F16-full' AND (latest.id IS NULL OR latest.fixture NOT IN('F16-partial','F16-full'))
  THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
- IF job_status<>'live' THEN RAISE EXCEPTION 'ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE' USING ERRCODE='0A000';END IF;
- sources:=app.pf1b_source_bundle(t,j,cid);
  IF fixture='F16-partial' AND jsonb_array_length(sources->'payments')<>1 OR fixture<>'F16-partial' AND jsonb_array_length(sources->'payments')<>2
  THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
  SELECT * INTO binding FROM app.practice_supplier_credit_case_binding WHERE tenant_id=t AND case_id=cid;
@@ -202,13 +202,14 @@ ALTER FUNCTION app.pf1b_review_supplier_credit(uuid,uuid,jsonb) OWNER TO jobguar
 REVOKE ALL ON FUNCTION app.pf1b_review_supplier_credit(uuid,uuid,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.pf1b_review_supplier_credit(uuid,uuid,jsonb) TO jobguard_runtime;
 
--- Newest main guard: 0130. Newest main completeness: 0119. Non-credit branches retained.
+-- Both routines start from 0186_recovery_eligibility_paid_interest.sql (latest main definitions).
+-- Preserve 0142 insurer locks/exclusions and every 0186 paid-interest/F19 rule; add only F14/F16 paths.
 CREATE OR REPLACE FUNCTION app.guard_recovery_eligibility_v3() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 DECLARE c app.recovery_case_current; e app.practice_feed_event; r app.recovery_eligibility_v3_review;
  digest text:=nullif(current_setting('app.practice_material_digest',true),'');
  sources jsonb; expected_result jsonb; binding app.practice_supplier_credit_case_binding;
  expected_q bigint:=0; expected_reason text; expected_category text; expected_kind text;
- expected_net bigint; expected_debtor text; paid_before boolean; settled boolean;
+ expected_net bigint; expected_debtor text; paid_before boolean; settled boolean; insurer_money boolean:=false; interest app.practice_feed_event; interest_reason text;
 BEGIN
  IF NEW.tenant_id IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid
  OR current_setting('app.recovery_eligibility_environment',true) IS DISTINCT FROM 'synthetic_demo' OR digest IS NULL
@@ -245,19 +246,25 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext(NEW.case_id::text));
  SELECT * INTO c FROM app.recovery_case_current WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND id=NEW.case_id;
  IF NOT FOUND OR NOT c.synthetic OR c.claim_revision IS NULL THEN RAISE EXCEPTION 'RECOVERY_CASE_NOT_FOUND' USING ERRCODE='23514';END IF;
+ IF c.case_type='withheld_customer_payment' AND NEW.source_event_id IS NOT NULL THEN
+  PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext('payer-mark:'||NEW.source_event_id::text));
+  PERFORM app.lock_recovery_payer_job(NEW.tenant_id,NEW.job_id,NEW.actor_membership_id);
+  insurer_money:=coalesce(app.recovery_job_payer_type(NEW.tenant_id,NEW.job_id)='insurer',false)
+   AND coalesce((SELECT state FROM app.recovery_payment_payer_mark WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND source_event_id=NEW.source_event_id ORDER BY revision DESC LIMIT 1),'withdrawn')<>'customer_own';
+ END IF;
  IF NEW.case_revision<>c.revision OR NEW.revision<>(SELECT coalesce(max(revision),0)+1 FROM app.recovery_eligibility_v3_review WHERE tenant_id=NEW.tenant_id AND case_id=NEW.case_id)
  THEN RAISE EXCEPTION 'ELIGIBILITY_STALE_REVISION' USING ERRCODE='40001';END IF;
  IF NEW.fixture IN('F14','F16-partial','F16-full') THEN
   -- Runtime's historical INSERT privilege cannot bypass the new checked writer.
   IF current_user<>'jobguard_migration' THEN RAISE EXCEPTION 'ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE' USING ERRCODE='0A000';END IF;
+  IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id AND status='live')
+  THEN RAISE EXCEPTION 'ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE' USING ERRCODE='0A000';END IF;
+  sources:=app.pf1b_source_bundle(NEW.tenant_id,NEW.job_id,NEW.case_id);
   IF c.case_type<>'merchant_overcharge' OR c.claim_pence<30000
   OR EXISTS(SELECT 1 FROM app.recovery_eligibility_v3_review x WHERE x.tenant_id=NEW.tenant_id AND x.case_id=NEW.case_id AND x.revision=(SELECT max(y.revision) FROM app.recovery_eligibility_v3_review y WHERE y.tenant_id=NEW.tenant_id AND y.case_id=NEW.case_id)
    AND x.fixture<>NEW.fixture AND NOT(x.fixture='F16-partial' AND NEW.fixture='F16-full'))
   OR NEW.fixture='F16-full' AND NOT EXISTS(SELECT 1 FROM app.recovery_eligibility_v3_review x WHERE x.tenant_id=NEW.tenant_id AND x.case_id=NEW.case_id AND x.fixture IN('F16-partial','F16-full'))
   THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
-  IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id AND status='live')
-  THEN RAISE EXCEPTION 'ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE' USING ERRCODE='0A000';END IF;
-  sources:=app.pf1b_source_bundle(NEW.tenant_id,NEW.job_id,NEW.case_id);
   IF NEW.fixture='F16-partial' AND jsonb_array_length(sources->'payments')<>1 OR NEW.fixture<>'F16-partial' AND jsonb_array_length(sources->'payments')<>2
   THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
   SELECT * INTO binding FROM app.practice_supplier_credit_case_binding WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND case_id=NEW.case_id;
@@ -291,9 +298,27 @@ BEGIN
  ELSIF NEW.fixture='F22' THEN expected_reason:='Prevented spending is not recovered cash';
  ELSIF NEW.fixture='F21' THEN expected_reason:=NULL;
  ELSIF coalesce(paid_before,false) AND c.case_type IN('withheld_customer_payment','duplicate_supplier_payment') THEN expected_reason:='Paid before you opened this case';
+ ELSIF insurer_money THEN expected_reason:='Insurer proceeds never qualify';
  ELSIF NOT coalesce(settled,false) THEN expected_reason:='Pending money cannot qualify';
  ELSE expected_q:=CASE NEW.fixture WHEN 'F17' THEN 45000 WHEN 'F18' THEN 262000 WHEN 'F19' THEN 250000 ELSE 0 END;
   expected_reason:=CASE WHEN NEW.fixture IN('F18','F19') THEN 'Fixed statutory compensation is not part of the fee base' ELSE NULL END;
+ END IF;
+ -- F18's principal receipt does not settle its separate interest movement.
+ IF NEW.fixture='F18' AND expected_q>0 THEN
+  SELECT i.* INTO interest FROM app.practice_feed_event i
+   WHERE i.tenant_id=NEW.tenant_id AND i.job_id=NEW.job_id AND i.movement_key='receipt-interest-120'
+    AND i.identity='identified' AND i.event_kind IN('settled','pending')
+   ORDER BY (i.event_kind='settled') DESC,i.created_at,i.id LIMIT 1;
+  IF interest.state='settled' AND interest.created_at<=c.created_at THEN
+   interest_reason:='Paid before you opened this case';
+  ELSIF interest.id IS NULL OR interest.state<>'settled' OR EXISTS(
+   SELECT 1 FROM app.practice_feed_event u WHERE u.tenant_id=interest.tenant_id AND u.account_id=interest.account_id
+    AND u.movement_key=interest.movement_key AND u.identity='unidentified'
+    AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id
+     AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate')) THEN
+   interest_reason:='Pending money cannot qualify';
+  END IF;
+  IF interest_reason IS NOT NULL THEN expected_q:=250000;expected_reason:=interest_reason;END IF;
  END IF;
  IF expected_q>c.claim_pence+(CASE WHEN NEW.fixture='F18' THEN 12000 ELSE 0 END) THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
  IF NEW.result - ARRAY['version','policyVersion','fixture','outcome','qualifyingPrincipal','reason','reasonHeld','terminal','productionEnabled','lines'] IS DISTINCT FROM '{}'::jsonb
@@ -306,7 +331,7 @@ BEGIN
  OR NEW.result->>'version' IS DISTINCT FROM 'recovery-eligibility-review.v3' OR NEW.result->>'policyVersion' IS DISTINCT FROM NEW.policy_version
  OR NEW.result->>'fixture' IS DISTINCT FROM NEW.fixture OR NEW.result->'qualifyingPrincipal' IS DISTINCT FROM jsonb_build_object('pence',expected_q,'currency','GBP')
  OR NEW.result->>'reason' IS DISTINCT FROM expected_reason OR NEW.result->>'outcome' IS DISTINCT FROM (CASE WHEN expected_q>0 THEN 'eligible_for_review' ELSE 'excluded' END)
- OR NEW.result->'reasonHeld' IS DISTINCT FROM to_jsonb(NEW.fixture IN('F19','F21'))
+ OR NEW.result->'reasonHeld' IS DISTINCT FROM to_jsonb(NEW.fixture='F21')
  OR NEW.result->'productionEnabled' IS DISTINCT FROM 'false'::jsonb OR NEW.result->'terminal' IS DISTINCT FROM to_jsonb(NEW.fixture='F22')
  THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
  RETURN NEW;
@@ -323,14 +348,19 @@ BEGIN
  THEN RAISE EXCEPTION 'ELIGIBILITY_LINES_REQUIRED' USING ERRCODE='23514';END IF;
  SELECT jsonb_agg(jsonb_build_object(
   'kind',l.kind,'debtorType',l.debtor_type,'netPence',l.net_pence,
-  'qualifyingPrincipal',jsonb_build_object('pence',CASE WHEN candidate_q=0 OR l.kind='fixed_compensation' OR l.kind='statutory_interest' AND l.debtor_type='individual' THEN 0 ELSE l.net_pence END,'currency','GBP'),
-  'reason',CASE WHEN NEW.result->>'reason'='Paid before you opened this case' THEN 'Paid before you opened this case'
+  'qualifyingPrincipal',jsonb_build_object('pence',CASE WHEN candidate_q=0 OR l.kind='fixed_compensation' OR l.kind='statutory_interest' AND (l.debtor_type='individual' OR NEW.fixture='F18' AND candidate_q=250000) THEN 0 ELSE l.net_pence END,'currency','GBP'),
+  'reason',CASE WHEN NEW.fixture='F18' AND candidate_q=250000 THEN
+     CASE l.kind WHEN 'statutory_interest' THEN NEW.result->>'reason'
+      WHEN 'fixed_compensation' THEN 'Fixed statutory compensation is not part of the fee base' ELSE NULL END
+    WHEN NEW.result->>'reason'='Paid before you opened this case' THEN 'Paid before you opened this case'
+    WHEN NEW.result->>'reason'='Insurer proceeds never qualify' THEN 'Insurer proceeds never qualify'
     WHEN NEW.fixture='F16-partial' THEN 'Credit note used against an invoice not yet paid in full'
     WHEN NEW.fixture='F15' THEN 'Credit note below the £250 minimum'
     WHEN NEW.fixture='F22' THEN 'Prevented spending is not recovered cash'
     WHEN l.kind='fixed_compensation' THEN 'Fixed statutory compensation is not part of the fee base'
+    WHEN l.kind='statutory_interest' AND l.debtor_type='individual' THEN 'Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.'
     WHEN NEW.result->>'reason'='Pending money cannot qualify' THEN 'Pending money cannot qualify' ELSE NULL END,
-  'reasonHeld',NEW.fixture='F21' OR l.kind='statutory_interest' AND l.debtor_type='individual')
+  'reasonHeld',NEW.fixture='F21')
   ORDER BY CASE l.kind WHEN 'principal' THEN 1 WHEN 'statutory_interest' THEN 2 ELSE 3 END)
  INTO expected_lines FROM app.recovery_claim_line l WHERE l.tenant_id=NEW.tenant_id AND l.review_id=NEW.id;
  IF NEW.result->'lines' IS DISTINCT FROM expected_lines THEN RAISE EXCEPTION 'ELIGIBILITY_LINES_REQUIRED' USING ERRCODE='23514';END IF;

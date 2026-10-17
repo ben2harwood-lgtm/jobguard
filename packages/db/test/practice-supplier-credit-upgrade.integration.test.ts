@@ -60,6 +60,25 @@ const security=async(pool:Pool)=>({
  triggers:(await pool.query("SELECT t.oid,t.tgrelid,t.tgname,pg_get_triggerdef(t.oid) definition FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE NOT t.tgisinternal AND c.relname NOT LIKE 'practice_supplier_credit_%' ORDER BY t.oid")).rows,
  functions:(await pool.query("SELECT p.oid,p.proowner,p.proacl::text,pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','control_plane','identity') AND p.prokind='f' AND p.proname NOT LIKE 'pf1b_%' AND p.proname NOT IN('guard_recovery_eligibility_v3','require_recovery_eligibility_v3_effect') ORDER BY p.oid")).rows,
 });
+// Strip only this migration's named supplier-credit additions. The remaining
+// server-rendered routine definition must exactly equal the pre-0187 definition.
+function withoutSupplierCreditAdditions(definition:string) {
+ if(definition.includes("IF TG_TABLE_NAME='supplier_credit_consumption' THEN")) {
+  definition=definition.replace(' sources jsonb; expected_result jsonb; binding app.practice_supplier_credit_case_binding;\n','');
+  const start=definition.indexOf(" IF TG_TABLE_NAME='supplier_credit_consumption' THEN"),end=definition.indexOf(" IF TG_TABLE_NAME='recovery_claim_line' THEN");
+  expect(start).toBeGreaterThan(0);expect(end).toBeGreaterThan(start);
+  definition=definition.slice(0,start)+" IF TG_TABLE_NAME='supplier_credit_consumption' THEN\n  -- Do not relabel a customer receipt or supplier refund as an invoice payment.\n  RAISE EXCEPTION 'ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE' USING ERRCODE='0A000';\n END IF;\n"+definition.slice(end);
+  definition=definition.replace("WHEN 'F14' THEN 30000 WHEN 'F16-partial' THEN 30000 WHEN 'F16-full' THEN 30000 ", '');
+  const credit=definition.indexOf(" IF NEW.fixture IN('F14','F16-partial','F16-full') THEN"),next=definition.indexOf(" IF EXISTS(SELECT 1 FROM app.recovery_eligibility_v3_review WHERE tenant_id=NEW.tenant_id AND case_id=NEW.case_id AND fixture<>NEW.fixture)");
+  expect(credit).toBeGreaterThan(0);expect(next).toBeGreaterThan(credit);
+  return definition.slice(0,credit)+" IF NEW.fixture IN('F14','F16-partial','F16-full') THEN RAISE EXCEPTION 'ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE' USING ERRCODE='0A000';END IF;\n"+definition.slice(next);
+ }
+ definition=definition.replace('DECLARE binding app.practice_supplier_credit_case_binding; count_links integer; expected_lines', 'DECLARE expected_lines');
+ definition=definition.replace("    WHEN NEW.fixture='F16-partial' THEN 'Credit note used against an invoice not yet paid in full'\n", '');
+ const credit=definition.indexOf(" IF NEW.fixture IN('F14','F16-partial','F16-full') THEN"),next=definition.indexOf(' RETURN NULL;');
+ expect(credit).toBeGreaterThan(0);expect(next).toBeGreaterThan(credit);
+ return definition.slice(0,credit)+definition.slice(next);
+}
 it('PF1B-A26 A26_OwnMigrationUpgradeThenLaterMigrationsTwice',async()=>{
  expect(position).toBeGreaterThan(0);expect(names).toEqual([...names].sort());
  await admin.query('CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())');
@@ -79,6 +98,9 @@ it('PF1B-A26 A26_OwnMigrationUpgradeThenLaterMigrationsTwice',async()=>{
  expect(await proofDifferences(admin,proof)).toEqual({rows:[],types:[]});expect(await security(admin)).toEqual(beforeSecurity);
  const newRoutines=(await admin.query("SELECT proname,pg_get_functiondef(oid) definition,proacl::text,proowner,prosecdef,proconfig FROM pg_proc WHERE oid IN('app.guard_recovery_eligibility_v3()'::regprocedure,'app.require_recovery_eligibility_v3_effect()'::regprocedure) ORDER BY proname")).rows;
  for(const [index,old] of oldRoutines.entries()){expect(newRoutines[index].definition).not.toBe(old.definition);expect({...newRoutines[index],definition:old.definition}).toEqual(old);}
+ // The immediate base includes 0186; every non-credit byte, including insurer locks, paid interest and F19 reasons, survives.
+ expect(names[position-1]).toBe('0186_recovery_eligibility_paid_interest.sql');
+ for(const [index,old] of oldRoutines.entries())expect(withoutSupplierCreditAdditions(newRoutines[index].definition)).toBe(old.definition);
  // An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
  await migrate(admin);await migrate(admin);expect(await proofDifferences(admin,proof)).toEqual({rows:[],types:[]});
  expect((await admin.query('SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name')).rows.map(r=>r.migration_name)).toEqual(names);

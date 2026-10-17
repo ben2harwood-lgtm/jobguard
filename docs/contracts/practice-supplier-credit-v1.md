@@ -1,6 +1,6 @@
 # Practice supplier credit v1 — PRACTICE-FACTS-1B
 
-Migration 0146 enables saved F14 and F16 eligibility candidates exclusively in a physically separate `synthetic_demo` database. This supplement enables the narrow Part B paths; the source-gap passages in the older practice-facts and CH-7 contracts describe the pre-Part-B implementation.
+Migration 0187 enables saved F14 and F16 eligibility candidates exclusively in a physically separate `synthetic_demo` database. This supplement enables the narrow Part B paths; the source-gap passages in the older practice-facts and CH-7 contracts describe the pre-Part-B implementation.
 
 Normal supplier intake retains two fictional one-page text originals: `practice-credit-300` / `CR-PF1B-001`, stating net GBP 300.00, and `practice-later-invoice-1440` / `INV-PF1B-001`, stating amount to pay GBP 1440.00. These are INTERIM fixture figures. Neither defines VAT, quantities, unit prices or credit subtraction. Eligibility uses their original version-1 identities and server-computed SHA-256 hashes, with ready state, fictional supplier context and exact fixture bytes. No supplier-fact confirmation or invented parser output supplies authority.
 
