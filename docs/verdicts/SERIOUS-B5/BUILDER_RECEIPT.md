@@ -368,3 +368,14 @@ pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 \
 **Dispatcher/CI hold.** This file is ready for the dispatcher to use as the conflict resolution after merging main. The local checks cover the current unmerged working tree; they do not establish the fully merged S06 calculator/migration/test combination. Run main's `final-account-baseline-net.integration.test.ts`, B5's integration/upgrade suites, MIGFIX-5, Test Q, full `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and required browser/e2e suites in GitHub CI after merge/commit/push. They were not run here under the explicit PostgreSQL/listener/browser restriction. The full root tests also run three tool suites that create/commit temporary Git repositories; those were not executed under the no-Git-write order. No mandatory check was disabled or weakened.
 
 No new migration, schema, data backfill, provider route, API shape, tax/fee policy, authorization rule or operational alert is introduced. Existing B5 migration upgrade/forward-fix requirements remain. The dispatcher still owns migration renumbering and all Git writes; all prior CI holds, independent exact-commit different-model verdict, separate acceptance and release gates remain outstanding. Identical intended conventional-commit messages are written to `/private/tmp/jg-msg-serious-b5-catchup.txt` and `/private/tmp/jg-msg-fixlater-5.txt`.
+
+## r6
+
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Cause: CI 38991318438 failed S17 (lock-bound) with "permission denied for table final_account_lock". The test inserted the lock check as `jobguard_shadow` using `INSERT ... SELECT FROM app.final_account_lock`, but the shadow role has no SELECT on that table (main's grants, asserted in final-account-lock.integration.test.ts:274-281). My own test set-up was wrong; no guard or merged test touched.
+
+Change: packages/db/test/serious-b5.integration.test.ts (S17 lock-bound branch, ~line 158): read the lock id and locked_at via the admin pool, then insert the completed check as shadow with `VALUES(...)`, the same pattern as migfix-5.integration.test.ts:16. No assertion changed.
+
+Run: `pnpm typecheck` and `LANE_BASE_REF=origin/main pnpm lint` in packages/db: pass.
+NOT RUN: serious-b5.integration.test.ts. Embedded PostgreSQL would not start in this sandbox ("Postgres init script exited with code null"). CI must confirm S17.

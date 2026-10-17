@@ -155,7 +155,8 @@ describe("SERIOUS-B5 final accounts and invoice artifacts", () => {
   if (kind === "legacy") await invoices.issue(a.context, input);
   else {
    const repo = await prepareLock(f, a); await repo.lock(a.context, a.input);
-   await asFixtureTenant(f.shadow, a.tenantId, db => db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) SELECT tenant_id,job_id,gen_random_uuid(),id,locked_at,'completed' FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [a.tenantId,a.jobId]));
+   const lockRow = (await f.admin.query("SELECT id,locked_at FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [a.tenantId,a.jobId])).rows[0];
+   await asFixtureTenant(f.shadow, a.tenantId, db => db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,'completed')", [a.tenantId,a.jobId,randomUUID(),lockRow.id,lockRow.locked_at]));
    await repo.issueInvoice(a.context, { ...input, expectedSourceHash: LOCK_HASH, invoiceKind: "final" });
   }
   const saved = (await f.admin.query("SELECT * FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId,a.jobId])).rows[0];
