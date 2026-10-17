@@ -64,3 +64,12 @@ test("B19-P3b the report mode lists computed module names without counting them 
   assert.equal(collected.unverifiable.length, 1);
   assert.equal(checkCorePuritySource("fixture/core.ts", 'import "node:fs"; import(name);', { computed: "report" }).length, 1);
 });
+
+test("B19-P5 member .fetch() calls stay refused as before", () => {
+  assert.equal(refused('ns.fetch("x");').length, 1);
+  assert.equal(refused('client.fetch ("x");').length, 1);
+  assert.equal(refused('import * as undici from "undici"; undici.fetch("https://example.invalid");').length, 1);
+  assert.equal(refused('const f = globalThis; f.fetch("x");').length, 1);
+  assert.equal(refused('globalThis["fetch"]("x");').length, 1);
+  assert.deepEqual(refused("const o = { fetch: 1 }; o.fetch;"), []);
+});

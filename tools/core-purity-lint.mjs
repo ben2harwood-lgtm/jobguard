@@ -66,8 +66,8 @@ export function checkCorePuritySource(file, text, options = {}) {
       if (callee.kind === ts.SyntaxKind.ImportKeyword) checkSpecifier(node, node.arguments[0], "dynamic import");
       else if (ts.isIdentifier(callee) && callee.text === "require") checkSpecifier(node, node.arguments[0], "require");
       else if (ts.isIdentifier(callee) && callee.text === "fetch") report(node, "network call fetch()");
-      else if (ts.isPropertyAccessExpression(callee) && callee.name.text === "fetch" && ts.isIdentifier(callee.expression)
-        && ["globalThis", "self", "window", "global"].includes(callee.expression.text)) report(node, "network call fetch()");
+      else if ((ts.isPropertyAccessExpression(callee) && callee.name.text === "fetch")
+        || (ts.isElementAccessExpression(callee) && literalText(callee.argumentExpression) === "fetch")) report(node, "network call fetch()");
     }
     ts.forEachChild(node, visit);
   };

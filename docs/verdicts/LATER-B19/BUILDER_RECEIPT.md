@@ -8,7 +8,7 @@ Status: BUILT, not independently reviewed or accepted. Decision 74: PARK after b
 
 Detector fixes:
 - `tools/money-arithmetic-lint.mjs`: now also refuses `*=` and `/=`; new export `checkMoneyArithmeticSource(file, text)`; CLI guarded so importing does not run it; file list unchanged.
-- `tools/core-purity-lint.mjs`: regex replaced by a TypeScript-parser check (static/side-effect/type-only imports, `export ... from`, `import x = require`, `import()`, `require()`, import-type nodes; `node:` and bare `fs net http https http2 dgram tls child_process dns`; `fetch()`/`globalThis.fetch()`); same traversal and same original refusals (pg, postgres, stripe, @aws-sdk/, @anthropic-ai/). New export `checkCorePuritySource(file, text, options)`.
+- `tools/core-purity-lint.mjs`: regex replaced by a TypeScript-parser check (static/side-effect/type-only imports, `export ... from`, `import x = require`, `import()`, `require()`, import-type nodes; `node:` and bare `fs net http https http2 dgram tls child_process dns`; any `fetch(...)` call, bare or as a member call of any object (see r1); same traversal; the original module refusals (pg, postgres, stripe, @aws-sdk/, @anthropic-ai/) are kept. New export `checkCorePuritySource(file, text, options)`.
 - `tools/shared-money-origin-scan.mjs` (new): recursive, import-following scanner (aliases, namespace imports, `@jobguard/core` barrel, wrapper chains).
 
 Stronger tests: `tools/later-money-arithmetic.test.mjs` (B19-M1..M4), `tools/later-core-purity.test.mjs` (B19-P1..P4, P3b), `tools/later-shared-money-discovery.test.mjs` (B19-S1..S5), `tools/later-commercial-boundary.test.mjs` (B19-C1, C2); appended-only cases in `tools/shared-money-origin.test.mjs` (2) and `tools/commercial-boundary.test.mjs` (3, isolated import-only / execution-only fixtures plus weakened-detector mutation). No existing assertion, count, pin or exclusion changed. `commercial-boundary-lint.mjs` untouched (production detector was already correct; the gap was test discrimination only).
@@ -279,3 +279,7 @@ Only initial source inspection was completed. No detector fix or stronger test w
 - `git show HEAD:docs/verdicts/LATER-B19/BUILDER_RECEIPT.md; git diff --numstat; git status --short`, group exit 0, read the prior receipt before preserving it.
 - Python recording command read the prior receipt through `git show`, restored its full text, and appended this session record; exit recorded by the tool.
 - Final verification commands: `git diff --check; git diff --stat; git diff --numstat; git status --short; git rev-parse HEAD`; results reported to the dispatcher. Only this receipt is changed; tests executed: 0.
+
+## Repair r1 (17 Oct 2026)
+
+Second check found that member `.fetch(` calls the old regex refused (`undici.fetch(...)`, `f.fetch("x")`, `client.fetch ("x")`) were no longer refused. Fixed in `tools/core-purity-lint.mjs` (checkCorePuritySource): every call whose callee is a property access named `fetch`, or an element access with literal "fetch", is refused whatever the object; plain `o.fetch;` stays accepted. Added B19-P5 in `tools/later-core-purity.test.mjs`. Results: see the commit that adds this section; node tests, repo purity CLI and lane lint run after the edit.
