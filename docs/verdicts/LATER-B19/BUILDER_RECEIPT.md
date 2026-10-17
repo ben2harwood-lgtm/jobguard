@@ -283,3 +283,7 @@ Only initial source inspection was completed. No detector fix or stronger test w
 ## Repair r1 (17 Oct 2026)
 
 Second check found that member `.fetch(` calls the old regex refused (`undici.fetch(...)`, `f.fetch("x")`, `client.fetch ("x")`) were no longer refused. Fixed in `tools/core-purity-lint.mjs` (checkCorePuritySource): every call whose callee is a property access named `fetch`, or an element access with literal "fetch", is refused whatever the object; plain `o.fetch;` stays accepted. Added B19-P5 in `tools/later-core-purity.test.mjs`. Results: see the commit that adds this section; node tests, repo purity CLI and lane lint run after the edit.
+
+## Repair r2 (17 Oct 2026)
+
+Delta check found two more forms the old regex refused: `new o.fetch("x")` and `(0, o.fetch)("x")`. `checkCorePuritySource` now unwraps parentheses, `as`, `!`, type assertions, `satisfies` and comma sequences from the callee, and tests it with one fetch-reference rule (`fetch`, `x.fetch`, `x["fetch"]`), applied to both CallExpression and NewExpression. `o.fetch;` reads stay accepted. B19-P5 extended with these cases (each refused once). Results are in the commit message and the coordinator report.

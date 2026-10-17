@@ -65,9 +65,9 @@ export function checkCorePuritySource(file, text, options = {}) {
       const callee = node.expression;
       if (callee.kind === ts.SyntaxKind.ImportKeyword) checkSpecifier(node, node.arguments[0], "dynamic import");
       else if (ts.isIdentifier(callee) && callee.text === "require") checkSpecifier(node, node.arguments[0], "require");
-      else if (ts.isIdentifier(callee) && callee.text === "fetch") report(node, "network call fetch()");
-      else if ((ts.isPropertyAccessExpression(callee) && callee.name.text === "fetch")
-        || (ts.isElementAccessExpression(callee) && literalText(callee.argumentExpression) === "fetch")) report(node, "network call fetch()");
+      else if (isFetchReference(callee)) report(node, "network call fetch()");
+    } else if (ts.isNewExpression(node) && isFetchReference(node.expression)) {
+      report(node, "network call new fetch()");
     }
     ts.forEachChild(node, visit);
   };

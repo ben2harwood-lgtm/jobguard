@@ -71,5 +71,10 @@ test("B19-P5 member .fetch() calls stay refused as before", () => {
   assert.equal(refused('import * as undici from "undici"; undici.fetch("https://example.invalid");').length, 1);
   assert.equal(refused('const f = globalThis; f.fetch("x");').length, 1);
   assert.equal(refused('globalThis["fetch"]("x");').length, 1);
+  assert.equal(refused('new o.fetch("x");').length, 1);
+  assert.equal(refused('new fetch("x");').length, 1);
+  assert.equal(refused('(0, o.fetch)("x");').length, 1);
+  assert.equal(refused('(o.fetch as any)("x");').length, 1);
+  assert.equal(refused('o.fetch!("x");').length, 1);
   assert.deepEqual(refused("const o = { fetch: 1 }; o.fetch;"), []);
 });
