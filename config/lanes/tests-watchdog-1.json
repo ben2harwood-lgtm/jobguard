@@ -1,0 +1,1 @@
+{"version":2,"lanes":{"tests-watchdog-1":{"branches":["codex/sandbox/tests-watchdog-1"],"receipt":"docs/verdicts/TESTS-WATCHDOG-1/BUILDER_RECEIPT.md","note":"RED watchdog response confidentiality tests; decision 74 PARK.","allow":["apps/api/src/watchdog.filter.privacy.test.ts","docs/ledger/TESTS-WATCHDOG-1.md","docs/verdicts/TESTS-WATCHDOG-1/BUILDER_RECEIPT.md"]}}}
