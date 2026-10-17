@@ -28,7 +28,12 @@
         "packages/db/test/quote-reacceptance-upgrade.integration.test.ts",
         "packages/db/test/small-builder-origin.integration.test.ts",
         "packages/db/test/quote.integration.test.ts",
-        "packages/db/test/practice-session.integration.test.ts"
+        "packages/db/test/practice-session.integration.test.ts",
+        "packages/db/migrations/0168_unchecked_job_doors.sql",
+        "packages/db/src/migrate.ts",
+        "packages/db/MIGRATIONS.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/lp-job-doors.ts"
       ]
     }
   }
