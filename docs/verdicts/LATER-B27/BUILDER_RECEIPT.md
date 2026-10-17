@@ -139,3 +139,24 @@ New untracked files: the lane, two tests, this receipt, and ledger. No permanent
 - LATER: none added beyond this scoped correction. L025/L152 and LP authority/lifecycle work remain untouched.
 
 Final head SHA: `31682762c903d716657c573e1b5deae63588aad7` (uncommitted diff; the dispatcher must bind reviews to its eventual commit).
+
+## r1 — verification completion
+
+Verified/completed by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Codex built the implementation (commit 3333f163); this section only records verification, run after decision 82 lowered the disk gate to 33 GB (about 47 GB free). No source or test change was needed; no existing test expectation was touched.
+
+Commands actually run (worktree on `codex/sandbox/later-b27`, clean at start; branch is 79 commits behind origin/main, not merged):
+
+- `pnpm --filter @jobguard/db... build` -> exit 0 (core, storage, db).
+- `pnpm --filter @jobguard/db exec vitest run src/later-money-boundaries.test.ts --maxWorkers=2` -> 1 file, 5 tests passed (L016, L026, L102 unit cases).
+- `heavy-slot later-b27 pnpm --filter @jobguard/db exec vitest run test/later-proposal-totals.integration.test.ts --maxWorkers=2` -> NOT RUN: embedded PostgreSQL init failed ("Postgres init script exited with code null"), 2 tests skipped. CI must run it.
+- `pnpm exec turbo run typecheck --force --concurrency=2` -> 7/7 tasks, 0 cached.
+- `pnpm exec turbo run lint --force --concurrency=2` -> 7/7 tasks, 0 cached.
+- `pnpm build --force --concurrency=2` -> 7/7 tasks, 0 cached.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` -> passed (8 files, includes config/lanes/later-b27.json from 3333f163).
+- `git diff --check` -> clean.
+
+Not run: full `pnpm test`, `test:db`, `test:migrations`, e2e/browser (CI). The first-failing-run (red) record remains unavailable.
+
+AGENTS.md section 5.5 check (source inspection): amounts pass through the public `money()` validator (safe integer, existing 1_000_000_000_000 limit, typed `MoneyError`); the proposal total is derived with the existing `calculateNetLine` half-even kernel, no second arithmetic implementation; no float multiplication added; ledger still requires positive amounts; nullable job-transition fields stay nullable. No fee, tax, VAT or rounding-policy change.
