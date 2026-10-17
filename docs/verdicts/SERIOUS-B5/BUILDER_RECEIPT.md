@@ -379,3 +379,14 @@ Change: packages/db/test/serious-b5.integration.test.ts (S17 lock-bound branch, 
 
 Run: `pnpm typecheck` and `LANE_BASE_REF=origin/main pnpm lint` in packages/db: pass.
 NOT RUN: serious-b5.integration.test.ts. Embedded PostgreSQL would not start in this sandbox ("Postgres init script exited with code null"). CI must confirm S17.
+
+## r7
+
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
+
+Review of r6 (REPAIR): reading `locked_at` through the admin pool gave a JS Date that dropped microseconds, so the check row would miss the composite foreign key to the lock row.
+
+Change: packages/db/test/serious-b5.integration.test.ts (S17 lock-bound set-up, ~lines 158-159) now selects `locked_at::text cutoff` and passes `lockRow.cutoff` into the shadow-role `VALUES(..., $5::timestamptz, ...)` insert, as in migfix-5.integration.test.ts:15. No assertion changed.
+
+Run: `pnpm typecheck` in packages/db passes.
+NOT RUN: serious-b5.integration.test.ts. Embedded PostgreSQL again failed to start in this sandbox ("Postgres init script exited with code null"). Accept only on a green CI run of this file.
