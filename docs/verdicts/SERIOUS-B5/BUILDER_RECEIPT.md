@@ -286,3 +286,85 @@ pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 \
 MIGFIX-5 and B5 PostgreSQL suites, full root `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and browser/e2e suites were NOT RUN under the dispatcher's service/browser prohibition. Full root tests also invoke three tool suites that write temporary Git repositories; those were excluded under the no-Git-write instruction. No mandatory CI suite was disabled or weakened. Run the affected real PostgreSQL tests and mandatory suites in GitHub CI after dispatch; local typechecks and unit subsets do not establish the migration's database behavior.
 
 **Handoff: HOLD for CI and independent review.** Both required checker confirmations that only MIGFIX-5's setup line changed remain outstanding, as do the independent different-model exact-commit verdict and separate acceptance. All existing release gates remain closed. No commit or push performed. Identical conventional-commit subject/body files are written at `/private/tmp/jg-msg-serious-b5-r5.txt` and `/private/tmp/jg-msg-fixlater-5.txt`; the dispatcher owns committing and pushing.
+
+## catch-up onto main
+
+Dispatcher 14, 17 October 2026; SERIOUS-B5 / PR #229. Starting and final HEAD: `c2446dd455f18a5c9cd0d58fe5992e898e5de9f9` (r5, ruling 86); branch `codex/sandbox/serious-b5`. Inspected supplied `origin/main` at `1bcd8db8e129809e9b6a84d0c8acc9c09e66a3f4`, including S06's repository guard and `final-account-baseline-net.integration.test.ts`. This is a prepared working-tree conflict resolution, not a performed merge. No Git write, commit, push, ref refresh, dependency installation/download, PostgreSQL startup, browser, real data or external action was performed. Builder evidence only; no independent verdict or acceptance is asserted.
+
+**Combination.** The two behaviors combine without changing either. The resolved `packages/db/src/final-account-repository.ts` is byte-identical to `git show origin/main:packages/db/src/final-account-repository.ts` except for the branch's exact S15 approved-variation query and its existing explanatory comment, now on its own line. S06's complete exact-integer baseline guard, typed error and pre-write placement are retained verbatim. S15's query is byte-identical to HEAD, retaining the greatest approved revision per tenant/job/variation regardless of a later pending proposal, including signed omissions. No new behavior was designed. S16/S17's migration, tests, PDF reader, error expectations, Test Q and MIGFIX-5 setup are untouched. Only this source file and this appended receipt change; S06's integration test will arrive with the dispatcher's merge, not through a separate working-tree edit here.
+
+Line-by-line explanation of the resolved source (physical line numbers):
+
+| Line | Combination and behavior |
+| --- | --- |
+| 1 | Preserve the existing confirmed-practice-scope import. |
+| 2 | Take main's added `FinalAccountLockError` import; all existing imports remain. This supplies the same typed S06 refusal. |
+| 3 | Preserve the existing SHA-256 helper. |
+| 4 | Preserve service construction and pool ownership. |
+| 5 | Preserve the complete account read path, including separate pending variation display. |
+| 6 | Preserve versioned command parsing, tenant transaction and active-owner check. |
+| 7 | Preserve the assembler serialization comment. |
+| 8 | Preserve the server-scoped lock-order comment. |
+| 9 | Preserve the existing tenant/job advisory lock before all source/head reads. |
+| 10 | Preserve the current draft-head read. |
+| 11 | Preserve the expected-revision refusal. |
+| 12 | Take main's unchanged live-job/frozen-baseline lookup and included-line recomputation. No draft insert precedes these reads. |
+| 13 | Preserve main's statement that comparison precedes draft, authorization and audit writes. |
+| 14 | Preserve main's `BigInt` reduction over recomputed baseline net pence, with no float summation or variation amounts. |
+| 15 | Preserve main's matching-baseline query and result type. |
+| 16 | Preserve its tenant, job, live-status and frozen-version predicates. |
+| 17 | Preserve its existence check through the frozen document to quote revision. |
+| 18 | Preserve the tenant/job/revision-qualified document/revision join. |
+| 19 | Preserve its exact frozen revision `net_pence=$4::bigint` equality and document scope. |
+| 20 | Preserve its bound tenant/job/version parameters and exact decimal bigint string. |
+| 21 | Preserve the same `FinalAccountLockError("FINAL_ACCOUNT_TOTAL_MISMATCH")` on no match. |
+| 22 | Preserve main's relocation of first-draft insertion after successful validation. Existing draft heads are unchanged on mismatch. |
+| 23 | Retain the branch's existing S15 comment, separated from the baseline mapping solely to accommodate the S06 block. |
+| 24 | Retain the branch's exact latest-approved variation query: reject an approval only when a newer approved revision exists for the same tenant/job/variation. Preserve its joins, ordering, signed amount, source/revision/scope/approval identities, and the rest of the existing proof/confirmed-scope/requirements chain on this physical line. |
+| 25 | Preserve the existing source-hash compatibility comment. |
+| 26 | Preserve the existing immutable-revision comment. |
+| 27 | Preserve the tenant/job-scoped immutable evidence-invalidation read. |
+| 28 | Preserve invalidated-evidence identity collection. |
+| 29 | Preserve pure assembly from baseline, approved variations, filtered proof and requirements. |
+| 30 | Preserve source hashing, exact source reuse, revision/line/proof persistence, head advance, stale authorization invalidation and audit append unchanged. |
+
+**Deterministic source evidence.** Read-only Python comparisons passed in both directions: replacing only the S15 query/comment in the result recovers main byte-for-byte; adding only S06's import/guard and draft-insert relocation to HEAD, with the comment newline, produces the result byte-for-byte. Checked the guard occurs before `INSERT INTO app.final_account_draft`, and that the S15 query equals HEAD exactly. Result SHA-256: `2daca9945f2d311a5167140cbb9b4a6ce20f947ff331ed05ba4dc2542f4268e4`. These are source checks, not PostgreSQL execution or independent review.
+
+**Environment and runs.** Supplied dependencies; Node 24.17.0 (repository pin 24.15.0); cached pnpm 10.28.1 through `PATH=/private/tmp/jg-migfix-2-bin:$PATH`, `npm_config_manage_package_manager_versions=false`, `COREPACK_ENABLE_NETWORK=0`. Ephemeral logs: `/private/tmp/jg-serious-b5-catchup-*.log`. No clean install is claimed.
+
+| Command actually run | Result |
+| --- | --- |
+| `pnpm typecheck` | Exit 0; 7 tasks successful, 2 cached. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1; core purity passes, lane migration-order check refuses B5 0185 below main's highest 0186. Same pre-existing r5 hold; no bypass or renumbering within this source-only order. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1; same migration-order refusal. |
+| `pnpm exec turbo run lint` | Exit 0; all 7 package tasks successful, 2 cached. Does not replace failed official root lint. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both exit 0. |
+| `pnpm build` | Exit 0; 7 tasks successful, 2 cached, including Next production build. Existing shared-cache EPERM/dependency tracing warnings were non-fatal. |
+| `pnpm --filter @jobguard/core --filter @jobguard/config --filter @jobguard/storage --filter @jobguard/ai --workspace-concurrency=1 -r exec vitest run src --maxWorkers=1` | Exit 0; core 2,696, config 1, storage 2, AI 113 passed. AI fixtures only. |
+| `pnpm --filter @jobguard/db exec vitest run src test/audit-api-file-final-account.test.ts --exclude 'test/*.integration.test.ts' --maxWorkers=1` | Exit 0; 21 files / 158 passed, including scripted-SQL assembler regressions. No PostgreSQL proof. |
+| API unit subset below | Exit 0; 84 files / 1,667 passed. |
+| `pnpm --filter @jobguard/web exec vitest run app --maxWorkers=1` | Exit 0; 40 files / 867 passed. No browser. |
+| `node --test tools/commercial-boundary.test.mjs tools/core-purity.test.mjs tools/decision-check-purity.test.mjs tools/decision-records.test.mjs tools/dependency-audit.test.mjs tools/policy-gate-sites.test.mjs tools/shared-money-origin.test.mjs` | Exit 0; 19 passed. |
+| `pnpm --filter @jobguard/db exec tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --esModuleInterop test/serious-b5.integration.test.ts test/serious-b5-upgrade.integration.test.ts test/migfix-5.integration.test.ts` | Exit 0; test-source typecheck only. |
+| `pnpm openapi:check` | Exit 1; sandbox refuses tsx CLI IPC listener with `listen EPERM`. |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | Exit 0; same OpenAPI generator/check through Node loader; snapshot unchanged. |
+| Read-only exact-content/source-order comparisons; `git diff --check`; final path/HEAD and append-only receipt inspection | Exit 0; only the requested repository file and appended receipt differ. |
+
+Exact API subset (same nine sandbox-only exclusions as r5; no committed test configuration changes):
+
+```sh
+pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 \
+  --exclude src/auth/sso/action-paths.test.ts \
+  --exclude src/contractor/contractor-practice-session.http.test.ts \
+  --exclude src/contractor/site-extra-pricing.http.test.ts \
+  --exclude src/contractor/site-extra.http.test.ts \
+  --exclude src/contractor/site-visit.http.test.ts \
+  --exclude src/contractor/practice-worker-switch.http.test.ts \
+  --exclude src/health.test.ts \
+  --exclude src/shadow-isolation.application.test.ts \
+  --exclude src/final-account-lock.isolation.test.ts
+```
+
+**Dispatcher/CI hold.** This file is ready for the dispatcher to use as the conflict resolution after merging main. The local checks cover the current unmerged working tree; they do not establish the fully merged S06 calculator/migration/test combination. Run main's `final-account-baseline-net.integration.test.ts`, B5's integration/upgrade suites, MIGFIX-5, Test Q, full `pnpm test`, `pnpm test:db`, `pnpm test:migrations` and required browser/e2e suites in GitHub CI after merge/commit/push. They were not run here under the explicit PostgreSQL/listener/browser restriction. The full root tests also run three tool suites that create/commit temporary Git repositories; those were not executed under the no-Git-write order. No mandatory check was disabled or weakened.
+
+No new migration, schema, data backfill, provider route, API shape, tax/fee policy, authorization rule or operational alert is introduced. Existing B5 migration upgrade/forward-fix requirements remain. The dispatcher still owns migration renumbering and all Git writes; all prior CI holds, independent exact-commit different-model verdict, separate acceptance and release gates remain outstanding. Identical intended conventional-commit messages are written to `/private/tmp/jg-msg-serious-b5-catchup.txt` and `/private/tmp/jg-msg-fixlater-5.txt`.
