@@ -21,6 +21,10 @@ for(const [name,button,movement,q,reason] of [
   await page.getByRole("button",{name:button,exact:true}).click();
   await expect(page.getByRole("article",{name:"Selected recovery case"})).toBeVisible();
   if(movement&&name!=="F20")await settle();
+  if(name==="F18"){
+   const factsPath=`/api/jobs/${jobId}/practice-facts`;let facts=await get(page,factsPath);
+   for(const movement of ["receipt-interest-120","receipt-compensation-70"] as const)facts=await post(page,factsPath,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:facts.revision,action:"advance",movement,step:"settled"});
+  }
   const control=page.getByRole("button",{name:`Review v3 ${name}`,exact:true});await expect(control).toBeEnabled();
   const box=await control.boundingBox();expect(box?.width).toBeGreaterThanOrEqual(44);expect(box?.height).toBeGreaterThanOrEqual(44);
   await control.focus();await expect(control).toBeFocused();expect(await control.evaluate(el=>{const css=getComputedStyle(el);return css.outlineStyle!=="none"&&parseFloat(css.outlineWidth)>0;})).toBe(true);await page.keyboard.press("Enter");
