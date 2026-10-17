@@ -1,6 +1,45 @@
-Builder: Codex; dispatched 13 Oct 2026. STOPPED before implementation.
+Built by Claude Sonnet (Codex stand-in), dispatcher 14
 
 # LATER-B5 — Recovery message attempt isolation
+
+Status: BUILT, PARKED (decision 74). Implementation and tests added on top of the earlier stopped commit. Database integration tests NOT RUN here (embedded PostgreSQL will not start in this sandbox); CI must run them. RED independent check and separate acceptance outstanding; nothing is accepted.
+
+The earlier stop (disk 44 GB under the old 45 GB gate; lane file absent) is history below. Decision 82 lowered the gate to 33 GB (47 GB free now). The missing `config/lanes/later-b5.json` is not this builder's job; the dispatcher registers it to exactly the changed files after this commit. Lane lint therefore reports "found 0" lanes.
+
+Base: branch cut at 31682762; current origin/main is 1bcd8db8. `recovery-message-repository.ts` is identical on both (no diff), so the build stands; main NOT merged (per instruction). Draft cited line 492; the code is `finishHistory` (now ~452-515).
+
+## Premise verified
+`finishHistory` mapped the outbox row's current status to the newest started event (`last.kind==="started"` -> `kinds[m.outbox_status]`). The outbox status is one value for the whole action. After attempt 1 ends `retryable`, a second `started` event (claim intent, recorded before the executor claims) sits beside an outbox still `retryable`, and the database guard passes it because the latest attempt row is attempt 1's `retryable`. Any concurrent `read` (which runs finishHistory) therefore appended a second `retryable` event, plus a second audit event, to attempt 2's start: attempt 1's failure was consumed twice.
+
+## Change (packages/db/src/recovery-message-repository.ts, finishHistory)
+- Counts start groups (an unbroken run of `started` events is one claim intent) and binds the open start to the attempt at its own position (`attempts[startGroups-1]`); a synthesised direct-worker start increments the count.
+- A terminal event is taken from that attempt's own outcome, and only if the outbox status agrees (succeeded/succeeded, outcome_unknown/outcome_unknown, retryable/retryable, failed/dead_letter). No attempt yet means no result. `cancelled` -> `blocked` is unchanged (cancellation is final for the action).
+- A `reconciled`/post-check `retryable` needs the bound attempt to be `outcome_unknown`, so an unknown second attempt stays unknown until its own reconciliation.
+- The in-memory attempt row is updated when the stale-claim path marks it unknown.
+No migration, no GRANT, no new table/routine/route, no existing test or expectation changed. New GRANTs: none (standard F satisfied).
+
+## Tests (packages/db/test/later-recovery-message-attempt.integration.test.ts, new)
+- `started second attempt cannot consume first attempt failure`: attempt 1 retryable; second start recorded pre-claim; concurrent reads add no event/audit; then second attempt paused mid-delivery (executing) with reads adding nothing; on release exactly one `succeeded`, one `retryable`, one sink row, one audit each.
+- `only the matching attempt can append terminal outcome`: forged `succeeded`/`failed` after a retryable are refused by the guard (23514) and leave events and audit unchanged (rollback); second attempt unknown stays unknown across repeated reads and a repeat direct execution (no new events/audit, attempts stay 2); its own reconcile closes it once.
+Tests-first: first failing run NOT RUN (PostgreSQL cannot start here), so RED-before-fix is by reading, not by execution; the pre-fix code appends `retryable` in the first test's pre-claim read.
+
+## Commands run
+- `pnpm --filter @jobguard/db... build` exit 0 (needed so vitest resolves @jobguard/core).
+- `pnpm --filter @jobguard/db exec vitest run test/later-recovery-message-attempt.integration.test.ts --maxWorkers=2` (via heavy-slot): exit 1, "Postgres init script exited with code null" in beforeAll; 0 tests run. NOT RUN.
+- `pnpm exec turbo run typecheck --force --concurrency=2` exit 0 (7 tasks, 0 cached).
+- `pnpm exec turbo run lint --force --concurrency=2` exit 0 (7 tasks, 0 cached).
+- `pnpm build --force --concurrency=2` exit 0 (7 tasks, 0 cached).
+- `git diff --check` exit 0.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: FAILED as expected, 'found 0' registered lanes (lane file is the dispatcher's).
+NOT RUN: the new and existing recovery-message PostgreSQL files (also recovery-messages.integration.test.ts, which exercises the changed function; it must pass in CI unchanged), `pnpm test`, `test:db`, `test:migrations`, `test:e2e`, browsers.
+Note: db `tsconfig` covers `src` only, so the new test file is type-checked only by vitest's transform in CI.
+
+## Risks for the checker
+- Mapping assumes one attempt per start group, in order. Duplicate starts with a crash before claim collapse into one group; the synthesis condition (`attempts > started events`) is unchanged.
+- LATER (not built): consider recording the attempt id on the started event so binding needs no counting.
+
+
+## History: earlier Codex run (16 Oct), kept as recorded
 
 Status: partial inspection only; PARKED, uncommitted, no acceptance claimed. No implementation or tests added. RED independent review and separate acceptance remain outstanding.
 

@@ -488,16 +488,29 @@ export class RecoveryMessageRepository {
       // The committed unknown outbox state is positive evidence of uncertainty, never of a successful delivery.
       if (m.outbox_status === "outcome_unknown" && attempts.at(-1)?.outcome === "started") {
         await db.$client.query("UPDATE app.action_attempt SET outcome='outcome_unknown',error_code='STALE_CLAIM',finished_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND outcome='started'", [tenantId, attempts.at(-1)!.id]);
+        attempts.at(-1)!.outcome = "outcome_unknown";
       }
+      let startGroups = history.filter((event, index) => event.kind === "started" && history[index - 1]?.kind !== "started").length;
       if ((last.kind === "approved" || last.kind === "retryable") && attempts.length > history.filter(event => event.kind === "started").length) {
         const attempt = attempts.at(-1)!;
         await append("started", attempt.id, requestHashOf({ attemptId: attempt.id, messageId: m.id }), m.approving_membership_id!);
+        startGroups += 1;
       }
+      // The outbox row is one status for the whole action, so on its own it cannot say WHICH attempt produced it. The open start
+      // (an unbroken run of start events is one claim intent) belongs to the attempt at its own position; a result is taken only
+      // from that attempt's own record, and only while the outbox status agrees with it. A start whose attempt has not been
+      // claimed yet has no result: the outbox still shows the previous attempt's, which must never close this one.
+      const own = attempts[startGroups - 1];
       let kind: RecoveryMessageEventKind | undefined;
       if (last.kind === "started") {
-        const kinds: Record<string, RecoveryMessageEventKind> = { succeeded: "succeeded", outcome_unknown: "outcome_unknown", retryable: "retryable", dead_letter: "failed", cancelled: "blocked" };
-        kind = kinds[m.outbox_status ?? ""];
-      } else if (last.kind === "reconcile_started") {
+        if (m.outbox_status === "cancelled") kind = "blocked";
+        else if (own) {
+          const settled: Record<string, [string, RecoveryMessageEventKind]> = {
+            succeeded: ["succeeded", "succeeded"], outcome_unknown: ["outcome_unknown", "outcome_unknown"], retryable: ["retryable", "retryable"], failed: ["dead_letter", "failed"] };
+          const match = settled[own.outcome];
+          if (match && match[0] === m.outbox_status) kind = match[1];
+        }
+      } else if (last.kind === "reconcile_started" && own?.outcome === "outcome_unknown") {
         if (m.outbox_status === "succeeded") kind = "reconciled";
         else if (m.outbox_status === "retryable") kind = "retryable";
       }
