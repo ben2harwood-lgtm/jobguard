@@ -186,3 +186,37 @@ Final b1 local results:
 - Unchanged audit-checkpoint file rerun (`pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1`): PASS, 71 tests. Earlier aggregate timeout remains recorded above.
 - `git diff --check`: PASS. Both merged regression test files are unchanged. Five edited paths: owned migration, migration note, two owned integration tests and this receipt.
 - Intended conventional commit message written to `/private/tmp/jg-msg-ent-8a-p.txt`. No staging, commit, checkout or push. PostgreSQL **NOT RUN**; visit-lock item remains STOP; two independent checks and separate acceptance remain outstanding.
+
+## b2 (ruling 119)
+
+18 October 2026. Last bounded order ENT-8A-P-b2, PR #288, starting HEAD `bf7058154722d59c8e22d1dc7a48f1af458aa729`. Builder: Codex gpt-6-astra. Working-tree delivery only; no commit, staging, checkout or push. This is builder evidence, not an independent verdict or technical acceptance.
+
+- **Before:** completion acquired advisory key 417 unconditionally before the live-job SHARE lock; replay therefore retained it after reading the receipt, violating merged R2.
+- **After:** after the shared authority lock and authority/ownership check, completion reads the receipt before key 417. An existing valid result bypasses that key and the evaluator, retains the live guard and final authority/ownership recheck, and returns the original result. The baseline SHARE lock remains inside `lp_visit_evaluate`, which is reached only on new execution. No migration edit is needed: that function already requires a processing receipt and is called only below the replay return.
+- **First execution order retained:** shared authority 54, read-only receipt lookup, 417, live-job SHARE, receipt insert, visit locks/writer, evaluator/baseline SHARE, audit head last. In particular the merged B12 assertion that the receipt INSERT follows the live guard is unchanged. Claiming the receipt before 417 would have broken that assertion, so this repair uses a read-only lookup instead.
+- **Concurrent duplicate:** if the initial read sees no receipt but the later claim discovers a concurrent winner, the tentative new-execution transaction rolls back (releasing 417 and all its locks), then retries through the cached-receipt path. No cached result is returned from the tentative transaction, no evaluator runs on that path, and no new business effect commits. The winner's immutable succeeded receipt supplies the retry.
+- Added two tests to the owned prompt-races suite: real lock-footprint assertions for first execution (417 held before live guard and through audit; baseline SHARE held), cached replay (authority advisory only, no 417/evaluator/baseline lock), and concurrent duplicate completion (same result, one answer). These are compiled, **not executed against PostgreSQL** here. Merged `site-visit.integration.test.ts`, including R2 and B12, is untouched; no merged expectation changes.
+
+Scope: repository, owned prompt-races test, this receipt. Migration `0194_enterprise_live_prompts.sql` remains unchanged. No schema/grant/backfill, external action, operational alert, commercial-policy change or new release permission. The shared visit repository requires serialization with other edits to that file. Invariants affected: replay idempotency, authority rechecks, first-execution serialization and audit-last lock ordering.
+
+Installed dependencies only: Node 24.17.0, pnpm 10.28.1 via `/private/tmp/jg-allocation-pnpm-bin`; no download or clean-install claim. Logs: `/private/tmp/ent-8a-p-b2-*.log`.
+
+- `pnpm --filter @jobguard/db typecheck`: PASS.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: PASS.
+- `pnpm --filter @jobguard/db exec vitest run src --exclude 'test/**' --maxWorkers=1`: PASS, 23 files / 198 tests.
+- `node --test tools/*.test.mjs`: PASS, 100 tests; temporary Git fixtures only, no worktree Git writes.
+- `pnpm --filter @jobguard/db exec tsc -p /private/tmp/ent-8a-p-b2-test-tsconfig.json`: PASS; owned PostgreSQL test and imports compiled without executing the harness.
+- `pnpm openapi:check`: BLOCKED by tsx IPC `listen EPERM`. First direct-loader fallback encountered stale pre-build DB exports (`evaluateDecisionChecks`); follow-up result below.
+- PostgreSQL, migration and browser suites: **NOT RUN**, per dispatcher instruction. Root `pnpm test` is not invoked because it includes PostgreSQL. CI must run both owned additions and untouched merged R2/B12. This is not database verification or an all-green acceptance claim.
+
+Remaining local results follow below. The b1 visit-lock implementation STOP is addressed in source by this bounded repair; database execution, independent exact-commit verdicts and separate acceptance remain outstanding.
+
+Final b2 local results:
+
+- `LANE_BASE_REF=origin/main pnpm lint`: PASS, 7/7 package tasks (one cached); cache-write permission warnings did not fail the check.
+- `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1`: PASS, 117 files / 2,909 tests.
+- `pnpm --filter @jobguard/api exec vitest run src/contractor/enterprise-live-prompt.application.test.ts src/contractor/enterprise-live-prompt-boundaries.test.ts --maxWorkers=1`: PASS, two files / 16 tests; not an HTTP, database or full API suite.
+- Same OpenAPI generator retried after DB build via `TSX_TSCONFIG_PATH=apps/api/tsconfig.json node --import ./apps/api/node_modules/tsx/dist/loader.mjs apps/api/src/generate-openapi.ts --check`: PASS.
+- `git diff --check`: PASS. Only the three scoped paths above changed; merged visit tests and migration 0194 have no diff against the issued head.
+- `pnpm build`: PASS, 7/7 tasks (one cached), including Next static generation. Existing dependency/cache warnings did not fail the build.
+- Intended conventional commit subject/body written to `/private/tmp/jg-msg-ent-8a-p.txt`. No commit or push. PostgreSQL **NOT RUN**; CI and independent exact-commit review remain required before acceptance.

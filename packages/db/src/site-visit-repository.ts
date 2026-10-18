@@ -28,6 +28,7 @@ const timestampText = (column: string) => `to_char(${column} AT TIME ZONE 'UTC',
 class FactsChanged extends Error {
  constructor(readonly authorizedCode: SiteVisitErrorCode = "SITE_VISIT_UNAVAILABLE", readonly refusal?: Refusal) { super(); }
 }
+class CompletionReplayRace extends Error {}
 const same = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 function routineFailure(error: unknown): SiteVisitErrorCode | FactsChanged {
  const message = (error as { message?: string } | null)?.message;
@@ -42,7 +43,11 @@ async function claim(db: TenantTransaction, tenant: string, commandId: string, t
  const inserted = await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
   VALUES($1,$2,$3,$4,$5,'processing',$6) ON CONFLICT DO NOTHING RETURNING command_id`, [tenant, commandId, type, semantic, hash, actor]);
  if (inserted.rowCount) return null;
+ return readReceipt(db, tenant, commandId, type, semantic, hash, false);
+}
+async function readReceipt(db: TenantTransaction, tenant: string, commandId: string, type: string, semantic: string, hash: string, allowMissing: boolean): Promise<unknown | null> {
  const rows = (await db.$client.query<{ request_hash: string; status: string; result: unknown }>("SELECT request_hash,status,result FROM app.command_receipt WHERE tenant_id=$1 AND (command_id=$2 OR (command_type=$3 AND semantic_key=$4))", [tenant, commandId, type, semantic])).rows;
+ if (allowMissing && rows.length === 0) return null;
  if (rows.length !== 1 || rows[0]!.request_hash !== hash || rows[0]!.status !== "succeeded" || rows[0]!.result === null) throw new SiteVisitError("IDEMPOTENCY_CONFLICT");
  return rows[0]!.result;
 }
@@ -102,19 +107,24 @@ export class SiteVisitRepository {
     await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [tenant]);
     const authority = await this.visitAuthority(db, actor, kind, input);
     if (authority) throw new FactsChanged("SITE_VISIT_UNAVAILABLE", authority);
+    const type = kind === "start" ? startCommandType : completeCommandType;
+    const content = kind === "start" ? { commandType: type, jobId: input.jobId, membershipId: actor.membershipId } : { commandType: type, jobId: input.jobId, membershipId: actor.membershipId, visitId: input.visitId, closeoutAnswer: input.closeoutAnswer };
+    const semantic = kind === "start" ? `site-visit-start:${input.jobId}:${actor.membershipId}:${input.commandId}` : `site-visit-complete:${input.jobId}:${input.visitId}:${input.commandId}`;
+    const hash = sha256Hex(canonicalJson(content));
+    const cached = kind === "complete" ? await readReceipt(db, tenant, input.commandId, type, semantic, hash, true) : null;
     // Completion shares the prompt/extra job serialization key before any job row lock.
     // Otherwise a confirming prompt can wait for this SHARE lock while this hook waits for its key.
-    if (kind === "complete") await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, input.jobId]);
+    if (kind === "complete" && cached === null) await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, input.jobId]);
     // Authority first, then the live-job row share lock, then the receipt; audit head remains last.
     try { await requireLiveJob(db, input.jobId); } catch (error) {
      if (error instanceof WatchdogError && error.code === "JOB_NOT_LIVE") throw new FactsChanged("JOB_NOT_LIVE");
      if (error instanceof WatchdogError) throw new FactsChanged();
      throw error;
     }
-    const type = kind === "start" ? startCommandType : completeCommandType;
-    const content = kind === "start" ? { commandType: type, jobId: input.jobId, membershipId: actor.membershipId } : { commandType: type, jobId: input.jobId, membershipId: actor.membershipId, visitId: input.visitId, closeoutAnswer: input.closeoutAnswer };
-    const semantic = kind === "start" ? `site-visit-start:${input.jobId}:${actor.membershipId}:${input.commandId}` : `site-visit-complete:${input.jobId}:${input.visitId}:${input.commandId}`;
-    const replay = await claim(db, tenant, input.commandId, type, semantic, sha256Hex(canonicalJson(content)), actor.membershipId);
+    const replay = cached ?? await claim(db, tenant, input.commandId, type, semantic, hash, actor.membershipId);
+    // A concurrent first execution may commit while we wait for key 417. Release all
+    // first-execution locks by rolling back, then read its receipt on a fresh replay path.
+    if (kind === "complete" && cached === null && replay !== null) throw new CompletionReplayRace();
     if (replay !== null) {
      // Claim can wait on another command. Recheck immediately before returning its cached answer, still under the shared authority lock.
      const current = await this.visitAuthority(db, actor, kind, input);
@@ -149,6 +159,7 @@ export class SiteVisitRepository {
     return schema.parse(result);
    });
   } catch (error) {
+   if (error instanceof CompletionReplayRace) return this.command(context, actor, kind, input, schema);
    if (error instanceof SiteVisitError || error instanceof FactsChanged || error instanceof InvalidTenantContextError) throw error;
    // Anything raised by the deferred checks at commit, or by the database in general, is unavailable and carries none of its text.
    throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
