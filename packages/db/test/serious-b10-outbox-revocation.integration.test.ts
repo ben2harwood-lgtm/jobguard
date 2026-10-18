@@ -89,13 +89,39 @@ describe("SERIOUS-B10 outbox revocation", () => {
     expect(await state(f, queued.action.id)).toBe("cancelled");
   });
 
-  it.each(["authorization", "membership"] as const)("also cancels direct %s revocation without a delivery attempt", async kind => {
+  it.each(["authorization", "membership"] as const)("leaves work pending, undelivered, after direct %s revocation (ruling 85 covers contractor-command revocation only)", async kind => {
     const f = await fixture(h), queued = await approvedAction(f);
     if (kind === "authorization") await h.admin.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.principal.tenantId, queued.action.authorizationId]);
     else await h.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.principal.tenantId, f.principal.membershipId]);
-    await expect(queued.execute()).resolves.toMatchObject({ kind: "cancelled", code: "AUTHORIZATION_REVOKED" });
+    await expect(queued.execute()).resolves.toBeUndefined();
     expect(queued.deliver).not.toHaveBeenCalled();
     expect(await queued.attempts()).toBe(0);
+    expect(await state(f, queued.action.id)).toBe("pending");
+  });
+
+  it("a contractor revocation in flight when dispatch starts is seen after the seed-54 lock: nothing is delivered", async () => {
+    const f = await fixture(h), queued = await approvedAction(f), tenantId = f.principal.tenantId;
+    // Stand-in for contractor_admin_command: take the same per-tenant seed-54 lock, write the revocation, hold the transaction open.
+    const revoker = await h.admin.connect();
+    try {
+      await revoker.query("BEGIN");
+      await revoker.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))", [tenantId]);
+      await revoker.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$3)", [tenantId, randomUUID(), f.principal.membershipId]);
+      const revokerPid = (await revoker.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0]!.pid;
+      const dispatch = queued.execute();
+      // Explicit ordering: wait until the executor is provably blocked behind the revoker (its first read has already run uncommitted-blind).
+      for (;;) {
+        const blocked = await h.admin.query("SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", [revokerPid]);
+        if (blocked.rowCount) break;
+        await new Promise(resolve => setImmediate(resolve));
+      }
+      expect(queued.deliver).not.toHaveBeenCalled();
+      await revoker.query("COMMIT");
+      await expect(dispatch).resolves.toEqual({ kind: "cancelled", code: "AUTHORIZATION_REVOKED" });
+    } finally { await revoker.query("ROLLBACK").catch(() => undefined); revoker.release(); }
+    expect(queued.deliver).not.toHaveBeenCalled();
+    expect(await queued.attempts()).toBe(0);
+    expect(await state(f, queued.action.id)).toBe("cancelled");
   });
 
   it("ignores another member's revocation in the same tenant", async () => {
