@@ -94,3 +94,64 @@ Last observed HEAD (no Git write): `31682762c903d716657c573e1b5deae63588aad7`. T
 ## Builder inspection notes
 
 This is a source-inspection receipt, not an independent verdict. No review, acceptance or completed self-verification is claimed. Resume with lane confirmation and resource checks, then write tests before implementation, run the allowed checks and obtain independent RED verdicts bound to the dispatcher's final commit. Keep the result PARKED.
+
+## r1 (ruling 102)
+
+18 Oct 2026. Builder: Codex, requested GPT-6-Astra lane. Earlier builder attribution and STOP sections above are historical. Status: STOPPED before implementation on a false order prerequisite; no acceptance claimed. BUILD-DON'T-MERGE / decision 74 / RED check then PARK remains binding.
+
+HEAD is `62b53bd6bcb75e83c6ea39ba7c1814e3fbb0bac3`; actual local `origin/main` is `b881f90be0a6d368838ca4392338147ef819bd3a`, superseding both bases in the issued file. Initial working tree was clean. Read the on-disk issued order, AGENTS.md, BUILD_PLAN.md C1–C8 and M0-9 inventory, standing handoff, earlier receipt, outbox implementation/audit helper and the three named test files. The outbox source and named tests have no diff against current origin/main. The four test conflicts match ruling 102. The protected `packages/db/src/outbox.test.ts:57–62` was not changed.
+
+### STOP: existing lane registration is absent
+
+The new order says: “Add those exact paths to the file that already registers the later-b9 lane … otherwise its entry in config/agent-lane-assignments.json” and “if something it assumes is false on the current code, STOP on that file:line with before/after and build nothing else.”
+
+- Location: `config/agent-lane-assignments.json:1`, the `lanes` object; no existing LATER-B9 entry has a line number because the entry does not exist. `config/lanes/later-b9.json` is also absent.
+- Before (parsed): `lanes["later-b9"] === undefined`; zero registrations match `codex/sandbox/later-b9`, including branch prefixes and all dedicated lane files.
+- After needed, NOT APPLIED: one coordinator-authorized `later-b9` registration for `codex/sandbox/later-b9`, with the original piece paths plus `packages/db/test/outbox.integration.test.ts`, `packages/db/src/outbox.test.ts`, and `packages/db/src/audit-fix-dbsrc-08.test.ts`. Then extend that single registration as ruling 102 directs. No duplicate registration is proposed.
+- Exact selector/lint refusal: `Branch "codex/sandbox/later-b9" must match exactly one registered lane; found 0. Register the task before building.`
+
+No registration, implementation, tests, expectations, pins or shared lists were edited. L019/L020/L027 remain NOT BUILT. There is no failing-first implementation run because the prerequisite STOP precedes building.
+
+### Commands and observed results
+
+Read-only inspection shell groups returned exit 0. They contained: `pwd`; `git status --short`; `git branch --show-current`; `git rev-parse HEAD origin/main`; reads of AGENTS.md, the issued order, prior receipt, both package manifests, outbox.ts, audit.ts, the three named tests, BUILD_PLAN.md excerpts, prior ledger, standing handoff and lane-lint implementation; `rg` searches for lane registrations and nested AGENTS.md files; `rg --files config/lanes`; `git show origin/main:config/agent-lane-assignments.json`; and `git diff origin/main --stat` plus the path-scoped source/test diff. The attempted dedicated lane-file read reported `No such file or directory`; searches for later-b9 returned no matches. Aggregate shell exit codes do not turn those missing-file/search results into passes. Some long read outputs were truncated; focused follow-up reads and parsed-policy inspection established the STOP independently.
+
+- `memory_pressure | tail -1`: exit 0; 58% free (threshold 35%).
+- `df -g /System/Volumes/Data`: exit 0; 59 GiB available (threshold above 33 GB).
+- `node --version`: exit 0; v24.17.0.
+- Inline `node --input-type=module` inspection using `existsSync`, parsed legacy JSON, `loadLanePolicy` and `selectLane`: exit 1; dedicated file false, legacy entry ABSENT, zero matching lanes.
+- `export PATH="$HOME/Library/pnpm/bin:$PATH"` followed by `LANE_BASE_REF=origin/main pnpm lint:lanes`: interrupted with Ctrl-C, exit 130, after only a pnpm configuration warning and no lint result. No package install/download command was issued. This is NOT a passing lint run.
+- `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`: exit 1; exact zero-registration refusal above.
+- `git diff --check`: exit 0 before receipt update; no implementation changes.
+- `git diff --stat`: exit 0 before receipt update; empty working diff. Relative to origin/main, only inherited receipt/ledger changes existed (2 files, 105 insertions).
+- `shasum -a 256` on the five files below: exit 0.
+- `git rev-parse HEAD`: exit 0; unchanged HEAD above.
+- Read existing `/private/tmp/jg-msg-later-b9.txt`: exit 0. Its old stopped-run text is preserved, with the r1 handoff appended.
+
+Post-receipt scope verification is recorded below. No Git write, package installation, provider call, real data, spending or outward action was performed.
+
+### NOT RUN and release holds
+
+- packages/db typecheck, lint, build; forced root typecheck/lint/build; OpenAPI check; own unit tests: NOT RUN because the order explicitly requires building nothing else when an assumed prerequisite is false.
+- New `packages/db/src/later-outbox.test.ts` and `packages/db/test/later-outbox.integration.test.ts`: NOT CREATED / NOT RUN.
+- `packages/db/test/outbox.integration.test.ts`, PostgreSQL concurrency checks, full `pnpm test:db` and `pnpm test:migrations`: NOT RUN; sandbox cannot start PostgreSQL, CI required.
+- Full `pnpm test`: NOT RUN; whole-suite runs belong to dispatcher/CI.
+- `pnpm test:e2e`, browser and Playwright: NOT RUN; prohibited locally, CI only.
+- Live adapter checks: NOT RUN; excluded by the synthetic-only order.
+- Migrations: none. New GRANTs: none. Standard F: no direct protected-table write grant added.
+
+### Unchanged source evidence and builder inspection
+
+SHA-256 before receipt-only updates:
+
+```text
+99032dfa0bdcd3782fa8b25dfea2282eb8f4de76a627800070a0b9c37a01e2b7  packages/db/src/outbox.ts
+288f47ad6f0f0fc3666ad9c556f73a5a8142f433a6c1f52e28bba1631050aa97  packages/db/src/outbox.test.ts
+2125cb1bc8a92578b9ed7a689390a93495091f01b9c29ab12106a777431ccebb  packages/db/src/audit-fix-dbsrc-08.test.ts
+107d82357b7cd2a350ee65b344a6f143d6d39d2fdd6d81122d53a4c51bb51606  packages/db/test/outbox.integration.test.ts
+2e146f8144b7c93cdb8d1b2de58d9383597f244484cbd82038a6bff9cb4206fc  config/agent-lane-assignments.json
+```
+
+Builder inspection only: ruling 102 resolves the earlier test-edit conflicts, but does not supply the assumed existing registration. Creating it would contradict this round's explicit false-assumption STOP instruction. No independent model verdict or technical acceptance is claimed. Dispatcher must resolve registration before implementation resumes; exact-commit independent RED review, CI database evidence and separate acceptance remain outstanding.
+
+Final verification shell group (exit 0): `git diff --check`; `git diff --stat`; `git status --short`; `git diff --name-only origin/main`; path-scoped `git diff origin/main` for the five hashed files; `git rev-parse HEAD`. Whitespace check passed, the five-file diff was empty, and both working-tree and base-relative changed-file lists contained only the receipt and ledger. Before adding this verification paragraph, the working diff was 2 files / 65 insertions. HEAD remains `62b53bd6bcb75e83c6ea39ba7c1814e3fbb0bac3`. No commit was created.
