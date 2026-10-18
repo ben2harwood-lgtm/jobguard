@@ -48,7 +48,7 @@ beforeAll(async () => {
     password: adminCredential,
     persistent: false,
     createPostgresUser: process.getuid?.() === 0,
-    initdbFlags: ["--lc-messages=C"],
+    initdbFlags: ["--encoding=UTF8", "--lc-messages=C"],
     onLog: () => undefined,
   });
   await postgres.initialise();
