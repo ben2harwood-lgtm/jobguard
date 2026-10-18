@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isSmallJobV3 } from "./activation-v3.js";
+import { isSmallJobV3 } from "./small-job-v3.js";
 import { workFactTimeV1 as sourceTimeV1 } from "./job-work-state.js";
 import { MAX_MONEY_PENCE, money, moneyFromBigInt } from "./money.js";
 import { divideRounded } from "./rational.js";
