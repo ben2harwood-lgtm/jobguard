@@ -9,7 +9,7 @@ separate acceptance remain outstanding. No independent verification is claimed.
 
 Inspected HEAD and origin/main both `c4f929f5a37bbc2639186fa3e2a4b2e7adc1ec3a`;
 branch `codex/sandbox/mon-8-p-a`. Highest existing migration 0192; added
-`0193_contractor_entitlement_authority.sql` (dispatcher renumbers at merge).
+`0194_contractor_entitlement_authority.sql` (dispatcher renumbers at merge).
 Working tree was clean initially. Node v24.17.0; cached pnpm 10.28.1. Dependencies
 were reused as instructed: **no clean reinstall was performed**. Initial PATH's
 `pnpm -v` shim attempted its automatic version resolution and failed registry
