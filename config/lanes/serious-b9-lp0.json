@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b9-lp0": {
+      "branches": ["codex/sandbox/serious-b9-lp0"],
+      "receipt": "docs/verdicts/SERIOUS-B9-LP0/BUILDER_RECEIPT.md",
+      "note": "Ben ruling 69, 16 October 2026: update only app.write_recovery_allocation's recorded definitionSha256 and staticCalls for migration 0169. Documentation-only inventory correction; no web workflow. Both independent checkers and separate acceptance remain required.",
+      "allow": [
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/verdicts/SERIOUS-B9-LP0/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
