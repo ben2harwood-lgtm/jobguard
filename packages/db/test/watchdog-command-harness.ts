@@ -104,13 +104,17 @@ interface Case {
   /** Exact retries whose server-generated fields differ; they must replay the first result unchanged. */
   retries?: string[];
 }
-// STOP r1 / ruling 114(f): the added cases need a coordinator-approved fixture.
-// Practice issuance requires fixed demo identities; existing cases retain their
-// original random tenant/member identities. Do not weaken their cross-case checks.
+// Ruling 116: only the added finish/cancel cases use the fixed demo identities.
+// Existing cases retain their original random tenant/member identities.
 const prepareWork = async (job:string,finish=false) => {
  process.env.JOBGUARD_ENV="synthetic_demo";
+ const {DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID}=await import("../src/demo-seed.js");
+ await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
+ await admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
+ await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional CH-4 practice') ON CONFLICT DO NOTHING",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
+ await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
  const token=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,token);
- const owned=(await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'",[tenant,auth.digest])).rows[0].id;
+ const owned=(await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'",[DEMO_TENANT_ID,auth.digest])).rows[0].id;
  const repo=new JobWorkStateRepository(observed.pool);
  const before=await repo.read(auth.context,owned,auth.digest);
  st(job).work={auth,owned,revision:before.events.length};

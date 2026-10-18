@@ -32,7 +32,7 @@ it('no-store typed refusal',()=>{
  const json=vi.fn(),status=vi.fn(()=>({json})),setHeader=vi.fn();
  const host={switchToHttp:()=>({getResponse:()=>({status,setHeader})})};
  new JobWorkStateExceptionFilter().catch(new JobWorkStateError('JOB_WORK_CLOSED'),host as never);
- expect(setHeader).toHaveBeenCalledWith('Cache-Control','no-store');expect(status).toHaveBeenCalledWith(409);expect(json).toHaveBeenCalledWith({code:'JOB_WORK_CLOSED',environment:'synthetic_demo',realExternalActions:0});
+ expect(setHeader).toHaveBeenCalledWith('Cache-Control','no-store');expect(status).toHaveBeenCalledWith(409);expect(json).toHaveBeenCalledWith({code:'IDEMPOTENCY_CONFLICT',environment:'synthetic_demo',realExternalActions:0});
 });
 
 it('missing-session controller refusal carries no-store before the identity filter',async()=>{

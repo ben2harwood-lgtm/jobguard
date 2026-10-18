@@ -279,3 +279,53 @@ Focused rerun after the timeout: DB
 **PASS: 71/71**, unchanged timeout and assertions (2.17 seconds total). This
 resolves the isolated timeout on rerun; the initial full-unit run remains recorded
 as failed. Final diff whitespace check also passed.
+
+
+## r2 (ruling 116)
+
+18 October 2026; builder: Codex gpt-6-astra. Last repair round for PR #290,
+starting at `2345e6cf21686f1a82f0a6aa6eb6d519dd41027e`.
+
+Applied exactly the two authorized repairs:
+
+- 116(a): only the added finish/cancel cases seed the fixed demo tenant,
+  identity, account and owner membership before issuing their practice session,
+  then select the owned live home job in that demo tenant. Existing cases,
+  random harness identities and conflict assertions are unchanged. This applies
+  the coordinator's fixture ruling to the previous STOP R1-F; it does not claim
+  a successful PostgreSQL run or cross-case collision proof.
+- 116(b): the piece's new no-store refusal test now expects
+  `IDEMPOTENCY_CONFLICT`, retaining its input, 409 status and no-store assertions.
+  This resolves STOP R1-C-TEST consistently with ruling 114(c).
+
+No item-specific implementation STOP remains. No runtime, migration, policy,
+contract or existing-case change was made in r2. The migration remains
+`0193_job_work_state_commands.sql`; it was already renumbered at the supplied
+head. Previous capacity/timer/release holds remain. No independent verdict or
+technical acceptance is claimed; the dispatcher owns commit/push and CI.
+
+### Commands actually executed
+
+Dependencies were already installed; no install or package download was requested.
+Node v24.17.0, TypeScript 5.8.3 and Vitest 4.1.11. `pnpm --version` stalled and
+was interrupted (130), as in r1. Checks use the installed binaries and configured
+script bodies below; no successful aggregate pnpm or clean-install run is claimed.
+
+| Command (relative to indicated working directory) | Result |
+| --- | --- |
+| API: `./node_modules/.bin/vitest run src/job-work-state-commands.test.ts src/watchdog-registry.test.ts src/job-work-state.http.test.ts --maxWorkers=2` | PASS: 134 tests, 3 suites. |
+| DB: `./node_modules/.bin/vitest run src --exclude '**/test/**' --maxWorkers=2` | FAIL: 197 passed, 1 failed (22 suites passed, 1 failed). Unchanged audit-checkpoint-handoff.test.ts:303 source traversal exceeded its 5000ms timeout. |
+| DB: `./node_modules/.bin/vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1` | FAIL: 70 passed, 1 failed at the same 5000ms timeout. No timeout or assertion was changed. |
+| Root: `LANE_BASE_REF=origin/main node tools/lint.mjs` | PASS: core purity, lane boundary and money arithmetic. |
+| Root: `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | PASS. |
+| API: `node --import tsx src/generate-openapi.ts --check` | PASS; no generation or API artifact edit. |
+| core/config/ai/storage/db: `./node_modules/.bin/tsc -p tsconfig.json`; API: `./node_modules/.bin/nest build`; web: `./node_modules/.bin/next build` | PASS all package builds. Web emitted workspace-lockfile, CSS compatibility/cache and dependency-import warnings. |
+| Each of core/config/ai/storage/db/api/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | PASS all seven; also their configured package lint checks. |
+| Root: `git diff --check` | PASS. |
+
+PostgreSQL, migration and browser/Playwright suites: **NOT RUN**, per dispatcher
+environment restriction. These must run in GitHub CI after dispatcher push.
+The shared-harness repair is source-inspected only. Broad root tests were not
+run because they include PostgreSQL suites. No provider/AI change or live-model
+evaluation applies. The DB unit timeout remains a validation hold, outside the
+two authorized repairs.
