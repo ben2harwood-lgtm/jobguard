@@ -1,0 +1,129 @@
+{
+  "version": "contractor-sales-claims.v1",
+  "label": "Practice sandbox — synthetic data; nothing is sent or charged",
+  "claims": [
+    {
+      "id": "northside",
+      "text": "The merged Northside generator creates fictional clients, operatives and work orders through commands; this is source evidence, not a new executed demonstration.",
+      "classification": "source_inspected",
+      "proof": "source_only",
+      "limit": "Source inspected only; no new executed PostgreSQL, browser, provider or independent-review evidence is claimed. Practice-only scope; no release gate is opened.",
+      "evidence": [
+        {
+          "commit": "0edb85b75a3600e850c2369911cc50e3fb289aad",
+          "path": "packages/db/src/northside-demo.ts",
+          "needle": "export async function seedNorthsideDemo",
+          "kind": "source"
+        },
+        {
+          "commit": "0edb85b75a3600e850c2369911cc50e3fb289aad",
+          "path": "packages/db/test/northside-demo.integration.test.ts",
+          "needle": "ACTION-ATTRIBUTION durably binds every journey command",
+          "kind": "test_source"
+        }
+      ]
+    },
+    {
+      "id": "dashboard",
+      "text": "The merged dashboard reads scoped capture and approval contributions. Billing and paid totals remain null pending ENT-6B.",
+      "classification": "source_inspected",
+      "proof": "source_only",
+      "limit": "Source inspected only; no new executed PostgreSQL, browser, provider or independent-review evidence is claimed. Practice-only scope; no release gate is opened.",
+      "evidence": [
+        {
+          "commit": "f9288fece150c2ed6b645739ed217a61fd72155e",
+          "path": "packages/db/src/enterprise-dashboard-repository.ts",
+          "needle": "export class EnterpriseDashboardRepository",
+          "kind": "source"
+        },
+        {
+          "commit": "f9288fece150c2ed6b645739ed217a61fd72155e",
+          "path": "packages/core/src/enterprise-dashboard.ts",
+          "needle": "billed: null, paid: null",
+          "kind": "source"
+        }
+      ]
+    },
+    {
+      "id": "baseline",
+      "text": "The merged baseline method prepares synthetic history with explicit cohorts, source hashes and drill-downs; it grants no historical-read authority and persists nothing.",
+      "classification": "source_inspected",
+      "proof": "source_only",
+      "limit": "Source inspected only; no new executed PostgreSQL, browser, provider or independent-review evidence is claimed. Practice-only scope; no release gate is opened.",
+      "evidence": [
+        {
+          "commit": "7ff452eeec1c523345d34715adfa3f8310062013",
+          "path": "apps/api/src/contractor/enterprise-baseline.application.ts",
+          "needle": "export function prepareEnterpriseBaseline",
+          "kind": "source"
+        },
+        {
+          "commit": "7ff452eeec1c523345d34715adfa3f8310062013",
+          "path": "packages/core/src/enterprise-baseline.ts",
+          "needle": "export const BASELINE_METHOD_V1",
+          "kind": "source"
+        }
+      ]
+    },
+    {
+      "id": "billing",
+      "text": "Billing export, invoice composition and settlement persistence remain pending ENT-6B for this package.",
+      "classification": "held",
+      "proof": "source_only",
+      "limit": "Source inspected only; no new executed PostgreSQL, browser, provider or independent-review evidence is claimed. Practice-only scope; no release gate is opened.",
+      "evidence": [
+        {
+          "commit": "b3386186a98c4ba92f77ac8ef7ad345740a028f0",
+          "path": "docs/verdicts/ENT-6/BUILDER_RECEIPT.md",
+          "needle": "- New billing application/HTTP/Next route suites: NOT BUILT with H1/H3/H5; NOT RUN. No server success stub or fabricated HTTP persistence.",
+          "kind": "builder_receipt"
+        }
+      ]
+    },
+    {
+      "id": "statements",
+      "text": "Persisted statements, posting and reconciliation remain pending ENT-7-P; reference preparation is not execution.",
+      "classification": "held",
+      "proof": "source_only",
+      "limit": "Source inspected only; no new executed PostgreSQL, browser, provider or independent-review evidence is claimed. Practice-only scope; no release gate is opened.",
+      "evidence": [
+        {
+          "commit": "31682762c903d716657c573e1b5deae63588aad7",
+          "path": "docs/verdicts/ENT-7/BUILDER_RECEIPT.md",
+          "needle": "Built the independent reference portion: strict versioned command/read/error/agreement/manifest/revision/dispute/binding/invoice-work representations; London month/cut-off calculation; immutable serialized reference derivation using the unchanged enterprise kernel; canonical input/artifact hashes and re-derivation validation; exact supplied-authority binding checks; refusal-only executor safeguards. Added three unit files with **31 authored cases, 0 executed, 0 passed**. No source fixture is a business command or persisted approval.",
+          "kind": "builder_receipt"
+        }
+      ]
+    },
+    {
+      "id": "prompts",
+      "text": "Persisted prompt confirmation remains pending; recorded-provider fictional fixtures do not establish a confirmation command.",
+      "classification": "held",
+      "proof": "source_only",
+      "limit": "Source inspected only; no new executed PostgreSQL, browser, provider or independent-review evidence is claimed. Practice-only scope; no release gate is opened.",
+      "evidence": [
+        {
+          "commit": "e0ecb2548ad53abfa539ad2dcc5bd3ff20c52661",
+          "path": "docs/verdicts/ENT-8B/BUILDER_RECEIPT.md",
+          "needle": "The merged ENT-8a contract holds persistence",
+          "kind": "builder_receipt"
+        }
+      ]
+    },
+    {
+      "id": "terms",
+      "text": "The 10% rate and no platform charge are proposed terms under D16, not approved pricing or a customer offer.",
+      "classification": "proposed",
+      "proof": "source_only",
+      "limit": "Source inspected only; no new executed PostgreSQL, browser, provider or independent-review evidence is claimed. Practice-only scope; no release gate is opened.",
+      "evidence": [
+        {
+          "commit": "71d525dec8de95a89ab923be298f9d18b3408e31",
+          "path": "docs/decisions/d16-enterprise-commercial-terms.md",
+          "needle": "**Status:** `proposed`",
+          "kind": "decision"
+        }
+      ]
+    }
+  ]
+}
