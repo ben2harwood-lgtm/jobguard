@@ -1,13 +1,23 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { jobStatuses, progressStages } from "@jobguard/core";
+import { calculateNetLine, jobStatuses, money, MoneyError, parseQuantity, progressStages } from "@jobguard/core";
+import { nonnegativeMoneyPenceSchema } from "./commands.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 const uuid=z.string().uuid();
 export const createJobV1=z.object({id:uuid.optional(),title:z.string().trim().min(1).max(200)});
 export const reserveProposalV1=z.object({id:uuid.optional(),scopeItemId:uuid.optional(),jobId:uuid,sourceHash:z.string().regex(/^[0-9a-f]{64}$/u),sourceReference:z.string().min(1).max(300)});
-export const confirmProposalV1=z.object({proposalId:uuid,jobId:uuid,revisionId:uuid.optional(),description:z.string().min(1).max(500),quantityDecimal:z.string().regex(/^(0|[1-9]\d*)(\.\d+)?$/u),unit:z.string().min(1).max(40),unitPricePence:z.number().int().nonnegative(),totalPence:z.number().int().nonnegative()});
-export const transitionJobV1=z.object({jobId:uuid,expectedRevision:z.number().int().nonnegative(),to:z.enum(jobStatuses),reason:z.string(),quoteVersionId:uuid.nullable().default(null),acceptedNetValuePence:z.number().int().nonnegative().nullable().default(null),feePolicyVersion:z.string().min(1).max(80).nullable().default(null),recoveryCapPence:z.number().int().nonnegative().nullable().default(null)});
+export const confirmProposalV1=z.object({proposalId:uuid,jobId:uuid,revisionId:uuid.optional(),description:z.string().min(1).max(500),quantityDecimal:z.string().regex(/^(0|[1-9]\d*)(\.\d+)?$/u),unit:z.string().min(1).max(40),unitPricePence:nonnegativeMoneyPenceSchema,totalPence:nonnegativeMoneyPenceSchema}).superRefine((input,context)=>{
+ try {
+  const expected=calculateNetLine(parseQuantity(input.quantityDecimal),money(input.unitPricePence));
+  if(input.totalPence!==expected.pence)context.addIssue({code:z.ZodIssueCode.custom,path:["totalPence"],message:"Total must equal the exact half-even quantity times unit price",params:{moneyCode:"total_mismatch"}});
+ } catch(error) {
+  if(error instanceof MoneyError)context.addIssue({code:z.ZodIssueCode.custom,path:["totalPence"],message:error.message,params:{moneyCode:error.code}});
+  else if(error instanceof RangeError)context.addIssue({code:z.ZodIssueCode.custom,path:["quantityDecimal"],message:error.message});
+  else throw error;
+ }
+});
+export const transitionJobV1=z.object({jobId:uuid,expectedRevision:z.number().int().nonnegative(),to:z.enum(jobStatuses),reason:z.string(),quoteVersionId:uuid.nullable().default(null),acceptedNetValuePence:nonnegativeMoneyPenceSchema.nullable().default(null),feePolicyVersion:z.string().min(1).max(80).nullable().default(null),recoveryCapPence:nonnegativeMoneyPenceSchema.nullable().default(null)});
 export const transitionProgressV1=z.object({jobId:uuid,scopeItemId:uuid,expectedRevision:z.number().int().nonnegative(),to:z.enum(progressStages),reason:z.string()});
 export type JobPermission="job:view"|"job:update"|"quote:edit"|"commercial:approve"|"finance:approve";
 export class JobRepositoryError extends Error{constructor(readonly code:"FORBIDDEN"|"NOT_FOUND"|"REVISION_CONFLICT"|"ILLEGAL_TRANSITION"){super(code)}}
