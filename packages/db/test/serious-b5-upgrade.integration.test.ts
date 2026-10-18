@@ -24,6 +24,7 @@ async function snapshot() {
  return { rows, routines, relations, policies };
 }
 // Ruling 104(b): only the objects created by 0188 may extend the snapshot.
+// Ruling 113 extends that allowance to the exact 0193 routines below.
 // Existing rows, routine privileges, relations and policies still compare in full.
 async function with0188Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -31,6 +32,16 @@ async function with0188Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const routineNames = ["pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
  expect(routines.map(r => r.proname).sort()).toEqual(routineNames);
+ // Ruling 113: 0193 adds only these three routines to the captured catalogues.
+ // Its two triggers are not relations, and it creates no tables, indexes or policies.
+ const routine0193Identities = [
+  ["decision_check_command", "p_digest text, p_command jsonb, p_phase text, p_data jsonb"],
+  ["guard_decision_check_receipt", ""],
+  ["require_completed_decision_check", ""],
+ ];
+ const routines0193 = after.routines.filter(r => r.nspname === "app" && routine0193Identities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines0193.map(r => [r.proname, r.args])).toEqual(routine0193Identities);
+ for (const r of routines0193) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
  // Index identity is bound to the two exact new tables, not a name-prefix exemption.
  const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x
   JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
@@ -54,7 +65,7 @@ async function with0188Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  };
  return {
   rows: { ...before.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [] },
-  routines: additive(before.routines, routines, after.routines),
+  routines: additive(before.routines, after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), after.routines),
   relations: additive(before.relations, relations, after.relations),
   policies: additive(before.policies, policies, after.policies),
  };
