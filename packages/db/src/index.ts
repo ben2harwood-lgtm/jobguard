@@ -112,3 +112,5 @@ export * from "./meter-repository.js";
 export * from "./northside-settings.js";
 export * from "./northside-run.js";
 export * from "./contractor-entitlement-authority-repository.js";
+
+export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
