@@ -111,3 +111,4 @@ export * from "./meter-persistence.js";
 export * from "./meter-repository.js";
 export * from "./northside-settings.js";
 export * from "./northside-run.js";
+export { OidcRepository, type StoredOidcRequest } from "./oidc-repository.js";

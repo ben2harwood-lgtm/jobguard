@@ -59,6 +59,21 @@ async function with0188Additions(before: Awaited<ReturnType<typeof snapshot>>) {
   policies: additive(before.policies, policies, after.policies),
  };
 }
+// Standing ruling 113: additive expectations for ENT-10-OIDC-B objects only.
+async function withOidcAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const names = ["oidc_claim", "oidc_complete", "oidc_create", "oidc_fail", "oidc_link", "oidc_save"];
+ const routines = after.routines.filter(r => r.nspname === "identity" && names.includes(r.proname));
+ expect(routines.map(r => r.proname)).toEqual(names);
+ const relations = after.relations.filter(r => r.nspname === "identity" && ["oidc_assertion_use", "oidc_assertion_use_pkey", "oidc_assertion_use_tenant_id_connection_id_request_id_key", "oidc_request", "oidc_request_pkey"].includes(r.relname));
+ expect(relations.map(r => r.relname)).toEqual(["oidc_assertion_use", "oidc_assertion_use_pkey", "oidc_assertion_use_tenant_id_connection_id_request_id_key", "oidc_request", "oidc_request_pkey"]);
+ const policies = after.policies.filter(p => p.schemaname === "identity" && (["oidc_request", "oidc_assertion_use"].includes(p.tablename) || (p.tablename === "sso_connection" && p.policyname === "oidc_hide_from_saml_view")));
+ expect(policies.map(p => p.policyname)).toEqual(["tenant_isolation", "tenant_isolation", "oidc_hide_from_saml_view"]);
+ expect(before.rows).not.toHaveProperty("identity.oidc_request");
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
+ const additive = <T>(old:T[], added:T[], live:T[]):T[] => { const expected=[...old]; for(const row of added)expected.splice(live.indexOf(row),0,row);return expected; };
+ return { rows:{...before.rows,"identity.oidc_request":[],"identity.oidc_assertion_use":[]}, routines:additive(before.routines,routines,after.routines), relations:additive(before.relations,relations,after.relations), policies:additive(before.policies,policies,after.policies) };
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -72,7 +87,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await with0188Additions(before);
+ const expected = await withOidcAdditions(await with0188Additions(before));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);
