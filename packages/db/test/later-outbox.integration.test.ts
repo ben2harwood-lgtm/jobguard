@@ -1,5 +1,6 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { closeTestPools, freePort } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,6 +10,9 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   ActionExecutor,
+  EvidencePackRepository,
+  FakeRecoveryMessageAdapter,
+  RecoveryMessageRepository,
   appendOutboundAction,
   ingestProviderEvent,
   migrate,
@@ -135,6 +139,57 @@ const events = async (id: string) => withTenant(runtime, context, async db =>
   (await db.$client.query("SELECT event_type,payload FROM app.audit_event WHERE subject_ref=$1 ORDER BY sequence", [id])).rows);
 
 describe("LATER-B9 PostgreSQL outcome guarantees", () => {
+  it("ruling 112 owner retry delivers once after definite failure while automatic execution honours back-off", async () => {
+    await installLegacySyntheticPartyFixtures(admin);
+    const fixture = await seedEvidencePackFixture(admin);
+    const ctx = testTenantContext(fixture.tenantId);
+    const actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
+    const caseId = fixture.customerCaseId;
+    await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",
+      [randomUUID(), fixture.tenantId, fixture.jobId, caseId, randomUUID(), hash(`open:${caseId}`)]);
+    const packs = new EvidencePackRepository(runtime), messages = new RecoveryMessageRepository(runtime);
+    const pack = await packs.generate(ctx, caseId, { commandId: randomUUID() }, actor.actorRef);
+    await packs.approveAttachment(ctx, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
+    const ready = await messages.read(ctx, caseId);
+    const preview = (await messages.preview(ctx, caseId, { version: "recovery-message-preview.v1", commandId: randomUUID(), expectedCaseRevision: ready.readiness.caseRevision, packId: pack.id }, actor)).latest!;
+    const approved = (await messages.command(ctx, caseId, {
+      version: "recovery-message-command.v1", commandId: randomUUID(), action: "approve", messageId: preview.id, expectedRevision: preview.revision,
+      recipient: preview.message.recipient, body: preview.message.body, amountPence: preview.message.amountPence, packId: preview.message.packId, contentHash: preview.message.contentHash,
+    }, actor)).latest!;
+    const failed = await messages.command(ctx, caseId, {
+      version: "recovery-message-command.v1", commandId: randomUUID(), action: "advance", messageId: approved.id, expectedRevision: approved.revision, outcome: "definite_failure",
+    }, actor);
+    expect(failed.latest!.status).toBe("retryable");
+    expect(failed.latest!.attempts).toBe(1);
+    expect(failed.sinkCount).toBe(0);
+    const actionId = approved.approval!.outboxActionId;
+    const due = await admin.query("SELECT next_attempt_at>clock_timestamp() AS future FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [fixture.tenantId, actionId]);
+    expect(due.rows[0].future).toBe(true);
+    const fake = new FakeRecoveryMessageAdapter(runtime, "success");
+    let automaticCalls = 0;
+    const automaticAdapter: OutboundAdapter = {
+      name: fake.name, supportsProviderDeduplication: fake.supportsProviderDeduplication,
+      deliver: action => { automaticCalls++; return fake.deliver(ctx, action); },
+      reconcile: key => fake.reconcile(ctx, key),
+    };
+    const executor = new ActionExecutor(runtime, new Map([[fake.name, automaticAdapter]]), telemetry);
+    await executor.execute(ctx, actionId);
+    expect(automaticCalls).toBe(0);
+    expect(await messages.read(ctx, caseId)).toEqual(failed);
+    const retry = {
+      version: "recovery-message-command.v1" as const, commandId: randomUUID(), action: "advance" as const,
+      messageId: approved.id, expectedRevision: failed.latest!.revision, outcome: "success" as const,
+    };
+    const delivered = await messages.command(ctx, caseId, retry, actor);
+    expect(delivered.latest!.status).toBe("simulated_delivery");
+    expect(delivered.latest!.attempts).toBe(2);
+    expect(delivered.sinkCount).toBe(1);
+    expect(delivered.latest!.history.map(event => event.kind)).toEqual(["previewed", "approved", "started", "retryable", "started", "succeeded"]);
+    expect(await messages.command(ctx, caseId, retry, actor)).toEqual(delivered);
+    await executor.execute(ctx, actionId);
+    expect(automaticCalls).toBe(0);
+    expect(await messages.read(ctx, caseId)).toEqual(delivered);
+  });
   it("L027 future next_attempt_at prevents claim; at due time only one concurrent executor claims", async () => {
     const action = await appendAction(); let calls = 0;
     const executor = new ActionExecutor(runtime, new Map([["fake_capture", adapter(async () => {

@@ -245,3 +245,32 @@ The intended commit subject/body was appended as the **r1b intended commit messa
 Final receipt/ledger/message writes were within the issued lane and named temporary artifact. The final whitespace, lane and Git-state verification follows this append. Source/test hashes above remain current. No Git write occurred; HEAD remains `cf4195dfb112630adfb9210402af744592b7e3f9`. Built uncommitted; acceptance remains held for independent RED review, CI PostgreSQL evidence and the OpenAPI check. PARK.
 
 Final verification group returned exit 0: lane lint passed; `git diff --check` passed; tracked diff snapshot 6 files / 198 insertions / 6 deletions, plus the two new test files; `git status --short` showed only the eight authorised implementation/test/document paths. HEAD unchanged as above. This paragraph records that completed verification.
+
+
+## r2 (ruling 112)
+
+18 Oct 2026. Builder: Codex. PR #285, decision 74, BUILD-DON'T-MERGE. Starting HEAD `cfe17d69d3a5d709a3f762161ff544c053a8c770`; working tree initially clean. Read AGENTS.md, BUILD_PLAN.md §5.3/C5 and M0-9 mapping, the current lane register, prior receipt, recovery-message advance and its merged tests. Ruling 112 supplies this repair's scope. No package download/install, Git write, commit or push.
+
+### Implementation and regression source
+
+An authorised owner advance of a retryable recovery message now updates that action's `next_attempt_at=clock_timestamp()` after approval/source validation and before recording `started` and audit, inside their transaction. The update is tenant/action scoped and restricted to `retryable`; business-row locking remains before audit append. Automatic execution and its one-minute back-off remain unchanged. Affected invariants: exact current authorization (§5.3), durable retry and transaction boundaries (§5.4), atomic audit (§5.7).
+
+Added one PostgreSQL regression to the already-authorised `packages/db/test/later-outbox.integration.test.ts`. It uses the real runtime role, evidence fixture and recovery-message service: definite failure creates one attempt and a future due time; automatic execution cannot call the adapter or change the message state; an owner retry delivers once, with two attempts and the expected history; command replay and another executor call produce no duplicate. This is test source only, NOT execution evidence. The existing L027 PostgreSQL test is unchanged. `git diff --exit-code -- packages/db/test/recovery-messages.integration.test.ts packages/db/src/outbox.ts` passed: the three named merged tests and the executor are untouched.
+
+### Local execution evidence
+
+Commands use the existing `/private/tmp/jg-pnpm-r1/bin` shim (pnpm 10.28.1), Node v24.17.0; dependencies were already installed. Logs use prefix `/private/tmp/jg-later-b9-r2-`.
+
+- `pnpm --filter @jobguard/db typecheck`: PASS, exit 0 (`typecheck.log`).
+- `LANE_BASE_REF=origin/main pnpm lint`: PASS, exit 0; boundary checks and 7/7 Turbo tasks, 4 cached; db/api/web lint executed (`lint.log`). Turbo emitted non-fatal IO permission warnings.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: PASS, exit 0 (`lanes.log`). Lane registration unchanged.
+- Initial `pnpm --filter @jobguard/db exec vitest run src --maxWorkers=2`: interrupted, exit 130 (`unit.log`). The substring filter unexpectedly selected four `test/*dbsrc*.integration.test.ts` suites; setup attempted and all 18 integration tests were skipped. This was an accidental prohibited suite selection, stopped as soon as noticed, not PostgreSQL verification. The partial run also reported one failed audit-checkpoint-handoff source test without a completed diagnostic summary. No test/configuration was changed in response.
+- Corrected `pnpm --filter @jobguard/db exec vitest run ./src/ --exclude '**/test/**' --maxWorkers=2`: PASS, exit 0; all 18 source unit files / 146 tests, including audit-checkpoint-handoff and L027 (`unit-only.log`).
+- `pnpm openapi:check`: STOP for this check only, exit 1 (`openapi.log`). The unchanged tsx launcher failed before schema verification with `listen EPERM` on `/var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/5405.pipe`. No workaround/escalation; dispatcher/CI must run it where IPC is permitted.
+
+PostgreSQL verification: NOT RUN. Neither the new regression nor the three protected recovery-message tests was run; their passing status must be established in CI. No browser suite, migration suite or live adapter run. The accidental aborted selection above is disclosed separately rather than represented as a successful database run. Full workspace `pnpm test` not run because it includes database suites. AI eval is inapplicable to this retry-only change.
+
+No schema, migration, grants, backfill, new alert, API contract or provider changes. Reverting the five-line source repair restores the known owner-retry regression; no data rollback is needed. Independent exact-commit review and separate acceptance remain outstanding. Decision 74: RED review then PARK; no merge, release or acceptance claimed.
+
+
+Final r2 build: `pnpm build --force --concurrency=2` PASS, exit 0, 7/7 tasks, zero cached, 1m37.975s (`/private/tmp/jg-later-b9-r2-build.log`). Non-fatal Turbo IO, Next workspace-root and compilation warnings remain outside this repair. Intended conventional commit subject/body written to `/private/tmp/jg-msg-later-b9.txt` for the dispatcher. No commit or push performed.
