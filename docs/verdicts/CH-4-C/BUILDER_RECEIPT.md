@@ -329,3 +329,76 @@ The shared-harness repair is source-inspected only. Broad root tests were not
 run because they include PostgreSQL suites. No provider/AI change or live-model
 evaluation applies. The DB unit timeout remains a validation hold, outside the
 two authorized repairs.
+
+## b1 (ruling 118)
+
+18 October 2026. Fresh order CH-4-C-b1 for PR #290, starting at `045f9066`.
+Working-tree delivery only; no git add/commit/push or dependency download.
+This is builder evidence, not independent verification or technical acceptance.
+
+The added finish/cancel prepare path now restores the exact previous
+`JOBGUARD_ENV` value in `finally` (including deleting an originally absent key),
+and holds its typed fixture state in a separate map rather than the existing
+cases' memo. Only that prepare path inserts the fixed demo rows. Existing cases,
+random tenant/member identities, boot/live/probe helpers and merged assertions
+remain byte-identical to origin/main. A source comparison removed only the CH-4
+imports, helper and two case registrations and verified exact equality; it also
+verified the entire shared replay-contract file is unchanged.
+
+**STOP B1-CROSS-TENANT — cross-kind replay/race proof cannot be repaired by
+fixture isolation under these constraints.** The shared replay test runs every
+other kind with the successful command's ID and expects a conflict; its race
+also expects exactly one winner. Existing cases use the random harness tenant.
+The two added cases must use demo-owned jobs: 0094's
+`practice_binding_synthetic_tenant` CHECK binds practice ownership to the fixed
+demo tenant, and its authentication routine binds the fixed membership/user.
+0193's identity lookup, receipt lookup and advisory lock are explicitly scoped
+by tenant (lines 81–88). A command in the random tenant therefore cannot conflict
+with a command in the demo tenant merely because their IDs match. Fresh probes
+can succeed, and reused probes can reject with stale-revision/domain errors,
+consistent with the supplied CI excerpt. Restoring the environment does not
+change that namespace mismatch. This is source analysis, not a PostgreSQL run.
+
+A separate database or more isolated prepare path cannot supply the missing
+same-tenant collision. No synthetic receipt copying, simulated conflict,
+authentication bypass, registry omission, case skip, changed random identity or
+weakened assertion was introduced. The demo rows remain in their own tenant in
+the suite database; full cross-case fixture isolation and a passing exhaustive
+contract are NOT claimed. Coordinator resolution of the incompatible fixture and
+cross-kind requirements is needed for this item only. The r2 statement that no
+implementation STOP remains is superseded for this item.
+
+**Validation hold — migration order.** Both lane checks now reject this branch's
+0193 because origin/main already contains 0193. No renumbering was performed in
+this fixture-only order. Earlier capacity, timer and release holds remain.
+
+### Commands actually executed
+
+Used installed binaries and configured script bodies, following the prior
+receipt's pnpm version-launcher failure; no fresh pnpm/clean-install pass is
+claimed. PostgreSQL, migration and browser suites: **NOT RUN**, per dispatcher.
+No model/prompt/provider change; evaluation is inapplicable.
+
+| Command | Result |
+| --- | --- |
+| DB: `./node_modules/.bin/vitest run src --exclude '**/test/**' --maxWorkers=1` | PASS: 23 suites, 198 tests. |
+| Root: `LANE_BASE_REF=origin/main node tools/lint.mjs` | FAIL: core purity passes; lane migration-order gate rejects 0193. |
+| Root: `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | FAIL: same migration-order gate. |
+| API: `node --import tsx src/generate-openapi.ts --check` | PASS. |
+| DB: direct `tsc --noEmit --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext test/watchdog-command-harness.ts` | FAIL: existing inbox seed case passes `ids[0]` (string or undefined) to dismiss at line 204. That case is byte-identical to main and was not edited. This extra check includes tests excluded from normal package typecheck. |
+
+No production code, SQL, migration, permission, commercial policy, public API or
+operational alert changed in b1. No data backfill or new migration is required.
+Commit message is supplied at `/private/tmp/jg-msg-ch-4-c.txt`; dispatcher owns
+commit/push, subsequent CI and independent review.
+
+Final b1 validation addendum:
+
+- Each of core/config/ai/storage/db/api/web: installed
+  `tsc -p tsconfig.json --noEmit` **PASS** (all seven). These are also the
+  configured package lint checks; the root lane failure remains above.
+- Source byte comparisons against origin/main and `git diff --check`: **PASS**.
+- core/config/ai/storage/db: installed `tsc -p tsconfig.json`; API:
+  installed `nest build`; web: installed `next build`: **PASS** all package
+  builds. Web emitted workspace-lockfile, CSS and dependency-import warnings.
+  Build completion is not browser or database verification.
