@@ -16,7 +16,9 @@
         "packages/db/src/audit-fix-dbsrc-08.test.ts",
         "docs/ledger/LATER-B9.md",
         "docs/verdicts/LATER-B9/BUILDER_RECEIPT.md",
-        "packages/db/src/recovery-message-repository.ts"
+        "packages/db/src/recovery-message-repository.ts",
+        "packages/db/test/recovery-messages.integration.test.ts",
+        "apps/api/src/shadow-isolation.application.test.ts"
       ]
     }
   }
