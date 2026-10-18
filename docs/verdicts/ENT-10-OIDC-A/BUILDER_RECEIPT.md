@@ -18,9 +18,9 @@ Read the installed package manifests, MIT licence texts, openid-client README, d
 
 Evidence paths: `apps/api/node_modules/openid-client/{package.json,LICENSE.md,README.md,build/index.d.ts,build/index.js}` and `node_modules/.pnpm/<package>@<version>/node_modules/<package>/{package.json,LICENSE.md}`. SHA-256 of installed licence files:
 
-- openid-client: `14c5cc0dc21f44add6d88a5621c65813d40bf382550c978430096db3df0cf68c`
+- openid-client: `14c5cc0dc21f` (full SHA-256 recorded in the local build log)
 - jose: `8078b0829d6c3e9ecde2f003e1966e4cad3efc6e7a640efbab0313cc166b1af1`
-- oauth4webapi: `81e7b4b0196e8caa43cf243131512e5e4ab04fc312623335e783abae6ff46d79`
+- oauth4webapi: `81e7b4b0196e` (full SHA-256 recorded in the local build log)
 
 MIT usage rights require retaining notices. Package metadata is not an independent registry attestation. README identifies Node 20+ support and upstream conformance/security-policy links; runtime here is Node **24.17.0**. Release date 2026-09-05 comes from dispatch, not an independently fetched release record. Current advisories/maintenance are not proven offline. See [library review](../../security/oidc-library-review.md) for comparison and lockfile hashes.
 
@@ -71,3 +71,25 @@ New files: `apps/api/src/auth/sso/oidc.ts`, `oidc.contracts.ts`, `oidc.test.ts`,
 Intended conventional commit message: `/private/tmp/jg-msg-ent-10-oidc-a.txt`. Raw logs listed above remain local temporary artifacts for dispatcher inspection.
 
 Remaining holds: clean install, advisory/current provenance verification, full required suites in CI, two independent Claude exact-commit checks and separate acceptance; B/C acceptance and native/live-provider/assurance obligations. D01/D02/D03/D08/D09/D16 and identity D04/G5 remain closed. No real identity/domain, outward notification, paid service, real-provider route, secret, retention policy or sanction introduced. This does not close parent ENT-10.
+
+
+## Repair round r1 — 18 October 2026
+
+Builder: Codex (dispatcher designated gpt-6-astra). Baseline `b3abbffc`, PR #289. Shortened only the two flagged openid-client and oauth4webapi licence hashes to their first 12 hex characters, with the requested local-log note. Full values are preserved in `/private/tmp/ent-10-oidc-a-r1-provenance-build.log`. No scanner or ignore-rule change; this receipt is the only changed repository file. No code, migration or behavior change; prior release holds remain. This is builder execution evidence, not independent review or acceptance.
+
+Checks used preinstalled dependencies and cached pnpm 10.28.1 via `/private/tmp/ent-10-oidc-a-bin` on PATH; Node 24.17.0. No install or package download performed.
+
+- `pnpm typecheck`: **PASS**.
+- `LANE_BASE_REF=origin/main pnpm lint`: **PASS**.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: **PASS**.
+- `pnpm build`: **PASS**, 7 tasks, 2 cached. Existing build/cache warnings did not fail the build.
+- `node --test tools/*.test.mjs`: **PASS**, 100 tests.
+- `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1`: **PASS**, 114 files / 2,889 tests.
+- `pnpm --filter @jobguard/config --filter @jobguard/ai --filter @jobguard/storage --filter @jobguard/web test`: **PASS**; config 18, AI 123, storage 4, web 867 tests.
+- `pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 --exclude '**/health.test.ts' --exclude '**/shadow-isolation.application.test.ts' --exclude '**/action-paths.test.ts' --exclude '**/*.http.test.ts' --exclude '**/final-account-lock.isolation.test.ts'`: **PASS**, 105 files / 1,938 tests. Socket/database exclusions apply to this invocation only; repository test configuration is unchanged.
+- `pnpm openapi:check`: **BLOCKED**, tsx IPC socket `listen EPERM`. Same check through `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check`: **PASS**.
+- Local repository secrets scan: **NOT RUN**. No pnpm secrets script or tools scanner exists, and no local `gitleaks` executable is installed. The required GitHub `secrets` job uses `gitleaks/gitleaks-action@v2.3.7`; its result remains for CI after dispatcher push.
+- Full `pnpm test`, PostgreSQL/migrations and browser suites: **NOT RUN** under dispatcher sandbox constraints; executable unit portions are listed above. CI remains required.
+- `git diff --check`: **PASS**.
+
+Local logs: `/private/tmp/ent-10-oidc-a-r1-{checks,build,units,openapi}.log`. Intended commit message: `/private/tmp/jg-msg-ent-10-oidc-a.txt`. No staging, commit or push performed by builder.
