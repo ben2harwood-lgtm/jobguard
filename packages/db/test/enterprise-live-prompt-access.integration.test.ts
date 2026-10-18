@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
-import { EnterpriseLivePromptRepository, withTenant } from '../src/index.js';
+import { EnterpriseLivePromptRepository, ContractorPracticeSessionRepository, contractorSessionContext, withTenant } from '../src/index.js';
 import { cluster, promptFixture, promptSession, materialsInput, evaluateInput, listInput, moveOffLive, smallTrack } from './enterprise-live-prompt-fixtures.js';
 import { command } from './site-extra-fixtures.js';
 import type { Cluster } from './site-visit-fixtures.js';
@@ -67,7 +67,7 @@ describe('ENT-8A-P persisted prompt access', () => {
  });
  it('a revoked persisted session cannot read or mutate', async () => {
   const f = await promptFixture(c), repository = new EnterpriseLivePromptRepository(c.runtime);
-  await c.admin.query("UPDATE control_plane.contractor_practice_session SET revoked_at=clock_timestamp() WHERE session_digest=app.contractor_practice_session_digest($1)", [f.sessions.supervisor]);
+  await new ContractorPracticeSessionRepository(c.runtime).revoke(await contractorSessionContext(c.runtime, f.sessions.supervisor!), f.sessions.supervisor!);
   await expect(repository.list(f.sessions.supervisor!, listInput(f))).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
   await expect(repository.evaluate(f.sessions.supervisor!, evaluateInput(f))).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
  });

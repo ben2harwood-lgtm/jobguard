@@ -6,7 +6,7 @@
         "codex/sandbox/ent-8a-p"
       ],
       "receipt": "docs/verdicts/ENT-8a-P/BUILDER_RECEIPT.md",
-      "note": "RED: synthetic persisted live prompts only. Migration 0189; no release permission. End-check agreement/completion dependency remains held. Two independent Claude verdicts and separate acceptance required. Own lane file is implicitly editable under version 2 policy.",
+      "note": "RED: synthetic persisted live prompts only. Migration 0191; no release permission. End-check agreement/completion dependency remains held. Two independent Claude verdicts and separate acceptance required. Own lane file is implicitly editable under version 2 policy.",
       "allow": [
         "docs/ledger/ENT-8a-P.md",
         "docs/verdicts/ENT-8a-P/BUILDER_RECEIPT.md",

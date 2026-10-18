@@ -119,8 +119,9 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) s WHERE s.tenant_id=t AND s.membership_id=a) THEN RAISE EXCEPTION 'EXTRA_FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF p_action NOT IN('list','detail') THEN
   IF NOT coalesce(app.contractor_member_active(a),false) THEN RAISE EXCEPTION 'EXTRA_FORBIDDEN' USING ERRCODE='42501'; END IF;
-  PERFORM app.require_watchdog_live(p_job);
+  -- Serialize before taking the job SHARE lock: confirmation may upgrade it via scope writes.
   PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||p_job::text,417));
+  PERFORM app.require_watchdog_live(p_job);
   -- Serializes baseline imports; their UPDATE of work_order_current waits for this lock.
   PERFORM 1 FROM app.work_order_current c JOIN app.work_order w ON(w.tenant_id,w.id)=(c.tenant_id,c.work_order_id) WHERE w.tenant_id=t AND w.job_id=p_job FOR SHARE OF c;
   IF EXISTS(SELECT 1 FROM app.work_order w JOIN app.work_order_current c ON(c.tenant_id,c.work_order_id)=(w.tenant_id,w.id) JOIN app.work_order_revision r ON(r.tenant_id,r.id)=(c.tenant_id,c.revision_id) WHERE w.tenant_id=t AND w.job_id=p_job AND r.status<>'ordered') THEN RAISE EXCEPTION 'JOB_NOT_LIVE'; END IF;
@@ -330,7 +331,7 @@ BEGIN
    term:=p_input->'locator'->>'quote';
   ELSIF p_input->'locator'->>'kind'='photo_tag' THEN
    source_kind:='completion_photo';
-   IF p_input ? 'sourceText' OR p_input->'locator'-ARRAY['kind','tag']<>'{}'::jsonb OR jsonb_typeof(p_input->'locator'->'tag') IS DISTINCT FROM 'string' THEN RAISE EXCEPTION 'PROMPT_SOURCE_INVALID'; END IF;
+   IF p_input ? 'sourceText' OR (p_input->'locator')-ARRAY['kind','tag']<>'{}'::jsonb OR jsonb_typeof(p_input->'locator'->'tag') IS DISTINCT FROM 'string' THEN RAISE EXCEPTION 'PROMPT_SOURCE_INVALID'; END IF;
    -- The ordinary-runtime source adapter reads the immutable original under its existing RLS.
    -- No new original-table grants. This preimage is independently bound to finalized metadata here.
    SELECT p_source_bytes INTO original_bytes FROM app.evidence_object e JOIN app.evidence_upload u ON(u.tenant_id,u.id)=(e.tenant_id,e.upload_id)
@@ -445,8 +446,8 @@ BEGIN
   OR NOT EXISTS(SELECT 1 FROM app.command_receipt r JOIN app.closeout_answer a ON(a.tenant_id,a.command_id)=(r.tenant_id,r.command_id)
    WHERE r.tenant_id=t AND r.command_id=p_command AND r.command_type='CompleteSiteVisit' AND r.status='processing' AND r.actor_membership_id=p_actor AND a.job_id=p_job AND a.membership_id=p_actor)
  THEN RAISE EXCEPTION 'EXTRA_FORBIDDEN' USING ERRCODE='42501'; END IF;
- PERFORM app.require_watchdog_live(p_job);
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||p_job::text,417));
+ PERFORM app.require_watchdog_live(p_job);
  PERFORM 1 FROM app.work_order_current c JOIN app.work_order w ON(w.tenant_id,w.id)=(c.tenant_id,c.work_order_id) WHERE w.tenant_id=t AND w.job_id=p_job FOR SHARE OF c;
  RETURN app.lp_evaluate(p_job,p_command);
 END $$;

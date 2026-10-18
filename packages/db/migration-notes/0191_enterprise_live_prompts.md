@@ -1,10 +1,10 @@
-# 0189 — ENT-8A-P enterprise live prompts
+# 0191 — ENT-8A-P enterprise live prompts
 
-Synthetic practice only. The owning dispatcher reserved 0189; MERGE-CHURN-1 applies at merge. No historical backfill. No production fee capability or outward action.
+Synthetic practice only. The owning dispatcher renumbered 0189 to 0191 after merging main; MERGE-CHURN-1 applies at merge. No historical backfill. No production fee capability or outward action.
 
 Seven append-only tables: `extra_prompt`, `extra_prompt_citation`, `prompt_resolution`, `materials_issue_fact`, `extra_completion_observation`, `extra_office_prompt_signal`, `extra_prompt_rule_settings`. All are migration-owned, tenant-qualified, FORCE RLS. Runtime, infrastructure and shadow roles have no direct table privileges. The settings side table has no customer write entrypoint and binds a client-contract version; it is not an enterprise agreement store.
 
-Runtime receives only checked EXECUTE on `lp_read`, `lp_command`, `lp_finish`, `lp_visit_evaluate`, `lp_sources`, `lp_observation_prompt` (signatures in migration). Helpers are private. Session-bound authority is checked before job state and replay. The existing tenant administration lock precedes live-job/job-origin/baseline/source locks. Audit append is last; `lp_finish` only validates the completed result, with no business write or new lock. Deferred receipt/fact checks require the exact result audit or the existing completion audit for the visit source hook.
+Runtime receives only checked EXECUTE on `lp_read`, `lp_command`, `lp_finish`, `lp_visit_evaluate`, `lp_sources`, `lp_observation_prompt` (signatures in migration). Helpers are private. Session-bound authority is checked before job state and replay. The existing tenant administration lock precedes job-origin serialization (key 417), the live-job row lock, then baseline/source locks. Visit completion takes key 417 before its live-job row lock too, so a concurrent confirmation cannot deadlock when scope writes upgrade the job lock. Audit append is last; `lp_finish` only validates the completed result, with no business write or new lock. Deferred receipt/fact checks require the exact result audit or the existing completion audit for the visit source hook.
 
 The sole replaced predecessor function is `ent4b_origin_provenance`; only its held prompt branch changes. Hash framing and other guards are retained. Raw/unbound confirmation still raises `PROMPT_ORIGIN_HELD`. The office advisory is an AFTER INSERT trigger on the actual office-origin write. It never edits an origin, group or fee.
 

@@ -66,9 +66,9 @@ describe("persisted deterministic prompt rules", () => {
   const prompt=page.items.find((p:{rule:string})=>p.rule==='d')!;
   const cmd={version:'confirm-prompt.v1',commandId:randomUUID(),jobId:f.jobId,promptId:prompt.id,promptHash:prompt.promptHash};
   await expect(repo.confirm(f.sessions.named!,cmd)).rejects.toMatchObject({code:'PROMPT_AMBIGUOUS'});
-  await repo.confirm(f.sessions.named!,{...cmd,commandId:randomUUID(),confirmedWorkIdentity:'FIT-LOCK'});
+  await repo.confirm(f.sessions.named!,{...cmd,commandId:randomUUID(),confirmedWorkIdentity:'CLEAR-GUTTER'});
   const origin=(await c.admin.query("SELECT o.kind,v.sor_code FROM app.extra_origin o JOIN app.variation v ON(v.tenant_id,v.id)=(o.tenant_id,o.variation_id) WHERE o.tenant_id=$1",[f.p.tenantId])).rows;
-  expect(origin).toEqual([{kind:'jobguard_surfaced_confirmed',sor_code:'FIT-LOCK'}]);
+  expect(origin).toEqual([{kind:'jobguard_surfaced_confirmed',sor_code:'CLEAR-GUTTER'}]);
   expect((await c.admin.query("SELECT kind FROM app.extra_event WHERE tenant_id=$1",[f.p.tenantId])).rows).toEqual([{kind:'logged'}]);
  });
  it("no answer suppresses closeout and missing factor suppresses visit duration", async () => {
@@ -79,7 +79,7 @@ describe("persisted deterministic prompt rules", () => {
  });
  it("completed visits compare exact server microseconds to immutable contract factor", async () => {
   const f=await promptFixture(c), visits=new SiteVisitRepository(c.runtime), actor=f.members.operative.member;
-  const sor=await new SorRepository(c.runtime).importVersion(f.p,{version:'sor-version-import.v1',environment:'synthetic_demo',commandId:randomUUID(),scheduleId:f.demo.scheduleId,reference:'Fictional prompt standards',effectiveFrom:'2026-01-01',items:[{code:'REPAIR-DOOR',description:'Fictional door',unit:'each',rate:{pence:10000,currency:'GBP'},standardMinutes:1}]});
+  const sor=await new SorRepository(c.runtime).importVersion(f.p,{version:'sor-version-import.v1',environment:'synthetic_demo',commandId:randomUUID(),scheduleId:randomUUID(),reference:'Fictional prompt standards',effectiveFrom:'2026-01-01',items:[{code:'REPAIR-DOOR',description:'Fictional door',unit:'each',rate:{pence:10000,currency:'GBP'},standardMinutes:1}]});
   const contractors=new ContractorRepository(c.runtime), organisation=await contractors.query(f.p,{version:'contractor-query.v1',tenantId:f.p.tenantId,resource:'organisation'});
   const original=(await c.admin.query('SELECT document FROM app.client_contract_version WHERE tenant_id=$1 AND id=$2',[f.p.tenantId,f.demo.contractVersionId])).rows[0]!.document;
   const contract=await contractors.command(f.p,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:organisation.revision,kind:'contract.revise',clientId:f.demo.clientId,contractId:f.demo.contractId,document:{...original,sorVersionIds:[sor.versionId]},rules:referenceApprovalRulesV1});

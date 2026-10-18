@@ -102,6 +102,9 @@ export class SiteVisitRepository {
     await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [tenant]);
     const authority = await this.visitAuthority(db, actor, kind, input);
     if (authority) throw new FactsChanged("SITE_VISIT_UNAVAILABLE", authority);
+    // Completion shares the prompt/extra job serialization key before any job row lock.
+    // Otherwise a confirming prompt can wait for this SHARE lock while this hook waits for its key.
+    if (kind === "complete") await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,417))", [tenant, input.jobId]);
     // Authority first, then the live-job row share lock, then the receipt; audit head remains last.
     try { await requireLiveJob(db, input.jobId); } catch (error) {
      if (error instanceof WatchdogError && error.code === "JOB_NOT_LIVE") throw new FactsChanged("JOB_NOT_LIVE");
