@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b16": {
+      "branches": [
+        "codex/sandbox/later-b16"
+      ],
+      "receipt": "docs/verdicts/LATER-B16/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B16 (coordinator queue-fill 16 Oct night). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "apps/web/e2e/invoice-later.spec.ts",
+        "docs/ledger/LATER-B16.md",
+        "docs/verdicts/LATER-B16/BUILDER_RECEIPT.md",
+        "packages/db/migration-notes/0190_credit_command_replay.md",
+        "packages/db/migrations/0190_credit_command_replay.sql",
+        "packages/db/src/customer-billing-repository.ts",
+        "packages/db/src/practice-invoice-later.test.ts",
+        "packages/db/src/practice-invoice-repository.ts",
+        "packages/db/test/invoice-later-upgrade.integration.test.ts",
+        "packages/db/test/invoice-later.integration.test.ts"
+      ]
+    }
+  }
+}

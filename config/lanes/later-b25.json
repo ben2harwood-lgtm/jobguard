@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b25": {
+      "branches": [
+        "codex/sandbox/later-b25"
+      ],
+      "receipt": "docs/verdicts/LATER-B25/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B25; BUILD-DON'T-MERGE (decision 74). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "apps/api/src/variation/variation.application.ts",
+        "docs/ledger/LATER-B25.md",
+        "docs/verdicts/LATER-B25/BUILDER_RECEIPT.md",
+        "packages/db/src/variation-repository.ts",
+        "packages/db/test/later-variation-history.integration.test.ts",
+        "packages/db/test/later-variation-isolation.integration.test.ts",
+        "packages/db/test/later-variation-replay.integration.test.ts"
+      ]
+    }
+  }
+}

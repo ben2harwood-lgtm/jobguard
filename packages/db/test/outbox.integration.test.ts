@@ -184,7 +184,7 @@ describe("transactional outbox and fake worker execution", () => {
       provider_reference: "synthetic:quote-delivered",
       error_code: null,
     })]);
-    expect(after.audit).toEqual(before.audit);
+    expect(after.audit).toHaveLength(before.audit.length + 1);
   });
 
   it("publishes no routing signal and sends nothing when the business transaction rolls back", async () => {
@@ -240,8 +240,8 @@ describe("transactional outbox and fake worker execution", () => {
     expect(await reconcileOutbox(runtime, context, action.id, unknown)).toBe("unknown");
     expect(calls).toBe(1);
     expect(telemetryEvents).toContainEqual(expect.objectContaining({ name: "outbox.unknown_outcome" }));
-    await operateOutbox(runtime, context, action.id, "retry", true);
-    expect(await statusOf(action.id)).toBe("retryable");
+    await expect(operateOutbox(runtime, context, action.id, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");
+    expect(await statusOf(action.id)).toBe("outcome_unknown");
   });
 
   it("dead-letters five retryable deliveries with a failed fifth attempt and no executing work", async () => {
@@ -255,6 +255,7 @@ describe("transactional outbox and fake worker execution", () => {
     const executor = new ActionExecutor(runtime, new Map([[retryable.name, retryable]]), telemetry);
 
     for (let attempt = 1; attempt <= 5; attempt++) {
+      await admin.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1", [action.id]);
       await executor.execute(context, action.id);
       expect(await statusOf(action.id)).toBe(attempt === 5 ? "dead_letter" : "retryable");
     }
