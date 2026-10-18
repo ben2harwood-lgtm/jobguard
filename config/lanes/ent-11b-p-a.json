@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-11b-p-a": {
+      "branches": [
+        "codex/sandbox/ent-11b-p-a"
+      ],
+      "receipt": "docs/verdicts/ENT-11B-P-A/BUILDER_RECEIPT.md",
+      "note": "RED. Synthetic internal composition, existing scoped reads, reference baseline and contractor sales evidence only. No DDL, new authority, routes, billing writes or UI.",
+      "allow": [
+        "apps/api/src/contractor/full-demo-package.application.ts",
+        "apps/api/src/contractor/full-demo-package.application.test.ts",
+        "apps/api/src/contractor/full-demo-package-baseline.test.ts",
+        "apps/api/src/contractor/full-demo-package-sales.test.ts",
+        "packages/db/test/contractor-full-demo-package.integration.test.ts",
+        "docs/contracts/contractor-full-demo-package-v1.md",
+        "docs/fixtures/contractor-full-demo-package.v1.json",
+        "docs/operations/contractor-full-demo-package.md",
+        "docs/ledger/ENT-11B-P-A.md",
+        "docs/verdicts/ENT-11B-P-A/BUILDER_RECEIPT.md",
+        "sales/JobGuard Contractor Sales Bible.md",
+        "sales/JobGuard Contractor Sales Bible.claims.v1.json"
+      ]
+    }
+  }
+}
