@@ -23,7 +23,7 @@ async function snapshot() {
  const policies = (await f.admin.query("SELECT * FROM pg_policies WHERE schemaname IN('app','identity','control_plane','audit_control') ORDER BY schemaname,tablename,policyname")).rows;
  return { rows, routines, relations, policies };
 }
-// Rulings 104(b) and 113: only the objects created by 0188 and 0192 may extend the snapshot.
+// Rulings 104(b) and 113: only objects created by 0188, the LATER-B14 0193 routines and MON-3-P-A's trial-claim migration may extend the snapshot.
 // Existing rows, routine privileges, relations and policies still compare in full.
 async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
@@ -31,6 +31,16 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
  expect(routines.map(r => r.proname).sort()).toEqual(routineNames);
+ // Ruling 113: 0193 adds only these three routines to the captured catalogues.
+ // Its two triggers are not relations, and it creates no tables, indexes or policies.
+ const routine0193Identities = [
+  ["decision_check_command", "p_digest text, p_command jsonb, p_phase text, p_data jsonb"],
+  ["guard_decision_check_receipt", ""],
+  ["require_completed_decision_check", ""],
+ ];
+ const routines0193 = after.routines.filter(r => r.nspname === "app" && routine0193Identities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines0193.map(r => [r.proname, r.args])).toEqual(routine0193Identities);
+ for (const r of routines0193) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
  // Index identity is bound to the four exact new tables, not a name-prefix exemption.
  const indexRows = (await f.admin.query(`SELECT t.relname table_name,i.relname FROM pg_index x
   JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
@@ -57,7 +67,7 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
  };
  return {
   rows: { ...before.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, routines, after.routines),
+  routines: additive(before.routines, after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), after.routines),
   relations: additive(before.relations, relations, after.relations),
   policies: additive(before.policies, policies, after.policies),
  };
