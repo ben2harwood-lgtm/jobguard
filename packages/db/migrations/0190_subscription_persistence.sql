@@ -316,10 +316,10 @@ BEGIN
  VALUES(a,t,d,r,actor,kind,NULL,hash,revision,amount,CASE WHEN amount IS NULL THEN NULL ELSE 'GBP' END,'subscription_pricing_policy_v4',expiry);
  RETURN a;
 END $$;
-CREATE FUNCTION app.mon2_authorized(t uuid,authorization uuid,expected_revision integer) RETURNS boolean LANGUAGE sql VOLATILE SET search_path=pg_catalog AS $$
+CREATE FUNCTION app.mon2_authorized(t uuid,authorization_id uuid,expected_revision integer) RETURNS boolean LANGUAGE sql VOLATILE SET search_path=pg_catalog AS $$
  SELECT EXISTS(SELECT 1 FROM app.action_authorization a JOIN app.decision_resolution r ON(r.tenant_id,r.id)=(a.tenant_id,a.resolution_id)
  JOIN app.membership m ON(m.tenant_id,m.id)=(a.tenant_id,a.actor_membership_id)
- WHERE a.tenant_id=t AND a.id=authorization AND a.aggregate_revision=expected_revision AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()
+ WHERE a.tenant_id=t AND a.id=authorization_id AND a.aggregate_revision=expected_revision AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()
  AND r.resolution='approved' AND r.actor_membership_id=a.actor_membership_id AND r.decision_id=a.decision_id
  AND m.role='owner' AND m.revoked_at IS NULL AND(m.expires_at IS NULL OR m.expires_at>clock_timestamp())
  AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=t AND revoked.membership_id=m.id))
@@ -387,14 +387,17 @@ BEGIN
   IF (kind='accept' AND current_revision<>0) OR (kind='change' AND current_revision=0) THEN RAISE EXCEPTION 'SUBSCRIPTION_STALE_REVISION' USING ERRCODE='40001'; END IF;
   IF current_revision>0 AND a.anchor_day<>(v->>'anchorDay')::integer THEN RAISE EXCEPTION 'SUBSCRIPTION_REANCHOR_POLICY_HOLD' USING ERRCODE='22023'; END IF;
   IF EXISTS(SELECT 1 FROM app.subscription_period WHERE tenant_id=t AND period_end>today) THEN RAISE EXCEPTION 'SUBSCRIPTION_PERIOD_ALREADY_ISSUED' USING ERRCODE='22023'; END IF;
-  auth:=app.mon2_approve(t,actor,'subscription.'||kind,approval_hash,current_revision,NULL,t,approval_expiry);
   IF kind='change' AND a.plan='Builder' AND v->>'plan'='Solo' THEN
    next_day:=app.mon2_boundary(today,a.anchor_day);
    IF next_day<=today THEN next_day:=app.mon2_boundary((date_trunc('month',today)+interval '1 month')::date,a.anchor_day); END IF;
+   -- Single-use exact downgrade approval survives the login session through its first Solo period.
+   approval_expiry:=app.mon2_boundary((date_trunc('month',next_day)+interval '1 month')::date,a.anchor_day)::timestamp AT TIME ZONE 'Europe/London';
+  auth:=app.mon2_approve(t,actor,'subscription.'||kind,approval_hash,current_revision,NULL,t,approval_expiry);
    INSERT INTO app.subscription_plan_change(tenant_id,id,expected_revision,plan,effective_date,authorization_id,content_hash,actor_membership_id)
    VALUES(t,new_id,current_revision,'Solo',next_day,auth,approval_hash,actor);
    result:=jsonb_build_object('changeId',new_id,'revision',current_revision,'status','pending','effectiveDate',next_day::text);
   ELSE
+  auth:=app.mon2_approve(t,actor,'subscription.'||kind,approval_hash,current_revision,NULL,t,approval_expiry);
    INSERT INTO app.subscription_agreement_revision(tenant_id,id,revision,catalogue_version,terms_version,plan,cadence,anchor_day,maximum_pence,content_hash,effective_date,actor_membership_id,authorization_id)
    VALUES(t,new_id,current_revision+1,v->>'catalogueVersion',v->>'termsVersion',v->>'plan','monthly',(v->>'anchorDay')::integer,(v->>'maximumPence')::integer,approval_hash,today,actor,auth);
    result:=jsonb_build_object('agreementId',new_id,'revision',current_revision+1,'effectiveDate',today::text);

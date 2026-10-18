@@ -4,13 +4,17 @@ const command = { version: "subscription-command.v1", kind: "onboarding", usualP
 const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 function fixture(environment = "synthetic_demo") {
  const repository = { command: vi.fn().mockResolvedValue({ hypothetical: true }), read: vi.fn().mockResolvedValue({ hypothetical: true }) };
- const authority = { environment: () => environment, resolve: vi.fn().mockResolvedValue({ context: {}, digest: "a".repeat(64) }) };
+ const credentials = { sessionToken: "session", requestedTenantId: id, csrfToken: "csrf", origin: "https://jobguard.invalid" };
+ const provider = { authenticate: vi.fn().mockResolvedValue({ identityUserId: id, sessionId: id, csrfToken: "csrf" }), findMembership: vi.fn().mockResolvedValue({ id, identityUserId: id, tenantId: id, role: "owner", email: "owner@example.invalid" }) };
+ const authority = { provider, allowedOrigin: credentials.origin, environment: () => environment, resolve: vi.fn().mockResolvedValue({ credentials, digest: "a".repeat(64) }) };
  return { repository, authority, app: new SubscriptionApplication(authority as never, repository as never) };
 }
 describe("subscription application", () => {
  it("server resolves current authority for every call", async () => {
   const f=fixture(); await f.app.command("session",id,command); await f.app.read("session");
   expect(f.authority.resolve).toHaveBeenCalledTimes(2);
+  expect(f.authority.provider.authenticate).toHaveBeenCalledTimes(2);
+  expect(f.authority.provider.findMembership).toHaveBeenCalledTimes(2);
   f.authority.resolve.mockRejectedValue(new Error("revoked foreign tenant"));
   await expect(f.app.command("session",id,command)).rejects.toThrow("SUBSCRIPTION_UNAVAILABLE");
   expect(f.repository.command).toHaveBeenCalledTimes(1);
