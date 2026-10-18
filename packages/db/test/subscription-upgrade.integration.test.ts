@@ -6,7 +6,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { meterCompany, meterInput, storeMeter, refreshMeter } from "./meter-persistence-fixtures.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
 
-const own = "0190_subscription_persistence.sql";
+const own = "0193_subscription_persistence.sql";
 describe.sequential("MON-2A-P upgrade against populated predecessors", () => {
  let f: WorkFixture;
  let before: Awaited<ReturnType<typeof proofBefore>>;
