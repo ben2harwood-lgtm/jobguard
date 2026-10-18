@@ -50,9 +50,14 @@ describe("M3-3 synthetic download policy (pure slice)", () => {
   // The same-tenant job selector can only narrow.
   const narrowed = evaluateSyncDownloadV1(facts({ request: request({ jobIds: [uid(1001), uid(1003), uid(1001001)] }) }));
   expect(narrowed.rows.map(r => r.jobId)).toEqual([uid(1001)]);
-  // Another tenant's job id that happens to be assigned in the facts is still not delivered.
-  const crossed = evaluateSyncDownloadV1(facts({ authority: authority({ assignedJobIds: [uid(1001)] }), source: [job(1001, T2, canary)] }));
-  expect(crossed.rows).toEqual([]);
+  // M33-S03b: an ASSIGNED job id arriving on another tenant's row is still not delivered (the tenant clause, not the assignment, excludes it).
+  const crossed = evaluateSyncDownloadV1(facts({ authority: authority({ assignedJobIds: [uid(1001)] }), source: [job(1, T2, canary)] }));
+  expect(crossed).toMatchObject({ outcome: "allowed", rows: [] });
+  expect(JSON.stringify(crossed)).not.toContain("Canary");
+  // The same job id on a T1 row and a T2 row: only the T1 reference is returned, and it is not a duplicate.
+  const both = evaluateSyncDownloadV1(facts({ authority: authority({ assignedJobIds: [uid(1001)] }), source: [job(1, T2, { reference: "T2-LEAK" }), job(1, T1, { reference: "T1-OK" })] }));
+  expect(both.outcome).toBe("allowed");
+  expect(both.rows.map(r => r.reference)).toEqual(["T1-OK"]);
  });
 
  it("M33-S04 inactive, expired or unknown authority gets one identical refusal", () => {
@@ -62,7 +67,16 @@ describe("M3-3 synthetic download policy (pure slice)", () => {
   }
   expect(evaluateSyncDownloadV1(facts({ authority: authority({ tenantId: T2 }) }))).toEqual(base);
   expect(evaluateSyncDownloadV1(facts({ authority: null }))).toEqual(base);
-  expect(base).toEqual({ version: "sync-download-decision.v1", environment: "synthetic_demo", outcome: "refused", reason: "authority_required", rows: [], cleanup: "required" });
+  // M33-S04b: absent key, undefined and malformed (revoked-looking) authority are the same loss of authority, with cleanup required.
+  const absent: Record<string, unknown> = facts(); delete absent.authority;
+  expect(evaluateSyncDownloadV1(absent)).toEqual(base);
+  expect(evaluateSyncDownloadV1(facts({ authority: undefined }))).toEqual(base);
+  for (const bad of [authority({ status: "revoked", role: "" }), authority({ status: "revoked", assignedJobIds: ["legacy-id"] }), authority({ role: "x".repeat(51) }), "revoked", 7, { status: "revoked" }]) {
+   expect(evaluateSyncDownloadV1(facts({ authority: bad }))).toEqual(base);
+  }
+  const plan = planSyncReconcileV1({ version: "sync-reconcile.v1", delivered: [uid(1001)], decision: evaluateSyncDownloadV1(absent) });
+  expect(plan).toMatchObject({ outcome: "cleanup_required", tombstones: [{ jobId: uid(1001) }], keep: [] });
+  expect(base).toEqual({ version: "sync-download-decision.v1", environment: "synthetic_demo", outcome: "refused", reason: "authority_required", rows: [], cleanup: "required", admittedJobIds: [] });
   // Roles outside the issued profile get nothing, with the same shape.
   expect(evaluateSyncDownloadV1(facts({ authority: authority({ role: "viewer" }) }))).toEqual(base);
  });
@@ -74,6 +88,26 @@ describe("M3-3 synthetic download policy (pure slice)", () => {
   const malformed = evaluateSyncDownloadV1(facts({ source: [job(1, T1, { priority: "banana" })] }));
   expect(malformed).toMatchObject({ outcome: "refused", reason: "source_invalid", rows: [] });
   expect(JSON.stringify(malformed)).not.toContain("banana");
+  // M33-S05b: a malformed permitted row refuses the download (fail closed) but removed assignments are still cleaned up.
+  const f = facts({ authority: authority({ assignedJobIds: [uid(1002)] }), source: [job(1), job(2, T1, { priority: "banana" })] });
+  const refused = evaluateSyncDownloadV1(f);
+  expect(refused).toMatchObject({ outcome: "refused", reason: "source_invalid", cleanup: "required", rows: [], admittedJobIds: [uid(1002)] });
+  const cleanup = planSyncReconcileV1({ version: "sync-reconcile.v1", delivered: [uid(1001), uid(1002)], decision: refused });
+  expect(cleanup).toMatchObject({ outcome: "cleanup_required", tombstones: [{ jobId: uid(1001) }], keep: [uid(1002)] });
+  // M33-S05c: duplicate permitted ids are refused as source_invalid; duplicates in `delivered` give one tombstone.
+  const dup = evaluateSyncDownloadV1(facts({ source: [job(1), job(1, T1, { reference: "DUP" })] }));
+  expect(dup).toMatchObject({ outcome: "refused", reason: "source_invalid", rows: [] });
+  expect(pageSyncDownloadV1({ facts: facts({ source: [job(1), job(1, T1, { reference: "DUP" })] }), afterJobId: null, pageSize: 1 }).rows).toEqual([]);
+  const once = planSyncReconcileV1({ version: "sync-reconcile.v1", delivered: [uid(1003), uid(1003), uid(1003)], decision: evaluateSyncDownloadV1(facts({ authority: authority({ status: "revoked" }) })) });
+  expect(once.tombstones).toEqual([{ jobId: uid(1003) }]);
+  // Inconsistent decisions are rejected at the reconcile boundary.
+  const ok = evaluateSyncDownloadV1(facts());
+  for (const bad of [{ ...ok, reason: "authority_required" }, { ...refused, rows: ok.rows }, { ...ok, cleanup: "required" }]) {
+   expect(() => planSyncReconcileV1({ version: "sync-reconcile.v1", delivered: [], decision: bad })).toThrow(SyncDownloadContractError);
+  }
+  // A plain invalid request holds (no cleanup claim either way).
+  const hold = planSyncReconcileV1({ version: "sync-reconcile.v1", delivered: [uid(1001)], decision: evaluateSyncDownloadV1(facts({ environment: "production" })) });
+  expect(hold).toMatchObject({ outcome: "hold", tombstones: [], keep: [uid(1001)] });
  });
 
  it("M33-S06 membership loss or tenant switch yields tombstones by identity only, and rebuild never restores them", () => {
@@ -119,14 +153,16 @@ describe("M3-3 synthetic download policy (pure slice)", () => {
  });
 
  it("M33-S08 token claims come from validated facts, carry no secrets and never lifetimes by default", () => {
-  const input = { version: "sync-token-input.v1", environment: "synthetic_demo", facts: facts(), generation: 3, issuedAtMs: 100, expiresAtMs: 200, audience: "synthetic-sync-audience" };
+  const input = { version: "sync-token-input.v1", environment: "synthetic_demo", facts: facts(), generation: 3, issuedAtSeconds: 100, expiresAtSeconds: 200, audience: "synthetic-sync-audience" };
   const claims = deriveSyncTokenClaimsV1(input);
   expect(claims).toEqual({ version: "sync-token-claims.v1", environment: "synthetic_demo", sub: USER, tenantId: T1, membershipId: MEMBER, profile: "contractor_assigned_jobs.v1", generation: 3, aud: "synthetic-sync-audience", iat: 100, exp: 200 });
   expect(syncTokenClaimsV1.safeParse({ ...claims, role: "owner" }).success).toBe(false);
   expect(syncTokenClaimsV1.safeParse({ ...claims, exp: 100 }).success).toBe(false);
-  for (const bad of [{ expiresAtMs: undefined }, { expiresAtMs: 100 }, { generation: -1 }, { audience: "" }, { facts: facts({ authority: authority({ status: "revoked" }) }) }, { facts: facts({ request: request({ requestedTenantId: T2 }) }) }]) {
+  for (const bad of [{ expiresAtSeconds: undefined }, { expiresAtSeconds: 100 }, { expiresAtSeconds: 1.5 }, { issuedAtMs: 100, expiresAtMs: 200 }, { generation: -1 }, { audience: "" }, { facts: facts({ authority: authority({ status: "revoked" }) }) }, { facts: facts({ request: request({ requestedTenantId: T2 }) }) }]) {
    expect(() => deriveSyncTokenClaimsV1({ ...input, ...bad })).toThrow(SyncDownloadContractError);
   }
+  // M33-S08b: iat/exp are whole seconds; a millisecond-named input is refused rather than reinterpreted.
+  expect(Object.keys(claims)).toEqual(expect.arrayContaining(["iat", "exp"]));
   expect(JSON.stringify(claims)).not.toMatch(/secret|password|bank|resident|refresh/iu);
  });
 

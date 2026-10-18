@@ -14,19 +14,22 @@ It performs no authentication, SQL, network call or signing.
   There is no tenant, actor, role, membership, query or environment field; each is refused.
 - Authority facts are supplied by the server after it rechecks current membership. They are never request data.
   Only `active` authority in the requested tenant, with role `operative` or `supervisor` (the existing site-visit
-  read rule), receives rows. Every other case (revoked, expired, unknown, other tenant, other role, missing
-  authority) returns the byte-identical refusal `authority_required` with `cleanup: "required"`.
+  read rule), receives rows. Every other case (revoked, expired, unknown, other tenant, other role, and missing,
+  undefined or malformed authority) returns the byte-identical refusal `authority_required` with `cleanup: "required"`.
 - Projection copies seven named fields only: `jobId`, `workOrderId`, `reference`, `priority`, `issuedOn`,
   `dueOn`, `openVisitId`. These are the existing `siteAssignedJobsV1` fields; adopting them for sync still
   needs the Q03 ruling. Resident, address, price, bank, credential and shadow-signal fields are never copied,
-  however wide the replication source is. A malformed permitted row refuses the whole read (`source_invalid`).
+  however wide the replication source is. A malformed permitted row, or two permitted rows with one `jobId`, refuses
+  the whole read (`source_invalid`: fail closed for downloads). That refusal still carries `admittedJobIds` (ids only) and
+  `cleanup: "required"`, so reconcile still tombstones delivered ids that authority no longer admits and keeps the rest.
+  A job id on another tenant's row is never delivered and never counts as a duplicate.
 - Paging is stable keyset order by `jobId`. Repeating a cursor returns the same rows; each page re-evaluates
   current authority, so loss of authority between pages gives the identical refusal. 401+ eligible rows are tested.
 - Reconcile: `planSyncReconcileV1` lists identities (`{ jobId }` only) that must be removed locally. A rebuild is
   simply the current decision, so a purged identity returns only if current authority admits it.
 - Token claims: `deriveSyncTokenClaimsV1` returns claim content (`sub`, tenant, membership, profile, generation,
-  audience, issue and expiry) only when the subscription is currently allowed. Issue and expiry are explicit
-  inputs with no default; no lifetime, revocation delay or offline lease is chosen here.
+  audience, `iat` and `exp`) only when the subscription is currently allowed. `iat` and `exp` are whole seconds (JWT NumericDate), explicit
+  inputs with no default and millisecond-named inputs refused; no lifetime, revocation delay or offline lease is chosen here.
 - Errors carry only `SYNC_DOWNLOAD_INVALID_INPUT`, with no Zod issues, raw input or cause.
 
 ## What this does NOT prove (HELD)
