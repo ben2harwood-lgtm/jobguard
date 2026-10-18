@@ -1,16 +1,25 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { money, MoneyError } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import type { AuditEventInput } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 const uuid = z.string().uuid();
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
+/** Shared boundary adapter; the public money kernel owns magnitude and integer rules. */
+export const nonnegativeMoneyPenceSchema = z.number().nonnegative().superRefine((value, refinementIssues) => {
+  try { money(value); }
+  catch (error) {
+    if (!(error instanceof MoneyError)) throw error;
+    refinementIssues.addIssue({ code: z.ZodIssueCode.custom, message: error.message, params: { moneyCode: error.code } });
+  }
+});
 const actionSchema = z.object({
   actionType: z.string().min(1).max(100), recipient: z.string().max(320).nullable(),
   contentHash: sha256, aggregateRevision: z.number().int().nonnegative(),
-  amountPence: z.number().int().nonnegative().nullable(), currency: z.literal("GBP").nullable(),
+  amountPence: nonnegativeMoneyPenceSchema.nullable(), currency: z.literal("GBP").nullable(),
   policyVersion: z.string().min(1).max(80), expiresAt: z.coerce.date(),
 }).strict().refine((v) => (v.amountPence === null) === (v.currency === null), "amount and currency must appear together");
 export const consequentialCommandV1Schema = z.object({
