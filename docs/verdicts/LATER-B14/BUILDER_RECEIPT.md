@@ -232,3 +232,28 @@ Logs: `/private/tmp/jg-later-b14-r2-{typecheck,lint,lanes,build,tools-tests,core
 **NOT RUN:** `packages/db/test/decisions-later.integration.test.ts` (including both repaired L063 cases), `packages/db/test/lp-0-grant-freeze.integration.test.ts`, `packages/db/test/lp-0-authority-paths.integration.test.ts`, `packages/db/test/later-decisions-upgrade.integration.test.ts`, other PostgreSQL/migration/upgrade suites, full `pnpm test` / `pnpm test:db` / `pnpm test:migrations`, listener-dependent tests and all browser/e2e suites. Dispatcher states this sandbox cannot bind localhost or start PostgreSQL and prohibits browsers. PostgreSQL checks must run in GitHub CI after dispatcher push. No local database start/probe was attempted.
 
 Decision 74 remains BUILD, CHECK, PARK. Fresh exact-commit independent verdicts, separate acceptance and founder-owned merge/enablement remain outstanding. This repair is uncommitted; HEAD remains `a2fbd4e74a715d4736cfc016ee51cf76e050ba40`. Intended conventional commit subject/body is written to both `/private/tmp/jg-msg-later-b14-r2.txt` and `/private/tmp/jg-msg-later-b14.txt` for the dispatcher.
+
+## continuation — ci-d18 (ruling 113), 18 October 2026
+
+Builder: Codex. Continued from clean HEAD `8ff071294e101f12fdc879e04a718d8d775bfbd0` on `codex/sandbox/later-b14`, PR #263. Read the existing receipt, AGENTS.md, applicable BUILD_PLAN contracts and the diff against origin/main (including the merge-base diff to distinguish newer main-only work). The existing implementation was retained. This HEAD contained no ruling-113 snapshot repair. The dispatch states Ben decision 109 released the work to merge; this builder does not independently record acceptance or perform the merge.
+
+Only the requested upgrade test, its lane allowance and this receipt change in this continuation. The existing `with0188Additions` helper now also admits exactly `app.decision_check_command(p_digest text, p_command jsonb, p_phase text, p_data jsonb)`, `app.guard_decision_check_receipt()` and `app.require_completed_decision_check()`. It asserts their exact identities and absence before migration. The combined additions retain the live server ordering before insertion into the untouched prior expected rows. Every existing assertion and the entire upgrade test body remain unchanged. No broad prefix exclusion or baseline normalization was introduced. Migration 0193 also creates two triggers, which this snapshot does not capture; it creates no tables, indexes or policies. No SQL, application behavior, privileges, migration, compatibility behavior or operational alert changes.
+
+Checks used installed Node 24.17.0 and cached pnpm 10.28.1 via `/private/tmp/jg-later-b14-bin/pnpm`. No downloads, Git writes, database start, browser, push or commit. Lint/build used forced execution, concurrency 2, seven successful tasks and zero cache hits; existing cache-write and Next build warnings were nonfatal.
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0 |
+| `LANE_BASE_REF=origin/main pnpm lint --force --concurrency=2` | PASS, exit 0 |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0 |
+| `pnpm build --force --concurrency=2` | PASS, exit 0 |
+| `node --test tools/*.test.mjs` | PASS, 100 tests |
+| Core / AI / config / storage / web / DB / API unit selections | PASS, respectively 2,892 / 123 / 9 / 2 / 867 / 558 / 1,892 tests; each exit 0 |
+| `pnpm openapi:check` | Exit 1: tsx IPC `listen EPERM` before checker |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, exit 0, same checker via installed loader without IPC |
+| Inline Node/TypeScript source check | PASS: zero syntax diagnostics; all previous assertion lines and complete upgrade test body preserved against HEAD |
+| `git diff --check` | PASS, exit 0 |
+
+Unit selections reuse the r2 commands/exclusions recorded above, with at most two workers and sequential suites after build. Exact invocation arrays and exits are saved in `/private/tmp/jg-b14-ci-unit-results.json`; runner: `/private/tmp/jg-b14-ci-units.py`. Total: 6,443 passing selected tests including tooling. Logs: `/private/tmp/jg-b14-ci-{typecheck,lint,lanes,build,tools,core,ai,config,storage,web,db-unit,api-unit,openapi,openapi-loader}.log`. AI results are fixture tests, not live-model evaluation. Package typecheck excludes the integration-test directory; the additional syntax check is not a database execution claim.
+
+**PostgreSQL NOT RUN:** the repaired `serious-b5-upgrade.integration.test.ts`, all other database/upgrade/migration suites, full `pnpm test`, browser/e2e and listener-dependent tests remain for GitHub CI under the dispatch's environment restriction. STOP for the normal OpenAPI script only: its IPC listener is blocked; the same checker passed through the installed loader, with no source workaround. No unrelated repair was made. No independent model verdict or acceptance of this continuation is claimed. The dispatcher must obtain the CI upgrade result and any required exact-commit review evidence. Intended conventional commit subject/body: `/private/tmp/jg-msg-later-b14.txt`; all edits remain uncommitted for the dispatcher.
