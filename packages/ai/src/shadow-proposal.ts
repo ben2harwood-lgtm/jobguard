@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseObservation, proposalFromObservation, sha256, observationV1, shadowCaptureV1, type Observation, type ShadowProposal } from "@jobguard/core";
+import { parseObservation, proposalFromObservation, sha256, shadowDetectionId, observationV1, shadowCaptureV1, type Observation, type ShadowProposal } from "@jobguard/core";
 import { AiGateway } from "./gateway.js";
 import { FixtureAiProvider, type RecordedFixture } from "./fixture-provider.js";
 import type { AiGatewayRequest } from "./types.js";
@@ -25,13 +25,20 @@ export class ShadowFixtureProposer {
   constructor(fixtures: Readonly<Record<string, RecordedFixture>>) { this.gateway = new AiGateway(new FixtureAiProvider(fixtures)); }
   async propose(raw: unknown, fixtureId: string, at: string) {
     const o = parseObservation(raw), result = await this.gateway.generate(shadowGatewayRequest(o, fixtureId), shadowAiOutputV1);
-    const proposals: ShadowProposal[] = []; let droppedCitations = 0;
+    const proposals: ShadowProposal[] = [], seen = new Set<string>(); let droppedCitations = 0;
     for (const candidate of result.output.proposals) {
       const c = candidate.citation;
       if (c.start >= c.end || c.end > o.text.length || o.text.slice(c.start, c.end) !== c.quote) { droppedCitations++; continue; }
       // AI can suggest wording, never rule facts, work identity, value, origin or eligibility.
       const proposal = proposalFromObservation(o, "ai_proposal", SHADOW_PROMPT_VERSION, at, { lock: "before_lock", adoption: "after_adoption" });
-      proposals.push({ ...proposal, description: candidate.description, confidenceBand: candidate.confidenceBand });
+      // A candidate identity includes every validated output field, in fixed order.
+      // Keep work identity unchanged; neither result order nor processing time enters the ID.
+      const signalId = shadowDetectionId([proposal.signalId, "shadow-ai-candidate.v1", candidate.description,
+        candidate.confidenceBand, candidate.recommendation, String(c.start), String(c.end), c.quote]);
+      if (seen.has(signalId)) continue;
+      seen.add(signalId);
+      proposals.push({ ...proposal, signalId, description: candidate.description, confidenceBand: candidate.confidenceBand,
+        evidence: proposal.evidence.map(e => ({ ...e, signalId })) });
     }
     return { proposals, droppedCitations, provenance: result.provenance, evaluationVersion: "shadow-held-out.v1" as const };
   }

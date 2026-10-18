@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b28": {
+      "branches": ["codex/sandbox/later-b28"],
+      "receipt": "docs/verdicts/LATER-B28/BUILDER_RECEIPT.md",
+      "note": "LATER-B28 SSO boundary and resource correctness. RED; synthetic only; decision 74 PARK; no migration.",
+      "allow": [
+        "packages/db/src/enterprise-identity-repository.ts",
+        "apps/api/src/auth/sso/sso.application.ts",
+        "packages/db/src/later-sso-refusal.test.ts",
+        "apps/api/src/auth/sso/later-sso-resource.test.ts",
+        "packages/db/test/later-sso-authority.integration.test.ts",
+        "docs/verdicts/LATER-B28/BUILDER_RECEIPT.md",
+        "docs/ledger/LATER-B28.md"
+      ]
+    }
+  }
+}
