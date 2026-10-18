@@ -12,7 +12,7 @@ RED; issued 18 October 2026. Scope A only. MON-3 remains OPEN. Builder work is n
 | Catalog inventories preserve existing expectations | Exactly two additive entries in each existing RLS/owner inventory in `tenancy.integration.test.ts` |
 | No runtime exposure | Migration 0192 has no non-owner table/helper grants; no API/barrel/schema/composition change |
 
-Migration: `0192_free_first_job_keys.sql`, with standalone migration note. Expand-only, no backfill; installation rollback then preserve claims and fix forward. Legacy key bytes and old helper remain compatible. No new operational alert or external action.
+Migration: `0193_free_first_job_keys.sql`, with standalone migration note. Expand-only, no backfill; installation rollback then preserve claims and fix forward. Legacy key bytes and old helper remain compatible. No new operational alert or external action.
 
 Remaining B/C acceptance: verified business/card persistence and eligibility, first/second checked activation, bypass protection, current authorization and command replay, command/receipt/audit atomicity, London clock/DST, immutable authoritative ends, MON-2A-P conversion/corrections, actual Final Check/illustration parity. These are not demonstrated by A's isolated synthetic activation parents or storage tests. MON-3 does not close on this foundation.
 
