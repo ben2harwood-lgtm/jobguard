@@ -14,7 +14,6 @@
         "packages/db/test/outbox.integration.test.ts",
         "packages/db/src/outbox.test.ts",
         "packages/db/src/audit-fix-dbsrc-08.test.ts",
-        "config/lanes/later-b9.json",
         "docs/ledger/LATER-B9.md",
         "docs/verdicts/LATER-B9/BUILDER_RECEIPT.md"
       ]
