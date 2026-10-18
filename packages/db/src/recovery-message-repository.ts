@@ -262,6 +262,11 @@ export class RecoveryMessageRepository {
         await this.audit(db, actor, messageId, "blocked", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
         return { replayed: false as const, blocked: true as const };
       }
+      // An explicit owner retry is due now; automatic retries retain the executor's back-off.
+      // Keep this business-row lock before the started event and audit append, in the same transaction.
+      if (status === "retryable") {
+        await db.$client.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status='retryable'", [ctx.tenantId, m.outbox_action_id]);
+      }
       const started = await this.event(db, ctx.tenantId, ref, actor, "started", input.commandId, requestHash, revision);
       await this.audit(db, actor, messageId, "started", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
       return { replayed: false as const, blocked: false as const, started, outboxId: m.outbox_action_id!, row: m };
