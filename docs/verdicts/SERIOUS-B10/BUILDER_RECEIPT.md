@@ -126,3 +126,49 @@ Without that extra mock allowance, the requested statement reaches `throw new Er
 Read the repository AGENTS.md, applicable BUILD_PLAN.md §§2.4 and 5.3, the existing diff, receipt and SQL mocks. The referenced `jg-orders/SERIOUS-B10-r2.txt` was not located in the checked workspace/project or temporary paths; its contents have not been read. The dispatch text in this conversation was available. No completion claim is made for either r2 item.
 
 Typecheck, lint (`LANE_BASE_REF=origin/main`), lint:lanes, unit tests, build and OpenAPI check: **NOT RUN in r2b**, following the explicit STOP before implementation. PostgreSQL and browser/e2e/Playwright: **NOT RUN**, prohibited locally by dispatch. No install, download, Git write, commit, push, merge, independent verdict or acceptance. Only this STOP receipt and `/private/tmp/jg-msg-serious-b10.txt` were written. The intended commit text is for the STOP receipt only, not a claim that the inherited source patch is ready. Dispatcher clarification of the permitted matcher edits is required before resuming; CI and exact-commit review/acceptance remain outstanding.
+
+## r2c (rulings 101 + 105)
+
+18 October 2026; Codex builder; branch `codex/sandbox/serious-b10`; starting HEAD `b8849e38dbef7a907a48224f31b08812c20d6bd0`. BUILD-DON'T-MERGE, decision 74. Initial working tree was clean: the inherited stand-in changes were already in HEAD. No commit, push, merge, installation, download, independent model verdict or acceptance performed.
+
+Implemented the authorized plain `SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))`, parameter `[context.tenantId]`, in the first executor transaction immediately after withTenant's tenant set_config and before AUTHORITY_SQL. Removed the wrapped set_config lock, misleading comment and second authority read. Under the existing default READ COMMITTED transaction, the authority statement obtains its snapshot after the lock is acquired; contractor_admin_command (0138:135) cannot commit a competing revocation between that read and the claim while the transaction holds seed 54. The second read is therefore unnecessary. Order is now tenant lock -> outbox row -> audit head when cancelling. Delivery remains outside the transaction; this does not retract already-claimed/in-flight work.
+
+Verified by source inspection that cancelRevokedAction still requires the tenant/member-qualified inner JOIN to app.contractor_membership_revocation. Direct membership/authorization revocations therefore remain pending and unsent. enterprise-identity.integration.test.ts and scim-deactivation-access.integration.test.ts are unchanged; their PostgreSQL assertions were NOT RUN.
+
+The only merged-test edits are the three authorized additions in src/outbox.test.ts: one plain-lock expected sequence entry, and one startsWith lock allowance in each strict mock. Added that exact file to the lane allow-list. Retained the synthetic PostgreSQL race, corrected its stale ordering comment, bounded its pg_blocking_pids wait and added promise/connection cleanup. No sleeps. It holds the same seed-54 lock and inserts the contractor revocation in an open transaction, then proves dispatch is blocked before committing and asserting no delivery/attempt plus cancellation. This is a controlled SQL stand-in for the contractor command's concurrent transaction; the existing sequential case uses the actual contractor command. PostgreSQL proof remains NOT RUN locally.
+
+### Item-only STOPs — no edits applied to these files
+
+The order authorizes merged-test changes ONLY in outbox.test.ts and says "No other file changes". The lane allow-list alone is not permission to expand that order. All other authorized work continued.
+
+1. `packages/db/src/serious-b10.test.ts:23`: four executed unit failures because its strict mock rejects the plain lock. Before:
+   `if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config")) return { rows: [] };`
+   Required after (proposal only): insert immediately before it
+   `if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };`
+2. `packages/db/src/audit-fix-dbsrc-08.test.ts:78`: executed "demoted approver cannot execute queued sends" failure for the same plain lock. Before:
+   `if (transactionSql(sql) || sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };`
+   Required after (proposal only): insert immediately before it
+   `if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };`
+
+These failures leave the piece on HOLD for those additional narrowly scoped mock edits and CI/review. No production workaround or weakened assertion was introduced.
+
+### Executed checks
+
+Node v24.17.0; cached pinned pnpm 10.28.1 invoked through `/private/tmp/jg-serious-b10-r2c-bin/pnpm` (the default pnpm shim stalled on version inspection; no packages installed). Logs are `/private/tmp/jg-b10-r2c-*.log`.
+
+- `pnpm --filter @jobguard/db typecheck`: PASS.
+- `LANE_BASE_REF=origin/main pnpm lint`: PASS, 7 tasks (4 cached); includes DB lint. Turbo emitted sandbox IO warnings.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: PASS.
+- `pnpm --filter @jobguard/db exec vitest run src/outbox.test.ts --maxWorkers=1`: PASS, 5/5.
+- `pnpm openapi:check`: BLOCKED by tsx CLI IPC `listen EPERM`. Equivalent check from apps/api, `node --import tsx src/generate-openapi.ts --check`: PASS, exit 0.
+- Initial `vitest run src --maxWorkers=1` selected four integration files containing "dbsrc" in their names; their setup failed at port discovery, before PostgreSQL could run. This unintended selection is not integration evidence. It also had a 5-second audit-checkpoint unit timeout. A retry with `--include` was rejected as an unsupported Vitest option; the next exclusion run also selected a built dist test. Final unit selection explicitly excludes both test/** and dist/**; results below.
+
+PostgreSQL, migrations and browser/e2e: NOT RUN. The sandbox cannot bind/start PostgreSQL or a browser; CI must execute the race and preserved merged integration suites after the dispatcher commits/pushes. No schema migration, new permission, provider change or operational alert. Invariants affected: AGENTS §§5.3–5.4 execution-time authority/idempotency and §5.7 cancellation audit. Exact-commit independent verdict, separate acceptance and founder merge remain outstanding.
+
+Final DB source-unit command: `pnpm --filter @jobguard/db exec vitest run src --exclude 'test/**' --exclude 'dist/**' --maxWorkers=1`: **FAIL**, 133 passed / 5 failed, 16 files passed / 2 failed. All five failures are the two stopped mock edits above (four SERIOUS-B10, one AUDIT-FIX-DBSRC-08). The audit-checkpoint test passed on this final run. No PostgreSQL files selected in this run.
+
+Tooling note: the initial default `pnpm --version` eventually failed its automatic version-switch signature check because registry fetch failed. No downloaded package was used; subsequent commands used the already cached exact 10.28.1 CLI directly.
+
+- `pnpm build`: PASS, 7 tasks (4 cached), including rebuilt DB/API/web; Next emitted dependency-expression warnings and Turbo emitted sandbox IO warnings.
+- Final `LANE_BASE_REF=origin/main pnpm lint:lanes`: PASS. `git diff --check`: PASS. Exactly five authorized repository files changed in r2c: executor, outbox.test.ts, piece integration test, lane JSON, and this receipt.
+- Intended conventional commit subject/body written to `/private/tmp/jg-msg-serious-b10.txt` for the dispatcher. No Git write commands run. This working-tree repair is reviewable but is not technically accepted: the two item-only mock STOPs, PostgreSQL/CI proof, exact-commit independent verdict and separate acceptance remain outstanding.

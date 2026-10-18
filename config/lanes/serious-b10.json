@@ -7,6 +7,7 @@
       "note": "Ruling 85 / L054: refuse contractor-revoked outbox authority at dispatch. BUILD-DON'T-MERGE under decision 74; RED two-model check and Ben's merge approval required. Backend execution only; no new web workflow (C1). Existing tests and expectations remain untouched. This lane's own JSON file is implicitly editable under the ruling 70 lane pattern.",
       "allow": [
         "packages/db/src/outbox.ts",
+        "packages/db/src/outbox.test.ts",
         "packages/db/src/serious-b10.test.ts",
         "packages/db/test/serious-b10-outbox-revocation.integration.test.ts",
         "docs/verdicts/SERIOUS-B10/BUILDER_RECEIPT.md"

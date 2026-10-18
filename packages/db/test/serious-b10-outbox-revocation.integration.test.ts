@@ -103,22 +103,30 @@ describe("SERIOUS-B10 outbox revocation", () => {
     const f = await fixture(h), queued = await approvedAction(f), tenantId = f.principal.tenantId;
     // Stand-in for contractor_admin_command: take the same per-tenant seed-54 lock, write the revocation, hold the transaction open.
     const revoker = await h.admin.connect();
+    let dispatch: ReturnType<typeof queued.execute> | undefined;
     try {
       await revoker.query("BEGIN");
       await revoker.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))", [tenantId]);
       await revoker.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$3)", [tenantId, randomUUID(), f.principal.membershipId]);
       const revokerPid = (await revoker.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0]!.pid;
-      const dispatch = queued.execute();
-      // Explicit ordering: wait until the executor is provably blocked behind the revoker (its first read has already run uncommitted-blind).
+      dispatch = queued.execute();
+      void dispatch.catch(() => undefined);
+      // Explicit ordering: dispatch must wait for the revoker before reading authority.
+      const deadline = Date.now() + 10_000;
       for (;;) {
         const blocked = await h.admin.query("SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", [revokerPid]);
         if (blocked.rowCount) break;
+        if (Date.now() >= deadline) throw new Error("Dispatch did not block behind contractor revocation");
         await new Promise(resolve => setImmediate(resolve));
       }
       expect(queued.deliver).not.toHaveBeenCalled();
       await revoker.query("COMMIT");
       await expect(dispatch).resolves.toEqual({ kind: "cancelled", code: "AUTHORIZATION_REVOKED" });
-    } finally { await revoker.query("ROLLBACK").catch(() => undefined); revoker.release(); }
+    } finally {
+      await revoker.query("ROLLBACK").catch(() => undefined);
+      revoker.release();
+      await dispatch?.catch(() => undefined);
+    }
     expect(queued.deliver).not.toHaveBeenCalled();
     expect(await queued.attempts()).toBe(0);
     expect(await state(f, queued.action.id)).toBe("cancelled");
