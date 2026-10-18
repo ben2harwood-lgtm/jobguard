@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-2a-p": {
+      "branches": [
+        "codex/sandbox/mon-2a-p"
+      ],
+      "receipt": "docs/verdicts/MON-2A-P/BUILDER_RECEIPT.md",
+      "note": "RED. Ben 17 Oct answers 1.4-1.8; Q7 reuses MON-1B authority. Synthetic persistence only. Catalogue/inventory additions are limited to this migration.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/subscription-persistence.ts",
+        "packages/core/src/subscription-persistence.test.ts",
+        "packages/core/src/subscription-allocation.ts",
+        "packages/core/src/subscription-allocation.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/subscription-repository.ts",
+        "packages/db/src/subscription-meter-source.ts",
+        "packages/db/src/subscription-executor.ts",
+        "packages/db/src/platform-statement-repository.ts",
+        "packages/db/src/subscription-simulated-payment-adapter.ts",
+        "packages/db/src/subscription-simulated-payment-adapter.test.ts",
+        "packages/db/migrations/0190_subscription_persistence.sql",
+        "packages/db/migration-notes/0190_subscription_persistence.md",
+        "packages/db/test/subscription-persistence-fixtures.ts",
+        "packages/db/test/subscription-persistence.integration.test.ts",
+        "packages/db/test/subscription-authority.integration.test.ts",
+        "packages/db/test/subscription-replay.integration.test.ts",
+        "packages/db/test/subscription-statements.integration.test.ts",
+        "packages/db/test/subscription-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "apps/api/src/subscription.application.ts",
+        "apps/api/src/subscription.application.test.ts",
+        "docs/contracts/subscription-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/operations/subscription-synthetic.md",
+        "docs/ledger/MON-2A-P.md",
+        "docs/verdicts/MON-2A-P/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
