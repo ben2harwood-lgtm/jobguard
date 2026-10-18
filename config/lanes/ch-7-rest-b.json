@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch-7-rest-b": {
+      "branches": [
+        "codex/sandbox/ch-7-rest-b"
+      ],
+      "receipt": "docs/verdicts/CH-7-REST-B/BUILDER_RECEIPT.md",
+      "note": "RED; build-ahead on PR #292; DW3 implementation STOP pending issued scope and timing/result decisions; synthetic only. 0196 provisional, no migration installed.",
+      "allow": [
+        "packages/core/src/recovery-eligibility-v3.ts",
+        "packages/core/src/recovery-eligibility-v3.test.ts",
+        "packages/core/src/recovery-terms-timing.test.ts",
+        "packages/db/src/recovery-eligibility-v3-repository.ts",
+        "packages/db/migrations/0196_recovery_eligibility_terms_timing.sql",
+        "packages/db/migration-notes/0196_recovery_eligibility_terms_timing.md",
+        "packages/db/test/recovery-terms-timing.integration.test.ts",
+        "packages/db/test/recovery-terms-timing-upgrade.integration.test.ts",
+        "packages/db/test/recovery-eligibility-v3.integration.test.ts",
+        "packages/db/test/recovery-insurer-money.integration.test.ts",
+        "apps/api/src/recovery-eligibility-v3.application.test.ts",
+        "docs/contracts/recovery-eligibility-v3.md",
+        "docs/contracts/recovery-case-terms-v1.md",
+        "docs/ledger/CH-7-REST-B.md",
+        "docs/verdicts/CH-7-REST-B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
