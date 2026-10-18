@@ -35,7 +35,8 @@
         "docs/contracts/lp-0-effective-privileges-v1.json",
         "docs/operations/subscription-synthetic.md",
         "docs/ledger/MON-2A-P.md",
-        "docs/verdicts/MON-2A-P/BUILDER_RECEIPT.md"
+        "docs/verdicts/MON-2A-P/BUILDER_RECEIPT.md",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }
