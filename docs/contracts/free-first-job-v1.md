@@ -1,15 +1,15 @@
 # MON-3 free first job reference contract v1
 
-Status: synthetic preview only; card remains open. No charging, activation,
-entitlement consumption, statement, payment, card storage or setup session is
+Status: synthetic preview plus private MON-3-P-A key storage (see `free-first-job-keys-v1.md`); card remains open. No charging, activation,
+runtime entitlement consumption, statement, payment, card storage or setup session is
 implemented. The proposed D09 policy is not approved by this change.
 
 The 16 October build-ahead order overrides the 13 October draft's whole-piece
 hold. BUILD_PLAN.md §§10.1.3–10.1.12 and the MON-3 card at lines 2175–2194
 agree with the quoted trial/price/card rules. The historical graph reservation
-0087 differs from the issued provisional 0185. No migration is created: parent
-MON-1/MON-2A have no persisted identity, agreement, capacity-lock or subscription
-interfaces. MON-2A's catalogue, calculator and existing files are reused unchanged.
+0087 differs from the issued provisional 0185. The original preview created no migration; MON-3-P-A now adds private migration
+0192. Runtime identity, agreement, capacity-lock and subscription composition
+remain outside A. MON-2A's catalogue, calculator and existing files are reused unchanged.
 The parent receipt's LP-0 inventory restriction is superseded for own new objects
 by this order, but does not supply the missing persisted authority contracts.
 
@@ -18,14 +18,16 @@ and typed `FreeFirstJobError` codes. Its only import is Zod. All inputs and outp
 are synthetic, and every preview is hypothetical with zero real external actions.
 No return value authorizes activation.
 
-- `freeFirstJobKey`: exact tuple encoding, company number when supplied, otherwise
+- `freeFirstJobKeys`: all available exact tuples; company number and independently complete
+  phone/card. Preview checks every tuple. The compatibility-only `freeFirstJobKey`
+  is deprecated for entitlement decisions; it returns company number when supplied, otherwise
   normalized phone plus simulated-provider fingerprint. Tenant/user/job is absent
   from the business key. Separators cannot cause collisions. Missing fallback
   identity returns `identity_required`; phone alone or card alone is insufficient.
   These are supplied fictional normalized identifiers, not verification or
   normalization services. Keys are internal personal-data references, never logs,
-  public projections or audit payloads. Future storage needs an approved privacy
-  and identity policy; no retention or deletion rules are invented here.
+  public projections or audit payloads. Private migration-owned fictional storage now exists under MON-3-P-A; no
+  runtime verification, retention or deletion rules are invented here.
 - `previewFreeFirstJob`: supplied immutable consumed keys prevent a new candidate
   across tenants. Distinct prior live jobs require a completed same-tenant card,
   regardless of small-job status, stopped counts or customer/site grouping. An
@@ -71,18 +73,18 @@ reconciliation and command idempotency remain held on persistence/provider seams
 
 Pricing tests call unchanged MON-2A `computeSubscriptionPeriod` with explicitly
 supplied days: trial days contribute no base/extras, subsequent supplied days
-prorate once with half-even, and all 2,196 generated schedules stay within the
+prorate once with half-even, and all 416 distinct generated periods stay within the
 existing maxima. The 1,933p fixture is arithmetic for ten explicitly supplied free
 days of a 30-day Solo period, not approval of a real conversion-day interpretation.
 No new billing calculator, fee credit/offset, VAT assumption or meter logic exists.
 The inherited parent calculator's transitive dependency on fee/shadow modules
 remains unresolved by this piece; parent ownership is preserved.
 
-Future persistence must use checked actor/session routines, append-only facts,
-RLS, same-tenant/job FKs, durable command uniqueness, audit rollback and replay
-proofs. Runtime SELECT at most on protected new tables; no direct write grants.
-Migration 0185 is only provisional, unused. Its eventual migration needs a note,
-new-object reviewed-list rows and full own-migration upgrade controls under rule 9.
+Future runtime composition must use checked actor/session routines, append-only
+facts, RLS, same-tenant/job FKs, durable command uniqueness, audit rollback and
+replay proofs. A grants no runtime access at all. Migration 0192 supplies the
+private tables, standalone note, additive catalog inventory and own-migration
+upgrade tests; historical provisional 0185 is not an allocation for this task.
 
 Held: verified identity/continuity, unidentified-business skip reconciliation,
 historical/import/reopen eligibility, persisted first/second activation and old
@@ -90,3 +92,8 @@ facade enforcement, actual lock/close/expiry/conversion, parent statement/paymen
 seams, transactional replay/races/audit, actual SV-5/SV-6 Final Check and illustration,
 real provider/data/charging, all policy/release approvals and UI. No rule, schema
 or flag here disables Final Check or changes existing success-fee processing.
+
+18 October supersession: the historical persistence holds above describe the original
+preview delivery. MON-3-P-A adds migration 0192 and private dual-key storage only,
+under Ben’s issued authority; it does not enable admission or settle B/C interfaces.
+The old elapsed-day clock remains preview-only, never persisted billing authority.
