@@ -61,3 +61,34 @@ Migration recovery: transaction rollback on installation failure; once installed
 STOPs are scoped in `docs/ledger/MON-3-P-A.md` with file:line and before/after: no runtime admission/composition without B/C interfaces; no persisted elapsed-day/DST/conversion decision; no identity replacement/merge authority when no retained verified key connects records. Independent A work continues and is delivered. All D01/D02/D03/D08/D09/D16 release gates remain closed. No approval is inferred from any green test.
 
 B/C still own verified identity/card facts, new-live eligibility, first/second admission, old-facade/direct-SQL protection, exact authorization/current membership replay, command/receipt/audit atomicity, authoritative ends, London clock and MON-2A-P correction/conversion interfaces, actual Final Check/illustration parity. A does not close their aggregate acceptance.
+
+## Repair round r1 — 18 October 2026
+
+Builder: Codex gpt-6-astra. Starting HEAD `8b3cfd6a`, branch `codex/sandbox/mon-3-p-a`; clean working tree. This is a builder receipt, not independent review or acceptance. No commit, push, dependency download, PostgreSQL or browser execution. Installed Node `v24.17.0`, cached pnpm `10.28.1`; commands use `PATH=/private/tmp/mon3pa-bin:$PATH`. No fresh install claimed.
+
+Delivered the lane allowance for `docs/contracts/lp-0-effective-privileges-v1.json`. Under standing ruling 113, extended the SERIOUS-B5 installed-schema expectation only for 0192's two empty tables, five constraint indexes, two routines and two policies; added that test path to the lane allowance. Existing row/privilege/policy comparisons remain, including the separate five-index expectation for 0188. Added objects are inserted at server-sort positions together with the existing 0188 additions. This is source-inspected and compiler-checked; the upgrade/replay behaviour is NOT RUN locally.
+
+**STOP — item 1(b), live LP-0 protection record:** required `readProtectionRecord(readCatalogue(...))` output from a migrated PostgreSQL database is unavailable in this sandbox. The dispatcher expressly forbids PostgreSQL execution and hand-guessed digests/search paths/static scans. The JSON, including all existing records and `entries[]`, is therefore unchanged. The missing two routine identities remain a blocking CI hold; this repair does not claim to fix that equality guard. Dispatcher must extract and append the actual records on a migrated database. Two source discrepancies must be resolved against that output: `readProtectionRecord` omits tables without non-owner ACLs from `recorded.rls`, whereas these tables are owner-only; migration 0192 creates five triggers, not the six stated in the repair request. No invented RLS rows, trigger or digest was added. No grants or capability changes.
+
+**STOP — item 1(c), PostgreSQL validation:** NOT RUN per dispatcher instruction. CI must run, from `packages/db`, `vitest run --maxWorkers=1 test/lp-0-authority-paths.integration.test.ts test/lp-0-grant-freeze.integration.test.ts test/free-first-job-keys.integration.test.ts test/free-first-job-keys-security.integration.test.ts test/free-first-job-keys-races.integration.test.ts test/free-first-job-keys-upgrade.integration.test.ts test/tenancy.integration.test.ts test/serious-b5-upgrade.integration.test.ts`. No live PostgreSQL version or catalogue outcome is asserted.
+
+**Separate range-lint hold:** both `LANE_BASE_REF=origin/main pnpm lint` and `LANE_BASE_REF=origin/main pnpm lint:lanes` exit 1 because base `origin/main` already contains `0192_fee_illustration_replay.sql`; this branch's `0192_free_first_job_keys.sql` must be above the base maximum. No out-of-scope renumber, migration edit or range substitution performed. Root lint's core-purity check passes; remaining package lint was invoked separately. Dispatcher must resolve allocation before acceptance.
+
+Run logs: `/private/tmp/mon3pa-r1-*.log`. Results below are actual child-command outcomes; cached results are not fresh execution evidence.
+
+- `pnpm --filter @jobguard/db typecheck`: exit 0.
+- `node node_modules/typescript/bin/tsc -p /private/tmp/mon3pa-r1-test-tsconfig.json`: exit 0; strict compilation includes the free-first-job-keys tests/helpers and SERIOUS-B5 upgrade test.
+- `pnpm --filter @jobguard/core exec vitest run src/free-first-job-keys.test.ts src/free-first-job.test.ts --maxWorkers=1`: exit 0, 2 files / 16 tests pass.
+- `node --test tools/*.test.mjs`: exit 0, 100 tests pass.
+- `node tools/money-arithmetic-lint.mjs` and `node tools/commercial-boundary-lint.mjs`: exit 0 each.
+- Initial DB unit selection (`vitest run test --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=1`) also matched generated `dist` tests; interrupted, exit 130. It reported source and generated audit-checkpoint-handoff timeout failures; no passing result claimed. Replaced with explicit source/test paths and a `dist` exclusion. Socket-dependent free-port tests and PostgreSQL integration files are excluded only from this local invocation, not from CI.
+- `pnpm openapi:check`: exit 1, tsx CLI IPC `listen EPERM`; direct-loader fallback recorded below.
+
+No LATER item changed. No new migration, backfill, runtime/API behaviour, operational alert or approval. Original release holds remain; exact-commit independent verdict and separate acceptance still required. Intended commit message is written to `/private/tmp/jg-msg-mon-3-p-a.txt`; dispatcher owns committing and pushing.
+
+Final r1 results:
+
+- `pnpm --filter @jobguard/db exec vitest run src test --exclude '**/dist/**' --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=1`: exit 0, 43 files / 382 tests pass, including LP-0 catalogue unit tests. These are not PostgreSQL semantics evidence.
+- `pnpm exec turbo run lint`: exit 0, 7 tasks successful, 2 cache hits. Root range lint remains failed as recorded above.
+- `pnpm build`: exit 0, 7 tasks successful, 2 cache hits. Turbo emitted cache IO permission warnings; build succeeded.
+- From `apps/api`, `node --import tsx src/generate-openapi.ts --check`: exit 0; no OpenAPI diff.

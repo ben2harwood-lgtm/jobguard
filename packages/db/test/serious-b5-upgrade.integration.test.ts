@@ -23,20 +23,23 @@ async function snapshot() {
  const policies = (await f.admin.query("SELECT * FROM pg_policies WHERE schemaname IN('app','identity','control_plane','audit_control') ORDER BY schemaname,tablename,policyname")).rows;
  return { rows, routines, relations, policies };
 }
-// Ruling 104(b): only the objects created by 0188 may extend the snapshot.
+// Rulings 104(b) and 113: only the objects created by 0188 and 0192 may extend the snapshot.
 // Existing rows, routine privileges, relations and policies still compare in full.
-async function with0188Additions(before: Awaited<ReturnType<typeof snapshot>>) {
+async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
- const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment"];
- const routineNames = ["pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side"];
+ const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment", "trial_identity_key_claim", "trial_identity_snapshot"];
+ const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
  expect(routines.map(r => r.proname).sort()).toEqual(routineNames);
- // Index identity is bound to the two exact new tables, not a name-prefix exemption.
- const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x
+ // Index identity is bound to the four exact new tables, not a name-prefix exemption.
+ const indexRows = (await f.admin.query(`SELECT t.relname table_name,i.relname FROM pg_index x
   JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
   JOIN pg_namespace n ON n.oid=t.relnamespace
-  WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
- expect(indexes).toHaveLength(5); // two primary keys and the three UNIQUE constraints in 0188
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows;
+ expect(indexRows.filter(r => tables.slice(0, 2).includes(r.table_name))).toHaveLength(5); // 0188 unchanged
+ expect(indexRows.filter(r => r.table_name === "trial_identity_snapshot")).toHaveLength(4); // PK + three UNIQUEs
+ expect(indexRows.filter(r => r.table_name === "trial_identity_key_claim")).toHaveLength(1); // PK
+ const indexes = indexRows.map(r => r.relname);
  const relationNames = [...tables, ...indexes];
  const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
  expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
@@ -53,7 +56,7 @@ async function with0188Additions(before: Awaited<ReturnType<typeof snapshot>>) {
   return expected;
  };
  return {
-  rows: { ...before.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [] },
+  rows: { ...before.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
   routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations),
   policies: additive(before.policies, policies, after.policies),
@@ -72,7 +75,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await with0188Additions(before);
+ const expected = await with0188And0192Additions(before);
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

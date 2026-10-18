@@ -21,7 +21,9 @@
         "docs/contracts/free-first-job-v1.md",
         "docs/contracts/free-first-job-keys-v1.md",
         "docs/ledger/MON-3-P-A.md",
-        "docs/verdicts/MON-3-P-A/BUILDER_RECEIPT.md"
+        "docs/verdicts/MON-3-P-A/BUILDER_RECEIPT.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
       ]
     }
   }
