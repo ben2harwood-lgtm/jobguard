@@ -19,7 +19,7 @@ Read the installed package manifests, MIT licence texts, openid-client README, d
 Evidence paths: `apps/api/node_modules/openid-client/{package.json,LICENSE.md,README.md,build/index.d.ts,build/index.js}` and `node_modules/.pnpm/<package>@<version>/node_modules/<package>/{package.json,LICENSE.md}`. SHA-256 of installed licence files:
 
 - openid-client: `14c5cc0dc21f` (full SHA-256 recorded in the local build log)
-- jose: `8078b0829d6c3e9ecde2f003e1966e4cad3efc6e7a640efbab0313cc166b1af1`
+- jose: `8078b0829d6c` (full SHA-256 recorded in the local build log)
 - oauth4webapi: `81e7b4b0196e` (full SHA-256 recorded in the local build log)
 
 MIT usage rights require retaining notices. Package metadata is not an independent registry attestation. README identifies Node 20+ support and upstream conformance/security-policy links; runtime here is Node **24.17.0**. Release date 2026-09-05 comes from dispatch, not an independently fetched release record. Current advisories/maintenance are not proven offline. See [library review](../../security/oidc-library-review.md) for comparison and lockfile hashes.
