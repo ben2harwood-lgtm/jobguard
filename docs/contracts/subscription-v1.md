@@ -4,7 +4,7 @@ MON-2A-P adds a synthetic server/database contract to the unchanged MON-2A previ
 
 MON-1, MON-1B and the earlier MON-2A reference slice are merged at the dispatch base `b881f90b`. Migration 0184 supplies immutable input/computation/correction identities and checked owner/admin company authority. There is no dedicated meter role. The old absent-authority and catalogue-inventory holds are superseded by this dispatch's bounded authorization. The transitive shadow import was repaired upstream through `small-job-v3.ts`; existing architecture tests remain unchanged.
 
-The first platform statement implementation is migration `0193_subscription_persistence.sql`. Its `platform_statement` and `platform_statement_line` namespace currently admits subscription synthetic documents only. Future fee documents require their own source contracts and migration; they must never reuse subscription lines or allocation identities.
+The first platform statement implementation is migration `0194_subscription_persistence.sql`. Its `platform_statement` and `platform_statement_line` namespace currently admits subscription synthetic documents only. Future fee documents require their own source contracts and migration; they must never reuse subscription lines or allocation identities.
 
 ## Persisted entry points for B and C
 
