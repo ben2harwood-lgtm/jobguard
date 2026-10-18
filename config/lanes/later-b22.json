@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b22": {
+      "branches": [
+        "codex/sandbox/later-b22"
+      ],
+      "receipt": "docs/verdicts/LATER-B22/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B22; BUILD-DON'T-MERGE (decision 74). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "docs/ledger/LATER-B22.md",
+        "docs/verdicts/LATER-B22/BUILDER_RECEIPT.md",
+        "packages/db/test/later-audit-export-membership.integration.test.ts"
+      ]
+    }
+  }
+}
