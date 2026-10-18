@@ -120,6 +120,7 @@ beforeAll(async()=>{
  }
  previousSchema.active=false;
  const legacy=await fixture("withheld_customer_payment",false);await legacy.advance("receipt-3000");
+ await advanceInterestFact(legacy,"receipt-interest-120");await advanceInterestFact(legacy,"receipt-compensation-70");
  prePayerReview=await legacy.reviews.review(ctx,legacy.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:legacy.c.id,expectedCaseRevision:legacy.c.revision,expectedReviewRevision:0,fixture:"F18"},actor,legacy.auth.digest);
  proof=await proofBefore(admin,["app.recovery_eligibility_v3_review","app.recovery_claim_line"]);
  await admin.query(await readFile(MIGRATION_URLS[n]!,"utf8"));
@@ -325,6 +326,7 @@ it("[A3 A4 DB13] trigger pins supplied time and rejects changed stored evidence 
 });
 it("[A5 DB15] a review waits for the open mark transaction and then uses the committed mark without sleeps",async()=>{
  const f=await fixture();await f.advance("receipt-3000");const input=await markInput(f);
+ await advanceInterestFact(f,"receipt-interest-120");await advanceInterestFact(f,"receipt-compensation-70");
  let release!:()=>void,ready!: (pid:number)=>void,failed!:(error:unknown)=>void;
  const gate=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<number>((resolve,reject)=>{ready=resolve;failed=reject;});
  const transaction=withTenant(f.pool,ctx,async db=>{
@@ -398,6 +400,7 @@ async function partyTypes(f:Awaited<ReturnType<typeof fixture>>,customerType:str
 async function storedReview(id:string){return (await admin.query("SELECT row_to_json(t)::text bytes FROM app.recovery_eligibility_v3_review t WHERE id=$1",[id])).rows[0].bytes as string;}
 it.each(["F18","F19"])("[A1 A6 DB1 DB3 DB4 DB5] %s saves independent insurer exclusion, exact audit facts and immutable earlier reviews",async name=>{
  const f=await fixture();await f.advance("receipt-3000");
+ if(name==="F18"){await advanceInterestFact(f,"receipt-interest-120");await advanceInterestFact(f,"receipt-compensation-70");}
  const excluded=await reviewPayer(f,name),bytes=await storedReview(excluded.id);
  expect(excluded.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify",reasonHeld:false});
  for(const line of excluded.result.lines)expect(line).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify",reasonHeld:false});
@@ -420,6 +423,7 @@ it.each(["F18","F19"])("[A1 A6 DB1 DB3 DB4 DB5] %s saves independent insurer exc
 });
 it.each([["person",null,262000],["business",null,262000],["insurer","person",262000],["person","insurer",0],["insurer",null,0]] as const)("[A2 A6 DB2] customer %s payer %s determines Q %i using paying party only",async(customer,payer,q)=>{
  const f=await fixture("withheld_customer_payment",false);await partyTypes(f,customer,payer);await f.advance("receipt-3000");
+ if(q>0){await advanceInterestFact(f,"receipt-interest-120");await advanceInterestFact(f,"receipt-compensation-70");}
  expect((await reviewPayer(f)).result).toMatchObject({qualifyingPrincipal:{pence:q},reason:q===0?"Insurer proceeds never qualify":"Fixed statutory compensation is not part of the fee base"});
 });
 it("[A6 DB2] missing binding keeps the merged non-insurer result and omits payer audit references",async()=>{
@@ -430,6 +434,7 @@ it("[A6 DB2] missing binding keeps the merged non-insurer result and omits payer
  const feed=new PracticeFeedRepository(runtime,"synthetic_demo");const connected=await feed.command(ctx,actor,f.auth.digest,unbound,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
  await feed.command(ctx,actor,f.auth.digest,unbound,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:connected.revision,action:"advance",movement:"receipt-3000",step:"settled"});
  f.jobId=unbound;f.c=c;
+ await advanceInterestFact(f,"receipt-interest-120");await advanceInterestFact(f,"receipt-compensation-70");
  const saved=await reviewPayer(f);
  expect(saved.result.qualifyingPrincipal.pence).toBe(262000);
  const refs=(await admin.query("SELECT payload->'references' refs FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'reviewId'=$2",[T,saved.id])).rows[0].refs;
@@ -447,6 +452,7 @@ it("[A6 DB8] pending insurer payment saves exclusion before pending reason",asyn
 });
 it("[A6 DB10] binding changes insurer to person to insurer affect only new reviews",async()=>{
  const f=await fixture();await f.advance("receipt-3000");const original=await reviewPayer(f),bytes=await storedReview(original.id);
+ await advanceInterestFact(f,"receipt-interest-120");await advanceInterestFact(f,"receipt-compensation-70");
  await partyTypes(f,"person",null);expect((await reviewPayer(f,"F18",1)).result.qualifyingPrincipal.pence).toBe(262000);
  await partyTypes(f,"person","insurer");expect((await reviewPayer(f,"F18",2)).result).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Insurer proceeds never qualify"});
  expect(await storedReview(original.id)).toBe(bytes);
@@ -456,6 +462,13 @@ it("[Round2 DB16] F21 stays null and held on an insurer-paid job, independently 
  const r=await reviewPayer(f,"F21");
  expect(r.result).toMatchObject({qualifyingPrincipal:{pence:0},reason:null,reasonHeld:true,lines:[{reason:null,reasonHeld:true}]});
 });
+
+// Ruling 66: the same separate-component setup path used by ruling 55(a).
+async function advanceInterestFact(f:Awaited<ReturnType<typeof fixture>>,movement:"receipt-interest-120"|"receipt-compensation-70",step="settled"){
+ const feed=new PracticeFeedRepository(runtime,"synthetic_demo");
+ const current=await feed.factsView(ctx,actor,f.auth.digest,f.jobId);
+ return feed.factsCommand(ctx,actor,f.auth.digest,f.jobId,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:current.revision,action:"advance",movement,step});
+}
 
 it.each(["wrong_reason","held"])("[A5 DB11 Round2] raw insurer exclusion with %s cannot commit",async change=>{
  const f=await fixture();await f.advance("receipt-3000");
@@ -476,5 +489,6 @@ it("[B2 DB16 Round2] pending F19 interest keeps approved words and settled F18 i
  expect(r.lines.find(l=>l.kind==="principal")).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Pending money cannot qualify",reasonHeld:false});
  expect(r.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({qualifyingPrincipal:{pence:0},reason:"Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.",reasonHeld:false});
  const settled=await fixture("withheld_customer_payment",false);await settled.advance("receipt-3000");
+ await advanceInterestFact(settled,"receipt-interest-120");await advanceInterestFact(settled,"receipt-compensation-70");
  expect((await reviewPayer(settled)).result.lines.find(l=>l.kind==="statutory_interest")).toMatchObject({qualifyingPrincipal:{pence:12000},reason:null,reasonHeld:false});
 });

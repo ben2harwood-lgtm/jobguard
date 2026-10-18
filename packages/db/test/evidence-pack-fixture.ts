@@ -1,11 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { createSyntheticInvoicePdf, money } from "@jobguard/core";
+import { DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID } from "../src/demo-seed.js";
 
 /** Test setup only: writes actual source rows with foreign keys/triggers enabled. */
-export async function seedEvidencePackFixture(admin: Pool, options: { withVariation?: boolean } = {}) {
-  const tenantId = randomUUID(), otherTenantId = randomUUID(), jobId = randomUUID(), otherJobId = randomUUID();
-  const memberId = randomUUID(), accountId = randomUUID(), identityId = randomUUID(), scopeId = randomUUID();
+export async function seedEvidencePackFixture(admin: Pool, options: { withVariation?: boolean; practice?: boolean } = {}) {
+  const tenantId = options.practice ? DEMO_TENANT_ID : randomUUID(), otherTenantId = randomUUID(), jobId = randomUUID(), otherJobId = randomUUID();
+  const memberId = options.practice ? DEMO_MEMBERSHIP_ID : randomUUID(), accountId = options.practice ? DEMO_ACCOUNT_ID : randomUUID(), identityId = options.practice ? DEMO_IDENTITY_USER_ID : randomUUID(), scopeId = randomUUID();
+  const sessionToken = options.practice ? randomUUID() : undefined;
+  const sessionDigest = sessionToken ? createHash("sha256").update(sessionToken).digest("hex") : null;
   const quoteId = randomUUID(), quoteDraftId = randomUUID(), quoteRevisionId = randomUUID(), acceptanceId = randomUUID();
   const proofId = randomUUID(), uploadId = randomUUID(), variationId = randomUUID(), variationRevisionId = randomUUID();
   const merchantId = randomUUID(), skuId = randomUUID(), rateId = randomUUID();
@@ -22,7 +25,17 @@ export async function seedEvidencePackFixture(admin: Pool, options: { withVariat
     await db.query("INSERT INTO identity.identity_user(id) VALUES($1)", [identityId]);
     await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Evidence fixture builder')", [accountId, tenantId]);
     await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [memberId, tenantId, accountId, identityId]);
-    await db.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$3,'Evidence fixture job'),($2,$3,'Unrelated fixture job')", [jobId, otherJobId, tenantId]);
+    if (sessionDigest) {
+      // The session's saved-sample trigger runs as its invoker and requires the
+      // migration owner. Keep this fixture-only role switch on the same client.
+      await db.query("SET LOCAL ROLE jobguard_migration");
+      await db.query("INSERT INTO control_plane.practice_session(token_digest) VALUES($1)", [sessionDigest]);
+      await db.query("RESET ROLE");
+      await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [sessionDigest]);
+      await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$3,'Evidence fixture job',$4,'capture'),($2,$3,'Unrelated fixture job',NULL,NULL)", [jobId, otherJobId, tenantId, sessionDigest]);
+    } else {
+      await db.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$3,'Evidence fixture job'),($2,$3,'Unrelated fixture job')", [jobId, otherJobId, tenantId]);
+    }
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
     await db.query("INSERT INTO app.quote_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [quoteDraftId, tenantId, jobId]);
     await db.query("INSERT INTO app.quote_revision(id,tenant_id,job_id,quote_draft_id,revision,currency,tax_policy_version,subtotal_pence,discount_pence,net_pence,tax_pence,total_pence,issuable,blockers) VALUES($1,$2,$3,$4,1,'GBP','candidate_m1_standard_v1',1880000,0,1880000,376000,2256000,true,'[]')", [quoteRevisionId, tenantId, jobId, quoteDraftId]);
@@ -76,5 +89,5 @@ export async function seedEvidencePackFixture(admin: Pool, options: { withVariat
     await db.query("COMMIT");
   } catch (error) { await db.query("ROLLBACK"); throw error; }
   finally { db.release(); }
-  return { tenantId,otherTenantId,jobId,otherJobId,memberId,scopeId,caseId,customerCaseId,badReferenceCaseId,crossJobReferenceCaseId,emptyCaseId,quoteId,acceptanceId,proofId,proofBytes,variationId,variationRevisionId,invoiceId,supplierInvoiceId,supplierDeliveryId,supplierInvoiceVersionId,supplierDeliveryVersionId,unrelatedSupplierVersionId,rateId };
+  return { tenantId,otherTenantId,jobId,otherJobId,memberId,identityId,sessionToken,sessionDigest,scopeId,caseId,customerCaseId,badReferenceCaseId,crossJobReferenceCaseId,emptyCaseId,quoteId,acceptanceId,proofId,proofBytes,variationId,variationRevisionId,invoiceId,supplierInvoiceId,supplierDeliveryId,supplierInvoiceVersionId,supplierDeliveryVersionId,unrelatedSupplierVersionId,rateId };
 }
