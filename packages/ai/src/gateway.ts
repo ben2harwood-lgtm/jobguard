@@ -3,6 +3,7 @@ import { AiGatewayError } from "./errors.js";
 import {
   aiGatewayRequestSchema,
   aiProviderResponseSchema,
+  aiCitationSchema,
   type AiGatewayRequest,
   type AiGatewayResponse,
   type AiOutputSchema,
@@ -44,9 +45,16 @@ export class AiGateway {
     let repairAttempts: 0 | 1 = 0;
     if (!parsedOutput.success && options.repair) {
       repairAttempts = 1;
-      parsedOutput = outputSchema.safeParse(options.repair(parsedResponse.data.output));
+      let repairedOutput: unknown;
+      try {
+        repairedOutput = options.repair(parsedResponse.data.output);
+      } catch {
+        throw new AiGatewayError("invalid_output", "AI output repair failed");
+      }
+      parsedOutput = outputSchema.safeParse(repairedOutput);
     }
     if (!parsedOutput.success) throw typedZodError("invalid_output", "Invalid structured AI output", parsedOutput.error);
+    validateOutputCitations(request, parsedOutput.data);
 
     return {
       output: parsedOutput.data,
@@ -64,6 +72,23 @@ export class AiGateway {
       repairAttempts,
     };
   }
+}
+
+/** Validate references retained by the output schema, including after repair.
+ * Offset-only shadow proposal citations keep their existing proposer checks. */
+function validateOutputCitations(request: AiGatewayRequest, value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const child of value) validateOutputCitations(request, child);
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  if ("sourceId" in record && "start" in record && "end" in record) {
+    const citation = aiCitationSchema.safeParse(record);
+    if (!citation.success) throw new AiGatewayError("invalid_citation", "Invalid output source reference");
+    validateCitations(request, [citation.data]);
+  }
+  for (const child of Object.values(record)) validateOutputCitations(request, child);
 }
 
 function validateCitations(request: AiGatewayRequest, citations: readonly { sourceId: string; start: number; end: number }[]): void {
