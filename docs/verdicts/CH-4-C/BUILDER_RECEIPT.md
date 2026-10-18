@@ -2,7 +2,7 @@
 
 18 October 2026. Builder: Codex. Base inspected:
 `b881f90be0a6d368838ca4392338147ef819bd3a`; branch `codex/sandbox/ch-4-c`.
-Migration `0191_job_work_state_commands.sql`. Working-tree delivery only: no git
+Migration `0193_job_work_state_commands.sql`. Working-tree delivery only: no git
 add/commit/push, no browser, Playwright or real provider execution. PostgreSQL
 proofs were not run; see the interrupted mixed-suite selection below.
 Dependencies were supplied; no install/download was performed by the builder.
@@ -108,7 +108,7 @@ as a live model evaluation.
    Existing sources still record immutable facts; B must add source restart
    admission before interpreting those facts as new places. No restoration of
    past stopped/billed intervals or restarted trial was invented.
-2. **Capacity handoff B.** `0191_job_work_state_commands.sql:31` supplies an
+2. **Capacity handoff B.** `0193_job_work_state_commands.sql:31` supplies an
    always-refusing private admission seam; unlocked reopen/resume cannot commit.
    `job-work-state-admission.ts` is the typed transaction-bound integration seam.
    No fixture snapshot or cached count authorizes admission. Shared exhaustive
@@ -134,7 +134,7 @@ as a live model evaluation.
 
 ## Migration, compatibility and operational limits
 
-See `packages/db/migration-notes/0191_job_work_state_commands.md` for exact
+See `packages/db/migration-notes/0193_job_work_state_commands.md` for exact
 routines, ACLs, serializer order, forward-fix recovery and B rollout dependency.
 Two public runtime EXECUTE signatures, six new routines, five definition
 replacements and a six-kind extension to the existing watchdog identity CHECK;
