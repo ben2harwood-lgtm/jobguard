@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-8a-p": {
+      "branches": [
+        "codex/sandbox/ent-8a-p"
+      ],
+      "receipt": "docs/verdicts/ENT-8a-P/BUILDER_RECEIPT.md",
+      "note": "RED: synthetic persisted live prompts only. Migration 0189; no release permission. End-check agreement/completion dependency remains held. Two independent Claude verdicts and separate acceptance required. Own lane file is implicitly editable under version 2 policy.",
+      "allow": [
+        "docs/ledger/ENT-8a-P.md",
+        "docs/verdicts/ENT-8a-P/BUILDER_RECEIPT.md",
+        "docs/contracts/enterprise-live-prompts-v1.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/fixtures/enterprise-live-prompts/persisted-development.v1.json",
+        "docs/fixtures/enterprise-live-prompts/persisted-held-out-inputs.v1.json",
+        "docs/fixtures/enterprise-live-prompts/persisted-held-out-labels.v1.json",
+        "docs/fixtures/enterprise-live-prompts/PERSISTED-EVALUATION.md",
+        "packages/core/src/enterprise-live-prompt-persistence.ts",
+        "packages/core/src/enterprise-live-prompt-persistence.test.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0189_enterprise_live_prompts.sql",
+        "packages/db/migration-notes/0189_enterprise_live_prompts.md",
+        "packages/db/src/enterprise-live-prompt-repository.ts",
+        "packages/db/src/enterprise-live-prompt-source-reader.ts",
+        "packages/db/src/site-visit-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/enterprise-live-prompt-fixtures.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "apps/api/src/contractor/enterprise-live-prompt.application.ts",
+        "apps/api/src/contractor/enterprise-live-prompt.application.test.ts",
+        "apps/api/src/contractor/enterprise-live-prompt.controller.ts",
+        "apps/api/src/contractor/enterprise-live-prompt.http.test.ts",
+        "apps/api/src/contractor/enterprise-live-prompt-boundaries.test.ts",
+        "apps/api/src/app.module.ts",
+        "apps/api/openapi.json",
+        "packages/ai/src/enterprise-live-prompt-persisted-evaluation.ts",
+        "packages/ai/src/enterprise-live-prompt-persisted-evaluation.test.ts",
+        "packages/db/test/enterprise-live-prompt-rules.integration.test.ts",
+        "packages/db/test/enterprise-live-prompt-commands.integration.test.ts",
+        "packages/db/test/enterprise-live-prompt-access.integration.test.ts",
+        "packages/db/test/enterprise-live-prompt-races.integration.test.ts",
+        "packages/db/test/enterprise-live-prompt-office.integration.test.ts",
+        "packages/db/test/enterprise-live-prompt-end-check.integration.test.ts",
+        "packages/db/test/enterprise-live-prompt-catalog.integration.test.ts",
+        "packages/db/test/enterprise-live-prompt-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

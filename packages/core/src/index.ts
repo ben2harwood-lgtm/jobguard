@@ -90,3 +90,5 @@ export * from "./enterprise-dashboard.js";
 export * from "./enterprise-signal.js";
 export * from "./enterprise-dashboard-billing.js";
 export * from "./enterprise-baseline.js";
+
+export * from "./enterprise-live-prompt-persistence.js";

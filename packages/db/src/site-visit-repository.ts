@@ -138,6 +138,8 @@ export class SiteVisitRepository {
      const mapped = routineFailure(error);
      throw typeof mapped === "string" ? new SiteVisitError(mapped) : mapped;
     }
+    // Persist live prompt evaluations before the final audit-head lock. A visit is not job completion.
+    if (kind === "complete") await db.$client.query("SELECT app.lp_visit_evaluate($1,$2,$3)", [actor.membershipId, input.jobId, input.commandId]);
     // The audit append is the last write before the receipt is completed; no lock is taken after it.
     await appendAuditBatch(db, [audit]);
     await finish(db, tenant, input.commandId, result);
