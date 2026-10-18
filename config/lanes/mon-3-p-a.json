@@ -10,8 +10,8 @@
       "allow": [
         "packages/core/src/free-first-job.ts",
         "packages/core/src/free-first-job-keys.test.ts",
-        "packages/db/migrations/0193_free_first_job_keys.sql",
-        "packages/db/migration-notes/0193_free_first_job_keys.md",
+        "packages/db/migrations/0194_free_first_job_keys.sql",
+        "packages/db/migration-notes/0194_free_first_job_keys.md",
         "packages/db/test/free-first-job-keys-fixtures.ts",
         "packages/db/test/free-first-job-keys.integration.test.ts",
         "packages/db/test/free-first-job-keys-security.integration.test.ts",

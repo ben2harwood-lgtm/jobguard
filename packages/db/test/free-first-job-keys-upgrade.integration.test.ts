@@ -4,7 +4,7 @@ import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { createWorkFixture, closeWorkFixture, keyParent, snapshot, store, type WorkFixture } from "./free-first-job-keys-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
-const own="0193_free_first_job_keys.sql";
+const own="0194_free_first_job_keys.sql";
 describe("MON3P-UPGRADE-01 own migration",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture(false);},60000);afterAll(async()=>closeWorkFixture(f));
  it("populated predecessor named-column/type/identity comparison, own migration alone, later migrations twice and damage controls",async()=>{
