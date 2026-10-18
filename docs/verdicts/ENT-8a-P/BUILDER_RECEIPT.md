@@ -153,3 +153,36 @@ Final r2 results:
 - Unchanged timeout-file rerun (`pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1`): PASS, 71 tests. This resolves the observed transient timeout in that file; the earlier aggregate source-unit invocation remains recorded as failed rather than relabelled.
 - `git diff --check`: PASS. Final working-tree scope: five authorized paths only (snapshot test, own lane JSON, contract wording, migration-note wording, and this receipt).
 - Intended conventional-commit subject/body written to `/private/tmp/jg-msg-ent-8a-p.txt`. No worktree Git writes, commit or push. PostgreSQL **NOT RUN**; CI and independent exact-commit review remain required.
+
+## b1 (ruling 117)
+
+18 October 2026. Fresh bounded order ENT-8A-P-b1 on `3cc2a50d`, PR #288. Builder changes only; no independent verdict, acceptance, commit or push. Two post-change independent checks remain for the dispatcher.
+
+- **Item 1 — implemented, PostgreSQL NOT RUN:** the duration fixture revised an existing order, whose contract binding correctly stays immutable. It therefore still used the original SoR without standards and could not fire rule (c). The fixture now creates a new order after the contract revision, explicitly asserts its contract version and one-minute SoR binding, then retains the original prompt and citation assertions. No production duration arithmetic or merged expectation changed.
+- **Item 2 / SH-1 — implemented, PostgreSQL NOT RUN:** `lp_receipt_immutable` previously treated every `ConfirmPrompt` receipt as owned by this feature, including the predecessor's non-work-order origin path. It now uses the same work-order provenance boundary as the existing origin guard and the original receipt's server-written semantic job identity. Non-work-order receipts retain their predecessor behavior; real work-order prompt receipts retain the guard. Added owned integration coverage for runtime attempts to rewrite a successful real prompt receipt's result or semantic identity, followed by unchanged replay. No extra privileges or SECURITY DEFINER expansion.
+- **Item 2 / visit locks — STOP, unresolved:** before and after this patch, completion unconditionally takes advisory key 417 before the live-job SHARE lock, and `lp_visit_evaluate` takes that key plus the current-baseline SHARE lock. The merged R2 replay expects only the tenant authority advisory lock. Neither the repository nor that merged test is changed, so the reported R2 failure is expected to remain. Removing key 417 outright reverses the established lock order against prompt confirmation, which can upgrade the job lock during scope creation. A replay-only bypass would not satisfy the order's broader no-prompt completion requirement. This builder has not established a safe conditional replacement; this is an unresolved implementation STOP, not proof that the requirement is impossible or permission to change a merged expectation. No claim that item 2 as a whole is complete.
+
+Migration 0193 remains the assigned editable migration. No new schema identities, grants, backfill, external actions, operational alerts or production-policy activation. Existing forward-fix guidance applies. Invariants affected: immutable contract history, compatibility of shared command receipts, prompt idempotency. The unresolved visit lock behavior remains a merge hold.
+
+Validation uses installed dependencies, Node 24.17.0 and pinned pnpm 10.28.1 via `/private/tmp/jg-allocation-pnpm-bin`. No install/download or clean-install claim. Logs: `/private/tmp/ent-8a-p-b1-*.log`.
+
+- `pnpm --filter @jobguard/db --filter @jobguard/api typecheck`: PASS.
+- Same package filters with `lint`: PASS.
+- `LANE_BASE_REF=origin/main pnpm lint` and `LANE_BASE_REF=origin/main pnpm lint:lanes`: FAIL at migration-order check: current `origin/main` already contains 0193, so the validator requires a number above 0193. Dispatcher integration STOP; no renumber, base merge or lint bypass performed.
+- Changed PostgreSQL test compilation (`pnpm --filter @jobguard/db exec tsc -p /private/tmp/ent-8a-p-b1-test-tsconfig.json`): PASS. Compilation only.
+- `node --test tools/*.test.mjs`: PASS, 100 tests. Temporary Git fixtures only; no worktree Git writes.
+- DB source units (`pnpm --filter @jobguard/db exec vitest run src --exclude 'test/**' --maxWorkers=1`): FAIL, 197 passed / one pre-existing audit-checkpoint source-graph 5-second timeout. No assertion or timeout changed.
+- `pnpm eval`: PASS, 15 files / 147 tests. Synthetic evaluation only.
+- `pnpm openapi:check`: BLOCKED by tsx IPC `listen EPERM`. Same generator via `TSX_TSCONFIG_PATH=apps/api/tsconfig.json node --import ./apps/api/node_modules/tsx/dist/loader.mjs apps/api/src/generate-openapi.ts --check`: PASS.
+- PostgreSQL, migrations and browser suites: **NOT RUN**, per dispatcher environment restriction. Root `pnpm test` is not invoked because it includes PostgreSQL. CI must execute the changed fixtures and untouched SH-1/R2 tests; no database guarantees or all-green claim.
+
+Remaining local results are appended below.
+
+Final b1 local results:
+
+- `pnpm build`: PASS, 7/7 tasks (one cached), including Next static generation. Existing dependency/cache warnings did not fail the build.
+- Core source units (`pnpm --filter @jobguard/core exec vitest run src --maxWorkers=1`): PASS, 116 files / 2,906 tests.
+- API non-socket unit subset: PASS, 104 files / 1,752 tests. Exact selected file list: `/private/tmp/ent-8a-p-b1-api-unit-files.txt`; invoked with `pnpm --filter @jobguard/api exec vitest run --maxWorkers=1` plus that list. Excludes HTTP/socket suites and the known PostgreSQL-backed isolation file. This is not a full API-suite pass.
+- Unchanged audit-checkpoint file rerun (`pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1`): PASS, 71 tests. Earlier aggregate timeout remains recorded above.
+- `git diff --check`: PASS. Both merged regression test files are unchanged. Five edited paths: owned migration, migration note, two owned integration tests and this receipt.
+- Intended conventional commit message written to `/private/tmp/jg-msg-ent-8a-p.txt`. No staging, commit, checkout or push. PostgreSQL **NOT RUN**; visit-lock item remains STOP; two independent checks and separate acceptance remain outstanding.

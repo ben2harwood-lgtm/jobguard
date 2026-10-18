@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { EnterpriseLivePromptRepository } from "../src/enterprise-live-prompt-repository.js";
-import { ExtraRepository, ExtraApprovalRepository } from "../src/index.js";
+import { ExtraRepository, ExtraApprovalRepository, withTenant } from "../src/index.js";
 import { cluster, promptFixture, materialsInput, evaluateInput, listInput, moveOffLive, secondJob, type PromptFixture } from "./enterprise-live-prompt-fixtures.js";
 let c: Awaited<ReturnType<typeof cluster>>, repo: EnterpriseLivePromptRepository;
 beforeAll(async () => { process.env.JOBGUARD_ENV="synthetic_demo"; c=await cluster(); repo=new EnterpriseLivePromptRepository(c.runtime); },120000);
@@ -32,6 +32,14 @@ describe("ENT-8A-P atomic commands",()=>{
   await approvals.approveExtraStep(f.ctx,f.named.member,{version:"approve-extra-step.v1",commandId:randomUUID(),jobId:f.jobId,requestId:submitted.requestId,stepIndex:0,revisionHash:submitted.revisionHash,netPence:1000});
   expect((await c.admin.query("SELECT kind FROM app.extra_event WHERE tenant_id=$1 ORDER BY sequence DESC LIMIT 1",[f.p.tenantId])).rows).toEqual([{kind:"approved"}]);
   expect((await c.admin.query("SELECT origin_hash FROM app.extra_origin WHERE tenant_id=$1",[f.p.tenantId])).rows).toEqual([{origin_hash:before.origin_hash}]);
+ });
+ it("work-order prompt receipts still refuse runtime result and identity rewrites",async()=>{
+  const f=await promptFixture(c),p=await surfaced(f),cmd=confirmation(f,p);
+  const result=await repo.confirm(f.sessions.supervisor!,cmd);
+  for(const assignment of ["result='{}'::jsonb", "semantic_key='extra-origin:legacy:forged'"]) {
+   await expect(withTenant(c.runtime,f.ctx,db=>db.$client.query(`UPDATE app.command_receipt SET ${assignment} WHERE tenant_id=$1 AND command_id=$2`,[f.p.tenantId,cmd.commandId]))).rejects.toThrow();
+  }
+  expect(await repo.confirm(f.sessions.supervisor!,cmd)).toEqual(result);
  });
  it("raw confirmation still raises PROMPT_ORIGIN_HELD",async()=>{
   const f=await promptFixture(c);

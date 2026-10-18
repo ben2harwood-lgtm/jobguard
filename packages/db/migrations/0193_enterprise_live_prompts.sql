@@ -591,6 +591,13 @@ END $$;
 CREATE FUNCTION app.lp_receipt_immutable() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
  IF OLD.command_type NOT IN('ImportMaterialsIssue','RegisterCompletionObservation','EvaluateLivePrompts','ConfirmPrompt','DismissPrompt') THEN IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF; END IF;
+ -- SH-1's legacy non-work-order ConfirmPrompt is not a persisted live-prompt command.
+ -- Match the same work-order provenance boundary as ent4b_origin_provenance; do not
+ -- weaken protection for real prompt receipts or grant access to private prompt tables.
+ IF OLD.command_type='ConfirmPrompt' AND NOT EXISTS(
+  SELECT 1 FROM app.job j WHERE j.tenant_id=OLD.tenant_id AND j.provenance='work_order'
+   AND split_part(OLD.semantic_key,':',1)='extra-origin' AND split_part(OLD.semantic_key,':',2)=j.id::text
+ ) THEN IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF; END IF;
  IF TG_OP='DELETE' OR current_user<>'jobguard_migration' OR OLD.status<>'processing' OR NEW.status<>'succeeded'
   OR ROW(NEW.tenant_id,NEW.command_id,NEW.command_type,NEW.semantic_key,NEW.request_hash,NEW.actor_membership_id,NEW.created_at)
    IS DISTINCT FROM ROW(OLD.tenant_id,OLD.command_id,OLD.command_type,OLD.semantic_key,OLD.request_hash,OLD.actor_membership_id,OLD.created_at)

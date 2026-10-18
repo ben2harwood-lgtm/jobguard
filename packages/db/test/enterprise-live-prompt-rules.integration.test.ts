@@ -2,11 +2,11 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { EnterpriseLivePromptRepository } from "../src/enterprise-live-prompt-repository.js";
-import { ContractorRepository, SorRepository, WorkOrderRepository, demoFile, demoRow } from "../src/index.js";
+import { ContractorRepository, SorRepository } from "../src/index.js";
 import { referenceApprovalRulesV1 } from "@jobguard/core";
 import { SiteVisitRepository } from "../src/site-visit-repository.js";
 import { cluster, promptFixture, materialsInput, evaluateInput, listInput, ownerTx, completionPhoto, moveOffLive, secondJob, type PromptFixture } from "./enterprise-live-prompt-fixtures.js";
-import { startInput, completeInput } from "./site-visit-fixtures.js";
+import { startInput, completeInput, extraOrder } from "./site-visit-fixtures.js";
 vi.setConfig({ testTimeout: 90000, hookTimeout: 120000 });
 let c: Awaited<ReturnType<typeof cluster>>, repo: EnterpriseLivePromptRepository;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); repo = new EnterpriseLivePromptRepository(c.runtime); });
@@ -84,7 +84,11 @@ describe("persisted deterministic prompt rules", () => {
   const original=(await c.admin.query('SELECT document FROM app.client_contract_version WHERE tenant_id=$1 AND id=$2',[f.p.tenantId,f.demo.contractVersionId])).rows[0]!.document;
   const contract=await contractors.command(f.p,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:randomUUID(),expectedRevision:organisation.revision,kind:'contract.revise',clientId:f.demo.clientId,contractId:f.demo.contractId,document:{...original,sorVersionIds:[sor.versionId]},rules:referenceApprovalRulesV1});
   f.demo.contractVersionId=contract.id;
-  await new WorkOrderRepository(c.runtime).importCsv(f.p,{commandId:randomUUID(),name:'fictional-standards.csv',kind:'csv',csv:demoFile([demoRow(f.demo,1,{expectedRevision:f.revision,assignedMembershipIds:[actor.membershipId,f.named.member.membershipId],lines:[{clientLineReference:'L1',sorCode:'REPAIR-DOOR',quantity:'1'}]})])});
+  // Existing orders retain their immutable contract binding. A new order picks up the revised standards.
+  const order=await extraOrder(c,f,2,[actor.membershipId,f.named.member.membershipId],{lines:[{clientLineReference:'L1',sorCode:'REPAIR-DOOR',quantity:'1'}]});
+  f.jobId=order.jobId;
+  expect((await c.admin.query('SELECT contract_version_id FROM app.work_order WHERE tenant_id=$1 AND id=$2',[f.p.tenantId,order.orderId])).rows[0]!.contract_version_id).toBe(contract.id);
+  expect((await c.admin.query('SELECT l.sor_version_id,i.standard_minutes FROM app.work_order_line l JOIN app.sor_item i ON(i.tenant_id,i.version_id,i.code)=(l.tenant_id,l.sor_version_id,l.sor_code) WHERE l.tenant_id=$1 AND l.job_id=$2',[f.p.tenantId,f.jobId])).rows).toEqual([{sor_version_id:sor.versionId,standard_minutes:1}]);
   await ownerTx(c,f.p.tenantId,db=>db.$client.query("INSERT INTO app.extra_prompt_rule_settings(tenant_id,id,client_contract_version_id,version,factor_numerator,factor_denominator,recognition,content_hash) VALUES($1,$2,$3,'extra-prompt-rule-settings.v1',1,1000000000000,'[]',$4)",[f.p.tenantId,randomUUID(),f.demo.contractVersionId,'a'.repeat(64)]));
   const started=await visits.startVisit(f.ctx,actor,startInput(f));
   await visits.completeVisit(f.ctx,actor,completeInput(f,started.visitId,'no'));
