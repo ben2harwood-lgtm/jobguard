@@ -179,3 +179,103 @@ none is an independent verdict or founder acceptance.
 - Executed source comparison confirms the 0191 invoice routine equals 0187
   byte-for-byte after removing the single added open-state guard. This is source
   comparison, not a database/PDF integration result.
+
+## r1 (ruling 114)
+
+18 October 2026. Repair of PR #290 at inspected head `0b5b6c94`, branch
+`codex/sandbox/ch-4-c`. Working-tree delivery only; no git write, commit or push.
+This receipt is builder evidence, not an independent verdict or acceptance.
+
+Applied within ruling 114:
+
+- (a) finish/cancelFinish/resume entrypoints now carry requireLiveJob prechecks;
+  active finish/cancel calls run that precheck inside the same tenant transaction
+  before the SQL command. The generic command boundary dispatches through those
+  entrypoints. Active watchdog guard entries require one call. Resume is held
+  before execution, per (e).
+- (b) only strip the trailing action qualifier for Nest route-key comparison
+  (deduplicating the resulting route keys) and OpenAPI lookup. Other registry
+  assertions, including the exact 409 enum, remain unchanged.
+- (c) generated OpenAPI and runtime work-state conflict mapping retain the exact
+  409 codes JOB_NOT_LIVE / IDEMPOTENCY_CONFLICT. Repository identity collisions
+  surface the existing WatchdogError IDEMPOTENCY_CONFLICT. No test was changed.
+- (d) prototype assertion is exactly constructor/get/post; added the POST
+  no-store metadata assertion without deleting the GET assertion.
+- (e) removed resume transport/command registry keys, guard registration, shared
+  harness case, SQL identity kind and execution branch. Explicit resume refusal
+  remains; MON-1-PLACES is required before registering an executable action.
+- (f) restored the original random tenant/member/user/account setup and original
+  CONFLICT regex. Existing harness cases are unchanged from origin/main. Added
+  finish/cancel cases remain subject to STOP R1-F below.
+- Added the two newly permitted test paths to config/lanes/ch-4-c.json.
+- Parenthesised the CASE expression in the version condition of the internal
+  app.ch4_work_state_command implementation called by ch4_record_work_state.
+  Re-read the whole 0191 migration and inspected every CASE/WHEN occurrence:
+  no other CASE embedded in an IF/WHEN condition was found. Other CASEs occur
+  in INSERT values or SQL SELECT expressions. This is source inspection only,
+  not a PostgreSQL parse or fresh-migration proof.
+
+### Item-specific STOPs and remaining failures
+
+**STOP R1-F — added shared harness cases.** The required restoration is complete,
+including the unrelated user/account substitutions. Making the added cases pass
+in the restored harness is blocked by the existing practice authority contract:
+0094 constrains owned jobs to the fixed demo tenant, and practice authentication
+requires the fixed demo membership/user. The existing harness uses a random
+tenant/member and its cross-case assertions rely on one tenant-wide identity
+namespace. The added prepareWork currently cannot issue an authenticated practice
+session from that setup. Moving just the added cases to another tenant would
+invalidate the cross-case collision proof; changing the original identities is
+expressly forbidden. No authentication bypass, fixture policy relaxation or
+existing-case edit was made. Coordinator must supply/approve a compatible fixture
+approach; the added cases are NOT claimed executable or verified.
+
+**STOP R1-C-TEST — unchanged command assertion conflicts with the ruling.**
+apps/api/src/job-work-state-commands.test.ts:35 requires a JOB_WORK_CLOSED body
+at status 409. Ruling 114(c) permits only JOB_NOT_LIVE / IDEMPOTENCY_CONFLICT at
+409 and forbids changing tests. Runtime follows the ruling; that test remains
+unchanged and fails. Registry and HTTP suites pass. No weaker mapping was used
+just to satisfy this assertion.
+
+**Lane check hold:** origin/main now contains migration 0192; lane lint refuses
+0191 because it must be above the base's highest migration. This repair was
+explicitly scoped to the assigned 0191, so no renumbering was attempted.
+
+### Commands actually executed
+
+Dependencies were already installed; no install was performed. Node v24.17.0,
+TypeScript 5.8.3, Vitest 4.1.11. The pnpm launcher stalled selecting its version:
+`PNPM_MANAGE_PACKAGE_MANAGER_VERSIONS=false pnpm --version` and
+`pnpm --manage-package-manager-versions=false --version` were interrupted (130).
+Direct installed binaries below ran the checks; aggregate pnpm results and a
+clean pinned-install result are not claimed.
+
+| Command (relative to indicated working directory) | Result |
+| --- | --- |
+| API: `./node_modules/.bin/vitest run src/watchdog-registry.test.ts src/job-work-state.http.test.ts src/job-work-state-commands.test.ts --maxWorkers=2` | 133 passed, 1 failed; 2 suites passed, command suite failed only at R1-C-TEST above. |
+| DB: `./node_modules/.bin/vitest run src --exclude '**/test/**' --maxWorkers=2` | 180 passed, 1 failed; 21 suites passed. audit-checkpoint-handoff.test.ts:303 transitive source traversal timed out at unchanged 5000ms. |
+| Each of core/config/ai/storage/db/api/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | PASS all seven. These are also each package's configured lint checks. |
+| Root: `LANE_BASE_REF=origin/main node tools/lint.mjs` | Core purity passed; lane migration-order gate failed (0191 vs base 0192). |
+| Root: `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | FAILED same migration-order gate. No bypass. |
+| core/config/ai/storage/db: installed `tsc -p tsconfig.json`; API: installed `nest build`; web: installed `next build` | PASS all package builds. Web emitted workspace-root/multiple-lockfile and existing import warnings. |
+| API: `node --import tsx src/generate-openapi.ts`, then same with `--check` | PASS generation and verification; no socket required. |
+| Root: `git diff --check` | PASS. |
+
+Initial DB `vitest run src --maxWorkers=2` also matched integration filenames
+containing "dbsrc". Their setup failed before tests executed (all reported tests
+skipped); selection was interrupted (130) and corrected to exclude test/.
+No PostgreSQL migration or integration test passed or is claimed run. No server
+was successfully started. PostgreSQL, database migrations, browser/Playwright:
+**NOT RUN**; dispatcher runs these in GitHub CI. The broad root test command was
+not run because it includes those prohibited suites. No provider/AI change:
+no live-model evaluation is applicable. No new alert or release authority.
+
+The existing migration strategy remains the unmerged 0191 edit, with no data
+backfill. Compatibility changes are the exact 409 mapping and the resume hold.
+Earlier timing/capacity/release holds remain. FIX-LATER items were not pursued.
+
+Focused rerun after the timeout: DB
+`./node_modules/.bin/vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1`
+**PASS: 71/71**, unchanged timeout and assertions (2.17 seconds total). This
+resolves the isolated timeout on rerun; the initial full-unit run remains recorded
+as failed. Final diff whitespace check also passed.

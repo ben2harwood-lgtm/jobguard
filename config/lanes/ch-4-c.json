@@ -42,7 +42,9 @@
         "apps/api/src/workspace/application.ts",
         "apps/api/openapi.json",
         "apps/web/app/api/jobs/[id]/work-state/route.ts",
-        "apps/web/app/api/jobs/[id]/work-state/route.test.ts"
+        "apps/web/app/api/jobs/[id]/work-state/route.test.ts",
+        "apps/api/src/watchdog-registry.test.ts",
+        "apps/api/src/job-work-state.http.test.ts"
       ]
     }
   }

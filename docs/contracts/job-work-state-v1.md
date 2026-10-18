@@ -181,3 +181,12 @@ transaction-bound admission. Timer/interval STOP T-01 is isolated in
 [job-work-timing-v1.md](job-work-timing-v1.md). This also holds deriving implicit
 restart places from source receipts. A alone does not complete CH-4 or MON-1.
 No subscription, success fee, provider or release authority is added.
+
+## r1 (ruling 114)
+
+Resume is HELD until MON-1-PLACES supplies capacity admission. Its transport and
+command registry keys, watchdog guard registration, shared harness case and SQL
+execution branch are removed. Requests fail closed with capacity unavailable;
+there is no executable resume action. Finish/cancel precheck with requireLiveJob
+in their command transaction. HTTP 409 retains only JOB_NOT_LIVE and
+IDEMPOTENCY_CONFLICT, including mapped work-state conflicts.

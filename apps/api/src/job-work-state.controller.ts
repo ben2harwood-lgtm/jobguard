@@ -16,7 +16,7 @@ export class JobWorkStateController {
  }
  @Post() @Header("Cache-Control","no-store")
  @ApiOperation({summary:"Record owner-authorized synthetic work state"})
- @ApiConflictResponse({description:"State/revision conflict or unavailable capacity admission",schema:{type:"object",required:["code"],properties:{code:{type:"string",enum:["JOB_NOT_LIVE","WORK_STATE_CONFLICT","WORK_STATE_STALE_REVISION","CAPACITY_ADMISSION_UNAVAILABLE","JOB_WORK_CLOSED"]}}}})
+ @ApiConflictResponse({description:"State/revision conflict or unavailable capacity admission",schema:{type:"object",required:["code"],properties:{code:{type:"string",enum:["JOB_NOT_LIVE","IDEMPOTENCY_CONFLICT"]}}}})
  @ApiBadRequestResponse({description:"INVALID_WORK_STATE_INPUT: strict versioned action required"})
  @ApiNotFoundResponse({description:"NOT_FOUND: current owner/session authority required"})
  @ApiUnprocessableEntityResponse({description:"POST_LOCK_WORK_REQUIRES_LINKED_JOB: Start a linked job for this customer and site"})

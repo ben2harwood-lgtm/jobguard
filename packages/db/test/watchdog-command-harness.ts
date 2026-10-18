@@ -9,7 +9,7 @@ import { Pool } from "pg";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import {
   DiscrepancyRepository, EvidenceService, InboxRelevanceRepository, MaterialRepository, ProofCommandService, PurchaseOrderRepository, ReadinessRepository,
-  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, issuePracticeSession, authenticatePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, migrate,
+  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, issuePracticeSession, authenticatePracticeSession, migrate,
 } from "../src/index.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -19,10 +19,10 @@ import { ObservedPool } from "./lock-observer.js";
 // role. Several suites are driven by it (replay contract, lock order, legacy command ids), so a command added to or missing from
 // the registry fails each of them, not just one.
 export function createWatchdogHarness(label: string, portBase: number) {
-const tenant = DEMO_TENANT_ID, member = DEMO_MEMBERSHIP_ID, otherMember = randomUUID();
+const tenant = randomUUID(), member = randomUUID(), otherMember = randomUUID();
 const ctx = testTenantContext(tenant);
 const RULE = "supplier-overcharge.v1", DAY = "2026-03-27T09:00:00.000Z", NEXT = "2026-03-30T08:00:00.000Z";
-const CONFLICT = /IDEMPOTENCY_CONFLICT|COMMAND_CONFLICT|WORK_STATE_CONFLICT/u;
+const CONFLICT = /IDEMPOTENCY_CONFLICT|COMMAND_CONFLICT/u;
 const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const norm = (value: unknown) => JSON.parse(JSON.stringify(value ?? null));
 function validPng() {
@@ -104,8 +104,9 @@ interface Case {
   /** Exact retries whose server-generated fields differ; they must replay the first result unchanged. */
   retries?: string[];
 }
-// These cases use ordinary issued practice sessions. Their mapped jobs are in the
-// same tenant-wide command namespace as every existing harness case.
+// STOP r1 / ruling 114(f): the added cases need a coordinator-approved fixture.
+// Practice issuance requires fixed demo identities; existing cases retain their
+// original random tenant/member identities. Do not weaken their cross-case checks.
 const prepareWork = async (job:string,finish=false) => {
  process.env.JOBGUARD_ENV="synthetic_demo";
  const token=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,token);
@@ -115,17 +116,16 @@ const prepareWork = async (job:string,finish=false) => {
  st(job).work={auth,owned,revision:before.events.length};
  if(finish){const result=await repo.finish(auth.context,owned,auth.digest,{version:"job-work-state-command.v1",action:"finish",commandId:randomUUID(),expectedRevision:before.events.length});st(job).work.revision=result.events.length;st(job).work.marker=result.events.find(e=>e.kind==="finished_on_site")!.id;}
 };
-const workCase=(action:"finish"|"cancel_finish"|"resume",method:"finish"|"cancelFinish"|"resume"):Case=>({
+const workCase=(action:"finish"|"cancel_finish",method:"finish"|"cancelFinish"):Case=>({
  key:`job-work-state-repository.ts#${method}`,
  registry:[`/api/jobs/[id]/work-state#${action}`,`nest:/jobs/:id/work-state#${action}`,`command:WorkState.${action}`],
  prepare:job=>prepareWork(job,action==="cancel_finish"),
  run:async(job,id,variant)=>{const w=st(job).work;return new JobWorkStateRepository(observed.pool)[method](w.auth.context,w.owned,w.auth.digest,{version:"job-work-state-command.v1",action,commandId:id,expectedRevision:w.revision+(variant==="changed"?1:0),...(action==="cancel_finish"?{markerId:w.marker}:{})});},
  later:async job=>{const w=st(job).work;const repo=new JobWorkStateRepository(observed.pool);const before=await repo.read(w.auth.context,w.owned,w.auth.digest);await repo.command(w.auth.context,w.owned,w.auth.digest,{version:"job-work-state-command.v1",action:"close",commandId:randomUUID(),expectedRevision:before.events.length,reason:"other",note:"Fictional later history"});},
 });
-// Resume's successful replay assertions intentionally remain blocked until B
-// supplies capacity admission. Do not turn that missing authority into success.
+// Resume is held and unregistered until MON-1-PLACES supplies capacity admission.
 const cases: Case[] = [
-  workCase("finish","finish"), workCase("cancel_finish","cancelFinish"), workCase("resume","resume"),
+  workCase("finish","finish"), workCase("cancel_finish","cancelFinish"),
   { key: "purchase-order-repository.ts#revise", registry: ["/api/jobs/[id]/purchase-orders/revisions", "nest:/jobs/:id/purchase-orders/revisions"],
     prepare: async job => { await pre.requirement(job); },
     run: async (job, id, variant) => po.revise(ctx, job, orderInput(st(job).requirement, 0, id, variant === "changed" ? "11" : "10")),
@@ -215,7 +215,7 @@ async function boot() {
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic", max: 4 });
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant(id)VALUES($1)", [tenant]);
-  const user = DEMO_IDENTITY_USER_ID, account = DEMO_ACCOUNT_ID;
+  const user = randomUUID(), account = randomUUID();
   await admin.query("INSERT INTO identity.identity_user(id)VALUES($1)", [user]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'Fictional builder')", [account, tenant]);
   for (const id of [member, otherMember]) await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')", [id, tenant, account, user]);

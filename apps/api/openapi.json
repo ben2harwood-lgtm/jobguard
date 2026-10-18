@@ -4625,10 +4625,7 @@
                       "type": "string",
                       "enum": [
                         "JOB_NOT_LIVE",
-                        "WORK_STATE_CONFLICT",
-                        "WORK_STATE_STALE_REVISION",
-                        "CAPACITY_ADMISSION_UNAVAILABLE",
-                        "JOB_WORK_CLOSED"
+                        "IDEMPOTENCY_CONFLICT"
                       ]
                     }
                   }

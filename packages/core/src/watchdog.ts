@@ -21,9 +21,6 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/work-state#cancel_finish": "watchdog_live_only",
   "nest:/jobs/:id/work-state#cancel_finish": "watchdog_live_only",
   "command:WorkState.cancel_finish": "watchdog_live_only",
-  "/api/jobs/[id]/work-state#resume": "watchdog_live_only",
-  "nest:/jobs/:id/work-state#resume": "watchdog_live_only",
-  "command:WorkState.resume": "watchdog_live_only",
   "/api/jobs/[id]/work-state#close": "pre_live_allowed",
   "nest:/jobs/:id/work-state#close": "pre_live_allowed",
   "command:WorkState.close": "pre_live_allowed",
@@ -194,10 +191,9 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
 
 /** Business entrypoints used by the registry's live-only commands. */
 export const watchdogCommandGuards = [
-  // Controlled SQL routines perform the live guard inside their serialized command.
-  { file: "job-work-state-repository.ts", method: "finish", calls: 0 },
-  { file: "job-work-state-repository.ts", method: "cancelFinish", calls: 0 },
-  { file: "job-work-state-repository.ts", method: "resume", calls: 0 },
+  // Work-state entrypoints precheck live state; controlled SQL also enforces it.
+  { file: "job-work-state-repository.ts", method: "finish", calls: 1 },
+  { file: "job-work-state-repository.ts", method: "cancelFinish", calls: 1 },
   { file: "purchase-order-repository.ts", method: "revise", calls: 1 },
   { file: "purchase-order-repository.ts", method: "place", calls: 1 },
   { file: "supplier-document-repository.ts", method: "intake", calls: 1 },

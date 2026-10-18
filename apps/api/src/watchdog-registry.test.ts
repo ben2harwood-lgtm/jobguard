@@ -342,7 +342,7 @@ describe("CH-2 command coverage and lock order", () => {
     }
     expect(found.length).toBeGreaterThan(25);
     assertClassified(found, jobMutationRegistry);
-    expect(found.sort()).toEqual(Object.keys(jobMutationRegistry).filter(key => key.startsWith("nest:")).sort());
+    expect(found.sort()).toEqual([...new Set(Object.keys(jobMutationRegistry).filter(key => key.startsWith("nest:")).map(key => key.replace(/#[^#]+$/u, "")))].sort());
   });
   it("new public mutations in watchdog modules cannot omit classification and the guard", async () => {
     for(const file of new Set(watchdogCommandGuards.map(entry=>entry.file))) {
@@ -383,7 +383,7 @@ describe("CH-2 command coverage and lock order", () => {
     const spec=JSON.parse(await readFile(new URL("apps/api/openapi.json",root),"utf8"));
     for(const [key,phase] of Object.entries(jobMutationRegistry)) {
       if(!key.startsWith("nest:")||phase!=="watchdog_live_only")continue;
-      const path=key.slice(5).replace(/:([A-Za-z0-9]+)/gu,"{$1}");
+      const path=key.slice(5).replace(/#[^#]+$/u, "").replace(/:([A-Za-z0-9]+)/gu,"{$1}");
       const responses=spec.paths[path]?.post?.responses;
       expect(responses,path).toBeDefined();
       expect(responses["201"],path).toBeDefined();

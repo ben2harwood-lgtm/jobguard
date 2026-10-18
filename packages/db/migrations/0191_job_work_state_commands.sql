@@ -6,7 +6,7 @@ ALTER TABLE app.watchdog_command_identity ADD CONSTRAINT watchdog_command_identi
  'readiness.record','readiness.advance','things_to_check.evaluate','things_to_check.review','things_to_check.supersede',
  'supplier_match.create','supplier_match.correct','inbox.seed','inbox.dismiss','purchase_order.revise','purchase_order.place',
  'supplier_document.intake','supplier_document.receipt','supplier_document.confirm','evidence.begin_upload','evidence.finalize','proof.complete',
- 'WorkState.finish','WorkState.cancel_finish','WorkState.close','WorkState.reopen','WorkState.resume','WorkState.link'));
+ 'WorkState.finish','WorkState.cancel_finish','WorkState.close','WorkState.reopen','WorkState.link'));
 -- Lock order: job(s) sorted UUID; command identity; graph/event serializers;
 -- receipt and facts; deferred audit last; authority recheck uses plain reads.
 CREATE FUNCTION app.ch4_require_command_owner(t uuid,j uuid,digest text) RETURNS uuid
@@ -48,8 +48,10 @@ BEGIN
  -- Never accept caller-selected tenant/actor/time/policy or a loose JSON shape.
  IF jsonb_typeof(input) IS DISTINCT FROM 'object' THEN RAISE EXCEPTION 'INVALID_WORK_STATE_INPUT'; END IF;
  action:=input->>'action';
- IF action IS NULL OR action NOT IN('finish','cancel_finish','close','reopen','resume','link')
-  OR input->>'version' IS DISTINCT FROM CASE WHEN action='link' THEN 'job-link-command.v1' ELSE 'job-work-state-command.v1' END
+ -- Ruling 114: resume has no registered SQL action until MON-1-PLACES.
+ IF action='resume' THEN RAISE EXCEPTION 'CAPACITY_ADMISSION_UNAVAILABLE'; END IF;
+ IF action IS NULL OR action NOT IN('finish','cancel_finish','close','reopen','link')
+  OR input->>'version' IS DISTINCT FROM (CASE WHEN action='link' THEN 'job-link-command.v1' ELSE 'job-work-state-command.v1' END)
   OR jsonb_typeof(input->'commandId') IS DISTINCT FROM 'string'
   OR jsonb_typeof(input->'expectedRevision') IS DISTINCT FROM 'number'
   OR (input->>'expectedRevision') !~ '^(0|[1-9][0-9]*)$'
@@ -93,12 +95,12 @@ BEGIN
  IF expected<>revision THEN RAISE EXCEPTION 'WORK_STATE_STALE_REVISION' USING ERRCODE='40001'; END IF;
  SELECT * INTO latest FROM app.job_work_state_event WHERE tenant_id=t AND job_id=j AND kind IN('closed','reopened') ORDER BY sequence DESC LIMIT 1;
  SELECT * INTO marker FROM app.job_work_state_event WHERE tenant_id=t AND job_id=j AND kind IN('finished_on_site','finished_cancelled') ORDER BY sequence DESC LIMIT 1;
- IF action IN('finish','cancel_finish','resume') THEN
+ IF action IN('finish','cancel_finish') THEN
   -- Stored replay precedes current lifecycle checks, but never current authority.
   PERFORM app.require_watchdog_live(j);
   PERFORM app.ch4_require_open(t,j);
  END IF;
- IF action IN('finish','resume') AND EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
+ IF action='finish' AND EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
  IF action='finish' THEN
   IF marker.kind='finished_on_site' THEN RAISE EXCEPTION 'INVALID_WORK_STATE_INPUT'; END IF;
   event_kind:='finished_on_site';
@@ -114,8 +116,6 @@ BEGIN
   -- baseline, lock, activation or check record.
   IF NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j) THEN PERFORM app.ch4_admit_place(t,j,action); END IF;
   event_kind:='reopened';
- ELSIF action='resume' THEN
-  PERFORM app.ch4_admit_place(t,j,action); event_kind:='resumed';
  ELSE
   SELECT b.* INTO p FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id)
    WHERE b.tenant_id=t AND b.job_id=j AND b.id=(input->>'predecessorBindingId')::uuid;
