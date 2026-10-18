@@ -155,3 +155,93 @@ SHA-256 before receipt-only updates:
 Builder inspection only: ruling 102 resolves the earlier test-edit conflicts, but does not supply the assumed existing registration. Creating it would contradict this round's explicit false-assumption STOP instruction. No independent model verdict or technical acceptance is claimed. Dispatcher must resolve registration before implementation resumes; exact-commit independent RED review, CI database evidence and separate acceptance remain outstanding.
 
 Final verification shell group (exit 0): `git diff --check`; `git diff --stat`; `git status --short`; `git diff --name-only origin/main`; path-scoped `git diff origin/main` for the five hashed files; `git rev-parse HEAD`. Whitespace check passed, the five-file diff was empty, and both working-tree and base-relative changed-file lists contained only the receipt and ledger. Before adding this verification paragraph, the working diff was 2 files / 65 insertions. HEAD remains `62b53bd6bcb75e83c6ea39ba7c1814e3fbb0bac3`. No commit was created.
+
+
+## r1b — 18 Oct 2026
+
+Builder: Codex. This is a build receipt, not an independent verdict or acceptance. Historical STOPs above are superseded by the dispatcher's lane registration and ruling 102. Decision 74: synthetic only, RED independent exact-commit reviews, then PARK. No commit, push, deployment or outward delivery.
+
+Initial/final Git HEAD: `cf4195dfb112630adfb9210402af744592b7e3f9`. Local `origin/main`: `b881f90be0a6d368838ca4392338147ef819bd3a`. Initial working tree clean. Read AGENTS.md, the on-disk issued order, standing handoff, BUILD_PLAN.md §5.3/C5/M0-9, earlier receipt and current implementation/tests. Main's outbox lines match the ruling. The existing dedicated lane already contains all required paths; no duplicate or registration edit was needed.
+
+### Implementation and acceptance mapping
+
+- L019: legacy `safeRetry` remains signature-compatible but cannot release `outcome_unknown`. Only the reconciliation adapter's definitive result transitions it. The result and adapter identity are recorded in the action's audit event in the same transaction. Reconciliation checks adapter identity, and compares the original full-precision database timestamp on update so duplicate/stale responses cannot apply to a newer state. No caller-created evidence parameter was added.
+- L020: success, retryable, unknown, dead-letter, expiry cancellation, stale-claim recovery, operator retry/cancel and definitive reconciliation append one outcome audit event, after all business writes. A failed audit append rolls back outcome/attempt writes. A zero-row completion/reconciliation update appends no event. Claim/attempt-start remains execution bookkeeping, not a second outcome event: ruling 102 requires exactly one additional event for successful delivery. Invalid commands and unchanged unknown reconciliation have no committed outcome to audit. No user content or provider free text is copied into audit payloads.
+- L027: the locked claim query uses PostgreSQL `clock_timestamp()` to refuse future `next_attempt_at`; stale executing claims remain eligible for unknown-outcome recovery. Normal retries keep the one-minute back-off.
+- Preserved: fake adapters only; exact authorization and active owner membership predicate; network calls outside transactions; all business writes before the audit-head lock. No worker paging or dispatcher edits.
+- Ruling 102 applied only to the named success count, unsafe retry refusal, five-attempt due-time setup and four audit SELECT responses in each named strict mock. `outbox.test.ts:57–62` is unchanged.
+
+### Tests first
+
+Created `packages/db/src/later-outbox.test.ts` before implementation. The installed Vitest first run returned exit 1: **12/12 tests failed** against original outbox code (boolean retry resolved, future work delivered, audit events missing, audit failure did not roll back, mismatched adapter accepted). Command: `packages/db/node_modules/.bin/vitest run --root packages/db src/later-outbox.test.ts --maxWorkers=2`.
+
+Created `packages/db/test/later-outbox.integration.test.ts` before implementation. **NOT RUN**, including its first failing run: PostgreSQL prohibited in this sandbox. It covers due-time/concurrent claim, concurrent definitive reconciliation, one event per outcome, refusal/no-op behavior, audit-trigger failure rolling back outcome and attempt, and duplicate provider callback idempotency. This is test source, not PostgreSQL execution evidence.
+
+The first post-implementation three-file unit run returned exit 1: **17 tests passed in 2 files**, third suite could not import `@jobguard/core` because its generated build output was absent. Command: `packages/db/node_modules/.bin/vitest run --root packages/db src/later-outbox.test.ts src/outbox.test.ts src/audit-fix-dbsrc-08.test.ts --maxWorkers=2`. No test or shared configuration was changed to bypass that prerequisite.
+
+### Tooling and inspection record
+
+Read-only inspections used `pwd`, `git status --short`, `git rev-parse HEAD` / `origin/main`, `git diff --stat` / path-scoped diffs / `--check`, `cat`, `sed`, `rg`, `ls`, `tail`, `node --version`, and the TypeScript printer. File edits used Python and Node filesystem operations within the lane. Read groups returned exit 0 except the explicitly missing optional files below. No package install/download command was issued.
+
+Resource checks: `memory_pressure | tail -1` returned 52%, 54%, 53% free; `df -g /System/Volumes/Data` returned 57 then 56 GiB available. All above the 35% / 33 GB gates. Node v24.17.0. Inspection of optional root `node_modules/.bin/vitest` and `.npmrc` reported absent files (group exit 1); package-local Vitest exists.
+
+Initial `export PATH="$HOME/Library/pnpm/bin:$PATH"; pnpm --filter @jobguard/db exec vitest run src/later-outbox.test.ts --maxWorkers=2` stalled after a pnpm configuration warning; interrupted with Ctrl-C, exit 130, no tests run. The launcher is pnpm 11 while the repository pins 10.28.1. Subsequent pnpm commands prepend the existing `/private/tmp/jg-pnpm-r1/bin` shim, which invokes the already-cached `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`; no download or shim edit. Direct installed Vitest supplied the failing-first evidence above.
+
+Diagnostic STOP only: `ps -axo pid,ppid,etime,command | rg 'pnpm|vitest' | head -15` reported `zsh:1: operation not permitted: ps`. Process inspection was stopped; no alternate route or escalation attempted. This does not block implementation. Turbo also emitted `WARNING IO error: Operation not permitted (os error 1)` during forced checks; final command results are recorded below, not inferred from cache output.
+
+### Scope, operational impact and review holds
+
+Migrations: none. New GRANTs: none. Standard F: no new direct protected-table write grants. No schema/backfill/rollback operation; rollback is the ordinary source revert, but do not re-enable boolean-based unknown retries in production. No new alerts; existing queue/retry/failure/unknown telemetry remains. Existing operator retry callers retain their signature but `true` no longer authorizes an unknown retry.
+
+Builder source inspection, not independent review: checked predicate preservation, audit lock order, reconciliation timestamp precision, duplicate transition no-op handling and ruling-only merged test diffs. SQL protocol doubles do not establish PostgreSQL locking, RLS or rollback guarantees. Existing provider adapter trust and stale-delivery behavior outside the issued fixes still require their normal review; no production readiness claim.
+
+NOT RUN: both `packages/db/test/outbox.integration.test.ts` and `packages/db/test/later-outbox.integration.test.ts`; PostgreSQL concurrency/rollback runs; full `pnpm test`, `pnpm test:db`, `pnpm test:migrations`; `pnpm test:e2e`, browser and Playwright; live adapters. Reasons: dispatcher prohibits database/browser/socket runs locally, full suites belong to dispatcher/CI, live effects excluded. No local browser or database startup attempted. No independent verdict or separate acceptance has been recorded for this diff.
+
+### Executed checks and scope evidence
+
+- `pnpm exec turbo run typecheck --force --concurrency=2`: exit 0; 7/7 tasks successful, **0 cached**. Includes packages/db. Log `/private/tmp/jg-later-b9-r1b-typecheck.log`.
+- `LANE_BASE_REF=origin/main pnpm exec turbo run lint --force --concurrency=2`: exit 0; 7/7 tasks successful, **0 cached**. Includes packages/db on final source. Log `/private/tmp/jg-later-b9-r1b-lint.log`.
+- `LANE_BASE_REF=origin/main node tools/lint.mjs`: exit 0; core purity (212 TypeScript files), lane, money and commercial boundaries.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes` and direct `node tools/agent-lane-boundary-lint.mjs`: exit 0; exactly the registered lane, including new untracked test files. `git diff --check`: exit 0.
+- Pre-build resource check: exit 0; 48% memory free, 56 GiB disk available.
+
+Implementation/test SHA-256 (`shasum -a 256`, exit 0):
+
+```text
+bdd002c41c4f865f3746c33e23f5345dc3d95e0504705ff3ccb1291fd8de26c1  packages/db/src/outbox.ts
+609f9f379464e22a99dce537939067b56375ce04fc45915b9e4d78188c56b267  packages/db/src/later-outbox.test.ts
+e9f61f5440c285d0af5f2dc6f0dcad9566cf6248ef8ed9a00018c6099a6518f1  packages/db/test/later-outbox.integration.test.ts
+6fed4335de1244f7f15095273110d7893502e96134bbdbf51a3f0b6661fa5fe7  packages/db/src/outbox.test.ts
+75ece302c45f12c76b2fe9d34f20de941306da8255199ca3a348092429be764c  packages/db/src/audit-fix-dbsrc-08.test.ts
+b4585cdd8294de3b4254f50d11dbb40a2b370adf57851bbd04ea25c4447a6b21  packages/db/test/outbox.integration.test.ts
+```
+
+Read-only Python comparison against `git show origin/main:packages/db/src/outbox.test.ts` confirms lines 57–62 byte-identical (SHA-256 of joined lines: `e3ffdcb45c844cc4666698a0289de65d2a8661e3d8121edc5aba21f24aacfd86`). Both lane registers unchanged from HEAD: dedicated SHA-256 `d73a269014d884c2883166b3f76f25f8df16ad00af23afab23da8b7498b45a1c`; legacy `2e146f8144b7c93cdb8d1b2de58d9383597f244484cbd82038a6bff9cb4206fc`. No permanent file-pinning test was added.
+
+Tracked diff snapshot before this paragraph (`git diff --stat`, exit 0; new files separately listed below):
+
+```text
+ docs/ledger/LATER-B9.md                     |  5 ++
+ docs/verdicts/LATER-B9/BUILDER_RECEIPT.md   | 41 +++++++++++++
+ packages/db/src/audit-fix-dbsrc-08.test.ts  |  4 ++
+ packages/db/src/outbox.test.ts              |  4 ++
+ packages/db/src/outbox.ts                   | 94 ++++++++++++++++++++++++++++-
+ packages/db/test/outbox.integration.test.ts |  7 ++-
+ 6 files changed, 149 insertions(+), 6 deletions(-)
+```
+- New untracked `packages/db/src/later-outbox.test.ts`: 91 lines.
+- New untracked `packages/db/test/later-outbox.integration.test.ts`: 199 lines.
+
+The intended commit subject/body was appended as the **r1b intended commit message** block to `/private/tmp/jg-msg-later-b9.txt`; prior handoff text preserved under the no-overwrite instruction. Dispatcher should use the r1b block.
+
+
+### Final r1b results
+
+- `pnpm build --force --concurrency=2`: exit 0; **7/7 tasks successful, 0 cached**, 1m48s. Log `/private/tmp/jg-later-b9-r1b-build.log`. Existing workspace-root / CSS autoprefixer warnings and Turbo IO warnings did not fail the command; no unrelated configuration changed.
+- Final `pnpm --filter @jobguard/db exec vitest run src/later-outbox.test.ts src/outbox.test.ts src/audit-fix-dbsrc-08.test.ts --maxWorkers=2`: exit 0; **3 files, 22 tests passed**. Log `/private/tmp/jg-later-b9-r1b-unit.log`. The formerly blocked core import resolved after the required build. Pre-test gate: 51% memory free, 56 GiB disk; exit 0.
+- `pnpm openapi:check`: exit 1, **STOP for this check only**. `apps/api/package.json:72` before: `"openapi:check": "tsx src/generate-openapi.ts --check"`; after: unchanged (run the same check in CI where IPC is permitted). Exact refusal: `Error: listen EPERM: operation not permitted /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/tsx-501/24130.pipe`. The tsx launcher failed before schema verification. No workaround, permission escalation or source/script edit. Log `/private/tmp/jg-later-b9-r1b-openapi.log`.
+- No implementation STOP remains. Diagnostic process inspection remains stopped as documented above; not a product blocker. PostgreSQL/browser/full-suite NOT RUN entries remain as listed. AI evaluation inapplicable: no AI changes.
+
+Final receipt/ledger/message writes were within the issued lane and named temporary artifact. The final whitespace, lane and Git-state verification follows this append. Source/test hashes above remain current. No Git write occurred; HEAD remains `cf4195dfb112630adfb9210402af744592b7e3f9`. Built uncommitted; acceptance remains held for independent RED review, CI PostgreSQL evidence and the OpenAPI check. PARK.
+
+Final verification group returned exit 0: lane lint passed; `git diff --check` passed; tracked diff snapshot 6 files / 198 insertions / 6 deletions, plus the two new test files; `git status --short` showed only the eight authorised implementation/test/document paths. HEAD unchanged as above. This paragraph records that completed verification.
