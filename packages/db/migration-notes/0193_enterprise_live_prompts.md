@@ -1,6 +1,6 @@
-# 0191 — ENT-8A-P enterprise live prompts
+# 0193 — ENT-8A-P enterprise live prompts
 
-Synthetic practice only. The owning dispatcher renumbered 0189 to 0191 after merging main; MERGE-CHURN-1 applies at merge. No historical backfill. No production fee capability or outward action.
+Synthetic practice only. The owning dispatcher renumbered 0189 to 0193 after merging main; MERGE-CHURN-1 applies at merge. No historical backfill. No production fee capability or outward action.
 
 Seven append-only tables: `extra_prompt`, `extra_prompt_citation`, `prompt_resolution`, `materials_issue_fact`, `extra_completion_observation`, `extra_office_prompt_signal`, `extra_prompt_rule_settings`. All are migration-owned, tenant-qualified, FORCE RLS. Runtime, infrastructure and shadow roles have no direct table privileges. The settings side table has no customer write entrypoint and binds a client-contract version; it is not an enterprise agreement store.
 

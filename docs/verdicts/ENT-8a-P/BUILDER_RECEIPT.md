@@ -82,21 +82,21 @@ Final `pnpm build`: PASS, 7/7 tasks (two cached), including API compilation and 
 
 ### Repairs
 
-- Migration **0191**: parenthesize the JSON locator before subtracting allowed keys. PostgreSQL arithmetic precedence otherwise tries to parse the literal `locator` as JSON, preventing all valid photo observations from reaching source validation.
-- Migration **0191**: acquire job serialization key 417 before the live-job SHARE lock. Previously a second confirmation/dismissal could hold that row lock while waiting for the first command's advisory key; the first command's scope write then needed to upgrade the row lock. Visit completion now takes that same key before its live check, and the internal hook follows the same order. Tenant authority remains first and audit remains last; no deadlock is hidden by error remapping. Existing race assertions are unchanged.
+- Migration **0193**: parenthesize the JSON locator before subtracting allowed keys. PostgreSQL arithmetic precedence otherwise tries to parse the literal `locator` as JSON, preventing all valid photo observations from reaching source validation.
+- Migration **0193**: acquire job serialization key 417 before the live-job SHARE lock. Previously a second confirmation/dismissal could hold that row lock while waiting for the first command's advisory key; the first command's scope write then needed to upgrade the row lock. Visit completion now takes that same key before its live check, and the internal hook follows the same order. Tenant authority remains first and audit remains last; no deadlock is hidden by error remapping. Existing race assertions are unchanged.
 - Revoked-session fixture uses the merged audited `ContractorPracticeSessionRepository.revoke` with the persisted session context, rather than a raw update rejected by `PRACTICE_SESSION_AUDIT_REQUIRED`.
 - Closeout fixture selects `CLEAR-GUTTER` (off-order, present in the immutable SoR), instead of `FIT-LOCK` (already on demo order 1). Both rejection of a missing identity and the no-implicit-price assertions remain.
 - Duration fixture imports standards into a fresh schedule instead of colliding with the seeded schedule's unique 2026-01-01 effective date. It still revises the contract and order through the existing command paths.
 - LP0-17: add exactly the 15 new `lp_*` routine protection records. Existing entries and assertions are untouched. The added metadata is source-inspected; `definitionSha256` is null because no `pg_get_functiondef` output was obtained. No fabricated database digest. Schema/path validation passes: 1,177 entries, 341 routine records.
-- Executable migration references already used 0191; update remaining current documentation/lane-note references from 0189. Earlier receipt entries are retained as historical evidence.
+- Executable migration references already used 0193; update remaining current documentation/lane-note references from 0189. Earlier receipt entries are retained as historical evidence.
 
-No new migration number, grants, business policy, external action, backfill or release capability. Existing 0191 forward-fix guidance remains applicable. No merged test assertion changed.
+No new migration number, grants, business policy, external action, backfill or release capability. Existing 0193 forward-fix guidance remains applicable. No merged test assertion changed.
 
 ### Item-specific STOPs
 
-- **SERIOUS-B5 upgrade:** STOP pending the actual text/location of standing ruling 113. The merged test snapshots through 0186, then applies every later migration; its only additive allowance is the two 0188 tables and five helpers. The excerpt correctly shows 0191's seven new tables breaking that whole-tail comparison. Ruling 113 was referenced but not supplied or found in the repository. Do not guess an exemption or alter this merged assertion. Asked dispatcher for the ruling; all other work continued.
-- **Role × permission conformance:** STOP pending the omitted failure name/assertion and owning-lane direction if needed. The excerpt contains failures 1–13 only. 0191 changes neither `contractor_allowed` nor `contractor_role_permits` nor the core permission matrix. Shared merged role assertions remain untouched.
-- **Migration ordering against moving origin/main:** STOP for dispatcher integration. Both requested lane-aware lint commands refuse 0191 because origin/main now contains migration 0192. The issued worktree still uses 0191 as explicitly assigned. No main merge, renumber, shared-list rewrite or lint bypass performed.
+- **SERIOUS-B5 upgrade:** STOP pending the actual text/location of standing ruling 113. The merged test snapshots through 0186, then applies every later migration; its only additive allowance is the two 0188 tables and five helpers. The excerpt correctly shows 0193's seven new tables breaking that whole-tail comparison. Ruling 113 was referenced but not supplied or found in the repository. Do not guess an exemption or alter this merged assertion. Asked dispatcher for the ruling; all other work continued.
+- **Role × permission conformance:** STOP pending the omitted failure name/assertion and owning-lane direction if needed. The excerpt contains failures 1–13 only. 0193 changes neither `contractor_allowed` nor `contractor_role_permits` nor the core permission matrix. Shared merged role assertions remain untouched.
+- **Migration ordering against moving origin/main:** STOP for dispatcher integration. Both requested lane-aware lint commands refuse 0193 because origin/main now contains migration 0192. The issued worktree still uses 0193 as explicitly assigned. No main merge, renumber, shared-list rewrite or lint bypass performed.
 
 ### Validation (local, installed dependencies)
 
@@ -121,3 +121,35 @@ Final r1 local results:
 - DB source units with explicit `--exclude 'test/**'`: first run 180 passed / 1 existing source-graph timeout; unchanged rerun with one worker PASS, 22 files / 181 tests. No timeout relaxed.
 - Enumerated API subset: 104 files / 1,754 tests PASS; the aggregate command FAILS because `final-account-lock.isolation.test.ts` imports the real-DB harness indirectly and cannot obtain a localhost port (one skipped test). PostgreSQL did not start. This is not a full API-suite pass. Selection list: `/private/tmp/ent-8a-p-r1-api-unit-files.txt`; result: `/private/tmp/ent-8a-p-r1-api-unit-selected.log`.
 - No new approval, independent verdict or acceptance claimed. Intended commit subject/body written to `/private/tmp/jg-msg-ent-8a-p.txt` for dispatcher use. No commit or push.
+
+
+## r2 (ruling 113)
+
+18 October 2026. Builder: Codex gpt-6-astra. Issued head `dd61fbc5`, PR #288. Standing coordinator ruling 113 was supplied in this dispatch and resolves the r1 SERIOUS-B5 editing STOP. This is builder evidence, not an independent verdict or acceptance.
+
+- Extended `with0188Additions` additively for exactly migration 0193's seven tables, 21 named primary/unique indexes, 15 routines (exact name plus identity arguments), and seven exact `tenant_isolation` policies. Each new identity is asserted absent before upgrade; new tables must be empty. Both sets of additions are inserted together at server-sort positions. Every pre-existing snapshot row remains compared in full, including the replaced `ent4b_origin_provenance` routine's catalogue metadata. Upgrade and replay equality assertions remain unchanged.
+- Added only `packages/db/test/serious-b5-upgrade.integration.test.ts` to the lane allowlist. This shared test requires serialization with other lanes; their unrelated additions are not exempted here.
+- Corrected stale migration-number wording to 0193 in owned documentation and lane metadata. Earlier receipt references are normalized to the current migration number; their recorded run outcomes and STOPs remain historical, not new claims about this head. The dispatcher already renumbered the executable migration before r2; this repair changes no SQL, application behavior, privileges, policy, backfill, external action or release gate.
+- r1 migration-order lint STOP is resolved on this supplied head. The earlier role-conformance question and optional end-check dependency are outside this narrowly issued repair and are not represented as fixed.
+
+Validation uses the installed pinned pnpm 10.28.1 via `/private/tmp/jg-allocation-pnpm-bin` and Node 24.17.0. No packages installed/downloaded. Logs: `/private/tmp/ent-8a-p-r2-*.log`.
+
+- `pnpm --filter @jobguard/db typecheck`: PASS.
+- `LANE_BASE_REF=origin/main pnpm lint`: PASS, 7/7 package tasks (one cached); cache-write permission warnings did not fail the check.
+- `LANE_BASE_REF=origin/main pnpm lint:lanes`: PASS.
+- Modified PostgreSQL test compilation: PASS using `pnpm --filter @jobguard/db exec tsc -p /private/tmp/ent-8a-p-r2-test-tsconfig.json`. This compiles the test and imports without executing PostgreSQL.
+- `node --test tools/*.test.mjs`: PASS, 100 tests (temporary Git fixtures only; no worktree Git writes).
+- Focused core persistence units: PASS, 9 tests. Focused API application/controller/boundary units: PASS, 21 tests. These are not database or browser evidence.
+- `pnpm eval`: PASS, 15 files / 147 tests; synthetic fixture evaluation only, no live model.
+- DB source units (`vitest run src --exclude 'test/**' --maxWorkers=1`): FAIL, 197 passed / one existing 5-second timeout in the audit-checkpoint handoff source-graph check. No assertion or timeout changed. Follow-up below.
+- `pnpm openapi:check`: blocked by tsx CLI IPC `listen EPERM`. The same generator via `TSX_TSCONFIG_PATH=apps/api/tsconfig.json node --import ./apps/api/node_modules/tsx/dist/loader.mjs apps/api/src/generate-openapi.ts --check`: PASS.
+- PostgreSQL, migration and browser suites: **NOT RUN**, per dispatcher sandbox restriction. Item-specific execution STOP only: CI must run the upgraded snapshot against PostgreSQL after dispatcher push; no database guarantee is claimed. Root `pnpm test` is not run because it includes PostgreSQL.
+
+Build and final follow-up results are appended below. No commit, staging, checkout or push performed in this worktree. Independent exact-commit verdicts and separate acceptance remain required.
+
+Final r2 results:
+
+- `pnpm build`: PASS, 7/7 tasks (one cached), including Next static generation. Existing webpack/dependency and cache-permission warnings did not fail the build.
+- Unchanged timeout-file rerun (`pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1`): PASS, 71 tests. This resolves the observed transient timeout in that file; the earlier aggregate source-unit invocation remains recorded as failed rather than relabelled.
+- `git diff --check`: PASS. Final working-tree scope: five authorized paths only (snapshot test, own lane JSON, contract wording, migration-note wording, and this receipt).
+- Intended conventional-commit subject/body written to `/private/tmp/jg-msg-ent-8a-p.txt`. No worktree Git writes, commit or push. PostgreSQL **NOT RUN**; CI and independent exact-commit review remain required.
