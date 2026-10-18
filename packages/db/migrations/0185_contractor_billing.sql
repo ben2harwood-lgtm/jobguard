@@ -493,9 +493,9 @@ BEGIN
  VALUES(t,run,p_job,contract,p_source,p_invoice,h,p_projection,prev,p_command);
  FOR movement IN SELECT value FROM jsonb_array_elements(p_projection->'allocations') LOOP
   FOR l IN SELECT value FROM jsonb_array_elements(movement->'lines') LOOP
-   SELECT m.export_line_id,m.line_job_id INTO exported,line_job FROM app.billing_line_match m JOIN app.billing_fact f ON(f.tenant_id,f.id)=(m.tenant_id,m.fact_id)
-   WHERE f.tenant_id=t AND f.job_id=p_job AND f.source=p_source AND f.invoice_number=p_invoice AND f.match_valid
-   AND f.payload->>'factType'='invoiced' AND m.external_invoice_line_id=l->>'lineId' LIMIT 1;
+   SELECT m.export_line_id,m.line_job_id INTO exported,line_job FROM app.billing_line_match m JOIN app.billing_fact bf ON(bf.tenant_id,bf.id)=(m.tenant_id,m.fact_id)
+   WHERE bf.tenant_id=t AND bf.job_id=p_job AND bf.source=p_source AND bf.invoice_number=p_invoice AND bf.match_valid
+   AND bf.payload->>'factType'='invoiced' AND m.external_invoice_line_id=l->>'lineId' LIMIT 1;
    IF exported IS NULL AND(l->'matchedExtraNet'->>'numerator')::numeric<>0 THEN RAISE EXCEPTION 'BILLING_INVALID'; END IF;
    INSERT INTO app.contractor_receipt_line_allocation(tenant_id,id,job_id,run_id,source_ref,original_source_ref,external_invoice_line_id,export_line_id,line_job_id,rule,gross_numerator,gross_denominator,net_numerator,net_denominator,matched_extra_numerator,matched_extra_denominator)
    VALUES(t,gen_random_uuid(),p_job,run,movement->>'sourceRef',movement->>'originalSourceRef',l->>'lineId',exported,coalesce(line_job,p_job),l->>'rule',(l->'gross'->>'numerator')::numeric,(l->'gross'->>'denominator')::numeric,

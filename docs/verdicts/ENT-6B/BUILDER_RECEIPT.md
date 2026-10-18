@@ -467,3 +467,48 @@ Node `v24.17.0`, dependencies already installed. No package installation/downloa
 PostgreSQL own failing suites, full database/migration/upgrade suites, browser/e2e and the nine excluded API suites: **NOT RUN**, require dispatcher/GitHub CI infrastructure. No claim that the eight CI failures pass. No AI behavior changed; live-model evaluation inapplicable. Lint's migration-order failure is left parked. The diagnostic is source-inspected, not independently verified or accepted; exact-commit independent verdict, separate acceptance and existing release gates remain outstanding.
 
 Final attestation: `git diff --check` and a Python comparison with read-only `git show HEAD:<receipt>` pass; the previous receipt bytes are preserved and the only tracked or untracked worktree change is this appended receipt. Intended conventional commit subject/body written to **both** `/private/tmp/jg-msg-ent-6b-diag.txt` and `/private/tmp/jg-msg-ent-6b.txt`. No git write, commit, add, checkout, push, deployment or external message. Dispatcher owns commit/push; ENT-6B remains parked pending a new ruling for any repair.
+
+## r5 (ruling 100) — JobGuard dispatcher, 18 October 2026
+
+Builder: Codex gpt-6-astra (ALL-ASTRA day), decision 74, PR #240, BUILD-DON'T-MERGE. Repair base: `013cf269895e1eee235405b7af15c814cb028f6f`, branch `codex/sandbox/ent-6b`; initial tree clean. Read AGENTS, BUILD_PLAN ENT-6 / contractor billing contracts, both billing contract documents, migration 0185, repository error mapping and the r4 receipt. This is builder evidence, not independent verification or acceptance.
+
+### Exact authorized change and inspection
+
+Only migration `packages/db/migrations/0185_contractor_billing.sql:496–498` changes: the `app.billing_fact` SQL alias `f` becomes `bf`, with all eight references qualified by that alias changed to `bf.`. The `f record` declaration at line 479, its `FOR f` loop at 505 and record references at 506–507 remain byte-identical. No predicate, allocation calculation, uniqueness constraint, SQLSTATE or error mapping changes. A source comparison against HEAD proves the entire migration equals exactly those three line substitutions.
+
+Inspected all 17 functions in 0185 for the same SQL table-alias/local-variable clash; **no other instances found**. In particular, `cb_begin` (149), `cb_inputs` (329–332) and `cb_validate` (376–379, 393–395, 443–445) use alias `f` without declaring a local `f`. `cb_ingest` declares `f uuid` (272) but does not use `f` as a SQL table alias. A source-only scan enumerated all 17 function bodies and found no remaining app-table alias/declaration overlaps. This is not a PostgreSQL execution test.
+
+The r4 diagnostic is preserved verbatim in the earlier receipt. At this HEAD it is documentation only: r4 added no runtime diagnostic surfacing. `packages/db/src/contractor-billing-repository.ts:11–17` still maps unknown database failures to `DATABASE_UNAVAILABLE`; no production error code is changed by diagnostic surfacing or by this round.
+
+The `billing_line_match` uniqueness repair remains for a later round. No merged test, assertion, pin, shared list, inventory, repository logic or generated API snapshot is edited. The changed function body means the existing LP-0 `cb_derive` definition hash needs a subsequent authorized catalog refresh; ruling 100 does not authorize changing `docs/contracts/lp-0-effective-privileges-v1.json`, so it remains unchanged. No migration renumbering, new migration, data backfill, new alert or production activation is included. This edits this piece's own pending migration; existing applied-database repair/forward-fix and catalog verification remain dispatcher/CI work.
+
+### Commands actually run and results
+
+Node `v24.17.0`; existing installed dependencies used, with no install/download command or pin/runner override. `pnpm --filter @jobguard/db typecheck` was attempted and stalled after the ignored-`pnpm.overrides` warning; a Python subprocess timeout terminated it after 15 seconds. pnpm orchestration did not complete. The installed constituent executables were then run directly, as in r4. Root `pnpm typecheck`, `pnpm lint`, `pnpm lint:lanes`, `pnpm test`, `pnpm build` and `pnpm openapi:check` orchestration are **NOT RUN**; the actual direct checks below are not described as passes of those root commands.
+
+Logs: `/private/tmp/jg-ent-6b-r5-*.log`; exact command/exit manifests: `/private/tmp/jg-ent-6b-r5-checks.json`, `/private/tmp/jg-ent-6b-r5-tests.json`, `/private/tmp/jg-ent-6b-r5-builds.json`. Commands below are relative to the named package unless stated otherwise.
+
+| Actual command | Result |
+|---|---|
+| All seven packages: `./node_modules/.bin/tsc -p tsconfig.json --noEmit` | PASS, all exit 0, including packages/db. Also the exact body of each package's lint script, executed once per package. |
+| Root: `LANE_BASE_REF=origin/main node tools/lint.mjs` | FAIL, exit 1. Core purity passes; lane check refuses migration 0185 because base `origin/main` (`b881f90be0a6d368838ca4392338147ef819bd3a`) already has 0187. |
+| Root: `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | FAIL, exit 1, same migration-order hold. No renumbering authorized. |
+| Root: `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | PASS, both exit 0; run separately after combined lint stopped. |
+| Root: `node --test tools/*.test.mjs` (Python-expanded file list) | PASS, 100 tests, exit 0. |
+| core / config / storage / ai: `./node_modules/.bin/vitest run src --maxWorkers=2` | PASS: respectively 100 / 1 / 1 / 10 files and 2,701 / 1 / 2 / 113 tests; all exit 0. |
+| db: `./node_modules/.bin/vitest run src --exclude 'test/**' --exclude 'dist/**' --maxWorkers=1` | FAIL, exit 1: 15 files pass, 1 fails; 130 tests pass, 1 fails. Existing C-OPS-1 at `src/audit-checkpoint-handoff.test.ts:279` exceeds its unchanged 5,000 ms timeout. No assertion/configuration change or retry. |
+| db: `./node_modules/.bin/vitest run test/lp-0-catalog.test.ts --maxWorkers=1` | PASS, 1 file / 26 tests, exit 0. Pure catalog unit tests, not live catalog verification. |
+| API: `./node_modules/.bin/vitest run src --maxWorkers=2` with the nine exclusions listed below | PASS, 86 files / 1,671 tests, exit 0. Partial unit/transport suite only. |
+| web: `./node_modules/.bin/vitest run --maxWorkers=2` | PASS, 42 files / 869 tests, exit 0. Unit/transport, not browser tests. |
+| core / config / storage / ai / db: `./node_modules/.bin/tsc -p tsconfig.json`; API: `./node_modules/.bin/nest build`; web: `./node_modules/.bin/next build` | PASS, all seven exit 0. Next compilation, type validation and static generation completed; existing workspace/CSS/dependency warnings remain in its log. |
+| API: `node --import tsx src/generate-openapi.ts --check` | PASS, exit 0; snapshot unchanged. |
+
+API exclusions, each supplied with `--exclude`, match r4: `src/shadow-isolation.application.test.ts`, `src/final-account-lock.isolation.test.ts`, `src/health.test.ts`, `src/contractor/site-visit.http.test.ts`, `src/contractor/site-extra-pricing.http.test.ts`, `src/contractor/site-extra.http.test.ts`, `src/contractor/contractor-practice-session.http.test.ts`, `src/contractor/practice-worker-switch.http.test.ts`, `src/auth/sso/action-paths.test.ts`. These require unavailable database/socket infrastructure and are **NOT RUN**. No shared exclusion list or test configuration was edited.
+
+Total executed unit/tool results: **5,613 passed, 1 failed** (C-OPS-1 timeout). No full-suite green claim. Lint/lane ordering and the existing timeout remain holds outside this repair's scope.
+
+### NOT RUN and handoff
+
+**PostgreSQL NOT RUN:** all integration, migration, fresh/upgrade, live catalog/LP-0 and allocation/import/ordering regression tests. **Browser/e2e/Playwright NOT RUN.** No PostgreSQL process, browser or listening server was started. GitHub CI must execute the database and browser suites after the dispatcher pushes. This source-only alias repair has not been proven to resolve the eight CI failures; the separate uniqueness fix is still pending. No AI behavior changed and no live-model evaluation was run.
+
+Final `git diff --check` and byte comparisons against read-only `git show HEAD:<path>` pass: exactly two tracked files change (the three SQL lines and this appended receipt), earlier receipt bytes are preserved, and no untracked repository files exist. Intended conventional commit subject/body is in `/private/tmp/jg-msg-ent-6b.txt`. No git write, commit, add, checkout, push, merge, deployment or external message occurred. Dispatcher owns commit/push/merge; exact-commit independent verdict, separate acceptance and all existing production/release gates remain outstanding. This receipt does not self-accept the work.
