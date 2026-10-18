@@ -18,7 +18,8 @@ const poolWithQuery = (query: Query) => ({
   connect: async () => ({ query, release: () => undefined }),
 }) as unknown as Pool;
 const transactionSql = (sql: string) => ["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)
-  || sql.startsWith("SELECT set_config");
+  || sql.startsWith("SELECT set_config")
+  || sql.startsWith("SELECT pg_advisory_xact_lock(");
 const deferred = () => {
   let resolve!: () => void;
   const promise = new Promise<void>(r => { resolve = r; });

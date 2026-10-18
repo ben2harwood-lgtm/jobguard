@@ -20,6 +20,7 @@ function harness(options: { cancelled?: boolean; databaseFailure?: boolean } = {
     if (sql.includes("UPDATE app.action_outbox o SET status='cancelled'")) {
       return { rows: options.cancelled ? [{ id: actionId }] : [] };
     }
+    if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [] };
     if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config")) return { rows: [] };
     throw new Error(`Unexpected database operation: ${sql}`);
   });
