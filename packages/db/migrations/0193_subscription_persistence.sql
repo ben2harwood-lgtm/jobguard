@@ -381,7 +381,7 @@ BEGIN
   IF v->>'cadence' IS DISTINCT FROM 'monthly' OR jsonb_typeof(v->'plan') IS DISTINCT FROM 'string' OR v->>'plan' NOT IN('Solo','Builder') OR v->>'catalogueVersion' IS DISTINCT FROM 'subscription_pricing_policy_v4'
   OR v->>'termsVersion' IS DISTINCT FROM 'subscription_terms_v1' OR jsonb_typeof(v->'anchorDay') IS DISTINCT FROM 'number' OR (v->>'anchorDay') !~ '^[0-9]+$'
   OR (v->>'anchorDay')::integer NOT BETWEEN 1 AND 31 OR jsonb_typeof(v->'maximumPence') IS DISTINCT FROM 'number'
-  OR v->>'maximumPence' IS DISTINCT FROM CASE WHEN v->>'plan'='Solo' THEN '4900' ELSE '16900' END THEN RAISE EXCEPTION 'INVALID_SUBSCRIPTION_TERMS' USING ERRCODE='22023'; END IF;
+  OR v->>'maximumPence' IS DISTINCT FROM (CASE WHEN v->>'plan'='Solo' THEN '4900' ELSE '16900' END) THEN RAISE EXCEPTION 'INVALID_SUBSCRIPTION_TERMS' USING ERRCODE='22023'; END IF;
   approval_hash:=app.final_lock_hash((v-ARRAY['version','kind','contentHash'])||jsonb_build_object('tenantId',t));
   IF v->>'contentHash' IS DISTINCT FROM approval_hash THEN RAISE EXCEPTION 'SUBSCRIPTION_CONTENT_MISMATCH' USING ERRCODE='22023'; END IF;
   IF (kind='accept' AND current_revision<>0) OR (kind='change' AND current_revision=0) THEN RAISE EXCEPTION 'SUBSCRIPTION_STALE_REVISION' USING ERRCODE='40001'; END IF;
