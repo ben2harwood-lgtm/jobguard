@@ -6,7 +6,7 @@ export function jobWorkStateFailure(error:unknown):{status:number;body:Record<st
   const offer=linkedJobOfferV1.safeParse("offer" in error?error.offer:undefined);
   return {status:422,body:{...(offer.success?offer.data:{code:error.code,message:LINKED_JOB_COPY}),environment:"synthetic_demo",realExternalActions:0}};
  }
- return {status:error.code==="WORK_STATE_FORBIDDEN"?404:error.code==="SYNTHETIC_MODE_REQUIRED"?403:400,body:{code:error.code==="WORK_STATE_FORBIDDEN"?"NOT_FOUND":error.code,environment:"synthetic_demo",realExternalActions:0}};
+ return {status:error.code==="WORK_STATE_FORBIDDEN"?404:error.code==="SYNTHETIC_MODE_REQUIRED"?403:["JOB_NOT_LIVE","WORK_STATE_CONFLICT","WORK_STATE_STALE_REVISION","CAPACITY_ADMISSION_UNAVAILABLE","JOB_WORK_CLOSED"].includes(error.code)?409:400,body:{code:error.code==="WORK_STATE_FORBIDDEN"?"NOT_FOUND":error.code,environment:"synthetic_demo",realExternalActions:0}};
 }
 @Catch(JobWorkStateError)
 export class JobWorkStateExceptionFilter implements ExceptionFilter {

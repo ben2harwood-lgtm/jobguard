@@ -1,3 +1,4 @@
+import { JobWorkStateError } from "@jobguard/core";
 import { z } from "zod";
 import type { Pool } from "pg";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
@@ -28,7 +29,10 @@ export class ShadowRepository {
     const request = parse(readV1, raw);
     return withTenant(this.pool, context, async db => (await db.$client.query<PersistedShadowSignal>(
       "SELECT * FROM app.reveal_shadow_signals($1,$2)", [context.tenantId, request.jobId],
-    )).rows);
+    )).rows).catch((error: unknown) => {
+      if (error instanceof Error && error.message === "JOB_WORK_CLOSED") throw new JobWorkStateError("JOB_WORK_CLOSED");
+      throw error;
+    });
   }
   async emergencyRead(context: VerifiedTenantContext, raw: unknown): Promise<PersistedShadowSignal[]> {
     const request = parse(emergencyReadV1, raw);

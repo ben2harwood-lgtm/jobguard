@@ -14,6 +14,25 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // Coordinator ruling 107: classification never grants command authority.
+  "/api/jobs/[id]/work-state#finish": "watchdog_live_only",
+  "nest:/jobs/:id/work-state#finish": "watchdog_live_only",
+  "command:WorkState.finish": "watchdog_live_only",
+  "/api/jobs/[id]/work-state#cancel_finish": "watchdog_live_only",
+  "nest:/jobs/:id/work-state#cancel_finish": "watchdog_live_only",
+  "command:WorkState.cancel_finish": "watchdog_live_only",
+  "/api/jobs/[id]/work-state#resume": "watchdog_live_only",
+  "nest:/jobs/:id/work-state#resume": "watchdog_live_only",
+  "command:WorkState.resume": "watchdog_live_only",
+  "/api/jobs/[id]/work-state#close": "pre_live_allowed",
+  "nest:/jobs/:id/work-state#close": "pre_live_allowed",
+  "command:WorkState.close": "pre_live_allowed",
+  "/api/jobs/[id]/work-state#reopen": "pre_live_allowed",
+  "nest:/jobs/:id/work-state#reopen": "pre_live_allowed",
+  "command:WorkState.reopen": "pre_live_allowed",
+  "/api/jobs/[id]/work-state#link": "pre_live_allowed",
+  "nest:/jobs/:id/work-state#link": "pre_live_allowed",
+  "command:WorkState.link": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and this route carries its own live-job guard (precheck and seam, `SiteExtraRepository`).
   "/api/contractor/jobs/[id]/site-extras": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-extras": "pre_live_allowed",
@@ -175,6 +194,10 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
 
 /** Business entrypoints used by the registry's live-only commands. */
 export const watchdogCommandGuards = [
+  // Controlled SQL routines perform the live guard inside their serialized command.
+  { file: "job-work-state-repository.ts", method: "finish", calls: 0 },
+  { file: "job-work-state-repository.ts", method: "cancelFinish", calls: 0 },
+  { file: "job-work-state-repository.ts", method: "resume", calls: 0 },
   { file: "purchase-order-repository.ts", method: "revise", calls: 1 },
   { file: "purchase-order-repository.ts", method: "place", calls: 1 },
   { file: "supplier-document-repository.ts", method: "intake", calls: 1 },

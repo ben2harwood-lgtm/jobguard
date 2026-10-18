@@ -138,3 +138,46 @@ OpenAPI source metadata is additive (one read and source 422 responses). Generat
 was refused by the sandbox's tsx IPC `listen EPERM`; the JSON artifact is unchanged
 and the dispatcher must regenerate it and run `openapi:check`. The root lane gate
 also refused the initial no-commit self-comparison. Neither gate was bypassed.
+
+## CH-4-C supersession — 18 October 2026
+
+Ben's answers 1.1, 1.2 and 2 and coordinator ruling 107 supersede the old Q-01,
+Q-02, Q-05 and Q-06 holds only as follows. This additive section is current;
+preceding descriptions of absent commands describe the merged 0144 slice.
+
+Active owners may finish, cancel a named outstanding marker, close with a plan
+reason and nonblank note, reopen the current close, resume, and link an ordinary
+independently created successor. SQL derives authority from the persisted practice
+session and exact direct ownership of both endpoints. Adoption is not a mutation
+exception. Current membership/session expiry and revocation are checked after
+waits and on replay. No admin, finance, worker or shared-tenant sibling session is
+owner authority. Only synthetic small-builder jobs qualify.
+
+POST work-state accepts the strict `job-work-state-command.v1` discriminated
+union, or `job-link-command.v1` with `action: link`. IDs and expected revisions
+are required. Revision is max event sequence plus outgoing link count. No actor,
+tenant, timestamp, purpose, permission or policy field is admitted. The two public
+SQL signatures are documented in the 0191 migration note. Commands persist a
+canonical request hash, receipt, event/link and append-only audit atomically.
+Replay rechecks current authority and returns the stored original snapshot without
+adding an event or audit. Fresh GET exposes current persisted history, not a cache.
+
+Ruling 107: finish/cancel_finish/resume are `watchdog_live_only`;
+close/reopen/link are `pre_live_allowed`. Classification is no grant. Successful
+replay is checked before lifecycle refusal, but after current authentication.
+Close/reopen never change commercial job status. A locked reopen permits only
+non-site administration. It leaves the lock and completed historical checks intact.
+New completed-result reveal/use and new check completion require current open state
+under the job lock. Historical invoice replay and safety disclosure are preserved.
+
+Q-03 is resolved as refusal: no post-lock snagging photos, diary or customer
+message intake. No client label bypass or snagging admission routine exists.
+Linking requires the predecessor lock, exact current customer/site/payer bindings,
+both direct session-owned endpoints and existing cycle checks. Linking creates no
+job, quote, activation, fee or capacity exemption.
+
+Capacity-dependent commands are deliberately unavailable until B installs real
+transaction-bound admission. Timer/interval STOP T-01 is isolated in
+[job-work-timing-v1.md](job-work-timing-v1.md). This also holds deriving implicit
+restart places from source receipts. A alone does not complete CH-4 or MON-1.
+No subscription, success fee, provider or release authority is added.
