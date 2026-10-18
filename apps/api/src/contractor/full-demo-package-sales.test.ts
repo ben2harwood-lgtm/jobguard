@@ -31,8 +31,12 @@ function validate(raw: unknown) {
     expect(claim.text).toBe(texts[claim.id]);
     expect(claim.limit).toBe("Source inspected only; no new executed PostgreSQL, browser, provider or independent-review evidence is claimed. Practice-only scope; no release gate is opened.");
     expect(claim.classification).toBe(claim.id === "terms" ? "proposed" : ["billing", "statements", "prompts"].includes(claim.id) ? "held" : "source_inspected");
+  }
+  // Reject unsupported wording before spawning Git processes for source evidence.
+  for (const claim of parsed.claims) {
     for (const evidence of claim.evidence) {
       git("merge-base", "--is-ancestor", evidence.commit, "HEAD");
+      git("merge-base", "--is-ancestor", evidence.commit, "origin/main");
       expect(git("show", `${evidence.commit}:${evidence.path}`)).toContain(evidence.needle);
     }
   }
