@@ -1,13 +1,165 @@
 // Orchestration evidence only (synthetic doubles): proves the application layer validates input and
 // keeps request identity separate. It is NOT PostgreSQL tenant-isolation proof.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { ZodError } from "zod";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InboxRelevanceRepository } from "@jobguard/db";
 import { InboxRelevanceApplication } from "./inbox-relevance.application.js";
 import { PracticeAccess } from "./practice-access.js";
 
 afterEach(() => vi.restoreAllMocks());
+
+// Additive coverage: keep the original IB1–IB4 assertions below unchanged.
+function requestFixture() {
+  const sessionId = randomUUID();
+  return {
+    sessionId,
+    jobId: randomUUID(),
+    decisionId: randomUUID(),
+    principal: {
+      context: { tenantId: randomUUID() },
+      membershipId: randomUUID(),
+      identityUserId: randomUUID(),
+      digest: createHash("sha256").update(sessionId).digest("hex"),
+    },
+  };
+}
+
+function repositoryDoubles() {
+  return {
+    view: vi.spyOn(InboxRelevanceRepository.prototype, "view").mockResolvedValue({} as never),
+    seed: vi.spyOn(InboxRelevanceRepository.prototype, "seed").mockResolvedValue({} as never),
+    setBudget: vi.spyOn(InboxRelevanceRepository.prototype, "setBudget").mockResolvedValue({} as never),
+    dismiss: vi.spyOn(InboxRelevanceRepository.prototype, "dismiss").mockResolvedValue({} as never),
+  };
+}
+
+const actions = ["view", "seed", "budget", "dismiss"] as const;
+type Action = (typeof actions)[number];
+type RequestFixture = ReturnType<typeof requestFixture>;
+
+function invoke(action: Action, application: InboxRelevanceApplication, request: RequestFixture, raw: unknown) {
+  if (action === "view") return application.view(request.jobId);
+  if (action === "dismiss") return application.dismiss(request.jobId, request.decisionId, raw);
+  return application[action](request.jobId, raw);
+}
+
+function commandFor(action: Action, advisoryBudget = 0) {
+  return {
+    version: `inbox-${action}.v1`,
+    commandId: randomUUID(),
+    ...(action === "budget" ? { advisoryBudget } : {}),
+  };
+}
+
+function expectedArguments(action: Action, request: RequestFixture, command: ReturnType<typeof commandFor>) {
+  const { context, membershipId, digest } = request.principal;
+  const subject = [context, request.jobId];
+  const authority = [membershipId, digest];
+  if (action === "view") return [...subject, ...authority];
+  if (action === "seed") return [...subject, command.commandId, ...authority];
+  if (action === "budget") return [...subject, command, ...authority];
+  return [...subject, request.decisionId, command, ...authority];
+}
+
+describe("IB1/IB4 exact command routing and typed validation (orchestration only)", () => {
+  it.each(["seed", "budget", "dismiss"] as const)("%s rejects malformed envelopes without calling any repository operation", async action => {
+    const repository = repositoryDoubles();
+    const request = requestFixture();
+    const access = vi.spyOn(PracticeAccess.prototype, "job").mockResolvedValue(request.principal as never);
+    const application = new InboxRelevanceApplication({} as Pool, request.sessionId);
+    const command = commandFor(action);
+    const invalid = [
+      { ...command, tenantId: randomUUID() },
+      { ...command, membershipId: randomUUID() },
+      { ...command, jobId: randomUUID() },
+      { ...command, digest: "forged" },
+      { ...command, context: request.principal.context },
+      { ...command, lane: "advisory" },
+      { ...command, approved: true },
+      { ...command, amountPence: 1 },
+      { ...command, version: `${command.version}.future` },
+      { ...command, commandId: "invalid-command" },
+      { ...command, commandId: undefined },
+      null,
+    ];
+    for (const raw of invalid) {
+      await expect(invoke(action, application, request, raw)).rejects.toBeInstanceOf(ZodError);
+      for (const spy of Object.values(repository)) expect(spy).not.toHaveBeenCalled();
+    }
+    expect(access.mock.calls).toEqual(invalid.map(() => [request.jobId]));
+    await invoke(action, application, request, command);
+    const method = action === "budget" ? "setBudget" : action;
+    expect(repository[method].mock.calls).toEqual([expectedArguments(action, request, command)]);
+    for (const [name, spy] of Object.entries(repository)) {
+      if (name !== method) expect(spy).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([0, 100])("IB2 forwards budget endpoint %s unchanged with verified authority", async advisoryBudget => {
+    const repository = repositoryDoubles();
+    const request = requestFixture();
+    const access = vi.spyOn(PracticeAccess.prototype, "job").mockResolvedValue(request.principal as never);
+    const application = new InboxRelevanceApplication({} as Pool, request.sessionId);
+    const command = commandFor("budget", advisoryBudget);
+    await application.budget(request.jobId, command);
+    expect(access.mock.calls).toEqual([[request.jobId]]);
+    expect(repository.setBudget.mock.calls).toEqual([expectedArguments("budget", request, command)]);
+    expect(repository.view).not.toHaveBeenCalled();
+    expect(repository.seed).not.toHaveBeenCalled();
+    expect(repository.dismiss).not.toHaveBeenCalled();
+  });
+});
+
+describe("IB3 controlled overlapping sessions (no PostgreSQL isolation claim)", () => {
+  it.each(actions)("%s waits for each ownership lookup and completes B before A without mixing identity", async action => {
+    const repository = repositoryDoubles();
+    const a = requestFixture(), b = requestFixture();
+    const pool = {} as Pool;
+    const appA = new InboxRelevanceApplication(pool, a.sessionId);
+    const appB = new InboxRelevanceApplication(pool, b.sessionId);
+    const commandA = commandFor(action, 0), commandB = commandFor(action, 100);
+    let releaseA!: () => void, releaseB!: () => void;
+    const heldA = new Promise<void>(resolve => { releaseA = resolve; });
+    const heldB = new Promise<void>(resolve => { releaseB = resolve; });
+    const access = vi.spyOn(PracticeAccess.prototype, "job").mockImplementation(async function (this: PracticeAccess, jobId) {
+      expect([a.jobId, b.jobId]).toContain(jobId);
+      const request = jobId === a.jobId ? a : b;
+      // Assert the real bridge instance received this request's session, without authenticating it.
+      expect(this).toHaveProperty("sessionId", request.sessionId);
+      await (request === a ? heldA : heldB);
+      return request.principal as never;
+    });
+    const pendingA = invoke(action, appA, a, commandA);
+    const pendingB = invoke(action, appB, b, commandB);
+    const settled = Promise.allSettled([pendingA, pendingB]);
+    try {
+      expect(access.mock.calls).toEqual([[a.jobId], [b.jobId]]);
+      await Promise.resolve();
+      for (const spy of Object.values(repository)) expect(spy).not.toHaveBeenCalled();
+
+      releaseB();
+      await pendingB;
+      const method = action === "budget" ? "setBudget" : action;
+      expect(repository[method].mock.calls).toEqual([expectedArguments(action, b, commandB)]);
+
+      releaseA();
+      await pendingA;
+      expect(repository[method].mock.calls).toEqual([
+        expectedArguments(action, b, commandB),
+        expectedArguments(action, a, commandA),
+      ]);
+      for (const [name, spy] of Object.entries(repository)) {
+        if (name !== method) expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      releaseA();
+      releaseB();
+      await settled;
+    }
+  });
+});
 
 const owner = () => ({ context: { tag: randomUUID() }, membershipId: randomUUID(), digest: randomUUID().replace(/-/g, "") });
 const methods = ["view", "seed", "setBudget", "dismiss"] as const;
