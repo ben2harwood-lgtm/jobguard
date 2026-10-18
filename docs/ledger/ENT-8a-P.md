@@ -1,6 +1,6 @@
 # ENT-8A-P — persisted live prompts
 
-Issued 18 October 2026 against main `b881f90b`; Sub-order A only. Practice on made-up data, no release permission. Migration `0193_enterprise_live_prompts.sql`; dispatcher owns merge-time renumbering (MERGE-CHURN-1).
+Issued 18 October 2026 against main `b881f90b`; Sub-order A only. Practice on made-up data, no release permission. Migration `0194_enterprise_live_prompts.sql`; dispatcher owns merge-time renumbering (MERGE-CHURN-1).
 
 Binding inputs: Ben's answers of 17 October (read directly), dispatcher rules in the 18 October order, AGENTS.md rev 3.0 and BUILD_PLAN.md contractor prompt/origin contracts. Merged prerequisites: ENT-8a #219 (`2a230bb5`), ENT-8B #236 (`e0ecb254`), ENT-8B-SOR #237 (`ca435eeb`), ENT-5 #215 and ENT-5b #217. ENT-6B and Sub-order B are not prerequisites of the live-prompt work and are not implemented here.
 
