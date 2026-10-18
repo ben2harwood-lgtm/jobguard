@@ -4,6 +4,8 @@ import { refreshMeter } from "./meter-persistence-fixtures.js";
 import { closeWorkFixture, createWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
 import { approvedSimulation, calendarInput, command, correctionPeriod, count, historicalAgreement, issue, meterCompany, meterInput, preparedPeriod, rows, storeMeter } from "./subscription-persistence-fixtures.js";
 
+// Multi-period/correction scenarios below have bounded 120s budgets for real PostgreSQL CI.
+// Their full month inputs, deferred integrity checks and assertions remain enabled.
 describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
  let f: WorkFixture; beforeAll(async () => { f = await createWorkFixture(); }, 60000); afterAll(async () => closeWorkFixture(f));
  it("correction-inclusive issue never exceeds maximum", async () => {
@@ -13,7 +15,7 @@ describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
    expect(issued.amountPence).toBe(Math.min(16900, 6900 + Math.min(5, Math.max(0, places - 7)) * 2000 + 2000));
    expect(await count(f, a, "subscription_correction_disposition")).toBe(1);
   }
- });
+ }, 120000);
  it("excess remains uncollected and alerted", async () => {
   const { a, issued } = await correctionPeriod(f);
   expect(issued.amountPence).toBe(16900);
@@ -21,7 +23,7 @@ describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
   expect(dispositions).toHaveLength(1);
   expect(Number(dispositions[0].full_pence)).toBe(2000); expect(Number(dispositions[0].applied_pence)).toBe(0); expect(Number(dispositions[0].excess_pence)).toBe(2000);
   expect((await rows(f, a, "subscription_alert")).map(row => row.code)).toContain("CORRECTION_EXCESS_UNCOLLECTED");
- });
+ }, 120000);
  it("lines sum exactly and never contain fee sources", async () => {
   const { a, issued } = await preparedPeriod(f);
   const lines = await rows(f, a, "platform_statement_line"), statement = (await rows(f, a, "platform_statement"))[0];
@@ -65,7 +67,7 @@ describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
   const b = await meterCompany(f); await historicalAgreement(f, b);
   for (const month of [9, 10, 11]) { const input = calendarInput(b.tenantId, month === 10 ? 7 : 8, month); await storeMeter(f, b, input); await issue(f, b, input.startDate); }
   const sustained = (await rows(f, b, "subscription_review"))[0]; expect(sustained).toMatchObject({ sustained: true, immediate: false });
- });
+ }, 120000);
  it("negative correction stays linked without refund or future credit", async () => {
   const a = await meterCompany(f); await historicalAgreement(f, a);
   const old = meterInput(a.tenantId, 8); await storeMeter(f, a, old); await refreshMeter(f, a);
@@ -78,7 +80,7 @@ describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
   await storeMeter(f, a, calendarInput(a.tenantId, 7, 11));
   expect((await issue(f, a, "2026-11-01")).amountPence).toBe(6900);
   expect(await count(f, a, "subscription_correction_disposition")).toBe(1);
- });
+ }, 120000);
 
  it("crossing grace records review before issue and later issue reuses it", async () => {
   const a = await meterCompany(f); await historicalAgreement(f, a);
@@ -96,7 +98,7 @@ describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
   expect(await count(f, a, "subscription_operations_card")).toBe(1);
   expect((await issue(f, a)).amountPence).toBe(16900);
   expect(await rows(f, a, "subscription_review")).toEqual([review]);
- });
+ }, 120000);
  it("late correction refuses an already issued receiving subscription period", async () => {
   const a = await meterCompany(f); await historicalAgreement(f, a);
   const original = meterInput(a.tenantId, 7); await storeMeter(f, a, original); await refreshMeter(f, a);

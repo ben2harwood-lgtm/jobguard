@@ -123,3 +123,45 @@ An initial DB unit command used positional `src` instead of `--dir src`; Vitest 
 Technical acceptance remains HOLD pending PostgreSQL/migration CI, green `checks`, an independent verdict bound to the final commit and separate acceptance. The builder does not self-accept. Intended commit message is `/private/tmp/jg-msg-mon-2a-p.txt`.
 
 Final continuation build: `pnpm build --force` exited 0, seven successful packages, zero cache hits (2m20.551s). Existing Next workspace-root/CSS warnings and Turbo cache-write warnings did not fail the build. Final `git diff --check` passed. Working-tree changes are limited to the new PostgreSQL regression cases, this piece's API fixture, two expiry descriptions and this appended receipt. No new migration, backfill, operational alert or production capability was added in the continuation.
+
+## r2 (CI)
+
+18 October 2026. Builder: Codex (dispatcher requested gpt-6-astra). Repair starts at dispatcher head `346a3507`; the dispatcher reports two independent inspection PASS verdicts on the prior code. Those are not PostgreSQL execution evidence or reviews of this uncommitted repair. No Git writes, commit, push, dependency download, PostgreSQL process, database suite or browser run was performed. Installed Node v24.17.0 and cached pnpm 10.28.1 were reused through `PATH=/private/tmp/mon2-bin:$PATH`.
+
+Read the actual failed-job log for run `39137966392` with `gh run view --log-failed` (read-only network access; saved to `/private/tmp/mon2-r2-ci.log`). The eight subscription failures were one PostgreSQL `42P08` fixture error, one incorrect privilege expectation, and six five-second timeouts. Repairs:
+
+- The foreign-family receipt fixture casts the reused parameter as `$2::uuid::text`, matching the existing fixture convention and avoiding conflicting text/UUID inference. Actor/payload/subject/family conflict assertions stay in place.
+- The authority test now checks forbidden writes on the subscription-owned agreement, work, statement, attempt and result tables. It explicitly records the legacy `command_receipt` INSERT grant from 0005 and continues to deny DELETE/TRUNCATE. It no longer incorrectly claims this task revoked the shared receipt grant. No grant, access rule or migration changed.
+- The six timed-out multi-period/correction scenarios have explicit, bounded 120-second test budgets. Their full inputs, money/maximum/lineage/review assertions and deferred database integrity checks remain intact. No global timeout, skip or reduced fixture was introduced. Whether these budgets suffice, and whether all assertions pass once reached, remains for PostgreSQL CI.
+- LP-0's recorded inventory gains exactly the eleven new `mon2_*` routine identities, in the existing row format with `definitionSha256: null`. Owner, definer, execution, trigger and source-scan metadata are recorded; no merged LP-0 assertion, grant comparator or held digest-comparison mechanism changed. Existing ACL dispositions already cover the new reachable routines.
+- Standing ruling 113 is applied only to the SERIOUS-B5 additive snapshot: seventeen named app tables plus the control-plane catalogue, eleven named routines, the twenty-eight indexes attached to those exact tables, and their seventeen policies. Expected app rows are empty; the two catalogue seed rows are explicitly specified, then ordered by PostgreSQL's JSONB-text ordering. Predecessor rows, privileges, relations and policies still compare in full. Combined 0188/0193 additions are inserted in server order to avoid displacing earlier additions at the wrong array positions. The original 0188 and final equality assertions remain in place.
+
+Migration `0193_subscription_persistence.sql` and the dispatcher's CASE fix are unchanged. Main's separate 0193/LATER-B14 collision remains dispatcher-owned at merge, as explicitly instructed. No new money/access rule, production capability, backfill or alert was introduced. All previous commercial and release holds remain.
+
+### Actual r2 checks
+
+Logs are `/private/tmp/mon2-r2-*.log`. Unit commands use source-only discovery to exclude generated tests and PostgreSQL integration files.
+
+| Command | Actual result |
+|---|---|
+| `pnpm --filter @jobguard/core --filter @jobguard/db --filter @jobguard/api typecheck` | Exit 0, all three packages. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1: core purity passes; lane registry refuses the authorized `packages/db/test/serious-b5-upgrade.integration.test.ts` edit. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1, same registry refusal. No lane exception or registry edit made. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both exit 0. |
+| `pnpm --filter @jobguard/core exec vitest run --dir src --maxWorkers=2` | Exit 0, 117 files / 2,908 tests. |
+| `pnpm --filter @jobguard/api exec vitest run src/subscription.application.test.ts src/subscription-boundaries.test.ts src/auth/context-boundary.test.ts --maxWorkers=2` | Exit 0, 3 files / 152 tests. |
+| `pnpm --filter @jobguard/db exec vitest run --dir src --maxWorkers=2` | Exit 1, 199 passed / 1 failed: unchanged `[C-OPS-1]` audit-checkpoint source-graph test exceeded 5 seconds. No subscription unit failed. |
+| `node --test tools/*.test.mjs` | Exit 0, 100 passed. |
+| TypeScript `createProgram` / `getPreEmitDiagnostics`, seven subscription/snapshot test and fixture files, workspace rootDir | Exit 0, zero diagnostics in those files. Static check only. |
+| From `apps/api`, `node --import tsx --input-type=module` invoking `loadReviewedInventory()` | Exit 0, 337 recorded routines parse successfully. Structure check only, not live catalogue evidence. |
+| `pnpm openapi:check` | Exit 1, sandbox `listen EPERM` on the tsx CLI IPC pipe. |
+
+**STOP — lane registry only:** standing ruling 113 explicitly authorizes the snapshot edit, but the lane allowlist does not include its path. Shared lane-registry changes are outside this repair's allowed shared edits. Dispatcher must reconcile that allowlist; the authorized snapshot repair is retained. Migration renumbering likewise remains dispatcher-owned. Neither issue was used to stop the other repairs.
+
+**PostgreSQL NOT RUN.** Root `pnpm test`, `test:db`, migrations, browser/e2e, persisted figures, live grants, and the repaired upgrade snapshots remain for dispatcher CI. Timeouts in the supplied CI log do not establish that the underlying assertions passed. No self-acceptance: technical acceptance requires CI and a verdict bound to the final dispatcher commit, followed by separate acceptance.
+
+Additional completed checks: `pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1 --testTimeout=15000` exited 0 (71 tests). This is a command-only diagnostic timeout; the standard five-second failure above remains recorded and the merged test/configuration is unchanged. From `apps/api`, `node --import tsx src/generate-openapi.ts --check` exited 0 using the same source generator without the prohibited CLI IPC listener. `git diff --check` exited 0.
+
+`pnpm exec turbo run lint --force` exited 0: seven successful packages, zero cached tasks (2m19.803s). This package-level result does not override the root lint/lane-registry STOP above. Intended conventional commit subject/body is written to `/private/tmp/jg-msg-mon-2a-p.txt`; dispatcher owns committing it.
+
+Final build: `pnpm build --force` exited 0, seven successful packages, zero cached tasks (2m23.158s). Next emitted workspace-root/CSS/dynamic-dependency warnings and Turbo emitted cache-write permission warnings; the build succeeded. Final working-tree whitespace check passed. The seven modified files are the four subscription suites, the two explicitly allowed shared inventory/snapshot files, and this receipt. PostgreSQL remains **NOT RUN**; migration 0193 is untouched and no commit/push was performed.

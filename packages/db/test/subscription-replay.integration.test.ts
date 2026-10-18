@@ -24,7 +24,7 @@ describe("MON-2A-P PostgreSQL atomic replay", () => {
   await f.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')", [secondSession, user, secondDigest, randomUUID()]);
   await expect(command(f, { ...second, digest: secondDigest, sessionId: secondSession }, terms(a), id)).rejects.toThrow();
   const foreignId = randomUUID();
-  await f.admin.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'mon1.fixture',$2::text,$3,'succeeded',$4,'{}',clock_timestamp())", [a.tenantId, foreignId, "a".repeat(64), a.actorId]);
+  await f.admin.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,'mon1.fixture',$2::uuid::text,$3,'succeeded',$4,'{}',clock_timestamp())", [a.tenantId, foreignId, "a".repeat(64), a.actorId]);
   await expect(command(f, a, terms(a), foreignId)).rejects.toThrow();
  });
  it("rollback leaves no partial approval work or receipt", async () => {

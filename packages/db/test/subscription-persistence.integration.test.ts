@@ -4,6 +4,8 @@ import { closeWorkFixture, createWorkFixture, seedWorkJob, workTenant, type Work
 import { calendarInput, command, historicalAgreement, issue, meterCompany, meterInput, preparedPeriod, readSubscription, rows, storeMeter, terms } from "./subscription-persistence-fixtures.js";
 import { refreshMeter } from "./meter-persistence-fixtures.js";
 
+// Multi-period/correction scenarios below have bounded 120s budgets for real PostgreSQL CI.
+// Their full month inputs, deferred integrity checks and assertions remain enabled.
 describe("MON-2A-P persisted subscription", () => {
  let f: WorkFixture; beforeAll(async () => { f = await createWorkFixture(); }, 60000); afterAll(async () => closeWorkFixture(f));
  it("all nine card figures survive persisted issue", async () => {
@@ -28,7 +30,7 @@ describe("MON-2A-P persisted subscription", () => {
    await storeMeter(f, a, input); actual.push((await issue(f, a, input.startDate, revision)).amountPence);
   }
   expect(actual).toEqual([34800,82800,8900,7900,16900,4900,4900,6233,6965]);
- });
+ }, 120000);
  it("fresh connection reads accepted effective terms", async () => {
   const a = await meterCompany(f); await command(f, a, terms(a));
   const client = await f.runtime.connect();
