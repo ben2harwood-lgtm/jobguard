@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { MIGRATION_URLS, migrate, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, SupplierDocumentRepository, QuoteRepository, QuoteDocumentRepository, IssueQuoteMutation, RecordBuilderAcceptanceMutation, SwitchJobLiveV3Mutation, UserCommandDispatcher, withTenant } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
@@ -12,11 +12,13 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool;
+let adminConfig:PoolConfig;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV='synthetic_demo';const directory=await mkdtemp(join(tmpdir(),'jg-pf1b-upgrade-')),port=await freePort(61900,100),value=randomUUID();
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:'postgres',password:value,persistent:true,createPostgresUser:process.getuid?.()===0,initdbFlags:['--lc-messages=C','--encoding=UTF8'],onLog:()=>undefined});await postgres.initialise();await postgres.start();
- admin=new Pool({host:'127.0.0.1',port,user:'postgres',database:'postgres',password:value});
+ adminConfig={host:'127.0.0.1',port,user:'postgres',database:'postgres',password:value};
+ admin=new Pool(adminConfig);
  await admin.query(`CREATE ROLE pf1b_upgrade_login LOGIN PASSWORD '${value}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
  runtime=new Pool({host:'127.0.0.1',port,user:'pf1b_upgrade_login',database:'postgres',password:value});
 });
@@ -61,7 +63,7 @@ const security=async(pool:Pool)=>({
  functions:(await pool.query("SELECT p.oid,p.proowner,p.proacl::text,pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','control_plane','identity') AND p.prokind='f' AND p.proname NOT LIKE 'pf1b_%' AND p.proname NOT IN('guard_recovery_eligibility_v3','require_recovery_eligibility_v3_effect') ORDER BY p.oid")).rows,
 });
 // Strip only this migration's named supplier-credit additions. The remaining
-// server-rendered routine definition must exactly equal the pre-0187 definition.
+// server-rendered routine definition must exactly equal the pre-0188 definition.
 function withoutSupplierCreditAdditions(definition:string) {
  if(definition.includes("IF TG_TABLE_NAME='supplier_credit_consumption' THEN")) {
   definition=definition.replace(' sources jsonb; expected_result jsonb; binding app.practice_supplier_credit_case_binding;\n','');
@@ -86,7 +88,7 @@ it('PF1B-A26 A26_OwnMigrationUpgradeThenLaterMigrationsTwice',async()=>{
  await admin.query('GRANT jobguard_runtime TO pf1b_upgrade_login');await seedIdentity(admin);
  const f=await liveJob(admin,runtime),suppliers=new SupplierDocumentRepository(f.scoped);
  for(const [revision,fixtureId] of ['materials-B-invoice','materials-B-credit'].entries())await suppliers.intake(context,f.jobId,{version:'supplier-document-intake.v1',fixtureId:fixtureId as 'materials-B-invoice'|'materials-B-credit',channel:'picker',expectedRevision:revision});
- const cases=new RecoveryCaseRepository(f.scoped),c=await cases.command(context,f.jobId,{version:'recovery-case-command.v1',commandId:randomUUID(),action:'open',caseType:'merchant_overcharge',claimedNetPence:30000,counterparty:'Fictional supplier',book:'supplier_cost',sourceType:'supplier_documents',sourceRefs:['CR-MB-001'],expectedRevision:0},actor);
+ const cases=new RecoveryCaseRepository(f.scoped),c=await cases.command(context,f.jobId,{version:'recovery-case-command.v1',commandId:randomUUID(),action:'open',caseType:'merchant_overcharge',claimedNetPence:30000,counterparty:'Fictional supplier',book:'supplier_cost',sourceType:'supplier_documents',sourceRefs:['Supplier agreement AG-320','Supplier invoice INV-320'],expectedRevision:0},actor);
  await cases.eligibilityCommand(context,f.jobId,{version:'recovery-eligibility-command.v1',commandId:randomUUID(),action:'review',caseId:c.id,expectedCaseRevision:c.revision,scenario:'pending_money',evidenceRevision:1,policyVersion:'reference-d03.v1',policyRevision:1},actor);
  await new RecoveryEligibilityV3Repository(f.scoped,'synthetic_demo').review(context,f.jobId,{version:'recovery-eligibility-command.v3',action:'review',commandId:randomUUID(),caseId:c.id,fixture:'F15',expectedCaseRevision:c.revision,expectedReviewRevision:0},actor,f.auth.digest);
  const feed=new PracticeFeedRepository(runtime,'synthetic_demo');await feed.command(context,actor,f.auth.digest,f.jobId,{version:'practice-feed-command.v1',commandId:randomUUID(),action:'connect',expectedRevision:0});
@@ -98,15 +100,15 @@ it('PF1B-A26 A26_OwnMigrationUpgradeThenLaterMigrationsTwice',async()=>{
  expect(await proofDifferences(admin,proof)).toEqual({rows:[],types:[]});expect(await security(admin)).toEqual(beforeSecurity);
  const newRoutines=(await admin.query("SELECT proname,pg_get_functiondef(oid) definition,proacl::text,proowner,prosecdef,proconfig FROM pg_proc WHERE oid IN('app.guard_recovery_eligibility_v3()'::regprocedure,'app.require_recovery_eligibility_v3_effect()'::regprocedure) ORDER BY proname")).rows;
  for(const [index,old] of oldRoutines.entries()){expect(newRoutines[index].definition).not.toBe(old.definition);expect({...newRoutines[index],definition:old.definition}).toEqual(old);}
- // The immediate base includes 0186; every non-credit byte, including insurer locks, paid interest and F19 reasons, survives.
- expect(names[position-1]).toBe('0186_recovery_eligibility_paid_interest.sql');
+ // The immediate base includes 0187; every non-credit byte, including insurer locks, paid interest and F19 reasons, survives.
+ expect(names[position-1]).toBe('0187_final_account_sources_and_pdf.sql');
  for(const [index,old] of oldRoutines.entries())expect(withoutSupplierCreditAdditions(newRoutines[index].definition)).toBe(old.definition);
  // An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
  await migrate(admin);await migrate(admin);expect(await proofDifferences(admin,proof)).toEqual({rows:[],types:[]});
  expect((await admin.query('SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name')).rows.map(r=>r.migration_name)).toEqual(names);
 });
 it('PF1B-A26 A26_FreshInstall',async()=>{
- const database=`pf1b_fresh_${randomUUID().replaceAll('-','')}`;await admin.query(`CREATE DATABASE ${database}`);const pool=new Pool({...admin.options,database});
+ const database=`pf1b_fresh_${randomUUID().replaceAll('-','')}`;await admin.query(`CREATE DATABASE ${database}`);const pool=new Pool({...adminConfig,database});
  try{await migrate(pool);await migrate(pool);expect((await pool.query("SELECT count(*)::int n FROM pg_class WHERE oid IN('app.practice_supplier_credit_case_binding'::regclass,'app.practice_supplier_credit_review_payment'::regclass)")).rows[0].n).toBe(2);}finally{await closeTestPools(pool);} // Scratch databases retained; no destructive cleanup.
 });
 it('PF1B-A27 A27_UpgradeProofControls',async()=>{

@@ -248,3 +248,43 @@ Built by Claude Sonnet (Codex stand-in), dispatcher 14
 Root cause: `assertRecoverySources` (packages/core/src/recovery-case.ts:~195) accepts only catalogue labels of the right source type (recoverySourceCatalogueV1) or recorded-id (UUID) shaped refs. The piece's own test fixture opened its case with `sourceRefs:['CR-PF1B-001','INV-PF1B-001']` (document numbers), which are neither, so every test failed at open with RECOVERY_SOURCE_NOT_RECOGNISED.
 Change: `packages/db/test/practice-supplier-credit.integration.test.ts:64` sourceRefs now `['Supplier agreement AG-320','Supplier invoice INV-320']` (catalogue labels, supplier_documents). The supplier-credit binding is by document number inside the SQL routine, not via the case's sourceRefs (grep of CR-PF1B-001/INV-PF1B-001 shows no sourceRefs link), so intent and expected values are unchanged. Main's recovery-case rules and merged tests untouched.
 Run: `pnpm --filter @jobguard/db typecheck` clean. NOT RUN: the DB integration test (no PostgreSQL), lane lint. Residual risk: if the test or SQL later reads the case's source refs to match documents, CI will show it.
+
+
+## r6 (CI after renumber; ruling 104)
+
+Builder: Codex gpt-6-astra, ALL-ASTRA day, 18 October 2026. Worktree branch `codex/sandbox/practice-facts-1b`, unchanged HEAD `8bdb6d142375a90b1e0ddc2f5550ce263c8bdee1`, merged main `b881f90be0a6d368838ca4392338147ef819bd3a`. This receipt describes uncommitted working-tree changes, not an exact-commit independent verdict. The dispatcher reports the prior delta PASS at `6487d1bd` (`jg-runs/d14-practice-facts-1b-r5-delta-6487d1b.md`); that external report was not available locally. No commit, push, browser or PostgreSQL start was attempted.
+
+`gh run view 39019278175 --log-failed` could not connect to api.github.com. Repairs therefore follow the dispatcher's supplied CI failures and ruling 104:
+
+- A26 uses recognised supplier catalogue references, preserving its populated supplier documents, 30000p claim, F15 review and every row/type/security comparison. The immediate predecessor assertion now names SERIOUS-B5's `0187_final_account_sources_and_pdf.sql`; the migration under proof remains `0188_practice_supplier_credit.sql`. A27's proof controls and expected values are unchanged; its undefined proof was downstream of A26 failing before assignment.
+- Fresh-install setup retains the original explicit `PoolConfig` and copies that for the scratch database. `pg.Pool.options.password` is non-enumerable, so spreading `admin.options` lost the credential. No password is recorded in this receipt.
+- A09 supplies the original settlement required by the merged feed before requesting an alternate representation. The original is settled before case opening, so its later alternate cannot replace it as qualifying evidence; the unchanged supplier-payment-unavailable/no-write assertion still applies. Customer cash/refund assertions remain unchanged. The corrupt-source probe has its own ordinary post-opening settlement.
+- Ruling 104(a): exactly five additive routine records in the LP-0 JSON, solely `pf1b_pin_time`, `pf1b_require_side_effect`, `pf1b_review_supplier_credit`, `pf1b_source_bundle`, and `pf1b_validate_side`. Existing entries/records and LP0-17 assertions are unchanged. These additions are source-inspected; their nullable `definitionSha256` is null because no PostgreSQL-rendered definition was captured. This does not claim a live catalogue inspection or enable the held LP0-13 comparator.
+- Ruling 104(b): SERIOUS-B5's expected snapshot adds only the two empty 0188 tables, their five primary/unique indexes, two tenant policies and five new routines. Exact table/routine identities and counts bound the additions; indexes must belong to the two named tables. All pre-existing row values, routine privileges, relation metadata and policies remain in the expected snapshot verbatim, and the second migration run compares against the same expected snapshot. No other before/after difference is allowed. This file serialises with SERIOUS-B5; its path was added only to this branch's lane under ruling 104.
+- Corrected remaining own-migration 0187 references in the contract, migration note, regression-test title, upgrade-test comment and lane note. The only remaining 0187 references in this piece identify the legitimate SERIOUS-B5 predecessor. Migration 0188 SQL is byte-identical to HEAD: SHA-256 `8088658f721d42ad8833fdd320f3db39ab07d013079b3a25125ac54224566215`.
+
+No production code, money rule, claim/fee expected value, historical migration, provider route, credential contract or commercial authority changed. Existing r2–r5 payer/source corrections remain. No new migration, backfill, alert or operational deployment change. Existing synthetic-only, earlier-payment, browser-journey, commercial-policy and release gates remain held.
+
+Local validation used installed dependencies, Node `v24.17.0` and the already cached pinned pnpm `10.28.1`; no install/download was performed. The default pnpm shim did not complete its version check and was interrupted; subsequent commands used `PATH=/private/tmp/jg-pf1b-bin:$PATH`, whose pnpm points to `/Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs`.
+
+| Command actually run | Result |
+|---|---|
+| `pnpm --filter @jobguard/core --filter @jobguard/db typecheck` | PASS, both packages |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS, boundary checks and 7 workspace tasks (2 cached) |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS |
+| `pnpm build` | PASS, 7 workspace tasks (2 cached); existing webpack dynamic-dependency and sandbox cache-write warnings |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS on rerun: 112 files / 2804 tests. Initial concurrent invocation exited without a completion summary; not counted as a pass. |
+| `node --test tools/*.test.mjs` | PASS, 100 tests |
+| `pnpm --filter @jobguard/api exec vitest run src/practice-supplier-credit.application.test.ts src/practice-supplier-credit.http.test.ts --maxWorkers=2` | PASS, 2 files / 7 tests; no browser |
+| `pnpm openapi:check` | BLOCKED by tsx CLI IPC `listen EPERM` before checking the schema |
+| `pnpm --filter @jobguard/api exec node --import tsx src/generate-openapi.ts --check` | PASS, same schema-check script via the loader without CLI IPC |
+| `pnpm --filter @jobguard/db exec vitest run --exclude 'dist/**' --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=2` | 339/340 passed on both completed runs; C-OPS-1 source-graph test exceeded its unchanged 5000ms timeout (about 6.5s). An earlier broad `vitest run test` invocation also included generated dist copies and was interrupted, not counted as a pass. |
+| `pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1` | PASS, 56 tests at the unchanged timeout |
+| `pnpm --filter @jobguard/db exec vitest run --exclude 'dist/**' --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=1` | PASS, 39 files / 340 tests; assertions and timeouts unchanged |
+| `git diff --check` | PASS |
+| TypeScript `transpileModule` syntax check of the four changed integration files | PASS; syntax only, not database execution |
+| Local JSON/migration comparison against HEAD | PASS: only five new LP-0 records; every prior JSON value unchanged; 0188 SQL unchanged |
+
+PostgreSQL integration/upgrade/migration/catalogue suites: **NOT RUN** (dispatcher/GitHub CI required). Browser/e2e/Playwright: **NOT RUN** per instruction. `free-port.test.ts`: **NOT RUN**, because it binds loopback sockets. Full `pnpm test` / `pnpm test:db` would start PostgreSQL and were therefore **NOT RUN**. No live-model evaluation applies to these test/fixture/catalogue corrections. No clean install was attempted because dependencies were supplied and downloads prohibited.
+
+Logs are `/private/tmp/jg-pf1b-r6-*.log`. Intended commit message: `/private/tmp/jg-msg-practice-facts-1b.txt`. Exact-commit CI, a recorded independent verdict and separate technical acceptance remain dispatcher work; this builder does not accept its own change.

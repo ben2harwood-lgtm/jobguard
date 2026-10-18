@@ -53,7 +53,7 @@ async function fixture(insurer: boolean) {
   return { auth, jobId, c, feed, repo: new RecoveryEligibilityV3Repository(pool, "synthetic_demo") };
 }
 
-it("0187 preserves 0142 insurer exclusion, 0186 unpaid interest, and F19's released reason", async () => {
+it("0188 preserves 0142 insurer exclusion, 0186 unpaid interest, and F19's released reason", async () => {
   expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0188_practice_supplier_credit.sql'")).rows).toHaveLength(1);
   for (const [insurer, name] of [[true, "F19"], [false, "F18"], [false, "F19"]] as const) {
     const f = await fixture(insurer);

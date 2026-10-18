@@ -57,10 +57,11 @@ async function liveJob(admin:Pool,runtime:Pool,live=true) {
   return {jobId,session,auth,scoped};
 }
 type Fixture=Awaited<ReturnType<typeof setup>>;
-async function setup(options:{documents?:boolean;claim?:number;type?:'merchant_overcharge'|'duplicate_supplier_payment';open?:boolean}={}) {
+async function setup(options:{documents?:boolean;claim?:number;type?:'merchant_overcharge'|'duplicate_supplier_payment';open?:boolean;settleBeforeOpen?:boolean}={}) {
   const f=await liveJob(admin,runtime),feed=new PracticeFeedRepository(runtime,'synthetic_demo'),cases=new RecoveryCaseRepository(f.scoped);
   await feed.command(context,actor,f.auth.digest,f.jobId,{version:'practice-feed-command.v1',commandId:randomUUID(),expectedRevision:0,action:'connect'});
   if(options.documents!==false)await documents(f);
+  if(options.settleBeforeOpen)await feed.factsCommand(context,actor,f.auth.digest,f.jobId,{version:'practice-facts-command.v1',commandId:randomUUID(),action:'advance',movement:'supplier-payment-600',step:'settled',expectedRevision:1});
   const c=options.open===false?null:await cases.command(context,f.jobId,{version:'recovery-case-command.v1',commandId:randomUUID(),action:'open',caseType:options.type??'merchant_overcharge',claimedNetPence:options.claim??30000,counterparty:'Fictional supplier',book:'supplier_cost',sourceType:'supplier_documents',sourceRefs:['Supplier agreement AG-320','Supplier invoice INV-320'],expectedRevision:0},actor);
   return {...f,feed,cases,c,repo:new RecoveryEligibilityV3Repository(f.scoped,'synthetic_demo')};
 }
@@ -130,9 +131,10 @@ it('PF1B-A07 A07_ReconnectReadsSavedHistory',async()=>{
 });
 it('PF1B-A09 A09_RejectCustomerCashAndSupplierRefund',async()=>{
   for(const movement of ['receipt-3000','supplier-refund-540']) {const f=await setup();await f.feed.command(context,actor,f.auth.digest,f.jobId,{version:'practice-feed-command.v1',commandId:randomUUID(),expectedRevision:1,action:'advance',movement,step:'settled'});await refusal(f);}
-  const f=await setup();await advance(f,'supplier-payment-600','alternate_representation');await refusal(f);
+  // The feed requires an original settlement. Its pre-case time cannot be replaced by a later representation.
+  const alternate=await setup({settleBeforeOpen:true});await advance(alternate,'supplier-payment-600','alternate_representation');await refusal(alternate);
   // Explicit administrative source probe: bypass feed triggers to simulate invalid imported data.
-  await advance(f);await admin.query("UPDATE app.practice_feed_event SET source_hash=$3 WHERE tenant_id=$1 AND job_id=$2 AND event_kind='settled'",[T,f.jobId,'0'.repeat(64)]);await refusal(f);
+  const f=await setup();await advance(f);await admin.query("UPDATE app.practice_feed_event SET source_hash=$3 WHERE tenant_id=$1 AND job_id=$2 AND event_kind='settled'",[T,f.jobId,'0'.repeat(64)]);await refusal(f);
   await refusal(f); // invalid source is never accepted by another review
 });
 it('PF1B-A10 A10_RejectIncompleteSupplierProof',async()=>{
