@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { nonnegativeMoneyPenceSchema } from "./commands.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 const uuid=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/u),ref=z.string().min(1).max(200);
-const base=z.object({journalId:uuid.optional(),bookId:uuid,amountPence:z.number().int().positive(),currency:z.literal("GBP"),sourceEventId:ref,provenanceRef:ref,artifactHash:hash,authorizationId:uuid,actorRef:ref});
+const base=z.object({journalId:uuid.optional(),bookId:uuid,amountPence:nonnegativeMoneyPenceSchema.refine(value=>value>0,"Amount must be positive"),currency:z.literal("GBP"),sourceEventId:ref,provenanceRef:ref,artifactHash:hash,authorizationId:uuid,actorRef:ref});
 export const planObligationV1=base.extend({schemaVersion:z.literal(1),receivableAccountId:uuid,deferredIncomeAccountId:uuid,provenanceKind:z.literal("synthetic_authorized_plan")}).strict();
 export const planSettlementV1=base.extend({schemaVersion:z.literal(1),obligationJournalId:uuid,clearingAccountId:uuid,receivableAccountId:uuid}).strict();
 export const journalReversalV1=z.object({schemaVersion:z.literal(1),journalId:uuid.optional(),bookId:uuid,originalJournalId:uuid,sourceEventId:ref,provenanceRef:ref,artifactHash:hash,authorizationId:uuid,actorRef:ref}).strict();
