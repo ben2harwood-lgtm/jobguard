@@ -85,3 +85,41 @@ Reconciliation uses its own command identity while retaining the provider result
 Final audit source inspection binds both canonical request and committed-result hashes in the same existing audit format; statement artifact hashes are therefore covered by the chained result hash. SQL remains NOT RUN. The post-reconciliation DB rebuild passed (exit 0).
 
 Final handoff: the last `pnpm build --force` completed with exit 0, seven successful packages and zero cached tasks (9m05s). Final working-tree diff whitespace check passed. No PostgreSQL/browser execution or technical acceptance is implied. The dispatcher commit-message file is written and the repository remains uncommitted/unpushed.
+
+## r1 — continuation (18 October 2026)
+
+Builder: Codex (dispatcher requested gpt-6-astra). Resumed dispatcher-committed partial repair at `4c07c506f3046a5146f9921f853b0deeeae296b6`, following the verdict on `da7979fd`. Read the receipt, current diff against origin/main and merge-base diff; the direct comparison includes unrelated changes that have since landed on main. None of those files or merged tests/expectations were changed. Existing installed dependencies and cached pnpm 10.28.1 wrapper were reused; Node v24.17.0. No downloads, Git writes, commit or push.
+
+Preserved the partial repair's correct implementation: `mon2_authorized` uses the non-keyword `authorization_id` parameter; downgrade boundary is calculated before approval, and expiry is London midnight ending the first Solo period; accept/upgrade/simulation still use session expiry. All active-owner, contractor-revocation, authorization and revision checks remain. `SubscriptionApplication` already routes through the existing principal bridge and passes its whole context. SQL syntax repair is source-inspected only, pending PostgreSQL CI.
+
+Added three PostgreSQL regression cases: expired accepting session and revoked accepting session each permit due application by a separately authenticated current admin with fitting capacity; revoked approving-owner membership instead records `refused_authority`. Each asserts the original authorization expiry equals the scheduled first Solo period's end and outlasts the session. As in the existing synthetic tests, privileged fixture setup brings the scheduled date into the past; it does not alter authorization expiry or expose a runtime clock override. These cases are written and statically checked, **NOT PostgreSQL-executed**.
+
+Fixed the partial API test fixture's short session/CSRF strings to satisfy the existing principal-bridge schemas. Initial execution caught two fixture failures; final API execution passes with the existing sole-constructor test unchanged. Updated only the directly affected expiry descriptions in the subscription contract and migration note. This supersedes the original receipt's statement that delayed downgrades expire with the login session. FIX-LATER L1–L7 remain untouched.
+
+### Actual continuation checks
+
+All pnpm commands below used `PATH=/private/tmp/mon2-bin:$PATH`; logs are `/private/tmp/mon2-r1-*.log`.
+
+| Command | Actual result |
+|---|---|
+| `pnpm --filter @jobguard/core --filter @jobguard/db --filter @jobguard/api typecheck` | Exit 0, all three packages. |
+| `LANE_BASE_REF=origin/main pnpm lint` | Exit 1 after core-purity pass: migration 0190 must be above main's 0192. |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | Exit 1, same migration-order refusal. |
+| `pnpm exec turbo run lint --force` | Exit 0, seven packages, zero cache hits. |
+| `node tools/money-arithmetic-lint.mjs`; `node tools/commercial-boundary-lint.mjs` | Both exit 0. |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | Exit 0, 114 files / 2,815 tests. |
+| `pnpm --filter @jobguard/api exec vitest run src/subscription.application.test.ts src/auth/context-boundary.test.ts --maxWorkers=2` | Final exit 0, 149 tests. Initial run had two invalid-fixture failures, repaired above. |
+| `pnpm --filter @jobguard/db exec vitest run --dir src --maxWorkers=2` | Exit 1: 140 passed, one unchanged audit source-graph test exceeded its 5-second timeout. |
+| `pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1` | Exit 1, same timeout; 55 passed. |
+| Same audit test command with `--testTimeout=15000` | Exit 0, all 56 tests. Command-only diagnostic allowance; no test or configuration edit. Standard timeout result remains recorded above. |
+| `pnpm openapi:check` | Exit 1, sandbox `listen EPERM` for tsx IPC pipe. |
+| From `apps/api`: `node --import tsx src/generate-openapi.ts --check` | Exit 0, same source generator without CLI IPC socket. |
+| TypeScript program/static diagnostics for `subscription-persistence.integration.test.ts`, workspace rootDir | Exit 0, zero diagnostics in the regression file; no PostgreSQL execution. |
+
+An initial DB unit command used positional `src` instead of `--dir src`; Vitest also selected `test/audit-dbsrc-03.integration.test.ts` by substring. It reported skipped assertions during fixture setup and was interrupted (130) immediately on discovery. No running PostgreSQL or successful database assertion is claimed; corrected unit-only discovery is recorded above. Root `pnpm test`, PostgreSQL/migration suites and browsers were not intentionally run. All PostgreSQL behavioral/syntax verification remains **NOT RUN**, for dispatcher CI.
+
+**STOP — migration numbering only:** origin/main now contains migration 0192; lane checks require renumbering this piece above it. This narrow r1 order authorizes B1, SQL syntax and context-boundary repairs, not migration renumbering/reconciliation with new main. No renumber, lane exception or merged expectation edit was performed. Dispatcher follow-up is required for a green lane/checks job. The standard audit timeout is also retained as a local check limitation; its assertions pass under the explicitly recorded diagnostic timeout.
+
+Technical acceptance remains HOLD pending PostgreSQL/migration CI, green `checks`, an independent verdict bound to the final commit and separate acceptance. The builder does not self-accept. Intended commit message is `/private/tmp/jg-msg-mon-2a-p.txt`.
+
+Final continuation build: `pnpm build --force` exited 0, seven successful packages, zero cache hits (2m20.551s). Existing Next workspace-root/CSS warnings and Turbo cache-write warnings did not fail the build. Final `git diff --check` passed. Working-tree changes are limited to the new PostgreSQL regression cases, this piece's API fixture, two expiry descriptions and this appended receipt. No new migration, backfill, operational alert or production capability was added in the continuation.

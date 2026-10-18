@@ -4,8 +4,8 @@ const command = { version: "subscription-command.v1", kind: "onboarding", usualP
 const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 function fixture(environment = "synthetic_demo") {
  const repository = { command: vi.fn().mockResolvedValue({ hypothetical: true }), read: vi.fn().mockResolvedValue({ hypothetical: true }) };
- const credentials = { sessionToken: "session", requestedTenantId: id, csrfToken: "csrf", origin: "https://jobguard.invalid" };
- const provider = { authenticate: vi.fn().mockResolvedValue({ identityUserId: id, sessionId: id, csrfToken: "csrf" }), findMembership: vi.fn().mockResolvedValue({ id, identityUserId: id, tenantId: id, role: "owner", email: "owner@example.invalid" }) };
+ const credentials = { sessionToken: "s".repeat(32), requestedTenantId: id, csrfToken: "c".repeat(24), origin: "https://jobguard.invalid" };
+ const provider = { authenticate: vi.fn().mockResolvedValue({ identityUserId: id, sessionId: id, csrfToken: "c".repeat(24) }), findMembership: vi.fn().mockResolvedValue({ id, identityUserId: id, tenantId: id, role: "owner", email: "owner@example.invalid" }) };
  const authority = { provider, allowedOrigin: credentials.origin, environment: () => environment, resolve: vi.fn().mockResolvedValue({ credentials, digest: "a".repeat(64) }) };
  return { repository, authority, app: new SubscriptionApplication(authority as never, repository as never) };
 }

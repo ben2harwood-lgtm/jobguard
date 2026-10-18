@@ -1,5 +1,6 @@
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closeWorkFixture, createWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
+import { closeWorkFixture, createWorkFixture, seedWorkJob, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { calendarInput, command, historicalAgreement, issue, meterCompany, meterInput, preparedPeriod, readSubscription, rows, storeMeter, terms } from "./subscription-persistence-fixtures.js";
 import { refreshMeter } from "./meter-persistence-fixtures.js";
 
@@ -52,6 +53,39 @@ describe("MON-2A-P persisted subscription", () => {
   await workTenant(f.admin, a.tenantId, async db => { await db.query("SET LOCAL session_replication_role='replica'"); await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1", [a.tenantId]); });
   const refusal = await command(f, a, { version: "subscription-command.v1", kind: "apply_change", changeId: changed.changeId, sourceId, expectedRevision: 1 });
   expect(refusal.outcome).toBe("refused_capacity"); expect((await readSubscription(f, a)).agreements).toHaveLength(1);
+ });
+ it.each(["expired session", "revoked session", "revoked membership"] as const)("due downgrade after %s rechecks the approving owner independently of the executing admin", async (invalidated) => {
+  const a = await meterCompany(f); await historicalAgreement(f, a);
+  const changed = await command(f, a, { ...terms(a, "Solo", 1), kind: "change" });
+  // Assert the actual scheduled authorization horizon before bringing the boundary forward.
+  const horizon = (await f.admin.query(`SELECT au.expires_at =
+   (app.mon2_boundary((date_trunc('month',c.effective_date)+interval '1 month')::date,1)::timestamp AT TIME ZONE 'Europe/London') boundary_expiry,
+   au.expires_at > s.expires_at survives_session
+   FROM app.subscription_plan_change c JOIN app.action_authorization au ON (au.tenant_id,au.id)=(c.tenant_id,c.authorization_id)
+   JOIN identity.session s ON s.id=$2 WHERE c.tenant_id=$1 AND c.id=$3`, [a.tenantId, a.sessionId, changed.changeId])).rows[0];
+  expect(horizon).toEqual({ boundary_expiry: true, survives_session: true });
+  const sourceId = await storeMeter(f, a, calendarInput(a.tenantId, 5, 9));
+  // Separate current admin: revoking the approving owner must reach the durable
+  // authorization check, rather than fail authentication of the executor.
+  const executor = await seedWorkJob(f, a.tenantId), sessionId = randomUUID();
+  const digest = createHash("sha256").update(randomUUID()).digest("hex");
+  await workTenant(f.admin, a.tenantId, async db => {
+   const user = (await db.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2 RETURNING identity_user_id", [a.tenantId, executor.actorId])).rows[0].identity_user_id;
+   await db.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${randomUUID()}@meter.invalid`, user]);
+   await db.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, a.tenantId, executor.actorId]);
+   await db.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')", [sessionId, user, digest, randomUUID()]);
+   if (invalidated === "expired session") await db.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [a.sessionId]);
+   else if (invalidated === "revoked session") await db.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [a.sessionId]);
+   else await db.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.actorId]);
+   // Admin-only historical fixture; no runtime clock override or authorization edit.
+   await db.query("SET LOCAL session_replication_role='replica'");
+   await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1 AND id=$2", [a.tenantId, changed.changeId]);
+  });
+  const fresh = { ...executor, digest, sessionId };
+  const revoked = invalidated === "revoked membership";
+  expect(await command(f, fresh, { version: "subscription-command.v1", kind: "apply_change", changeId: changed.changeId, sourceId, expectedRevision: 1 }))
+   .toMatchObject({ outcome: revoked ? "refused_authority" : "applied", revision: revoked ? 1 : 2 });
+  expect((await readSubscription(f, fresh)).agreements).toHaveLength(revoked ? 1 : 2);
  });
  it("source replay defeats corrupted cached totals", async () => {
   const a = await meterCompany(f); await historicalAgreement(f, a); const input = meterInput(a.tenantId);
