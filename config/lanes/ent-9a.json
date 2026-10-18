@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-9a": {
+      "branches": ["codex/sandbox/ent-9a"],
+      "receipt": "docs/verdicts/ENT-9A/BUILDER_RECEIPT.md",
+      "note": "ENT-9A baseline half only, synthetic pure/application preparation. No web workflow (C1); UI parked. No persistence, route, new access, migration, dashboard or advisory implementation. ENT-7 build-ahead; one additive core export.",
+      "allow": [
+        "packages/core/src/enterprise-baseline.ts",
+        "packages/core/src/enterprise-baseline.test.ts",
+        "packages/core/src/index.ts",
+        "apps/api/src/contractor/enterprise-baseline.application.ts",
+        "apps/api/src/contractor/enterprise-baseline.application.test.ts",
+        "docs/contracts/enterprise-baseline-v1.md",
+        "docs/fixtures/enterprise-baseline-synthetic.v1.json",
+        "docs/fixtures/enterprise-baseline-synthetic.v1.csv",
+        "docs/ledger/ENT-9A.md",
+        "docs/verdicts/ENT-9A/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

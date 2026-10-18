@@ -25,8 +25,8 @@ function canonicalRecord(value: unknown): string {
  * Missing referenced rows fail closed; optional absent categories are explicit.
  */
 export async function loadEvidencePackSources(db: TenantTransaction, tenantId: string, caseId: string): Promise<EvidencePackSources> {
-  const found = await db.$client.query<{ job_id: string; case_type: string; source_refs: string[] }>(
-    "SELECT job_id,case_type,source_refs FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [tenantId, caseId],
+  const found = await db.$client.query<{ job_id: string; case_type: string; book: "supplier_cost" | "builder_customer"; source_type: "supplier_documents" | "customer_invoice"; source_refs: string[] }>(
+    "SELECT job_id,case_type,book,source_type,source_refs FROM app.recovery_case WHERE tenant_id=$1 AND id=$2", [tenantId, caseId],
   );
   const recoveryCase = found.rows[0];
   if (!recoveryCase) throw new EvidencePackSourceError("EVIDENCE_PACK_CASE_NOT_FOUND");
@@ -83,7 +83,7 @@ export async function loadEvidencePackSources(db: TenantTransaction, tenantId: s
   for (const row of events.rows) add("recovery_case_event", row, "recovery_case", "Recovery case event record");
 
   const refs = recoveryCase.source_refs, mappedRefs = new Set<string>();
-  if (recoveryCase.case_type === "merchant_overcharge") {
+  if (recoveryCase.source_type === "supplier_documents" && recoveryCase.book === "supplier_cost") {
     const agreements = await db.$client.query<SourceRow>(`
       SELECT r.id,r.version,to_jsonb(r) record FROM app.material_rate_revision r
       WHERE r.tenant_id=$1 AND r.id::text=ANY($3::text[])
