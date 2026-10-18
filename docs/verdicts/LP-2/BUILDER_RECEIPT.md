@@ -652,3 +652,38 @@ pnpm --filter @jobguard/db exec tsc --noEmit --module NodeNext --moduleResolutio
 The original receipt prefix is retained exactly, SHA-256 `942e8d1d5601cb30cb929e2a462c6ef5f26a566f718243fa63cff82d53feeabf`. No migration, backwards-compatibility change to application code, new runtime permission or operational alert in this round. Existing LP-0/coordinator delta and rollout holds persist. Exact-commit independent Opus/Sol verdicts, their confirmation that only named setup changed, and separate actor acceptance remain absent; builder does not accept its own work. Park for Ben's button; no merge authority.
 
 Intended conventional commit message written to both requested paths: `/private/tmp/jg-msg-LP-2-r3.txt` and `/private/tmp/jg-msg-lp-2.txt`. Dispatcher owns any subsequent commit, push and checker handoff.
+
+
+## r4 (ruling 103)
+
+18 October 2026. **STOP — ruling scope incomplete; BUILD-DON'T-MERGE, decision 74 remains.** Round-start HEAD `2ee3f87c8694e8f8543d869eaf84f0a3ec4474b4`, branch `codex/sandbox/lp-2`; worktree was clean. Read AGENTS.md, BUILD_PLAN §11.8, the LP-2 contract, proposal items 5/6, and both independent REPAIR verdicts supplied inline by the dispatcher. The external verdict files were not accessed. CI run 39018190840 evidence is from those supplied verdicts, not a fresh CI query.
+
+### Required STOP: merged scripted-SQL fixture omitted from ruling 103
+
+`packages/db/test/audit-api-capture.test.ts:55` is unchanged from origin/main and is absent from LP-2's own-file list. Independent second-checker finding B2 requires this fixture to recognise the replacement routine called by `packages/db/src/review-repository.ts:79`. Ruling 103 authorises the inventory/capability delta and Q3 owner/Q4 trusted-database fixtures; this scripted unit mock is neither conversion and is not named. The dispatch explicitly forbids other merged-test changes and requires STOP with file:line and before/after. No grant restoration or product-code workaround was attempted.
+
+Before (actual line 55):
+
+```ts
+    if (sql.includes("app.transition_job")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
+```
+
+Required after (PROPOSED ONLY, NOT APPLIED; needs coordinator scope amendment):
+
+```ts
+    if (sql.includes("app.start_quote_from_review")) { this.status = "quoting"; return rows([{ revision: 1 }]); }
+```
+
+Every assertion would remain byte-identical. The coordinator amendment would also need to allow this test path in `config/lanes/lp-2.json`. Do not restore `transition_job` access. This is the same missing authorisation identified explicitly in B2, not a newly invented approval requirement.
+
+### Execution evidence and disposition
+
+- `git rev-parse HEAD`, `git status --short`, and read-only source/diff inspection: expected head, clean initial tree; merged fixture matches origin/main.
+- Initial default-launcher `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-api-capture.test.ts`: emitted a pnpm configuration warning, did not reach Vitest, interrupted with exit 130. No install/download command issued.
+- `PATH="/private/tmp/jg-lp1-bin:$PATH" pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/audit-api-capture.test.ts`: **FAIL**, exit 1, **8 failed / 6 passed**. All eight failures report `Unexpected SQL: SELECT revision FROM app.start_quote_from_review($1,$2,$3,$4,$5,$6,$7,$8)` at fixture line 61, called from repository line 79. This is a scripted unit reproduction, not PostgreSQL evidence.
+- DB/API typecheck, root lint with `LANE_BASE_REF=origin/main`, lint:lanes, remaining unit suites, build and OpenAPI check: **NOT RUN** after the explicit STOP/build-nothing-else condition. No prior-round result is claimed as this round's verification.
+- PostgreSQL, migrations, database-backed API isolation, browser/e2e/Playwright: **NOT RUN**, as ordered. No server or browser started.
+
+Only this receipt is changed in the repository. Its path is already allowed in `config/lanes/lp-2.json`, so no lane change is needed; the shared lane register is untouched. Ruling 103 implementation changes remain unapplied because the dispatch requires stopping before building anything else. No tests, assertions, pins, ACL inventory, migrations, grants or application code changed. No commit, push, merge, deployment, independent acceptance or green-CI claim. Intended receipt-only conventional commit message is at `/private/tmp/jg-msg-lp-2.txt` for the dispatcher.
+
+Pre-r4 receipt SHA-256: `e085e52dd36294bc6bfd142d751002092f36c5d3a0f8cc1ce7ca318d5122240b`. The preceding receipt bytes are preserved exactly.
