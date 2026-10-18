@@ -8,7 +8,6 @@
       "receipt": "docs/verdicts/CH-4-C/BUILDER_RECEIPT.md",
       "note": "RED Sub-order A only; migration 0191; capacity B and timer convention remain gated. No UI or providers.",
       "allow": [
-        "config/lanes/ch-4-c.json",
         "docs/ledger/CH-4-C.md",
         "docs/contracts/job-work-state-v1.md",
         "docs/contracts/job-work-timing-v1.md",
