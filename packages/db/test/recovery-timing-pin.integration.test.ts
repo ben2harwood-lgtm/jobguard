@@ -116,6 +116,7 @@ async function rawAdvance(f: Fixture, chosen: string) {
 async function assertReview(f: Fixture, caseId: string, name: "F18" | "F19", before: boolean) {
   const current = (await f.db.query("SELECT revision FROM app.recovery_case_current WHERE tenant_id=$1 AND id=$2", [T, caseId])).rows[0]!;
   const command = { version: "recovery-eligibility-command.v3", action: "review", commandId: randomUUID(), caseId, expectedCaseRevision: current.revision, expectedReviewRevision: 0, fixture: name };
+  if (name === "F18" && !before) { await advanceInterestFact(f, "receipt-interest-120"); await advanceInterestFact(f, "receipt-compensation-70"); }
   const saved = await f.repo.review(ctx, f.jobId, command, actor, f.auth.digest);
   const lines = recoveryFixtureDefinitionV3(name).lines;
   const full = lines.filter(line => line.kind === "principal" || line.kind === "statutory_interest" && line.debtorType === "business").reduce((sum, line) => sum + line.netPence, 0);
@@ -125,6 +126,13 @@ async function assertReview(f: Fixture, caseId: string, name: "F18" | "F19", bef
   expect((await f.db.query("SELECT result FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2", [T, saved.id])).rows).toEqual([{ result: saved.result }]);
   expect(await f.repo.review(ctx, f.jobId, command, actor, f.auth.digest)).toEqual(saved);
   return saved;
+}
+
+// Ruling 66: the same separate-component setup path used by ruling 55(a).
+async function advanceInterestFact(f: Fixture, movement: "receipt-interest-120" | "receipt-compensation-70", step = "settled") {
+  const feed = new PracticeFeedRepository(f.business, "synthetic_demo");
+  const current = await feed.factsView(ctx, actor, f.auth.digest, f.jobId);
+  return feed.factsCommand(ctx, actor, f.auth.digest, f.jobId, { version: "practice-facts-command.v1", commandId: randomUUID(), expectedRevision: current.revision, action: "advance", movement, step });
 }
 
 it("[AC1] ordinary insert triggers and invoker function have the exact catalog shape", async () => {

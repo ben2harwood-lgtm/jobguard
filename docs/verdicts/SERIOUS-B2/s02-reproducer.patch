@@ -1,0 +1,26 @@
+diff --git a/packages/db/src/serious-b2-sor.test.ts b/packages/db/src/serious-b2-sor.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/db/src/serious-b2-sor.test.ts
+@@ -0,0 +1,21 @@
++import { randomUUID } from "node:crypto";
++import type { Pool } from "pg";
++import { expect, it, vi } from "vitest";
++import { SorRepository } from "./sor-repository.js";
++import type { AuthenticatedMembership } from "./tenant-context.js";
++
++it("S02: client-specific contract read cannot unlock general SoR listing (scripted SQL responses)", async () => {
++  const principal = { tenantId: randomUUID(), membershipId: randomUUID(), identityUserId: randomUUID() } as AuthenticatedMembership;
++  const query = vi.fn(async (sql: string) => {
++    if (sql.includes("commercial_track_assignment")) return { rows: [{ track: "contractor", active: true, allowed: true }] };
++    // Model the existing database permission function: tenant read is false, client A read is true.
++    if (sql.includes("app.contractor_allowed")) return { rows: [{ allowed: sql.includes("OR EXISTS") }] };
++    if (sql.includes("FROM app.sor_version")) return { rows: ["A", "B"].map(reference => ({
++      id: randomUUID(), schedule_id: randomUUID(), schedule_reference: `Fictional client ${reference}`,
++      reference, effective_from: "2026-01-01", item_count: 1, created_at: new Date("2026-10-16T00:00:00Z"),
++    })) };
++    return { rows: [] };
++  });
++  const pool = { connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
++  await expect(new SorRepository(pool).list(principal)).rejects.toMatchObject({ code: "NOT_FOUND" });
++});
