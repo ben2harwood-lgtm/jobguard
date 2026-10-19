@@ -30,6 +30,17 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/work-state#link": "pre_live_allowed",
   "nest:/jobs/:id/work-state#link": "pre_live_allowed",
   "command:WorkState.link": "pre_live_allowed",
+  // ENT-8A-P: contractor mutations enforce their own authority-first live-job guard.
+  "command:ImportMaterialsIssue": "pre_live_allowed",
+  "command:RegisterCompletionObservation": "pre_live_allowed",
+  "command:EvaluateLivePrompts": "pre_live_allowed",
+  "command:ConfirmPrompt": "pre_live_allowed",
+  "command:DismissPrompt": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/possible-extras/materials": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/possible-extras/observations": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/possible-extras/evaluate": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/possible-extras/:promptId/confirm": "pre_live_allowed",
+  "nest:/contractor/jobs/:id/possible-extras/:promptId/dismiss": "pre_live_allowed",
   // contractor work-order jobs have no pre-live phase (they become live in the same transaction as the import), and this route carries its own live-job guard (precheck and seam, `SiteExtraRepository`).
   "/api/contractor/jobs/[id]/site-extras": "pre_live_allowed",
   "nest:/contractor/jobs/:id/site-extras": "pre_live_allowed",
