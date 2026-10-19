@@ -46,7 +46,7 @@ describe('OIDC actual adapter/local issuer and PostgreSQL authority',()=>{
  it('SSO-required retains bound session access while refusing ordinary email-code access',async()=>{
   const f=await oidcFixture(h);f.issuer.claims.email=f.email;
   const bound=await f.callback(await f.start(true));
-  await h.required.command({version:'sso-required-command.v1',requested_tenant_id:f.principal.tenantId,required:true,expectedRevision:0,reason:'Fictional owner enables OIDC requirement'}, {...bound,origin:f.ordinary.origin});
+  await h.required.command({version:'sso-required-command.v1',requested_tenant_id:f.principal.tenantId,required:true,expectedRevision:0,reason:'Fictional owner enables OIDC requirement'}, {sessionToken:bound.sessionToken,csrfToken:bound.csrfToken,origin:f.ordinary.origin});
   expect((await h.provider.memberships((await h.provider.authenticate(bound.sessionToken))!)).some(m=>m.tenantId===f.principal.tenantId)).toBe(true);
   expect((await h.provider.memberships((await h.provider.authenticate(f.ordinary.sessionToken))!)).some(m=>m.tenantId===f.principal.tenantId)).toBe(false);
  });

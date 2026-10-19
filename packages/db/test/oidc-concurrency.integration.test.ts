@@ -9,7 +9,8 @@ afterAll(async()=>{if(h)await h.close();});
 describe('durable OIDC concurrency and unknown outcomes',()=>{
  it('separate pool clients race one callback: one exchange/session and losing refusal audit',async()=>{
   const f=await oidcFixture(h),s=await f.start();
-  const otherPool=new Pool({...h.identity.options,max:1});
+  // pg-pool keeps `password` non-enumerable, so a plain spread of `options` would drop it and the second client could not authenticate.
+  const otherPool=new Pool({...h.identity.options,password:h.identity.options.password,max:1});
   try {
   const other=new OidcApplication(h.provider,new OidcRepository(otherPool),origin,'synthetic_demo',f.issuer);
   const result=await Promise.allSettled([f.callback(s),f.callback(s,other)]);
