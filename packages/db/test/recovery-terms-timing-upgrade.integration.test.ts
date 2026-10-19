@@ -50,7 +50,7 @@ type Fixture=Awaited<ReturnType<typeof fixture>>;
 const approve=(f:Fixture)=>new RecoveryCaseTermsRepository(practiceMaterialPool(runtime,f.auth.digest)).approve(ctx,f.jobId,termsCommand(f.c.id),actor);
 const save=(f:Fixture,command=review(f.c,"F18"))=>f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
 
-const position=MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0196_recovery_eligibility_terms_timing.sql");
+const position=MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0198_recovery_eligibility_terms_timing.sql");
 beforeAll(async()=>{
  await start();expect(position).toBeGreaterThan(0);
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
