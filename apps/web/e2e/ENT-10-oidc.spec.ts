@@ -1,12 +1,18 @@
 import { join } from "node:path";
 import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { Pool } from "pg";
 import { appendAuditBatch } from "../../../packages/db/src/audit";
 import { withTenant } from "../../../packages/db/src/tenant-context";
 import { testTenantContext } from "../../../packages/db/test/tenant-context-test-utils";
+import { TestOidcIssuer } from "../../api/src/auth/sso/test-oidc-issuer";
 // NOT RUN locally. Both actual transports and persisted sessions use the CI synthetic PostgreSQL database.
+// Typed imports below come from source or the package's exported entries, so typecheck needs no build output. The one exception is the
+// decorated Nest controller: apps/web has no experimentalDecorators, so importing its source here fails typecheck (TS1206). It is loaded
+// natively from the built package after `pnpm build`, the way global-setup.ts loads @jobguard/db.
+const nativeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<any>;
 async function owner(context: BrowserContext) {
   const tenantId = randomUUID(), userId = randomUUID(), membershipId = randomUUID(), accountId = randomUUID(), assignmentId = randomUUID();
   const email = `admin-${randomUUID()}@fictional.invalid`, token = randomBytes(32).toString("base64url"), csrfToken = randomBytes(24).toString("base64url");
@@ -31,7 +37,9 @@ async function owner(context: BrowserContext) {
   await context.addCookies([{ name: "jobguard_session", value: token, url: "http://127.0.0.1:3000", httpOnly: true, secure: true, sameSite: "Strict" }]);
   return { tenantId, csrfToken };
 }
-for(const transport of ['Next','Nest'] as const) test(`${transport} persisted local OIDC sign-in, replay refusal and next-request revocation`,async({page})=>{
+// Nest: the test injects the fictional issuer, so the whole persisted sign-in can run. Next: the deployed server is another process in production
+// composition, which configures no issuer and can be given none, so the same anonymous visitor must be refused (access-control repair B1).
+for(const transport of ['Next','Nest'] as const) test(transport==='Nest'?'Nest persisted local OIDC sign-in with a test-injected issuer, replay refusal and next-request revocation':'Next refuses OIDC sign-in without a configured issuer, even to a visitor who knows the connection id',async({page})=>{
  const account=await owner(page.context()),id=randomUUID(),origin='http://127.0.0.1:3000';
  let nest:{close:()=>Promise<void>}|undefined;
  let root=origin,path='/api/auth/oidc';
@@ -39,13 +47,15 @@ for(const transport of ['Next','Nest'] as const) test(`${transport} persisted lo
   // Load the actual built controller, without a second application implementation.
   const requireApi=createRequire(join(__dirname,'../../api/package.json'));
   const {NestFactory,APP_FILTER}=requireApi('@nestjs/core');const {Module}=requireApi('@nestjs/common');
-  const {OidcController,OidcParseExceptionFilter,OIDC_APPLICATION}=await import('../../api/dist/auth/sso/oidc.controller.js');
-  const {createIdentityApplication}=await import('../../api/dist/auth/identity.application.js');
-  const {OidcApplication}=await import('../../api/dist/auth/sso/oidc.application.js');
+  const {OidcController,OidcParseExceptionFilter,OIDC_APPLICATION}=await nativeImport(pathToFileURL(join(__dirname,'../../api/dist/auth/sso/oidc.controller.js')).href);
+  const {createIdentityApplication}=await import('@jobguard/api/identity');
+  const {OidcApplication}=await import('@jobguard/api/workspace');
   const {OidcRepository}=await import('@jobguard/db');
   const identity=createIdentityApplication({JOBGUARD_ENV:'synthetic_demo',IDENTITY_DATABASE_URL:'postgresql://jobguard_identity:sbox-e2e-identity@127.0.0.1:55432/jobguard_synthetic_demo',AUTH_CODE_SECRET:'sbox-only-identity-hmac-secret-32-bytes',AUTH_ALLOWED_ORIGIN:origin});
+  // The fictional issuer approves anyone, so only a test may supply it: the test process injects it here and no deployed route can.
+  const issuer=new TestOidcIssuer();issuer.claims={sub:`fictional-${id}`,email:`person@${id}.oidc.invalid`,groups:['site']};
   class FixtureModule {}
-  Module({controllers:[OidcController],providers:[{provide:APP_FILTER,useClass:OidcParseExceptionFilter},{provide:OIDC_APPLICATION,useValue:()=>new OidcApplication(identity.provider,new OidcRepository(identity.provider.repository.pool),origin,'synthetic_demo')}]})(FixtureModule);
+  Module({controllers:[OidcController],providers:[{provide:APP_FILTER,useClass:OidcParseExceptionFilter},{provide:OIDC_APPLICATION,useValue:()=>new OidcApplication(identity.provider,new OidcRepository(identity.provider.repository.pool),origin,'synthetic_demo',issuer)}]})(FixtureModule);
   const app=await NestFactory.create(FixtureModule,{logger:false});await app.listen(0,'127.0.0.1');
   root=await app.getUrl();path='/auth/oidc';nest={close:async()=>{await app.close();await identity.provider.repository.pool.end();}};
  }
@@ -59,6 +69,13 @@ for(const transport of ['Next','Nest'] as const) test(`${transport} persisted lo
   }
   await page.context().clearCookies();
   const malformed=await page.request.post(`${root}${path}/${id}/callback`,{headers:{origin,'content-type':'application/json'},data:'{raw-secret'});expect(malformed.status()).toBe(403);expect(malformed.headers()['cache-control']).toBe('no-store');expect(await malformed.json()).toEqual({version:'oidc-error.v1',code:'OIDC_REFUSED'});
+  if(transport==='Next') {
+   const refused=await post(`${root}${path}/${id}/start`,{version:'oidc-start.v1',action:'signin'});
+   expect(refused.status()).toBe(403);expect(refused.headers()['cache-control']).toBe('no-store');expect(await refused.json()).toEqual({version:'oidc-error.v1',code:'OIDC_REFUSED'});
+   expect((await page.context().cookies()).filter(c=>c.name==='jobguard_oidc_state'||c.name==='jobguard_session')).toEqual([]);
+   expect((await page.request.get(`${origin}/api/auth/session`)).status()).toBeGreaterThanOrEqual(400);
+   return;
+  }
   const started=await post(`${root}${path}/${id}/start`,{version:'oidc-start.v1',action:'signin'});expect(started.ok()).toBe(true);expect(started.headers()['cache-control']).toBe('no-store');
   const payload=await started.json();expect(payload.verifier).toBeUndefined();expect(payload.browser).toBeUndefined();
   const state=(await page.context().cookies()).find(c=>c.name==='jobguard_oidc_state')!;
