@@ -1,4 +1,4 @@
-// Written before 0195/core activation. PostgreSQL NOT RUN in the builder sandbox.
+// Written before 0197 (was 0195)/core activation. PostgreSQL NOT RUN in the builder sandbox.
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -56,7 +56,7 @@ vi.mock("@jobguard/core",async original=>{
    lines:[{kind:"principal",debtorType:"business",netPence:9000,qualifyingPrincipal:{pence:0,currency:"GBP"},reason:null,reasonHeld:true}]};
  }};
 });
-const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),position=names.indexOf("0195_ch7_f21_reason.sql");
+const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),position=names.indexOf("0197_ch7_f21_reason.sql");
 let proof:Awaited<ReturnType<typeof proofBefore>>,historical:Awaited<ReturnType<typeof fixture>>,command:ReturnType<typeof review>,saved:Awaited<ReturnType<RecoveryEligibilityV3Repository["review"]>>;
 const routines=async()=> (await admin.query("SELECT oid,proname,proowner,proacl::text,prosecdef,proconfig,pg_get_functiondef(oid) definition FROM pg_proc WHERE oid IN('app.guard_recovery_eligibility_v3()'::regprocedure,'app.require_recovery_eligibility_v3_effect()'::regprocedure) ORDER BY proname")).rows;
 async function security(){

@@ -10,8 +10,8 @@
       "allow": [
         "packages/core/src/recovery-eligibility-v3.ts",
         "packages/core/src/recovery-eligibility-v3.test.ts",
-        "packages/db/migrations/0195_ch7_f21_reason.sql",
-        "packages/db/migration-notes/0195_ch7_f21_reason.md",
+        "packages/db/migrations/0197_ch7_f21_reason.sql",
+        "packages/db/migration-notes/0197_ch7_f21_reason.md",
         "packages/db/test/recovery-eligibility-v3.integration.test.ts",
         "packages/db/test/recovery-insurer-money.integration.test.ts",
         "packages/db/test/ch7-f21-reason.integration.test.ts",
