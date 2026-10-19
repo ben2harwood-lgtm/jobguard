@@ -90,3 +90,9 @@ export * from "./enterprise-dashboard.js";
 export * from "./enterprise-signal.js";
 export * from "./enterprise-dashboard-billing.js";
 export * from "./enterprise-baseline.js";
+export * from "./sync-download.js";
+
+export * from "./subscription-persistence.js";
+export * from "./subscription-allocation.js";
+
+export * from "./enterprise-live-prompt-persistence.js";

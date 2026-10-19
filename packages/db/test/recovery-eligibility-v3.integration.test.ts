@@ -96,7 +96,7 @@ async function fixture(type="withheld_customer_payment",before=false){
  return {auth,jobId,c,cases,advance,repo:new RecoveryEligibilityV3Repository(practiceMaterialPool(runtime,auth.digest),"synthetic_demo")};
 }
 const review=(c:{id:string;revision:number},fixture:string,expectedReviewRevision=0)=>({version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,expectedReviewRevision,fixture});
-it.each([["F15","merchant_overcharge",0,"Credit note below the £250 minimum"],["F17","duplicate_supplier_payment",45000,null],["F18","withheld_customer_payment",262000,"Fixed statutory compensation is not part of the fee base"],["F19","withheld_customer_payment",250000,"Fixed statutory compensation is not part of the fee base"],["F20","withheld_customer_payment",0,"Paid before you opened this case"],["F21","merchant_overcharge",0,null],["F22","prevention",0,"Prevented spending is not recovered cash"]] as const)("DW1 %s uses M4-7-S facts and persists exact Q/reason",async(name,type,q,reason)=>{
+it.each([["F15","merchant_overcharge",0,"Credit note below the £250 minimum"],["F17","duplicate_supplier_payment",45000,null],["F18","withheld_customer_payment",262000,"Fixed statutory compensation is not part of the fee base"],["F19","withheld_customer_payment",250000,"Fixed statutory compensation is not part of the fee base"],["F20","withheld_customer_payment",0,"Paid before you opened this case"],["F21","merchant_overcharge",0,"Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it."],["F22","prevention",0,"Prevented spending is not recovered cash"]] as const)("DW1 %s uses M4-7-S facts and persists exact Q/reason",async(name,type,q,reason)=>{
  const f=await fixture(type,name==="F20");if(name!=="F20"&&name!=="F15")await f.advance(name==="F17"?"supplier-refund-540":"receipt-3000");
  if(name==="F18"){await advanceInterestFact(f,"receipt-interest-120");await advanceInterestFact(f,"receipt-compensation-70");}
  const command=review(f.c,name),r=await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
@@ -304,7 +304,7 @@ it("settled-before-opening is decided in PostgreSQL on microsecond timestamps: s
 it.each([["F17","duplicate_supplier_payment","supplier-refund-540",45000,"result"],["F21","merchant_overcharge",null,9000,"result"],["F17","duplicate_supplier_payment","supplier-refund-540",45000,"claim line"]] as const)("%s: a runtime-role review whose stored %s omits the reason key cannot commit",async(name,type,movement,net,shape)=>{
  const valid=await fixture(type);if(movement)await valid.advance(movement);
  const good=await valid.repo.review(ctx,valid.jobId,review(valid.c,name),actor,valid.auth.digest);
- expect(good.result.reason).toBeNull();
+ expect(good.result.reason).toBe(name==="F21"?"Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.":null);
  const f=await fixture(type);if(movement)await f.advance(movement);
  const sourceEventId=movement?(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key=$3 AND event_kind='settled'",[T,f.jobId,movement])).rows[0].id as string:null;
  const {reason:_omitted,...withoutReason}=good.result as Record<string,unknown>;
