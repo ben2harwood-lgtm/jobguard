@@ -23,6 +23,38 @@ async function snapshot() {
  const policies = (await f.admin.query("SELECT * FROM pg_policies WHERE schemaname IN('app','identity','control_plane','audit_control') ORDER BY schemaname,tablename,policyname")).rows;
  return { rows, routines, relations, policies };
 }
+// Ruling 110: only 0188's named objects may extend this snapshot. Existing rows
+// (including full routine privileges/configuration and relation/policy metadata)
+// remain compared without dropping fields or accepting arbitrary later additions.
+const billingTables = ["billing_export_batch", "billing_export_line", "billing_status_import", "billing_fact", "billing_line_match", "billing_quarantine", "billing_allocation_run", "billing_application_event", "contractor_receipt_line_allocation", "billing_export_delivery"];
+const billingRoutines = ["app.cb_authority(uuid,uuid,boolean)", "app.cb_begin(uuid,uuid,uuid,text,jsonb)", "app.cb_complete(uuid,uuid,uuid,jsonb)", "app.cb_unresolved(uuid,uuid)", "app.cb_candidates(uuid,uuid,uuid)", "app.cb_line_id(uuid,uuid)", "app.cb_csv_cell(text)", "app.cb_csv(jsonb)", "app.cb_export(uuid,uuid,uuid,jsonb,text,text)", "app.cb_ingest(uuid,uuid,uuid,jsonb)", "app.cb_inputs(uuid,uuid)", "app.cb_add(numeric,numeric,numeric,numeric)", "app.cb_validate(uuid,text,text,jsonb)", "app.cb_derive(uuid,uuid,uuid,text,text,text,jsonb)", "app.cb_delivery(uuid,uuid,uuid,jsonb)", "app.cb_audit(uuid,uuid,text,uuid)", "app.cb_delivery_step(uuid,uuid,uuid,text,jsonb)"];
+async function withoutBillingAdditions(after: Awaited<ReturnType<typeof snapshot>>, before: Awaited<ReturnType<typeof snapshot>>) {
+ const rows = { ...after.rows };
+ for (const table of billingTables) {
+  expect(Object.hasOwn(before.rows, `app.${table}`)).toBe(false);
+  expect(rows[`app.${table}`]).toEqual([]);
+  delete rows[`app.${table}`];
+ }
+ // Bind indexes to these exact new tables through pg_index, never a name prefix.
+ const indexes = (await f.admin.query(`SELECT c.relname FROM pg_index i
+  JOIN pg_class c ON c.oid=i.indexrelid JOIN pg_class t ON t.oid=i.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[])`, [billingTables])).rows.map(r => r.relname as string);
+ expect(indexes).toContain("billing_line_match_export_line_unique");
+ const relationNames = new Set([...billingTables, ...indexes]);
+ expect(before.relations.filter(r => r.nspname==='app' && relationNames.has(r.relname))).toEqual([]);
+ const allowedRoutines = (await f.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args
+  FROM pg_proc p WHERE p.oid=ANY(ARRAY(SELECT unnest($1::text[])::regprocedure::oid))`, [billingRoutines])).rows;
+ expect(allowedRoutines).toHaveLength(billingRoutines.length);
+ const isBillingRoutine = (r: typeof after.routines[number]) => r.nspname==='app' && allowedRoutines.some(a => a.proname===r.proname && a.args===r.args);
+ expect(before.routines.filter(isBillingRoutine)).toEqual([]);
+ const isBillingPolicy = (r: typeof after.policies[number]) => r.schemaname==='app' && billingTables.includes(r.tablename) && r.policyname==='tenant_isolation';
+ expect(after.policies.filter(isBillingPolicy)).toHaveLength(billingTables.length);
+ return { rows,
+  routines: after.routines.filter(r => !isBillingRoutine(r)),
+  relations: after.relations.filter(r => !(r.nspname==='app' && relationNames.has(r.relname))),
+  policies: after.policies.filter(r => !isBillingPolicy(r)) };
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -36,8 +68,9 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- expect(await snapshot()).toEqual(before);
+ const after = await snapshot();
+ expect(await withoutBillingAdditions(after, before)).toEqual(before);
  await migrate(f.admin);
- expect(await snapshot()).toEqual(before);
+ expect(await snapshot()).toEqual(after);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [own])).rows[0].n).toBe(1);
 }, 60000);

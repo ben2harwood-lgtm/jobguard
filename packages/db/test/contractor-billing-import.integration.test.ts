@@ -53,3 +53,43 @@ it("E6-03 E6-28 populated billing rows fail closed without tenant context and st
  expect(await withTenant(c.runtime,foreign.ctx,async db=>(await db.$client.query("SELECT count(*)::int n FROM app.billing_fact WHERE tenant_id=$1",[own.w.p.tenantId])).rows[0].n)).toBe(0);
  expect(await code(own.repo.read(own.ctx,foreign.session,own.s.jobId))).toBe("BILLING_FORBIDDEN");
 });
+
+for (const acrossJobs of [false, true]) it(`r6 one export line cannot match two invoices (${acrossJobs ? "two jobs" : "one job"})`,async()=>{
+ const own=await world(c),invoice=await own.invoice();
+ const payment=own.event("paid",{effectiveAt:"2026-10-03T12:00:00Z",reconciliationId:"r6-first-payment",amount:{netPence:41667,vatPence:8333,grossPence:50000}});
+ await own.repo.import(own.ctx,own.session,own.s.jobId,own.importInput([invoice,payment]));
+ const before=(await c.admin.query("SELECT * FROM app.billing_line_match WHERE tenant_id=$1",[own.w.p.tenantId])).rows;
+ expect(before).toHaveLength(1);
+ let secondJob=own.s.jobId;
+ if(acrossJobs){const {submitted}=await import("./extra-approval-chain-fixtures.js");secondJob=(await submitted(c,own.w,24000)).jobId;}
+ const second={...invoice,sourceEventId:"r6-second-invoice",invoiceNumber:"r6-second-invoice"};
+ await own.repo.import(own.ctx,own.session,secondJob,own.importInput([second,{...payment,sourceEventId:"r6-second-payment",invoiceNumber:second.invoiceNumber,reconciliationId:"r6-second-payment"}]));
+ expect((await c.admin.query("SELECT * FROM app.billing_line_match WHERE tenant_id=$1",[own.w.p.tenantId])).rows).toEqual(before);
+ const facts=(await c.admin.query("SELECT id,source_event_id,match_valid FROM app.billing_fact WHERE tenant_id=$1 AND payload->>'factType'='invoiced' ORDER BY match_valid DESC",[own.w.p.tenantId])).rows;
+ expect(facts).toEqual([{id:expect.any(String),source_event_id:invoice.sourceEventId,match_valid:true},{id:expect.any(String),source_event_id:second.sourceEventId,match_valid:false}]);
+ const quarantine=(await own.repo.read(own.ctx,own.session,secondJob)).quarantine;
+ expect(quarantine).toContainEqual({fact_id:facts[1].id,reason:"EXPORT_LINE_ALREADY_MATCHED"});
+ expect(quarantine.some(q=>q.fact_id===facts[0].id)).toBe(false);
+ const views=await Promise.all([...new Set([own.s.jobId,secondJob])].map(job=>own.repo.read(own.ctx,own.session,job)));
+ const totals=views.flatMap(v=>v.invoices.map(i=>i.projection.totals.matchedExtraNet));
+ expect(totals.filter(t=>t.numerator!=="0")).toEqual([{numerator:"250000",denominator:"31"}]);
+ const allocations=(await c.admin.query(`SELECT a.matched_extra_numerator::text n,a.matched_extra_denominator::text d
+ FROM app.contractor_receipt_line_allocation a JOIN app.billing_allocation_run r ON(r.tenant_id,r.id)=(a.tenant_id,a.run_id)
+ WHERE a.tenant_id=$1 AND a.matched_extra_numerator<>0 AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run newer WHERE newer.tenant_id=r.tenant_id AND newer.predecessor_id=r.id)`,[own.w.p.tenantId])).rows;
+ expect(allocations).toEqual([{n:"250000",d:"31"}]);
+});
+it("r6 replaying the same invoice fact with a new command creates no match or quarantine",async()=>{
+ const own=await world(c),invoice=await own.invoice();
+ await own.repo.import(own.ctx,own.session,own.s.jobId,own.importInput([invoice]));
+ const before=(await c.admin.query("SELECT * FROM app.billing_line_match WHERE tenant_id=$1",[own.w.p.tenantId])).rows;
+ await own.repo.import(own.ctx,own.session,own.s.jobId,own.importInput([invoice]));
+ expect((await c.admin.query("SELECT * FROM app.billing_line_match WHERE tenant_id=$1",[own.w.p.tenantId])).rows).toEqual(before);
+ expect((await c.admin.query("SELECT count(*)::int n FROM app.billing_fact WHERE tenant_id=$1",[own.w.p.tenantId])).rows[0].n).toBe(1);
+ expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).quarantine).toEqual([]);
+});
+it("r6 PostgreSQL refuses a second direct match of the same export line",async()=>{
+ const own=await world(c),invoice=await own.invoice();
+ await own.repo.import(own.ctx,own.session,own.s.jobId,own.importInput([invoice]));
+ await expect(c.admin.query(`INSERT INTO app.billing_line_match(tenant_id,id,job_id,client_contract_id,fact_id,external_invoice_line_id,export_line_id,line_job_id)
+ SELECT tenant_id,gen_random_uuid(),job_id,client_contract_id,fact_id,'different-line',export_line_id,line_job_id FROM app.billing_line_match WHERE tenant_id=$1`,[own.w.p.tenantId])).rejects.toMatchObject({code:"23505",constraint:"billing_line_match_export_line_unique"});
+});

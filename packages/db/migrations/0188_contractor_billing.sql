@@ -44,7 +44,9 @@ CREATE TABLE app.billing_fact (
 CREATE TABLE app.billing_line_match (
  tenant_id uuid NOT NULL,id uuid NOT NULL,job_id uuid NOT NULL,client_contract_id uuid NOT NULL,fact_id uuid NOT NULL,
  external_invoice_line_id text NOT NULL,export_line_id uuid NOT NULL,line_job_id uuid NOT NULL,
+ -- Only valid matches are inserted here; invalid facts live in billing_quarantine.
  PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,fact_id,external_invoice_line_id),
+ CONSTRAINT billing_line_match_export_line_unique UNIQUE(tenant_id,export_line_id),
  FOREIGN KEY(tenant_id,job_id,client_contract_id,fact_id) REFERENCES app.billing_fact(tenant_id,job_id,client_contract_id,id),
  FOREIGN KEY(tenant_id,line_job_id,client_contract_id,export_line_id) REFERENCES app.billing_export_line(tenant_id,job_id,client_contract_id,id)
 );
@@ -269,7 +271,7 @@ END $$;
 
 CREATE FUNCTION app.cb_ingest(p_session uuid,p_job uuid,p_command uuid,p_payload jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; replay jsonb; imp uuid:=gen_random_uuid(); f uuid; e jsonb; l jsonb; valid boolean; prior app.billing_fact; h text; contract uuid;
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; replay jsonb; imp uuid:=gen_random_uuid(); f uuid; e jsonb; l jsonb; valid boolean; prior app.billing_fact; h text; contract uuid; quarantine_reason text;
 BEGIN
  replay:=app.cb_begin(p_session,p_job,p_command,'ImportBillingStatus',p_payload); IF replay IS NOT NULL THEN RETURN replay; END IF;
  a:=app.cb_authority(p_session,p_job,true);
@@ -287,7 +289,7 @@ BEGIN
    IF prior.payload_hash<>h OR prior.job_id<>p_job THEN RAISE EXCEPTION 'BILLING_CONFLICT' USING ERRCODE='23505'; END IF;
    CONTINUE;
   END IF;
-  valid:=true;
+  valid:=true; quarantine_reason:='INVALID_COMPOSITION_OR_MATCH';
   IF jsonb_typeof(e->'composition')='object' THEN
    IF jsonb_array_length(e->'composition'->'lines')=0 OR
     (SELECT sum((x->>'netPence')::numeric) FROM jsonb_array_elements(e->'composition'->'lines') x) IS DISTINCT FROM(e->'composition'->'declared'->>'netPence')::numeric OR
@@ -301,11 +303,18 @@ BEGIN
     END IF;
    END LOOP;
   END IF;
+  -- cb_begin holds the tenant billing fence (618), including across anchor jobs.
+  -- Same-fact replay has already been skipped above. Never invalidate the first match.
+  IF valid AND EXISTS(
+   SELECT 1 FROM jsonb_array_elements(e->'composition'->'lines') x
+   JOIN app.billing_line_match m ON m.tenant_id=t AND m.export_line_id=(x->'match'->>'exportLineId')::uuid
+   WHERE x->>'kind'='extra'
+  ) THEN valid:=false; quarantine_reason:='EXPORT_LINE_ALREADY_MATCHED'; END IF;
   f:=gen_random_uuid();
   INSERT INTO app.billing_fact(tenant_id,id,job_id,client_contract_id,import_id,source,source_event_id,invoice_number,payload,payload_hash,match_valid)
   VALUES(t,f,p_job,contract,imp,e->>'source',e->>'sourceEventId',e->>'invoiceNumber',e,h,valid);
   IF NOT valid THEN
-   INSERT INTO app.billing_quarantine(tenant_id,id,job_id,client_contract_id,fact_id,reason) VALUES(t,gen_random_uuid(),p_job,contract,f,'INVALID_COMPOSITION_OR_MATCH');
+   INSERT INTO app.billing_quarantine(tenant_id,id,job_id,client_contract_id,fact_id,reason) VALUES(t,gen_random_uuid(),p_job,contract,f,quarantine_reason);
   ELSE
    FOR l IN SELECT value FROM jsonb_array_elements(e->'composition'->'lines') WHERE value->>'kind'='extra' LOOP
     INSERT INTO app.billing_line_match(tenant_id,id,job_id,client_contract_id,fact_id,external_invoice_line_id,export_line_id,line_job_id)
