@@ -393,7 +393,7 @@ Cited current sites were re-read against main. LP-1's account/membership seed co
 
 ### Delivered, source-inspected
 
-- Migration `0195_unchecked_job_doors.sql`: ordinary runtime draft-only insertion guard; null-safe permit-based imported/work-order/home/sandbox insertion; private exact tenant/job/backend/xid8/operation/shape permits, tenant-qualified identity references, FORCE RLS, one-use consumption and deferred unused-permit refusal. No caller-set import flag is read. Shared migration ownership alone cannot insert an imported/work-order/home/core-1000 job.
+- Migration `0198_unchecked_job_doors.sql`: ordinary runtime draft-only insertion guard; null-safe permit-based imported/work-order/home/sandbox insertion; private exact tenant/job/backend/xid8/operation/shape permits, tenant-qualified identity references, FORCE RLS, one-use consumption and deferred unused-permit refusal. No caller-set import flag is read. Shared migration ownership alone cannot insert an imported/work-order/home/core-1000 job.
 - Static replacements preserve the current eighteen-argument adoption checks/party binding/deferred record checks and v1 value/cap/lineage, ENT-2's checked work-order creation, and home state/revision/session recipe. The old thirteen-argument adoption runtime grant is withdrawn. No business table gains a column, no existing row is backfilled or rewritten, and no financial formula is changed.
 - The narrow review routine preserves the existing current-owner confirmation permission. It validates the processing actor/type/job/proposal receipt and exact approved action, hashes the unchanged raw review serialization, reconstructs the persisted review and checks accepted canonical scope. Only non-stored parent/question ordering is normalized for content comparison. It checks ordinary draft source/expected revision, confirms the review and changes only job status/revision/update time. It cannot express acceptance/live/settlement or set money/policy/pointers. `reviewContentHash` is unchanged. The review caller remains in its existing dispatcher transaction; broad transition runtime/PUBLIC/identity/infrastructure EXECUTE is withdrawn. Source search finds no SQL wrapper reaching it; generic JobRepository.transition remains unavailable with runtime credentials.
 - Sandbox creation uses its existing persisted session's authenticated membership and a fixed checked core-1000 creator, with state/revision and existing replay behavior preserved. Bootstrap's same owner connection creates its three existing quoting rows as the migration role; LP-1's account/membership work and row identities/replay SQL are preserved. No service receives owner credentials.
@@ -573,8 +573,8 @@ Untracked artifacts (git diff --stat omits them):
 - `config/lanes/lp-2.json`
 - `docs/operations/lp-2-rollout-evidence.md`
 - `docs/verdicts/LP-2/PROPOSED-COORDINATOR-CHANGES.md`
-- `packages/db/migration-notes/0195_unchecked_job_doors.md`
-- `packages/db/migrations/0195_unchecked_job_doors.sql`
+- `packages/db/migration-notes/0198_unchecked_job_doors.md`
+- `packages/db/migrations/0198_unchecked_job_doors.sql`
 - `packages/db/test/lp-practice-doors.integration.test.ts`
 - `packages/db/test/lp-start-quote.integration.test.ts`
 
