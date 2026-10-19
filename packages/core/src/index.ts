@@ -96,3 +96,5 @@ export * from "./subscription-persistence.js";
 export * from "./subscription-allocation.js";
 
 export * from "./enterprise-live-prompt-persistence.js";
+
+export * from "./contractor-entitlement-authority.js";
