@@ -6,7 +6,7 @@ import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { ownerTx, type Cluster, type SessionFixture } from "./contractor-entitlement-fixtures.js";
 export { cluster,startSession,status,unchanged,snapshot,startBeforeMigration,applyMigration,ownerTx,makeSessionExpired } from "./contractor-entitlement-fixtures.js";
 export type { Cluster,SessionFixture };
-export const own="0194_contractor_retained_workspace.sql";
+export const own="0199_contractor_retained_workspace.sql";
 export const query=(f:SessionFixture,resource="contracts",id?:string)=>({version:"contractor-query.v1",tenantId:f.p.tenantId,resource,...(id?{id}:{})});
 export const read=(c:Cluster,f:SessionFixture,resource="contracts",id?:string)=>new ContractorApplication(c.runtime).read({version:"contractor-principal.v1",sessionId:f.session},query(f,resource,id));
 export const resume=(c:Cluster,f:SessionFixture)=>new ContractorApplication(c.runtime).resume({version:"contractor-principal.v1",sessionId:f.session});
