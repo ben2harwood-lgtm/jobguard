@@ -1,52 +1,24 @@
-# MON-2A hypothetical subscription operations
+# Synthetic subscription operations
 
-This piece exposes pure reference calculations and schemas only. It registers
-no HTTP route, scheduler, database migration, business routine, payment adapter
-or provider connection. Do not describe its calculated principal as an amount
-due. Label any consuming fixture **hypothetical; principal only, VAT not
-calculated**. Production and pilot settlement remain disabled; no pilot job is
-retrospectively billed.
+Use only made-up MON-1B company/session/input fixtures. No real IdP, data, provider, spending, messages or charging are authorized. The internal application is not a public endpoint. Trial activation and entitlement enforcement belong to B and C after A merges.
 
-For local fixtures supply all 28–31 calendar dates and unambiguous day-end plans
-to `computeSubscriptionPeriod`. The input uses MON-1's actual supplied-period
-schema, not a cached counter or an event stream. It is not evidence of an issued
-bill. Changes to source events or company authority require the separately
-released executable meter adapter. Annual-prepaid flags are supplied reference
-inputs, not payment evidence; annual selection remains unavailable.
+An owner reviews monthly terms and their exact hash, then submits `accept`. Administrative reads use the same persisted company bridge, but admin cannot accept or approve simulated collection. Date/time and actor are server-derived. Annual and reanchoring requests fail closed. No first-period stub is guessed: issue requires all dates covered by accepted terms and the original monthly anchor.
 
-The nine exact card fixtures and generated timelines run in
-`subscription-period.test.ts`; detector inputs name adjacent explicit periods.
-The pure calculator has no access to hidden signals. Its transitive module
-isolation assertion currently fails on MON-1's activation-policy import; hold
-technical acceptance until the parent owner supplies an isolated seam.
+Load immutable meter sources through existing migration-only MON-1B fixture infrastructure. `review` can persist the live supplied-source grace-crossing Decision before period issue; it requires the latest source revision and accepted plan. There is no lifecycle scheduler installed. `issue` recomputes source counts under accepted terms, allocates lines, disposes corrections and creates a hypothetical principal-only document atomically with its receipt and audit. Cached MON-1B totals never set the principal. An issued receiving period refuses further late corrections; investigate upstream timing rather than moving them to another period.
 
-Catalogue SQL 0166 is allocated but stopped before implementation: coordinator
-review of the LP-0 capability inventory is required. No grants or data changes
-need rollback. Once released, install prior migrations, snapshot populated rows
-by captured primary keys and named columns as canonical JSON text, apply N
-alone and compare existing rows/permissions/routines. Then apply every later
-migration and require repeat migrate success twice. Preserve original column
-names and full `format_type` types; ignore later rows/columns/functions outside
-the captured identities. Include rolled-back microsecond/retype/deletion
-negative controls and nullable-column/function-replacement/later-insert positive
-controls. At least one original row is required for each compared table. This
-is a requirement for the future real PostgreSQL proof, not a run receipt.
+Alerts:
 
-An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'.
+- `CORRECTION_EXCESS_UNCOLLECTED`: full positive correction exceeded receiving headroom. Inspect full/applied/excess and exact statement lines. Leave the excess uncollected; no automatic future charge or maximum override.
+- `NEGATIVE_CORRECTION_POLICY_HOLD`: retain the negative source fact. Refund, negative balance and future credit need separate supplied policy. No simulated refund is created.
+- Existing MON-1B `METER_CACHE_MISMATCH`: projection drift; inspect source and recompute through the existing meter tools. Preserve issued documents.
+- Unknown simulation outcome: reconcile the exact existing work; do not execute again. Every result remains synthetic.
 
-Future execution must derive and durably surface meter cache mismatches and
-maximum breaches without issuing/settling the invalid amount; agree the alerts
-and ownership when that execution is released. No operational alerts are
-installed now. Future correction handling must preserve issued history and
-await Q5; unknown payment results must reconcile the same approved attempt,
-never blindly start a second attempt. Those paths are not implemented here.
+For simulation, the owner approves the exact immutable statement hash/amount. The executor first claims durable work in PostgreSQL, releases the transaction, calls the provider-neutral synthetic adapter, then persists its result through checked SQL. An adapter exception becomes `outcome_unknown`; a redirect is never settlement. If result persistence fails after adapter execution, the attempt remains and requires reconciliation. There is no live provider fallback. Revoked/expired owners or changed agreement revisions fail execution checks. Synthetic approval expiry uses the accepting session's persisted expiry; expired work requires a fresh permitted approval, never fabricated standing consent.
 
-Before any later release, resolve Q3–Q9 as applicable, review exact actor/tenant
-SQL checks and lock ordering before audit, implement immutable statement and
-payment identities, and run the unchanged aggregate CI gates. Do not create a
-second platform-statement namespace or use subscription money as recovery proof.
-D09/D05/D02 and G4-S still gate production collection and live providers.
+Current owner/admin reads survive plan changes. Shared-practice company summary remains forbidden. Support does not gain a new role or shadow-data access.
 
-The dispatcher owns the commit, push and CI run; a different model supplies the
-exact-commit verdict and a separate actor supplies acceptance. The builder's
-receipt is partial evidence only. Parent merge and reconciliation precede a PR.
+CI handoff must run PostgreSQL and populated upgrade tests with migration 0190 (dispatcher renumbers on merge), inspect exact LP-0 grants and tenancy catalogs, and execute the mandatory repository checks. The local sandbox cannot prove those database assertions. RED requires two independent Claude checks bound to the final dispatcher commit and separate acceptance. Founder retains commit/push/merge/release ownership.
+
+Installation is one transaction and rolls back on failure. After installation retain all accepted history and issued facts; repair additively. No data backfill or deletion is part of this migration.
+
+A durable claimed attempt with no result (process interruption or lost result persistence) is also reconciled without another execution. A completed redirect alone is not a settlement or an unknown-outcome retry permission.
