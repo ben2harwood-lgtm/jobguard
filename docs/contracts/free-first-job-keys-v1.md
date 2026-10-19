@@ -1,0 +1,11 @@
+# MON-3-P-A private key foundation v1
+
+Authority: issued 18 October 2026 sub-order A, Ben 17 October answer 2/MON-3 and finishing-order item 5. RED review required. MON-3 remains open.
+
+`freeFirstJobKeys` returns an immutable array containing the company tuple if available and the phone/simulated-provider/fingerprint tuple if complete. It never substitutes a tenant/user/job identifier, phone alone or card alone. All existing v1 tuple bytes remain stable; preview refuses a consumed match on any returned key. The old `freeFirstJobKey` remains compatible, explicitly unsuitable for entitlement decisions. Inputs are supplied fictional normalized facts, not verified identity or permission.
+
+Migration 0192 stores immutable `app.trial_identity_snapshot` and `app.trial_identity_key_claim`. The snapshot binds tenant/job/activation and fictional verified-fixture provenance/version/time. Its insert trigger calls the private invoker `app.claim_trial_identity_keys(uuid,uuid)`. There is no caller key list: every available stored key is derived in canonical order. Key uniqueness is global, independent of tenant, job and snapshot version. Exact helper replay adds no rows; snapshot edits conflict. Inserting a colliding snapshot fails atomically without orphan snapshots or partial claims, even if the surrounding transaction catches the statement failure.
+
+Only migration ownership and isolated synthetic tests can populate these facts in A. Both tables have forced tenant RLS, no non-owner grants and update/delete/truncate guards. Helpers have no non-owner execution grants. Error messages from claim collisions omit identity values. No new identity/bootstrap exception, access capability, runtime endpoint or feature-pool credential is introduced.
+
+A does not grant a trial, verify a real business, register a card, create an activation, decide a deadline, convert a subscription or post money. B must bind storage to its checked authorization/receipt/audit transaction; C must supply authoritative end, London-date conversion and actual Final Check parity. Changing all business identifiers without any retained verified key is undecided; dual-key storage does not solve identity replacement/merging. No reset, expiry or release of consumed keys is provided.

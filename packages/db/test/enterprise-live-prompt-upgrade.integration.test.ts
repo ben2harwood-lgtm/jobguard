@@ -4,7 +4,7 @@ import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { MIGRATION_URLS,migrate } from "../src/index.js";
 import { cluster } from "./extra-fixtures.js";
 let c:Awaited<ReturnType<typeof cluster>>;
-const name="0194_enterprise_live_prompts.sql";
+const name="0196_enterprise_live_prompts.sql";
 beforeAll(async()=>{
  c=await cluster(true);
  const applied=new Set((await c.admin.query("SELECT migration_name FROM public.jobguard_schema_migration")).rows.map(r=>r.migration_name));
