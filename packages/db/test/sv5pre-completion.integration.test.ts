@@ -225,6 +225,9 @@ describe("SV5PRE authoritative completion", () => {
    await expect(exclusive()).rejects.toMatchObject({code:'55P03'});
    await writers[1]!.query("COMMIT");
    expect((await exclusive()).rowCount).toBe(1);
+   // Was: the lock succeeded straight away. Per C135 it is refused while the two photo uploads are still pending.
+   await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:"FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"});
+   await asFixtureTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='SYNTHETIC' WHERE tenant_id=$1 AND job_id=$2 AND state='pending'",[a.tenantId,a.jobId]));
    await repo.lock(a.context,a.input);
    const manifest=await new FinalCheckCompletionRepository(f.shadow).freeze(a.context,{version:'final-check-manifest.v1',jobId:a.jobId,manifestId:randomUUID(),detectorVersion:'synthetic.v1',reconciliationVersion:'synthetic.v1'});
    expect(manifest.sourceCount).toBe(2);
@@ -254,7 +257,10 @@ describe("SV5PRE authoritative completion", () => {
    expect(done).toBe(false);
    expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
    await w.db.query("COMMIT");
-   const locked = await lock;
+   // Was: the lock completed once the upload committed. Per C135 it is refused while that photo is pending, and completes once it is checked.
+   await expect(lock).rejects.toMatchObject({ code: "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS" });
+   await asFixtureTenant(f.admin, a.tenantId, db => db.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='SYNTHETIC' WHERE tenant_id=$1 AND id=$2", [a.tenantId, w.id]));
+   const locked = await repo.lock(a.context, a.input);
    const manifest = await new FinalCheckCompletionRepository(f.shadow).freeze(a.context, { version: 'final-check-manifest.v1', jobId: a.jobId, manifestId: randomUUID(), detectorVersion: 'synthetic.v1', reconciliationVersion: 'synthetic.v1' });
    expect(manifest.sourceCount).toBe(1);
    const src = (await f.admin.query("SELECT upload_id, source_received_at <= $3::timestamptz ok FROM app.final_check_manifest_source WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId, (await f.admin.query("SELECT locked_at::text t FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].t])).rows;
@@ -275,6 +281,9 @@ describe("SV5PRE authoritative completion", () => {
    expect(Date.now() - started).toBeLessThan(5000);
    expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
    await w.db.query("COMMIT");
+   // Was: the lock then succeeded. Per C135 a committed but still pending photo keeps refusing it until the photo is checked.
+   await expect(repo.lock(a.context, a.input)).rejects.toMatchObject({ code: "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS" });
+   await asFixtureTenant(f.admin, a.tenantId, db => db.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='SYNTHETIC' WHERE tenant_id=$1 AND id=$2", [a.tenantId, w.id]));
    await repo.lock(a.context, a.input);
    expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(1);
   } finally { await w.db.query("ROLLBACK"); w.db.release(); }
