@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-10-oidc-a": {
+      "branches": [
+        "codex/sandbox/ent-10-oidc-a",
+        "codex/sandbox/ent-10-oidc-a2"
+      ],
+      "receipt": "docs/verdicts/ENT-10-OIDC-A/BUILDER_RECEIPT.md",
+      "note": "RED. Checked synthetic OIDC adapter only; no routes, sessions, grants, database changes or external transport.",
+      "allow": [
+        "apps/api/package.json",
+        "pnpm-lock.yaml",
+        "apps/api/src/auth/sso/oidc.ts",
+        "apps/api/src/auth/sso/oidc.contracts.ts",
+        "apps/api/src/auth/sso/oidc.test.ts",
+        "apps/api/src/auth/sso/oidc.contracts.test.ts",
+        "apps/api/src/auth/sso/test-oidc-issuer.ts",
+        "docs/contracts/oidc-signin-v1.md",
+        "docs/operations/oidc-data-flow.md",
+        "docs/security/oidc-library-review.md",
+        "docs/ledger/ENT-10-OIDC-A.md",
+        "docs/verdicts/ENT-10-OIDC-A/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

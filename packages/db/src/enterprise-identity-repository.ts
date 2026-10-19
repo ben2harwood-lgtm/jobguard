@@ -42,6 +42,15 @@ export class EnterpriseIdentityRepository {
     try { return (await client.query<{metadata:unknown}>("SELECT identity.sso_load_connection($1) metadata",[id])).rows[0]!.metadata; }
     catch(error){throw ssoRepositoryError(error);}
   }
+  /** Recheck linking on the held client, after the tenant lock and before request/audit writes. */
+  async requireLinkSession(client:PoolClient,tenantId:string,sessionId:string,userId:string,sessionDigest:string,csrfToken:string):Promise<void> {
+    const session=(await client.query("SELECT id,user_id FROM identity.session WHERE id=$1 AND user_id=$2 AND token_digest=$3 AND csrf_token=$4 AND environment='synthetic_demo' AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE",[sessionId,userId,sessionDigest,csrfToken])).rows[0];
+    if(!session)throw new SsoRepositoryError("LINK_FORBIDDEN");
+    const scope=(await client.query<{scope:{tenantId?:string;membershipId?:string;revoked?:boolean}|null}>("SELECT identity.sso_session_scope($1) scope",[sessionId])).rows[0]!.scope;
+    if(scope && (scope.revoked || scope.tenantId!==tenantId))throw new SsoRepositoryError("LINK_FORBIDDEN");
+    const members=(await client.query<{id:string;tenant_id:string;identity_user_id:string}>("SELECT * FROM identity.sso_session_memberships($1,$2)",[userId,sessionId])).rows;
+    if(!members.some(member=>member.tenant_id===tenantId && member.identity_user_id===userId && (!scope || member.id===scope.membershipId)))throw new SsoRepositoryError("LINK_FORBIDDEN");
+  }
   cache(client:PoolClient,connectionId:string,stateDigest:string|null=null,linkSessionId:string|null=null):SsoRequestCache {
     const run=async(key:string|null,value:string|null,operation:string) => (await client.query<{value:string|null}>("SELECT identity.sso_cache($1,$2,$3,$4,$5,$6) value",[connectionId,key,value,stateDigest,linkSessionId,operation])).rows[0]!.value;
     return {
@@ -63,7 +72,7 @@ export class EnterpriseIdentityRepository {
   async refusal(route:string,code:string):Promise<void> {
     // Unknown/malformed routes have no tenant authority. Always append the global bootstrap event.
     await this.pool.query("INSERT INTO identity.sso_refusal_event(id,route_hash,code) VALUES($1,$2,$3)",[randomUUID(),hash(route),code]);
-    if(!/^[0-9a-f-]{36}$/iu.test(route))return;
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(route))return;
     try {await this.transaction(async client=>{await this.connection(client,route);await this.audit(client,route,"sso.refused","identity:saml",code);});}
     catch(error){if(ssoRepositoryError(error).code!=="SSO_NOT_FOUND" && ssoRepositoryError(error).code!=="SSO_ROUTE_BLOCKED")throw error;}
   }

@@ -109,6 +109,466 @@
         ]
       }
     },
+    "/contractor/jobs/{id}/possible-extras": {
+      "get": {
+        "operationId": "EnterpriseLivePromptController_list",
+        "parameters": [
+          {
+            "name": "after",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the paginated Possible extras lane for a covered job",
+        "tags": [
+          "contractor-possible-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/possible-extras/{promptId}": {
+      "get": {
+        "operationId": "EnterpriseLivePromptController_detail",
+        "parameters": [
+          {
+            "name": "promptId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read one cited possible extra with immutable resolution history",
+        "tags": [
+          "contractor-possible-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/possible-extras/materials": {
+      "post": {
+        "operationId": "EnterpriseLivePromptController_materials",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "sourceId",
+                  "eventId",
+                  "workIdentity",
+                  "unit",
+                  "quantity",
+                  "occurredAtMicros",
+                  "kind"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "materials-issue.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "workIdentity": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "unit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,6})?$"
+                  },
+                  "occurredAtMicros": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "return",
+                      "correction"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import strict materials issue facts and evaluate atomically; finance or owner only",
+        "tags": [
+          "contractor-possible-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/possible-extras/observations": {
+      "post": {
+        "operationId": "EnterpriseLivePromptController_observation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "evidenceId",
+                  "sha256",
+                  "objectVersion",
+                  "locator",
+                  "workIdentity"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "completion-observation.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "evidenceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "objectVersion": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "locator": {
+                    "type": "object",
+                    "description": "Strict versioned completion-work locator; exact stored span or photo tag"
+                  },
+                  "workIdentity": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceText": {
+                    "type": "string",
+                    "maxLength": 100000,
+                    "description": "Required only for a text_span; forbidden for photo_tag, whose tags are read from stored PNG bytes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Register completion observations bound to stored immutable evidence",
+        "tags": [
+          "contractor-possible-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/possible-extras/evaluate": {
+      "post": {
+        "operationId": "EnterpriseLivePromptController_evaluate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "evaluate-live-prompts.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Evaluate authoritative persisted sources in synthetic practice mode",
+        "tags": [
+          "contractor-possible-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/possible-extras/{promptId}/confirm": {
+      "post": {
+        "operationId": "EnterpriseLivePromptController_confirm",
+        "parameters": [
+          {
+            "name": "promptId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "promptHash"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "confirm-prompt.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "promptHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "confirmedWorkIdentity": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "excessScopeItemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "existingExtraId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm the exact cited prompt or coalesce into an existing extra; no pricing or approval",
+        "tags": [
+          "contractor-possible-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/possible-extras/{promptId}/dismiss": {
+      "post": {
+        "operationId": "EnterpriseLivePromptController_dismiss",
+        "parameters": [
+          {
+            "name": "promptId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "promptHash",
+                  "reason"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "dismiss-prompt.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "promptHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Dismiss the exact prompt with a reason and immutable resolution",
+        "tags": [
+          "contractor-possible-extras"
+        ]
+      }
+    },
     "/jobs/{id}/diary": {
       "get": {
         "operationId": "JobSourceController_diary",

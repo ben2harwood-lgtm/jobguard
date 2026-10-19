@@ -31,7 +31,17 @@ export const freeFirstJobIdentityV1 = z.object({
   companyNumber: opaque.nullable(), normalizedPhone: opaque.nullable(), cardFingerprint: opaque.startsWith("sim_fp_").nullable(),
 }).strict().readonly();
 
-/** Supplied already-normalised fictional identifiers only. This performs no identity verification. */
+/** All independently derivable keys, with stable v1 bytes. No verification is performed. */
+export function freeFirstJobKeys(raw: unknown): readonly string[] {
+  const identity = parseFreeFirstJob(freeFirstJobIdentityV1, raw);
+  const keys: string[] = [];
+  if (identity.companyNumber !== null) keys.push(JSON.stringify(["free-first-job.v1", "company", identity.companyNumber]));
+  if (identity.normalizedPhone !== null && identity.cardFingerprint !== null)
+    keys.push(JSON.stringify(["free-first-job.v1", "phone_card", identity.normalizedPhone, "simulated", identity.cardFingerprint]));
+  return Object.freeze(keys);
+}
+
+/** @deprecated Compatibility only; unsuitable for entitlement decisions. Use freeFirstJobKeys. */
 export function freeFirstJobKey(raw: unknown) {
   const identity = parseFreeFirstJob(freeFirstJobIdentityV1, raw);
   if (identity.companyNumber !== null) return { status: "identified" as const,
@@ -68,9 +78,9 @@ export function previewFreeFirstJob(raw: unknown) {
   const input = parseFreeFirstJob(freeFirstJobPreviewInputV1, raw);
   const existing = input.priorLiveJobIds.includes(input.jobId);
   const first = input.priorLiveJobIds.length === 0;
-  const identity = freeFirstJobKey(input.identity);
-  const trial = existing ? "existing_job" : !first ? "not_first_job" : identity.key === null ? "identity_required"
-    : input.consumedKeys.includes(identity.key) ? "already_consumed" : "candidate";
+  const keys = freeFirstJobKeys(input.identity);
+  const trial = existing ? "existing_job" : !first ? "not_first_job" : keys.length === 0 ? "identity_required"
+    : keys.some(key => input.consumedKeys.includes(key)) ? "already_consumed" : "candidate";
   const requiresCard = !existing && !first && input.card?.status !== "completed";
   return Object.freeze({
     ...previewFacts, version: "free-first-job-preview-result.v1" as const, activationAuthorized: false as const,

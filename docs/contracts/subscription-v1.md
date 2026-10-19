@@ -1,142 +1,59 @@
-# MON-2A reference subscription contract v1
+# Synthetic subscription persistence v1
 
-Status: partial build, hypothetical calculations only. D09
-`subscription_pricing_policy_v4`, D05 `standing_authority_policy_v3` and D02
-`reference_tax_invoice_policy_v1` remain proposed. Principal only; VAT not
-calculated. No agreement, obligation, statement, payment or authority is created.
+MON-2A-P adds a synthetic server/database contract to the unchanged MON-2A previews. No live charge, VAT, journal, success-fee offset, track transition or release approval is provided. D01/D02/D03/D08/D09/D16 and D05/G4-S remain held.
 
-## Dispatch and source reconciliation
+MON-1, MON-1B and the earlier MON-2A reference slice are merged at the dispatch base `b881f90b`. Migration 0184 supplies immutable input/computation/correction identities and checked owner/admin company authority. There is no dedicated meter role. The old absent-authority and catalogue-inventory holds are superseded by this dispatch's bounded authorization. The transitive shadow import was repaired upstream through `small-job-v3.ts`; existing architecture tests remain unchanged.
 
-The build-ahead header supersedes the draft dependency restriction. Supplied
-HEAD and `origin/codex/sandbox/mon-1` are
-`2514049c8dfb7630598fdf81f5c0d6d23444abb4`; `origin/main` is
-`6671538c8d69936c162368c760dd6ce0f7f10493`. MON-1 is unmerged. No PR may open
-before its merge and dispatcher reconciliation of any parent repairs.
+The first platform statement implementation is migration `0195_subscription_persistence.sql`. Its `platform_statement` and `platform_statement_line` namespace currently admits subscription synthetic documents only. Future fee documents require their own source contracts and migration; they must never reuse subscription lines or allocation identities.
 
-The quoted pricing formula, nine card figures, parameters, table rows and graph
-edge agree with inspected BUILD_PLAN sections 10.1, 10.4, 10.5 and 12.3 on main.
-The source migration list extends through 0158, beyond the draft's inspection of
-0138. Actual decision files still record no dated approval evidence. No policy
-approval is inferred from the dispatch. Migration **0166** is allocated by the
-header, but is **not created or registered** because of the inventory STOP below.
+## Persisted entry points for B and C
 
-MON-1 exports its functions from `packages/core/src/jobs-on-the-go.ts` through
-`packages/core/src/index.ts`. The available pricing seam is
-`computeSuppliedMeterPeriod(unknown)` with `suppliedMeterPeriodV1` and
-`suppliedMeterPeriodResultV1`. Its strict input has:
+Exports from `@jobguard/db`:
 
-- version `meter-supplied-period.v1`, environment `synthetic_demo` or
-  `pilot_no_charge`, and exact proposed `syntheticMeterPolicySchemaV1`;
-- `startDate`, `endDateExclusive`, and every supplied date exactly once, 28–31
-  calendar dates, accepted independently of any anchor construction;
-- per day: `plan`, `countedPlaces`, `trial`, `annualPrepaid` and `date`.
+- `SubscriptionRepository(pool).command(context, digest, commandId, raw)` validates `subscriptionCommandV1`, calls checked SQL and verifies issue's base principal through the existing core meter projection in the same transaction.
+- `SubscriptionRepository(pool).read(context, digest)` returns `subscription-persisted-read.v1`, `environment: synthetic_demo`, `hypothetical: true`, and arrays `agreements`, `changes`, `changeOutcomes`, `periods`, `periodLines`, `places`, `placeBindings`, `statements`, `statementLines`, `reviews`, `operationsCards`, `work`, `attempts`, `results`, `corrections`, `alerts`, `onboarding`. Row fields retain PostgreSQL snake_case; bigint row values are JSON numbers within the declared bounds.
+- `SubscriptionMeterSource(pool).read(context,digest,sourceId)` returns `{input,result,ledger}` freshly derived from immutable MON-1B input under accepted effective terms. It does not infer lifecycle or trial entitlement.
+- `PlatformSubscriptionStatementRepository(repository).read(context,digest,statementId)` performs current authorized company read before lookup.
+- `SubscriptionExecutor(repository,adapter)` claims only exact approved durable work and records results. It cannot accept terms. The adapter executes outside the database transaction.
+- `subscriptionTermsContentHash(tenantId,selection)` computes the canonical hash for reviewed terms, with the fields below except `contentHash`. A hash is not approval.
 
-MON-1 sorts dates, caps the paid extras and sums the numerator with bigint. It
-uses `moneyFromBigInt(divideRounded(numerator, days, "half_even"))`, returning
-hypothetical principal, maximum and exact unallocated daily contributions.
-MON-2A delegates to this function and never groups/recounts jobs or derives
-counting intervals. These supplied counts are fictional inputs, **not trusted
-persisted company derivations**.
+The internal API `SubscriptionApplication` resolves the request's current authenticated authority every call and refuses any environment except `synthetic_demo`. Its concrete repository uses PostgreSQL. No HTTP route or display endpoint is installed. SQL independently authenticates the persisted synthetic session and SSO-aware company membership on every operation; a TypeScript context or client field cannot replace that check.
 
-Other available MON-1 seams include `groupSuppliedMeterPlaces` with supplied
-`tenantId/jobId/customerId/siteId`, `computeSmallPlaceAllowance`, and
-`suppliedMeterCorrection` (difference of two supplied principal values).
-These are pure fixtures/calculations only. There are **no** persisted ledger,
-source revision, event-derived daily result, qualified SQL place/correction key,
-capacity lock, correction business identity, meter SQL routine or company/session
-authority in this parent. MON-2A introduces no executable database meter adapter.
-Q7/Q8 remain held; no future SQL signature or lock order is invented.
+SQL runtime EXECUTEs are only `app.mon2_command(uuid,text,uuid,jsonb)`, `app.mon2_read(uuid,text)` and `app.mon2_source(uuid,text,uuid)`. All business tables deny direct runtime writes/reads. Catalogue SELECT is a bounded public-reference control-plane exception. Shared-practice company summaries remain refused.
 
-Inspection found no `platform_statement` or `platform_statement_line` in database
-source/migrations. The namespace is not created here: statement persistence is
-held under Q4/Q7/Q8. Its eventual first merged owner remains M4-10-S or released
-MON-2A; re-inspect before that implementation.
+Every command is strict `{version:'subscription-command.v1',kind,...}`. Tenant and digest are authenticated call arguments, never payload fields. Actor/time are server-derived. Commands are:
 
-## Buildable schema and calculation boundaries
+| Kind | Additional fields |
+|---|---|
+| `accept`, `change` | `plan`, `cadence:'monthly'`, `anchorDay`, `termsVersion:'subscription_terms_v1'`, `catalogueVersion:'subscription_pricing_policy_v4'`, `maximumPence`, `contentHash`, `expectedRevision` |
+| `issue` | `periodStart`, `expectedRevision` |
+| `apply_change` | `changeId`, `sourceId`, `expectedRevision` |
+| `review` | `sourceId`, `expectedRevision` |
+| `approve_simulation` | `statementId`, `contentHash`, `amountPence`, `expectedRevision` |
+| `execute_simulation` | `workId`, `expectedRevision` |
+| `record_simulation`, `reconcile_simulation` | `workId`, `resultId`, `outcome`, `expectedRevision` |
+| `onboarding` | `usualPlaces`, `siteStaffLogExtras` |
 
-`subscriptionCatalogueRequestV1` requires an explicit version and policy version.
-`getSubscriptionCatalogue` returns frozen Solo/Builder rows validated against
-`subscriptionCatalogueRowV1`:
+Only current owners accept terms/change terms/approve simulation. Exact authorization binds tenant, catalogue, terms, plan, cadence, original anchor, maximum and expected revision. Accept, immediate upgrade and simulation approval expiry is bounded by the accepting session's persisted expiry. A pending downgrade's single-use exact approval expires at London midnight ending its first Solo period, so it can execute at the next billing boundary after the accepting login session expires or is revoked. Durable execution still rechecks active owner membership, contractor revocation and revision; revoked owner membership refuses the downgrade. Expired approval cannot authorize execution. No standing consent is created.
 
-| Plan | Monthly pence | Annual pence | Included | Extra pence | Cap | Maximum pence |
-|---|---:|---:|---:|---:|---:|---:|
-| Solo | 2900 | 29000 | 4 | 2000 | 1 | 4900 |
-| Builder | 6900 | 69000 | 7 | 2000 | 5 | 16900 |
+`agreements` contains applied accepted revisions only; pending downgrade intentions live in `changes`. Consumers must select the greatest effective date then accepted revision for the requested London date, never the latest pending change. B must add its own approved trial/conversion facts; fixture trial flags here are intentionally ignored. C must retain existing read authorization and not treat plan data as a substitute for actor grants.
 
-All rows have schemaVersion 1, GBP, proposed status and policy version v4. The
-monthly parameters reference MON-1's actual versioned constants rather than
-introducing a second counting/pricing policy.
+## Calendar, source and pennies
 
-`subscriptionTermsSelectionV1` describes only catalogue version, selected plan,
-cadence, expected revision and terms-version label. It is an **unaccepted
-selection**; it cannot describe an anchor, effective date, actor, approval or
-maximum. `subscriptionPlanChangeSelectionV1` adds settled from/to plan fields,
-without choosing any change execution rule. Cadence defaults to monthly.
-`selectSubscriptionTerms` refuses annual selection; `subscriptionAnnualAvailable`
-is false and no caller input can enable it. The descriptive schema's annual
-literal does not grant annual availability or execution.
+Monthly boundaries retain the original 1–31 anchor and independently clamp to each month's end. Half-open London-date periods include 28–31 actual dates. Same-day accepted revisions resolve by revision. First-period stubs, re-anchoring and unspecified conversion rules remain stopped; no missing dates are fabricated. Annual acceptance and execution are unavailable even if a client supplies an enablement flag.
 
-`subscriptionPeriodPreviewV1` wraps the actual MON-1 input with version
-`subscription-period-preview.v1`. `computeSubscriptionPeriod` validates and
-returns `subscription-period-preview-result.v1`, hypothetical true and zero real
-external actions. It exposes principal, maximum, exact numerator/denominator
-and unallocated daily contributions. No source hash, representative job,
-statement penny allocation or artifact is constructed. Trial days contribute
-zero; an explicitly supplied annual-prepaid reference flag suppresses the base
-only, without proving annual prepayment. Existing MON-1 errors remain typed;
-invalid outer input returns `SubscriptionError(INVALID_SUBSCRIPTION_INPUT)`.
+Stable place keys are canonical lowercase `tenant:customer:site`. Source job UUIDs remain fixture references, not fabricated `app.job` rows. `canonical-place-and-job.v1` chooses the smallest canonical job identity as representative, allocates small-place allowances first by place key, then included/paid-extra/grace places by place key. Bindings retain source ID/revision, representative and rule version immutably. Largest-remainder equal fractions break ties by canonical line key. Hashes exclude random period/statement IDs and input array ordering.
 
-`roundSubscriptionContribution` validates signed canonical integer text and a
-positive integer denominator up to 366, checks the numerator against
-MAX_MONEY_PENCE times that denominator, and rounds half-even once with bigint.
-It creates no correction record and applies no settlement/credit policy.
+Issue consumes latest immutable input under the MON-1B tenant lock and replaces supplied plan/trial/annual flags with accepted terms. Scalar pricing reuses existing core functions and SQL MON-1 projection. Qualified late correction identities are recalculated from their immutable source/predecessor with accepted terms. Positive corrections share the receiving maximum; full/applied/excess remain reconciled and excess alerts persist. Negative facts are retained with zero applied amount and an explicit policy-hold alert. No refund, future credit or excess roll-forward exists. A trigger refuses correction insertion into an already subscription-issued receiving period.
 
-`subscriptionTrackReviewInputV1` accepts a plan, committed scalar capacity and
-zero to three explicitly identified periods. Each period supplies every day's
-count, 28–31 dates implied by its supplied bounds. Periods must be ordered,
-non-overlapping, adjacent and have distinct identities. The caller must supply
-the trailing periods; this pure function cannot authenticate completeness
-against a ledger. Sustained review is evaluated only with a complete three-period
-window; at least two must contain ten days strictly above seven places.
-Immediate review requires Builder committed capacity at least fourteen.
-A thirteenth place does not trigger it. Results are hypothetical booleans and
-busy-day counts; no Decision, operations card or track assignment is written.
+Review is explicit against a current supplied source before issue; issue also evaluates review. Thirteen Builder places are grace, fourteen trigger immediately. Sustained use requires three consecutive periods with at least ten busy days in two. A deduplicated mandatory Decision and internal operations card do not change track. Onboarding stores a recommendation only. This supplied-fact integration is not CH-4 lifecycle wiring.
 
-Onboarding schemas require a safe non-negative integer usual-job count and a
-boolean site-staff capture answer. Seven/no staff routes `small_builder`;
-above seven or staff capture routes `contractor`. This is a pure recommendation.
-API schemas are definitions only; no controller/application/provider/route is
-registered, and OpenAPI is unchanged.
+## Simulation and integrity
 
-## Coordinator prerequisites and holds
+Statements are immutable hypothetical GBP principal-only documents. Period and statement lines sum exactly. Deferred constraints bind lines, sources and exact approved simulated amounts. Redirect is not settlement; the single durable attempt is unique per work/statement. Unknown outcomes require reconciliation. Every adapter/result remains synthetic and posts no ledger fact.
 
-**STOP — catalogue persistence:** the existing LP-0 guard compares all actual
-runtime capabilities against `docs/contracts/lp-0-effective-privileges-v1.json`.
-Its entries array starts at line 61 and has no subscription-catalogue capability.
-`packages/db/test/lp-0-grant-freeze.integration.test.ts:64` requires
-`expect(brief(compareInventory(inventory, baselineMigrationOnly))).toEqual([]);`.
-The necessary new runtime SELECT would be an unreviewed addition. Rule G forbids
-this builder from updating the inventory or that assertion. A coordinator must
-add the reviewed catalogue-only SELECT inventory entry (and schema reachability
-facts if necessary), preserving the assertion, before 0166, repository access
-and real upgrade proofs can proceed. No inert table or guessed access substitute
-has been created. Standard F: no new grants of any kind in this piece.
+The command receipt namespace is shared with existing commands. Payload/actor/family mismatch conflicts; exact retries return committed results. Tenant lock 184 precedes all business and receipt work; audit-head allocation is last. No business lock follows it. Migration installation is transactional; installed history is preserved by additive forward fixes.
 
-**STOP — transitive architecture:** `packages/core/src/jobs-on-the-go.ts:2`
-imports `isSmallJobV3` from `activation-v3.ts`; that module's line 3 imports
-`shadowSuccessFeeV1` from `./shadow-domain/success-fee.js`. The subscription
-calculator's supplied MON-1 seam therefore reaches fee/shadow schemas. Its new
-architecture assertion is deliberately still red. No fee operation is invoked
-by the subscription function, but transitive isolation is not proved. Parent
-owners must expose an isolated supplied-pricing/date/policy seam; this builder
-cannot edit their implementation beyond additive exports and has not duplicated
-meter arithmetic to avoid the dependency.
+Actual PostgreSQL installation, upgrade and adversarial execution remain CI obligations. Two independent Claude verdicts bound to the dispatcher's final commit and separate acceptance are required. This contract is not evidence those checks passed.
 
-Q3 anchor/first-period/same-day rules; Q4 full line attribution/allocation;
-Q5 correction application/collection; Q6 annual activation/prepayment/proration;
-Q7 tenant/session authority; Q8 roles/internal executor; Q9 actual legal track
-move all remain held. Agreements, business tables, statements, controlled SQL,
-HTTP execution, durable reviews/routing, payments, corrections, audit writes and
-actual track changes remain unbuilt. UI, MON-3, MON-8 and live MON-2B remain with
-their assigned tasks. No redirect or fabricated payload has a settlement writer
-to call; the required durable payment proofs remain unbuilt rather than claimed.
+A durable claimed attempt with no result (process interruption or lost result persistence) is also reconciled without another execution. A completed redirect alone is not a settlement or an unknown-outcome retry permission.
