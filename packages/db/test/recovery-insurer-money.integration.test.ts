@@ -99,8 +99,8 @@ beforeAll(async()=>{
  const directory=await mkdtemp(join(tmpdir(),"jg-insurer-")),port=await freePort(60900,100);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:
   accessValue,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();
- admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:
+ await postgres.initialise();await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+ admin=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password:
   accessValue});
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),n=names.indexOf("0142_recovery_insurer_money.sql");
@@ -111,7 +111,7 @@ beforeAll(async()=>{
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')",[M,T,A,U]);
  const login=(await admin.query("SELECT format('CREATE ROLE insurer_test_login LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS',$1::text) statement",[accessValue])).rows[0];
  await admin.query(login.statement);await admin.query("GRANT jobguard_runtime TO insurer_test_login");
- runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"insurer_test_login",password:
+ runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"insurer_test_login",password:
   accessValue});
  for(const [name,type] of [["F19","withheld_customer_payment"],["F21","merchant_overcharge"]]){
   const f=await fixture(type!,false);if(name==="F19")await f.advance("receipt-3000");

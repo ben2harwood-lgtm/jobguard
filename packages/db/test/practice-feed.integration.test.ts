@@ -80,8 +80,8 @@ beforeAll(async () => {
   const port = await freePort(60300, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password,
     persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password });
   // Upgrade from exactly the preceding supported schema, retaining a prior job.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   // The previous schema is every migration registered before 0106, so later migrations (0102, 0103, ...) never change what this suite upgrades from.
@@ -100,7 +100,7 @@ beforeAll(async () => {
   // CH-3a: a job cannot go live without parties. This suite exercises the feed, not the party registry, so it installs the same explicit fictional party recipe as the other pre-CH-3a suites.
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query("CREATE ROLE practice_feed_test_login LOGIN PASSWORD 'synthetic-feed-test-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO practice_feed_test_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "practice_feed_test_login", password, max: 8 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "practice_feed_test_login", password, max: 8 });
 }, 90_000);
 afterAll(async () => { if (priorEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = priorEnvironment; await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 

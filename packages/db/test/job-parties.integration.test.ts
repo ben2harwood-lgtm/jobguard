@@ -127,7 +127,7 @@ describe("stored party revision schemas at the runtime INSERT boundary", () => {
 beforeAll(async () => {
   dir=await mkdtemp(join(tmpdir(),"ch3a-pg16-"));const port=await freePort(58000,300);
   postgres=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
-  await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
+  await postgres.initialise();await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic", database: "jobguard_synthetic_demo"});
   // Upgrade from the exact previous supported schema with each lifecycle state.
   for (const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.indexOf(migrationURL))) await admin.query(await readFile(url,"utf8"));
   const user=randomUUID(),account=randomUUID();
@@ -151,7 +151,7 @@ beforeAll(async () => {
   const migration=await readFile(migrationURL,"utf8");
   await admin.query(migration.replace("BEGIN;","BEGIN; SELECT set_config('app.deployment_mode','synthetic_demo',true);"));
   await admin.query(`CREATE ROLE ch3a_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch3a_login;`);
-  runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"ch3a_login",password:"synthetic",max:5});repository=new JobPartiesRepository(runtime);
+  runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"ch3a_login",password:"synthetic",max:5});repository=new JobPartiesRepository(runtime);
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();if(dir)await rm(dir,{recursive:true,force:true});});
 

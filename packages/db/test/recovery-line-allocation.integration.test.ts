@@ -50,10 +50,10 @@ beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   directory = await mkdtemp(join(tmpdir(), "jg-line-allocation-"));
   const port = await freePort(63400, 180);
-  const options = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: passphrase };
+  const options = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: passphrase };
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: passphrase, persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
   admin = new Pool(options); await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);

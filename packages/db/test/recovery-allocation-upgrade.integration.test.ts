@@ -50,10 +50,10 @@ beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   directory = await mkdtemp(join(tmpdir(), "jg-allocation-upgrade-"));
   const port = await freePort(63600, 180);
-  const options = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: passphrase };
+  const options = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: passphrase };
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: passphrase, persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
   admin = new Pool(options);
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   const at = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("0136_recovery_allocation.sql"));

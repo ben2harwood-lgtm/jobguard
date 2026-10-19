@@ -6,7 +6,7 @@
         "codex/sandbox/lp-2"
       ],
       "receipt": "docs/verdicts/LP-2/BUILDER_RECEIPT.md",
-      "note": "LP-2 round 3; decision 74/75 BUILD-DONT-MERGE. Database and existing server caller compatibility only; C1: no new web workflow, UI parked. Synthetic only. Coordinator must retire the duplicate legacy LP-2 registration and review LP-0 inventory/fixture changes. Migration discovery and note follow decision 35; do not edit shared migration registry or ledger.",
+      "note": "LP-2 r4b, rulings 103 + 106; decision 74 BUILD-DONT-MERGE. Authorised inventory, owner/trusted-database fixtures and routine-name unit mock repair. PostgreSQL/browser NOT RUN locally; no grants restored.",
       "allow": [
         "docs/contracts/least-privilege-job-doors-v1.md",
         "docs/operations/lp-2-rollout-evidence.md",
@@ -33,7 +33,14 @@
         "packages/db/src/migrate.ts",
         "packages/db/MIGRATIONS.md",
         "packages/db/src/index.ts",
-        "packages/db/src/lp-job-doors.ts"
+        "packages/db/src/lp-job-doors.ts",
+        "packages/db/test/audit-api-capture.test.ts",
+        "packages/db/test/job.integration.test.ts",
+        "packages/db/test/commands.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts",
+        "packages/db/test/contractor-parties.integration.test.ts",
+        "packages/db/test/lp-0-authority-paths.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json"
       ]
     }
   }

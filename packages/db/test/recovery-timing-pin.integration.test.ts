@@ -40,7 +40,7 @@ beforeAll(async () => {
   port = await freePort(62500, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
   admin = new Pool(connectionOptions("postgres", "postgres"));
   await migrate(admin); await seed(admin);
   await admin.query("CREATE ROLE stored_times_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO stored_times_login");

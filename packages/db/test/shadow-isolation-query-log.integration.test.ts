@@ -14,8 +14,8 @@ const credential=randomUUID(),session=randomUUID(),J=randomUUID(),logs:string[]=
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,shadow:Pool,dir:string;
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";dir=await mkdtemp(join(tmpdir(),"sv3-query-log-"));const port=await freePort(57500,500);
- pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});await pg.initialise();await pg.start();
- const pool=(user:string)=>new Pool({host:"127.0.0.1",port,user,password:credential,database:"postgres",max:1});admin=pool("postgres");await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
+ pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});await pg.initialise();await pg.start(); await pg.createDatabase("jobguard_synthetic_demo");
+ const pool=(user:string)=>new Pool({host:"127.0.0.1",port,user,password:credential,database:"jobguard_synthetic_demo",max:1});admin=pool("postgres");await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query("ALTER SYSTEM SET log_line_prefix='SV3:%u: '");await admin.query("SELECT pg_reload_conf()");
  for(const [login,role] of [["sv3_log_runtime","jobguard_runtime"],["sv3_log_shadow","jobguard_shadow"]])await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT ${role} TO ${login}`);
  await admin.query("ALTER ROLE sv3_log_runtime SET log_statement='all'");runtime=pool("sv3_log_runtime");shadow=pool("sv3_log_shadow");
