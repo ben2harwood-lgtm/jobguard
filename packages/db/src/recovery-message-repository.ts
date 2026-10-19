@@ -262,6 +262,11 @@ export class RecoveryMessageRepository {
         await this.audit(db, actor, messageId, "blocked", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
         return { replayed: false as const, blocked: true as const };
       }
+      // An explicit owner retry is due now; automatic retries retain the executor's back-off.
+      // Keep this business-row lock before the started event and audit append, in the same transaction.
+      if (status === "retryable") {
+        await db.$client.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status='retryable'", [ctx.tenantId, m.outbox_action_id]);
+      }
       const started = await this.event(db, ctx.tenantId, ref, actor, "started", input.commandId, requestHash, revision);
       await this.audit(db, actor, messageId, "started", { caseId, jobId: m.job_id, commandId: input.commandId }, m.content_hash, requestHash);
       return { replayed: false as const, blocked: false as const, started, outboxId: m.outbox_action_id!, row: m };
@@ -488,16 +493,30 @@ export class RecoveryMessageRepository {
       // The committed unknown outbox state is positive evidence of uncertainty, never of a successful delivery.
       if (m.outbox_status === "outcome_unknown" && attempts.at(-1)?.outcome === "started") {
         await db.$client.query("UPDATE app.action_attempt SET outcome='outcome_unknown',error_code='STALE_CLAIM',finished_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND outcome='started'", [tenantId, attempts.at(-1)!.id]);
+        attempts.at(-1)!.outcome = "outcome_unknown";
       }
+      let startGroups = history.filter((event, index) => event.kind === "started" && history[index - 1]?.kind !== "started").length;
       if ((last.kind === "approved" || last.kind === "retryable") && attempts.length > history.filter(event => event.kind === "started").length) {
         const attempt = attempts.at(-1)!;
         await append("started", attempt.id, requestHashOf({ attemptId: attempt.id, messageId: m.id }), m.approving_membership_id!);
+        startGroups += 1;
       }
+      // The outbox row is one status for the whole action, so on its own it cannot say WHICH attempt produced it. The open start
+      // (an unbroken run of start events is one claim intent) belongs to the attempt at its own position; a result is taken only
+      // from that attempt's own record, and only while the outbox status agrees with it. A start whose attempt has not been
+      // claimed yet has no result: the outbox still shows the previous attempt's, which must never close this one.
+      const own = attempts[startGroups - 1];
       let kind: RecoveryMessageEventKind | undefined;
       if (last.kind === "started") {
-        const kinds: Record<string, RecoveryMessageEventKind> = { succeeded: "succeeded", outcome_unknown: "outcome_unknown", retryable: "retryable", dead_letter: "failed", cancelled: "blocked" };
-        kind = kinds[m.outbox_status ?? ""];
-      } else if (last.kind === "reconcile_started") {
+        if (m.outbox_status === "cancelled") kind = "blocked";
+        else if (own) {
+          const settled: Record<string, [string, RecoveryMessageEventKind]> = {
+            succeeded: ["succeeded", "succeeded"], outcome_unknown: ["outcome_unknown", "outcome_unknown"], retryable: ["retryable", "retryable"], failed: ["dead_letter", "failed"] };
+          const match = settled[own.outcome];
+          if (match && match[0] === m.outbox_status) kind = match[1];
+        }
+      } else if (last.kind === "reconcile_started" && own) {
+        // The check belongs to the attempt it reconciles (the bound one); a later attempt that has no record yet cannot be closed by it.
         if (m.outbox_status === "succeeded") kind = "reconciled";
         else if (m.outbox_status === "retryable") kind = "retryable";
       }
