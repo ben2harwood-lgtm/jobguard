@@ -384,7 +384,10 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    // Real authorized delivery exercises notification content and retry telemetry, with no external provider.
    let attempts=0;const adapter:import("@jobguard/db").OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async action=>{trace.notifications.push(action);return ++attempts===1?{kind:"retryable",code:"SYNTHETIC_RETRY"}:{kind:"succeeded",providerReference:"synthetic:Q"}},reconcile:async()=>"unknown"};
    const executor=new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:(name:Parameters<import("@jobguard/db").SafeTelemetry["emit"]>[0],fields:Readonly<Record<string,string|number>>)=>trace.telemetry.push({name,fields})});
-   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   await inspect.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1",[queued]);
+   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   await inspect.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1",[queued]);
+   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
    expect(trace.notifications).toHaveLength(2);expect(trace.telemetry).toContainEqual(expect.objectContaining({name:"outbox.retry"}));
    await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:rebuilt.revisionId,expectedSourceHash:rebuilt.sourceHash,recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
    const invoice=(await app.customerInvoice.get(a.jobId)).invoices[0]!;
