@@ -1,6 +1,6 @@
 # SV5PRE completion prerequisites v1 — 13 October 2026
 
-Synthetic small-builder work only. Issued base `2350b1a718b76aabdedd1782f02e92f516914246`; migration `0197_final_check_prerequisites.sql`. This is prerequisite construction, not technical acceptance or SV-5 completion. Database, browser and actual worker execution remain unexecuted in the builder sandbox. The builder receipt records all holds.
+Synthetic small-builder work only. Issued base `2350b1a718b76aabdedd1782f02e92f516914246`; migration `0198_final_check_prerequisites.sql`. This is prerequisite construction, not technical acceptance or SV-5 completion. Database, browser and actual worker execution remain unexecuted in the builder sandbox. The builder receipt records all holds.
 
 The legacy seven-argument issue routine and the explicit final/supplementary routine require the same authoritative completion predicate for new effects. Deposits are unchanged. A genuine invoice issued before this migration can replay its immutable result after current membership, expiry and persisted session/job checks; it gains no invented lock or certificate. A second fresh main final is refused. The legacy artifact and returned columns are preserved. Side bindings record the exact lock, check, revision and source lines; no fingerprinted table gains a column.
 

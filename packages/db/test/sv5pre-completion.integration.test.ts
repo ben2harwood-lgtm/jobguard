@@ -24,6 +24,15 @@ describe("SV5PRE authoritative completion", () => {
   return { events: await rows(tenantId, 'app.audit_event'), head: await rows(tenantId, 'audit_control.audit_head') };
  }
  async function locked() { const a=await seedAccount(f.admin); const repo=await prepareLock(f,a); await repo.lock(a.context,a.input); return a; }
+ it("PRE-Q5-R1 the lock refuses while a pre-lock site photo is still pending, and succeeds once it is checked (per C135)",async()=>{
+  const a=await seedAccount(f.admin),uploadId=randomUUID(),repo=await prepareLock(f,a);
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`sv5pre/${uploadId}`]));
+  await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:"FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"});
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='SYNTHETIC' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]));
+  await repo.lock(a.context,a.input);
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(1);
+ });
  it("PRE-Q5-01 a completed string without a run is refused", async () => {
   const a=await locked(); await expect(asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,status) VALUES($1,$2,$3,'completed')",[a.tenantId,a.jobId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
   expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);

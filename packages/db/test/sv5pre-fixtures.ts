@@ -131,7 +131,7 @@ export async function createHistoricalInvoice() {
   const { MIGRATION_URLS }=await import('../src/migrate.js'),{readFile}=await import('node:fs/promises');
   await fixture.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for(const url of MIGRATION_URLS) {
-   const name=url.pathname.split('/').at(-1)!;if(name==='0197_final_check_prerequisites.sql') break;
+   const name=url.pathname.split('/').at(-1)!;if(name==='0198_final_check_prerequisites.sql') break;
    await fixture.admin.query(await readFile(url,'utf8'));
    await fixture.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)",[name]);
   }

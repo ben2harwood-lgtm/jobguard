@@ -546,4 +546,74 @@ BEGIN
  RETURN result;
 END $$;
 
+-- Restated on 0187's body; the only change is the pending-photo refusal above (C135).
+CREATE OR REPLACE FUNCTION app.lock_final_account(p_tenant uuid,p_job uuid,p_actor uuid,p_command uuid,p_revision uuid,p_expected integer,p_declaration text) RETURNS app.final_account_lock
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE request_digest text; prior app.command_receipt; existing_lock app.final_account_lock; r app.final_account_revision; sources jsonb; s jsonb;
+ row_id uuid:=gen_random_uuid(); event_id uuid:=gen_random_uuid(); server_time timestamptz; result jsonb;
+BEGIN
+ PERFORM app.final_lock_require_owner(p_tenant,p_actor);
+ -- Always the job first, as in SV-2 reveal/disclosure; audit allocation is last.
+ PERFORM 1 FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id)
+ WHERE j.tenant_id=p_tenant AND j.id=p_job AND j.status IN ('live','invoiced','paid') AND t.job_track='small_builder'
+ AND t.environment='synthetic_demo' FOR UPDATE OF j;
+ IF NOT FOUND THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ PERFORM app.final_lock_require_owner(p_tenant,p_actor);
+ IF p_command IS NULL OR p_revision IS NULL OR p_expected IS NULL OR p_expected<0 OR p_declaration IS DISTINCT FROM 'final_account_declaration.v1' THEN RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_LOCK_INPUT'; END IF;
+ request_digest:=app.final_lock_hash(jsonb_build_object('command','LockFinalAccount','job',p_job,'actor',p_actor,'revision',p_revision,'expected',p_expected,'declaration',p_declaration));
+ SELECT * INTO prior FROM app.command_receipt WHERE tenant_id=p_tenant AND command_id=p_command;
+ IF FOUND THEN
+  IF prior.command_type<>'LockFinalAccount' OR prior.request_hash<>request_digest THEN RAISE EXCEPTION 'IDEMPOTENCY_PAYLOAD_CONFLICT' USING ERRCODE='23505'; END IF;
+  SELECT * INTO existing_lock FROM app.final_account_lock WHERE tenant_id=p_tenant AND command_id=p_command; RETURN existing_lock;
+ END IF;
+ SELECT * INTO existing_lock FROM app.final_account_lock WHERE tenant_id=p_tenant AND job_id=p_job;
+ IF FOUND THEN RAISE EXCEPTION 'FINAL_ACCOUNT_ALREADY_LOCKED' USING ERRCODE='23505',DETAIL=existing_lock.id::text; END IF;
+ SELECT x.* INTO r FROM app.final_account_revision x JOIN app.final_account_draft d ON(d.tenant_id,d.job_id,d.current_revision_id)=(x.tenant_id,x.job_id,x.id)
+ WHERE x.tenant_id=p_tenant AND x.job_id=p_job AND x.id=p_revision AND x.revision=p_expected AND NOT x.issue_blocked;
+ IF NOT FOUND THEN RAISE EXCEPTION 'STALE_OR_BLOCKED_FINAL_ACCOUNT' USING ERRCODE='40001'; END IF;
+ -- C135 / R1: a site photo begun before the lock must finish its check first. After the lock the job-work-state rule refuses any
+ -- verification of a photo upload, so a pending one could never be checked and the final check could never complete.
+ IF EXISTS(SELECT 1 FROM app.evidence_upload u WHERE u.tenant_id=p_tenant AND u.job_id=p_job AND u.state='pending'
+  AND u.expected_content_type IN('image/png','image/jpeg','image/webp') AND u.expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'FINAL_ACCOUNT_UPLOADS_IN_PROGRESS' USING ERRCODE='55000'; END IF;
+ PERFORM 1 FROM app.variation WHERE tenant_id=p_tenant AND job_id=p_job ORDER BY id FOR UPDATE;
+ -- Both directions matter: missing, replaced, duplicated or spurious approved lines require reassembly.
+ -- Approval writers lock their variation before inserting approval, so this statement runs after all waits.
+ IF EXISTS(
+  WITH effective AS (
+   -- Keep this SQL alias distinct from the final-account record variable r.
+   SELECT DISTINCT ON (a.variation_id) approved_revision.id source_id,approved_revision.scope_item_id,approved_revision.id commercial_revision_id,
+    a.id approval_id,approved_revision.signed_delta_pence net_pence,approved_revision.description
+   FROM app.variation_approval a
+   JOIN app.variation_revision approved_revision ON(approved_revision.tenant_id,approved_revision.job_id,approved_revision.id)=(a.tenant_id,a.job_id,a.revision_id)
+   WHERE a.tenant_id=p_tenant AND a.job_id=p_job
+   ORDER BY a.variation_id,approved_revision.revision DESC
+  ), actual AS (
+   SELECT source_id,scope_item_id,commercial_revision_id,approval_id,net_pence,description
+   FROM app.final_account_line WHERE tenant_id=p_tenant AND job_id=p_job
+    AND final_account_revision_id=p_revision AND line_kind='variation'
+  )
+  SELECT * FROM (TABLE effective EXCEPT ALL TABLE actual) missing
+  UNION ALL SELECT * FROM (TABLE actual EXCEPT ALL TABLE effective) obsolete
+ ) THEN RAISE EXCEPTION 'STALE_OR_BLOCKED_FINAL_ACCOUNT' USING ERRCODE='40001'; END IF;
+ sources:=app.read_final_account_lock_sources(p_tenant,p_job,p_revision);
+ IF jsonb_array_length(sources->'captureRegister')<>(SELECT count(DISTINCT value->>'id') FROM jsonb_array_elements(sources->'captureRegister')) THEN RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_LOCK_INPUT'; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(sources->'captureRegister') c WHERE length(c.value->>'description') NOT BETWEEN 1 AND 4000 OR (c.value->>'valuePence')::numeric>1000000000000)
+ OR EXISTS(SELECT 1 FROM jsonb_array_elements(sources->'lines') l WHERE (l.value->>'netPence')::numeric>1000000000000) THEN RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_LOCK_INPUT'; END IF;
+ IF jsonb_array_length(sources->'baselineScopeItemIds')=0 OR jsonb_array_length(sources->'scopeDispositions')<>jsonb_array_length(sources->'baselineScopeItemIds') THEN RAISE EXCEPTION 'SCOPE_DISPOSITION_MISSING'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=p_tenant AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'DISCLOSURE_TERMS_NOT_ACCEPTED'; END IF;
+ server_time:=clock_timestamp();
+ s:=sources||jsonb_build_object('version','shadow-lock.v1','tenantId',p_tenant,'jobId',p_job,'finalAccountRevisionId',p_revision,'baselineQuoteVersionId',r.baseline_quote_version_id,
+  'declaration','I''ve reviewed the work and extras on this job and this is my complete final account.','declarationVersion',p_declaration,'onboardingTermsVersion','synthetic_final_check_terms.v1',
+  'lockingMembershipId',p_actor,'serverTimestamp',to_char(server_time AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'commandId',p_command,'auditEventId',event_id);
+ result:=jsonb_build_object('lockId',row_id);
+ INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
+ VALUES(p_tenant,p_command,'LockFinalAccount',p_job::text,request_digest,'succeeded',result,p_actor,server_time);
+ INSERT INTO app.final_account_lock(tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,
+ declaration,declaration_version,onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id)
+ VALUES(p_tenant,p_job,row_id,p_revision,r.baseline_quote_version_id,app.final_lock_hash(s->'captureRegister'),app.final_lock_hash(s->'lines'),app.final_lock_hash(s->'scopeDispositions'),app.final_lock_hash(s),s,
+ s->>'declaration',p_declaration,'synthetic_final_check_terms.v1',p_actor,server_time,p_command,event_id) RETURNING * INTO existing_lock;
+ PERFORM app.append_final_lock_audit(event_id,p_actor,p_job,'final_account.locked',jsonb_build_object('lockId',row_id,'commandId',p_command,'finalAccountRevisionId',p_revision),jsonb_build_object('snapshot',existing_lock.snapshot_digest));
+ RETURN existing_lock;
+END $$;
+
 COMMIT;
