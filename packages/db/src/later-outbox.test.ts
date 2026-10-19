@@ -26,6 +26,7 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
     }
     if (sql.startsWith("SELECT status") || sql.startsWith("SELECT provider_effect_key")) return { rows: [{ ...row }], rowCount: 1 };
     if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 0 }], rowCount: 1 };
+    if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [], rowCount: 1 };
     if (sql.startsWith("SELECT nullif")) return { rows: [{ tenant_id: tenant }], rowCount: 1 };
     if (sql.includes("app.lock_audit_head")) return { rows: [], rowCount: 0 };
     if (sql.startsWith("SELECT clock_timestamp")) return { rows: [{ occurred_at: new Date() }], rowCount: 1 };
