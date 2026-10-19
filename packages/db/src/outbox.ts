@@ -11,6 +11,30 @@ export type FakeDeliveryResult={kind:"succeeded";providerReference:string}|{kind
 export interface OutboundAdapter {readonly name:`fake_${string}`;readonly supportsProviderDeduplication:boolean;deliver(action:Readonly<OutboundAction>):Promise<FakeDeliveryResult>;reconcile(providerEffectKey:string):Promise<"succeeded"|"not_found"|"unknown">;}
 export interface SafeTelemetry{emit(name:"outbox.queue_age"|"outbox.failure"|"outbox.retry"|"outbox.unknown_outcome",fields:Readonly<Record<string,string|number>>):void;}
 const rowToAction=(r:any):OutboundAction=>outboundActionV1Schema.parse({version:"outbound-action.v1",id:r.id,authorizationId:r.authorization_id,adapter:r.adapter,providerEffectKey:r.provider_effect_key,actionType:r.action_type,recipient:r.recipient,contentHash:r.content_hash,immutableContent:r.immutable_content,aggregateRevision:r.aggregate_revision,amountPence:r.amount_pence===null?null:Number(r.amount_pence),currency:r.currency,policyVersion:r.policy_version,authorizationExpiresAt:r.authorization_expires_at});
+/** Terminal refusal: no adapter call or delivery attempt is made. */
+export type OutboxRevocationRefusal = { kind: "cancelled"; code: "AUTHORIZATION_REVOKED" };
+
+async function cancelRevokedAction(db: TenantTransaction, id: string, adapters: readonly string[]): Promise<OutboxRevocationRefusal | undefined> {
+  // A failed authority lookup must not leave revoked work eligible for blind retry.
+  // Scope both the authorization and revocation to the action's tenant and author.
+  const cancelled = await db.$client.query<{ id: string }>(`UPDATE app.action_outbox o SET status='cancelled',updated_at=clock_timestamp()
+    FROM app.action_authorization a
+    JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id
+    JOIN app.contractor_membership_revocation revoked
+      ON revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id
+    WHERE o.id=$1 AND o.adapter=ANY($2::text[]) AND o.status IN ('pending','retryable')
+      AND a.tenant_id=o.tenant_id AND a.id=o.authorization_id
+      AND revoked.membership_id IS NOT NULL
+    RETURNING o.id`, [id, adapters]);
+  if (!cancelled.rows.length) return;
+  await appendAuditBatch(db, [{
+    id: randomUUID(), version: "audit.v1", actorRef: "system:outbox",
+    eventType: "outbox.authorization_revoked", subjectType: "outbox_action", subjectRef: id,
+    payload: { references: { outcome: "cancelled", code: "AUTHORIZATION_REVOKED" }, classifications: { action: "security" } },
+  }]);
+  return { kind: "cancelled", code: "AUTHORIZATION_REVOKED" };
+}
+
 // Append only after all business writes. Reconciliation evidence and the resulting
 // state share this commit; callers cannot manufacture evidence with safeRetry.
 async function auditOutcome(db: TenantTransaction, id: string, status: string, references: Record<string, string> = {}) {
@@ -25,9 +49,12 @@ export class ActionExecutor {
   async execute(context: VerifiedTenantContext, id: string) {
     let action: OutboundAction | undefined;
     let attempt = 0;
+    let refusal: OutboxRevocationRefusal | undefined;
     await withTenant(this.pool, context, async db => {
-      const r = (await db.$client.query<any>(`SELECT o.* FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) WHERE o.id=$1 AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
-      if (!r || !this.adapters.has(r.adapter)) return;
+      await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))`, [context.tenantId]);
+      const r = (await db.$client.query<any>(`SELECT o.* FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved' JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation revoked WHERE revoked.tenant_id=m.tenant_id AND revoked.membership_id=m.id) AND a.revoked_at IS NULL AND o.action_type=a.action_type AND o.recipient IS NOT DISTINCT FROM a.recipient AND o.content_hash=a.content_hash AND o.aggregate_revision=a.aggregate_revision AND o.amount_pence IS NOT DISTINCT FROM a.amount_pence AND o.currency IS NOT DISTINCT FROM a.currency AND o.policy_version=a.policy_version AND o.authorization_expires_at<=a.expires_at AND (o.status='executing' OR o.next_attempt_at<=clock_timestamp()) FOR UPDATE OF o`, [id])).rows[0];
+      if (!r) { refusal = await cancelRevokedAction(db, id, [...this.adapters.keys()]); return; }
+      if (!this.adapters.has(r.adapter)) return;
       if (r.status === "executing" && new Date(r.claimed_at).getTime() < Date.now() - 300_000) {
         await db.$client.query(`UPDATE app.action_outbox SET status='outcome_unknown',updated_at=clock_timestamp() WHERE id=$1`, [id]);
         await auditOutcome(db, id, "outcome_unknown", { reason: "stale_claim" });
@@ -46,7 +73,7 @@ export class ActionExecutor {
       await db.$client.query(`UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`, [id]);
       await db.$client.query(`INSERT INTO app.action_attempt(id,tenant_id,action_id,attempt_number,outcome) VALUES($1,$2,$3,$4,'started')`, [randomUUID(), context.tenantId, id, attempt]);
     });
-    if (!action) return;
+    if (!action) return refusal;
     const adapter = this.adapters.get(action.adapter);
     if (!adapter) throw new Error("FAKE_ADAPTER_NOT_REGISTERED");
     const result = await adapter.deliver(Object.freeze(action));
