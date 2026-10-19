@@ -20,7 +20,7 @@ const previousSchema = vi.hoisted(() => ({ active: true }));
 vi.mock("@jobguard/core", async original => {
  const actual = await original<typeof import("@jobguard/core")>();
  return { ...actual, evaluateRecoveryEligibilityV3: (raw: unknown) => {
-  const result = actual.evaluateRecoveryEligibilityV3(previousSchema.active ? {...raw as object,payer:"not_insurer",termsTiming:"before_settlement"} : raw);
+  const result = actual.evaluateRecoveryEligibilityV3(previousSchema.active ? {...raw as object,payer:"not_insurer"} : raw);
   if (previousSchema.active && result.fixture === "F21") return { ...result, reason: null, reasonHeld: true, lines: result.lines.map(line => ({ ...line, reason: null, reasonHeld: true })) };
   if (!previousSchema.active || result.fixture !== "F19") return result;
   return { ...result, reasonHeld: true, lines: result.lines.map(line => line.kind === "statutory_interest" ? { ...line, reason: null, reasonHeld: true } : line) };
@@ -122,7 +122,7 @@ beforeAll(async()=>{
  previousSchema.active=false;
  const legacy=await fixture("withheld_customer_payment",false);await legacy.advance("receipt-3000");
  await advanceInterestFact(legacy,"receipt-interest-120");await advanceInterestFact(legacy,"receipt-compensation-70");
- prePayerReview=await new PreviousRecoveryEligibilityV3Repository(legacy.pool,"synthetic_demo").review(ctx,legacy.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:legacy.c.id,expectedCaseRevision:legacy.c.revision,expectedReviewRevision:0,fixture:"F18"},actor,legacy.auth.digest);
+ prePayerReview=await legacy.reviews.review(ctx,legacy.jobId,{version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:legacy.c.id,expectedCaseRevision:legacy.c.revision,expectedReviewRevision:0,fixture:"F18"},actor,legacy.auth.digest);
  proof=await proofBefore(admin,["app.recovery_eligibility_v3_review","app.recovery_claim_line"]);
  await admin.query(await readFile(MIGRATION_URLS[n]!,"utf8"));
  await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[names[n]]);
@@ -236,7 +236,7 @@ it("[DB18] preserves named pre-existing F19/F21 rows and full types with rolled-
 // Raw writer controls independently test the PostgreSQL backstop.
 async function rawReview(f:Awaited<ReturnType<typeof fixture>>,insurer:boolean,mutate:(result:unknown)=>unknown=result=>result){
  const event=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='receipt-3000' AND event_kind='settled'",[T,f.jobId])).rows[0];
- const ordinary=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:event.id});
+ const ordinary=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:event.id});
  const result=insurer?{...ordinary,outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Insurer proceeds never qualify",lines:ordinary.lines.map(line=>({...line,qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Insurer proceeds never qualify"}))}:ordinary;
  return withTenant(f.pool,ctx,async db=>{
   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");

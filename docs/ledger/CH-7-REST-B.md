@@ -45,3 +45,7 @@ Remaining item-specific STOPs:
 4. A's files remain outside B's exact lane against stale local origin/main. No lane widening, historical migration, central registry, runner, inventory or A test edits. A browser/current-schema fixture outside the lane also requires a dispatcher amendment.
 
 No task closure: C's non-v3 pursuit work, database/browser execution, complete adversarial/upgrade coverage, independent different-model RED verdict, separate technical acceptance and all production/release gates remain. This patch is reviewable build-ahead work, not a merge-ready complete B.
+
+## ruling 130 / option B (refined by ruling 131) — 19 October 2026
+
+Supersedes the missing-approval and equality STOPs above (their `ELIGIBILITY_TERMS_DECISION_REQUIRED` hold is removed). Eligibility review never refuses for fee terms; the terms requirement stays at pursuit only (CH-7-REST-A's merged guard, untouched). Decision 123's pre-terms exclusion (Q 0, exact note) applies only when an approval exists and `approved_at` is strictly after the qualifying settlement's `created_at`. Approval earlier than (or equal to) the settlement qualifies normally; no approval evaluates exactly as before DW3 (provisional: see the FIX-LATER item in the builder receipt). The cross-lane mocked suite `recovery-eligibility-v3-interest.test.ts` passes unedited. Still open: reversed transaction-start/commit ordering, supplier-credit terms (writer is withheld-only), CI database/browser execution, independent RED verdict and acceptance. No push, merge or release performed.

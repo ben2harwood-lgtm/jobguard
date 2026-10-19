@@ -12,12 +12,11 @@ export const recoveryEligibilityCommandV3 = z.object({
 export const recoveryEligibilityFactsV3 = z.object({
  version:z.literal("recovery-eligibility-facts.v3"),environment:z.literal("synthetic_demo"),tenantId:z.string().uuid(),jobId:z.string().uuid(),caseId:z.string().uuid(),
  fixture:recoveryEligibilityFixtureV3,payer:z.enum(["not_insurer","insurer_unmarked","insurer_customer_own"]),settlement:z.enum(["settled","pending","unverified"]),paymentTiming:z.enum(["before_opening","after_opening"]),sourceRef:z.string().min(1).max(300),
+ // Ruling 130 option B: server-derived and OPTIONAL. Absent means no persisted fee-terms approval exists for the case; terms never gate a review.
  termsTiming:z.enum(["before_settlement","after_settlement"]).optional(),
-}).strict().superRefine((facts,ctx)=>{
- if(["F18","F19","F20"].includes(facts.fixture)&&facts.termsTiming===undefined)ctx.addIssue({code:"custom",path:["termsTiming"],message:"Server-derived terms timing required"});
-});
+}).strict();
 export class RecoveryEligibilityV3Error extends Error {
- constructor(readonly code:"ELIGIBILITY_TERMS_DECISION_REQUIRED"|"INVALID_COMMAND"|"ELIGIBILITY_SOURCE_REQUIRED"|"ELIGIBILITY_FIXTURE_MISMATCH"|"ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE") {super(code);}
+ constructor(readonly code:"INVALID_COMMAND"|"ELIGIBILITY_SOURCE_REQUIRED"|"ELIGIBILITY_FIXTURE_MISMATCH"|"ELIGIBILITY_SUPPLIER_PAYMENT_UNAVAILABLE") {super(code);}
 }
 export const recoveryClaimLineKindV3 = z.enum(["principal","statutory_interest","fixed_compensation"]);
 export const recoveryDebtorTypeV3 = z.enum(["business","individual"]);
@@ -51,7 +50,8 @@ export function recoveryFixtureDefinitionV3(fixture:RecoveryEligibilityFixtureV3
  return {category,credit,lines,movement:fixture==="F17"?"supplier-refund-540":fixture==="F20"?"receipt-384":"receipt-3000"} as const;
 }
 /** D03 v3 synthetic candidates only. The required payer fact is server-derived; terms authority is not created here.
- * Withheld-payment terms timing is required and derived from persisted approval and original settlement in PostgreSQL.
+ * Withheld-payment terms timing is optional and server-derived (ruling 130 option B): only "after_settlement", i.e. a persisted approval strictly later than the
+ * qualifying settlement, is the decision 123 exclusion. "before_settlement" and absent (no approval) evaluate exactly as before DW3; the terms requirement lives at pursuit.
  * No result authorizes pursuit or money posting. All category/line arithmetic comes from SV-1 and SH-1. */
 export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityViewV3 {
  const parsed=recoveryEligibilityFactsV3.safeParse(raw);if(!parsed.success)throw new RecoveryEligibilityV3Error("INVALID_COMMAND");
@@ -65,7 +65,7 @@ export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityVi
    proof:{version:"shadow-settlement-proof.v1",...binding,status:f.settlement==="settled"?"verified_settled":f.settlement==="pending"?"pending":"unverified",sourceRef:f.sourceRef},
    origin:{version:"shadow-eligibility-origin.v1",...binding,kind:definition.category==="withheld_customer_payment"?"builder_opened_case":"approved_supplier_case",sourceRef:f.caseId},principalNet:serializeExactPence(exactPence(BigInt(line.netPence)))};
   const specifics=definition.category==="duplicate_supplier_payment"?{category:definition.category,doublePaymentEvidenced:true,refundForm:"cash"}:
-   definition.category==="withheld_customer_payment"?{category:definition.category,builderOpened:true,feeTermsApprovedBeforePursuit:f.termsTiming==="before_settlement",overdue:{version:"D03-overdue.v1",basis:"synthetic_fixture",thresholdMet:true,sourceRef:f.caseId},ownReminderResponse:"ignored",paymentTiming:f.fixture==="F20"?"before_opening":f.paymentTiming,proceeds:f.payer==="insurer_unmarked"?"insurer":"customer_cash",component:line.kind,debtor:line.debtorType}:
+   definition.category==="withheld_customer_payment"?{category:definition.category,builderOpened:true,feeTermsApprovedBeforePursuit:f.termsTiming!=="after_settlement",overdue:{version:"D03-overdue.v1",basis:"synthetic_fixture",thresholdMet:true,sourceRef:f.caseId},ownReminderResponse:"ignored",paymentTiming:f.fixture==="F20"?"before_opening":f.paymentTiming,proceeds:f.payer==="insurer_unmarked"?"insurer":"customer_cash",component:line.kind,debtor:line.debtorType}:
    definition.category==="prevention"?{category:definition.category}:{category:definition.category,mode:"applied_credit",credit:{consumedNetPence:line.netPence,laterInvoiceId:f.jobId,laterInvoicePayment:f.fixture==="F16-partial"?"partial":f.fixture==="F21"?"unpaid":"full",sourceRef:f.sourceRef}};
   const result=evaluateRecoveryEligibility(createEligibilityFacts({...base,...specifics}));
   const reason:RecoveryEligibilityViewV3["reason"]=f.fixture==="F22"?"Prevented spending is not recovered cash":

@@ -3,7 +3,7 @@ import { sha256 } from "./evidence-pack.js";
 import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityFactsV3, recoveryEligibilityViewV3, RECOVERY_NOT_COUNTED_WORDING_V1 } from "./recovery-eligibility-v3.js";
 import { assertRecoverySources, recoveryCaseTypeV1 } from "./recovery-case.js";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
-const facts = (fixture: string, changes: Record<string,unknown> = {}) => ({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:id(1),jobId:id(2),caseId:id(3),fixture,payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:id(4),...changes});
+const facts = (fixture: string, changes: Record<string,unknown> = {}) => ({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:id(1),jobId:id(2),caseId:id(3),fixture,payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:id(4),...changes});
 describe("CH-7 D03 v3 candidate reviews", () => {
  it("B1 accepts the additive supplier case category and source split",()=>{
   expect(recoveryCaseTypeV1.parse("duplicate_supplier_payment")).toBe("duplicate_supplier_payment");

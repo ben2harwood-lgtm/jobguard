@@ -1,5 +1,6 @@
--- CH-7-REST-B / decision 123. Restates 0195 guards; no history/backfill.
--- Missing approval and equal timestamps remain STOP items (no stored product result).
+-- CH-7-REST-B / decision 123 as applied by ruling 130 (option B). Restates 0197 guards; no history/backfill.
+-- Fee terms never gate a review. Only an approval that EXISTS and is strictly later than the settled source excludes (decision 123 note).
+-- No approval, an earlier approval or an equal timestamp evaluate exactly as before DW3. No review refusal for terms (the requirement lives at pursuit).
 BEGIN;
 
 CREATE OR REPLACE FUNCTION app.guard_recovery_eligibility_v3() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
@@ -98,9 +99,8 @@ BEGIN
    WHERE a.tenant_id=NEW.tenant_id AND a.job_id=NEW.job_id AND a.case_id=NEW.case_id
     AND a.terms_version='synthetic_recovery_fee_terms.v1' AND a.fee_policy_version='reference_fee_policy_v3'
     AND a.eligibility_policy_version='reference_recovery_eligibility_policy_v3' AND a.environment='synthetic_demo' AND a.policy_status='proposed';
-  IF terms.id IS NULL OR e.state='settled' AND terms.approved_at=e.created_at
-  THEN RAISE EXCEPTION 'ELIGIBILITY_TERMS_DECISION_REQUIRED' USING ERRCODE='0A000';END IF;
-  pre_terms:=e.state='settled' AND e.created_at<terms.approved_at;
+  -- No approval row leaves terms.id NULL and pre_terms false: the pre-DW3 expectation applies. Never a refusal.
+  pre_terms:=terms.id IS NOT NULL AND coalesce(e.state='settled' AND e.created_at<terms.approved_at,false);
  END IF;
  IF NEW.fixture='F20' AND NOT coalesce(paid_before,false) THEN RAISE EXCEPTION 'ELIGIBILITY_FIXTURE_MISMATCH' USING ERRCODE='23514';END IF;
  IF NEW.fixture='F15' THEN expected_reason:='Credit note below the £250 minimum';
@@ -119,7 +119,6 @@ BEGIN
    WHERE i.tenant_id=NEW.tenant_id AND i.job_id=NEW.job_id AND i.movement_key='receipt-interest-120'
     AND i.identity='identified' AND i.event_kind IN('settled','pending')
    ORDER BY (i.event_kind='settled') DESC,i.created_at,i.id LIMIT 1;
-  IF interest.state='settled' AND interest.created_at=terms.approved_at THEN RAISE EXCEPTION 'ELIGIBILITY_TERMS_DECISION_REQUIRED' USING ERRCODE='0A000';END IF;
   IF interest.state='settled' AND interest.created_at<=c.created_at THEN
    interest_reason:='Paid before you opened this case';
   ELSIF interest.id IS NULL OR interest.state<>'settled' OR EXISTS(
@@ -128,7 +127,7 @@ BEGIN
     AND NOT EXISTS(SELECT 1 FROM app.practice_feed_command k WHERE k.tenant_id=u.tenant_id AND k.account_id=u.account_id
      AND k.movement_key=u.movement_key AND k.action='reconcile_duplicate')) THEN
    interest_reason:='Pending money cannot qualify';
-  ELSIF interest.created_at<terms.approved_at THEN interest_reason:='This came in before your fee terms were agreed, so it isn''t counted as recovered money and there''s no fee on it.';
+  ELSIF terms.id IS NOT NULL AND interest.created_at<terms.approved_at THEN interest_reason:='This came in before your fee terms were agreed, so it isn''t counted as recovered money and there''s no fee on it.';
   END IF;
   IF interest_reason IS NOT NULL THEN expected_q:=250000;expected_reason:=interest_reason;END IF;
  END IF;
@@ -152,7 +151,8 @@ END $$;
 CREATE OR REPLACE FUNCTION app.require_recovery_eligibility_v3_effect() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 DECLARE binding app.practice_supplier_credit_case_binding; count_links integer; expected_lines jsonb; candidate_q bigint:=(NEW.result->'qualifyingPrincipal'->>'pence')::bigint;
 BEGIN
- IF NEW.fixture IN('F18','F19','F20') AND NOT EXISTS(
+ -- The approval reference is demanded only when the saved result IS the decision 123 terms exclusion; a review produced without terms needs none.
+ IF NEW.fixture IN('F18','F19','F20') AND position('This came in before your fee terms were agreed, so it isn''t counted as recovered money and there''s no fee on it.' in NEW.result::text)>0 AND NOT EXISTS(
   SELECT 1 FROM app.audit_event e JOIN app.recovery_case_terms_approval a
    ON a.tenant_id=e.tenant_id AND a.id::text=e.payload->'references'->>'termsApprovalId'
   WHERE e.tenant_id=NEW.tenant_id AND e.event_type='recovery.eligibility.v3_reviewed' AND e.subject_ref=NEW.case_id::text

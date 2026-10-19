@@ -69,26 +69,23 @@ export class RecoveryEligibilityV3Repository {
       WHERE tenant_id=$1 AND job_id=$2 AND source_event_id=$3 ORDER BY revision DESC LIMIT 1) m ON true`,[context.tenantId,job,event.id])).rows[0]!;
     }
    }
-   // Read only persisted, applicable approval under the shared case lock. Never use
-   // the pursuit helper: its non-v3 exemption is not an approval.
-   const terms=definition.category!=="withheld_customer_payment"?undefined:(await db.$client.query<{id:string}>(`SELECT a.id
+   // Ruling 130 option B: fee terms never gate a review and a review never throws for their absence (the terms requirement lives at pursuit, CH-7-REST-A).
+   // Read only a persisted, applicable approval under the shared case lock; never the pursuit helper, whose non-v3 exemption is not an approval.
+   // No approval (or a schema that predates the terms table, as in the earlier upgrade proofs) means termsTiming stays undefined and the review evaluates as before DW3.
+   const termsSchema=definition.category==="withheld_customer_payment"&&(await db.$client.query<{installed:boolean}>("SELECT to_regclass('app.recovery_case_terms_approval') IS NOT NULL installed")).rows[0]!.installed;
+   const terms=!termsSchema?undefined:(await db.$client.query<{id:string}>(`SELECT a.id
     FROM app.recovery_case_terms_approval a JOIN app.job j ON j.tenant_id=a.tenant_id AND j.id=a.job_id AND j.fee_policy_version=a.fee_policy_version
     WHERE a.tenant_id=$1 AND a.job_id=$2 AND a.case_id=$3 AND a.terms_version='synthetic_recovery_fee_terms.v1'
      AND a.fee_policy_version='reference_fee_policy_v3' AND a.eligibility_policy_version='reference_recovery_eligibility_policy_v3'
      AND a.environment='synthetic_demo' AND a.policy_status='proposed'`,[context.tenantId,job,input.caseId])).rows[0];
    const termsTiming=async(sourceId:string|undefined):Promise<"before_settlement"|"after_settlement"|undefined>=>{
-    if(definition.category!=="withheld_customer_payment")return undefined;
-    // STOP-2/STOP-1 are unsupported cases, not saved exclusion/refusal product contracts.
-    if(!terms)throw new RecoveryEligibilityV3Error("ELIGIBILITY_TERMS_DECISION_REQUIRED");
-    const timing=(await db.$client.query<{timing:"before_settlement"|"after_settlement"|null}>(`SELECT CASE
-     WHEN e.state IS DISTINCT FROM 'settled' OR e.id IS NULL THEN 'before_settlement'
-     WHEN a.approved_at<e.created_at THEN 'before_settlement'
-     WHEN a.approved_at>e.created_at THEN 'after_settlement' END timing
-     FROM app.recovery_case_terms_approval a LEFT JOIN app.practice_feed_event e
-      ON e.tenant_id=a.tenant_id AND e.job_id=a.job_id AND e.id=$3
-     WHERE a.tenant_id=$1 AND a.id=$2`,[context.tenantId,terms.id,sourceId??null])).rows[0]?.timing;
-    if(!timing)throw new RecoveryEligibilityV3Error("ELIGIBILITY_TERMS_DECISION_REQUIRED");
-    return timing;
+    if(!terms)return undefined;
+    // Decision 123 excludes only money settled strictly BEFORE the approval (approved_at strictly after the settled source's created_at, full timestamptz precision).
+    // Terms approved earlier, at the same instant, or with no settled source evaluate normally.
+    const late=(await db.$client.query<{late:boolean}>(`SELECT (e.state='settled' AND a.approved_at>e.created_at) late
+     FROM app.recovery_case_terms_approval a JOIN app.practice_feed_event e ON e.tenant_id=a.tenant_id AND e.job_id=a.job_id AND e.id=$3
+     WHERE a.tenant_id=$1 AND a.id=$2`,[context.tenantId,terms.id,sourceId??null])).rows[0]?.late;
+    return late===true?"after_settlement":"before_settlement";
    };
    let result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
     termsTiming:await termsTiming(event?.id),payer:payer.payer,settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});

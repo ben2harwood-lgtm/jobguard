@@ -7,14 +7,14 @@ import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryCaseTermsRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, readRecoveryEligibilityV3, withTenant } from "../src/index.js";
+import { migrate, MIGRATION_URLS, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, readRecoveryEligibilityV3, withTenant } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import * as mo4Proof from "./upgrade-proof-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import type { TenantTransaction } from "../src/tenant-context.js";
-import { evaluateRecoveryEligibilityV3, recoveryCaseTermsHash } from "@jobguard/core";
+import { evaluateRecoveryEligibilityV3 } from "@jobguard/core";
 const ctx=testTenantContext(T), actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 const previousEnvironment=process.env.JOBGUARD_ENV;
@@ -86,21 +86,13 @@ beforeAll(async()=>{
  await admin.query("CREATE ROLE ch7_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch7_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"ch7_login",password:"synthetic"});
 });
 afterAll(async()=>{if(previousEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previousEnvironment;await closeTestPools(runtime,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});});
-// DW3 (decision 123): a withheld-customer-payment review needs a persisted fee-terms approval, so this shared fixture declares reference_fee_policy_v3 when the job is
-// created (the same imported-job columns recovery-terms-timing.integration.test.ts uses) and approves the synthetic terms through the real authorized command.
-// Other case categories do not read an approval and keep the original job row.
-const termsCommand=(caseId:string)=>({version:"recovery-case-terms-command.v1",action:"approve",commandId:randomUUID(),caseId,termsVersion:"synthetic_recovery_fee_terms.v1",feePolicyVersion:"reference_fee_policy_v3",eligibilityPolicyVersion:"reference_recovery_eligibility_policy_v3",termsHash:recoveryCaseTermsHash(caseId)});
 async function fixture(type="withheld_customer_payment",before=false){
- const sessionId=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,sessionId),jobId=randomUUID(),withheld=type==="withheld_customer_payment";
- await admin.query(withheld?"INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence)VALUES($1,$2,'CH-7 generated job',$3,'capture','imported',100000,'reference_fee_policy_v3',1500)":"INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario)VALUES($1,$2,'CH-7 generated job',$3,'capture')",[jobId,T,auth.digest]);
+ const sessionId=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,sessionId),jobId=randomUUID();
+ await admin.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario)VALUES($1,$2,'CH-7 generated job',$3,'capture')",[jobId,T,auth.digest]);
  const cases=new RecoveryCaseRepository(practiceMaterialPool(runtime,auth.digest)),feed=new PracticeFeedRepository(runtime,"synthetic_demo");let revision=0;
  const advance=async(movement:string,step="settled")=>{const reply=await feed.command(ctx,actor,auth.digest,jobId,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:revision,action:revision===0?"connect":"advance",...(revision===0?{}:{movement,step})});revision=reply.revision;};
  await advance("receipt-384");if(before)await advance("receipt-384");
  const c=await cases.command(ctx,jobId,{version:"recovery-case-command.v1",commandId:randomUUID(),action:"open",caseType:type,claimedNetPence:300000,counterparty:"Fictional debtor",book:type==="withheld_customer_payment"?"builder_customer":"supplier_cost",sourceType:type==="withheld_customer_payment"?"customer_invoice":"supplier_documents",sourceRefs:type==="withheld_customer_payment"?["Generated customer invoice INV-18800"]:["Supplier invoice INV-320"],expectedRevision:0},actor);
- // Approved right after opening and before any later settlement step, so the transaction-pinned approved_at precedes every settlement a test advances afterwards
- // (termsTiming before_settlement, the pre-DW3 assumption). Only the F20 fixture settles before opening; there the approval necessarily follows the settlement
- // (after_settlement), and the evaluator reports "Paid before you opened this case" ahead of the terms wording, so F20's asserted result is unchanged.
- if(withheld)await new RecoveryCaseTermsRepository(practiceMaterialPool(runtime,auth.digest)).approve(ctx,jobId,termsCommand(c.id),actor);
  return {auth,jobId,c,cases,advance,repo:new RecoveryEligibilityV3Repository(practiceMaterialPool(runtime,auth.digest),"synthetic_demo")};
 }
 const review=(c:{id:string;revision:number},fixture:string,expectedReviewRevision=0)=>({version:"recovery-eligibility-command.v3",action:"review",commandId:randomUUID(),caseId:c.id,expectedCaseRevision:c.revision,expectedReviewRevision,fixture});
@@ -284,9 +276,6 @@ const stampTimes=async(f:{c:{id:string};jobId:string},movement:string,caseAt:str
   await connection.query("BEGIN");await connection.query("SET LOCAL session_replication_role=replica");
   await connection.query("UPDATE app.recovery_case SET created_at=$1 WHERE tenant_id=$2 AND id=$3",[caseAt,T,f.c.id]);
   await connection.query("UPDATE app.practice_feed_event SET created_at=$1 WHERE tenant_id=$2 AND job_id=$3 AND movement_key=$4 AND event_kind='settled'",[eventAt,T,f.jobId,movement]);
-  // DW3: the fixture's real approval is timestamped now, i.e. after these historical instants. Keep these timing tests about opening time only: pin the approval one
-  // microsecond before the earlier stamped instant (full precision, same superuser control), as it was before DW3 where terms were always approved first. No row for a non-withheld case.
-  await connection.query("UPDATE app.recovery_case_terms_approval SET approved_at=LEAST($1::timestamptz,$2::timestamptz)-interval '1 microsecond' WHERE tenant_id=$3 AND case_id=$4",[caseAt,eventAt,T,f.c.id]);
   await connection.query("COMMIT");
  }catch(error){await connection.query("ROLLBACK");throw error;}finally{connection.release();}
 };
@@ -349,7 +338,7 @@ it.each([
  expect(r.result).toMatchObject({outcome:q===0?"excluded":"eligible_for_review",qualifyingPrincipal:{pence:q,currency:"GBP"},reason});
  const stored=(await admin.query("SELECT result,source_event_id FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,r.id])).rows[0];
  expect(stored).toEqual({result:r.result,source_event_id:r.sourceEventId});
- expect(r.result).toEqual(evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming,sourceRef:r.sourceEventId}));
+ expect(r.result).toEqual(evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",settlement:"settled",paymentTiming,sourceRef:r.sourceEventId}));
  expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3).toEqual(r);
  expect(await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest)).toEqual(r);
 });
@@ -361,7 +350,7 @@ async function rawQualifyingF17(pool:Pool,f:{auth:{digest:string};jobId:string;c
   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
   const sourceEventId=(await db.$client.query<{id:string}>("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='supplier-refund-540' AND event_kind='settled' AND identity='identified'",[T,f.jobId])).rows[0]!.id;
   // Deliberately propose £450 irrespective of the stored timing, as a raw writer could.
-  const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+  const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
   const id=randomUUID(),commandId=randomUUID(),payloadHash=createHash("sha256").update(commandId).digest("hex");
   const inserted=await db.$client.query<{h:string}>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F17',$6,$7,$8,$9,$10) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') h",[id,T,f.jobId,f.c.id,f.c.revision,sourceEventId,M,commandId,payloadHash,JSON.stringify(result)]);
   await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'principal','business',45000)",[randomUUID(),T,f.jobId,f.c.id,id]);
@@ -631,7 +620,7 @@ it("F18 principal-only",async()=>{
 it.each(["amount","component"] as const)("F18 raw runtime writer cannot include unpaid interest in the %s",async(shape)=>{
  const f=await fixture();await f.advance("receipt-3000");
  const sourceEventId=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='receipt-3000' AND event_kind='settled'",[T,f.jobId])).rows[0].id as string;
- const full=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+ const full=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
  const result=shape==="amount"?full:{...full,qualifyingPrincipal:{pence:250000,currency:"GBP"},reason:"Pending money cannot qualify",lines:full.lines.map(line=>line.kind==="statutory_interest"?{...line,reason:"Pending money cannot qualify"}:line)};
  await expect(rawInterestCandidate(f,sourceEventId,result as ReturnType<typeof evaluateRecoveryEligibilityV3>)).rejects.toMatchObject({code:"23514",message:shape==="amount"?"ELIGIBILITY_FIXTURE_MISMATCH":"ELIGIBILITY_LINES_REQUIRED"});
  for(const table of ["recovery_eligibility_v3_review","recovery_claim_line"])expect((await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND case_id=$2`,[T,f.c.id])).rows[0].n).toBe(0);
@@ -654,14 +643,12 @@ it.each([
 });
 
 async function rawInterestCandidate(f:Awaited<ReturnType<typeof fixture>>,sourceEventId:string,result:ReturnType<typeof evaluateRecoveryEligibilityV3>){
- // DW3: a withheld-payment candidate's audit event names the approval it relied on (the repository does the same); 0198's effect check requires it.
- const termsApprovalId=(await admin.query("SELECT id FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND case_id=$2 AND terms_version='synthetic_recovery_fee_terms.v1'",[T,f.c.id])).rows[0]?.id as string|undefined;
  return withTenant(practiceMaterialPool(runtime,f.auth.digest),ctx,async db=>{
   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
   const id=randomUUID(),commandId=randomUUID(),payloadHash=createHash("sha256").update(commandId).digest("hex");
   const inserted=await db.$client.query<{h:string}>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F18',$6,$7,$8,$9,$10) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') h",[id,T,f.jobId,f.c.id,f.c.revision,sourceEventId,M,commandId,payloadHash,JSON.stringify(result)]);
   for(const line of result.lines)await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),T,f.jobId,f.c.id,id,line.kind,line.debtorType,line.netPence]);
-  await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${M}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:f.c.id,payload:{references:{jobId:f.jobId,reviewId:id,commandId,...(termsApprovalId?{termsApprovalId}:{}),sourceEventId},hashes:{command:payloadHash,result:inserted.rows[0]!.h},classifications:{recovery:"financial"}}}]);
+  await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${M}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:f.c.id,payload:{references:{jobId:f.jobId,reviewId:id,commandId,sourceEventId},hashes:{command:payloadHash,result:inserted.rows[0]!.h},classifications:{recovery:"financial"}}}]);
   return id;
  });
 }
@@ -676,7 +663,7 @@ it("0166 upgrades the previous guards without rewriting saved reviews, claim lin
  try{
   await admin.query(previousGuards);
   const sourceEventId=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='receipt-3000' AND event_kind='settled'",[T,f.jobId])).rows[0].id as string;
-  const legacy=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+  const legacy=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
   const id=await rawInterestCandidate(f,sourceEventId,legacy);
   const proof=await mo4Proof.proofBefore(admin,["app.recovery_eligibility_v3_review","app.recovery_claim_line","app.audit_event"]);
   await admin.query(forward);

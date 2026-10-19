@@ -86,6 +86,22 @@ it("ReceiptBeforeTermsNeverRescued",async()=>{
  const audit=(await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'reviewId'=$2",[T,saved.id])).rows[0];
  expect(audit.payload.references.termsApprovalId).toBe(a.id);
 });
+it("Decision 123 (ruling 131): money settled first, fee terms approved strictly later => excluded and not counted, never a throw or the qualifying value",async()=>{
+ const f=await fixture();await f.advance("receipt-3000");const a=await approve(f);
+ // Superuser test-only timestamp control, after the real authorized approval: pin approved_at exactly one microsecond after the settled receipt (full precision, clock-independent).
+ const client=await admin.connect();try{
+  await client.query("BEGIN");await client.query("SET LOCAL session_replication_role=replica");
+  await client.query("UPDATE app.recovery_case_terms_approval a SET approved_at=e.created_at+interval '1 microsecond' FROM app.practice_feed_event e WHERE a.tenant_id=$1 AND a.id=$2 AND e.tenant_id=a.tenant_id AND e.id=$3",[T,a.id,await source(f)]);
+  await client.query("COMMIT");
+ }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+ expect((await admin.query("SELECT a.approved_at>e.created_at later FROM app.recovery_case_terms_approval a JOIN app.practice_feed_event e ON e.tenant_id=a.tenant_id AND e.id=$3 WHERE a.tenant_id=$1 AND a.id=$2",[T,a.id,await source(f)])).rows[0].later).toBe(true);
+ const saved=await save(f);
+ expect(saved.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:note,reasonHeld:false});
+ expect(saved.result.lines.every(l=>l.qualifyingPrincipal.pence===0)).toBe(true);
+ expect(saved.result.lines[0]).toMatchObject({kind:"principal",qualifyingPrincipal:{pence:0},reason:note});
+ const audit=(await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'reviewId'=$2",[T,saved.id])).rows[0];
+ expect(audit.payload.references.termsApprovalId).toBe(a.id);
+});
 it("SeparateInterestUsesOwnSettlementTime",async()=>{
  const f=await fixture();await interest(f);await approve(f);await f.advance("receipt-3000");
  const r=await save(f);expect(r.result.qualifyingPrincipal.pence).toBe(250000);
@@ -102,9 +118,16 @@ it.each(["positive header","positive line","foreign approval","forged flag","for
  if(mode==="forged timestamp")Object.assign(r,{approvedAt:"2000-01-01T00:00:00.000001Z"});
  const before=await counts(f);await expect(raw(f,r,mode==="foreign approval"?foreign.id:a.id)).rejects.toMatchObject({code:"23514"});expect(await counts(f)).toEqual(before);
 });
-it("missing approval cannot qualify (STOP-2: no saved result contract)",async()=>{
- const f=await fixture();await f.advance("receipt-3000");const before=await counts(f);
- await expect(save(f)).rejects.toThrow("ELIGIBILITY_TERMS_DECISION_REQUIRED");expect(await counts(f)).toEqual(before);
+it("ruling 130 option B: a review with no fee-terms approval never throws; it evaluates as before DW3 and cites no approval",async()=>{
+ const f=await fixture();await f.advance("receipt-3000");
+ const b0=await counts(f),saved=await save(f),b1=await counts(f);
+ expect(saved.result).toMatchObject({outcome:"eligible_for_review",qualifyingPrincipal:{pence:250000,currency:"GBP"},reason:"Pending money cannot qualify",reasonHeld:false});
+ expect(b1.recovery_eligibility_v3_review!-b0.recovery_eligibility_v3_review!).toBe(1);expect(b1.recovery_claim_line!-b0.recovery_claim_line!).toBe(3);
+ expect(b1.recovery_fee_journal).toBe(b0.recovery_fee_journal);expect(b1.action_outbox).toBe(b0.action_outbox);
+ await interest(f);
+ const second=await save(f,review(f.c,"F18",1));
+ expect(second.result).toMatchObject({outcome:"eligible_for_review",qualifyingPrincipal:{pence:262000,currency:"GBP"},reason:"Fixed statutory compensation is not part of the fee base"});
+ for(const r of [saved,second])expect((await admin.query("SELECT payload->'references' ? 'termsApprovalId' cited FROM app.audit_event WHERE tenant_id=$1 AND payload->'references'->>'reviewId'=$2",[T,r.id])).rows[0].cited).toBe(false);
 });
 it("TermsReviewConcurrency: shared case lock blocks review until rollback",async()=>{
  const f=await fixture();await f.advance("receipt-3000");await approve(f);
@@ -117,8 +140,8 @@ it("TermsReviewConcurrency: shared case lock blocks review until rollback",async
   expect(await reviewing).toMatchObject({result:{qualifyingPrincipal:{pence:0},reason:note}});
  }finally{await held.query("ROLLBACK");held.release();await reviewing;}
 });
-it.todo("LaterApprovalPreservesEarlierReview: missing-approval saved encoding STOP-2; historical replay covered by upgrade suite");
-it.todo("TermsReviewConcurrency: reversed transaction-start/commit order and approval/settlement equality STOP-1");
+it.todo("LaterApprovalPreservesEarlierReview: historical replay covered by the upgrade suite (the missing-approval case is no longer a STOP: ruling 130 option B)");
+it.todo("TermsReviewConcurrency: reversed transaction-start/commit order remains undecided; approval/settlement equality is not excluded under ruling 130's strictly-after rule (no natural equality to construct)");
 it.each(["commit","rollback"] as const)("TermsReviewConcurrency: authorized approval %s serializes with review",async outcome=>{
  const f=await fixture();await f.advance("receipt-3000");
  let ready!:()=>void,rollback!:()=>void;
@@ -141,9 +164,9 @@ it.each(["commit","rollback"] as const)("TermsReviewConcurrency: authorized appr
   let waiting=false;for(let i=0;i<100&&!waiting;i++)waiting=(await admin.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event='advisory' AND usename='dw3_login') waiting")).rows[0].waiting;
   expect(waiting).toBe(true);
  }finally{rollback();}
- expect(await approval).toBe(outcome==="rollback"?"DW3 injected rollback":"committed");expect(await reviewing).toBe(outcome==="rollback"?"ELIGIBILITY_TERMS_DECISION_REQUIRED":0);
+ expect(await approval).toBe(outcome==="rollback"?"DW3 injected rollback":"committed");expect(await reviewing).toBe(outcome==="rollback"?250000:0);
  expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND case_id=$2",[T,f.c.id])).rows[0].n).toBe(outcome==="rollback"?0:1);
- expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type IN('recovery.terms.approved','recovery.eligibility.v3_reviewed')",[T,f.c.id])).rows[0].n).toBe(outcome==="rollback"?0:2);
+ expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type IN('recovery.terms.approved','recovery.eligibility.v3_reviewed')",[T,f.c.id])).rows[0].n).toBe(outcome==="rollback"?1:2);
 });
 it("DW3 preserves replay conflicts, stale revisions and same-tenant session ownership",async()=>{
  const f=await fixture();await f.advance("receipt-3000");await approve(f);
