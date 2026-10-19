@@ -18,7 +18,8 @@ const poolWithQuery = (query: Query) => ({
   connect: async () => ({ query, release: () => undefined }),
 }) as unknown as Pool;
 const transactionSql = (sql: string) => ["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)
-  || sql.startsWith("SELECT set_config");
+  || sql.startsWith("SELECT set_config")
+  || sql.startsWith("SELECT pg_advisory_xact_lock(");
 const deferred = () => {
   let resolve!: () => void;
   const promise = new Promise<void>(r => { resolve = r; });
@@ -73,6 +74,10 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
         return { rows: permitted ? [{ ...row, status }] : [] };
       }
       if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 0 }] };
+      if (sql.startsWith("SELECT nullif(current_setting")) return { rows: [{ tenant_id: tenantId }] };
+      if (sql === "SELECT sequence::text, event_hash FROM app.lock_audit_head()") return { rows: [] };
+      if (sql === "SELECT clock_timestamp() AS occurred_at") return { rows: [{ occurred_at: new Date() }] };
+      if (sql === "SELECT app.advance_audit_head($1, $2)") return { rows: [] };
       if (sql.startsWith("UPDATE app.action_outbox SET status='executing'")) status = "executing";
       if (sql.startsWith("UPDATE app.action_outbox SET status=$2")) status = String(values[1]);
       if (transactionSql(sql) || sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };

@@ -1364,6 +1364,7 @@ describe('terminal changed-source refusal in real PostgreSQL (Sol 3)', () => {
       expect(current.status).toBe('retryable');
     }
     await amend(caseId, 32400);
+    await admin.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1", [view.approval!.outboxActionId]);
     await executorWith(practiceAdapter()).execute(context, view.approval!.outboxActionId);
     expect(await outboxStatus(view.approval!.outboxActionId)).toBe('dead_letter');
     expect((await admin.query('SELECT outcome,error_code FROM app.action_attempt WHERE action_id=$1 AND attempt_number=5', [view.approval!.outboxActionId])).rows)
