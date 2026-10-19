@@ -10,7 +10,7 @@ for(const [name,button,movement,q,reason] of [
  ["F18","Open £2,500 withheld payment","receipt-3000","£2,620.00","Fixed statutory compensation is not part of the fee base"],
  ["F19","Open £2,500 withheld payment","receipt-3000","£2,500.00","Fixed statutory compensation is not part of the fee base"],
  ["F20","Open £320 withheld payment","receipt-384","£0.00","Paid before you opened this case"],
- ["F21","Open materials-320 overcharge",null,"£0.00",null],
+ ["F21","Open materials-320 overcharge",null,"£0.00","Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it."],
  ["F22","Record prevention",null,"£0.00","Prevented spending is not recovered cash"],
 ] as const){
  test(`${name} persists candidate Q, exact available reason and source across contexts`,async({page,browser,context},testInfo)=>{
@@ -34,7 +34,7 @@ for(const [name,button,movement,q,reason] of [
    if(reason)await expect(view.getByTestId("v3-reason")).toHaveText(reason);
    if(name==="F19")await expect(view.getByTestId("v3-line-statutory_interest")).toContainText("£0.00");
    if(name==="F19")await expect(view.getByTestId("v3-line-statutory_interest")).toContainText("Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.");
-   if(name==="F21")await expect(view.getByTestId("v3-reason")).toHaveCount(0);
+   if(name==="F21")await expect(view.getByTestId("v3-reason")).toHaveText("Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.");
    await expect(view.getByText(banner,{exact:true})).toHaveCount(1);
    expect(await view.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
   };
