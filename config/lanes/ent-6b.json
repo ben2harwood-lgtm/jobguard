@@ -42,6 +42,7 @@
         "packages/db/test/contractor-billing-ordering.integration.test.ts",
         "packages/db/test/contractor-billing-replay.integration.test.ts",
         "packages/db/test/contractor-billing-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
         "packages/db/test/tenancy.integration.test.ts"
       ]
     }
