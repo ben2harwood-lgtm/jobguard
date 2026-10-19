@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b5": {
+      "branches": [
+        "codex/sandbox/later-b5"
+      ],
+      "receipt": "docs/verdicts/LATER-B5/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B5; BUILD-DON'T-MERGE (decision 74). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "docs/ledger/LATER-B5.md",
+        "docs/verdicts/LATER-B5/BUILDER_RECEIPT.md",
+        "packages/db/src/recovery-message-repository.ts",
+        "packages/db/test/later-recovery-message-attempt.integration.test.ts"
+      ]
+    }
+  }
+}

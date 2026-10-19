@@ -9,7 +9,7 @@ separate acceptance remain outstanding. No independent verification is claimed.
 
 Inspected HEAD and origin/main both `c4f929f5a37bbc2639186fa3e2a4b2e7adc1ec3a`;
 branch `codex/sandbox/mon-8-p-a`. Highest existing migration 0192; added
-`0193_contractor_entitlement_authority.sql` (dispatcher renumbers at merge).
+`0198_contractor_entitlement_authority.sql` (dispatcher renumbers at merge).
 Working tree was clean initially. Node v24.17.0; cached pnpm 10.28.1. Dependencies
 were reused as instructed: **no clean reinstall was performed**. Initial PATH's
 `pnpm -v` shim attempted its automatic version resolution and failed registry
@@ -137,3 +137,58 @@ real-data/provider, sending/spending, charging, deployment and release approvals
 remain outside scope. No policy approval is inferred from local green tests.
 
 Intended dispatcher commit text: `/private/tmp/jg-msg-mon-8-p-a.txt`.
+
+## r1 (CI)
+
+18 October 2026 · Codex gpt-6-astra builder. CI repair for PR #293, run
+39136710407; inspected HEAD `79b69614612453641b6e4e23496396b40e70b3a5`.
+Dispatcher reports one independent inspection PASS for that earlier code; this
+repair is not independently verified or accepted by the builder.
+
+The superseded-assignment fixture now takes the seed-54 exclusive tenant lock,
+inserts the replacement assignment and appends its required
+`commercial_track.assigned` audit event with the same assignment ID and actor in
+one transaction. It additionally asserts the replacement identity and refused
+new-work eligibility. No trigger is disabled in this fixture. The two tenancy
+catalogue lists only relocate A's existing `contractor_agreement_status_revision`
+row into name order, before `contractor_client_customer`. No merged assertions,
+prior catalogue values, grants, migration SQL or production behavior changed.
+SERIOUS-B5 was not changed: no additional failure was supplied for it.
+
+Dependencies reused without installation; Node v24.17.0, cached pnpm 10.28.1 via
+`PATH=/private/tmp/jg-r1-pnpm-bin:$PATH`. Logs:
+`/private/tmp/mon8a-ci-r1-*.log`. Actual checks:
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0 |
+| `LANE_BASE_REF=origin/main pnpm lint` | STOP, exit 1: migration numbering collision; core purity passed |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | STOP, exit 1: same migration numbering collision |
+| `node --test tools/*.test.mjs` | PASS, 100/100 |
+| `pnpm --filter @jobguard/core exec vitest run src --maxWorkers=2` | PASS, 116 files, 2,902/2,902 |
+| `pnpm --filter @jobguard/db exec vitest run test/contractor-session-context.test.ts test/lp-0-catalog.test.ts --maxWorkers=2` | PASS, 43/43; unit tests, not PostgreSQL proof |
+| `node tools/money-arithmetic-lint.mjs` | PASS |
+| `node tools/commercial-boundary-lint.mjs` | PASS |
+| `node node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --target ES2023 --module NodeNext --moduleResolution NodeNext --esModuleInterop packages/db/test/contractor-entitlement-authority.integration.test.ts` | PASS; fixture compilation, not execution |
+| `pnpm openapi:check` | Exit 1: tsx launcher IPC socket EPERM |
+| `node --import tsx src/generate-openapi.ts --check` (apps/api) | PASS; source generator checked committed OpenAPI without IPC launcher |
+
+STOP for migration renumbering only: current `origin/main`
+`42990862881cd048c7167869246551d5360beb17` already has migration 0193. The lane
+checker requires A's migration above 0193. Dispatcher must reconcile/renumber the
+migration and its references at integration as the original receipt specifies;
+this CI fixture repair does not edit the lane policy or migration history.
+
+**PostgreSQL NOT RUN**, per dispatcher: no database server, migration suite or
+integration assertions executed locally. Browser NOT RUN. Full `pnpm test` was
+not launched because it includes PostgreSQL; feasible unit suites are above.
+CI must rerun the three reported failures and mandatory database/upgrade suites.
+No clean-install, database success, professional approval or release is claimed.
+No git add, commit, push, checkout, merge or release performed in this worktree.
+Intended commit text: `/private/tmp/jg-msg-mon-8-p-a.txt`.
+
+Remaining completed checks: `pnpm exec turbo run lint` PASS (7 tasks, 1 cached,
+6 fresh); `pnpm build` PASS (7 tasks, 1 cached, 6 fresh, including Next production
+build); `git diff --check` PASS. Turbo logged cache IO permission warnings;
+Next logged dependency-expression warnings, but the build exited 0. Workspace
+lint success does not supersede the migration-order failure in root lint.

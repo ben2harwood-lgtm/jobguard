@@ -18,7 +18,7 @@ export class RecoveryEligibilityV3Error extends Error {
 }
 export const recoveryClaimLineKindV3 = z.enum(["principal","statutory_interest","fixed_compensation"]);
 export const recoveryDebtorTypeV3 = z.enum(["business","individual"]);
-/** Ben-approved message bytes. Round 2 preserves F21 null/held reasons; its constant is not activated. */
+/** Ben-approved message bytes. Ruling 108 activates F21 for new reviews; historical null/held results remain readable. */
 export const RECOVERY_NOT_COUNTED_WORDING_V1 = {
  individualInterest: "Late-payment interest only counts when a business paid it. This customer is a private individual, so this interest isn’t counted as recovered money and there’s no fee on it.",
  unpaidBillReduced: "Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.",
@@ -69,9 +69,9 @@ export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityVi
    definition.category==="withheld_customer_payment"&&f.payer==="insurer_unmarked"?"Insurer proceeds never qualify":
    line.kind==="fixed_compensation"?"Fixed statutory compensation is not part of the fee base":
    line.kind==="statutory_interest"&&line.debtorType==="individual"?RECOVERY_NOT_COUNTED_WORDING_V1.individualInterest:
-   f.fixture==="F15"?"Credit note below the £250 minimum":f.fixture==="F16-partial"?"Credit note used against an invoice not yet paid in full":f.fixture==="F21"?null:
+   f.fixture==="F15"?"Credit note below the £250 minimum":f.fixture==="F16-partial"?"Credit note used against an invoice not yet paid in full":f.fixture==="F21"?RECOVERY_NOT_COUNTED_WORDING_V1.unpaidBillReduced:
    f.settlement==="pending"?"Pending money cannot qualify":f.settlement==="unverified"?"A manual payment record is not settlement evidence":null;
-  return {...line,qualifyingPrincipal:moneyFromBigInt(refundBeforeOpening?0n:parseExactPence(result.qualifyingPrincipal).numerator),reason,reasonHeld:f.fixture==="F21"};
+  return {...line,qualifyingPrincipal:moneyFromBigInt(refundBeforeOpening?0n:parseExactPence(result.qualifyingPrincipal).numerator),reason,reasonHeld:false};
  });
  const headerReason=f.fixture==="F19"?(lines.find(l=>l.kind==="principal")?.reason??lines.find(l=>l.kind==="fixed_compensation")?.reason??null):lines.find(l=>l.reason!==null)?.reason??null;
  const q=sumExactPence(lines.map(l=>exactPence(BigInt(l.qualifyingPrincipal.pence))));

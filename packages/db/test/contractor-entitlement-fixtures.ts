@@ -5,7 +5,7 @@ import { ContractorEntitlementAuthorityRepository } from "../src/contractor-enti
 import { ownerTx, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
 export { cluster, startSession, startBeforeMigration, applyMigration, ownerTx, makeSessionExpired } from "./contractor-practice-session-fixtures.js";
 export type { Cluster, SessionFixture };
-export const own = "0193_contractor_entitlement_authority.sql";
+export const own = "0198_contractor_entitlement_authority.sql";
 export async function snapshot(db: Pool | PoolClient) {
  const tables = (await db.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2")).rows;
  const rows: Record<string, unknown> = {};
