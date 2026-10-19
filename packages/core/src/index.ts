@@ -94,3 +94,5 @@ export * from "./sync-download.js";
 
 export * from "./subscription-persistence.js";
 export * from "./subscription-allocation.js";
+
+export * from "./enterprise-live-prompt-persistence.js";
