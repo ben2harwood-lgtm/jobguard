@@ -211,7 +211,7 @@ Intended conventional commit subject/body overwritten at `/private/tmp/jg-msg-sv
 Changed non-receipt SHA-256 values:
 
 - `docs/contracts/sv5pre-completion-v1.md`: `86a7dd77d6858b3981a4fd32055deb1d12b6bc0abefa615c2ea27474242c21b2`
-- `packages/db/migrations/0198_final_check_prerequisites.sql`: `7288421289036e015b99cca45c51ed0844348d7f847b47ff62abbfcebabc9c0e`
+- `packages/db/migrations/0199_final_check_prerequisites.sql`: `7288421289036e015b99cca45c51ed0844348d7f847b47ff62abbfcebabc9c0e`
 - `packages/db/test/recovery-case-terms-upgrade.integration.test.ts`: `c0085502f1e6ee1409dcfeb1b035ff4d8e2d6b6cabbe5cfc7d6479d544fe53d7`
 - `packages/db/test/sv5pre-completion-isolation.integration.test.ts`: `d895d724492e93a1e59919024840e1d765567917d048965babd0f2c463201fb8`
 - `packages/db/test/sv5pre-completion.integration.test.ts`: `893f6f3b1e594ab486355abd144fabf5f5ec3a2e65fbbb6bd09c3d0cf1f04ff1`
@@ -224,7 +224,7 @@ Changed non-receipt SHA-256 values:
 
 PR #189; dispatch head `c335f3c`; local HEAD is `b70cd18cc58d62eb71091ad7433d449f882eac5c` on `codex/sandbox/sv5pre`. Git state was not changed. Read-only comparison confirms migration 0147 is byte-identical at those two commits before this repair. Local checks below cover the existing worktree, not the merged dispatch head. No independent verdict or acceptance is claimed.
 
-At `packages/db/migrations/0198_final_check_prerequisites.sql:139`, `guard_final_check_attempt` used `IF NEW.version IS DISTINCT FROM CASE ... THEN ... END THEN`. The PL/pgSQL condition reader terminates at the first unparenthesized THEN, passing an incomplete CASE expression to the SQL parser. PostgreSQL's reported position 15611 lands on this condition. Parenthesized the SQL CASE expression: `IS DISTINCT FROM (CASE ... END) THEN`. Exactly two parentheses are the only code change. Version selection, refusal codes, evidence/completion gates, grants, policies, money, fingerprints and expected values retain their semantics.
+At `packages/db/migrations/0199_final_check_prerequisites.sql:139`, `guard_final_check_attempt` used `IF NEW.version IS DISTINCT FROM CASE ... THEN ... END THEN`. The PL/pgSQL condition reader terminates at the first unparenthesized THEN, passing an incomplete CASE expression to the SQL parser. PostgreSQL's reported position 15611 lands on this condition. Parenthesized the SQL CASE expression: `IS DISTINCT FROM (CASE ... END) THEN`. Exactly two parentheses are the only code change. Version selection, refusal codes, evidence/completion gates, grants, policies, money, fingerprints and expected values retain their semantics.
 
 Re-read all 14 function bodies and both DO blocks for dollar-quote delimiters, BEGIN/END, IF/END IF, LOOP/END LOOP, CASE/END and parentheses. All 32 dollar-quote delimiters pair; a local structural scan confirms balanced blocks/parentheses. The other six CASE expressions occur in the two invoice SQL queries and are balanced; none is another ungrouped IF condition. This is source/structure evidence, not PostgreSQL syntax execution. Log: `/private/tmp/sv5pre-r9-sql-review.log`.
 
@@ -737,7 +737,7 @@ aea65e500dadedd989847be01086927b4b55b77976a129eca238ba9365125736  packages/db/te
 9cd4c7a9ce7028f5e4ab65c31dc0606892712146e784e5216f27d487d97cdb56  packages/db/test/UIWIRE-11.integration.test.ts
 26d8684466cc660588c2fc72df2b58bd2d3e6b7564a0ab2c362f72b0103a61e2  packages/db/test/UIWIRE-12.integration.test.ts
 3f3269a0685b4709b4c0a404945f6a8818f520aba91a3e602501015d078cd4d9  packages/db/test/final-account-lock-invoice.integration.test.ts
-a75ec3e6d819954628d5b32298ca436ba3bb9a8dae4845daa8ba27bd7cabff96  packages/db/migrations/0198_final_check_prerequisites.sql (unchanged from r1 HEAD)
+a75ec3e6d819954628d5b32298ca436ba3bb9a8dae4845daa8ba27bd7cabff96  packages/db/migrations/0199_final_check_prerequisites.sql (unchanged from r1 HEAD)
 a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35  apps/api/src/auth/context-boundary.test.ts (unchanged from r1 HEAD)
 1935b39a8c3dbe15dba3fa4240758d5c133470c8f8c50ac4f31c5ac4ba46e493  apps/api/src/worker.ts (unchanged from r1 HEAD)
 91f158fd82838366a432e32698c0089a8f65bcc41f6d92ff9be5f84c2b9bd89f  packages/db/test/sv5pre-fixtures.ts (unchanged from r1 HEAD)
@@ -1178,7 +1178,7 @@ Changed non-receipt files (receipt self-hash omitted):
 | `packages/core/src/final-check-completion.test.ts` | `f55016a09bf98a226996dfbdd9e4f0b5e955cf70c1a0e2361d16586dea034e7e` | 115 |
 | `packages/core/src/final-check-completion.ts` | `dd2963ddd02cdc64d9884b99766dc8abd5148c9f78f4cbf1233f9abeca2d3214` | 111 |
 | `packages/db/MIGRATIONS.md` | `13ac374fce74b7443e9aff17d327a7344a50cdba7b872364e8b7a500b215fcce` | 975 |
-| `packages/db/migrations/0198_final_check_prerequisites.sql` | `af9b08de5d4a038300f686c1b8982d7fcef71f7715098d5af22871faf2030274` | 434 |
+| `packages/db/migrations/0199_final_check_prerequisites.sql` | `af9b08de5d4a038300f686c1b8982d7fcef71f7715098d5af22871faf2030274` | 434 |
 | `packages/db/src/final-check-completion-repository.ts` | `57612a1ad7618e600768f8949e669e96ad73eee440d5f79bcfea4acc48dfe876` | 73 |
 | `packages/db/src/guarded-practice-invoice-repository.ts` | `c14bd7717b822bc9e444fa67d3e23b9cabbf51449a34618bd8effc6d23c2ab12` | 36 |
 | `packages/db/src/index.ts` | `63059a84364f7a240b7af6a34fb0827edcadbcdacf5e501ab4f03cd5d06d8fed` | 94 |
@@ -1238,7 +1238,7 @@ Read-only final scope/grant comparison (Python plus git diff/show) returned 0: e
 | r1 changed file | SHA-256 |
 | --- | --- |
 | `docs/contracts/sv5pre-completion-v1.md` | `baa48bf5fcfd4864f536a4308f481d82b52ad9338e6711c8ff959a282248b527` |
-| `packages/db/migrations/0198_final_check_prerequisites.sql` | `a75ec3e6d819954628d5b32298ca436ba3bb9a8dae4845daa8ba27bd7cabff96` |
+| `packages/db/migrations/0199_final_check_prerequisites.sql` | `a75ec3e6d819954628d5b32298ca436ba3bb9a8dae4845daa8ba27bd7cabff96` |
 | `packages/db/test/final-account-lock-invoice.integration.test.ts` | `ac0b6e2783daa5ec696ab2111cdaf3950bd8f2ba531f681e062d659972b10180` |
 | `packages/db/test/sv5pre-completion.integration.test.ts` | `7272642ae5509456d232023055b4462417fcb51933a03f16186226a2f2fd26c1` |
 | `packages/db/test/sv5pre-upgrade.integration.test.ts` | `0083ff31098a407ce440191a044bd53aeddc5d5c2e4ac9a89907ec6d3c0e8cb9` |
@@ -1248,7 +1248,7 @@ Final read-only `git diff --stat HEAD` (working tree only):
 ```text
  docs/contracts/sv5pre-completion-v1.md             |   2 +-
  docs/verdicts/SV5PRE/BUILDER_RECEIPT.md            | 238 ++++++++++++++++++++-
- .../migrations/0198_final_check_prerequisites.sql  |  30 +--
+ .../migrations/0199_final_check_prerequisites.sql  |  30 +--
  .../final-account-lock-invoice.integration.test.ts |   6 +-
  .../db/test/sv5pre-completion.integration.test.ts  |  43 +++-
  .../db/test/sv5pre-upgrade.integration.test.ts     |  18 +-
@@ -1349,6 +1349,6 @@ Intended conventional commit message overwritten at `/private/tmp/jg-msg-sv5pre.
 Changed implementation/test SHA-256 values:
 
 - `apps/api/src/sv5pre-worker-execution.integration.test.ts`: `691c9125b3c0faa9adc5c5bec383318acd72eccaf11d6b9f5635356ce598023e`
-- `packages/db/migrations/0198_final_check_prerequisites.sql`: `6daafc2d278efe85c24f674be45639adb0a0fdbb7a596ae9e7d873ddb557edd9`
+- `packages/db/migrations/0199_final_check_prerequisites.sql`: `6daafc2d278efe85c24f674be45639adb0a0fdbb7a596ae9e7d873ddb557edd9`
 - `packages/db/test/sv5pre-completion.integration.test.ts`: `10d9af575036a4a1bad3db7942f27d9c8ee81fd3a49a375628302c4734694e01`
 - `docs/contracts/sv5pre-completion-v1.md`: `2579580b5de8dfdfc8d257424c1c1d2dfe44b95557a39dc25d95f636a40607aa`
