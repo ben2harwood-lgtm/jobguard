@@ -1,0 +1,15 @@
+# Contractor demonstration package operations — ENT-11B-P-A
+
+Practice sandbox — synthetic data; nothing is sent or charged
+
+No migration: no DDL, backfill, new store, grant, routine, policy or trigger. Migration 0194 is unused. No existing implementation, tests, pins, shared composition or routes changed. This addition is internal and additive; it has no caller automatically enabled in a deployed service. No new operational alert or provider/data-flow change.
+
+To prepare the example, read `docs/fixtures/contractor-full-demo-package.v1.json`, pass its `history` serialized as JSON (or its `csv` field) with explicit `cohorts` and `methodVersion` to the `full-demo-baseline-example.v1` envelope described in the contract. Keep the returned sandbox/export envelope. Do not combine fictional historical team IDs with live dashboard dimensions. Reproducibility is not persistence.
+
+For authorized observations, use an existing synthetic practice session acting as a dashboard-authorized Northside supervisor and delegate through FullDemoPackageApplication. The Northside run is its generated tenant; do not create another run store. The DB test follows existing log/photo, price, submit, supervisor approval, local client-link and client decision commands, then reads with the supervisor session. The existing link command queues fake_email during setup only; no delivery executor is run. Read-only snapshots are measured after setup and role switching. Owner/client dashboard refusals remain intact; no finance switch is invented.
+
+Feature-disable/forward-fix: stop calling the internal reader/preparer, or remove the additive module in a later reviewed change. There is no schema rollback or data backfill. Preserve command receipts, audit history, evidence and attribution. A reset revokes the old session and starts a new generated tenant through existing commands; it never deletes history.
+
+STOP: finance export/billing/payment composition belongs to ENT-6B; persisted statements/approval/reconciliation to ENT-7-P; persisted prompt confirmation to ENT-8a-P. Durable baseline import and historical reads belong to ENT-9. No replacement operation, storage, scope, or paid fact is permitted here. B/C require fresh orders. All real-data/provider/commercial gates, including D01/D02/D03/D08/D09/D16, remain closed. Screens and rehearsal remain parked; none is claimed.
+
+Verification handoff: run the three own API files together with `--maxWorkers=2`, then the own PostgreSQL integration file in a separate invocation with `--maxWorkers=2`. Keep all existing Northside, dashboard, auth-context, tenancy/privilege, migration and ENT-11a browser regressions. PostgreSQL and browsers are NOT RUN locally by order. CI must supply the clean Node 24.15.0 / pnpm 10.28.1 frozen-install checks and mandatory fixture evaluation. No model/prompt/parser change; live-model evaluation is inapplicable. Builder receipt records actual local commands and limitations. Require a real different-model exact-commit verdict and separate acceptance; founder owns commit/push/merge/release.
