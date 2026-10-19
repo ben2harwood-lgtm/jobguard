@@ -57,9 +57,11 @@ async function subscriptionAdditions(before: Awaited<ReturnType<typeof snapshot>
  return { rows, routines, relations, policies };
 }
 // Rulings 104(b) and 113: only objects created by 0188, the LATER-B14 0193 routines and MON-3-P-A's trial-claim migration may extend the snapshot.
+// Ruling 113 also extends it to ENT-8A-P's own live-prompt objects (livePromptAdditions).
 // Existing rows, routine privileges, relations and policies still compare in full.
 async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const after = await snapshot();
+ const livePrompt = await livePromptAdditions(before, after);
  const tables = ["practice_supplier_credit_case_binding", "practice_supplier_credit_review_payment", "trial_identity_key_claim", "trial_identity_snapshot"];
  const routineNames = ["claim_trial_identity_keys", "pf1b_pin_time", "pf1b_require_side_effect", "pf1b_review_supplier_credit", "pf1b_source_bundle", "pf1b_validate_side", "trial_identity_claim_on_insert"];
  const routines = after.routines.filter(r => r.nspname === "app" && routineNames.includes(r.proname));
@@ -100,12 +102,89 @@ async function with0188And0192Additions(before: Awaited<ReturnType<typeof snapsh
   return expected;
  };
  return {
-  rows: { ...before.rows, ...subscription.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
-  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines], after.routines),
-  relations: additive(before.relations, [...relations, ...subscription.relations], after.relations),
-  policies: additive(before.policies, [...policies, ...subscription.policies], after.policies),
+  rows: { ...before.rows, ...subscription.rows, ...livePrompt.rows, "app.practice_supplier_credit_case_binding": [], "app.practice_supplier_credit_review_payment": [], "app.trial_identity_key_claim": [], "app.trial_identity_snapshot": [] },
+  routines: additive(before.routines, [...after.routines.filter(r => routines.includes(r) || routines0193.includes(r)), ...subscription.routines, ...livePrompt.routines], after.routines),
+  relations: additive(before.relations, [...relations, ...subscription.relations, ...livePrompt.relations], after.relations),
+  policies: additive(before.policies, [...policies, ...subscription.policies, ...livePrompt.policies], after.policies),
  };
 }
+// Ruling 113: additive allowance for exactly the objects created by ENT-8A-P's live-prompt migration.
+// The replaced ent4b_origin_provenance routine is NOT an addition: its existing
+// catalogue row (including owner, grants and configuration) still compares in full.
+async function livePromptAdditions(before: Awaited<ReturnType<typeof snapshot>>, after: Awaited<ReturnType<typeof snapshot>>) {
+ const tables = [
+  "extra_prompt_rule_settings",
+  "extra_prompt",
+  "extra_prompt_citation",
+  "prompt_resolution",
+  "materials_issue_fact",
+  "extra_completion_observation",
+  "extra_office_prompt_signal"
+];
+ const indexNames = [
+  "extra_prompt_rule_settings_pkey",
+  "extra_prompt_rule_settings_tenant_id_client_contract_versio_key",
+  "extra_prompt_pkey",
+  "extra_prompt_tenant_id_job_id_id_key",
+  "extra_prompt_tenant_id_job_id_coalescing_key_key",
+  "extra_prompt_citation_pkey",
+  "extra_prompt_citation_tenant_id_job_id_id_key",
+  "extra_prompt_citation_tenant_id_prompt_id_source_kind_sourc_key",
+  "prompt_resolution_pkey",
+  "prompt_resolution_tenant_id_job_id_id_key",
+  "prompt_resolution_tenant_id_prompt_id_key",
+  "prompt_resolution_tenant_id_command_id_key",
+  "materials_issue_fact_pkey",
+  "materials_issue_fact_tenant_id_job_id_id_key",
+  "materials_issue_fact_tenant_id_source_id_event_id_key",
+  "extra_completion_observation_pkey",
+  "extra_completion_observation_tenant_id_job_id_id_key",
+  "extra_completion_observation_tenant_id_command_id_key",
+  "extra_office_prompt_signal_pkey",
+  "extra_office_prompt_signal_tenant_id_job_id_id_key",
+  "extra_office_prompt_signal_tenant_id_prompt_id_variation_id_key"
+];
+ const routineIdentities = [
+  ["lp_authority", "p_session uuid, p_job uuid, p_action text"],
+  ["lp_surface", "p_job uuid, p_command uuid, p_rule text, p_key text, p_work text, p_sources jsonb, p_settings uuid"],
+  ["lp_png_completion_tags", "p_bytes bytea"],
+  ["lp_evaluate", "p_job uuid, p_command uuid"],
+  ["lp_read", "p_session uuid, p_input jsonb"],
+  ["lp_citations_valid", "p_job uuid, p_prompt uuid"],
+  ["lp_command", "p_session uuid, p_input jsonb, p_source_bytes bytea"],
+  ["lp_span_valid", "p_text text, p_locator jsonb"],
+  ["lp_finish", "p_session uuid, p_command uuid, p_result jsonb"],
+  ["lp_visit_evaluate", "p_actor uuid, p_job uuid, p_command uuid"],
+  ["lp_require_audit", ""],
+  ["lp_office_advisory", ""],
+  ["lp_sources", "p_session uuid, p_job uuid"],
+  ["lp_observation_prompt", "p_session uuid, p_job uuid, p_observation uuid"],
+  ["lp_receipt_immutable", ""]
+];
+ const routines = after.routines.filter(r => r.nspname === "app" && routineIdentities.some(([name, args]) => r.proname === name && r.args === args));
+ expect(routines.map(r => [r.proname, r.args]).sort()).toEqual([...routineIdentities].sort());
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x
+  JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE n.nspname='app' AND t.relname=ANY($1::text[]) ORDER BY i.relname`, [tables])).rows.map(r => r.relname);
+ expect([...indexes].sort()).toEqual([...indexNames].sort());
+ const relationNames = [...tables, ...indexNames];
+ const relations = after.relations.filter(r => r.nspname === "app" && relationNames.includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([...relationNames].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename) && p.policyname === "tenant_isolation");
+ expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "tenant_isolation"]).sort());
+ for (const table of tables) expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
+ return {
+  rows: Object.fromEntries(tables.map(t => [`app.${t}`, []])),
+  routines,
+  relations,
+  policies,
+ };
+}
+
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
