@@ -26,7 +26,7 @@ async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
 async function setup() {
  directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));port=59000+Math.floor(Math.random()*500);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
+ await postgres.initialise();await postgres.start();await postgres.createDatabase("jobguard_synthetic_demo");admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"jobguard_synthetic_demo"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  for(const [tenant,job] of [[T,J],[T,K],[O,L]]) {
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenant]);
   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional SV-2 job','live')",[job,tenant]);
@@ -38,7 +38,7 @@ async function setup() {
   await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT ${role} TO ${login}`);
  }
  // Name the database: with none, pg connects to a database called after the login, which does not exist.
- const pool=(user:string)=>new Pool({host:"127.0.0.1",port,database:"postgres",user,password:"synthetic",max:4});
+ const pool=(user:string)=>new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user,password:"synthetic",max:4});
  runtime=pool("sv2_runtime");shadow=pool("sv2_shadow");emergency=pool("sv2_emergency");
 }
 async function cleanup(){await closeTestPools(runtime,shadow,emergency,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});}

@@ -112,7 +112,13 @@ beforeAll(async()=>{
  await p.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
  // Issue the session through the product's own SECURITY DEFINER routine: the seed trigger on practice_session refuses a direct insert by any other role (no guard is switched off).
  await p.query("SELECT app.issue_practice_session($1)",[digest]);
- await p.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,created_at,updated_at) VALUES($1,$2,'Fictional SV-3 isolation job','live',$3,'home',$4,$4)",[jobId,DEMO_TENANT_ID,digest,fixed]);
+ // Ruling 103 (Q3): one explicit owner transaction carries the exact practice-home permit and the unchanged INSERT.
+ {const owner=await p.connect();try{await owner.query("BEGIN");await owner.query("SELECT set_config('app.tenant_id',$1,true)",[DEMO_TENANT_ID]);
+ await owner.query(`INSERT INTO app.lp_job_insert_permit(tenant_id,job_id,backend_pid,transaction_id,operation,insert_shape,actor_membership_id)
+  VALUES($1,$2,pg_backend_pid(),pg_current_xact_id(),'practice_home',
+   app.lp_job_insert_shape(jsonb_populate_record(NULL::app.job,jsonb_build_object('tenant_id',$1::uuid,'id',$2::uuid,'title','Fictional SV-3 isolation job','status','live','revision',0,
+    'practice_session_digest',$3::text,'practice_scenario','home','provenance','system_generated_quote'))),$4)`,[DEMO_TENANT_ID,jobId,digest,DEMO_MEMBERSHIP_ID]);
+ await owner.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,created_at,updated_at) VALUES($1,$2,'Fictional SV-3 isolation job','live',$3,'home',$4,$4)",[jobId,DEMO_TENANT_ID,digest,fixed]);await owner.query("COMMIT")}catch(error){await owner.query("ROLLBACK");throw error}finally{owner.release()}}
  await p.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state,created_at) VALUES($1,$2,$3,'confirmed',$4)",[baselineScopeId,DEMO_TENANT_ID,jobId,fixed]);
  await withTenant(p,testTenantContext(DEMO_TENANT_ID),async (db:{$client:PoolClient})=>{
   for(let n=0;n<25;n++){

@@ -183,7 +183,8 @@ describe("CH-3a real PostgreSQL guarantees",()=>{
   it("refuses live and adoption without parties in the PostgreSQL boundary and rolls back",async()=>{
     const job=await createJob();
     await expect(setLiveDirectly(job)).rejects.toThrow("JOB_PARTIES_REQUIRED");
-    await expect(withTenant(runtime,context,db=>db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,'Fictional import','live',$4,'Fictional baseline',100000,1500,'reference_fee_policy_v1','synthetic_import_terms_candidate.v1',$5,now())`,[tenant,randomUUID(),randomUUID(),"b".repeat(64),member]))).rejects.toThrow("JOB_PARTIES_REQUIRED");
+    // Ruling 103: the thirteen-argument adoption routine is no longer runtime-executable; this legacy backstop runs as an explicit owner fixture.
+    await expect(withTenant(admin,context,db=>db.$client.query(`SELECT app.adopt_in_flight_job($1,$2,$3,'Fictional import','live',$4,'Fictional baseline',100000,1500,'reference_fee_policy_v1','synthetic_import_terms_candidate.v1',$5,now())`,[tenant,randomUUID(),randomUUID(),"b".repeat(64),member]))).rejects.toThrow("JOB_PARTIES_REQUIRED");
     expect((await repository.view(context,member,job)).current).toBeNull();
   });
   it("serializes concurrent bindings, deduplicates replay and conflicts on changed payloads",async()=>{

@@ -16,6 +16,7 @@ import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const context = testTenantContext(DEMO_TENANT_ID);
@@ -74,6 +75,7 @@ async function fixture({ claim1 = 32_000, claim2 = 250_000, settle = true }: { c
   const db = await admin.connect();
   try {
     await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await permitPracticeHomeJob(db, { tenantId: DEMO_TENANT_ID, jobId, title: "Recovery £18,800 allocation fixture", practiceSessionDigest: digest, actorMembershipId: DEMO_MEMBERSHIP_ID });
     await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Recovery £18,800 allocation fixture',$3,'home')", [jobId, DEMO_TENANT_ID, digest]);
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, DEMO_TENANT_ID, jobId]);
     await db.query("INSERT INTO app.quote_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [quoteDraftId, DEMO_TENANT_ID, jobId]);

@@ -10,6 +10,7 @@ import { withTenant } from "../src/tenant-context.js";
 import { DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID } from "../src/demo-seed.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 const credential=randomUUID(),session=randomUUID(),J=randomUUID(),logs:string[]=[];
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,shadow:Pool,dir:string;
 beforeAll(async()=>{
@@ -24,7 +25,10 @@ beforeAll(async()=>{
  const digest=createHash("sha256").update(session).digest("hex");
  // Issue the session through the product's own SECURITY DEFINER routine: the seed trigger on practice_session refuses a direct insert by any other role (no guard is switched off).
  await admin.query("SELECT app.issue_practice_session($1)",[digest]);
- await admin.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional isolation job','live',$3,'home')",[J,DEMO_TENANT_ID,digest]);
+ // Ruling 103 (Q3): one explicit owner transaction carries the exact practice-home permit and the unchanged INSERT.
+ {const owner=await admin.connect();try{await owner.query("BEGIN");await owner.query("SELECT set_config('app.tenant_id',$1,true)",[DEMO_TENANT_ID]);
+ await permitPracticeHomeJob(owner,{tenantId:DEMO_TENANT_ID,jobId:J,title:"Fictional isolation job",practiceSessionDigest:digest,actorMembershipId:DEMO_MEMBERSHIP_ID,status:"live"});
+ await owner.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional isolation job','live',$3,'home')",[J,DEMO_TENANT_ID,digest]);await owner.query("COMMIT")}catch(error){await owner.query("ROLLBACK");throw error}finally{owner.release()}}
 },60000);
 afterAll(async()=>{await closeTestPools(runtime,shadow,admin);await pg?.stop();if(dir)await rm(dir,{recursive:true,force:true})});
 describe("SV-3 structural timing and runtime query logging",()=>{

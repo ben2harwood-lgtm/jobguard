@@ -41,10 +41,10 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
-  admin = new Pool(connectionOptions("postgres", "postgres"));
+  admin = new Pool(connectionOptions("jobguard_synthetic_demo", "postgres"));
   await migrate(admin); await seed(admin);
   await admin.query("CREATE ROLE stored_times_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO stored_times_login");
-  runtime = new Pool(connectionOptions("postgres", login));
+  runtime = new Pool(connectionOptions("jobguard_synthetic_demo", login));
 }, 40_000);
 afterAll(async () => {
   if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment;
