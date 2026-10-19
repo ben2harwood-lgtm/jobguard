@@ -5,7 +5,7 @@ import { createScimHarness,canonicalRows } from './oidc-fixtures.js';
 import { fixture,person,deactivate,origin } from './scim-fixtures.js';
 import { randomUUID } from 'node:crypto';
 let h:Awaited<ReturnType<typeof createScimHarness>>;
-beforeAll(async()=>{h=await createScimHarness('jg-oidc-upgrade-','0194_oidc_signin.sql');},120000);
+beforeAll(async()=>{h=await createScimHarness('jg-oidc-upgrade-','0197_oidc_signin.sql');},120000);
 afterAll(async()=>{if(h)await h.close();});
 it('populated SAML/SCIM/emergency upgrade preserves historical rows and installs restricted OIDC routines/RLS',async()=>{
  const f=await fixture(h);
