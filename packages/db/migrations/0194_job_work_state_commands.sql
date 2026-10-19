@@ -14,11 +14,75 @@ CREATE FUNCTION app.ch4_require_command_owner(t uuid,j uuid,digest text) RETURNS
 DECLARE actor uuid;
 BEGIN
  IF t IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
- SELECT a.membership_id INTO actor FROM app.authenticate_practice_session(digest,t) a;
- IF actor IS NULL OR NOT EXISTS(SELECT 1 FROM app.job x JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(x.tenant_id,x.id)
-  WHERE x.tenant_id=t AND x.id=j AND x.practice_session_digest=digest AND c.job_track='small_builder' AND c.environment='synthetic_demo')
+ -- Trusted server membership IDs use the same authority boundary as final-lock
+ -- commands. Practice digests still authenticate their persisted session.
+ IF digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN
+  actor:=digest::uuid;
+ ELSE
+  SELECT a.membership_id INTO actor FROM app.authenticate_practice_session(digest,t) a;
+ END IF;
+ IF actor IS NULL OR NOT EXISTS(SELECT 1 FROM app.job x JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(x.tenant_id,x.id) WHERE x.tenant_id=t AND x.id=j AND c.job_track='small_builder' AND c.environment='synthetic_demo')
  THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN
+  PERFORM app.final_lock_require_owner(t,actor);
+ EXCEPTION WHEN insufficient_privilege THEN
+  RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501';
+ END;
  RETURN actor;
+END $$;
+CREATE FUNCTION app.ch4_command_work_facts(t uuid,j uuid,digest text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE events jsonb; links jsonb; lock jsonb;
+BEGIN
+ PERFORM app.ch4_require_command_owner(t,j,digest);
+ SELECT coalesce(jsonb_agg(jsonb_build_object('version',version,'id',id,'jobId',job_id,'sequence',sequence,'kind',kind,'factAt',to_char(fact_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'recordedAt',to_char(recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'sourceReceiptId',source_receipt_id,'commandId',command_id,'predecessorId',predecessor_id,'closeReason',close_reason,'closeNote',close_note) ORDER BY fact_at,id),'[]') INTO events FROM app.job_work_state_event WHERE tenant_id=t AND job_id=j;
+ SELECT jsonb_build_object('id',id,'lockedAt',to_char(locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) INTO lock FROM app.final_account_lock WHERE tenant_id=t AND job_id=j;
+ SELECT coalesce(jsonb_agg(jsonb_build_object('id',l.id,'predecessorJobId',l.predecessor_job_id,'successorJobId',l.successor_job_id,'linkedAt',to_char(l.linked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) ORDER BY l.linked_at,l.id),'[]') INTO links FROM app.job_link l JOIN app.job predecessor ON predecessor.tenant_id=t AND predecessor.id=l.predecessor_job_id JOIN app.job successor ON successor.tenant_id=t AND successor.id=l.successor_job_id WHERE l.tenant_id=t AND (l.predecessor_job_id=j OR l.successor_job_id=j);
+ RETURN jsonb_build_object('version','job-work-state-read.v1','jobId',j,'events',events,'links',links,'lock',lock,'environment','synthetic_demo','realExternalActions',0);
+END $$;
+CREATE OR REPLACE FUNCTION app.ch4_storage_integrity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE latest app.job_work_state_event; p app.job_party_binding; s app.job_party_binding; old_context text:=current_setting('app.tenant_id',true);
+BEGIN
+ IF NEW.tenant_id IS DISTINCT FROM nullif(old_context,'')::uuid THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF TG_TABLE_NAME='job_link' THEN
+  PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id IN(NEW.predecessor_job_id,NEW.successor_job_id) ORDER BY id FOR UPDATE;
+  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text,145));
+  IF (SELECT count(*) FROM app.job_commercial_track WHERE tenant_id=NEW.tenant_id AND job_id IN(NEW.predecessor_job_id,NEW.successor_job_id) AND job_track='small_builder' AND environment='synthetic_demo')<>2 THEN RAISE EXCEPTION 'INVALID_JOB_LINK'; END IF;
+  SELECT * INTO p FROM app.job_party_binding WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.predecessor_job_id,NEW.predecessor_binding_id);
+  SELECT * INTO s FROM app.job_party_binding WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.successor_job_id,NEW.successor_binding_id);
+  IF p.id IS NULL OR s.id IS NULL OR (p.customer_id,p.site_id,p.paying_party_id) IS DISTINCT FROM (s.customer_id,s.site_id,s.paying_party_id)
+   OR (p.customer_id,p.site_id,p.paying_party_id) IS DISTINCT FROM (NEW.customer_id,NEW.site_id,NEW.paying_party_id)
+   OR NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.predecessor_job_id)
+  THEN RAISE EXCEPTION 'INVALID_JOB_LINK'; END IF;
+  IF EXISTS(WITH RECURSIVE descendants(id) AS(SELECT NEW.successor_job_id UNION SELECT l.successor_job_id FROM app.job_link l JOIN descendants d ON d.id=l.predecessor_job_id WHERE l.tenant_id=NEW.tenant_id) SELECT 1 FROM descendants WHERE id=NEW.predecessor_job_id) THEN RAISE EXCEPTION 'JOB_LINK_CYCLE'; END IF;
+  RETURN NEW;
+ END IF;
+ IF TG_TABLE_NAME='job_work_state_event' THEN IF NEW.source_receipt_id IS NULL THEN PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=NEW.job_id FOR UPDATE; END IF; END IF;
+ -- Command facts use current tenant-owner authority, not the job creator's
+ -- practice session. Source facts and photo purposes keep their existing gates.
+ IF TG_TABLE_NAME='job_work_state_event' THEN
+  IF NEW.source_receipt_id IS NULL THEN
+   PERFORM app.final_lock_require_owner(NEW.tenant_id,NEW.actor_membership_id);
+   IF NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND job_track='small_builder' AND environment='synthetic_demo') THEN RAISE EXCEPTION 'SYNTHETIC_MODE_REQUIRED'; END IF;
+  ELSIF NOT app.ch4_source_job(NEW.tenant_id,NEW.job_id) THEN RAISE EXCEPTION 'SYNTHETIC_MODE_REQUIRED'; END IF;
+ ELSIF NOT app.ch4_source_job(NEW.tenant_id,NEW.job_id) THEN RAISE EXCEPTION 'SYNTHETIC_MODE_REQUIRED'; END IF;
+ IF TG_TABLE_NAME='job_photo_purpose' THEN
+  IF NOT EXISTS(SELECT 1 FROM app.evidence_object e JOIN app.evidence_upload u ON(u.tenant_id,u.job_id,u.id)=(e.tenant_id,e.job_id,e.upload_id)
+   WHERE (e.tenant_id,e.job_id,e.id,e.upload_id)=(NEW.tenant_id,NEW.job_id,NEW.evidence_id,NEW.upload_id) AND e.kind='original' AND u.state='verified' AND e.sha256=NEW.sha256 AND e.object_version_id=NEW.object_version_id AND u.object_version_id=NEW.object_version_id)
+  THEN RAISE EXCEPTION 'INVALID_PHOTO_PURPOSE'; END IF;
+  -- Q-03 held: even a fixture cannot reclassify an existing progress source as snagging.
+  IF NEW.purpose='snagging' AND EXISTS(SELECT 1 FROM app.job_site_source_receipt WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND evidence_id=NEW.evidence_id) THEN RAISE EXCEPTION 'INVALID_PHOTO_PURPOSE'; END IF;
+ END IF;
+ IF TG_TABLE_NAME='job_work_state_event' THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text||':'||NEW.job_id::text,144));
+  IF NEW.sequence<>(SELECT coalesce(max(sequence),0)+1 FROM app.job_work_state_event WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id) THEN RAISE EXCEPTION 'INVALID_WORK_SEQUENCE'; END IF;
+  IF NEW.source_receipt_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM app.job_site_source_receipt r WHERE (r.tenant_id,r.job_id,r.id,r.received_at,r.source_hash)=(NEW.tenant_id,NEW.job_id,NEW.source_receipt_id,NEW.fact_at,NEW.request_hash)) THEN RAISE EXCEPTION 'INVALID_WORK_SOURCE'; END IF;
+  IF NEW.kind IN('finished_cancelled','reopened') THEN
+   SELECT * INTO latest FROM app.job_work_state_event WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND kind IN(CASE WHEN NEW.kind='finished_cancelled' THEN 'finished_on_site' ELSE 'closed' END,NEW.kind) ORDER BY sequence DESC LIMIT 1;
+   IF (NEW.kind='finished_cancelled' AND latest.fact_at>NEW.fact_at) OR latest.id IS DISTINCT FROM NEW.predecessor_id OR latest.kind IS DISTINCT FROM (CASE WHEN NEW.kind='finished_cancelled' THEN 'finished_on_site' ELSE 'closed' END) THEN RAISE EXCEPTION 'INVALID_WORK_PREDECESSOR'; END IF;
+  END IF;
+  IF NEW.kind IN('first_site_evidence','site_activity','resumed','finished_on_site') AND EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id) THEN RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB'; END IF;
+ END IF;
+ RETURN NEW;
 END $$;
 CREATE FUNCTION app.ch4_require_open(t uuid,j uuid) RETURNS void
  LANGUAGE plpgsql SET search_path=pg_catalog AS $$
@@ -153,7 +217,7 @@ BEGIN
   INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,command_id,predecessor_id,close_reason,close_note,request_hash,audit_event_id)
   VALUES(t,j,fact_id,seq+1,event_kind,at_time,actor,cid,predecessor,CASE WHEN action='close' THEN input->>'reason' END,CASE WHEN action='close' THEN input->>'note' END,request_digest,audit_id);
  END IF;
- command_result:=app.ch4_read_work_facts(t,j,digest);
+ command_result:=app.ch4_command_work_facts(t,j,digest);
  UPDATE app.command_receipt SET status='succeeded',result=command_result,completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=cid;
  -- Drain only our audit constraint after the last business write/lock.
  IF action='link' THEN SET CONSTRAINTS app."A0_ch4_link_audit" IMMEDIATE; ELSE SET CONSTRAINTS app."A0_ch4_event_audit" IMMEDIATE; END IF;
@@ -392,7 +456,7 @@ END $$;
 
 DO $$ DECLARE fn regprocedure; BEGIN
  FOR fn IN SELECT p.oid::regprocedure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname='app' AND p.proname IN('ch4_require_command_owner','ch4_require_open','ch4_admit_place','ch4_work_state_command','ch4_record_work_state','ch4_link_post_lock_job') LOOP
+ WHERE n.nspname='app' AND p.proname IN('ch4_command_work_facts','ch4_require_command_owner','ch4_require_open','ch4_admit_place','ch4_work_state_command','ch4_record_work_state','ch4_link_post_lock_job') LOOP
   EXECUTE format('ALTER FUNCTION %s OWNER TO jobguard_migration',fn);
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,jobguard_runtime,jobguard_infrastructure,jobguard_shadow,jobguard_shadow_emergency_access',fn);
  END LOOP;

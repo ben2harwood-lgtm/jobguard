@@ -402,3 +402,123 @@ Final b1 validation addendum:
   installed `nest build`; web: installed `next build`: **PASS** all package
   builds. Web emitted workspace-lockfile, CSS and dependency-import warnings.
   Build completion is not browser or database verification.
+
+## c1 (rulings 124/126)
+
+Order CH-4-C-c1, PR #290. Starting HEAD `c12971ed`; inspected local
+`origin/main` at `dbd3b165`. No git writes, commit, push, install or database
+startup. Migration 0194 is edited in place as ordered. This is builder evidence,
+not independent review or acceptance. RED: dispatcher obtains two independent
+checks bound to its eventual commit, then PARK. No review is fabricated here.
+
+### Implementation and authority
+
+- Finish, cancel_finish, close, reopen and link accept a normal active owner of
+  the job's tenant. The command authority argument accepts a server-authenticated
+  membership UUID, like existing owner command routines, or an authenticated
+  practice digest. SQL reuses `final_lock_require_owner`; revoked, expired,
+  foreign-tenant and non-owner memberships fail closed. Rechecks and replay
+  ordering remain. Practice sessions still authenticate; creator-session job
+  ownership is no longer command authority.
+- The application command optionally uses the existing identity context bridge
+  (session, origin, CSRF, membership), deriving the owner ID server-side. The
+  practice path authenticates the session without requiring creator ownership.
+  Body-supplied authority remains rejected. The existing synthetic small-builder
+  gate remains; this is not a production release.
+- A private command projection returns tenant-scoped facts without invoking the
+  merged practice-only GET reader. The public reader and its ACL are unchanged.
+  The projection is migration-owned and has no runtime/infrastructure/shadow
+  EXECUTE grant. The storage guard no longer requires equal creator digests for
+  links or a live creator session for command events. Tenant, party, cycle,
+  source, photo, lock and immutable-history constraints remain.
+- Finish/cancel harness preparation uses the existing random tenant, normal
+  owner and job. Removed demo seeding, practice issuance, substituted job IDs and
+  JOBGUARD_ENV switching. Existing cases/helpers/assertions are byte-identical
+  to origin/main: a deterministic comparison removes only the CH-4 import,
+  helper and two registrations, then compares the complete remaining file.
+  Shared replay files were not edited. No expectation was narrowed.
+- Rulings 114/116 remain: resume HELD; 409 response contract unchanged.
+  Added normal-owner lifecycle and negative authority integration coverage and
+  private-projection ACL/upgrade assertions; updated only this unmerged task's
+  obsolete practice-only command assertions. PostgreSQL coverage is NOT RUN.
+
+### STOP items and handoff
+
+1. **Normal-session HTTP transport remains outside this lane.** The shared
+   `apps/api/src/auth/application-auth.guard.ts` explicitly rejects every normal
+   session workflow as SYNTHETIC_WORKFLOW_ONLY, even after identity verification.
+   It is not in the CH-4-C lane. Next's shared workspace factory supplies only
+   practice credentials. No changes to these shared identity boundaries were
+   made. The command/application bridge is ready, but normal-session HTTP
+   availability is NOT claimed. Dispatcher must issue the bounded transport work.
+2. **Migration numbering:** origin/main already contains
+   `0194_free_first_job_keys.sql`. Both lane and root lint fail because this
+   branch's 0194 is not higher. This order explicitly specifies editable 0194;
+   no renumber, rebase or unrelated main catch-up was attempted. This repeats
+   b1's numbering hold. Dispatcher owns the catch-up/renumber before merge.
+3. SQL and shared replay/race behavior need real PostgreSQL CI. Browser and
+   localhost suites need a permitted environment. The previous b1 cross-tenant
+   harness mismatch is removed in source; an actual PostgreSQL pass is not claimed.
+
+The trusted server must bind membership IDs to the verified principal/context;
+UUIDs are not bearer credentials. This follows existing owner-command trust
+boundaries and does not protect against a compromised privileged application
+choosing another actor/tenant. No schema/data backfill or money/provider change.
+Migration note records pre-merge reapplication and post-deploy forward-fix policy.
+
+### Executed checks
+
+Node v24.17.0; installed TypeScript 5.8.3 / Vitest 4.1.11. The installed pnpm
+launcher stalled selecting the pinned package manager, as earlier receipts
+recorded. Attempted pnpm typecheck/lint/lint:lanes/unit/build/openapi wrappers
+were interrupted (130); no successful aggregate pnpm or clean-install claim.
+Configured script bodies were run with installed local binaries instead.
+
+| Check (installed script body) | Result |
+| --- | --- |
+| Root `tsc -p apps/api/tsconfig.json --noEmit` and `tsc -p packages/db/tsconfig.json --noEmit` | PASS; API repeated after final application edit, PASS. These also implement package lint. |
+| Root `LANE_BASE_REF=origin/main node tools/lint.mjs` | FAIL at lane migration-number check; core purity PASS. |
+| Root `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs` | FAIL: 0194 must be above main's existing 0194. |
+| Root `node tools/money-arithmetic-lint.mjs` | PASS. |
+| Root `node --test tools/*.test.mjs` | PASS: 100 tests. |
+| API `vitest run src/job-work-state-commands.test.ts src/watchdog-registry.test.ts --maxWorkers=1` | PASS: 135 tests, 2 files, after final application edit. |
+| DB `vitest run src --exclude '**/test/**' --maxWorkers=2` | 197 passed, 1 failed: unchanged audit-checkpoint-handoff.test.ts:303 exceeded 5000ms. |
+| DB second check `vitest run src/audit-checkpoint-handoff.test.ts --maxWorkers=1` | 70 passed, same timeout failed. PARK; no timeout/expectation change. |
+| API `node --import tsx src/generate-openapi.ts --check` | PASS after building DB. First attempt failed against stale built DB export evaluateDecisionChecks; no source or OpenAPI artifact correction was needed. |
+| core/config/ai/storage/db `tsc -p tsconfig.json`; API `nest build` | PASS all six builds. |
+
+The initial broad API `vitest run src --exclude '**/*.http.test.ts'
+--maxWorkers=2` was interrupted: it still included localhost-dependent SSO and
+health tests. It reported two SSO action-path failures, a stale DB-export suite
+load failure, and a registry scan failure from an intermediate extra command
+method. The final implementation folds identity authorization into the existing
+command method; the focused registry pass above confirms no additional registry
+key is needed. Those intermediate results are not reported as passing evidence.
+
+Web `./node_modules/.bin/next build` (apps/web): PASS, including type validation,
+41 static pages and build traces. Warnings: workspace lockfile selection, CSS
+compatibility and pre-existing dynamic Nest dependency imports. An initial root
+Next invocation used the wrong working directory and exited 1; the package
+invocation above is the applicable build. No tracked build artifact changed.
+
+Final broader API command (apps/api):
+`./node_modules/.bin/vitest run src --exclude '**/*.http.test.ts' --exclude
+'**/health.test.ts' --exclude '**/shadow-isolation.application.test.ts' --exclude
+'**/auth/sso/action-paths.test.ts' --maxWorkers=2`.
+Result: **1953 tests passed, 1 skipped; 107 files passed, 1 file failed**.
+The remaining mixed file `final-account-lock.isolation.test.ts` dynamically
+imports a PostgreSQL fixture. Its beforeAll failed at `freePort` with
+`no free port in 58400..58650`, before constructing/initialising/starting
+EmbeddedPostgres. The two scripted tests in that file passed; its real-database
+case did not run. This is not an all-green API suite or PostgreSQL evidence.
+No further broad rerun; dispatcher CI owns the mixed integration suite.
+
+Final deterministic harness-preservation comparison and `git diff --check`:
+PASS. All ten changed tracked paths are within CH-4-C's allowlist; the lane
+failure is migration ordering. No existing merged harness/replay expectation
+was modified. PostgreSQL/migrations/shared replay races: **NOT RUN**. Browser:
+**NOT RUN**. AI evaluation: inapplicable. No independent verdict or acceptance.
+
+Commit message written to `/private/tmp/jg-msg-ch-4-c.txt`; dispatcher owns the
+commit/push. Status: **PARK / not accepted**, with transport, migration numbering,
+DB unit timeout and CI evidence holds above. No git write was performed.

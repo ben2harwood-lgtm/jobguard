@@ -40,3 +40,22 @@ it('missing-session controller refusal carries no-store before the identity filt
  await expect(new JobWorkStateController({} as Pool).post('11111111-1111-4111-8111-111111111111',{},undefined,response)).rejects.toThrow('UNAUTHENTICATED');
  expect(response.setHeader).toHaveBeenCalledWith('Cache-Control','no-store');
 });
+
+import type { IdentityApplication } from './auth/identity.application.js';
+it.each(['owner','admin','finance',undefined])('normal-session command bridge requires owner (%s)',async role=>{
+ vi.stubEnv('JOBGUARD_ENV','synthetic_demo');
+ const context={tenantId:'11111111-1111-4111-8111-111111111111'};
+ const principal={identityUserId:'user',sessionId:'session',csrfToken:'csrf'};
+ const membership={id:'22222222-2222-4222-8222-222222222222',role};
+ const identity={context:vi.fn(async()=>context),principal:vi.fn(async()=>principal),provider:{findMembership:vi.fn(async()=>role?membership:undefined)}} as unknown as IdentityApplication;
+ const command=vi.spyOn(JobWorkStateRepository.prototype,'command').mockResolvedValue({} as never);
+ try {
+  const credentials={sessionToken:'normal-session',tenantHeader:context.tenantId,csrfToken:'csrf',origin:'https://example.invalid'};
+  const result=new JobWorkStateApplication({} as Pool).command(context.tenantId,{},identity,credentials);
+  if(role==='owner'){
+   await result;expect(command).toHaveBeenCalledWith(context,context.tenantId,membership.id,{});
+   expect(identity.context).toHaveBeenCalledWith(credentials);
+   expect(identity.provider.findMembership).toHaveBeenCalledWith(principal,context.tenantId);
+  }else{await expect(result).rejects.toThrow('WORK_STATE_FORBIDDEN');expect(command).not.toHaveBeenCalled();}
+ }finally{command.mockRestore();}
+});

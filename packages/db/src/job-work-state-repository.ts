@@ -32,7 +32,7 @@ export class JobWorkStateRepository {
  /** SQL derives and rechecks authority, serializes work, and returns the durable first snapshot. */
  private async execute(context:VerifiedTenantContext,jobId:string,digest:string,raw:unknown,precheck?: (db:TenantTransaction)=>Promise<void>) {
   const input=jobWorkStateMutationV1.safeParse(raw);
-  if(!input.success || !z.string().uuid().safeParse(jobId).success || !/^[a-f0-9]{64}$/u.test(digest))throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
+  if(!input.success || !z.string().uuid().safeParse(jobId).success || (!z.string().uuid().safeParse(digest).success && !/^[a-f0-9]{64}$/u.test(digest)))throw new JobWorkStateError("INVALID_WORK_STATE_INPUT");
   return withTenant(this.pool,context,async db=>{
    try {
     // Resume remains unavailable until MON-1-PLACES supplies capacity admission.

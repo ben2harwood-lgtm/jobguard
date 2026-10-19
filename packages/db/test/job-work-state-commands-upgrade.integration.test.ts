@@ -43,12 +43,15 @@ describe("CH-4-C isolated forward migration proof",()=>{
   expect(await snapshot(f.admin)).toEqual(before);
   const after=await functionCatalog(f.admin),changes=after.filter(row=>{const old=functions.find(x=>x.signature===row.signature);return old&&old.definition!==row.definition});
   const added=after.filter(row=>!functions.some(old=>old.signature===row.signature)).map(row=>row.signature).sort();
-  expect(added).toEqual(["app.ch4_require_command_owner(uuid,uuid,text)","app.ch4_require_open(uuid,uuid)","app.ch4_admit_place(uuid,uuid,text)","app.ch4_work_state_command(uuid,uuid,text,jsonb)","app.ch4_record_work_state(uuid,uuid,text,jsonb)","app.ch4_link_post_lock_job(uuid,uuid,text,jsonb)"].sort());
+  expect(added).toEqual(["app.ch4_command_work_facts(uuid,uuid,text)","app.ch4_require_command_owner(uuid,uuid,text)","app.ch4_require_open(uuid,uuid)","app.ch4_admit_place(uuid,uuid,text)","app.ch4_work_state_command(uuid,uuid,text,jsonb)","app.ch4_record_work_state(uuid,uuid,text,jsonb)","app.ch4_link_post_lock_job(uuid,uuid,text,jsonb)"].sort());
   // Definitions may change only in the explicitly authorized guard/use seams.
-  const allowedDefinitions=["app.ch4_guard_final_check_admission()","app.job_source_insert_guard()","app.reveal_shadow_signals(uuid,uuid)","app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)","app.ch4_guard_new_site_work()"];
+  const allowedDefinitions=["app.ch4_storage_integrity()","app.ch4_guard_final_check_admission()","app.job_source_insert_guard()","app.reveal_shadow_signals(uuid,uuid)","app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)","app.ch4_guard_new_site_work()"];
   for(const row of changes)expect(allowedDefinitions).toContain(row.signature);
   for(const old of functions){const current=after.find(row=>row.signature===old.signature);expect(current,old.signature).toBeDefined();expect(current!.acl,old.signature).toEqual(old.acl)}
   for(const signature of ["app.ch4_record_work_state(uuid,uuid,text,jsonb)","app.ch4_link_post_lock_job(uuid,uuid,text,jsonb)"])expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime',$1,'EXECUTE') allowed",[signature])).rows[0].allowed).toBe(true);
+  for(const role of ["jobguard_runtime","jobguard_infrastructure","jobguard_shadow"]){
+   expect((await f.admin.query("SELECT has_function_privilege($1,'app.ch4_command_work_facts(uuid,uuid,text)','EXECUTE') allowed",[role])).rows[0].allowed).toBe(false);
+  }
   await migrate(f.admin);await migrate(f.admin);
   // Compare original columns/rows before adding any new command history.
   await compareOriginal(f.admin,before);

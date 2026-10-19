@@ -53,3 +53,20 @@ remain compatible. Privilege inventory additions are source-derived exact
 signatures; changed/new definition hashes require PostgreSQL catalogue capture
 in CI (recorded as null, not fabricated). Fresh/upgrade/races/runtime-role suites
 must run before acceptance; no production capability or billing is enabled here.
+
+## c1 (rulings 124/126)
+
+Edited unmerged migration 0194 in place. Adds private
+`ch4_command_work_facts(uuid,uuid,text)` (migration owner, no runtime grant),
+so normal owner commands do not depend on the practice-only public read routine.
+The command authority argument is either the server-authenticated membership UUID
+or a persisted practice digest; membership IDs are trusted server inputs like the
+existing final-lock owner commands, not bearer credentials or user body fields.
+`final_lock_require_owner` enforces current owner role, tenant, revocation and
+expiry. RLS does not protect against a compromised trusted server selecting an
+arbitrary actor/tenant. Replaces `ch4_storage_integrity()` preserving ACLs: link
+endpoints need not share a practice digest; command events do not require the
+creator's practice session to remain active. Source and photo gates stay intact.
+No data/backfill/schema changes. Before merge, edit/reapply in a fresh synthetic
+database; after deployment use a separately reviewed forward-fix migration.
+PostgreSQL upgrade/catalog/privilege tests are updated but NOT RUN here.

@@ -9,7 +9,7 @@ import { Pool } from "pg";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import {
   DiscrepancyRepository, EvidenceService, InboxRelevanceRepository, MaterialRepository, ProofCommandService, PurchaseOrderRepository, ReadinessRepository,
-  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, issuePracticeSession, authenticatePracticeSession, migrate,
+  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, migrate,
 } from "../src/index.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -104,43 +104,19 @@ interface Case {
   /** Exact retries whose server-generated fields differ; they must replay the first result unchanged. */
   retries?: string[];
 }
-// Ruling 118: only the added finish/cancel prepare path creates demo fixtures.
-// Keep their state out of the existing cases' memo and restore the environment
-// even when session issuance/authentication fails. Existing identities stay random.
-const workFixtures = new Map<string, {
- auth: Awaited<ReturnType<typeof authenticatePracticeSession>>;
- owned: string;
- revision: number;
- marker?: string;
-}>();
+// Rulings 124/126: use the same random tenant and normal owner as every case.
+const workFixtures = new Map<string, { revision:number; marker?:string }>();
 const prepareWork = async (job:string,finish=false) => {
- const {DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID}=await import("../src/demo-seed.js");
- await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
- await admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
- await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional CH-4 practice') ON CONFLICT DO NOTHING",[DEMO_ACCOUNT_ID,DEMO_TENANT_ID]);
- await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,DEMO_ACCOUNT_ID,DEMO_IDENTITY_USER_ID]);
- const previousEnvironment = process.env.JOBGUARD_ENV;
- let auth: Awaited<ReturnType<typeof authenticatePracticeSession>>;
- try {
-  process.env.JOBGUARD_ENV = "synthetic_demo";
-  const token = await issuePracticeSession(runtime);
-  auth = await authenticatePracticeSession(runtime, token);
- } finally {
-  if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV;
-  else process.env.JOBGUARD_ENV = previousEnvironment;
- }
- const owned=(await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'",[DEMO_TENANT_ID,auth.digest])).rows[0].id;
- const repo=new JobWorkStateRepository(observed.pool);
- const before=await repo.read(auth.context,owned,auth.digest);
- workFixtures.set(job,{auth,owned,revision:before.events.length});
- if(finish){const result=await repo.finish(auth.context,owned,auth.digest,{version:"job-work-state-command.v1",action:"finish",commandId:randomUUID(),expectedRevision:before.events.length});workFixtures.get(job)!.revision=result.events.length;workFixtures.get(job)!.marker=result.events.find(e=>e.kind==="finished_on_site")!.id;}
+ const revision=Number((await admin.query("SELECT coalesce(max(sequence),0) revision FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2",[tenant,job])).rows[0].revision);
+ const state:{revision:number;marker?:string}={revision};workFixtures.set(job,state);
+ if(finish){const result=await new JobWorkStateRepository(observed.pool).finish(ctx,job,member,{version:"job-work-state-command.v1",action:"finish",commandId:randomUUID(),expectedRevision:revision});state.revision=Math.max(...result.events.map(e=>e.sequence));state.marker=result.events.find(e=>e.kind==="finished_on_site")!.id;}
 };
 const workCase=(action:"finish"|"cancel_finish",method:"finish"|"cancelFinish"):Case=>({
  key:`job-work-state-repository.ts#${method}`,
  registry:[`/api/jobs/[id]/work-state#${action}`,`nest:/jobs/:id/work-state#${action}`,`command:WorkState.${action}`],
  prepare:job=>prepareWork(job,action==="cancel_finish"),
- run:async(job,id,variant)=>{const w=workFixtures.get(job)!;return new JobWorkStateRepository(observed.pool)[method](w.auth.context,w.owned,w.auth.digest,{version:"job-work-state-command.v1",action,commandId:id,expectedRevision:w.revision+(variant==="changed"?1:0),...(action==="cancel_finish"?{markerId:w.marker}:{})});},
- later:async job=>{const w=workFixtures.get(job)!;const repo=new JobWorkStateRepository(observed.pool);const before=await repo.read(w.auth.context,w.owned,w.auth.digest);await repo.command(w.auth.context,w.owned,w.auth.digest,{version:"job-work-state-command.v1",action:"close",commandId:randomUUID(),expectedRevision:before.events.length,reason:"other",note:"Fictional later history"});},
+ run:async(job,id,variant)=>{const w=workFixtures.get(job)!;return new JobWorkStateRepository(observed.pool)[method](ctx,job,member,{version:"job-work-state-command.v1",action,commandId:id,expectedRevision:w.revision+(variant==="changed"?1:0),...(action==="cancel_finish"?{markerId:w.marker}:{})});},
+ later:async job=>{const revision=Number((await admin.query("SELECT coalesce(max(sequence),0) revision FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2",[tenant,job])).rows[0].revision);await new JobWorkStateRepository(observed.pool).command(ctx,job,member,{version:"job-work-state-command.v1",action:"close",commandId:randomUUID(),expectedRevision:revision,reason:"other",note:"Fictional later history"});},
 });
 // Resume is held and unregistered until MON-1-PLACES supplies capacity admission.
 const cases: Case[] = [

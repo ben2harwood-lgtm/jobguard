@@ -190,3 +190,24 @@ execution branch are removed. Requests fail closed with capacity unavailable;
 there is no executable resume action. Finish/cancel precheck with requireLiveJob
 in their command transaction. HTTP 409 retains only JOB_NOT_LIVE and
 IDEMPOTENCY_CONFLICT, including mapped work-state conflicts.
+
+## c1 (rulings 124/126)
+
+Supersedes the command-only practice ownership restriction above. The five
+commands accept any active owner membership in the job's tenant. The server
+supplies the authenticated membership ID through the existing verified-context
+boundary; it is not a field in the request body. SQL reuses
+`final_lock_require_owner`, rejecting revoked, expired and non-owner memberships
+before execution and replay and after waits/audit. A practice digest continues to
+resolve its persisted active owner, without requiring creator-session ownership.
+The synthetic small-builder feature gate remains; this does not release real data.
+The private command response projection uses tenant-owned endpoints. The merged
+practice GET reader and its isolation guarantees are unchanged. Link storage no
+longer requires matching practice digests; party, tenant, lock and cycle checks
+remain. Resume remains HELD and the 409 response contract is unchanged.
+
+Normal identity callers can use `command` with identity credentials, which verifies session, CSRF,
+origin and membership with the existing identity bridge. Transport wiring is
+STOPPED outside this lane: the shared ApplicationAuthGuard refuses all normal
+session workflow requests and the Next workspace factory supplies only practice
+credentials. No normal-session HTTP availability is claimed by this change.
