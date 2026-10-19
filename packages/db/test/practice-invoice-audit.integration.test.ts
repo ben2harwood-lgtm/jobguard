@@ -38,6 +38,10 @@ async function nextRevision(f: Fixture, net: number, tax: number) {
   const id = randomUUID();
   await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
     VALUES($1,$2,$3,$4,2,$5,$6,$7,'GBP','candidate_m1_standard_v1',$8,$9,$10,false,'[]')`, [id,T,f.jobId,f.draftId,f.revisionId,"b".repeat(64),f.quoteId,net,tax,net+tax]);
+  // Set-up (per C135): a revised account carries its own baseline line, so the issue routine reaches its lock-revision check.
+  const scope = randomUUID();
+  await admin.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')`, [scope,T,f.jobId]);
+  await admin.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional revised baseline',$7,1)`, [randomUUID(),T,f.jobId,id,f.quoteId,scope,net]);
   await admin.query(`UPDATE app.final_account_draft SET revision=2,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`, [T,f.draftId,id]);
   return id;
 }
@@ -164,7 +168,7 @@ describe("practice invoice audit regressions (real PostgreSQL)", () => {
     } finally { await holder.query("ROLLBACK"); holder.release(); }
   });
 
-  it("requires full credit before replacing an invoice and preserves earlier command replays", async () => {
+  it("a fully credited invoice is still not replaced by a second final; earlier command replays are preserved (per C135)", async () => {
     const f = await freshInvoice(10000,2000);
     const original = f.command;
     const originalInvoice = await repo.issue(context,original);
@@ -172,18 +176,21 @@ describe("practice invoice audit regressions (real PostgreSQL)", () => {
     const next = await nextRevision(f,12000,2400);
     await expect(repo.issue(context,issue(f.jobId,next))).rejects.toThrow("INVOICE_CORRECTION_OR_SUPPLEMENTARY_REQUIRED");
     await credit(f,5000);
-    const replacement = await repo.issue(context,issue(f.jobId,next));
-    expect(replacement.id).not.toBe(f.invoiceId);
+    // Was: the replacement issued. Now a second fresh main final is refused (the final lock binds the first revision only).
+    await expect(repo.issue(context,issue(f.jobId,next))).rejects.toThrow("FINAL_INVOICE_REVISION_MISMATCH");
+    expect((await repo.list(context,f.jobId)).filter(i=>i.finalAccountRevisionId===next)).toHaveLength(0);
     expect((await repo.issue(context,original)).id).toBe(originalInvoice.id);
     await expect(repo.issue(context,{...original,recipient:"changed@example.invalid"})).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
   });
 
-  it("serializes revised issuance on the job before checking prior invoices", async () => {
+  it("concurrent revised issuance after a full credit is refused each time and bills nothing (per C135)", async () => {
     const f = await freshInvoice(10000,2000); await credit(f,10000);
     const next = await nextRevision(f,12000,2400);
     const commands = [issue(f.jobId,next),issue(f.jobId,next)];
-    const invoices = await Promise.all(commands.map(c=>repo.issue(context,c)));
-    expect(invoices[0]!.id).toBe(invoices[1]!.id);
-    expect((await repo.list(context,f.jobId)).filter(i=>i.finalAccountRevisionId===next)).toHaveLength(1);
+    const results = await Promise.allSettled(commands.map(c=>repo.issue(context,c)));
+    // Was: both calls returned the same replacement invoice. Now a second fresh main final is refused for each.
+    expect(results.map(r=>r.status)).toEqual(["rejected","rejected"]);
+    for (const r of results) expect(String((r as PromiseRejectedResult).reason)).toContain("FINAL_INVOICE_REVISION_MISMATCH");
+    expect((await repo.list(context,f.jobId)).filter(i=>i.finalAccountRevisionId===next)).toHaveLength(0);
   });
 });

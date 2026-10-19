@@ -143,3 +143,11 @@ export async function createHistoricalInvoice() {
   return {fixture,account,invoice,command,close:()=>closeLockFixture(fixture)};
  } catch(error) { await closeLockFixture(fixture);throw error; }
 }
+
+/** Set-up only (per C135): a legacy fixture job gets one baseline line, accepted terms, a lock and a checked completion before its first issue. */
+export async function prepareBaselineInvoice(admin: Pool, runtime: Pool, tenantId: string, jobId: string, actorMembershipId: string, revisionId: string, quoteId: string, net: number) {
+ const scopeItemId=randomUUID();
+ await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeItemId,tenantId,jobId]);
+ await admin.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',$7,1)",[randomUUID(),tenantId,jobId,revisionId,quoteId,scopeItemId,net]);
+ await prepareInvoicePrerequisites(admin,runtime,tenantId,jobId,actorMembershipId,revisionId);
+}

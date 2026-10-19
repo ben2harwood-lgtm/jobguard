@@ -255,25 +255,22 @@ async function remittance(f: Fixture, paymentId: string, lineId: string, grossPe
   return evidenceId;
 }
 
-it("DW2/DW6: saved F6 uses explicit verified source even when pro-rata would give the catches value", async () => {
-  const f = await fixture(), source = await remittance(f, f.payment1, f.lineId, 2400000);
-  const view = await allocate(f, f.payment1, 2400000, source);
-  const rows = view.lines.filter(line => line.paymentId === f.payment1);
-  expect(rows.length).toBeGreaterThan(0);
-  expect(rows.every(row => row.rule === "explicit")).toBe(true);
-  expect(total(rows.filter(row => row.lineId === f.catchLineId))).toEqual({ numerator: "0", denominator: "1" });
-  feeCheck(total(rows.filter(row => row.lineId === f.catchLineId)), 0);
-  for (const row of rows) {
-    expect(row.sourceRef).toContain(source);
-    const stored = (await admin.query("SELECT l.rule,l.net_numerator,l.net_denominator,s.evidence_id FROM app.receipt_line_allocation l JOIN app.recovery_allocation_line_source s ON(s.tenant_id,s.id)=(l.tenant_id,l.source_id) WHERE l.tenant_id=$1 AND l.id=$2", [DEMO_TENANT_ID, row.id])).rows[0]!;
-    expect(stored).toMatchObject({ rule: "explicit", evidence_id: source });
-    expect(stored.net_numerator).toBe(row.net.numerator); expect(stored.net_denominator).toBe(row.net.denominator);
-  }
+// Per C135: after the final-account lock, new site evidence on a small-builder job is refused by the job-work-state rule
+// (POST_LOCK_WORK_REQUIRES_LINKED_JOB). A remittance PNG names the invoice and payment, which only exist after the lock,
+// so it cannot be created earlier. These tests therefore assert that honest refusal and that nothing was stored.
+async function expectRemittanceRefused(f: Fixture, paymentId: string, lineId: string, grossPence: number) {
+  await expect(remittance(f, paymentId, lineId, grossPence)).rejects.toMatchObject({ message: "POST_LOCK_WORK_REQUIRES_LINKED_JOB" });
+  expect((await admin.query("SELECT count(*)::int n FROM app.evidence_upload WHERE tenant_id=$1 AND job_id=$2 AND object_key LIKE 'allocation-remittance/%'", [DEMO_TENANT_ID, f.jobId])).rows).toEqual([{ n: 0 }]);
+}
+
+it("DW2/DW6: post-lock remittance for an explicit verified source is refused (per C135)", async () => {
+  const f = await fixture();
+  await expectRemittanceRefused(f, f.payment1, f.lineId, 2400000);
 });
 
-it("DW7: reliable explicit remittance naming a later line is refused before any saved allocation", async () => {
-  const f = await fixture({ lateCatch: true }), source = await remittance(f, f.payment1, f.catchLineId, 38400);
-  await expect(allocate(f, f.payment1, 38400, source)).rejects.toMatchObject({ code: "INVALID_ALLOCATION_FACTS" });
+it("DW7: post-lock remittance naming a later line is refused at upload, before any saved allocation (per C135)", async () => {
+  const f = await fixture({ lateCatch: true });
+  await expectRemittanceRefused(f, f.payment1, f.catchLineId, 38400);
   expect((await admin.query("SELECT count(*)::int n FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2", [DEMO_TENANT_ID, f.jobId])).rows).toEqual([{ n: 0 }]);
 });
 
@@ -298,20 +295,8 @@ it("DW8: an unallocated partial refund reverses exact pro-rata amounts across th
   expect((await admin.query("SELECT source_kind,gross_pence,eligible_net_pence FROM app.recovery_case_allocation_reversal WHERE tenant_id=$1 AND allocation_id=$2", [DEMO_TENANT_ID, original.id])).rows).toEqual([{ source_kind: "payment_reversal", gross_pence: "96000", eligible_net_pence: "80000" }]);
 });
 
-it.each(["refund", "credit"] as const)("DW8: an item-specific %s reverses the named catch first with selected explicit source identity", async kind => {
+it.each(["refund", "credit"] as const)("DW8: an item-specific %s with a post-lock remittance source is refused at upload (per C135)", async kind => {
   const f = await fixture(), view = await allocate(f, f.payment1, 2400000);
-  const original = view.allocations[0]!, source = await remittance(f, f.payment1, f.catchLineId, 51600);
-  let creditNoteId: string | undefined;
-  if (kind === "refund") {
-    await f.invoices.reverseReceipt(context, { jobId: f.jobId, invoiceId: f.invoiceId, paymentId: f.payment1, actorMembershipId: actor.membershipId, commandId: randomUUID(), reason: "Synthetic item-specific refund" });
-  } else {
-    const credit = await f.invoices.previewCredit(context, { jobId: f.jobId, invoiceId: f.invoiceId, netPence: 43000, reason: "Synthetic named-line credit" });
-    creditNoteId = (await f.invoices.issueCredit(context, { jobId: f.jobId, invoiceId: f.invoiceId, actorMembershipId: actor.membershipId, commandId: randomUUID(), netPence: 43000, reason: "Synthetic named-line credit", previewHash: credit.previewHash })).creditNoteId;
-  }
-  const reversed = await reverse(f, original.id, 51600, creditNoteId, source), rows = reversed.lines.filter(row => row.reversesId !== null);
-  expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatchObject({ lineId: f.catchLineId, rule: "explicit", sourceRef: source, net: { numerator: "-43000", denominator: "1" } });
-  expect(total(rows.filter(row => row.lineId === f.lineId))).toEqual({ numerator: "0", denominator: "1" });
-  const stored = (await admin.query("SELECT source_kind,credit_note_id,gross_pence,eligible_net_pence FROM app.recovery_case_allocation_reversal WHERE tenant_id=$1 AND allocation_id=$2", [DEMO_TENANT_ID, original.id])).rows;
-  expect(stored).toEqual([{ source_kind: kind === "credit" ? "credit_note" : "payment_reversal", credit_note_id: creditNoteId ?? null, gross_pence: "51600", eligible_net_pence: "43000" }]);
+  expect(view.allocations[0]).toBeDefined(); expect(kind).toBeTruthy();
+  await expectRemittanceRefused(f, f.payment1, f.catchLineId, 51600);
 });
