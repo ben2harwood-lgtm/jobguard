@@ -3,18 +3,23 @@ import type { Pool } from "pg";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
-const amounts = `COALESCE((SELECT sum(c.amount_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited_pence,
+const amounts = `to_char(i.issued_on,'YYYY-MM-DD') issued_date,COALESCE((SELECT sum(c.amount_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited_pence,
  COALESCE((SELECT sum(p.amount_pence) FROM app.customer_payment p WHERE(p.tenant_id,p.invoice_id)=(i.tenant_id,i.id) AND NOT EXISTS(SELECT 1 FROM app.customer_payment_reversal r WHERE(r.tenant_id,r.payment_id)=(p.tenant_id,p.id))),0) paid_pence`;
 function checkedPence(value: unknown): number {
   const n = Number(value);
   if (!Number.isSafeInteger(n) || n < 0 || n > 1_000_000_000_000) throw new Error("INVOICE_AMOUNT_INVALID");
   return n;
 }
+/** SQL supplies a date string; custom pg date parsers may supply local midnight. */
+function calendarDate(value: string | Date): string {
+ if(typeof value === "string")return value.slice(0,10);
+ return [value.getFullYear().toString().padStart(4,"0"),(value.getMonth()+1).toString().padStart(2,"0"),value.getDate().toString().padStart(2,"0")].join("-");
+}
 export class PracticeInvoiceRepository {
  constructor(readonly pool: Pool) {}
  private map(row: any) {
   const total=checkedPence(row.total_pence), credited=checkedPence(row.credited_pence??0), paid=checkedPence(row.paid_pence??0), debt=Math.max(0,total-credited);
-  return {id:row.id,number:row.invoice_number,issuedOn:new Date(row.issued_on).toISOString().slice(0,10),recipient:"practice-customer@example.invalid",pdfSha256:row.pdf_sha256.trim(),finalAccountRevisionId:row.final_account_revision_id,sourceHash:row.source_hash.trim(),netPence:checkedPence(row.net_pence),taxPence:checkedPence(row.tax_pence),totalPence:total,balancePence:Math.max(0,debt-paid),customerCreditPence:Math.max(0,paid-debt),paidPence:paid,creditedPence:credited,delivery:"simulated_delivery" as const};
+  return {id:row.id,number:row.invoice_number,issuedOn:calendarDate(row.issued_date??row.issued_on),recipient:"practice-customer@example.invalid",pdfSha256:row.pdf_sha256.trim(),finalAccountRevisionId:row.final_account_revision_id,sourceHash:row.source_hash.trim(),netPence:checkedPence(row.net_pence),taxPence:checkedPence(row.tax_pence),totalPence:total,balancePence:Math.max(0,debt-paid),customerCreditPence:Math.max(0,paid-debt),paidPence:paid,creditedPence:credited,delivery:"simulated_delivery" as const};
  }
  async list(context:VerifiedTenantContext,jobId:string) {
   return withTenant(this.pool,context,async db=>(await db.$client.query<any>(`SELECT i.*,${amounts} FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.job_id=$2 ORDER BY i.created_at,i.id`,[context.tenantId,jobId])).rows.map(row=>this.map(row)));
@@ -32,8 +37,9 @@ export class PracticeInvoiceRepository {
    AND NOT EXISTS(SELECT 1 FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3) AS rebill_blocked`,[context.tenantId,input.jobId,input.finalAccountRevisionId,input.commandId])).rows[0]!;
    if(prior.rebill_blocked)throw new Error("INVOICE_CORRECTION_OR_SUPPLEMENTARY_REQUIRED");
    const r=(await db.$client.query<any>(`SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)`,[context.tenantId,input.jobId,input.finalAccountRevisionId,input.actorMembershipId,input.commandId,input.recipient,input.issuedOn])).rows[0];
-   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${input.actorMembershipId}`,eventType:"customer_invoice.synthetic_issued",subjectType:"job",subjectRef:input.jobId,payload:{references:{invoiceId:r.invoice_id,finalAccountRevisionId:input.finalAccountRevisionId},hashes:{pdfSha256:r.pdf_sha256,sourceHash:r.source_hash},classifications:{action:"commercial",delivery:"operational"}}}]);
-   return this.map((await db.$client.query<any>(`SELECT * FROM app.customer_invoice WHERE tenant_id=$1 AND id=$2`,[context.tenantId,r.invoice_id])).rows[0]);
+   const seen=(await db.$client.query(`SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND event_type='customer_invoice.synthetic_issued' AND payload->'references'->>'invoiceId'=$2`,[context.tenantId,r.invoice_id])).rowCount;
+   if(!seen)await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${input.actorMembershipId}`,eventType:"customer_invoice.synthetic_issued",subjectType:"job",subjectRef:input.jobId,payload:{references:{invoiceId:r.invoice_id,finalAccountRevisionId:input.finalAccountRevisionId},hashes:{pdfSha256:r.pdf_sha256,sourceHash:r.source_hash},classifications:{action:"commercial",delivery:"operational"}}}]);
+   return this.map((await db.$client.query<any>(`SELECT i.*,${amounts} FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.id=$2`,[context.tenantId,r.invoice_id])).rows[0]);
   });
  }
  async artifact(context:VerifiedTenantContext,jobId:string,invoiceId:string) {
@@ -58,9 +64,10 @@ export class PracticeInvoiceRepository {
   await db.$client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,0))`,[context.tenantId,invoiceId]);
  }
  private async creditAmounts(db:TenantTransaction,context:VerifiedTenantContext,input:{jobId:string;invoiceId:string;netPence:number}) {
-  const row=(await db.$client.query<any>(`SELECT i.pdf_sha256,i.invoice_number,i.net_pence,i.total_pence,
+  const row=(await db.$client.query<any>(`SELECT i.pdf_sha256,i.invoice_number,i.net_pence,i.tax_pence,i.total_pence,
    COALESCE((SELECT sum(c.amount_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited,
-   COALESCE((SELECT -sum(c.net_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited_net
+   COALESCE((SELECT -sum(c.net_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited_net,
+   COALESCE((SELECT -sum(c.tax_pence) FROM app.customer_credit_note c WHERE(c.tenant_id,c.invoice_id)=(i.tenant_id,i.id)),0) credited_tax
    FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.job_id=$2 AND i.id=$3`,[context.tenantId,input.jobId,input.invoiceId])).rows[0];
   if(!row)throw new Error("INVOICE_NOT_FOUND");
   // Independent net ceiling: split VAT rounding must never create principal.
@@ -71,18 +78,24 @@ export class PracticeInvoiceRepository {
   return withTenant(this.pool,context,async db=>{
    await this.lockCredits(db,context,input.invoiceId);
    const row=await this.creditAmounts(db,context,input);
-   const tax=Math.floor((input.netPence+2)/5),gross=input.netPence+tax;
+   // Same cumulative whole-invoice VAT rule as app.issue_practice_customer_credit_note (0156): half-up on cumulative net; the credit reaching full net takes exactly the original VAT.
+   const cumulativeNet=Number(row.credited_net)+input.netPence,cumulativeTax=cumulativeNet===Number(row.net_pence)?Number(row.tax_pence):Math.min(Math.floor((cumulativeNet+2)/5),Number(row.tax_pence)),tax=Math.max(0,Math.min(cumulativeTax-Number(row.credited_tax),Number(row.tax_pence)-Number(row.credited_tax))),gross=input.netPence+tax;
    if(gross>Number(row.total_pence)-Number(row.credited))throw new Error("CREDIT_EXCEEDS_AVAILABLE_AMOUNT");
    return {previewHash:createHash("sha256").update(`${input.jobId}${input.invoiceId}${input.netPence}${row.credited}${row.pdf_sha256.trim()}`).digest("hex"),invoiceNumber:row.invoice_number,netPence:-input.netPence,taxPence:-tax,totalPence:-gross,reason:input.reason,availablePence:Number(row.total_pence)-Number(row.credited)};
   });
  }
  async issueCredit(context:VerifiedTenantContext,input:{jobId:string;invoiceId:string;actorMembershipId:string;commandId:string;netPence:number;reason:string;previewHash:string}) {
-  return withTenant(this.pool,context,async db=>{
+  // Preserve the early net-ceiling error in a separate, read-only preflight.
+  // Release its invoice lock before the routine takes command -> invoice locks.
+  // The routine alone authorizes replay and revalidates all amounts at issuance.
+  await withTenant(this.pool,context,async db=>{
    await this.lockCredits(db,context,input.invoiceId);
    // Completed commands must reach the routine's exact replay/conflict check,
    // even when that original credit has since exhausted the available net.
    const replay=(await db.$client.query(`SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[context.tenantId,input.commandId])).rowCount;
    if(!replay)await this.creditAmounts(db,context,input);
+  });
+  return withTenant(this.pool,context,async db=>{
    const row=(await db.$client.query<any>(`SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,[context.tenantId,input.jobId,input.invoiceId,input.actorMembershipId,input.commandId,input.netPence,input.reason,input.previewHash])).rows[0];
    const seen=(await db.$client.query(`SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND event_type='customer_credit_note.synthetic_approved' AND payload->'references'->>'creditNoteId'=$2`,[context.tenantId,row.credit_note_id])).rowCount;
    if(!seen)await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${input.actorMembershipId}`,eventType:"customer_credit_note.synthetic_approved",subjectType:"job",subjectRef:input.jobId,payload:{references:{creditNoteId:row.credit_note_id,invoiceId:input.invoiceId,commandId:input.commandId},hashes:{pdfSha256:row.pdf_sha256,previewHash:input.previewHash},classifications:{action:"commercial",environment:"operational"}}}]);

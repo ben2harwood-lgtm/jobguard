@@ -358,18 +358,45 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    const selected=await success("proof select",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"select_generated",commandId:randomUUID(),scopeItemId:proofScope,fixture:"completion-photo"}));
    const verified=await success("proof finalize",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"finalize",commandId:randomUUID(),uploadId:selected.upload.id,objectVersionId:selected.upload.objectVersionId}));
    await success("proof complete",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"complete",commandId:randomUUID(),scopeItemId:proofScope,evidenceId:verified.upload.evidenceId}));
-   await success("final-account lock",()=>app.finalAccountLock.lock(a.jobId,{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"}));
+   const {assembleDraftFinalAccount}=await import("@jobguard/core");
+   const rebuilt=await withTenant(inspect,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+    const lines=(await db.$client.query(`
+     SELECT line_kind kind,source_id "sourceId",scope_item_id "scopeItemId",commercial_revision_id "commercialRevisionId",approval_id "approvalId",description,net_pence "netPence"
+     FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'
+     UNION ALL
+     SELECT 'variation',r.id,r.scope_item_id,r.id,ap.id,r.description,r.signed_delta_pence
+     FROM app.variation_revision r JOIN app.variation_approval ap ON(ap.tenant_id,ap.job_id,ap.revision_id)=(r.tenant_id,r.job_id,r.id)
+     WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.id=$4 AND ap.variation_id=$5`,[DEMO_TENANT_ID,a.jobId,a.revisionId,revision,extra.proposalId])).rows
+     .map((line:any)=>({...line,netPence:Number(line.netPence)})) as import("@jobguard/core").FinalAccountSourceLine[];
+    const proof=(await db.$client.query(`SELECT evidence_id "evidenceId",object_version_id "objectVersionId",scope_item_id "scopeItemId",evidence_type "evidenceType",sha256,mandatory
+     FROM app.final_account_proof WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3`,[DEMO_TENANT_ID,a.jobId,a.revisionId])).rows as import("@jobguard/core").FinalAccountProof[];
+    const assembled=assembleDraftFinalAccount({baselineLines:lines.filter(line=>line.kind==="baseline"),approvedVariationLines:lines.filter(line=>line.kind==="variation"),proof,mandatoryProofRequirements:[]});
+    const revisionId=randomUUID(),sourceHash=createHash("sha256").update(assembled.canonicalSource).digest("hex");
+    await db.$client.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
+     SELECT $1,tenant_id,job_id,final_account_draft_id,2,id,$2,baseline_quote_version_id,currency,tax_policy_version,$3,$4,$5,issue_blocked,findings
+     FROM app.final_account_revision WHERE tenant_id=$6 AND job_id=$7 AND id=$8`,[revisionId,sourceHash,assembled.totals.net.pence,assembled.totals.tax.pence,assembled.totals.total.pence,DEMO_TENANT_ID,a.jobId,a.revisionId]);
+    for(const [index,line] of assembled.lines.entries())await db.$client.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[randomUUID(),DEMO_TENANT_ID,a.jobId,revisionId,line.kind,line.sourceId,line.scopeItemId,line.commercialRevisionId,line.approvalId,line.description,line.netPence,index+1]);
+    for(const item of assembled.proof)await db.$client.query(`INSERT INTO app.final_account_proof(id,tenant_id,job_id,final_account_revision_id,evidence_id,object_version_id,scope_item_id,evidence_type,sha256,mandatory)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[randomUUID(),DEMO_TENANT_ID,a.jobId,revisionId,item.evidenceId,item.objectVersionId,item.scopeItemId,item.evidenceType,item.sha256,item.mandatory]);
+    await db.$client.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND job_id=$3 AND id=$4",[revisionId,DEMO_TENANT_ID,a.jobId,a.draftId]);
+    return {revisionId,sourceHash};
+   });
+   await success("final-account lock",()=>app.finalAccountLock.lock(a.jobId,{version:"final-account.lock.v1",commandId:randomUUID(),finalAccountRevisionId:rebuilt.revisionId,expectedRevision:2,declarationVersion:"final_account_declaration.v1"}));
    await success("final-account lock projection",()=>app.finalAccountLock.get(a.jobId));
    // Real authorized delivery exercises notification content and retry telemetry, with no external provider.
    let attempts=0;const adapter:import("@jobguard/db").OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async action=>{trace.notifications.push(action);return ++attempts===1?{kind:"retryable",code:"SYNTHETIC_RETRY"}:{kind:"succeeded",providerReference:"synthetic:Q"}},reconcile:async()=>"unknown"};
    const executor=new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:(name:Parameters<import("@jobguard/db").SafeTelemetry["emit"]>[0],fields:Readonly<Record<string,string|number>>)=>trace.telemetry.push({name,fields})});
-   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   await inspect.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1",[queued]);
+   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   await inspect.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1",[queued]);
+   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
    expect(trace.notifications).toHaveLength(2);expect(trace.telemetry).toContainEqual(expect.objectContaining({name:"outbox.retry"}));
    // Setup only: simulate authoritative processing of every frozen source without advancing public UUIDs per signal.
    const {publishFixtureCompletion}=await import(new URL("../../../packages/db/test/sv5pre-fixtures.ts",import.meta.url).href);
    const completionWorker=pool("sv3_isolation_shadow",database);
    try{await publishFixtureCompletion(completionWorker,inspect,DEMO_TENANT_ID,a.jobId,{deterministicIds:true})}finally{await closeTestPools(completionWorker)}
-   await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:"a".repeat(64),recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
+   await success("issue customer invoice",()=>app.customerInvoice.issue(a.jobId,{version:"practice-customer-invoice.issue.v1",commandId:randomUUID(),finalAccountRevisionId:rebuilt.revisionId,expectedSourceHash:rebuilt.sourceHash,recipient:"fixture@example.invalid",issuedOn:"2026-10-13"}));
    const invoice=(await app.customerInvoice.get(a.jobId)).invoices[0]!;
    const pdf=await app.customerInvoice.pdf(a.jobId,invoice.id);expect(pdf.byteLength).toBeGreaterThan(0);trace.exports.push(Buffer.from(pdf).toString("base64"));
    const receipt=await success("record receipt",()=>app.customerInvoice.recordReceipt(a.jobId,{version:"practice-customer-receipt.record.v1",commandId:randomUUID(),invoiceId:invoice.id,paidOn:"2026-10-13",amountPence:1000,method:"bank_transfer",reference:"Fictional payment"}));

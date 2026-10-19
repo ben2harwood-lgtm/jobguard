@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-8b": {
+      "branches": ["codex/sandbox/ent-8b"],
+      "receipt": "docs/verdicts/ENT-8B/BUILDER_RECEIPT.md",
+      "note": "AMBER: ENT-8B fixture-only cited possible-extra proposals and held-out evaluation. No migration, grants, live provider, arbitrary input text, API, persistence, SoR or UI. ENT-8a confirmation/dismissal and prompt persistence remain held in the merged base; this piece cannot integrate with missing commands. Existing merged tests, lists and fingerprints stay unchanged.",
+      "allow": [
+        "packages/ai/src/enterprise-ai-prompts.ts",
+        "packages/ai/src/enterprise-ai-prompts.test.ts",
+        "packages/ai/src/enterprise-ai-evaluation.ts",
+        "packages/ai/src/enterprise-ai-evaluation.test.ts",
+        "docs/fixtures/enterprise-ai-prompts/development.v1.json",
+        "docs/fixtures/enterprise-ai-prompts/held-out-inputs.v1.json",
+        "docs/fixtures/enterprise-ai-prompts/held-out-labels.v1.json",
+        "docs/fixtures/enterprise-ai-prompts/EVALUATION.md",
+        "docs/contracts/enterprise-ai-prompts-v1.md",
+        "docs/verdicts/ENT-8B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

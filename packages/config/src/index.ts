@@ -6,3 +6,4 @@ const apiEnvironmentSchema = z.object({ API_PORT: z.coerce.number().int().min(1)
 export type ApiEnvironment = z.infer<typeof apiEnvironmentSchema>;
 export const parseApiEnvironment = (environment: unknown): ApiEnvironment => apiEnvironmentSchema.parse(environment);
 export * from "./identity-environment.js";
+export * from "./connector-environment.js";
