@@ -1,3 +1,4 @@
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -24,6 +25,11 @@ async function freshInvoice(net = 20003, tax = 4001): Promise<Fixture> {
   await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
     VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',$7,$8,$9,false,'[]')`, [revisionId,T,jobId,draftId,H,quoteId,net,tax,net+tax]);
   await admin.query(`UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`, [T,draftId,revisionId]);
+  // SV5PRE set-up only: new final effects need an accepted-terms lock and a checked completion, so establish them first.
+  const scopeItemId = randomUUID();
+  await admin.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')`, [scopeItemId,T,jobId]);
+  await admin.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',$7,1)`, [randomUUID(),T,jobId,revisionId,quoteId,scopeItemId,net]);
+  await prepareInvoicePrerequisites(admin, runtime, T, jobId, M, revisionId);
   const command = issue(jobId,revisionId);
   const invoice = await repo.issue(context,command);
   return { jobId,invoiceId:invoice.id,draftId,revisionId,quoteId,command };

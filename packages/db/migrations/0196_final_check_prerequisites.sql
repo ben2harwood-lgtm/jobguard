@@ -113,7 +113,9 @@ BEGIN
  IF NEW.tenant_id IS DISTINCT FROM nullif(prior,'')::uuid AND NOT pg_has_role(session_user,'jobguard_migration','USAGE') AND NOT (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  PERFORM set_config('app.tenant_id',NEW.tenant_id::text,true);
  SELECT job_id INTO source_job FROM app.evidence_object WHERE tenant_id=NEW.tenant_id AND id=NEW.evidence_id;
- PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=source_job FOR UPDATE;
+ -- SHARE is compatible with the watchdog live guard other commands already hold, so merged invalidation/completion races still
+ -- reach their own upload-row lock; it still excludes the UPDATE-class lock/freeze/publication/invoice routines until commit.
+ PERFORM 1 FROM app.job WHERE tenant_id=NEW.tenant_id AND id=source_job FOR SHARE;
  PERFORM set_config('app.tenant_id',coalesce(prior,''),true);
  RETURN NEW;
 END $$;
@@ -285,6 +287,8 @@ END $$;
 ALTER FUNCTION app.final_check_require_invoice_actor(uuid,uuid,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.final_check_require_invoice_actor(uuid,uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_shadow_emergency_access,jobguard_infrastructure;
 
+-- Renumbered from 0147 (SV-5 repair, ruling C126). The two invoice routines below are 0187's bodies with only the final-check guards
+-- of the original 0147 added (three-way merge of 0095/0132 base, 0147 guard edit and 0187), so 0187 cannot overwrite the guard.
 CREATE OR REPLACE FUNCTION app.issue_practice_customer_invoice(
  p_tenant uuid,p_job uuid,p_final_revision uuid,p_actor uuid,p_command uuid,p_recipient text,p_issued_on date
 ) RETURNS TABLE(invoice_id uuid,invoice_number text,pdf_sha256 text,total_pence bigint,source_hash text,outbox_status text)
@@ -294,6 +298,11 @@ DECLARE existing app.customer_invoice%ROWTYPE; final_row app.final_account_revis
  resolution_id uuid:=gen_random_uuid(); authorization_id uuid:=gen_random_uuid(); new_invoice uuid:=gen_random_uuid();
  request_digest text:=encode(public.digest(convert_to(p_job::text||p_final_revision::text||p_recipient||p_issued_on::text,'UTF8'),'sha256'),'hex');
  prior jsonb; party_snapshot jsonb; check_row record; lock_row app.final_account_lock; item jsonb;
+
+ -- ASCII PDF 1.4 objects: offsets and lengths below are byte counts of the stored artifact.
+ pdf_rows text[]:=ARRAY[]::text[]; pdf_objects text[]; pdf_offsets bigint[]:=ARRAY[0::bigint];
+ pdf_raw text; pdf_line text; pdf_stream text; pdf_kids text:=''; pdf_xref bigint;
+ pdf_page integer; pdf_pages integer; pdf_i integer; pdf_j integer; pdf_content integer; pdf_font integer;
 BEGIN
  IF p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'tenant context mismatch' USING ERRCODE='42501'; END IF;
  PERFORM app.final_check_require_invoice_actor(p_tenant,p_job,p_actor);
@@ -326,12 +335,56 @@ BEGIN
  INSERT INTO app.customer_invoice_sequence(id,tenant_id,next_number)VALUES(gen_random_uuid(),p_tenant,2)
  ON CONFLICT(tenant_id) DO UPDATE SET next_number=app.customer_invoice_sequence.next_number+1 RETURNING next_number-1 INTO n;
  number:='DEMO-CUST-'||lpad(n::text,6,'0');
- artifact:='%PDF-1.4'||chr(10)||'Practice sandbox — synthetic data; nothing is sent or charged'||chr(10)||
-   'Not a real tax invoice'||chr(10)||'Number: '||number||chr(10)||'Issue date: '||p_issued_on::text||chr(10)||
-   'Issuer: Fictional Builder Ltd ['||p_tenant::text||']'||chr(10)||'Recipient: '||p_recipient||chr(10)||
-   'Reference tax version: '||final_row.tax_policy_version||chr(10)||'Frozen final account: '||final_row.id::text||chr(10)||
-   'Source hash: '||final_row.source_hash||chr(10)||'Net pence: '||final_row.net_pence||chr(10)||'VAT pence: '||final_row.tax_pence||chr(10)||'Gross pence: '||final_row.total_pence||chr(10)||'%%EOF';
- artifact:=artifact||chr(10)||party_snapshot::text;
+ artifact:='Number: '||number||chr(10)||'Issue date: '||p_issued_on::text||chr(10)||
+  'Issuer: Fictional Builder Ltd ['||p_tenant::text||']'||chr(10)||'Recipient: '||p_recipient||chr(10)||
+  'Reference tax version: '||final_row.tax_policy_version||chr(10)||'Frozen final account: '||final_row.id::text||chr(10)||
+  'Source hash: '||final_row.source_hash||chr(10)||
+  'Net GBP: '||to_char(final_row.net_pence::numeric/100,'FM999999999990.00')||chr(10)||
+  'VAT GBP: '||to_char(final_row.tax_pence::numeric/100,'FM999999999990.00')||chr(10)||
+  'Total GBP: '||to_char(final_row.total_pence::numeric/100,'FM999999999990.00')||chr(10)||
+  coalesce((SELECT string_agg(l.description||' | Net GBP: '||to_char(l.net_pence::numeric/100,'FM999999999990.00'),chr(10) ORDER BY l.ordinal,l.id)
+   FROM app.final_account_line l WHERE l.tenant_id=p_tenant AND l.job_id=p_job AND l.final_account_revision_id=p_final_revision),'')||chr(10)||
+  party_snapshot::text;
+
+ -- Convert the exact approved snapshot to printable, wrapped rows (same ASCII fallback as quote PDFs).
+ FOREACH pdf_raw IN ARRAY string_to_array(artifact,chr(10)) LOOP
+  pdf_raw:=regexp_replace(pdf_raw,'[^ -~]','?','g');
+  IF length(pdf_raw)=0 THEN pdf_rows:=array_append(pdf_rows,''); END IF;
+  pdf_i:=1;
+  WHILE pdf_i<=length(pdf_raw) LOOP
+   pdf_rows:=array_append(pdf_rows,substr(pdf_raw,pdf_i,90)); pdf_i:=pdf_i+90;
+  END LOOP;
+ END LOOP;
+ pdf_pages:=greatest(1,(cardinality(pdf_rows)+53)/54); pdf_font:=3+pdf_pages*2;
+ pdf_objects:=ARRAY['<< /Type /Catalog /Pages 2 0 R >>',''];
+ FOR pdf_page IN 1..pdf_pages LOOP
+  pdf_i:=3+(pdf_page-1)*2; pdf_content:=pdf_i+1;
+  pdf_kids:=pdf_kids||pdf_i::text||' 0 R ';
+  pdf_stream:='BT /F1 8 Tf 40 790 Td 12 TL'||chr(10)||
+   '(SYNTHETIC - NOT A REAL INVOICE) Tj'||chr(10)||
+   'T* (Practice sandbox - synthetic data; nothing is sent or charged) Tj'||chr(10)||
+   'T* (Not a real tax invoice) Tj';
+  FOR pdf_j IN ((pdf_page-1)*54+1)..least(pdf_page*54,cardinality(pdf_rows)) LOOP
+   pdf_line:=replace(replace(replace(pdf_rows[pdf_j],chr(92),chr(92)||chr(92)),'(',chr(92)||'('),')',chr(92)||')');
+   pdf_stream:=pdf_stream||chr(10)||'T* ('||pdf_line||') Tj';
+  END LOOP;
+  pdf_stream:=pdf_stream||chr(10)||'ET';
+  pdf_objects:=array_append(pdf_objects,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 '||pdf_font||' 0 R >> >> /Contents '||pdf_content||' 0 R >>');
+  pdf_objects:=array_append(pdf_objects,'<< /Length '||octet_length(pdf_stream)||' >>'||chr(10)||'stream'||chr(10)||pdf_stream||chr(10)||'endstream');
+ END LOOP;
+ pdf_objects[2]:='<< /Type /Pages /Kids ['||pdf_kids||'] /Count '||pdf_pages||' >>';
+ pdf_objects:=array_append(pdf_objects,'<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+ artifact:='%PDF-1.4'||chr(10);
+ FOR pdf_i IN 1..cardinality(pdf_objects) LOOP
+  pdf_offsets:=array_append(pdf_offsets,octet_length(artifact)::bigint);
+  artifact:=artifact||pdf_i||' 0 obj'||chr(10)||pdf_objects[pdf_i]||chr(10)||'endobj'||chr(10);
+ END LOOP;
+ pdf_xref:=octet_length(artifact);
+ artifact:=artifact||'xref'||chr(10)||'0 '||(cardinality(pdf_objects)+1)||chr(10)||'0000000000 65535 f '||chr(10);
+ FOR pdf_i IN 2..cardinality(pdf_offsets) LOOP
+  artifact:=artifact||lpad(pdf_offsets[pdf_i]::text,10,'0')||' 00000 n '||chr(10);
+ END LOOP;
+ artifact:=artifact||'trailer << /Size '||(cardinality(pdf_objects)+1)||' /Root 1 0 R >>'||chr(10)||'startxref'||chr(10)||pdf_xref||chr(10)||'%%EOF';
  digest:=encode(public.digest(convert_to(artifact,'UTF8'),'sha256'),'hex');
  INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type)VALUES(decision_id,p_tenant,'job',p_job::text,'final_account.issue');
  INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id)VALUES(resolution_id,p_tenant,decision_id,'approved',p_actor);
@@ -364,6 +417,11 @@ DECLARE lock_row app.final_account_lock; check_row record; final_row app.final_a
  request_digest text; party_snapshot jsonb; n bigint; number text; artifact text; digest text; invoice_id uuid:=gen_random_uuid();
  decision_id uuid:=gen_random_uuid(); resolution_id uuid:=gen_random_uuid(); authorization_id uuid:=gen_random_uuid(); audit_id uuid:=gen_random_uuid();
  net bigint; tax bigint; gross bigint; selected_lines jsonb; result jsonb; item jsonb;
+
+ -- ASCII PDF 1.4 objects: offsets and lengths below are byte counts of the stored artifact.
+ pdf_rows text[]:=ARRAY[]::text[]; pdf_objects text[]; pdf_offsets bigint[]:=ARRAY[0::bigint];
+ pdf_raw text; pdf_line text; pdf_stream text; pdf_kids text:=''; pdf_xref bigint;
+ pdf_page integer; pdf_pages integer; pdf_i integer; pdf_j integer; pdf_content integer; pdf_font integer;
 BEGIN
  PERFORM app.final_check_require_invoice_actor(p_tenant,p_job,p_actor);
  PERFORM 1 FROM app.job WHERE tenant_id=p_tenant AND id=p_job FOR UPDATE;
@@ -409,7 +467,56 @@ BEGIN
  party_snapshot:=app.require_current_job_parties(p_tenant,p_job);
  INSERT INTO app.customer_invoice_sequence(id,tenant_id,next_number) VALUES(gen_random_uuid(),p_tenant,2) ON CONFLICT(tenant_id) DO UPDATE SET next_number=app.customer_invoice_sequence.next_number+1 RETURNING next_number-1 INTO n;
  number:='DEMO-CUST-'||lpad(n::text,6,'0');
- artifact:='%PDF-1.4'||chr(10)||'Practice sandbox — synthetic data; nothing is sent or charged'||chr(10)||'Not a real tax invoice'||chr(10)||'Number: '||number||chr(10)||'Issue date: '||p_issued_on::text||chr(10)||'Lock: '||lock_row.id::text||chr(10)||'Kind: '||p_kind||chr(10)||'Net pence: '||net||chr(10)||'VAT pence: '||tax||chr(10)||'Gross pence: '||gross||chr(10)||'Lines: '||selected_lines::text||chr(10)||party_snapshot::text||chr(10)||'%%EOF';
+ artifact:='Number: '||number||chr(10)||'Issue date: '||p_issued_on::text||chr(10)||
+  'Issuer: Fictional Builder Ltd ['||p_tenant::text||']'||chr(10)||'Recipient: '||p_recipient||chr(10)||
+  'Reference tax version: '||final_row.tax_policy_version||chr(10)||'Frozen final account: '||final_row.id::text||chr(10)||
+  'Source hash: '||final_row.source_hash||chr(10)||
+  'Lock: '||lock_row.id::text||chr(10)||'Kind: '||p_kind||chr(10)||
+  'Net GBP: '||to_char(net::numeric/100,'FM999999999990.00')||chr(10)||
+  'VAT GBP: '||to_char(tax::numeric/100,'FM999999999990.00')||chr(10)||
+  'Total GBP: '||to_char(gross::numeric/100,'FM999999999990.00')||chr(10)||
+  coalesce((SELECT string_agg((l->>'description')||' | Net GBP: '||to_char((l->>'net_pence')::numeric/100,'FM999999999990.00'),chr(10) ORDER BY (l->>'ordinal')::integer,l->>'id')
+   FROM jsonb_array_elements(selected_lines) l),'')||chr(10)||party_snapshot::text;
+
+ -- Convert the exact approved snapshot to printable, wrapped rows (same ASCII fallback as quote PDFs).
+ FOREACH pdf_raw IN ARRAY string_to_array(artifact,chr(10)) LOOP
+  pdf_raw:=regexp_replace(pdf_raw,'[^ -~]','?','g');
+  IF length(pdf_raw)=0 THEN pdf_rows:=array_append(pdf_rows,''); END IF;
+  pdf_i:=1;
+  WHILE pdf_i<=length(pdf_raw) LOOP
+   pdf_rows:=array_append(pdf_rows,substr(pdf_raw,pdf_i,90)); pdf_i:=pdf_i+90;
+  END LOOP;
+ END LOOP;
+ pdf_pages:=greatest(1,(cardinality(pdf_rows)+53)/54); pdf_font:=3+pdf_pages*2;
+ pdf_objects:=ARRAY['<< /Type /Catalog /Pages 2 0 R >>',''];
+ FOR pdf_page IN 1..pdf_pages LOOP
+  pdf_i:=3+(pdf_page-1)*2; pdf_content:=pdf_i+1;
+  pdf_kids:=pdf_kids||pdf_i::text||' 0 R ';
+  pdf_stream:='BT /F1 8 Tf 40 790 Td 12 TL'||chr(10)||
+   '(SYNTHETIC - NOT A REAL INVOICE) Tj'||chr(10)||
+   'T* (Practice sandbox - synthetic data; nothing is sent or charged) Tj'||chr(10)||
+   'T* (Not a real tax invoice) Tj';
+  FOR pdf_j IN ((pdf_page-1)*54+1)..least(pdf_page*54,cardinality(pdf_rows)) LOOP
+   pdf_line:=replace(replace(replace(pdf_rows[pdf_j],chr(92),chr(92)||chr(92)),'(',chr(92)||'('),')',chr(92)||')');
+   pdf_stream:=pdf_stream||chr(10)||'T* ('||pdf_line||') Tj';
+  END LOOP;
+  pdf_stream:=pdf_stream||chr(10)||'ET';
+  pdf_objects:=array_append(pdf_objects,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 '||pdf_font||' 0 R >> >> /Contents '||pdf_content||' 0 R >>');
+  pdf_objects:=array_append(pdf_objects,'<< /Length '||octet_length(pdf_stream)||' >>'||chr(10)||'stream'||chr(10)||pdf_stream||chr(10)||'endstream');
+ END LOOP;
+ pdf_objects[2]:='<< /Type /Pages /Kids ['||pdf_kids||'] /Count '||pdf_pages||' >>';
+ pdf_objects:=array_append(pdf_objects,'<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+ artifact:='%PDF-1.4'||chr(10);
+ FOR pdf_i IN 1..cardinality(pdf_objects) LOOP
+  pdf_offsets:=array_append(pdf_offsets,octet_length(artifact)::bigint);
+  artifact:=artifact||pdf_i||' 0 obj'||chr(10)||pdf_objects[pdf_i]||chr(10)||'endobj'||chr(10);
+ END LOOP;
+ pdf_xref:=octet_length(artifact);
+ artifact:=artifact||'xref'||chr(10)||'0 '||(cardinality(pdf_objects)+1)||chr(10)||'0000000000 65535 f '||chr(10);
+ FOR pdf_i IN 2..cardinality(pdf_offsets) LOOP
+  artifact:=artifact||lpad(pdf_offsets[pdf_i]::text,10,'0')||' 00000 n '||chr(10);
+ END LOOP;
+ artifact:=artifact||'trailer << /Size '||(cardinality(pdf_objects)+1)||' /Root 1 0 R >>'||chr(10)||'startxref'||chr(10)||pdf_xref||chr(10)||'%%EOF';
  digest:=encode(sha256(convert_to(artifact,'UTF8')),'hex');
  INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES(decision_id,p_tenant,'job',p_job::text,'final_account.issue');
  INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES(resolution_id,p_tenant,decision_id,'approved',p_actor);
