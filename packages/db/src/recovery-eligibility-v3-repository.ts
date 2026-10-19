@@ -69,8 +69,29 @@ export class RecoveryEligibilityV3Repository {
       WHERE tenant_id=$1 AND job_id=$2 AND source_event_id=$3 ORDER BY revision DESC LIMIT 1) m ON true`,[context.tenantId,job,event.id])).rows[0]!;
     }
    }
+   // Read only persisted, applicable approval under the shared case lock. Never use
+   // the pursuit helper: its non-v3 exemption is not an approval.
+   const terms=definition.category!=="withheld_customer_payment"?undefined:(await db.$client.query<{id:string}>(`SELECT a.id
+    FROM app.recovery_case_terms_approval a JOIN app.job j ON j.tenant_id=a.tenant_id AND j.id=a.job_id AND j.fee_policy_version=a.fee_policy_version
+    WHERE a.tenant_id=$1 AND a.job_id=$2 AND a.case_id=$3 AND a.terms_version='synthetic_recovery_fee_terms.v1'
+     AND a.fee_policy_version='reference_fee_policy_v3' AND a.eligibility_policy_version='reference_recovery_eligibility_policy_v3'
+     AND a.environment='synthetic_demo' AND a.policy_status='proposed'`,[context.tenantId,job,input.caseId])).rows[0];
+   const termsTiming=async(sourceId:string|undefined):Promise<"before_settlement"|"after_settlement"|undefined>=>{
+    if(definition.category!=="withheld_customer_payment")return undefined;
+    // STOP-2/STOP-1 are unsupported cases, not saved exclusion/refusal product contracts.
+    if(!terms)throw new RecoveryEligibilityV3Error("ELIGIBILITY_TERMS_DECISION_REQUIRED");
+    const timing=(await db.$client.query<{timing:"before_settlement"|"after_settlement"|null}>(`SELECT CASE
+     WHEN e.state IS DISTINCT FROM 'settled' OR e.id IS NULL THEN 'before_settlement'
+     WHEN a.approved_at<e.created_at THEN 'before_settlement'
+     WHEN a.approved_at>e.created_at THEN 'after_settlement' END timing
+     FROM app.recovery_case_terms_approval a LEFT JOIN app.practice_feed_event e
+      ON e.tenant_id=a.tenant_id AND e.job_id=a.job_id AND e.id=$3
+     WHERE a.tenant_id=$1 AND a.id=$2`,[context.tenantId,terms.id,sourceId??null])).rows[0]?.timing;
+    if(!timing)throw new RecoveryEligibilityV3Error("ELIGIBILITY_TERMS_DECISION_REQUIRED");
+    return timing;
+   };
    let result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
-    payer:payer.payer,settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});
+    termsTiming:await termsTiming(event?.id),payer:payer.payer,settlement:event?.state==="settled"&&!event.duplicate_held?"settled":"pending",paymentTiming:before?"before_opening":"after_opening",sourceRef:event?.id??input.caseId});
    // Principal settlement cannot prove the separate, outside-VAT interest receipt.
    // Keep the existing whole-case exclusions; qualify F18's interest independently.
    let interestSourceEventId:string|undefined;
@@ -84,7 +105,7 @@ export class RecoveryEligibilityV3Repository {
      ORDER BY (e.event_kind='settled') DESC,e.created_at,e.id LIMIT 1`,[context.tenantId,job,input.caseId])).rows[0];
     interestSourceEventId=interest?.id;
     const interestResult=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:context.tenantId,jobId:job,caseId:input.caseId,fixture:input.fixture,
-     payer:payer.payer,settlement:interest?.state==="settled"&&!interest.duplicate_held?"settled":"pending",paymentTiming:interest?.settled_before_opening?"before_opening":"after_opening",sourceRef:interest?.id??input.caseId});
+     termsTiming:await termsTiming(interest?.id),payer:payer.payer,settlement:interest?.state==="settled"&&!interest.duplicate_held?"settled":"pending",paymentTiming:interest?.settled_before_opening?"before_opening":"after_opening",sourceRef:interest?.id??input.caseId});
     const lines=result.lines.map(line=>line.kind==="statutory_interest"?interestResult.lines.find(component=>component.kind==="statutory_interest")!:line);
     result=recoveryEligibilityViewV3.parse({...result,lines,qualifyingPrincipal:moneyFromBigInt(lines.reduce((sum,line)=>sum+BigInt(line.qualifyingPrincipal.pence),0n)),reason:lines.find(line=>line.reason!==null)?.reason??null});
    }
@@ -94,7 +115,7 @@ export class RecoveryEligibilityV3Repository {
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') result_hash`,[id,context.tenantId,job,input.caseId,revision,c.revision,input.fixture,event?.id??null,actor.membershipId,input.commandId,payloadHash,JSON.stringify(result)]);
    for(const line of result.lines)await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),context.tenantId,job,input.caseId,id,line.kind,line.debtorType,line.netPence]);
    await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.membershipId}`,eventType:"recovery.eligibility.v3_reviewed",subjectType:"recovery_case",subjectRef:input.caseId,
-    payload:{references:{jobId:job,reviewId:id,commandId:input.commandId,...(event?{sourceEventId:event.id}:{}),...(interestSourceEventId?{interestSourceEventId}:{}),...(payer.paying_party_binding_id?{payingPartyBindingId:payer.paying_party_binding_id}:{}),...(payer.payer_mark_id?{payerMarkId:payer.payer_mark_id}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.result_hash},classifications:{recovery:"financial"}}}]);
+    payload:{references:{jobId:job,reviewId:id,commandId:input.commandId,...(terms?{termsApprovalId:terms.id}:{}),...(event?{sourceEventId:event.id}:{}),...(interestSourceEventId?{interestSourceEventId}:{}),...(payer.paying_party_binding_id?{payingPartyBindingId:payer.paying_party_binding_id}:{}),...(payer.payer_mark_id?{payerMarkId:payer.payer_mark_id}:{})},hashes:{command:payloadHash,result:inserted.rows[0]!.result_hash},classifications:{recovery:"financial"}}}]);
    return {id,revision,caseRevision:c.revision,sourceEventId:event?.id??null,result};
   }).catch((error: unknown) => {
    // Known database pre-commit guards use the same typed refusal contract as the service.

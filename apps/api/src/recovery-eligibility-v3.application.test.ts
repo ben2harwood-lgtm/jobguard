@@ -40,7 +40,7 @@ it("a saved v3 write whose read fails stays outcome-unknown",async()=>{
 });
 it("replays the immutable v3 command result when the workbench has a newer candidate",async()=>{
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue(principal as never);
- const original={id:randomUUID(),revision:1,caseRevision:2,sourceEventId:randomUUID(),result:evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:principal.context.tenantId,jobId:job,caseId,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:randomUUID()})};
+ const original={id:randomUUID(),revision:1,caseRevision:2,sourceEventId:randomUUID(),result:evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:principal.context.tenantId,jobId:job,caseId,fixture:"F18",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:randomUUID()})};
  vi.spyOn(RecoveryEligibilityV3Repository.prototype,"review").mockResolvedValue(original);
  vi.spyOn(RecoveryCaseRepository.prototype,"listForMember").mockResolvedValue([{id:caseId,eligibilityV3:{...original,id:randomUUID(),revision:2}}] as never);
  const service=new RecoveryCaseApplication(pool,session),raw=command();

@@ -338,7 +338,7 @@ it.each([
  expect(r.result).toMatchObject({outcome:q===0?"excluded":"eligible_for_review",qualifyingPrincipal:{pence:q,currency:"GBP"},reason});
  const stored=(await admin.query("SELECT result,source_event_id FROM app.recovery_eligibility_v3_review WHERE tenant_id=$1 AND id=$2",[T,r.id])).rows[0];
  expect(stored).toEqual({result:r.result,source_event_id:r.sourceEventId});
- expect(r.result).toEqual(evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",settlement:"settled",paymentTiming,sourceRef:r.sourceEventId}));
+ expect(r.result).toEqual(evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming,sourceRef:r.sourceEventId}));
  expect((await f.cases.listForMember(ctx,f.jobId,actor)).find(c=>c.id===f.c.id)?.eligibilityV3).toEqual(r);
  expect(await f.repo.review(ctx,f.jobId,command,actor,f.auth.digest)).toEqual(r);
 });
@@ -350,7 +350,7 @@ async function rawQualifyingF17(pool:Pool,f:{auth:{digest:string};jobId:string;c
   await db.$client.query("SELECT set_config('app.recovery_eligibility_environment','synthetic_demo',true)");
   const sourceEventId=(await db.$client.query<{id:string}>("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='supplier-refund-540' AND event_kind='settled' AND identity='identified'",[T,f.jobId])).rows[0]!.id;
   // Deliberately propose £450 irrespective of the stored timing, as a raw writer could.
-  const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+  const result=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F17",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
   const id=randomUUID(),commandId=randomUUID(),payloadHash=createHash("sha256").update(commandId).digest("hex");
   const inserted=await db.$client.query<{h:string}>("INSERT INTO app.recovery_eligibility_v3_review(id,tenant_id,job_id,case_id,revision,case_revision,fixture,source_event_id,actor_membership_id,command_id,payload_hash,result)VALUES($1,$2,$3,$4,1,$5,'F17',$6,$7,$8,$9,$10) RETURNING encode(sha256(convert_to(result::text,'UTF8')),'hex') h",[id,T,f.jobId,f.c.id,f.c.revision,sourceEventId,M,commandId,payloadHash,JSON.stringify(result)]);
   await db.$client.query("INSERT INTO app.recovery_claim_line(id,tenant_id,job_id,case_id,review_id,kind,debtor_type,net_pence)VALUES($1,$2,$3,$4,$5,'principal','business',45000)",[randomUUID(),T,f.jobId,f.c.id,id]);
@@ -620,7 +620,7 @@ it("F18 principal-only",async()=>{
 it.each(["amount","component"] as const)("F18 raw runtime writer cannot include unpaid interest in the %s",async(shape)=>{
  const f=await fixture();await f.advance("receipt-3000");
  const sourceEventId=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='receipt-3000' AND event_kind='settled'",[T,f.jobId])).rows[0].id as string;
- const full=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+ const full=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
  const result=shape==="amount"?full:{...full,qualifyingPrincipal:{pence:250000,currency:"GBP"},reason:"Pending money cannot qualify",lines:full.lines.map(line=>line.kind==="statutory_interest"?{...line,reason:"Pending money cannot qualify"}:line)};
  await expect(rawInterestCandidate(f,sourceEventId,result as ReturnType<typeof evaluateRecoveryEligibilityV3>)).rejects.toMatchObject({code:"23514",message:shape==="amount"?"ELIGIBILITY_FIXTURE_MISMATCH":"ELIGIBILITY_LINES_REQUIRED"});
  for(const table of ["recovery_eligibility_v3_review","recovery_claim_line"])expect((await admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND case_id=$2`,[T,f.c.id])).rows[0].n).toBe(0);
@@ -663,7 +663,7 @@ it("0166 upgrades the previous guards without rewriting saved reviews, claim lin
  try{
   await admin.query(previousGuards);
   const sourceEventId=(await admin.query("SELECT id FROM app.practice_feed_event WHERE tenant_id=$1 AND job_id=$2 AND movement_key='receipt-3000' AND event_kind='settled'",[T,f.jobId])).rows[0].id as string;
-  const legacy=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
+  const legacy=evaluateRecoveryEligibilityV3({version:"recovery-eligibility-facts.v3",environment:"synthetic_demo",tenantId:T,jobId:f.jobId,caseId:f.c.id,fixture:"F18",payer:"not_insurer",termsTiming:"before_settlement",settlement:"settled",paymentTiming:"after_opening",sourceRef:sourceEventId});
   const id=await rawInterestCandidate(f,sourceEventId,legacy);
   const proof=await mo4Proof.proofBefore(admin,["app.recovery_eligibility_v3_review","app.recovery_claim_line","app.audit_event"]);
   await admin.query(forward);
