@@ -200,6 +200,33 @@ async function livePromptAdditions(before: Awaited<ReturnType<typeof snapshot>>,
  };
 }
 
+// Standing ruling 113: extend only MON-8-P-A's exact newly created objects (layered on the expected snapshot above).
+async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
+ const after = await snapshot();
+ const table = "contractor_agreement_status_revision";
+ const names = ["mon8_agreement_status_guard", "mon8_contractor_agreement_context"];
+ const routines = after.routines.filter(r => r.nspname === "app" && names.includes(r.proname));
+ expect(routines.map(r => r.proname).sort()).toEqual(names);
+ const indexes = (await f.admin.query(`SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid
+ JOIN pg_class t ON t.oid=x.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace
+ WHERE n.nspname='app' AND t.relname=$1 ORDER BY i.relname`, [table])).rows.map(r => r.relname);
+ expect(indexes).toHaveLength(2);
+ const relations = after.relations.filter(r => r.nspname === "app" && [table, ...indexes].includes(r.relname));
+ expect(relations.map(r => r.relname).sort()).toEqual([table, ...indexes].sort());
+ const policies = after.policies.filter(p => p.schemaname === "app" && p.tablename === table);
+ expect(policies.map(p => p.policyname)).toEqual(["tenant_isolation"]);
+ expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
+ for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
+ for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
+ const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
+  // Earlier additions were inserted using the final catalogue's positions. Order
+  // the complete expected set at those positions, retaining every prior value.
+  const position = (row: T) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
+  return [...old, ...added].sort((a, b) => position(a) - position(b));
+ };
+ return { rows: { ...before.rows, [`app.${table}`]: [] }, routines: additive(before.routines, routines, after.routines),
+  relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
+}
 it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes or privileges, then replays safely", async () => {
  const position = MIGRATION_URLS.findIndex(u => u.pathname.endsWith(`/${own}`));
  expect(position).toBeGreaterThan(0);
@@ -213,7 +240,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  await asFixtureTenant(f.admin, a.tenantId, db => db.query("SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", [a.tenantId,a.jobId,a.revisionId,LOCK_OWNER,randomUUID(),"practice-customer@example.invalid","2026-10-16"]));
  const before = await snapshot();
  await migrate(f.admin);
- const expected = await withOidcAdditions(await with0188And0192Additions(before));
+ const expected = await withOidcAdditions(await contractorAgreementAdditions(await with0188And0192Additions(before)));
  expect(await snapshot()).toEqual(expected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(expected);

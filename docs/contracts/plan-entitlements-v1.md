@@ -78,3 +78,15 @@ The parent's known transitive fee-schema import remains unchanged; this build
 does not claim transitive module separation. New exports in core and the API
 workspace index are additive; dispatcher reconciliation serializes those shared
 index lines with MON-3 and parent repairs. No PR before parent merge.
+
+## 18 October addendum — MON-8-P-A foundation
+
+The preceding text describes the merged #243 slice, including its historical holds.
+A now adds the separate [contractor authority v1](contractor-entitlement-authority-v1.md)
+projection, synthetic append-only status source, transaction-bound session reader
+and evaluator. Ben's answer 2 permits active-agreement-only eligibility; a reference
+alone remains insufficient. The existing `agreementAuthority: held` v1 schema and
+API port are deliberately unchanged. A is not their full adapter or enforcement.
+Migration 0193 adds only A's objects, no backfill or commercial effects. B owns
+command integration and permission-preserving historical readers; C owns merged
+subscription lifecycle composition and preservation evidence. MON-8 stays open.

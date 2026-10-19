@@ -120,3 +120,5 @@ export * from "./subscription-simulated-payment-adapter.js";
 export * from "./subscription-executor.js";
 
 export * from "./enterprise-live-prompt-repository.js";
+
+export * from "./contractor-entitlement-authority-repository.js";
