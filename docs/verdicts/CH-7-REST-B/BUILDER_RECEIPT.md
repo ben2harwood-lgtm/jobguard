@@ -149,3 +149,32 @@ No PostgreSQL/browser runs, no approved live routes, no security/commercial sign
 | `LANE_BASE_REF=origin/main pnpm lint` | PASS, exit 0 (7 package tasks successful) |
 | `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0 (re-run after the commit, see the final report) |
 | PostgreSQL integration suites (`test:db`, including 0198 SQL execution and the new ruling-131 test) and browser/e2e | NOT RUN (no PostgreSQL/browser locally by instruction). The 0198 SQL edit is source-reasoned only; CI must run it. |
+
+
+## CI ROUND v5-r1 — stale practice-feed fixture revision
+
+20 October 2026. Builder: Codex. Starting HEAD `ab9410fb85e2cdfe356c376f9048a7f21059f9dc`; integration base `origin/main` = `dc5721230fd8aedbf2d9d0457789074b66b48765`. Addresses the dispatcher-reported failure in CI run 39320998905, `SeparateInterestUsesOwnSettlementTime`. No commit, push, acceptance or independent verdict produced in this round. The reported Opus inspection verdicts bind fb68d3d5, not this uncommitted repair.
+
+**Source diagnosis.** The fixture's `advance` closure cached the revision returned by its own feed commands. `interest(f)` independently uses `factsView`/`factsCommand`. Both projections read the latest revision from the same `app.practice_feed_command` sequence; `factsCommand` inserts at `current.revision+1`. Thus connect leaves cached revision 1, interest settles at revision 2, and the subsequent principal advance incorrectly submits expected revision 1, correctly rejected by `command`'s stale-revision guard. This is a fixture defect, not a merged repository defect.
+
+**Change.** The fixture reads `feed.view(...)` before every feed command and uses that current revision to select connect/advance and populate `expectedRevision`. Its sequentially awaited commands now account for intervening facts writes. No retry or production semantics changed. All existing assertions, including principal 250000 and principal-plus-interest 262000, remain unchanged. Only this test and this receipt are edited. Migration `0199_recovery_eligibility_terms_timing.sql` is retained unchanged; no migration, runtime, API, authorization, money, audit, or contract change. No out-of-lane fix or STOP was needed.
+
+**Execution environment.** Node v24.17.0. The default pnpm launcher stalled on version probes; cached `corepack pnpm --version` returned the pinned 10.28.1. Check commands below used a temporary `/private/tmp/jg-ch7-b-v5-r1-bin/pnpm` wrapper invoking `/usr/local/bin/corepack pnpm`, prepended to PATH. No dependency install/download command was run. Logs have prefix `/private/tmp/jg-ch7-b-v5-r1-`. DB unit execution was capped at two workers. Lint reported sandbox cache-write warnings but exited successfully.
+
+| Command actually run | Real result |
+| --- | --- |
+| `pnpm --filter @jobguard/db typecheck` | PASS, exit 0 (`typecheck.log`). |
+| `node node_modules/typescript/bin/tsc -p /private/tmp/jg-ch7-b-v5-r1-tsconfig.json --noEmit` | PASS, exit 0 (`fixture-typecheck.log`). Scratch config extends db tsconfig, includes db source and the edited integration test, with db rootDir; no repository config change. Necessary because package typecheck excludes test/. |
+| `LANE_BASE_REF=origin/main pnpm lint` | PASS, exit 0, 7 successful package tasks, 2 cached (`lint.log`). |
+| `LANE_BASE_REF=origin/main pnpm lint:lanes` | PASS, exit 0 (`lanes.log`). |
+| `pnpm --filter @jobguard/db exec vitest run test --exclude '**/*.integration.test.ts' --exclude '**/free-port.test.ts' --maxWorkers=2` | PASS, exit 0, 69 files / 615 tests (`unit.log`). Unit/source checks only; not PostgreSQL proof. Port-binding free-port suite excluded due to dispatcher sandbox constraint. |
+| `git diff --check` | PASS, exit 0 before receipt; final check recorded below. |
+| `pnpm --filter @jobguard/api build` | NOT RUN: no API file touched by this repair or the branch diff against origin/main. |
+| `pnpm openapi:check` | NOT RUN: no route/API contract changes. |
+| PostgreSQL integration, `pnpm test:db`, `pnpm test:migrations`, including the failing timing scenario | NOT RUN locally by dispatcher instruction; required GitHub CI checks job must execute them after dispatcher push. |
+| Browser/e2e and port-binding tests | NOT RUN locally by dispatcher instruction/environment. |
+| Clean install, full root test/build, AI eval/live-model checks | NOT RUN; dependencies already installed, fixture-only repair with no AI change. |
+
+**Remaining gates.** This repair is source-diagnosed, typechecked and unit-checked; the reported PostgreSQL failure has not been reproduced or proven fixed locally. Await GitHub CI and an independent exact-commit verdict, separate acceptance and founder merge/release. Intended conventional commit message written to `/private/tmp/jg-msg-ch-7-rest-b.txt`; dispatcher owns all git writes.
+
+Final verification after receipt/message creation: `LANE_BASE_REF=origin/main pnpm lint:lanes` PASS, exit 0 (`lanes-final.log`); `git diff --check` PASS, exit 0. Working tree contains only the permitted test and receipt changes.
