@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-3-p-b": {
+      "branches": [
+        "codex/sandbox/mon-3-p-b"
+      ],
+      "receipt": "docs/verdicts/MON-3-P-B/BUILDER_RECEIPT.md",
+      "note": "Issued synthetic verification/card foundation. Admission disabled pending C; shared integration proposed separately.",
+      "allow": [
+        "packages/core/src/free-first-job-persistence.ts",
+        "packages/core/src/free-first-job-persistence.test.ts",
+        "packages/db/migrations/0206_free_first_job_admission.sql",
+        "packages/db/migration-notes/0206_free_first_job_admission.md",
+        "packages/db/src/free-first-job-repository.ts",
+        "packages/db/src/free-first-job-repository.test.ts",
+        "packages/db/src/free-first-job-card-repository.ts",
+        "packages/db/src/free-first-job-card-repository.test.ts",
+        "packages/db/src/activation-repository.ts",
+        "packages/db/test/free-first-job-admission-fixtures.ts",
+        "packages/db/test/free-first-job-admission.integration.test.ts",
+        "packages/db/test/free-first-job-admission-authority.integration.test.ts",
+        "packages/db/test/free-first-job-admission-races.integration.test.ts",
+        "packages/db/test/free-first-job-card-persistence.integration.test.ts",
+        "packages/db/test/free-first-job-admission-upgrade.integration.test.ts",
+        "apps/api/src/free-first-job.application.ts",
+        "apps/api/src/free-first-job.application.test.ts",
+        "apps/api/src/free-first-job-card.adapter.ts",
+        "apps/api/src/free-first-job-card.adapter.test.ts",
+        "docs/contracts/free-first-job-persistence-v1.md",
+        "docs/contracts/free-first-job-v1.md",
+        "docs/ledger/MON-3-P-B.md",
+        "docs/verdicts/MON-3-P-B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

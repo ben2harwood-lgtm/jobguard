@@ -44,3 +44,24 @@ export class FreeFirstJobApplication {
     if (this.source.environment() !== "synthetic_demo") throw new FreeFirstJobError("FREE_FIRST_JOB_SYNTHETIC_ONLY");
   }
 }
+
+/** Unregistered setup-only application seam. Implementations resolve current server auth each call.
+ * SQL independently rechecks the persisted session and owner; raw contains only the strict version.
+ * No completion, activation, admin override or provider route is installed.
+ */
+export interface FreeFirstJobCardRequestPort {
+ environment():string|undefined;
+ authorizeAndRequest(sessionHandle:unknown,commandId:string,raw:unknown):Promise<unknown|null>;
+}
+export class FreeFirstJobCardApplication {
+ constructor(private readonly source:FreeFirstJobCardRequestPort){}
+ async request(sessionHandle:unknown,commandId:string,raw:unknown){
+  this.assertSynthetic();
+  const result=await this.source.authorizeAndRequest(sessionHandle,commandId,raw);
+  this.assertSynthetic();
+  if(result===null)throw new FreeFirstJobError("FREE_FIRST_JOB_ACCESS_DENIED");
+  parseFreeFirstJob(z.object({version:z.literal("trial-card-request.v1")}).strict(),raw);
+  return parseFreeFirstJob(z.object({version:z.literal("trial-card-attempt.v1"),environment:z.literal("synthetic_demo"),hypothetical:z.literal(true),attemptId:z.string().uuid(),verificationId:z.string().uuid(),status:z.literal("requested")}).strict(),result);
+ }
+ private assertSynthetic(){if(this.source.environment()!=="synthetic_demo")throw new FreeFirstJobError("FREE_FIRST_JOB_SYNTHETIC_ONLY");}
+}
